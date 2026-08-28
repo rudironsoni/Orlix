@@ -907,6 +907,57 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 						 [dst] "r" (&result), [l] "r" (&left),
 						 [r] "r" (&right)
 					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 2) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, cs\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, cs\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 4) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, mi\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, mi\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 6) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, vs\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, vs\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
 		} else
 			return -EINVAL;
 		asm volatile("msr nzcv, %0\n" : : "r" (host_nzcv));
@@ -965,7 +1016,9 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			u8 nzcv_imm = c->instruction & 0xfU;
 			bool signal = !strcmp(m, "FCCMPE");
 
-			if (cond > 1 || (nzcv_imm != 0 && nzcv_imm != 8))
+			if ((cond > 1 && cond != 2 && cond != 4 && cond != 6) ||
+			    (nzcv_imm != 0 && nzcv_imm != 1 && nzcv_imm != 2 &&
+			     nzcv_imm != 4 && nzcv_imm != 8))
 				return -EINVAL;
 			if (d && !signal && cond == 0 && nzcv_imm == 0)
 				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
@@ -1095,6 +1148,63 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 					     : [guest] "r" (guest_nzcv),
 					       [l] "r" (&left), [r] "r" (&right)
 					     : "v0", "v1", "cc", "memory");
+#define HOST_FCCMP_ONE(op, dreg, imm, sfx) \
+	asm volatile("msr nzcv, %[guest]\n ldr " dreg "0, [%[l]]\n" \
+		     "ldr " dreg "1, [%[r]]\n " op " " dreg "0, " dreg "1, #" #imm \
+		     ", " sfx "\n mrs %[out], nzcv\n" \
+		     : [out] "=r" (nzcv) \
+		     : [guest] "r" (guest_nzcv), \
+		       [l] "r" (&left), [r] "r" (&right) \
+		     : "v0", "v1", "cc", "memory")
+			else if (d && !signal && cond == 2 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "cs");
+			else if (d && !signal && cond == 4 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "mi");
+			else if (d && !signal && cond == 6 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "vs");
+			else if (d && !signal && cond == 1 && nzcv_imm == 4)
+				HOST_FCCMP_ONE("fccmp", "d", 4, "ne");
+			else if (d && !signal && cond == 1 && nzcv_imm == 2)
+				HOST_FCCMP_ONE("fccmp", "d", 2, "ne");
+			else if (d && !signal && cond == 1 && nzcv_imm == 1)
+				HOST_FCCMP_ONE("fccmp", "d", 1, "ne");
+			else if (d && signal && cond == 2 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "cs");
+			else if (d && signal && cond == 4 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "mi");
+			else if (d && signal && cond == 6 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "vs");
+			else if (d && signal && cond == 1 && nzcv_imm == 4)
+				HOST_FCCMP_ONE("fccmpe", "d", 4, "ne");
+			else if (d && signal && cond == 1 && nzcv_imm == 2)
+				HOST_FCCMP_ONE("fccmpe", "d", 2, "ne");
+			else if (d && signal && cond == 1 && nzcv_imm == 1)
+				HOST_FCCMP_ONE("fccmpe", "d", 1, "ne");
+			else if (!d && !signal && cond == 2 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "cs");
+			else if (!d && !signal && cond == 4 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "mi");
+			else if (!d && !signal && cond == 6 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "vs");
+			else if (!d && !signal && cond == 1 && nzcv_imm == 4)
+				HOST_FCCMP_ONE("fccmp", "s", 4, "ne");
+			else if (!d && !signal && cond == 1 && nzcv_imm == 2)
+				HOST_FCCMP_ONE("fccmp", "s", 2, "ne");
+			else if (!d && !signal && cond == 1 && nzcv_imm == 1)
+				HOST_FCCMP_ONE("fccmp", "s", 1, "ne");
+			else if (!d && signal && cond == 2 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "cs");
+			else if (!d && signal && cond == 4 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "mi");
+			else if (!d && signal && cond == 6 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "vs");
+			else if (!d && signal && cond == 1 && nzcv_imm == 4)
+				HOST_FCCMP_ONE("fccmpe", "s", 4, "ne");
+			else if (!d && signal && cond == 1 && nzcv_imm == 2)
+				HOST_FCCMP_ONE("fccmpe", "s", 2, "ne");
+			else if (!d && signal && cond == 1 && nzcv_imm == 1)
+				HOST_FCCMP_ONE("fccmpe", "s", 1, "ne");
+#undef HOST_FCCMP_ONE
 			else
 				return -EINVAL;
 		}
@@ -1548,6 +1658,28 @@ static void orlix_tcti_scalar_fp_compare_encoding(struct kunit *test,
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(extra_code, PAGE_SIZE));
 }
 
+static void orlix_tcti_scalar_fp_compare_encoding_flags(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	unsigned long flags)
+{
+	struct pt_regs regs = {};
+	unsigned long extra_code;
+
+	KUNIT_ASSERT_TRUE_MSG(test,
+		orlix_tcti_scalar_fp_instruction_matches_source(source, instruction),
+		"%s insn %#x", source->name, instruction);
+	extra_code = orlix_tcti_scalar_fp_map(test, instruction);
+	if (orlix_tcti_scalar_fp_is_convert(source))
+		orlix_tcti_scalar_fp_seed_convert(source, &regs, extra_code,
+						  instruction);
+	else
+		orlix_tcti_scalar_fp_seed(source, &regs, extra_code, instruction);
+	regs.pstate = (regs.pstate & ~NZCV) | (flags & NZCV);
+	orlix_tcti_scalar_fp_compare_run(test, source, instruction, &regs,
+					 extra_code);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(extra_code, PAGE_SIZE));
+}
+
 static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	struct pt_regs *regs, unsigned long code)
@@ -1642,6 +1774,38 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		orlix_tcti_scalar_fp_compare_encoding(test, source, extra, false);
 		if (test->status == KUNIT_FAILURE)
 			return;
+		{
+			static const u8 conds[] = { 2, 4, 6 };
+			static const unsigned long flags[] = {
+				PSR_C_BIT, PSR_N_BIT, PSR_V_BIT,
+			};
+			size_t i;
+
+			for (i = 0; i < ARRAY_SIZE(conds); i++) {
+				extra = orlix_tcti_scalar_fp_instruction_with_cond(
+					source, conds[i], 0);
+				orlix_tcti_scalar_fp_compare_encoding_flags(test,
+					source, extra, flags[i]);
+				if (test->status == KUNIT_FAILURE)
+					return;
+				orlix_tcti_scalar_fp_compare_encoding_flags(test,
+					source, extra, 0);
+				if (test->status == KUNIT_FAILURE)
+					return;
+			}
+			if (ccmp) {
+				static const u8 fb[] = { 4, 2, 1 };
+
+				for (i = 0; i < ARRAY_SIZE(fb); i++) {
+					extra = orlix_tcti_scalar_fp_instruction_with_cond(
+						source, 1, fb[i]);
+					orlix_tcti_scalar_fp_compare_encoding_flags(test,
+						source, extra, PSR_Z_BIT);
+					if (test->status == KUNIT_FAILURE)
+						return;
+				}
+			}
+		}
 		if (ccmp) {
 			orlix_tcti_scalar_fp_run_quiet_nan_compare(test, source,
 				instruction, regs, code);
