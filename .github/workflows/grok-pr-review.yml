@@ -1,8 +1,14 @@
 name: Grok PR Review
 
+# Disabled 2026-08-28: this workflow was failing. Keep the file; do not run
+# it on pull requests until GROK_AUTH_JSON / grok-build-review-action is
+# stable. Restore the pull_request trigger below to re-enable.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
