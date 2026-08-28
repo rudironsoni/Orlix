@@ -59,6 +59,10 @@
 #define FP32_NEG_ONE 0xbf800000U
 #define FP32_FMA_A 0x3f800800U
 #define FP16_ONE 0x3c00U
+#define FP16_ONE_POINT_FIVE 0x3e00U
+#define FP16_TWO_POINT_FIVE 0x4100U
+#define FP16_POS_INF 0x7c00U
+#define FP16_NEG_ONE_POINT_FIVE 0xbe00U
 #define FP64_ONE 0x3ff0000000000000ULL
 #define FP64_TWO 0x4000000000000000ULL
 #define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
@@ -67,6 +71,9 @@
 #define FP64_POS_INF 0x7ff0000000000000ULL
 #define FP64_QNAN 0x7ff8000000000000ULL
 #define FP64_FOUR 0x4010000000000000ULL
+#define FP64_THREE 0x4008000000000000ULL
+#define FP64_MIN_SUBNORMAL 0x1ULL
+#define FP32_THREE 0x40400000U
 #define FP64_NEG_ONE 0xbff0000000000000ULL
 #define FP64_FMA_A 0x3ff0000002000000ULL
 #define CONVERT_GPR_NEG8 0xfffffffffffffff8ULL
@@ -399,12 +406,14 @@ static void orlix_tcti_scalar_fp_seed(
 	regs->pc = code;
 	regs->pstate = PSR_MODE_EL0t | PSR_Z_BIT;
 	regs->syscallno = NO_SYSCALL;
-	regs->regs[rd] = 0x1111111111111111ULL;
-	if (has_rn)
+	regs->sp = 0x1111111111111111ULL;
+	if (rd != 31U)
+		regs->regs[rd] = 0x1111111111111111ULL;
+	if (has_rn && rn != 31U)
 		regs->regs[rn] = 8;
-	if (has_rm)
+	if (has_rm && rm != 31U)
 		regs->regs[rm] = 3;
-	if (has_ra)
+	if (has_ra && ra != 31U)
 		regs->regs[ra] = 5;
 	regs->regs[30] = 0x4444444444444444ULL;
 	orlix_tcti_scalar_fp_seed_simd();
@@ -447,17 +456,42 @@ static void orlix_tcti_scalar_fp_apply_convert_operands(
 
 	if (!orlix_tcti_scalar_fp_is_convert(source) || !regs)
 		return;
-	regs->regs[rn] = gpr_n;
+	if (rn != 31U)
+		regs->regs[rn] = gpr_n;
 	if (strstr(source->name, "64VX"))
 		current->thread.user_simd[rn * 2U + 1U] = gpr_n;
 	else
 		current->thread.user_simd[rn * 2U] = fp_bits;
 }
 
+static u64 orlix_tcti_scalar_fp_src_lane_bits(
+	const struct orlix_tcti_test_fp_source *source, u64 f32, u64 f64, u64 f16)
+{
+	const char *name;
+
+	if (!source)
+		return f32;
+	name = source->name;
+	if (!strcmp(source->mnemonic, "FCVT")) {
+		if (strstr(name, "_DS") || strstr(name, "_HS"))
+			return f32;
+		if (strstr(name, "_SD") || strstr(name, "_HD"))
+			return f64;
+		if (strstr(name, "_SH") || strstr(name, "_DH"))
+			return f16;
+	}
+	return orlix_tcti_scalar_fp_is_double(source) ? f64 : f32;
+}
+
 static u64 orlix_tcti_scalar_fp_convert_bits(
 	const struct orlix_tcti_test_fp_source *source, u64 f32, u64 f64)
 {
-	return orlix_tcti_scalar_fp_is_double(source) ? f64 : f32;
+	return orlix_tcti_scalar_fp_src_lane_bits(source, f32, f64, FP16_ONE);
+}
+
+static u64 orlix_tcti_scalar_fp_read_gpr(const struct pt_regs *regs, u8 index)
+{
+	return index == 31U ? regs->sp : regs->regs[index];
 }
 
 static void orlix_tcti_scalar_fp_seed_convert(
@@ -828,7 +862,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			     : "x0", "v0", "memory");
 		c->out_simd[0] = dest_q[0];
 		c->out_simd[1] = dest_q[1];
-		c->out_gpr[0] = c->regs->regs[rd];
+		c->out_gpr[0] = orlix_tcti_scalar_fp_read_gpr(c->regs, rd);
 		return 0;
 	} else if (!strcmp(m, "FCSEL")) {
 		unsigned long host_nzcv;
@@ -1064,7 +1098,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 		*c->out_nzcv = nzcv & NZCV;
 		c->out_simd[0] = c->simd[rd * 2U];
 		c->out_simd[1] = c->simd[rd * 2U + 1U];
-		c->out_gpr[0] = c->regs->regs[rd];
+		c->out_gpr[0] = orlix_tcti_scalar_fp_read_gpr(c->regs, rd);
 		return 0;
 	} else if (!strcmp(m, "SCVTF") && strstr(name, "float2int")) {
 		if (strstr(name, "S32"))
@@ -1270,7 +1304,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 
 	c->out_simd[0] = result;
 	c->out_simd[1] = 0;
-	c->out_gpr[0] = (rd == 31U) ? c->regs->regs[31] : gpr_out;
+	c->out_gpr[0] = (rd == 31U) ? c->regs->sp : gpr_out;
 	*c->out_nzcv = nzcv;
 	return 0;
 }
@@ -1293,7 +1327,8 @@ static int orlix_tcti_scalar_fp_expected_from_source(
 
 	expected_simd[0] = simd[orlix_tcti_scalar_fp_rd_index(instruction) * 2U];
 	expected_simd[1] = simd[orlix_tcti_scalar_fp_rd_index(instruction) * 2U + 1U];
-	*expected_gpr = regs->regs[orlix_tcti_scalar_fp_rd_index(instruction)];
+	*expected_gpr = orlix_tcti_scalar_fp_read_gpr(regs,
+		orlix_tcti_scalar_fp_rd_index(instruction));
 	*expected_nzcv = regs->pstate & NZCV;
 	*expected_fpsr = fpsr_in;
 	if (strstr(source->name, "floatimm")) {
@@ -1367,7 +1402,8 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 				    source->mnemonic, instruction);
 	} else if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS) {
 		KUNIT_ASSERT_EQ_MSG(test, expected_gpr,
-				    regs->regs[orlix_tcti_scalar_fp_rd_index(instruction)],
+				    orlix_tcti_scalar_fp_read_gpr(regs,
+					orlix_tcti_scalar_fp_rd_index(instruction)),
 				    "%s gpr %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	} else {
@@ -1620,6 +1656,10 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 	}
 	if (!strcmp(mnemonic, "FMADD") || !strcmp(mnemonic, "FMSUB") ||
 	    !strcmp(mnemonic, "FNMADD") || !strcmp(mnemonic, "FNMSUB")) {
+		static const unsigned long modes[] = {
+			0, AARCH64_FPCR_RMODE_POSINF, AARCH64_FPCR_RMODE_NEGINF,
+			AARCH64_FPCR_RMODE_ZERO,
+		};
 		u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
 		u8 rm = orlix_tcti_scalar_fp_rm_index(instruction);
 		u8 ra = orlix_tcti_scalar_fp_ra_index(instruction);
@@ -1627,16 +1667,92 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 						       FP64_FMA_A);
 		bool sub = !strcmp(mnemonic, "FMSUB") ||
 			!strcmp(mnemonic, "FNMSUB");
+		size_t i;
 
-		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-		current->thread.user_simd[rn * 2U] = a;
-		current->thread.user_simd[rm * 2U] = a;
-		current->thread.user_simd[ra * 2U] = sub ?
-			orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE, FP64_ONE) :
-			orlix_tcti_scalar_fp_lane_bits(source, FP32_NEG_ONE,
-						       FP64_NEG_ONE);
-		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
-						 code);
+		for (i = 0; i < ARRAY_SIZE(modes); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_fpcr = modes[i];
+			current->thread.user_simd[rn * 2U] = a;
+			current->thread.user_simd[rm * 2U] = a;
+			current->thread.user_simd[ra * 2U] = sub ?
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE,
+							       FP64_ONE) :
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_NEG_ONE,
+							       FP64_NEG_ONE);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+		return;
+	}
+	if (!strcmp(mnemonic, "FADD") || !strcmp(mnemonic, "FSUB") ||
+	    !strcmp(mnemonic, "FMUL") || !strcmp(mnemonic, "FDIV") ||
+	    !strcmp(mnemonic, "FNMUL")) {
+		static const unsigned long modes[] = {
+			0, AARCH64_FPCR_RMODE_POSINF, AARCH64_FPCR_RMODE_NEGINF,
+			AARCH64_FPCR_RMODE_ZERO,
+		};
+		u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+		u8 rm = orlix_tcti_scalar_fp_rm_index(instruction);
+		size_t i;
+
+		for (i = 0; i < ARRAY_SIZE(modes); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_fpcr = modes[i];
+			if (!strcmp(mnemonic, "FDIV")) {
+				current->thread.user_simd[rn * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_ONE, FP64_ONE);
+				current->thread.user_simd[rm * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_THREE, FP64_THREE);
+			} else if (!strcmp(mnemonic, "FMUL") ||
+				   !strcmp(mnemonic, "FNMUL")) {
+				current->thread.user_simd[rn * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_FMA_A, FP64_FMA_A);
+				current->thread.user_simd[rm * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_FMA_A, FP64_FMA_A);
+			} else {
+				current->thread.user_simd[rn * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_ONE, FP64_ONE);
+				current->thread.user_simd[rm * 2U] =
+					orlix_tcti_scalar_fp_lane_bits(source,
+						FP32_MIN_SUBNORMAL,
+						FP64_MIN_SUBNORMAL);
+			}
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+		return;
+	}
+	if (!strcmp(mnemonic, "FCVT")) {
+		static const u64 fp32[] = {
+			FP32_ONE_POINT_FIVE, FP32_TWO_POINT_FIVE, FP32_POS_INF,
+		};
+		static const u64 fp64[] = {
+			FP64_ONE_POINT_FIVE, FP64_TWO_POINT_FIVE, FP64_POS_INF,
+		};
+		static const u64 fp16[] = {
+			FP16_ONE_POINT_FIVE, FP16_TWO_POINT_FIVE, FP16_POS_INF,
+		};
+		size_t i;
+
+		for (i = 0; i < ARRAY_SIZE(fp32); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
+				orlix_tcti_scalar_fp_src_lane_bits(source, fp32[i],
+					fp64[i], fp16[i]);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
 		return;
 	}
 	if (strstr(source->name, "floatimm")) {
@@ -1754,6 +1870,9 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			static const u64 fp64_vecs[] = {
 				FP64_ONE_POINT_FIVE, FP64_TWO_POINT_FIVE, FP64_POS_INF,
 			};
+			static const u64 fp16_vecs[] = {
+				FP16_ONE_POINT_FIVE, FP16_TWO_POINT_FIVE, FP16_POS_INF,
+			};
 			size_t vec;
 			u8 extra_fbits[2];
 			u8 extra_count = 0;
@@ -1766,8 +1885,9 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			for (vec = 0; vec < ARRAY_SIZE(fp32_vecs); vec++) {
 				orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 				orlix_tcti_scalar_fp_apply_convert_operands(source,
-					&regs, orlix_tcti_scalar_fp_is_double(source) ?
-						fp64_vecs[vec] : fp32_vecs[vec],
+					&regs, orlix_tcti_scalar_fp_src_lane_bits(source,
+						fp32_vecs[vec], fp64_vecs[vec],
+						fp16_vecs[vec]),
 					CONVERT_GPR_NEG8, instruction);
 				orlix_tcti_scalar_fp_compare_run(test, source,
 					instruction, &regs, code);
@@ -1786,7 +1906,8 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 				return;
 			if ((!strcmp(source->mnemonic, "SCVTF") ||
 			     !strcmp(source->mnemonic, "UCVTF")) &&
-			    strstr(source->name, "float2int") &&
+			    (strstr(source->name, "float2int") ||
+			     strstr(source->name, "float2fix")) &&
 			    !strstr(source->name, "D32")) {
 				static const unsigned long modes[] = {
 					0, AARCH64_FPCR_RMODE_POSINF,
