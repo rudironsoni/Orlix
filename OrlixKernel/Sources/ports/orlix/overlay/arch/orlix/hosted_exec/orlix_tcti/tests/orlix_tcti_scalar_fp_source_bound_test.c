@@ -2255,6 +2255,17 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 						 code);
 		if (test->status == KUNIT_FAILURE)
 			return;
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+		orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IOC);
+		current->thread.user_simd[rn * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source, FP32_NEG_ONE,
+						       FP64_NEG_ONE);
+		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
+						 code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
+			AARCH64_FPSR_IOC);
 		for (i = 0; i < ARRAY_SIZE(modes); i++) {
 			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 			current->thread.user_fpcr = modes[i];
