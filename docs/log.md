@@ -10,8 +10,8 @@ updated: 2026-08-29
 ## [2026-08-29] record | Strengthen SCALAR_FP exception proof
 
 SCALAR_FP proof now distinguishes quiet-NaN compare and FCVT IOC, FABS
-qNaN/sNaN payload and IOC behavior, FSQRT invalid IOC, FRINTI and FRINTX IXC,
-and FDIV divide-by-zero DZC before ingest. Durable details stay on
+qNaN/sNaN payload and IOC behavior, FSQRT invalid IOC, min/max qNaN/sNaN IOC,
+FRINTI and FRINTX IXC, and FDIV divide-by-zero DZC before ingest. Details stay on
 [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md).
 Optional FP leaves remain blockers, HWCAP stays zero, and
 `linux_proof_executed` stays 0.
