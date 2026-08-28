@@ -9,8 +9,9 @@ updated: 2026-08-28
 
 ## [2026-08-28] record | Strengthen SCALAR_FP status and NaN proof
 
-SCALAR_FP proof now distinguishes quiet-NaN compare and FCVT IOC, FRINTI and
-FRINTX IXC, and FDIV divide-by-zero DZC before ingest. Durable details stay on
+SCALAR_FP proof now distinguishes quiet-NaN compare and FCVT IOC, FABS
+qNaN/sNaN payload and IOC behavior, FRINTI and FRINTX IXC, and FDIV
+divide-by-zero DZC before ingest. Durable details stay on
 [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md).
 Optional FP leaves remain blockers, HWCAP stays zero, and
 `linux_proof_executed` stays 0.

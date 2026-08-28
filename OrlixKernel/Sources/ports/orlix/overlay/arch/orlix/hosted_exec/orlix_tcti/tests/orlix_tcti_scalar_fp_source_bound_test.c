@@ -2207,12 +2207,37 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		return;
 	}
 	if (!strcmp(mnemonic, "FABS")) {
+		static const u64 fp32_nans[] = {
+			FP32_QNAN_PAYLOAD, FP32_SNAN_PAYLOAD,
+		};
+		static const u64 fp64_nans[] = {
+			FP64_QNAN_PAYLOAD, FP64_SNAN_PAYLOAD,
+		};
+		u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+		size_t i;
+
 		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
+		current->thread.user_simd[rn * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source,
 				FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		for (i = 0; i < ARRAY_SIZE(fp32_nans); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IOC);
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, fp32_nans[i],
+							       fp64_nans[i]);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			KUNIT_EXPECT_EQ_MSG(test, 0UL,
+				current->thread.user_fpsr & AARCH64_FPSR_IOC,
+				"%s unexpected fpsr ioc", source->name);
+		}
 		return;
 	}
 	if (!strcmp(mnemonic, "FSQRT")) {
