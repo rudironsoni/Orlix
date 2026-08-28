@@ -612,6 +612,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_advsimd_fp_source_bound_cases"
 #define ADVSIMD_FP_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_advsimd_fp_production_capture.h\""
+#define SCALAR_FP_FAMILY_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_fp_source_bound_test.c"
+#define SCALAR_FP_FAMILY_SUITE "orlix-tcti-scalar-fp-source-bound"
+#define SCALAR_FP_FAMILY_SUITE_SYMBOL \
+	"orlix_tcti_scalar_fp_source_bound_suite"
+#define SCALAR_FP_FAMILY_CASE_ARRAY \
+	"orlix_tcti_scalar_fp_source_bound_cases"
+#define SCALAR_FP_FAMILY_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_scalar_fp_production_capture.h\""
 #define AES_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f414553"
 #define SHA1_CONDITION \
@@ -769,6 +778,11 @@ production_capture_bindings[] = {
 #define SCALAR_FP_CONVERT_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define SCALAR_FP_FAMILY_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define ADVSIMD_FP_ARITHMETIC_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
@@ -964,6 +978,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADVSIMD_FP_SOURCE,
 	  "cbdff96a1ca367126d637df1ad6cf37ab0fc1d7d963e8aa29536b7127e7692f1",
 	  "orlix_tcti_advsimd_fp_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ SCALAR_FP_FAMILY_SOURCE,
+	  "d1c691f608547e7dbabc177f5b8b8e853afc1dfc019ff66976c5d17d2a2db0bb",
+	  "orlix_tcti_scalar_fp_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1821,6 +1841,38 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_advsimd_fp_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_optional_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_edge_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE,
+	  SCALAR_FP_FAMILY_SUITE_SYMBOL, SCALAR_FP_FAMILY_CASE_ARRAY,
+	  "orlix_tcti_scalar_fp_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -2626,22 +2678,54 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("UCVTF_advsimd_fix", ADVSIMD_FP_SIMD_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UCVTF_advsimd_int", ADVSIMD_FP_SIMD_OBLIGATIONS),
 
-	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTZU_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTNS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTNU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SCVTF_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UCVTF_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTAS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTAU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTPS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTPU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTMS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTMU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTZS_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
-	SCALAR_REQUIREMENT("FCVTZU_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZU_float_fix", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTNS_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTNU_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SCVTF_float_int", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UCVTF_float_int", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTAS_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTAU_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTPS_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTPU_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTMS_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTMU_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZS_float_int", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZU_float_int", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMOV_float_gen", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMOV_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMOV_float_imm", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FABS_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FNEG_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FSQRT_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVT_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTN_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTP_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTM_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTZ_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTA_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTX_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FRINTI_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCMP_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCMPE_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCCMP_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCCMPE_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMUL_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FDIV_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FADD_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FSUB_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMAX_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMIN_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMAXNM_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMINNM_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FNMUL_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCSEL_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMADD_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMSUB_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FNMADD_float", SCALAR_FP_FAMILY_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FNMSUB_float", SCALAR_FP_FAMILY_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -3476,6 +3560,29 @@ advsimd_fp_simd_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case scalar_fp_family_cases[] = {
+	{ "orlix_tcti_scalar_fp_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_scalar_fp_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_scalar_fp_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_scalar_fp_optional_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_scalar_fp_edge_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_scalar_fp_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
 static const struct orlix_tcti_target_proof_case
 advsimd_permute_move_gpr_cases[] = {
 	{ "orlix_tcti_advsimd_permute_move_decodes_exact_source_cohort",
@@ -4023,8 +4130,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 346U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 500U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 378U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 624U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 39U
@@ -4596,7 +4703,8 @@ static const struct orlix_tcti_target_proof_case add_sub_register_flags_cases[]
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
-static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[] = {
+static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_scalar_fp_convert_resume_source_rows",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -4614,10 +4722,10 @@ static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[] = {
 			 minimum, maximum, expected) \
 	{ operation, proof, source_file, source_suite, SCALAR_CONDITION, case_set, \
 	  ARRAY_COUNT(case_set), minimum, maximum, expected, 0, 0 }
-#define SCALAR_FP_OPERATION(operation, proof, minimum) \
-	{ operation, proof, SCALAR_FP_SOURCE, SCALAR_FP_SUITE, \
-	  SCALAR_FP_CONDITION, scalar_fp_convert_cases, \
-	  ARRAY_COUNT(scalar_fp_convert_cases), minimum, minimum, 1, 0, 0 }
+#define SCALAR_FP_OPERATION(operation, proof, minimum, maximum, expected) \
+	{ operation, proof, SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE, \
+	  SCALAR_FP_CONDITION, scalar_fp_family_cases, \
+	  ARRAY_COUNT(scalar_fp_family_cases), minimum, maximum, expected, 0, 0 }
 #define CRYPTO_OPERATION(operation, proof, condition, minimum) \
 	{ operation, proof, ADVSIMD_CRYPTO_SOURCE, ADVSIMD_CRYPTO_SUITE, \
 	  condition, advsimd_crypto_production_cases, \
@@ -5354,37 +5462,101 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	FP_SIMD_OPERATION("UCVTF_advsimd_int",
 		"kunit:advsimd-fp-ucvtf-advsimd-int", 3582U, 3836U, 2),
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
-		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
+		"kunit:scalar-fp-convert-scvtf-fix", 4084U, 4100U, 4),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",
-		"kunit:scalar-fp-convert-ucvtf-fix", 4085U),
+		"kunit:scalar-fp-convert-ucvtf-fix", 4085U, 4101U, 4),
 	SCALAR_FP_OPERATION("FCVTZS_float_fix",
-		"kunit:scalar-fp-convert-fcvtzs-fix", 4086U),
+		"kunit:scalar-fp-convert-fcvtzs-fix", 4086U, 4102U, 4),
 	SCALAR_FP_OPERATION("FCVTZU_float_fix",
-		"kunit:scalar-fp-convert-fcvtzu-fix", 4087U),
+		"kunit:scalar-fp-convert-fcvtzu-fix", 4087U, 4103U, 4),
 	SCALAR_FP_OPERATION("FCVTNS_float",
-		"kunit:scalar-fp-convert-fcvtns", 4108U),
+		"kunit:scalar-fp-convert-fcvtns", 4108U, 4161U, 4),
 	SCALAR_FP_OPERATION("FCVTNU_float",
-		"kunit:scalar-fp-convert-fcvtnu", 4109U),
+		"kunit:scalar-fp-convert-fcvtnu", 4109U, 4162U, 4),
 	SCALAR_FP_OPERATION("SCVTF_float_int",
-		"kunit:scalar-fp-convert-scvtf-int", 4110U),
+		"kunit:scalar-fp-convert-scvtf-int", 4110U, 4163U, 4),
 	SCALAR_FP_OPERATION("UCVTF_float_int",
-		"kunit:scalar-fp-convert-ucvtf-int", 4111U),
+		"kunit:scalar-fp-convert-ucvtf-int", 4111U, 4164U, 4),
 	SCALAR_FP_OPERATION("FCVTAS_float",
-		"kunit:scalar-fp-convert-fcvtas", 4112U),
+		"kunit:scalar-fp-convert-fcvtas", 4112U, 4165U, 4),
 	SCALAR_FP_OPERATION("FCVTAU_float",
-		"kunit:scalar-fp-convert-fcvtau", 4113U),
+		"kunit:scalar-fp-convert-fcvtau", 4113U, 4166U, 4),
+	SCALAR_FP_OPERATION("FMOV_float_gen",
+		"kunit:scalar-fp-fmov-gen", 4114U, 4176U, 6),
 	SCALAR_FP_OPERATION("FCVTPS_float",
-		"kunit:scalar-fp-convert-fcvtps", 4116U),
+		"kunit:scalar-fp-convert-fcvtps", 4116U, 4169U, 4),
 	SCALAR_FP_OPERATION("FCVTPU_float",
-		"kunit:scalar-fp-convert-fcvtpu", 4117U),
+		"kunit:scalar-fp-convert-fcvtpu", 4117U, 4170U, 4),
 	SCALAR_FP_OPERATION("FCVTMS_float",
-		"kunit:scalar-fp-convert-fcvtms", 4118U),
+		"kunit:scalar-fp-convert-fcvtms", 4118U, 4171U, 4),
 	SCALAR_FP_OPERATION("FCVTMU_float",
-		"kunit:scalar-fp-convert-fcvtmu", 4119U),
+		"kunit:scalar-fp-convert-fcvtmu", 4119U, 4172U, 4),
 	SCALAR_FP_OPERATION("FCVTZS_float_int",
-		"kunit:scalar-fp-convert-fcvtzs-int", 4120U),
+		"kunit:scalar-fp-convert-fcvtzs-int", 4120U, 4173U, 4),
 	SCALAR_FP_OPERATION("FCVTZU_float_int",
-		"kunit:scalar-fp-convert-fcvtzu-int", 4121U),
+		"kunit:scalar-fp-convert-fcvtzu-int", 4121U, 4174U, 4),
+	SCALAR_FP_OPERATION("FMOV_float",
+		"kunit:scalar-fp-fmov", 4239U, 4256U, 2),
+	SCALAR_FP_OPERATION("FABS_float",
+		"kunit:scalar-fp-fabs", 4240U, 4257U, 2),
+	SCALAR_FP_OPERATION("FNEG_float",
+		"kunit:scalar-fp-fneg", 4241U, 4258U, 2),
+	SCALAR_FP_OPERATION("FSQRT_float",
+		"kunit:scalar-fp-fsqrt", 4242U, 4259U, 2),
+	SCALAR_FP_OPERATION("FCVT_float",
+		"kunit:scalar-fp-fcvt", 4243U, 4279U, 6),
+	SCALAR_FP_OPERATION("FRINTN_float",
+		"kunit:scalar-fp-frintn", 4245U, 4263U, 2),
+	SCALAR_FP_OPERATION("FRINTP_float",
+		"kunit:scalar-fp-frintp", 4246U, 4264U, 2),
+	SCALAR_FP_OPERATION("FRINTM_float",
+		"kunit:scalar-fp-frintm", 4247U, 4265U, 2),
+	SCALAR_FP_OPERATION("FRINTZ_float",
+		"kunit:scalar-fp-frintz", 4248U, 4266U, 2),
+	SCALAR_FP_OPERATION("FRINTA_float",
+		"kunit:scalar-fp-frinta", 4249U, 4267U, 2),
+	SCALAR_FP_OPERATION("FRINTX_float",
+		"kunit:scalar-fp-frintx", 4250U, 4268U, 2),
+	SCALAR_FP_OPERATION("FRINTI_float",
+		"kunit:scalar-fp-frinti", 4251U, 4269U, 2),
+	SCALAR_FP_OPERATION("FCMP_float",
+		"kunit:scalar-fp-fcmp", 4287U, 4292U, 4),
+	SCALAR_FP_OPERATION("FCMPE_float",
+		"kunit:scalar-fp-fcmpe", 4289U, 4294U, 4),
+	SCALAR_FP_OPERATION("FMOV_float_imm",
+		"kunit:scalar-fp-fmov-imm", 4299U, 4300U, 2),
+	SCALAR_FP_OPERATION("FCCMP_float",
+		"kunit:scalar-fp-fccmp", 4302U, 4304U, 2),
+	SCALAR_FP_OPERATION("FCCMPE_float",
+		"kunit:scalar-fp-fccmpe", 4303U, 4305U, 2),
+	SCALAR_FP_OPERATION("FMUL_float",
+		"kunit:scalar-fp-fmul", 4308U, 4317U, 2),
+	SCALAR_FP_OPERATION("FDIV_float",
+		"kunit:scalar-fp-fdiv", 4309U, 4318U, 2),
+	SCALAR_FP_OPERATION("FADD_float",
+		"kunit:scalar-fp-fadd", 4310U, 4319U, 2),
+	SCALAR_FP_OPERATION("FSUB_float",
+		"kunit:scalar-fp-fsub", 4311U, 4320U, 2),
+	SCALAR_FP_OPERATION("FMAX_float",
+		"kunit:scalar-fp-fmax", 4312U, 4321U, 2),
+	SCALAR_FP_OPERATION("FMIN_float",
+		"kunit:scalar-fp-fmin", 4313U, 4322U, 2),
+	SCALAR_FP_OPERATION("FMAXNM_float",
+		"kunit:scalar-fp-fmaxnm", 4314U, 4323U, 2),
+	SCALAR_FP_OPERATION("FMINNM_float",
+		"kunit:scalar-fp-fminnm", 4315U, 4324U, 2),
+	SCALAR_FP_OPERATION("FNMUL_float",
+		"kunit:scalar-fp-fnmul", 4316U, 4325U, 2),
+	SCALAR_FP_OPERATION("FCSEL_float",
+		"kunit:scalar-fp-fcsel", 4335U, 4336U, 2),
+	SCALAR_FP_OPERATION("FMADD_float",
+		"kunit:scalar-fp-fmadd", 4338U, 4342U, 2),
+	SCALAR_FP_OPERATION("FMSUB_float",
+		"kunit:scalar-fp-fmsub", 4339U, 4343U, 2),
+	SCALAR_FP_OPERATION("FNMADD_float",
+		"kunit:scalar-fp-fnmadd", 4340U, 4344U, 2),
+	SCALAR_FP_OPERATION("FNMSUB_float",
+		"kunit:scalar-fp-fnmsub", 4341U, 4345U, 2),
 };
 
 #undef CRYPTO_OPERATION

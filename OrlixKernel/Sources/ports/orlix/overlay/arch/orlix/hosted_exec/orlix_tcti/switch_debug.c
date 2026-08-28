@@ -25,7 +25,9 @@
 #define AARCH64_FPSR_IOC BIT(0)
 #define AARCH64_FPSR_DZC BIT(1)
 #define AARCH64_FPSR_IXC BIT(4)
+#define AARCH64_FPSR_IDC BIT(7)
 #define AARCH64_FPSR_QC BIT(27)
+#define AARCH64_FPCR_FZ BIT(24)
 #define AARCH64_FPCR_WRITABLE_MASK \
 	(GENMASK(26, 22) | BIT(15) | GENMASK(12, 8))
 #define AARCH64_FPSR_WRITABLE_MASK \
@@ -208,6 +210,48 @@ static bool orlix_tcti_fp64_is_signaling_nan(u64 value)
 	return orlix_tcti_fp64_is_nan(value) && !(value & BIT_ULL(51));
 }
 
+static bool orlix_tcti_fp32_is_subnormal(u32 value)
+{
+	return !(value & GENMASK(30, 23)) && (value & GENMASK(22, 0));
+}
+
+static bool orlix_tcti_fp16_is_subnormal(u16 value)
+{
+	return !(value & GENMASK(14, 10)) && (value & GENMASK(9, 0));
+}
+
+static bool orlix_tcti_fp64_is_subnormal(u64 value)
+{
+	return !(value & GENMASK_ULL(62, 52)) && (value & GENMASK_ULL(51, 0));
+}
+
+static u32 orlix_tcti_fp32_flush_to_zero(u32 value, bool *flushed)
+{
+	if (orlix_tcti_fp32_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT(31);
+	}
+	return value;
+}
+
+static u16 orlix_tcti_fp16_flush_to_zero(u16 value, bool *flushed)
+{
+	if (orlix_tcti_fp16_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT(15);
+	}
+	return value;
+}
+
+static u64 orlix_tcti_fp64_flush_to_zero(u64 value, bool *flushed)
+{
+	if (orlix_tcti_fp64_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT_ULL(63);
+	}
+	return value;
+}
+
 static void orlix_tcti_set_fp_compare_flags(struct pt_regs *regs, int result)
 {
 	u64 flags = 0;
@@ -283,148 +327,6 @@ static int orlix_tcti_compare_fp64(u64 left, u64 right)
 	if (left_magnitude == right_magnitude)
 		return 0;
 	return left_negative == (left_magnitude > right_magnitude) ? -1 : 1;
-}
-
-static u64 orlix_tcti_s32_to_fp64_bits(s32 value)
-{
-	u64 sign = value < 0 ? BIT_ULL(63) : 0;
-	u64 magnitude = value < 0 ? -(s64)value : value;
-	u8 top_bit = 0;
-	u64 exponent;
-	u64 fraction;
-
-	if (!magnitude)
-		return sign;
-
-	while ((magnitude >> (top_bit + 1)) != 0)
-		top_bit++;
-
-	exponent = top_bit + 1023;
-	fraction = (magnitude ^ BIT_ULL(top_bit)) << (52 - top_bit);
-	return sign | (exponent << 52) | fraction;
-}
-
-static u32 orlix_tcti_s32_to_fp32_bits(s32 value)
-{
-	u32 sign = value < 0 ? BIT(31) : 0;
-	u64 magnitude = value < 0 ? -(s64)value : value;
-	u8 top_bit = 0;
-	u32 exponent;
-	u64 mantissa;
-	u32 fraction;
-
-	if (!magnitude)
-		return sign;
-
-	while ((magnitude >> (top_bit + 1)) != 0)
-		top_bit++;
-
-	exponent = top_bit + 127;
-	if (top_bit <= 23) {
-		fraction = (magnitude ^ BIT_ULL(top_bit)) << (23 - top_bit);
-		return sign | (exponent << 23) | fraction;
-	}
-
-	{
-		u8 shift = top_bit - 23;
-		u64 remainder_mask = BIT_ULL(shift) - 1;
-		u64 remainder = magnitude & remainder_mask;
-		u64 halfway = BIT_ULL(shift - 1);
-
-		mantissa = magnitude >> shift;
-		if (remainder > halfway ||
-		    (remainder == halfway && (mantissa & 1)))
-			mantissa++;
-		if (mantissa & BIT_ULL(24)) {
-			mantissa >>= 1;
-			exponent++;
-		}
-	}
-
-	return sign | (exponent << 23) | (mantissa & GENMASK(22, 0));
-}
-
-static u32 orlix_tcti_u32_to_fp32_bits(u32 value)
-{
-	u8 top_bit = 0;
-	u32 exponent;
-	u64 mantissa;
-	u32 fraction;
-
-	if (!value)
-		return 0;
-
-	while (top_bit < 31 && (value >> (top_bit + 1)) != 0)
-		top_bit++;
-
-	exponent = top_bit + 127;
-	if (top_bit <= 23) {
-		fraction = (value ^ BIT(top_bit)) << (23 - top_bit);
-		return (exponent << 23) | fraction;
-	}
-
-	{
-		u8 shift = top_bit - 23;
-		u64 remainder_mask = BIT_ULL(shift) - 1;
-		u64 remainder = value & remainder_mask;
-		u64 halfway = BIT_ULL(shift - 1);
-
-		mantissa = value >> shift;
-		if (remainder > halfway || (remainder == halfway && (mantissa & 1)))
-			mantissa++;
-		if (mantissa & BIT_ULL(24)) {
-			mantissa >>= 1;
-			exponent++;
-		}
-	}
-
-	return (exponent << 23) | (mantissa & GENMASK(22, 0));
-}
-
-static u32 orlix_tcti_u64_to_fp32_bits(u64 value)
-{
-	u8 top_bit = 0;
-	u32 exponent;
-	u64 mantissa;
-	u32 fraction;
-
-	if (!value)
-		return 0;
-
-	while (top_bit < 63 && (value >> (top_bit + 1)) != 0)
-		top_bit++;
-
-	exponent = top_bit + 127;
-	if (top_bit <= 23) {
-		fraction = (value ^ BIT_ULL(top_bit)) << (23 - top_bit);
-		return (exponent << 23) | fraction;
-	}
-
-	{
-		u8 shift = top_bit - 23;
-		u64 remainder_mask = BIT_ULL(shift) - 1;
-		u64 remainder = value & remainder_mask;
-		u64 halfway = BIT_ULL(shift - 1);
-
-		mantissa = value >> shift;
-		if (remainder > halfway ||
-		    (remainder == halfway && (mantissa & 1)))
-			mantissa++;
-		if (mantissa & BIT_ULL(24)) {
-			mantissa >>= 1;
-			exponent++;
-		}
-	}
-
-	return (exponent << 23) | (mantissa & GENMASK(22, 0));
-}
-
-static u32 orlix_tcti_s64_to_fp32_bits(s64 value)
-{
-	u64 magnitude = value < 0 ? 0 - (u64)value : (u64)value;
-	u32 result = orlix_tcti_u64_to_fp32_bits(magnitude);
-
-	return value < 0 ? result | BIT(31) : result;
 }
 
 static u64 orlix_tcti_u64_to_fp64_bits(u64 value)
@@ -7563,6 +7465,7 @@ static int orlix_tcti_execute_fp_scalar_compare(
 	u64 right = decoded->immediate ?
 			    0 : current->thread.user_simd[decoded->rm * 2];
 	bool invalid_operation;
+	bool flushed = false;
 	int result;
 
 	if (decoded->fp_conditional &&
@@ -7570,6 +7473,25 @@ static int orlix_tcti_execute_fp_scalar_compare(
 		orlix_tcti_set_nzcv_from_immediate(regs, decoded->nzcv);
 		regs->pc += sizeof(u32);
 		return 0;
+	}
+
+	if (current->thread.user_fpcr & AARCH64_FPCR_FZ) {
+		if (decoded->access_size == sizeof(u16)) {
+			left = orlix_tcti_fp16_flush_to_zero((u16)left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp16_flush_to_zero((u16)right,
+								     &flushed);
+		} else if (decoded->access_size == sizeof(u32)) {
+			left = orlix_tcti_fp32_flush_to_zero((u32)left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp32_flush_to_zero((u32)right,
+								     &flushed);
+		} else if (decoded->access_size == sizeof(u64)) {
+			left = orlix_tcti_fp64_flush_to_zero(left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp64_flush_to_zero(right,
+								     &flushed);
+		}
 	}
 
 	if (decoded->access_size == sizeof(u16)) {
@@ -7599,6 +7521,8 @@ static int orlix_tcti_execute_fp_scalar_compare(
 
 	if (invalid_operation)
 		current->thread.user_fpsr |= AARCH64_FPSR_IOC;
+	if (flushed)
+		current->thread.user_fpsr |= AARCH64_FPSR_IDC;
 	orlix_tcti_set_fp_compare_flags(regs, result);
 	regs->pc += sizeof(u32);
 	return 0;
@@ -7861,66 +7785,76 @@ static int orlix_tcti_execute_fp_int_convert(
 		return 0;
 	}
 
-	if (decoded->fp_int_op == ORLIX_TCTI_FP_INT_SCVTF &&
-	    decoded->access_size == sizeof(u32)) {
-		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u32));
-		if (decoded->result_size == sizeof(u32)) {
-			orlix_tcti_write_simd_fp_register(
-				decoded->rd, decoded->result_size,
-				orlix_tcti_s32_to_fp32_bits((s32)value), 0);
-			regs->pc += sizeof(u32);
-			return 0;
-		}
-		if (decoded->result_size != sizeof(u64))
-			return -EOPNOTSUPP;
-		orlix_tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    orlix_tcti_s32_to_fp64_bits((s32)value),
-					    0);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
+	if (decoded->fp_int_op == ORLIX_TCTI_FP_INT_SCVTF ||
+	    decoded->fp_int_op == ORLIX_TCTI_FP_INT_UCVTF) {
+		u32 result32;
+		bool unsigned_conversion =
+			decoded->fp_int_op == ORLIX_TCTI_FP_INT_UCVTF;
+		bool wide_source = decoded->access_size == sizeof(u64);
+		bool wide_result = decoded->result_size == sizeof(u64);
 
-	if (decoded->fp_int_op == ORLIX_TCTI_FP_INT_SCVTF &&
-	    decoded->access_size == sizeof(u64)) {
-		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u64));
-		if (decoded->result_size == sizeof(u32))
-			result = orlix_tcti_s64_to_fp32_bits((s64)value);
-		else if (decoded->result_size == sizeof(u64))
-			result = orlix_tcti_s64_to_fp64_bits((s64)value);
-		else
+		if ((decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u32) &&
+		     decoded->result_size != sizeof(u64)))
 			return -EOPNOTSUPP;
-		orlix_tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    result, 0);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->fp_int_op == ORLIX_TCTI_FP_INT_UCVTF &&
-	    decoded->result_size == sizeof(u32)) {
 		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rn,
-					      decoded->access_size);
-		if (decoded->access_size == sizeof(u64)) {
-			orlix_tcti_write_simd_fp_register(
-				decoded->rd, decoded->result_size,
-				orlix_tcti_u64_to_fp32_bits(value), 0);
-			regs->pc += sizeof(u32);
-			return 0;
+						    decoded->access_size);
+		preempt_disable();
+		asm volatile(
+			"mrs %0, fpcr\n"
+			"mrs %1, fpsr\n"
+			"msr fpcr, %2\n"
+			"msr fpsr, %3\n"
+			"isb\n"
+			: "=&r" (host_fpcr), "=&r" (host_fpsr)
+			: "r" (current->thread.user_fpcr),
+			  "r" (current->thread.user_fpsr)
+			: "memory");
+		if (!unsigned_conversion) {
+			if (!wide_source && !wide_result)
+				asm volatile("scvtf s0, %w1\n fmov %w0, s0\n"
+					     : "=r" (result32) : "r" (value)
+					     : "v0");
+			else if (!wide_source)
+				asm volatile("scvtf d0, %w1\n fmov %0, d0\n"
+					     : "=r" (result) : "r" (value)
+					     : "v0");
+			else if (!wide_result)
+				asm volatile("scvtf s0, %1\n fmov %w0, s0\n"
+					     : "=r" (result32) : "r" (value)
+					     : "v0");
+			else
+				asm volatile("scvtf d0, %1\n fmov %0, d0\n"
+					     : "=r" (result) : "r" (value)
+					     : "v0");
+		} else if (!wide_source && !wide_result) {
+			asm volatile("ucvtf s0, %w1\n fmov %w0, s0\n"
+				     : "=r" (result32) : "r" (value) : "v0");
+		} else if (!wide_source) {
+			asm volatile("ucvtf d0, %w1\n fmov %0, d0\n"
+				     : "=r" (result) : "r" (value) : "v0");
+		} else if (!wide_result) {
+			asm volatile("ucvtf s0, %1\n fmov %w0, s0\n"
+				     : "=r" (result32) : "r" (value) : "v0");
+		} else {
+			asm volatile("ucvtf d0, %1\n fmov %0, d0\n"
+				     : "=r" (result) : "r" (value) : "v0");
 		}
-		if (decoded->access_size != sizeof(u32))
-			return -EOPNOTSUPP;
+		if (!wide_result)
+			result = result32;
+		asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+		current->thread.user_fpsr = guest_fpsr;
+		asm volatile(
+			"msr fpcr, %0\n"
+			"msr fpsr, %1\n"
+			"isb\n"
+			:
+			: "r" (host_fpcr), "r" (host_fpsr)
+			: "memory");
+		preempt_enable();
 		orlix_tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    orlix_tcti_u32_to_fp32_bits((u32)value),
-					    0);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->fp_int_op == ORLIX_TCTI_FP_INT_UCVTF &&
-	    decoded->result_size == sizeof(u64)) {
-		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rn,
-					      decoded->access_size);
-		orlix_tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    orlix_tcti_u64_to_fp64_bits(value), 0);
+						  result, 0);
 		regs->pc += sizeof(u32);
 		return 0;
 	}

@@ -161,11 +161,18 @@ static bool orlix_tcti_decoded_is_fp_operation(
 static bool orlix_tcti_decoded_requires_fp16(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
-	return decoded && decoded->simd_fp &&
-		!orlix_tcti_decoded_is_memory_transfer(decoded) &&
-		orlix_tcti_decoded_is_fp_operation(decoded) &&
-		(decoded->access_size == sizeof(u16) ||
-		 decoded->result_size == sizeof(u16));
+	if (!decoded || !decoded->simd_fp)
+		return false;
+	if (orlix_tcti_decoded_is_memory_transfer(decoded))
+		return false;
+	if (!orlix_tcti_decoded_is_fp_operation(decoded))
+		return false;
+	/* FCVT among H/S/D is FEAT_FP, not FEAT_FP16 arithmetic. */
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_1SOURCE &&
+	    decoded->fp1_op == ORLIX_TCTI_FP1_FCVT)
+		return false;
+	return decoded->access_size == sizeof(u16) ||
+		decoded->result_size == sizeof(u16);
 }
 
 static bool orlix_tcti_decoded_runtime_available(
@@ -173,6 +180,8 @@ static bool orlix_tcti_decoded_runtime_available(
 {
 	/* FEAT_LUT remains unavailable. AdvSIMD LUTI rejects at EL0. */
 	if (orlix_tcti_decoded_requires_lut(decoded))
+		return false;
+	if (decoded && orlix_tcti_scalar_fp_optional_ordinal(decoded->source_ordinal))
 		return false;
 	/* FEAT_RDM, FEAT_DotProd, FEAT_I8MM, and unadvertised AdvSIMD FP
 	 * extensions remain unavailable.

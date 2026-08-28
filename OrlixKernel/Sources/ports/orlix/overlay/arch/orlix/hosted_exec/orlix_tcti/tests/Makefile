@@ -90,6 +90,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_advsimd_permute_move_source_bound_test.o \
 	orlix_tcti_advsimd_integer_source_bound_test.o \
 	orlix_tcti_advsimd_fp_source_bound_test.o \
+	orlix_tcti_scalar_fp_source_bound_test.o \
 	orlix_tcti_logical_shifted_register_test.o \
 	orlix_tcti_logical_immediate_source_bound_test.o \
 	orlix_tcti_move_wide_source_bound_test.o \

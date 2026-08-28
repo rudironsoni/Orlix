@@ -3,9 +3,26 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-26
+updated: 2026-08-29
 ---
 # Orlix Knowledge Log
+
+## [2026-08-29] record | Strengthen SCALAR_FP exception proof
+
+SCALAR_FP proof now distinguishes quiet-NaN compare and FCVT IOC, FABS
+qNaN/sNaN payload and IOC behavior, FSQRT invalid IOC, min/max qNaN/sNaN IOC,
+FRINTI and FRINTX IXC, and FDIV divide-by-zero DZC before ingest. Details stay on
+[Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md).
+Optional FP leaves remain blockers, HWCAP stays zero, and
+`linux_proof_executed` stays 0.
+
+## [2026-08-28] record | Record SCALAR_FP outcome on the owning task page
+
+Moved the durable `SCALAR_FP` family outcome onto [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md). FCSEL, FCCMP, and FCCMPE extras now include inverted bit-3 conditions LS, LT, LE, and NV. The 126 optional FP leaves stay unclassified complete-target blockers. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
+## [2026-08-27] record | Prove SCALAR_FP always-on S/D results and keep optional FP unclassified
+
+Recorded that the 266 unique `SCALAR_FP` leaves have production decode and EL0 classification. Durable outcome, extra-vector contract, and remaining optional-FP blockers live on [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md). `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
 
 ## [2026-08-26] record | Pin current upstream Linux, mlibc, and Coreutils releases
 
