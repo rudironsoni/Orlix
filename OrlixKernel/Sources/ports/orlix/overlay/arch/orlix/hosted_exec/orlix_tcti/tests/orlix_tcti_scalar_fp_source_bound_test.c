@@ -58,6 +58,9 @@
 #define FP32_FOUR 0x40800000U
 #define FP32_NEG_ONE 0xbf800000U
 #define FP32_FMA_A 0x3f800800U
+#define FP32_NARROW_H 0x3f801000U
+#define FP64_NARROW_S 0x3ff0000010000000ULL
+#define FP64_NARROW_H 0x3ff0020000000000ULL
 #define FP16_ONE 0x3c00U
 #define FP16_ONE_POINT_FIVE 0x3e00U
 #define FP16_TWO_POINT_FIVE 0x4100U
@@ -1638,11 +1641,31 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		return;
 	}
 	if (!strcmp(mnemonic, "FSQRT")) {
+		static const unsigned long modes[] = {
+			0, AARCH64_FPCR_RMODE_POSINF, AARCH64_FPCR_RMODE_NEGINF,
+			AARCH64_FPCR_RMODE_ZERO,
+		};
+		u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+		size_t i;
+
 		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
+		current->thread.user_simd[rn * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source, FP32_FOUR, FP64_FOUR);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		for (i = 0; i < ARRAY_SIZE(modes); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_fpcr = modes[i];
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_TWO,
+							       FP64_TWO);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
 		return;
 	}
 	if (!strcmp(mnemonic, "FMAX") || !strcmp(mnemonic, "FMIN") ||
@@ -1753,6 +1776,32 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 			if (test->status == KUNIT_FAILURE)
 				return;
 		}
+		if (strstr(source->name, "_SD") || strstr(source->name, "_HS") ||
+		    strstr(source->name, "_HD")) {
+			static const unsigned long modes[] = {
+				0, AARCH64_FPCR_RMODE_POSINF,
+				AARCH64_FPCR_RMODE_NEGINF, AARCH64_FPCR_RMODE_ZERO,
+			};
+			u64 inexact;
+			u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+
+			if (strstr(source->name, "_HS"))
+				inexact = FP32_NARROW_H;
+			else if (strstr(source->name, "_SD"))
+				inexact = FP64_NARROW_S;
+			else
+				inexact = FP64_NARROW_H;
+			for (i = 0; i < ARRAY_SIZE(modes); i++) {
+				orlix_tcti_scalar_fp_seed(source, regs, code,
+							  instruction);
+				current->thread.user_fpcr = modes[i];
+				current->thread.user_simd[rn * 2U] = inexact;
+				orlix_tcti_scalar_fp_compare_run(test, source,
+					instruction, regs, code);
+				if (test->status == KUNIT_FAILURE)
+					return;
+			}
+		}
 		return;
 	}
 	if (strstr(source->name, "floatimm")) {
@@ -1798,18 +1847,48 @@ static void orlix_tcti_scalar_fp_run_register_vectors(struct kunit *test,
 		if (test->status == KUNIT_FAILURE)
 			return;
 	}
-	if (!rd_free || !rn_free)
-		return;
-	alias_rn = (alias_rn & ~0x1fU) | 16U;
-	alias_rn = (alias_rn & ~(0x1fU << 5)) | (16U << 5);
-	if (rm_free)
-		alias_rn = (alias_rn & ~(0x1fU << 16)) | (18U << 16);
-	if (ra_free)
-		alias_rn = (alias_rn & ~(0x1fU << 10)) | (19U << 10);
-	if (alias_rn != instruction && alias_rn != high)
-		orlix_tcti_scalar_fp_compare_encoding(test, source, alias_rn, true);
-	if (test->status == KUNIT_FAILURE)
-		return;
+	if (rd_free && rn_free) {
+		alias_rn = (alias_rn & ~0x1fU) | 16U;
+		alias_rn = (alias_rn & ~(0x1fU << 5)) | (16U << 5);
+		if (rm_free)
+			alias_rn = (alias_rn & ~(0x1fU << 16)) | (18U << 16);
+		if (ra_free)
+			alias_rn = (alias_rn & ~(0x1fU << 10)) | (19U << 10);
+		if (alias_rn != instruction && alias_rn != high) {
+			orlix_tcti_scalar_fp_compare_encoding(test, source, alias_rn,
+							      true);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+	}
+	if (rd_free && rm_free &&
+	    orlix_tcti_scalar_fp_dest_obligation(source) !=
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS) {
+		u32 alias_rm = instruction;
+
+		alias_rm = (alias_rm & ~0x1fU) | 16U;
+		alias_rm = (alias_rm & ~(0x1fU << 16)) | (16U << 16);
+		if (alias_rm != instruction && alias_rm != high &&
+		    alias_rm != alias_rn) {
+			orlix_tcti_scalar_fp_compare_encoding(test, source, alias_rm,
+							      true);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+	}
+	if (rd_free && ra_free) {
+		u32 alias_ra = instruction;
+
+		alias_ra = (alias_ra & ~0x1fU) | 16U;
+		alias_ra = (alias_ra & ~(0x1fU << 10)) | (16U << 10);
+		if (alias_ra != instruction && alias_ra != high &&
+		    alias_ra != alias_rn) {
+			orlix_tcti_scalar_fp_compare_encoding(test, source, alias_ra,
+							      true);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+	}
 	if (orlix_tcti_scalar_fp_gpr_rn(source) && rn_free) {
 		u32 zrn = instruction;
 
