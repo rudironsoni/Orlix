@@ -2433,9 +2433,7 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		for (i = 0; i < ARRAY_SIZE(vectors); i++) {
 			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 			current->thread.user_fpcr = vectors[i].fpcr;
-			if (vectors[i].raises_ioc)
-				orlix_tcti_scalar_fp_prepare_new_fpsr(
-					AARCH64_FPSR_IOC);
+			orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IOC);
 			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 				orlix_tcti_scalar_fp_src_lane_bits(source,
 					vectors[i].fp32, vectors[i].fp64,
@@ -2447,6 +2445,10 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 			if (vectors[i].raises_ioc)
 				orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
 					AARCH64_FPSR_IOC);
+			else
+				KUNIT_EXPECT_EQ_MSG(test, 0UL,
+					current->thread.user_fpsr & AARCH64_FPSR_IOC,
+					"%s unexpected fpsr ioc", source->name);
 		}
 		if (strstr(source->name, "_SD") || strstr(source->name, "_HS") ||
 		    strstr(source->name, "_HD")) {
