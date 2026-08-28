@@ -12,8 +12,9 @@ updated: 2026-08-28
 SCALAR_FP proof preserves seeded FPSR bits and clears required bits before
 vectors that raise IOC, IXC, or IDC. FCSEL, FCCMP, and FCCMPE cover true and
 false CC, PL, and VC. FCVT H/S/D covers quiet and signaling NaN with FPCR.DN
-off and on before ingest. Optional FP leaves remain blockers, HWCAP stays zero,
-and `linux_proof_executed` stays 0.
+off and on before ingest. Each run also checks all preserved SIMD and GPR
+state. Optional FP leaves remain blockers, HWCAP stays zero, and
+`linux_proof_executed` stays 0.
 
 ## [2026-08-28] record | Record SCALAR_FP outcome on the owning task page
 

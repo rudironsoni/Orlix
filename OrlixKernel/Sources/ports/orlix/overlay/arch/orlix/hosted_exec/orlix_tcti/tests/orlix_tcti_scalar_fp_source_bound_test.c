@@ -433,12 +433,15 @@ static void orlix_tcti_scalar_fp_seed(
 	u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
 	u8 rm = orlix_tcti_scalar_fp_rm_index(instruction);
 	u8 ra = orlix_tcti_scalar_fp_ra_index(instruction);
+	size_t index;
 
 	memset(regs, 0, sizeof(*regs));
 	regs->pc = code;
 	regs->pstate = PSR_MODE_EL0t | PSR_Z_BIT;
 	regs->syscallno = NO_SYSCALL;
 	regs->sp = 0x1111111111111111ULL;
+	for (index = 0; index < ARRAY_SIZE(regs->regs); index++)
+		regs->regs[index] = 0x3333000000000000ULL | index;
 	if (rd != 31U)
 		regs->regs[rd] = 0x1111111111111111ULL;
 	if (has_rn && rn != 31U)
@@ -1795,14 +1798,19 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 {
 	struct orlix_tcti_result result;
 	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 before_gpr[ARRAY_SIZE(regs->regs)];
+	u64 before_sp = regs->sp;
 	u64 expected_simd[2];
 	u64 expected_gpr;
 	unsigned long expected_nzcv;
 	unsigned long expected_fpsr;
 	u32 dest = orlix_tcti_scalar_fp_dest_obligation(source);
+	u8 rd = orlix_tcti_scalar_fp_rd_index(instruction);
+	size_t index;
 	int ret;
 
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	memcpy(before_gpr, regs->regs, sizeof(before_gpr));
 	ret = orlix_tcti_scalar_fp_expected_from_source(source, instruction, regs,
 		before_simd, current->thread.user_fpcr, current->thread.user_fpsr,
 		expected_simd, &expected_gpr, &expected_nzcv, &expected_fpsr);
@@ -1813,18 +1821,17 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 	if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD) {
 		KUNIT_ASSERT_EQ_MSG(test, expected_simd[0],
 				    current->thread.user_simd[
-					orlix_tcti_scalar_fp_rd_index(instruction) * 2U],
+					rd * 2U],
 				    "%s dest lo %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 		KUNIT_ASSERT_EQ_MSG(test, expected_simd[1],
 				    current->thread.user_simd[
-					orlix_tcti_scalar_fp_rd_index(instruction) * 2U + 1U],
+					rd * 2U + 1U],
 				    "%s dest hi %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	} else if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS) {
 		KUNIT_ASSERT_EQ_MSG(test, expected_gpr,
-				    orlix_tcti_scalar_fp_read_gpr(regs,
-					orlix_tcti_scalar_fp_rd_index(instruction)),
+				    orlix_tcti_scalar_fp_read_gpr(regs, rd),
 				    "%s gpr %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	} else {
@@ -1832,6 +1839,26 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 				    "%s nzcv %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	}
+	for (index = 0; index < ARRAY_SIZE(before_simd); index++) {
+		if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD &&
+		    index / 2U == rd)
+			continue;
+		KUNIT_ASSERT_EQ_MSG(test, before_simd[index],
+			current->thread.user_simd[index],
+			"%s preserved simd %zu %s insn %#x", source->name, index,
+			source->mnemonic, instruction);
+	}
+	for (index = 0; index < ARRAY_SIZE(before_gpr); index++) {
+		if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS &&
+		    index == rd)
+			continue;
+		KUNIT_ASSERT_EQ_MSG(test, before_gpr[index], regs->regs[index],
+			"%s preserved gpr %zu %s insn %#x", source->name, index,
+			source->mnemonic, instruction);
+	}
+	KUNIT_ASSERT_EQ_MSG(test, before_sp, regs->sp,
+			    "%s preserved sp %s insn %#x", source->name,
+			    source->mnemonic, instruction);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s insn %#x", source->name, source->mnemonic,
 			    instruction);
