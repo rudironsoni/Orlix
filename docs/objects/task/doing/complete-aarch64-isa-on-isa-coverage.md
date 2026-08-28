@@ -142,7 +142,7 @@ Passing mlibc, Coreutils, or another package suite is downstream compatibility e
 | `ADVSIMD_PERMUTE_MOVE` | 37 | The 33 always-on leaves and edge cases are proved. Four `FEAT_LUT` leaves prove EL0 rejection. `FEAT_LUT` is not advertised. |
 | `ADVSIMD_INTEGER` | 240 | The 222 always-on leaves and edge cases are proved. Eighteen RDM, DotProd, and I8MM leaves prove EL0 rejection. Their HWCAP bits are not advertised. |
 | `ADVSIMD_FP` | 268 | The 113 always-on leaves are proved, including NaN, infinity, zero, subnormal, rounding, IOC, Q=0, and alias cases. The 155 FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE leaves remain complete-target blockers. Their capability bits, including `HWCAP_FPHP` and `HWCAP_ASIMDHP`, are not advertised. |
-| `SCALAR_FP` | 266 | The 140 always-on FEAT_FP S/D leaves are proved. The host mnemonic oracle compares SIMD, GPR, NZCV, and FPSR before ingest. Coverage includes FPCR, FPSR, NaN, DN, alias, poison, and FMOV lane cases. The 126 FP16, FPRCVT, FRINTTS, JSCVT, and BF16 leaves remain complete-target blockers and unadvertised. |
+| `SCALAR_FP` | 266 | The 140 always-on FEAT_FP S/D leaves are proved. The host mnemonic oracle compares SIMD, GPR, NZCV, and FPSR before ingest. Coverage includes FPCR, raised and sticky FPSR, NaN, DN, all conditions, aliases, poison, and FMOV lanes. The 126 FP16, FPRCVT, FRINTTS, JSCVT, and BF16 leaves remain complete-target blockers and unadvertised. |
 
 Runtime rejection does not complete optional leaves. Pointer-auth branches, BTI,
 SVE, and SME remain open. These cohorts do not close the 4,350-leaf audit.
