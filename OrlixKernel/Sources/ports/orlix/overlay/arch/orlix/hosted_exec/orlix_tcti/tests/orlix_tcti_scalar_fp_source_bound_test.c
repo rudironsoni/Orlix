@@ -388,7 +388,7 @@ static void orlix_tcti_scalar_fp_seed_simd(void)
 	current->thread.user_fpsr = 0;
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
-			(index % 2U) ? 0 : (u64)FP32_ONE;
+			(index % 2U) ? 0 : (0x55550000ULL | (index / 2U));
 }
 
 static void orlix_tcti_scalar_fp_seed(
@@ -426,10 +426,10 @@ static void orlix_tcti_scalar_fp_seed(
 			orlix_tcti_scalar_fp_rn_seed_bits(source);
 	if (has_rm)
 		current->thread.user_simd[rm * 2U] = d ? FP64_TWO : FP32_TWO;
-	if (rd != rn)
-		current->thread.user_simd[rd * 2U] = 0;
 	if (has_ra)
 		current->thread.user_simd[ra * 2U] = d ? FP64_ONE : FP32_ONE;
+	if (rd != rn && (!has_rm || rd != rm) && (!has_ra || rd != ra))
+		current->thread.user_simd[rd * 2U] = 0;
 }
 
 static bool orlix_tcti_scalar_fp_is_double(
