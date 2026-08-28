@@ -80,6 +80,8 @@
 #define FP16_NEG_ONE_POINT_FIVE 0xbe00U
 #define FP16_SNAN_PAYLOAD 0x7c55U
 #define FP16_QNAN_PAYLOAD 0x7e55U
+#define FP64_POS_ZERO 0x0ULL
+#define FP64_NEG_ZERO 0x8000000000000000ULL
 #define FP64_ONE 0x3ff0000000000000ULL
 #define FP64_TWO 0x4000000000000000ULL
 #define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
@@ -1800,6 +1802,8 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
 	u64 before_gpr[ARRAY_SIZE(regs->regs)];
 	u64 before_sp = regs->sp;
+	unsigned long before_fpcr = current->thread.user_fpcr;
+	unsigned long before_nzcv = regs->pstate & NZCV;
 	u64 expected_simd[2];
 	u64 expected_gpr;
 	unsigned long expected_nzcv;
@@ -1812,7 +1816,7 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
 	memcpy(before_gpr, regs->regs, sizeof(before_gpr));
 	ret = orlix_tcti_scalar_fp_expected_from_source(source, instruction, regs,
-		before_simd, current->thread.user_fpcr, current->thread.user_fpsr,
+		before_simd, before_fpcr, current->thread.user_fpsr,
 		expected_simd, &expected_gpr, &expected_nzcv, &expected_fpsr);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
 			    source->name, source->mnemonic, instruction);
@@ -1834,11 +1838,12 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 				    orlix_tcti_scalar_fp_read_gpr(regs, rd),
 				    "%s gpr %s insn %#x", source->name,
 				    source->mnemonic, instruction);
-	} else {
-		KUNIT_ASSERT_EQ_MSG(test, expected_nzcv, regs->pstate & NZCV,
-				    "%s nzcv %s insn %#x", source->name,
-				    source->mnemonic, instruction);
 	}
+	KUNIT_ASSERT_EQ_MSG(test,
+		(dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS) ?
+			expected_nzcv : before_nzcv,
+		regs->pstate & NZCV, "%s nzcv %s insn %#x", source->name,
+		source->mnemonic, instruction);
 	for (index = 0; index < ARRAY_SIZE(before_simd); index++) {
 		if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD &&
 		    index / 2U == rd)
@@ -1859,6 +1864,9 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 	KUNIT_ASSERT_EQ_MSG(test, before_sp, regs->sp,
 			    "%s preserved sp %s insn %#x", source->name,
 			    source->mnemonic, instruction);
+	KUNIT_ASSERT_EQ_MSG(test, before_fpcr, current->thread.user_fpcr,
+			    "%s fpcr %s insn %#x", source->name, source->mnemonic,
+			    instruction);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s insn %#x", source->name, source->mnemonic,
 			    instruction);
@@ -2226,11 +2234,34 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 	}
 	if (!strcmp(mnemonic, "FMAX") || !strcmp(mnemonic, "FMIN") ||
 	    !strcmp(mnemonic, "FMAXNM") || !strcmp(mnemonic, "FMINNM")) {
+		static const u64 fp32_left[] = { FP32_POS_ZERO, FP32_NEG_ZERO };
+		static const u64 fp32_right[] = { FP32_NEG_ZERO, FP32_POS_ZERO };
+		static const u64 fp64_left[] = { FP64_POS_ZERO, FP64_NEG_ZERO };
+		static const u64 fp64_right[] = { FP64_NEG_ZERO, FP64_POS_ZERO };
+		u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+		u8 rm = orlix_tcti_scalar_fp_rm_index(instruction);
+		size_t i;
+
 		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
+		current->thread.user_simd[rn * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		for (i = 0; i < ARRAY_SIZE(fp32_left); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, fp32_left[i],
+							       fp64_left[i]);
+			current->thread.user_simd[rm * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, fp32_right[i],
+							       fp64_right[i]);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
 		return;
 	}
 	if (!strcmp(mnemonic, "FMADD") || !strcmp(mnemonic, "FMSUB") ||
