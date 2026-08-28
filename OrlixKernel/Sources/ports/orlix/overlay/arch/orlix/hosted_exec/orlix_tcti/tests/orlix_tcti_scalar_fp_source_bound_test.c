@@ -2030,8 +2030,7 @@ static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
 		!strcmp(source->mnemonic, "FCCMPE");
 
 	orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-	if (raises_ioc)
-		orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IOC);
+	orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IOC);
 	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 		orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
 	if (!strstr(source->name, "_SZ") && !strstr(source->name, "_DZ"))
@@ -2041,6 +2040,10 @@ static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
 	if (raises_ioc)
 		orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
 			AARCH64_FPSR_IOC);
+	else
+		KUNIT_EXPECT_EQ_MSG(test, 0UL,
+			current->thread.user_fpsr & AARCH64_FPSR_IOC,
+			"%s unexpected fpsr ioc", source->name);
 }
 
 static void orlix_tcti_scalar_fp_run_fz_subnormal_compare(struct kunit *test,
@@ -2083,10 +2086,13 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 			AARCH64_FPCR_RMODE_ZERO,
 		};
 		size_t i;
+		bool checks_ixc = !strcmp(source->mnemonic, "FRINTX") ||
+			!strcmp(source->mnemonic, "FRINTI");
+		bool raises_ixc = !strcmp(source->mnemonic, "FRINTX");
 
 		for (i = 0; i < ARRAY_SIZE(fp32); i++) {
 			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-			if (!strcmp(source->mnemonic, "FRINTX"))
+			if (checks_ixc)
 				orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IXC);
 			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 				orlix_tcti_scalar_fp_is_double(source) ? fp64[i] : fp32[i];
@@ -2094,14 +2100,19 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 							 regs, code);
 			if (test->status == KUNIT_FAILURE)
 				return;
-			if (!strcmp(source->mnemonic, "FRINTX"))
+			if (raises_ixc)
 				orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
 					AARCH64_FPSR_IXC);
+			else if (checks_ixc)
+				KUNIT_EXPECT_EQ_MSG(test, 0UL,
+					current->thread.user_fpsr & AARCH64_FPSR_IXC,
+					"%s unexpected fpsr ixc", source->name);
 		}
 		if (!strcmp(source->mnemonic, "FRINTI")) {
 			for (i = 0; i < ARRAY_SIZE(modes); i++) {
 				orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 				current->thread.user_fpcr = modes[i];
+				orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_IXC);
 				current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 					orlix_tcti_scalar_fp_is_double(source) ?
 					FP64_ONE_POINT_FIVE : FP32_ONE_POINT_FIVE;
@@ -2109,6 +2120,9 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 					instruction, regs, code);
 				if (test->status == KUNIT_FAILURE)
 					return;
+				KUNIT_EXPECT_EQ_MSG(test, 0UL,
+					current->thread.user_fpsr & AARCH64_FPSR_IXC,
+					"%s unexpected fpsr ixc", source->name);
 			}
 		}
 		return;
@@ -2341,6 +2355,22 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 				return;
 			orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
 				AARCH64_FPSR_IXC);
+		}
+		if (!strcmp(mnemonic, "FDIV")) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			orlix_tcti_scalar_fp_prepare_new_fpsr(AARCH64_FPSR_DZC);
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source,
+					FP32_ONE, FP64_ONE);
+			current->thread.user_simd[rm * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source,
+					FP32_POS_ZERO, FP64_POS_ZERO);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+						 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			orlix_tcti_scalar_fp_expect_new_fpsr(test, source,
+				AARCH64_FPSR_DZC);
 		}
 		if (!strcmp(mnemonic, "FADD")) {
 			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
