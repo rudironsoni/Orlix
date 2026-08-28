@@ -25,7 +25,9 @@
 #define AARCH64_FPSR_IOC BIT(0)
 #define AARCH64_FPSR_DZC BIT(1)
 #define AARCH64_FPSR_IXC BIT(4)
+#define AARCH64_FPSR_IDC BIT(7)
 #define AARCH64_FPSR_QC BIT(27)
+#define AARCH64_FPCR_FZ BIT(24)
 #define AARCH64_FPCR_WRITABLE_MASK \
 	(GENMASK(26, 22) | BIT(15) | GENMASK(12, 8))
 #define AARCH64_FPSR_WRITABLE_MASK \
@@ -206,6 +208,48 @@ static bool orlix_tcti_fp16_is_signaling_nan(u16 value)
 static bool orlix_tcti_fp64_is_signaling_nan(u64 value)
 {
 	return orlix_tcti_fp64_is_nan(value) && !(value & BIT_ULL(51));
+}
+
+static bool orlix_tcti_fp32_is_subnormal(u32 value)
+{
+	return !(value & GENMASK(30, 23)) && (value & GENMASK(22, 0));
+}
+
+static bool orlix_tcti_fp16_is_subnormal(u16 value)
+{
+	return !(value & GENMASK(14, 10)) && (value & GENMASK(9, 0));
+}
+
+static bool orlix_tcti_fp64_is_subnormal(u64 value)
+{
+	return !(value & GENMASK_ULL(62, 52)) && (value & GENMASK_ULL(51, 0));
+}
+
+static u32 orlix_tcti_fp32_flush_to_zero(u32 value, bool *flushed)
+{
+	if (orlix_tcti_fp32_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT(31);
+	}
+	return value;
+}
+
+static u16 orlix_tcti_fp16_flush_to_zero(u16 value, bool *flushed)
+{
+	if (orlix_tcti_fp16_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT(15);
+	}
+	return value;
+}
+
+static u64 orlix_tcti_fp64_flush_to_zero(u64 value, bool *flushed)
+{
+	if (orlix_tcti_fp64_is_subnormal(value)) {
+		*flushed = true;
+		return value & BIT_ULL(63);
+	}
+	return value;
 }
 
 static void orlix_tcti_set_fp_compare_flags(struct pt_regs *regs, int result)
@@ -7421,6 +7465,7 @@ static int orlix_tcti_execute_fp_scalar_compare(
 	u64 right = decoded->immediate ?
 			    0 : current->thread.user_simd[decoded->rm * 2];
 	bool invalid_operation;
+	bool flushed = false;
 	int result;
 
 	if (decoded->fp_conditional &&
@@ -7428,6 +7473,25 @@ static int orlix_tcti_execute_fp_scalar_compare(
 		orlix_tcti_set_nzcv_from_immediate(regs, decoded->nzcv);
 		regs->pc += sizeof(u32);
 		return 0;
+	}
+
+	if (current->thread.user_fpcr & AARCH64_FPCR_FZ) {
+		if (decoded->access_size == sizeof(u16)) {
+			left = orlix_tcti_fp16_flush_to_zero((u16)left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp16_flush_to_zero((u16)right,
+								     &flushed);
+		} else if (decoded->access_size == sizeof(u32)) {
+			left = orlix_tcti_fp32_flush_to_zero((u32)left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp32_flush_to_zero((u32)right,
+								     &flushed);
+		} else if (decoded->access_size == sizeof(u64)) {
+			left = orlix_tcti_fp64_flush_to_zero(left, &flushed);
+			if (!decoded->immediate)
+				right = orlix_tcti_fp64_flush_to_zero(right,
+								     &flushed);
+		}
 	}
 
 	if (decoded->access_size == sizeof(u16)) {
@@ -7457,6 +7521,8 @@ static int orlix_tcti_execute_fp_scalar_compare(
 
 	if (invalid_operation)
 		current->thread.user_fpsr |= AARCH64_FPSR_IOC;
+	if (flushed)
+		current->thread.user_fpsr |= AARCH64_FPSR_IDC;
 	orlix_tcti_set_fp_compare_flags(regs, result);
 	regs->pc += sizeof(u32);
 	return 0;

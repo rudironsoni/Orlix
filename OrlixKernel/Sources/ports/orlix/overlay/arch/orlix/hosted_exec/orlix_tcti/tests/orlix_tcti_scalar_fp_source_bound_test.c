@@ -42,6 +42,7 @@
 #define AARCH64_FPCR_RMODE_POSINF BIT(22)
 #define AARCH64_FPCR_RMODE_NEGINF BIT(23)
 #define AARCH64_FPCR_RMODE_ZERO (BIT(22) | BIT(23))
+#define AARCH64_FPCR_FZ BIT(24)
 #define NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
 #define FP32_POS_INF 0x7f800000U
 #define FP32_NEG_INF 0xff800000U
@@ -1560,6 +1561,26 @@ static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
 }
 
+static void orlix_tcti_scalar_fp_run_fz_subnormal_compare(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code)
+{
+	u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+	bool zero = strstr(source->name, "_SZ") || strstr(source->name, "_DZ");
+
+	orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+	current->thread.user_fpcr = AARCH64_FPCR_FZ;
+	current->thread.user_simd[rn * 2U] =
+		orlix_tcti_scalar_fp_lane_bits(source, FP32_MIN_SUBNORMAL,
+					       FP64_MIN_SUBNORMAL);
+	if (!zero)
+		current->thread.user_simd[
+			orlix_tcti_scalar_fp_rm_index(instruction) * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source, FP32_POS_ZERO,
+						       0);
+	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
+}
+
 static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	struct pt_regs *regs, unsigned long code)
@@ -1621,14 +1642,24 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		orlix_tcti_scalar_fp_compare_encoding(test, source, extra, false);
 		if (test->status == KUNIT_FAILURE)
 			return;
-		if (ccmp)
+		if (ccmp) {
 			orlix_tcti_scalar_fp_run_quiet_nan_compare(test, source,
 				instruction, regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			orlix_tcti_scalar_fp_run_fz_subnormal_compare(test, source,
+				instruction, regs, code);
+		}
 		return;
 	}
 	if (strstr(source->name, "floatcmp")) {
 		orlix_tcti_scalar_fp_run_quiet_nan_compare(test, source, instruction,
 							   regs, code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		orlix_tcti_scalar_fp_run_fz_subnormal_compare(test, source,
+							     instruction, regs,
+							     code);
 		return;
 	}
 	if (!strcmp(mnemonic, "FABS")) {
