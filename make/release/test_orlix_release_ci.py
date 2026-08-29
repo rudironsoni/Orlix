@@ -29,10 +29,13 @@ class ReleaseCITests(unittest.TestCase):
         self.assertEqual(identity["marketing_version"], "0.1")
         self.assertRegex(identity["project_build_number"], r"^[1-9][0-9]*$")
 
-    def test_release_tag_must_match_marketing_version(self) -> None:
-        release_ci.validate_release_tag("ios-v0.1", "0.1")
-        with self.assertRaisesRegex(release_ci.ReleaseCIError, "release tag must be"):
-            release_ci.validate_release_tag("ios-v0.2", "0.1")
+    def test_release_tag_must_match_marketing_version_and_build_number(self) -> None:
+        release_ci.validate_release_tag("ios-v0.1-b42", "0.1", "42")
+        for tag in ("ios-v0.1", "ios-v0.2-b42", "ios-v0.1-b43"):
+            with self.subTest(tag=tag), self.assertRaisesRegex(
+                release_ci.ReleaseCIError, "release tag must be"
+            ):
+                release_ci.validate_release_tag(tag, "0.1", "42")
 
     def test_build_number_must_be_positive_integer(self) -> None:
         self.assertEqual(release_ci.validate_build_number("43"), 43)
@@ -79,7 +82,7 @@ class ReleaseCITests(unittest.TestCase):
         ipa.write_bytes(b"signed archive")
         report = release_ci.build_release_report(
             repository="rudironsoni/Orlix",
-            release_tag="ios-v0.1",
+            release_tag="ios-v0.1-b43",
             commit="a" * 40,
             run_id="123",
             marketing_version="0.1",
@@ -94,7 +97,7 @@ class ReleaseCITests(unittest.TestCase):
         verified = release_ci.validate_release_report(
             path,
             repository="rudironsoni/Orlix",
-            release_tag="ios-v0.1",
+            release_tag="ios-v0.1-b43",
             commit="a" * 40,
             run_id="123",
         )
@@ -103,7 +106,7 @@ class ReleaseCITests(unittest.TestCase):
             release_ci.validate_release_report(
                 path,
                 repository="rudironsoni/Orlix",
-                release_tag="ios-v0.1",
+                release_tag="ios-v0.1-b43",
                 commit="b" * 40,
                 run_id="123",
             )

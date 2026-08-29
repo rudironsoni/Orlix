@@ -62,8 +62,9 @@ def validate_build_number(value: str) -> int:
     return int(value)
 
 
-def validate_release_tag(tag: str, marketing_version: str) -> None:
-    expected = f"ios-v{marketing_version}"
+def validate_release_tag(tag: str, marketing_version: str, build_number: str) -> None:
+    validate_build_number(build_number)
+    expected = f"ios-v{marketing_version}-b{build_number}"
     if tag != expected:
         fail(f"release tag must be {expected}, got: {tag}")
 
@@ -128,7 +129,7 @@ def build_release_report(
     xcode_version: str,
     upload_backend: str,
 ) -> dict[str, Any]:
-    validate_release_tag(release_tag, marketing_version)
+    validate_release_tag(release_tag, marketing_version, build_number)
     validate_commit(commit)
     validate_build_number(build_number)
     if not repository or "/" not in repository:
@@ -187,7 +188,11 @@ def validate_release_report(
             fail(f"release report {field} differs expected value")
     if report.get("github_run_id") != validate_build_number(run_id):
         fail("release report GitHub run ID differs expected value")
-    validate_release_tag(report["release_tag"], report.get("marketing_version", ""))
+    validate_release_tag(
+        report["release_tag"],
+        report.get("marketing_version", ""),
+        str(report.get("build_number", "")),
+    )
     validate_commit(report["commit"])
     validate_build_number(str(report.get("build_number", "")))
     if report.get("testflight", {}).get("processing_state") != "processed":
@@ -256,7 +261,11 @@ def main() -> int:
             write_json(args.output, read_project_identity(args.project))
         elif args.command == "tag-check":
             identity = read_project_identity(args.project)
-            validate_release_tag(args.tag, identity["marketing_version"])
+            validate_release_tag(
+                args.tag,
+                identity["marketing_version"],
+                identity["project_build_number"],
+            )
             validate_commit(args.commit)
         elif args.command == "approval-check":
             validate_public_distribution_approval(args.manifest, args.repo_root)

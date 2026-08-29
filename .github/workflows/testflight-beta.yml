@@ -3,7 +3,7 @@ name: TestFlight beta
 on:
   push:
     tags:
-      - "ios-v*"
+      - "ios-v*-b*"
 
 permissions:
   contents: read
@@ -131,7 +131,7 @@ jobs:
           make beta-export-archive
           make beta-validate-export
 
-      - name: Enforce public distribution approval
+      - name: Enforce beta upload eligibility
         run: make beta-upload-prerequisites
 
       - name: Upload and wait for TestFlight processing
