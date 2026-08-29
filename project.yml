@@ -667,8 +667,6 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
-      - target: OrlixOS
-        embed: true
       - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
         embed: false
       - package: MLXSwift
@@ -797,7 +795,7 @@ targets:
       - path: Orlix/OrlixUITests
         createIntermediateGroups: true
     dependencies:
-      - target: Orlix
+      - target: OrlixAppOnly
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
@@ -808,7 +806,7 @@ targets:
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
-        TEST_TARGET_NAME: Orlix
+        TEST_TARGET_NAME: OrlixAppOnly
   OrlixOSTestApp:
     type: application
     platform: iOS
@@ -1100,17 +1098,17 @@ schemes:
   "Orlix UI Tests":
     build:
       targets:
-        Orlix: all
+        OrlixAppOnly: all
         OrlixUITests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - name: OrlixUITests
-  "Orlix Release UI Tests":
+  "Orlix App Only Release UI Tests":
     build:
       targets:
-        Orlix: all
+        OrlixAppOnly: all
         OrlixUITests: test
     test:
       config: Release
