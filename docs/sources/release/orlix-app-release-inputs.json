@@ -750,8 +750,7 @@
         17
       ],
       "source_evidence": [
-        "Orlix/Orlix/Features/TerminalAccessories",
-        "Orlix/Orlix/Features/TerminalPresets"
+        "Orlix/Orlix/Features/TerminalAccessories"
       ],
       "platform_states": {
         "ios": "blocked",

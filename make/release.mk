@@ -3,8 +3,22 @@
 ORLIX_RELEASE_SUPPORT_DIR := $(CURDIR)/make/release
 ORLIX_RELEASE_MANIFEST ?= $(CURDIR)/docs/sources/release/orlix-app-release-inputs.json
 ORLIX_EXPORTED_APP ?= $(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app
+ORLIX_RELEASE_IDENTITY_PATH ?= $(ORLIX_BETA_ARCHIVE_DIR)/release-identity.json
+ORLIX_RELEASE_REPORT_PATH ?= $(ORLIX_BUILD_ROOT)/AgentHarness/orlix-release/release.json
+ORLIX_RELEASE_REPORT_INPUT ?= $(ORLIX_RELEASE_REPORT_PATH)
+ORLIX_RELEASE_REPORT_SELECTION ?= $(ORLIX_BUILD_ROOT)/AgentHarness/orlix-release/selection.json
+ORLIX_RELEASE_REPOSITORY ?=
+ORLIX_RELEASE_TAG ?=
+ORLIX_RELEASE_COMMIT ?=
+ORLIX_RELEASE_RUN_ID ?=
+ORLIX_RELEASE_XCODE_VERSION ?=
+ORLIX_RELEASE_UPLOAD_BACKEND ?= appstore-api
+ORLIX_TESTFLIGHT_INTERNAL_GROUP ?=
+ORLIX_STORE_METADATA_PATH ?= $(CURDIR)/fastlane/metadata
+ORLIX_STORE_SCREENSHOTS_PATH ?= $(CURDIR)/fastlane/screenshots
+ORLIX_REQUIRE_PUBLIC_DISTRIBUTION ?= false
 
-.PHONY: __release-manifest-check __release-inputs-check __exported-app-check __release-tests
+.PHONY: __release-manifest-check __release-inputs-check __exported-app-check __release-public-approval-check __release-tag-check __release-metadata-check __release-report-write __release-report-check __release-tests __release-workflow-tests
 
 __release-manifest-check:
 	@PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" \
@@ -17,7 +31,54 @@ __exported-app-check:
 		ORLIX_EXPORTED_APP="$(ORLIX_EXPORTED_APP)" \
 		ORLIX_RELEASE_MANIFEST="$(ORLIX_RELEASE_MANIFEST)" \
 		ORLIX_REPO_ROOT="$(CURDIR)" \
-		python3 -c 'import os; from pathlib import Path; import orlix_app_capability_gate as gate; app = Path(os.environ["ORLIX_EXPORTED_APP"]).resolve(); gate.validate_exported_app(app, Path(os.environ["ORLIX_RELEASE_MANIFEST"]).resolve(), Path(os.environ["ORLIX_REPO_ROOT"]).resolve(), None, None, False); print(f"pass: exported Orlix application {app}")'
+		ORLIX_REQUIRE_PUBLIC_DISTRIBUTION="$(ORLIX_REQUIRE_PUBLIC_DISTRIBUTION)" \
+		python3 -c 'import os; from pathlib import Path; import orlix_app_capability_gate as gate; app = Path(os.environ["ORLIX_EXPORTED_APP"]).resolve(); required = os.environ["ORLIX_REQUIRE_PUBLIC_DISTRIBUTION"].lower() == "true"; gate.validate_exported_app(app, Path(os.environ["ORLIX_RELEASE_MANIFEST"]).resolve(), Path(os.environ["ORLIX_REPO_ROOT"]).resolve(), None, None, required); print(f"pass: exported Orlix application {app}")'
+
+__release-public-approval-check:
+	@PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci approval-check \
+		--manifest "$(ORLIX_RELEASE_MANIFEST)" \
+		--repo-root "$(CURDIR)"
+
+__release-tag-check:
+	@set -euo pipefail; \
+	[ -n "$(ORLIX_RELEASE_TAG)" ] || { echo "ORLIX_RELEASE_TAG is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_COMMIT)" ] || { echo "ORLIX_RELEASE_COMMIT is required" >&2; exit 1; }; \
+	PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci tag-check --project project.yml --tag "$(ORLIX_RELEASE_TAG)" --commit "$(ORLIX_RELEASE_COMMIT)"; \
+	[ "$$(git rev-parse HEAD)" = "$(ORLIX_RELEASE_COMMIT)" ] || { echo "checked out commit differs from ORLIX_RELEASE_COMMIT" >&2; exit 1; }; \
+	[ "$$(git rev-list -n 1 "refs/tags/$(ORLIX_RELEASE_TAG)")" = "$(ORLIX_RELEASE_COMMIT)" ] || { echo "release tag does not point to ORLIX_RELEASE_COMMIT" >&2; exit 1; }; \
+	git show-ref --verify --quiet refs/remotes/origin/main || { echo "origin/main is required to validate the release tag" >&2; exit 1; }; \
+	git merge-base --is-ancestor "$(ORLIX_RELEASE_COMMIT)" refs/remotes/origin/main || { echo "release commit is not on origin/main" >&2; exit 1; }; \
+	echo "pass: protected release tag $(ORLIX_RELEASE_TAG)"
+
+__release-metadata-check:
+	@PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci metadata-check \
+		--metadata "$(ORLIX_STORE_METADATA_PATH)" \
+		--screenshots "$(ORLIX_STORE_SCREENSHOTS_PATH)"
+
+__release-report-write:
+	@set -euo pipefail; \
+	[ -f "$(ORLIX_RELEASE_IDENTITY_PATH)" ] || { echo "missing release identity: $(ORLIX_RELEASE_IDENTITY_PATH)" >&2; exit 1; }; \
+	[ -f "$(ORLIX_BETA_BUILD_NUMBER_FILE)" ] || { echo "missing beta build number: $(ORLIX_BETA_BUILD_NUMBER_FILE)" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_REPOSITORY)" ] || { echo "ORLIX_RELEASE_REPOSITORY is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_TAG)" ] || { echo "ORLIX_RELEASE_TAG is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_COMMIT)" ] || { echo "ORLIX_RELEASE_COMMIT is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_RUN_ID)" ] || { echo "ORLIX_RELEASE_RUN_ID is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_RELEASE_XCODE_VERSION)" ] || { echo "ORLIX_RELEASE_XCODE_VERSION is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_TESTFLIGHT_INTERNAL_GROUP)" ] || { echo "ORLIX_TESTFLIGHT_INTERNAL_GROUP is required" >&2; exit 1; }; \
+	marketing="$$(jq -r '.marketing_version' "$(ORLIX_RELEASE_IDENTITY_PATH)")"; \
+	build="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")"; \
+	PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci report-write \
+		--output "$(ORLIX_RELEASE_REPORT_PATH)" --repository "$(ORLIX_RELEASE_REPOSITORY)" \
+		--tag "$(ORLIX_RELEASE_TAG)" --commit "$(ORLIX_RELEASE_COMMIT)" --run-id "$(ORLIX_RELEASE_RUN_ID)" \
+		--marketing-version "$$marketing" --build-number "$$build" --ipa "$(ORLIX_BETA_IPA_PATH)" \
+		--tester-group "$(ORLIX_TESTFLIGHT_INTERNAL_GROUP)" --xcode-version "$(ORLIX_RELEASE_XCODE_VERSION)" \
+		--upload-backend "$(ORLIX_RELEASE_UPLOAD_BACKEND)"
+
+__release-report-check:
+	@PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci report-verify \
+		--report "$(ORLIX_RELEASE_REPORT_INPUT)" --repository "$(ORLIX_RELEASE_REPOSITORY)" \
+		--tag "$(ORLIX_RELEASE_TAG)" --commit "$(ORLIX_RELEASE_COMMIT)" --run-id "$(ORLIX_RELEASE_RUN_ID)" \
+		--output "$(ORLIX_RELEASE_REPORT_SELECTION)"
 
 __release-inputs-check: __release-manifest-check
 	@set -euo pipefail; \
@@ -75,3 +136,11 @@ __release-tests:
 	fi; \
 	grep -Fq "GHOSTTY_REF must be a full 40-character commit" "$$tmp/stdout"; \
 	echo "pass: release-input checks"
+
+__release-workflow-tests:
+	@PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m unittest discover -s "$(ORLIX_RELEASE_SUPPORT_DIR)" -p 'test_*.py'
+	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint is required; run: brew bundle --file Brewfile" >&2; exit 1; }
+	@actionlint .github/workflows/testflight-beta.yml .github/workflows/app-store-review.yml
+	@rg -q 'actions/checkout@[0-9a-f]{40}' .github/workflows/testflight-beta.yml
+	@rg -q 'automatic_release: false' fastlane/Fastfile
+	@echo "pass: release workflow policy"

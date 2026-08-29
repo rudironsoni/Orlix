@@ -1,0 +1,1 @@
+Orlix is a terminal workspace for iPhone and iPad. Use tabs and split panes to organize terminal sessions, and connect to remote systems with SSH.

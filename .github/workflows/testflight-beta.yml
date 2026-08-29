@@ -1,0 +1,165 @@
+name: TestFlight beta
+
+on:
+  push:
+    tags:
+      - "ios-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-beta-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-submit:
+    name: Build and submit beta
+    runs-on: macos-26
+    environment: testflight-internal
+    timeout-minutes: 180
+    env:
+      ORLIX_RELEASE_REPOSITORY: ${{ github.repository }}
+      ORLIX_RELEASE_TAG: ${{ github.ref_name }}
+      ORLIX_RELEASE_COMMIT: ${{ github.sha }}
+      ORLIX_RELEASE_RUN_ID: ${{ github.run_id }}
+      ORLIX_RELEASE_XCODE_VERSION: "26.6"
+      ORLIX_RELEASE_UPLOAD_BACKEND: appstore-api
+      ORLIX_DEVELOPMENT_TEAM: ${{ vars.APPLE_TEAM_ID }}
+      ORLIX_ASC_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+      ORLIX_ASC_API_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+      ORLIX_TESTFLIGHT_INTERNAL_GROUP: ${{ vars.TESTFLIGHT_INTERNAL_GROUP }}
+      ORLIX_BETA_EXPORT_OPTIONS_PLIST: ${{ github.workspace }}/Build/Release/ExportOptions.plist
+      ORLIX_ANALYTICS_ENABLED: "NO"
+      ORLIX_OBSERVABILITY_ENABLED: "NO"
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the protected release base
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+
+      - name: Install the Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Set up Ruby and pinned Fastlane
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "3.4.8"
+          bundler-cache: true
+
+      - name: Install build tools
+        run: brew bundle --file Brewfile
+
+      - name: Check runner capacity
+        run: |
+          set -euo pipefail
+          df -h .
+          available_kib="$(df -Pk . | awk 'NR == 2 { print $4 }')"
+          test "$available_kib" -ge 10485760 || {
+            echo "At least 10 GiB of free disk is required" >&2
+            exit 1
+          }
+
+      - name: Materialize App Store Connect credentials
+        env:
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$APPSTORE_API_PRIVATE_KEY"
+          umask 077
+          export ORLIX_FASTLANE_API_KEY_PATH="$RUNNER_TEMP/appstore-api-key.json"
+          export ORLIX_ASC_API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPSTORE_API_PRIVATE_KEY" > "$ORLIX_ASC_API_KEY_PATH"
+          ruby -rjson -e 'File.write(ENV.fetch("ORLIX_FASTLANE_API_KEY_PATH"), JSON.pretty_generate({key_id: ENV.fetch("ORLIX_ASC_API_KEY_ID"), issuer_id: ENV.fetch("ORLIX_ASC_API_ISSUER_ID"), key_filepath: ENV.fetch("ORLIX_ASC_API_KEY_PATH"), in_house: false}))'
+          echo "ORLIX_FASTLANE_API_KEY_PATH=$ORLIX_FASTLANE_API_KEY_PATH" >> "$GITHUB_ENV"
+          echo "ORLIX_ASC_API_KEY_PATH=$ORLIX_ASC_API_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Import distribution certificate
+        uses: Apple-Actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
+        with:
+          p12-file-base64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+
+      - name: Download app provisioning profile
+        uses: Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6.1.0
+        with:
+          bundle-id: com.rudironsoni.orlix
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+
+      - name: Download Live Activity provisioning profile
+        uses: Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6.1.0
+        with:
+          bundle-id: com.rudironsoni.orlix.live-activity
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+
+      - name: Build pinned native vendor artifacts
+        run: make build type=vendor vendor=all
+
+      - name: Validate tag and release inputs
+        run: make __release-tag-check beta-prerequisites
+
+      - name: Select an iOS simulator
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')"
+          test -n "$simulator_id" -a "$simulator_id" != null
+          echo "ORLIX_BETA_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Run the beta simulator gate
+        run: make beta-simulator-gate
+
+      - name: Archive and export the exact build
+        run: |
+          set -euo pipefail
+          make beta-export-options
+          make beta-archive
+          make beta-export-archive
+          make beta-validate-export
+
+      - name: Enforce public distribution approval
+        run: make beta-upload-prerequisites
+
+      - name: Upload and wait for TestFlight processing
+        uses: Apple-Actions/upload-testflight-build@5e75ff58276689011512ba87a381d93dc67dbcf8 # v5.3.0
+        with:
+          app-path: Build/Release/Export/Orlix.ipa
+          app-type: ios
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          backend: appstore-api
+          uses-non-exempt-encryption: false
+          wait-for-processing: true
+
+      - name: Assign the processed build to internal testers
+        run: make beta-distribute
+
+      - name: Write the immutable beta release report
+        run: make beta-release-report
+
+      - name: Store beta evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: orlix-testflight-${{ github.ref_name }}
+          path: |
+            Build/AgentHarness/orlix-release/release.json
+            Build/Release/release-identity.json
+            Build/Release/build-number
+            Build/Release/Export/Orlix.ipa
+          if-no-files-found: error
+          retention-days: 30

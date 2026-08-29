@@ -136,19 +136,19 @@ __vendor-build:
 	    log_info "Building GhosttyKit.xcframework..."
 
 	    local zig_flags=(
-	        -Dapp-runtime=none
-	        -Demit-xcframework=true
-	        -Demit-macos-app=false
-	        -Demit-exe=false
-	        -Demit-docs=false
-	        -Demit-webdata=false
-	        -Demit-helpgen=false
-	        -Demit-terminfo=false
-	        -Demit-termcap=false
-	        -Demit-themes=false
-	        -Doptimize=ReleaseFast
-	        -Dstrip
-	        -Dxcframework-target=universal
+	        '-Dapp-runtime=none'
+	        '-Demit-xcframework=true'
+	        '-Demit-macos-app=false'
+	        '-Demit-exe=false'
+	        '-Demit-docs=false'
+	        '-Demit-webdata=false'
+	        '-Demit-helpgen=false'
+	        '-Demit-terminfo=false'
+	        '-Demit-termcap=false'
+	        '-Demit-themes=false'
+	        '-Doptimize=ReleaseFast'
+	        '-Dstrip'
+	        '-Dxcframework-target=universal'
 	    )
 
 	    (cd "$${workdir}/ghostty" && zig build "$${zig_flags[@]}" -p "$${workdir}/zig-out")
@@ -162,7 +162,7 @@ __vendor-build:
 	    local macos_lib
 	    local ios_lib
 	    local sim_lib
-	    macos_lib=$$(find "$${xcframework}" -path "*/macos-*/libghostty*.a" -type f -print -quit)
+	    macos_lib=$$(find "$${xcframework}" -path "*/macos-*/*ghostty*.a" -type f -print -quit)
 	    ios_lib=$$(find "$${xcframework}" -path "*/ios-arm64/libghostty*.a" -type f -print -quit)
 	    sim_lib=$$(find "$${xcframework}" -path "*/ios-arm64-simulator/libghostty*.a" -type f -print -quit)
 

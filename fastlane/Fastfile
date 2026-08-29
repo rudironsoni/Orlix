@@ -1,0 +1,80 @@
+opt_out_usage
+default_platform(:ios)
+
+require "json"
+
+APP_IDENTIFIER = "com.rudironsoni.orlix"
+
+def required_environment(name)
+  value = ENV.fetch(name, "").strip
+  UI.user_error!("#{name} is required") if value.empty?
+  value
+end
+
+def connect_api_context
+  api_key_path = required_environment("ORLIX_FASTLANE_API_KEY_PATH")
+  api_key_values = JSON.parse(File.read(api_key_path), symbolize_names: true)
+  api_key = app_store_connect_api_key(**api_key_values)
+  app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+  UI.user_error!("App Store Connect app not found: #{APP_IDENTIFIER}") unless app
+  [api_key, app]
+end
+
+platform :ios do
+  desc "Assign one processed beta build to an existing internal TestFlight group"
+  lane :distribute_internal do
+    marketing_version = required_environment("ORLIX_MARKETING_VERSION")
+    build_number = required_environment("ORLIX_BUILD_NUMBER")
+    group_name = required_environment("ORLIX_TESTFLIGHT_INTERNAL_GROUP")
+    api_key, app = connect_api_context
+
+    group = app.get_beta_groups.find { |candidate| candidate.name == group_name }
+    UI.user_error!("TestFlight group does not exist: #{group_name}") unless group
+    UI.user_error!("TestFlight group is not internal: #{group_name}") unless group.is_internal_group
+    builds = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id,
+      version: marketing_version,
+      build_number: build_number
+    )
+    UI.user_error!("Processed TestFlight build not found: #{marketing_version} (#{build_number})") unless builds.one?
+    build = builds.first
+
+    pilot(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: marketing_version,
+      build_number: build_number,
+      groups: [group_name],
+      distribute_external: false,
+      skip_waiting_for_build_processing: false
+    )
+
+    selected = group.fetch_builds.any? { |candidate| candidate.id == build.id }
+    UI.user_error!("Exact build was not assigned to #{group_name}") unless selected
+    UI.success("Assigned #{marketing_version} (#{build_number}) to #{group_name}")
+  end
+
+  desc "Submit the exact processed TestFlight build for App Review"
+  lane :promote_to_review do
+    marketing_version = required_environment("ORLIX_MARKETING_VERSION")
+    build_number = required_environment("ORLIX_BUILD_NUMBER")
+    metadata_path = required_environment("ORLIX_STORE_METADATA_PATH")
+    screenshots_path = required_environment("ORLIX_STORE_SCREENSHOTS_PATH")
+    api_key, = connect_api_context
+
+    deliver(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: marketing_version,
+      build_number: build_number,
+      metadata_path: metadata_path,
+      screenshots_path: screenshots_path,
+      skip_binary_upload: true,
+      skip_metadata: false,
+      skip_screenshots: false,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true
+    )
+  end
+end
