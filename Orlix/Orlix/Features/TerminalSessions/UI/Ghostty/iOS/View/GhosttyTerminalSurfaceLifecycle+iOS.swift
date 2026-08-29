@@ -52,6 +52,8 @@ extension GhosttyTerminalView {
         stopSelectionAutoscroll()
         zoomIndicatorHideWorkItem?.cancel()
         zoomIndicatorHideWorkItem = nil
+        mouseCaptureIndicatorHideWorkItem?.cancel()
+        mouseCaptureIndicatorHideWorkItem = nil
 
         // Remove config reload observer
         if let observer = configReloadObserver {
@@ -74,6 +76,7 @@ extension GhosttyTerminalView {
         onKeyboardAvoidanceCursorRectChange = nil
         onKeyboardAvoidanceAccessoryFrameChange = nil
         onZoomAction = nil
+        onMouseReportingSuppressionChange = nil
         onPaneKeyboardShortcut = nil
         keyboardAvoidancePreservedSurfaceSize = nil
         keyboardAvoidanceReferenceSurfaceSize = nil

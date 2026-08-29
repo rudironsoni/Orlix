@@ -24,6 +24,27 @@ struct TerminalAccessoryModelsTests {
     @Test
     func defaultAccessoryProfileIncludesTabNavigationKey() {
         #expect(TerminalAccessoryProfile.defaultActiveItems.contains(.system(.tab)))
+        #expect(TerminalAccessoryProfile.defaultActiveItems.contains(.system(.mouseCapture)))
+    }
+
+    @Test
+    func normalizationAddsMouseCaptureOnlyToUntouchedLegacyDefault() {
+        let legacy = TerminalAccessoryProfile(
+            schemaVersion: 2,
+            layout: TerminalAccessoryLayout(
+                version: 1,
+                activeItems: TerminalAccessoryProfile.legacyDefaultActiveItemsV2,
+                updatedAt: .distantPast
+            ),
+            customActions: [],
+            updatedAt: .distantPast,
+            lastWriterDeviceId: "legacy"
+        )
+        var customized = legacy
+        customized.layout.activeItems.removeLast()
+
+        #expect(legacy.normalized().layout.activeItems == TerminalAccessoryProfile.defaultActiveItems)
+        #expect(!customized.normalized().layout.activeItems.contains(.system(.mouseCapture)))
     }
 
     @Test

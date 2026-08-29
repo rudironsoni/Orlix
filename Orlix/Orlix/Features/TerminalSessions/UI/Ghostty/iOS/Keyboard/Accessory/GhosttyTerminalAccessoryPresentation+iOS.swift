@@ -35,6 +35,7 @@ extension GhosttyTerminalView {
                 }
             )
             keyboardToolbar = toolbar
+            toolbar.setMouseReportingSuppressed(isMouseReportingSuppressed)
         } else {
             keyboardToolbar?.onVoice = onVoiceButtonTapped
         }

@@ -517,6 +517,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminalView.onZoomAction = { [paneId] action in
             tabManager.handleTerminalZoom(action, for: paneId)
         }
+        configureMouseReportingSuppression(on: terminalView)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
         terminalView.applyPresentationOverrides(
@@ -582,6 +583,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         }
         terminalView.onVoiceButtonTapped = onVoiceTrigger
         terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
+        configureMouseReportingSuppression(on: terminalView)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
         if size.width > 0, size.height > 0, size != context.coordinator.lastReportedSize {
@@ -649,6 +651,7 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminal.onZoomAction = { [paneId] action in
             tabManager.handleTerminalZoom(action, for: paneId)
         }
+        configureMouseReportingSuppression(on: terminal)
         terminal.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminal.terminalContextMenuActions = terminalContextMenuActions
         terminal.applyPresentationOverrides(
@@ -661,6 +664,18 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminal.onResize = { [weak coordinator] cols, rows in
             coordinator?.handleResize(cols: cols, rows: rows)
         }
+    }
+
+    private func configureMouseReportingSuppression(on terminal: GhosttyTerminalView) {
+        terminal.onMouseReportingSuppressionChange = { [paneId] isSuppressed in
+            tabManager.presentationState.setMouseReportingSuppressed(
+                isSuppressed,
+                for: paneId
+            )
+        }
+        _ = terminal.setMouseReportingSuppressed(
+            tabManager.presentationState.isMouseReportingSuppressed(for: paneId)
+        )
     }
 
     private func processExitHandler(for terminal: GhosttyTerminalView) -> () -> Void {
