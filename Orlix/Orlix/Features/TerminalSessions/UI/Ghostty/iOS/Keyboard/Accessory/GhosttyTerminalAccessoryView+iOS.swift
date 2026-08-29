@@ -33,6 +33,7 @@ final class TerminalInputAccessoryView: UIInputView {
     private weak var altButton: UIButton?
     private weak var commandButton: UIButton?
     private weak var shiftButton: UIButton?
+    private weak var mouseCaptureButton: UIButton?
     private weak var voiceButton: UIButton?
     private weak var dismissKeyboardButton: UIButton?
     private weak var leadingButtonsStack: UIStackView?
@@ -368,6 +369,7 @@ final class TerminalInputAccessoryView: UIInputView {
             dynamicItemsStack.removeArrangedSubview(arrangedSubview)
             arrangedSubview.removeFromSuperview()
         }
+        mouseCaptureButton = nil
 
         for item in inputSnapshot.resolvedItems {
             switch item {
@@ -391,6 +393,17 @@ final class TerminalInputAccessoryView: UIInputView {
             button.accessibilityIdentifier = "orlix.keyboard.accessory.system.\(actionID.rawValue)"
             commandButton = button
             updateModifierButton(button, isActive: commandActive)
+            return button
+        }
+
+        if actionID == .mouseCapture {
+            let button = makeIconButton(icon: actionID.iconName ?? "computermouse") { [weak self] in
+                self?.terminalOwner?.toggleMouseReportingSuppression()
+            }
+            button.accessibilityLabel = actionID.listTitle
+            button.accessibilityIdentifier = "orlix.keyboard.accessory.system.\(actionID.rawValue)"
+            mouseCaptureButton = button
+            updateMouseCaptureButton()
             return button
         }
 
@@ -467,6 +480,7 @@ final class TerminalInputAccessoryView: UIInputView {
         case .ctrlE: return .ctrlE
         case .ctrlK: return .ctrlK
         case .ctrlU: return .ctrlU
+        case .mouseCapture: return nil
         case .unknown: return nil
         }
     }
@@ -828,6 +842,27 @@ final class TerminalInputAccessoryView: UIInputView {
             self.updateModifierButton(self.commandButton, isActive: self.commandActive)
             self.updateModifierButton(self.shiftButton, isActive: self.shiftActive)
         }
+    }
+
+    func setMouseReportingSuppressed(_ isSuppressed: Bool) {
+        updateMouseCaptureButton(isSuppressed: isSuppressed)
+    }
+
+    private func updateMouseCaptureButton(isSuppressed: Bool? = nil) {
+        guard let button = mouseCaptureButton else { return }
+        let isActive = isSuppressed ?? terminalOwner?.isMouseReportingSuppressed == true
+        button.isSelected = isActive
+        button.accessibilityValue = isActive
+            ? String(localized: "Off")
+            : String(localized: "On")
+        button.backgroundColor = isActive
+            ? .systemBlue
+            : UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor.white.withAlphaComponent(0.12)
+                    : UIColor.black.withAlphaComponent(0.06)
+            }
+        button.tintColor = isActive ? .white : .label
     }
 
     private func updateModifierButton(_ button: UIButton?, isActive: Bool) {

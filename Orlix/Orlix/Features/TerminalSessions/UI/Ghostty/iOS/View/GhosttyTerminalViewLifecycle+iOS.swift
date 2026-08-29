@@ -15,6 +15,7 @@ extension GhosttyTerminalView {
         nativeFindOverlay.frame = bounds
         bringSubviewToFront(nativeFindOverlay)
         bringSubviewToFront(zoomIndicatorView)
+        bringSubviewToFront(mouseCaptureIndicatorView)
 
         guard !isShuttingDown else { return }
 

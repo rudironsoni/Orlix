@@ -90,6 +90,10 @@ class GhosttyTerminalView: UIView {
     /// Callback invoked when a pinch gesture requests terminal pane zoom.
     var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
 
+    /// Reports a successful per-surface mouse reporting override change.
+    var onMouseReportingSuppressionChange: ((Bool) -> Void)?
+    var isMouseReportingSuppressed = false
+
     /// App-owned pane actions invoked by local iPad keyboard shortcuts.
     var onPaneKeyboardShortcut: ((TerminalSplitCommand) -> Void)?
 
@@ -181,6 +185,8 @@ class GhosttyTerminalView: UIView {
     var pinchReferenceScale: CGFloat = 1
     let zoomIndicatorView = TerminalZoomIndicatorView()
     var zoomIndicatorHideWorkItem: DispatchWorkItem?
+    let mouseCaptureIndicatorView = TerminalMouseCaptureIndicatorView()
+    var mouseCaptureIndicatorHideWorkItem: DispatchWorkItem?
     var nativeSelectionSnapshot = TerminalNativeTextSnapshot.empty
     var nativeSelectionLifecycle = TerminalNativeSelectionLifecycle()
     var nativeSelectionLongPressAnchor: NSRange?
@@ -295,6 +301,20 @@ class GhosttyTerminalView: UIView {
     lazy var terminalSplitCommands = makeTerminalSplitKeyCommands(
         action: #selector(handleTerminalSplitCommand(_:))
     )
+    lazy var mouseCaptureCommand: UIKeyCommand = {
+        let command = UIKeyCommand(
+            input: "m",
+            modifierFlags: [.command, .alternate],
+            action: #selector(handleMouseCaptureCommand(_:))
+        )
+        command.discoverabilityTitle = String(localized: "Toggle Mouse Capture")
+        if #available(iOS 15.0, *) {
+            command.wantsPriorityOverSystemBehavior = true
+            command.allowsAutomaticLocalization = false
+            command.allowsAutomaticMirroring = false
+        }
+        return command
+    }()
     var hardwarePressesSentToGhostty: [UInt16: Ghostty.Input.KeyEvent] = [:]
     var systemTextInputPresses: Set<UInt16> = []
     var terminalAltOptionKeyCodes: Set<UInt16> = []
@@ -364,6 +384,16 @@ class GhosttyTerminalView: UIView {
             zoomIndicatorView.centerYAnchor.constraint(equalTo: centerYAnchor),
             zoomIndicatorView.widthAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumWidth),
             zoomIndicatorView.heightAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumHeight)
+        ])
+        mouseCaptureIndicatorView.isHidden = true
+        mouseCaptureIndicatorView.alpha = 0
+        mouseCaptureIndicatorView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(mouseCaptureIndicatorView)
+        NSLayoutConstraint.activate([
+            mouseCaptureIndicatorView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            mouseCaptureIndicatorView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            mouseCaptureIndicatorView.widthAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumWidth),
+            mouseCaptureIndicatorView.heightAnchor.constraint(greaterThanOrEqualToConstant: TerminalZoomPresentation.indicatorMinimumHeight)
         ])
         nativeFindOverlay.frame = bounds
         addSubview(nativeFindOverlay)

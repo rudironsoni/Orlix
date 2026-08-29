@@ -165,6 +165,7 @@ nonisolated extension TerminalAccessorySystemActionID {
         case .ctrlE: return String(localized: "Ctrl+E")
         case .ctrlK: return String(localized: "Ctrl+K")
         case .ctrlU: return String(localized: "Ctrl+U")
+        case .mouseCapture: return String(localized: "Mouse Capture")
         case .unknown: return String(localized: "Unknown")
         }
     }
@@ -204,6 +205,7 @@ nonisolated extension TerminalAccessorySystemActionID {
         case .ctrlE: return String(localized: "^E")
         case .ctrlK: return String(localized: "^K")
         case .ctrlU: return String(localized: "^U")
+        case .mouseCapture: return ""
         case .unknown: return String(localized: "?")
         }
     }
@@ -214,6 +216,7 @@ nonisolated extension TerminalAccessorySystemActionID {
         case .arrowDown: return "arrow.down"
         case .arrowLeft: return "arrow.left"
         case .arrowRight: return "arrow.right"
+        case .mouseCapture: return "computermouse"
         default: return nil
         }
     }

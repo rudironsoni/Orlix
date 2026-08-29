@@ -3,6 +3,100 @@ import XCTest
 
 final class TerminalPointerSelectionUITests: TerminalKeyboardUITestCase {
     @MainActor
+    func testCommandOptionMTogglesMouseCapture() throws {
+        let app = launchKeyboardHarness(simulatesTerminalMouseCapture: true)
+        let terminal = waitForTerminal(in: app)
+        let diagnostics = app.staticTexts["orlix.keyboardTest.diagnostics"]
+
+        terminal.tap()
+        terminal.typeKey("m", modifierFlags: [.command, .option])
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseReportingSuppressed=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseCaptured=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+
+        terminal.typeKey("m", modifierFlags: [.command, .option])
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseReportingSuppressed=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseCaptured=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+    }
+
+    @MainActor
+    func testMouseCaptureOverrideRestoresNativeInteractionAndCanBeReenabled() throws {
+        let app = launchKeyboardHarness(simulatesTerminalMouseCapture: true)
+        let terminal = waitForTerminal(in: app)
+        let diagnostics = app.staticTexts["orlix.keyboardTest.diagnostics"]
+
+        terminal.tap()
+        waitForMouseClickCounts(presses: 1, releases: 1, in: app)
+        app.buttons["orlix.keyboardTest.showKeyboard"].tap()
+        assertKeyboardSessionAndAccessoryVisible(in: app)
+
+        let accessory = app.otherElements["orlix.keyboard.accessory"]
+        let mouseCapture = app.buttons["orlix.keyboard.accessory.system.mouseCapture"]
+        for _ in 0..<4 where !mouseCapture.isHittable {
+            accessory.swipeLeft()
+        }
+        XCTAssertTrue(mouseCapture.isHittable, diagnosticsText(in: app))
+        mouseCapture.tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseReportingSuppressed=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseCaptured=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        XCTAssertEqual(mouseCapture.value as? String, "Off")
+
+        terminal.tap()
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+        terminal.doubleTap()
+        waitForDiagnosticMetrics(in: app) { metrics in
+            (metrics["nativeSelectionLength"] ?? 0) > 0
+        }
+        assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)
+
+        mouseCapture.tap()
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseReportingSuppressed=false",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        wait(
+            for: diagnostics,
+            labelContaining: "mouseCaptured=true",
+            timeout: 5,
+            diagnostics: diagnosticsText(in: app)
+        )
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.15)).tap()
+        terminal.tap()
+        waitForMouseClickCounts(presses: 2, releases: 2, in: app)
+    }
+
+    @MainActor
     func testDirectTouchRoutesBalancedClicksWithoutGestureDuplicates() throws {
         let app = launchKeyboardHarness(simulatesTerminalMouseCapture: true)
         let terminal = waitForTerminal(in: app)
@@ -222,4 +316,3 @@ final class TerminalPointerSelectionUITests: TerminalKeyboardUITestCase {
 
 }
 #endif
-

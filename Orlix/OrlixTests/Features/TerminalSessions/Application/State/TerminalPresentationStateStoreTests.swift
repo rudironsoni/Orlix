@@ -28,6 +28,7 @@ struct TerminalPresentationStateStoreTests {
         let paneId = UUID()
         store.setTerminalFindNavigatorVisible(true, for: paneId)
         store.applyVoiceEvent(.recordingStarted, for: paneId)
+        store.setMouseReportingSuppressed(true, for: paneId)
         #endif
 
         store.reset()
@@ -36,24 +37,42 @@ struct TerminalPresentationStateStoreTests {
         #if os(iOS)
         #expect(store.terminalFindNavigatorVisibleByPane.isEmpty)
         #expect(store.terminalVoicePresentationByPane.isEmpty)
+        #expect(store.mouseReportingSuppressedPaneIds.isEmpty)
         #endif
     }
 
     #if os(iOS)
     @Test
-    func paneCleanupRemovesFindAndVoicePresentationState() {
+    func paneCleanupRemovesTemporaryPresentationState() {
         let store = TerminalPresentationStateStore()
         let paneId = UUID()
 
         store.setTerminalFindNavigatorVisible(true, for: paneId)
         store.applyVoiceEvent(.recordingStarted, for: paneId)
+        store.setMouseReportingSuppressed(true, for: paneId)
         #expect(store.terminalFindNavigatorVisibleByPane[paneId] == true)
         #expect(store.voicePresentation(for: paneId) == .recording)
+        #expect(store.isMouseReportingSuppressed(for: paneId))
 
         store.removePane(paneId)
         #expect(store.terminalFindNavigatorVisibleByPane[paneId] == nil)
         #expect(store.terminalVoicePresentationByPane[paneId] == nil)
         #expect(store.voicePresentation(for: paneId) == .idle)
+        #expect(!store.isMouseReportingSuppressed(for: paneId))
+    }
+
+    @Test
+    func mouseReportingSuppressionIsIndependentByPane() {
+        let store = TerminalPresentationStateStore()
+        let firstPaneId = UUID()
+        let secondPaneId = UUID()
+
+        store.setMouseReportingSuppressed(true, for: firstPaneId)
+        #expect(store.isMouseReportingSuppressed(for: firstPaneId))
+        #expect(!store.isMouseReportingSuppressed(for: secondPaneId))
+
+        store.setMouseReportingSuppressed(false, for: firstPaneId)
+        #expect(!store.isMouseReportingSuppressed(for: firstPaneId))
     }
 
     @Test

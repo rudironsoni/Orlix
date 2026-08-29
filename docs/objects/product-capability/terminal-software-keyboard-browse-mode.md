@@ -3,13 +3,15 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-08-29
 status: partial
 summary: "Terminal iPhone Keyboard and Selection Interaction."
 part_of:
   - "[Orlix](../product/orlix.md)"
 owned_by:
   - "[Orlix native app](../software-component/orlix-native-app.md)"
+derived_from:
+  - "[RootShell mouse mode reference](../../sources/application/rootshell-mouse-mode.md)"
 ---
 
 # Terminal iPhone Keyboard and Selection Interaction
@@ -26,6 +28,23 @@ This spec defines the iPhone terminal interaction work we will do next.
 - We only reopen fork work later if the app-side selection spike proves that the current APIs are still missing a concrete geometry primitive we need.
 
 The recent Ghostty vendor update changes the plan in one important way: we now have better selection metadata available in the vendored headers, so we can start Phase 2 with stronger read-side primitives and without immediately changing the fork again.
+
+## Per-Pane Mouse Capture Override
+
+iOS and iPadOS terminal panes expose a customizable `Mouse Capture` accessory
+action and `Cmd+Option+M`. The action uses Ghostty's
+`toggle_mouse_reporting` surface binding. When capture is off, terminal
+programs stop receiving pointer reports and Orlix native selection and scrolling
+remain available. Running terminal programs are not reconfigured.
+
+The desired state belongs to the native app presentation layer. It is keyed by
+pane, survives terminal surface view reconstruction, does not cross split or
+tab boundaries, and is removed when the pane closes. It is not persisted across
+an app relaunch.
+
+The active accessory state means mouse capture is off. The terminal shows and
+announces `Mouse Capture Off` or `Mouse Capture On` after a user toggle.
+Native macOS command UI is deferred.
 
 ## Current Baseline
 

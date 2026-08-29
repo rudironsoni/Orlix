@@ -9,6 +9,95 @@ import UIKit
 @MainActor
 struct GhosttyTerminalInteractionOwnershipTests {
     @Test
+    func mouseReportingOverrideControlsTheActualGhosttySurface() throws {
+        let app = GhosttyRuntime()
+        defer { app.cleanup() }
+        let appHandle = try #require(app.app)
+        let terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: FileManager.default.currentDirectoryPath,
+            ghosttyApp: appHandle,
+            appWrapper: app,
+            paneId: "mouse-reporting-override",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "mouse-reporting-override-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        defer { terminal.cleanup() }
+        terminal.setupWriteCallback()
+        terminal.feedData(Data("\u{1B}[?1000h\u{1B}[?1006h".utf8))
+        let surface = try #require(terminal.surface)
+        #expect(surface.mouseCaptured)
+
+        var observedStates: [Bool] = []
+        terminal.onMouseReportingSuppressionChange = { observedStates.append($0) }
+
+        #expect(terminal.setMouseReportingSuppressed(true))
+        #expect(terminal.isMouseReportingSuppressed)
+        #expect(terminal.isMouseCapturedForHostInteraction == false)
+        #expect(surface.sendMouseButton(.init(action: .press, button: .left, mods: [])) == false)
+        #expect(observedStates == [true])
+
+        #expect(terminal.setMouseReportingSuppressed(true))
+        #expect(observedStates == [true])
+
+        #expect(terminal.setMouseReportingSuppressed(false))
+        #expect(!terminal.isMouseReportingSuppressed)
+        #expect(terminal.isMouseCapturedForHostInteraction)
+        #expect(surface.sendMouseButton(.init(action: .press, button: .left, mods: [])))
+        _ = surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
+        #expect(observedStates == [true, false])
+
+        terminal.cleanup()
+        #expect(!terminal.setMouseReportingSuppressed(true))
+        #expect(!terminal.isMouseReportingSuppressed)
+        #expect(observedStates == [true, false])
+    }
+
+    @Test
+    func mouseCaptureAccessoryAndKeyboardCommandToggleTheSameSurfaceState() throws {
+        let app = GhosttyRuntime()
+        defer { app.cleanup() }
+        let appHandle = try #require(app.app)
+        let terminal = GhosttyTerminalView(
+            frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            worktreePath: FileManager.default.currentDirectoryPath,
+            ghosttyApp: appHandle,
+            appWrapper: app,
+            paneId: "mouse-reporting-controls",
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                profile: .defaultValue(lastWriterDeviceId: "mouse-reporting-controls-test"),
+                showsDismissKeyboardButton: true
+            ),
+            useCustomIO: true
+        )
+        defer { terminal.cleanup() }
+        terminal.setupWriteCallback()
+        terminal.feedData(Data("\u{1B}[?1000h\u{1B}[?1006h".utf8))
+        terminal.keyboardUITestSetHardwareKeyboardAttached(false)
+
+        let toolbar = try #require(terminal.resolvedInputAccessoryView() as? TerminalInputAccessoryView)
+        let button = try #require(findView(
+            in: toolbar,
+            accessibilityIdentifier: "orlix.keyboard.accessory.system.mouseCapture"
+        ) as? UIButton)
+        button.sendActions(for: .touchUpInside)
+        #expect(terminal.isMouseReportingSuppressed)
+        #expect(button.isSelected)
+        #expect(!terminal.mouseCaptureIndicatorView.isHidden)
+        #expect(terminal.mouseCaptureIndicatorView.accessibilityLabel == "Mouse Capture Off")
+
+        let command = try #require(terminal.keyCommands?.first {
+            $0.input == "m" && $0.modifierFlags == [.command, .alternate]
+        })
+        terminal.handleMouseCaptureCommand(command)
+        #expect(!terminal.isMouseReportingSuppressed)
+        #expect(!button.isSelected)
+    }
+
+    @Test
     func splitCommandsRouteFromTextInputOwnerToTerminalResponder() throws {
         let app = GhosttyRuntime()
         defer { app.cleanup() }
@@ -285,5 +374,24 @@ struct GhosttyTerminalInteractionOwnershipTests {
         }
         return condition()
     }
+}
+
+@MainActor
+private func findView(
+    in root: UIView,
+    accessibilityIdentifier: String
+) -> UIView? {
+    if root.accessibilityIdentifier == accessibilityIdentifier {
+        return root
+    }
+    for subview in root.subviews {
+        if let match = findView(
+            in: subview,
+            accessibilityIdentifier: accessibilityIdentifier
+        ) {
+            return match
+        }
+    }
+    return nil
 }
 #endif

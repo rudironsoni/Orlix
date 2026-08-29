@@ -1000,3 +1000,11 @@ accepting Ghostty's current macOS archive name, removing stale XcodeGen source
 paths, linking the production TCTI proof providers, and using the current
 terminal theme storage keys. The release app builds, installs, and launches on
 the dedicated screenshot simulator.
+
+## [2026-08-29] implement | Add per-pane terminal mouse capture override
+
+Added the pinned RootShell mouse-mode reference and recorded the iOS and iPadOS
+Orlix behavior. Each pane can suppress Ghostty mouse reporting through a
+customizable accessory action or `Cmd+Option+M`. The process-local state
+survives surface view reconstruction, remains isolated by pane, and clears when
+the pane closes. Native macOS command UI remains deferred.
