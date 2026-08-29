@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "path_replacements": [
+    ["VVTerm", "Orlix"],
+    ["vvterm", "orlix"]
+  ],
+  "text_replacements": [
+    ["com.vivy-company.VVTerm", "com.rudironsoni.Orlix"],
+    ["com.vivy-company.vvterm", "com.rudironsoni.orlix"],
+    ["VVTerm", "Orlix"],
+    ["vvterm", "orlix"]
+  ],
+  "preserve_text_paths": [
+    ".contributors",
+    "CLA.md",
+    "CODE_OF_CONDUCT.md",
+    "LICENSE",
+    "LICENSE-APPSTORE.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "allowed_text_paths": [
+    ".contributors",
+    "CLA.md",
+    "CODE_OF_CONDUCT.md",
+    "LICENSE",
+    "LICENSE-APPSTORE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "Makefile",
+    "make/vvterm-*",
+    "make/vvterm_*",
+    "make/tests/test_vvterm_sync.py"
+  ],
+  "allowed_path_patterns": [
+    "make/vvterm-*",
+    "make/vvterm_*",
+    "make/vvterm-branding/*",
+    "make/tests/test_vvterm_sync.py"
+  ]
+}

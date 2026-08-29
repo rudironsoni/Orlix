@@ -15,6 +15,7 @@ type ?= app
 vendor ?= all
 
 include $(PROJECT_DIR)/make/vendor.mk
+include $(PROJECT_DIR)/make/vvterm-sync.mk
 
 .PHONY: all help build __build-app __vendor-reexec run clean mrproper
 
@@ -27,6 +28,10 @@ help:
 	@printf '%s\n' '  build type=vendor vendor=ghostty|ssh'
 	@printf '%s\n' '  run                           build and run the Orlix iOS host app'
 	@printf '%s\n' '  clean                         remove project-local build intermediates only'
+	@printf '%s\n' '  vvterm-sync                  merge one exact upstream snapshot into tracked Orlix source'
+	@printf '%s\n' '  vvterm-sync-complete         validate a resolved sync and advance source provenance'
+	@printf '%s\n' '  vvterm-source-check          validate the tracked source snapshot and branding contract'
+	@printf '%s\n' '  vvterm-upstream-tests        test the exact pristine upstream source revision'
 	@printf '%s\n' 'Variables for vendor builds:'
 	@printf '%s\n' '  GHOSTTY_REF=<40-char-sha>      override the pinned Ghostty commit'
 	@printf '%s\n' '  KEEP_WORKDIR=1                 retain the temporary Ghostty checkout'
