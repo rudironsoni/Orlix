@@ -18,6 +18,13 @@ final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
             timeout: 5,
             diagnostics: diagnosticsText(in: app)
         )
+        wait(
+            for: diagnostics,
+            labelContaining: "keyboardVisible=true",
+            timeout: 8,
+            diagnostics: diagnosticsText(in: app)
+        )
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         let stableGridRows = try requiredDiagnosticMetric("gridRows", in: app)
         let stableGridResizes = try requiredDiagnosticMetric("gridResizes", in: app)
         for identifier in [
@@ -431,4 +438,3 @@ final class TerminalKeyboardGeometryUITests: TerminalKeyboardUITestCase {
     }
 }
 #endif
-

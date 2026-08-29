@@ -15,7 +15,8 @@ final class TelemetryTests: XCTestCase {
         XCTAssertEqual(
             Set(OrlixAnalyticsEvent.allCases.map(\.rawValue)),
             [
-                "app_started", "app_launched", "connection_succeeded", "paywall_viewed",
+                "app_started", "app_launched", "connection_succeeded", "connection_attempted",
+                "connection_reconnecting", "connection_failed", "paywall_viewed",
                 "paywall_cta_tapped", "purchase_started", "purchased", "purchase_succeeded",
                 "purchase_cancelled", "purchase_pending", "purchase_failed", "limit_hit",
                 "free_plan_generation_assigned", "welcome_completed", "custom_action_created",

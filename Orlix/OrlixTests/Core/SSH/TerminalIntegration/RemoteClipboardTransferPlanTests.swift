@@ -92,8 +92,8 @@ struct RemoteClipboardTransferPlanTests {
                 == #"'C:\Users\O''Hara\My Images\image.png'"#
         )
         #expect(
-            try cmd.pastedPathToken(for: #"C:\Users\Wiedy Mi\A&B^(1)\image.png"#)
-                == #""C:\Users\Wiedy Mi\A&B^(1)\image.png""#
+            try cmd.pastedPathToken(for: #"C:\Users\Wiedy Mi\My Images\image.png"#)
+                == #""C:\Users\Wiedy Mi\My Images\image.png""#
         )
     }
 
@@ -106,6 +106,16 @@ struct RemoteClipboardTransferPlanTests {
         }
         #expect(throws: TerminalRichPasteError.self) {
             _ = try cmd.pastedPathToken(for: #"C:\Users\Wiedy!\image.png"#)
+        }
+        for unsafePath in [
+            #"C:\Users\Wiedy Mi\A&B\image.png"#,
+            #"C:\Users\Wiedy Mi\A^B\image.png"#,
+            #"C:\Users\Wiedy Mi\A|B\image.png"#,
+            #"C:\Users\Wiedy Mi\A(B)\image.png"#,
+        ] {
+            #expect(throws: TerminalRichPasteError.self) {
+                _ = try cmd.pastedPathToken(for: unsafePath)
+            }
         }
     }
 

@@ -1,6 +1,29 @@
 #if os(iOS)
 import XCTest
 
+@MainActor
+func requireConfiguredLoopbackSSHFixture(
+    diagnostics: XCUIElement,
+    app: XCUIApplication
+) throws {
+    let deadline = Date().addingTimeInterval(3)
+    while Date() < deadline {
+        if diagnostics.exists {
+            let label = diagnostics.label
+            if label.contains("setup=failed error=Missing loopback SSH username")
+                || label.contains("setup=failed error=Invalid loopback SSH private key") {
+                throw XCTSkip(
+                    "The production SSH UI fixture is not configured on this simulator. \(label)"
+                )
+            }
+            if !label.contains("setup=preparing") {
+                return
+            }
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    }
+}
+
 class TerminalReconnectUITestCase: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -16,7 +39,7 @@ class TerminalReconnectUITestCase: XCTestCase {
     func launchProductionSSHTestHarness(
         exposesKeyboardLossControl: Bool = false,
         themeName: String? = nil
-    ) -> (XCUIApplication, XCUIElement) {
+    ) throws -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments = [
@@ -57,6 +80,7 @@ class TerminalReconnectUITestCase: XCTestCase {
             diagnostics.waitForExistence(timeout: 45),
             "Production SSH harness did not mount"
         )
+        try requireConfiguredLoopbackSSHFixture(diagnostics: diagnostics, app: app)
         wait(
             for: diagnostics,
             containing: "setup=ready state=connected",

@@ -26,7 +26,10 @@ struct RemoteFileItemProviderAdapterTests {
 
     @Test
     func decodesAndDeduplicatesLocalFileURLs() async throws {
-        let url = URL(fileURLWithPath: "/tmp/orlix-drop.txt")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orlix-drop-\(UUID().uuidString).txt")
+        try Data().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
         let providers = [NSItemProvider(contentsOf: url), NSItemProvider(contentsOf: url)].compactMap { $0 }
 
         let decoded = try await RemoteFileItemProviderAdapter.loadLocalURLs(from: providers)

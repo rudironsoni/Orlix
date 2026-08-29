@@ -26,7 +26,7 @@ final class OpenSourceLicensesUITests: XCTestCase {
         settings.tap()
 
         let about = app.buttons["orlix.settings.route.aboutAndSupport"]
-        XCTAssertTrue(about.waitForExistence(timeout: 8))
+        XCTAssertTrue(scrollToHittable(about, in: app))
         about.tap()
 
         let licenses = app.buttons["orlix.settings.openSourceLicenses"]

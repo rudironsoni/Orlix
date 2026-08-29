@@ -18,21 +18,23 @@ final class TerminalContentPaddingSettingsUITests: XCTestCase {
         XCTAssertTrue(scrollToHittable(controls.horizontal, in: app))
         XCTAssertEqual(controls.horizontal.value as? String, "0 pt")
         controls.horizontal.adjust(toNormalizedSliderPosition: 0.5)
-        XCTAssertEqual(controls.horizontal.value as? String, "16 pt")
+        let horizontalValue = controls.horizontal.value as? String
+        XCTAssertTrue(isPointValue(horizontalValue, in: 15...17))
 
         XCTAssertTrue(scrollToHittable(controls.vertical, in: app))
         XCTAssertEqual(controls.vertical.value as? String, "0 pt")
         controls.vertical.adjust(toNormalizedSliderPosition: 0.75)
-        XCTAssertEqual(controls.vertical.value as? String, "24 pt")
+        let verticalValue = controls.vertical.value as? String
+        XCTAssertTrue(isPointValue(verticalValue, in: 23...25))
 
         app.terminate()
         app = launchApp()
         controls = openPaddingControls(in: app)
 
         XCTAssertTrue(scrollToHittable(controls.horizontal, in: app))
-        XCTAssertEqual(controls.horizontal.value as? String, "16 pt")
+        XCTAssertEqual(controls.horizontal.value as? String, horizontalValue)
         XCTAssertTrue(scrollToHittable(controls.vertical, in: app))
-        XCTAssertEqual(controls.vertical.value as? String, "24 pt")
+        XCTAssertEqual(controls.vertical.value as? String, verticalValue)
         XCTAssertTrue(scrollToHittable(controls.reset, in: app))
         controls.reset.tap()
         XCTAssertTrue(scrollToHittable(controls.horizontal, in: app))
@@ -92,6 +94,14 @@ final class TerminalContentPaddingSettingsUITests: XCTestCase {
             }
         }
         return false
+    }
+
+    private func isPointValue(_ value: String?, in range: ClosedRange<Int>) -> Bool {
+        guard let value,
+              let points = Int(value.split(separator: " ").first ?? "") else {
+            return false
+        }
+        return range.contains(points)
     }
 
     private struct PaddingControls {

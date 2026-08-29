@@ -87,6 +87,6 @@ struct TSSHServerInfoTests {
         #expect(command.contains("1280"))
         #expect(command.contains("nohup"))
         #expect(command.contains("umask 077"))
-        #expect(command.contains("trap 'rm -f \"$output\"'"))
+        #expect(command.contains("trap 'rm -f \\\"\\$output\\\"'"))
     }
 }

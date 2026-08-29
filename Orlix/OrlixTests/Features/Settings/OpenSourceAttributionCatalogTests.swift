@@ -13,13 +13,14 @@ struct OpenSourceAttributionCatalogTests {
                 .appendingPathComponent("Orlix/Resources/OpenSource/Licenses")
         )
 
-        #expect(documents.count == 19)
+        #expect(documents.count == 20)
         #expect(Set(documents.map(\.id)).count == documents.count)
         #expect(documents.allSatisfy { !$0.legalText.isEmpty })
         #expect(documents.allSatisfy { $0.attribution.projectURL.scheme == "https" })
         #expect(documents.contains { $0.id == "ghostty" })
         #expect(documents.contains { $0.id == "nvidia-parakeet" })
         #expect(documents.contains { $0.id == "nerd-fonts" })
+        #expect(documents.contains { $0.id == "trzsz-ssh-rootshell" })
     }
 
     private var repositoryRoot: URL {

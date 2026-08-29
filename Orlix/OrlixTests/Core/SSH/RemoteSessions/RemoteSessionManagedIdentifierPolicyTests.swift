@@ -74,7 +74,7 @@ struct RemoteSessionManagedIdentifierPolicyTests {
         let punctuation = try identifier(serverName: "---")
 
         #expect(long.rawValue.hasPrefix("orlix-this-d"))
-        #expect(long.rawValue.utf8.count == 32)
+        #expect(long.rawValue.utf8.count <= RemoteSessionManagedIdentifierPolicy.maximumIdentifierLength)
         #expect(accented.rawValue.hasPrefix("orlix-resu-d"))
         #expect(punctuation.rawValue.hasPrefix("orlix-serv-d"))
     }

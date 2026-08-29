@@ -359,15 +359,25 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        Task { [weak self] in
-            guard let self else { return }
+        let dependencies = dependencies
+        let localSnapshot = profile
+        let logger = logger
+        return Task { @MainActor [weak self, dependencies, localSnapshot, logger] in
             do {
-                try await self.synchronizeWithCloud()
+                try Task.checkCancellation()
+                guard dependencies.isSyncEnabled() else { return }
+                let cloudResolved = try await dependencies.cloud.syncTerminalAccessoryProfile(localSnapshot)
+                try Task.checkCancellation()
+                guard dependencies.isSyncEnabled(), self != nil else {
+                    throw CancellationError()
+                }
+                self?.applyCloudResolution(cloudResolved)
+                await dependencies.mutationQueue.drainPendingMutations()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
-                self.logger.warning("Terminal accessory CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, dependencies.isSyncEnabled() else { return }
+                logger.warning("Terminal accessory CloudKit sync failed: \(error.localizedDescription)")
             }
         }
     }

@@ -312,6 +312,7 @@ struct StatsBlocksContent: View {
         ) {
             ForEach(renderedBlocks, id: \.self) { blockID in
                 statsBlock(blockID, style: style)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("orlix.stats.card.\(blockID.rawValue)")
             }
         }

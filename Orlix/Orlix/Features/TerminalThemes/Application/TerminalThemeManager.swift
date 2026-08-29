@@ -546,15 +546,39 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        Task { [weak self] in
-            guard let self else { return }
+        let dependencies = dependencies
+        let localThemesSnapshot = customThemes
+        let logger = logger
+        return Task { @MainActor [weak self, dependencies, localThemesSnapshot, logger] in
             do {
-                try await self.synchronizeWithCloud()
+                try Task.checkCancellation()
+                guard dependencies.isSyncEnabled() else { return }
+                let remoteThemes = try await dependencies.cloud.fetchTerminalThemes()
+                try Task.checkCancellation()
+                guard dependencies.isSyncEnabled(), self != nil else {
+                    throw CancellationError()
+                }
+                try self?.applyRemoteThemesAndEnqueueMissing(
+                    remoteThemes,
+                    localThemesSnapshot: localThemesSnapshot,
+                    mutationQueue: dependencies.mutationQueue
+                )
+
+                let remotePreference = try await dependencies.cloud.fetchTerminalThemePreference()
+                try Task.checkCancellation()
+                guard dependencies.isSyncEnabled(), self != nil else {
+                    throw CancellationError()
+                }
+                try self?.applyRemotePreferenceOrEnqueueLocal(
+                    remotePreference,
+                    mutationQueue: dependencies.mutationQueue
+                )
+                await dependencies.mutationQueue.drainPendingMutations()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
-                self.logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, dependencies.isSyncEnabled() else { return }
+                logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
             }
         }
     }

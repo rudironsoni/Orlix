@@ -25,6 +25,12 @@ final class TerminalSessionRestoreUITests: TerminalReconnectUITestCase {
         app.launch()
         defer { app.terminate() }
 
+        let connectionDiagnostics = app.staticTexts["orlix.reconnectTest.diagnostics"]
+        XCTAssertTrue(connectionDiagnostics.waitForExistence(timeout: 45))
+        try requireConfiguredLoopbackSSHFixture(
+            diagnostics: connectionDiagnostics,
+            app: app
+        )
         let relaunchDiagnostics = app.staticTexts["orlix.coldRelaunchTest.diagnostics"]
         XCTAssertTrue(relaunchDiagnostics.waitForExistence(timeout: 45))
         wait(for: relaunchDiagnostics, containing: "tabs=2 panes=3", timeout: 15, app: app)
@@ -47,7 +53,6 @@ final class TerminalSessionRestoreUITests: TerminalReconnectUITestCase {
         XCTAssertEqual(diagnosticValue("selected", in: relaunchDiagnostics), selectedTab)
         XCTAssertEqual(diagnosticValue("focused", in: relaunchDiagnostics), focusedPane)
 
-        let connectionDiagnostics = app.staticTexts["orlix.reconnectTest.diagnostics"]
         XCTAssertTrue(connectionDiagnostics.waitForExistence(timeout: 10))
         wait(
             for: connectionDiagnostics,

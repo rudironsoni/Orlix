@@ -10,7 +10,9 @@ final class TerminalAccessoryProfileTests: XCTestCase {
                 activeItems: [
                     .system(.escape),
                     .system(.escape),
-                    .system(.tab)
+                    .system(.tab),
+                    .system(.arrowUp),
+                    .system(.arrowDown)
                 ],
                 updatedAt: Date()
             ),
@@ -23,7 +25,12 @@ final class TerminalAccessoryProfileTests: XCTestCase {
 
         XCTAssertEqual(
             normalized.layout.activeItems,
-            [TerminalAccessoryItemRef.system(.escape), TerminalAccessoryItemRef.system(.tab)]
+            [
+                TerminalAccessoryItemRef.system(.escape),
+                TerminalAccessoryItemRef.system(.tab),
+                TerminalAccessoryItemRef.system(.arrowUp),
+                TerminalAccessoryItemRef.system(.arrowDown),
+            ]
         )
     }
 
@@ -43,7 +50,13 @@ final class TerminalAccessoryProfileTests: XCTestCase {
             schemaVersion: TerminalAccessoryProfile.schemaVersion,
             layout: TerminalAccessoryLayout(
                 version: 1,
-                activeItems: [.custom(deletedAction.id)],
+                activeItems: [
+                    .system(.escape),
+                    .custom(deletedAction.id),
+                    .system(.tab),
+                    .system(.arrowUp),
+                    .system(.arrowDown),
+                ],
                 updatedAt: Date()
             ),
             customActions: [deletedAction],
@@ -53,6 +66,14 @@ final class TerminalAccessoryProfileTests: XCTestCase {
 
         let normalized = profile.normalized()
 
-        XCTAssertTrue(normalized.layout.activeItems.isEmpty)
+        XCTAssertEqual(
+            normalized.layout.activeItems,
+            [
+                TerminalAccessoryItemRef.system(.escape),
+                TerminalAccessoryItemRef.system(.tab),
+                TerminalAccessoryItemRef.system(.arrowUp),
+                TerminalAccessoryItemRef.system(.arrowDown),
+            ]
+        )
     }
 }

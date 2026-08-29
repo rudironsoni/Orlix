@@ -62,6 +62,15 @@ struct ServerDuplicateUITestHarness: View {
         .sheet(item: $formIntent) { intent in
             formSheet(for: intent)
         }
+        .task {
+            guard !serverManager.servers.contains(where: { $0.id == sourceServer.id }) else {
+                return
+            }
+            serverManager.stateStore.replaceCollections(
+                servers: [sourceServer],
+                workspaces: serverManager.workspaces
+            )
+        }
         .accessibilityIdentifier("orlix.serverDuplicateTest.root")
     }
 
