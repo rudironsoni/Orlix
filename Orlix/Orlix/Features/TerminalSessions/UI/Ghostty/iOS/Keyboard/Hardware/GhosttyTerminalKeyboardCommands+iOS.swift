@@ -10,7 +10,7 @@ import UIKit
 
 extension GhosttyTerminalView {
     override var keyCommands: [UIKeyCommand]? {
-        terminalSplitCommands + terminalZoomCommands + (super.keyCommands ?? [])
+        terminalSplitCommands + terminalZoomCommands + [mouseCaptureCommand] + (super.keyCommands ?? [])
     }
 
     func handleIMEProxyNavigationCommand(_ command: UIKeyCommand) {
@@ -48,6 +48,16 @@ extension GhosttyTerminalView {
             input: input,
             modifiers: command.modifierFlags.terminalSplitShortcutModifiers
         )
+    }
+
+    @objc
+    func handleMouseCaptureCommand(_ command: UIKeyCommand) {
+        guard canRouteTerminalInput,
+              command.input?.lowercased() == "m",
+              command.modifierFlags.intersection([.command, .alternate, .control, .shift]) == [.command, .alternate] else {
+            return
+        }
+        toggleMouseReportingSuppression()
     }
 
     func handlePasteShortcut(_ key: UIKey) -> Bool {
@@ -90,6 +100,12 @@ extension GhosttyTerminalView {
 
     func handleCommandShortcut(_ key: UIKey) -> Bool {
         guard key.modifierFlags.contains(.command) else { return false }
+        let significantModifiers = key.modifierFlags.intersection([.command, .alternate, .control, .shift])
+        if key.charactersIgnoringModifiers.lowercased() == "m",
+           significantModifiers == [.command, .alternate] {
+            toggleMouseReportingSuppression()
+            return true
+        }
         if performTerminalSplitCommand(terminalSplitCommand(for: key)) {
             return true
         }

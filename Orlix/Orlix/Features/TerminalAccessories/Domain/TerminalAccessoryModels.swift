@@ -283,6 +283,7 @@ nonisolated enum TerminalAccessorySystemActionID: String, Codable, CaseIterable,
     case ctrlE
     case ctrlK
     case ctrlU
+    case mouseCapture
     case unknown
 
     var id: String { rawValue }
@@ -487,7 +488,7 @@ nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
 }
 
 nonisolated extension TerminalAccessoryProfile {
-    static let schemaVersion = 2
+    static let schemaVersion = 3
     static let recordType = "UserPreference"
     static let recordName = "terminalAccessory.v1"
 
@@ -497,9 +498,28 @@ nonisolated extension TerminalAccessoryProfile {
     static let maxCustomActionTitleLength = 24
     static let maxCommandContentLength = 2048
 
+    static let legacyDefaultActiveItemsV2: [TerminalAccessoryItemRef] = [
+        .system(.escape),
+        .system(.tab),
+        .system(.arrowUp),
+        .system(.arrowDown),
+        .system(.arrowLeft),
+        .system(.arrowRight),
+        .system(.backspace),
+        .system(.ctrlC),
+        .system(.ctrlD),
+        .system(.ctrlZ),
+        .system(.ctrlL),
+        .system(.home),
+        .system(.end),
+        .system(.pageUp),
+        .system(.pageDown)
+    ]
+
     static let defaultActiveItems: [TerminalAccessoryItemRef] = [
         .system(.escape),
         .system(.tab),
+        .system(.mouseCapture),
         .system(.arrowUp),
         .system(.arrowDown),
         .system(.arrowLeft),
@@ -534,6 +554,8 @@ nonisolated extension TerminalAccessoryProfile {
     }
 
     func normalized() -> TerminalAccessoryProfile {
+        let shouldMigrateUntouchedDefaultLayout = schemaVersion < Self.schemaVersion
+            && layout.activeItems == Self.legacyDefaultActiveItemsV2
         var customActionsByID: [UUID: TerminalAccessoryCustomAction] = [:]
         for action in customActions {
             let normalizedAction = action.normalized()
@@ -569,7 +591,10 @@ nonisolated extension TerminalAccessoryProfile {
         var seenItems = Set<TerminalAccessoryItemRef>()
         var normalizedItems: [TerminalAccessoryItemRef] = []
 
-        for item in layout.activeItems {
+        let activeItems = shouldMigrateUntouchedDefaultLayout
+            ? Self.defaultActiveItems
+            : layout.activeItems
+        for item in activeItems {
             switch item {
             case .system(let actionID):
                 guard actionID != .unknown else { continue }

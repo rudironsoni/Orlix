@@ -963,3 +963,11 @@ source. Advanced the source pin to `31120756133d22e526d01c630c680bd949dda730`,
 updated packages and native artifacts, and preserved OrlixOS and telemetry
 overlays. Source and release-input checks pass. Xcode tests remain blocked on
 the missing optional Metal toolchain component.
+
+## [2026-08-29] implement | Add per-pane terminal mouse capture override
+
+Added the pinned RootShell mouse-mode reference and recorded the iOS and iPadOS
+Orlix behavior. Each pane can suppress Ghostty mouse reporting through a
+customizable accessory action or `Cmd+Option+M`. The process-local state
+survives surface view reconstruction, remains isolated by pane, and clears when
+the pane closes. Native macOS command UI remains deferred.

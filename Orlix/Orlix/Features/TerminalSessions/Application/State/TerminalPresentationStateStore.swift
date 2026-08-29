@@ -10,6 +10,7 @@ final class TerminalPresentationStateStore: ObservableObject {
     #if os(iOS)
     @Published private(set) var terminalFindNavigatorVisibleByPane: [UUID: Bool] = [:]
     @Published private(set) var terminalVoicePresentationByPane: [UUID: TerminalVoicePresentationState] = [:]
+    @Published private(set) var mouseReportingSuppressedPaneIds: Set<UUID> = []
     #endif
 
     func toggleSplitZoom(for tabId: UUID) {
@@ -28,6 +29,18 @@ final class TerminalPresentationStateStore: ObservableObject {
     func setTerminalFindNavigatorVisible(_ isVisible: Bool, for paneId: UUID) {
         guard terminalFindNavigatorVisibleByPane[paneId] != isVisible else { return }
         terminalFindNavigatorVisibleByPane[paneId] = isVisible
+    }
+
+    func isMouseReportingSuppressed(for paneId: UUID) -> Bool {
+        mouseReportingSuppressedPaneIds.contains(paneId)
+    }
+
+    func setMouseReportingSuppressed(_ isSuppressed: Bool, for paneId: UUID) {
+        if isSuppressed {
+            mouseReportingSuppressedPaneIds.insert(paneId)
+        } else {
+            mouseReportingSuppressedPaneIds.remove(paneId)
+        }
     }
 
     func voicePresentation(for paneId: UUID) -> TerminalVoicePresentationState {
@@ -52,6 +65,7 @@ final class TerminalPresentationStateStore: ObservableObject {
     func removePane(_ paneId: UUID) {
         terminalFindNavigatorVisibleByPane.removeValue(forKey: paneId)
         terminalVoicePresentationByPane.removeValue(forKey: paneId)
+        mouseReportingSuppressedPaneIds.remove(paneId)
     }
     #endif
 
@@ -61,6 +75,7 @@ final class TerminalPresentationStateStore: ObservableObject {
         #if os(iOS)
         terminalFindNavigatorVisibleByPane.removeAll()
         terminalVoicePresentationByPane.removeAll()
+        mouseReportingSuppressedPaneIds.removeAll()
         #endif
     }
     #endif

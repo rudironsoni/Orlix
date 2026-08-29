@@ -751,6 +751,7 @@ struct TerminalKeyboardUITestHarness: View {
             + " returnInputs=\(returnInputCount) codexResponses=\(codexResponseCount)"
             + " findPresented=\(terminalView.isFindNavigatorVisible)"
             + " mouseCaptured=\(terminalView.surface?.mouseCaptured == true)"
+            + " mouseReportingSuppressed=\(terminalView.isMouseReportingSuppressed)"
             + " primaryMousePresses=\(primaryMousePresses) primaryMouseReleases=\(primaryMouseReleases)"
             + " mouseScrollReports=\(mouseScrollReports) zoomActions=\(zoomActionCount)"
             + " lastZoomAction=\(lastZoomAction)"

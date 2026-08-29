@@ -49,6 +49,8 @@ struct TerminalAccessoryPresentationTests {
         #expect(TerminalAccessorySystemActionID.pageDown.toolbarTitle == String(localized: "PgDn"))
         #expect(TerminalAccessorySystemActionID.ctrlC.listTitle == String(localized: "Ctrl+C"))
         #expect(TerminalAccessorySystemActionID.ctrlC.toolbarTitle == String(localized: "^C"))
+        #expect(TerminalAccessorySystemActionID.mouseCapture.listTitle == String(localized: "Mouse Capture"))
+        #expect(TerminalAccessorySystemActionID.mouseCapture.toolbarTitle.isEmpty)
         #expect(TerminalAccessorySystemActionID.unknown.listTitle == String(localized: "Unknown"))
         #expect(TerminalAccessorySystemActionID.unknown.toolbarTitle == String(localized: "?"))
 
@@ -59,7 +61,8 @@ struct TerminalAccessoryPresentationTests {
             .arrowUp: "arrow.up",
             .arrowDown: "arrow.down",
             .arrowLeft: "arrow.left",
-            .arrowRight: "arrow.right"
+            .arrowRight: "arrow.right",
+            .mouseCapture: "computermouse"
         ])
         #expect(TerminalAccessorySystemActionID.arrowUp.toolbarTitle.isEmpty)
         #expect(TerminalAccessorySystemActionID.arrowDown.toolbarTitle.isEmpty)
