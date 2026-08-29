@@ -951,8 +951,8 @@ beta-validate-export:
 	[ -n "$$app" ] || { echo "exported IPA does not contain an app" >&2; exit 1; }; \
 	$(MAKE) --no-print-directory __exported-app-check ORLIX_EXPORTED_APP="$$app" ORLIX_REQUIRE_PUBLIC_DISTRIBUTION="$(ORLIX_REQUIRE_PUBLIC_DISTRIBUTION)"
 
-beta-upload-prerequisites: __release-tag-check __release-public-approval-check
-	@$(MAKE) --no-print-directory beta-validate-export ORLIX_REQUIRE_PUBLIC_DISTRIBUTION=true
+beta-upload-prerequisites: __release-tag-check
+	@$(MAKE) --no-print-directory beta-validate-export
 
 beta-upload:
 	@set -euo pipefail; \

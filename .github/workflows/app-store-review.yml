@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       beta_tag:
-        description: Protected beta tag, for example ios-v0.1
+        description: Protected beta tag, for example ios-v0.1-b42
         required: true
         type: string
 

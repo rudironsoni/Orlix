@@ -4,7 +4,7 @@ The repository workflows keep release policy in Git. Repository administrators m
 
 ## Tag rule
 
-Protect tags that match `ios-v*`. Only release maintainers can create or update these tags. A valid tag must match `ios-v<MARKETING_VERSION>`, point to the checked-out commit, and be on `origin/main`.
+Protect tags that match `ios-v*-b*`. Only release maintainers can create or update these tags. A valid tag must match `ios-v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`, point to the checked-out commit, and be on `origin/main`. For example, app version `0.1` and build `42` use `ios-v0.1-b42`.
 
 ## `testflight-internal` environment
 
