@@ -108,6 +108,21 @@ struct AppServerConnectionTestPlanTests {
     }
 
     @Test
+    func tsshUsesItsConfiguredBootstrapRange() {
+        var server = makeServer(mode: .tssh)
+        server.tsshProfile = TSSHProfile(
+            transportMode: .quic,
+            udpPortMinimum: 62_000,
+            udpPortMaximum: 62_100
+        )
+
+        #expect(
+            ServerConnectionTestPlan(server: server)
+                == .tssh(portRange: 62_000...62_100)
+        )
+    }
+
+    @Test
     func hostKeyFailureRequiresApprovalForTheCurrentEndpoint() {
         let server = makeServer(mode: .standard)
 

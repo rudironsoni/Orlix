@@ -10,6 +10,7 @@ targets:
   - "[Orlix](../../product/orlix.md)"
 has_story:
   - "[Establish native application foundation](../../story/doing/establish-native-application-foundation.md)"
+  - "[Deliver native TSSH transport](../../story/doing/deliver-native-tssh-transport.md)"
   - "[Deliver Orlix machines](../../story/doing/deliver-orlix-machines.md)"
 blocks:
   - "[OCI-derived environments](oci-derived-environments.md)"

@@ -22,6 +22,9 @@ DerivedData/
 Vendor/libssh2/*/lib/cmake/
 Vendor/libssh2/*/lib/pkgconfig/
 Vendor/libssh2/*/share/
+Vendor/trzsz-ssh/TrzszSSH.xcframework/
+Vendor/trzsz-ssh/VPNTunnel.xcframework/
+Vendor/trzsz-ssh/VERSION
 
 # CocoaPods (if used)
 Pods/

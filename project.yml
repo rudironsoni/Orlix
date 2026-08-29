@@ -478,6 +478,10 @@ targets:
         embed: true
       - target: OrlixLiveActivity
         embed: true
+      - target: OrlixPacketTunnel
+        embed: true
+      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
+        embed: false
       - package: MLXSwift
         products:
           - MLX
@@ -621,6 +625,8 @@ targets:
     dependencies:
       - target: OrlixOS
         embed: true
+      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
+        embed: false
       - package: MLXSwift
         products:
           - MLX
@@ -678,6 +684,33 @@ targets:
         PRODUCT_NAME: OrlixLiveActivity
         SKIP_INSTALL: YES
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+  OrlixPacketTunnel:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.1"
+    sources:
+      - path: Orlix/OrlixPacketTunnel
+        createIntermediateGroups: true
+        excludes:
+          - Info.plist
+          - OrlixPacketTunnel.entitlements
+      - path: Orlix/Orlix/Features/TerminalSessions/Infrastructure/TSSH/TSSHVPNSecretStore.swift
+    dependencies:
+      - framework: Orlix/Vendor/trzsz-ssh/VPNTunnel.xcframework
+        embed: false
+      - sdk: NetworkExtension.framework
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Orlix/OrlixPacketTunnel/OrlixPacketTunnel.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Orlix/OrlixPacketTunnel/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "16.1"
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.packet-tunnel
+        PRODUCT_NAME: OrlixPacketTunnel
+        SKIP_INSTALL: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
   OrlixTests:

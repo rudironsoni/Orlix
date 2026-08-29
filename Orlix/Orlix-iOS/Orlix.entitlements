@@ -23,10 +23,14 @@
 	</array>
 
     <!-- Fonts installed by the user or another app -->
-    <key>com.apple.developer.user-fonts</key>
+	<key>com.apple.developer.user-fonts</key>
     <array>
         <string>app-usage</string>
-    </array>
+	</array>
+	<key>com.apple.developer.networking.networkextension</key>
+	<array>
+		<string>packet-tunnel-provider</string>
+	</array>
 
     <!-- Network -->
     <key>com.apple.security.network.client</key>

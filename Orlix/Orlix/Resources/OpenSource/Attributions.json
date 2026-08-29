@@ -104,6 +104,13 @@
         "version": "3.2.0",
         "sourceSHA256": "14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e",
         "attributionID": "openssl"
+      },
+      {
+        "id": "trzsz-ssh-rootshell",
+        "sourceURL": "https://github.com/kitknox/trzsz-ssh-rootshell",
+        "version": "bd9e777620a2ec40e7be59ec31e8a008ff5f7fa5",
+        "sourceSHA256": null,
+        "attributionID": "trzsz-ssh-rootshell"
       }
     ],
     "modelAssets": [
@@ -219,6 +226,14 @@
       "projectURL": "https://github.com/libssh2/libssh2/tree/libssh2-1.11.1",
       "licenseName": "BSD-3-Clause",
       "licenseResource": "libssh2.txt"
+    },
+    {
+      "id": "trzsz-ssh-rootshell",
+      "name": "Trzsz SSH native transport",
+      "role": "networkTransport",
+      "projectURL": "https://github.com/kitknox/trzsz-ssh-rootshell/tree/bd9e777620a2ec40e7be59ec31e8a008ff5f7fa5",
+      "licenseName": "MIT",
+      "licenseResource": "TrzszSSH.txt"
     },
     {
       "id": "openssl",

@@ -11,6 +11,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     var port: Int
     /// TCP port exposed by etserver. SSH still uses `port` for bootstrap.
     var eternalTerminalPort: Int
+    var tsshProfile: TSSHProfile
     var username: String
     var connectionMode: SSHConnectionMode
     var authMethod: AuthMethod
@@ -39,6 +40,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         host: String,
         port: Int = 22,
         eternalTerminalPort: Int = 2022,
+        tsshProfile: TSSHProfile = TSSHProfile(),
         username: String,
         connectionMode: SSHConnectionMode = .standard,
         authMethod: AuthMethod = .password,
@@ -68,6 +70,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.eternalTerminalPort = (1...65535).contains(eternalTerminalPort)
             ? eternalTerminalPort
             : 2022
+        self.tsshProfile = tsshProfile.isValid ? tsshProfile : TSSHProfile()
         self.username = username
         self.connectionMode = connectionMode
         self.authMethod = authMethod
@@ -106,6 +109,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case host
         case port
         case eternalTerminalPort
+        case tsshProfile
         case username
         case connectionMode
         case authMethod
@@ -139,6 +143,11 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 22
         let decodedETPort = try container.decodeIfPresent(Int.self, forKey: .eternalTerminalPort) ?? 2022
         eternalTerminalPort = (1...65535).contains(decodedETPort) ? decodedETPort : 2022
+        let decodedTSSHProfile = try container.decodeIfPresent(
+            TSSHProfile.self,
+            forKey: .tsshProfile
+        ) ?? TSSHProfile()
+        tsshProfile = decodedTSSHProfile.isValid ? decodedTSSHProfile : TSSHProfile()
         username = try container.decode(String.self, forKey: .username)
         connectionMode = try container.decodeIfPresent(SSHConnectionMode.self, forKey: .connectionMode) ?? .standard
         authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .password
@@ -202,6 +211,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         try container.encode(host, forKey: .host)
         try container.encode(port, forKey: .port)
         try container.encode(eternalTerminalPort, forKey: .eternalTerminalPort)
+        try container.encode(tsshProfile, forKey: .tsshProfile)
         try container.encode(username, forKey: .username)
         try container.encode(connectionMode, forKey: .connectionMode)
         try container.encode(authMethod, forKey: .authMethod)
@@ -244,6 +254,7 @@ nonisolated enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable,
     case tailscale
     case mosh
     case eternalTerminal
+    case tssh
     case cloudflare
 
     var id: String { rawValue }

@@ -4,6 +4,7 @@ import os.log
 nonisolated enum TerminalTransportEndOwnership: Sendable {
     case ssh(client: SSHClient, shellId: UUID)
     case eternalTerminal(runtimeToken: UUID)
+    case tssh(runtimeToken: UUID)
 }
 
 @MainActor
@@ -40,6 +41,7 @@ final class TerminalTransportCoordinator {
         lifetime.registry
     }
     private let sshClientFactory: SSHClientFactory
+    private var tsshRuntimes: [UUID: TSSHRuntime] = [:]
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -80,7 +82,7 @@ final class TerminalTransportCoordinator {
     }
 
     var ownedPaneIds: Set<UUID> {
-        registry.ownedPaneIds
+        registry.ownedPaneIds.union(tsshRuntimes.keys)
     }
 
     func makeSSHClient() -> SSHClient {
@@ -89,6 +91,53 @@ final class TerminalTransportCoordinator {
 
     func hasLiveTransport(for paneId: UUID) -> Bool {
         registry.hasLiveTransport(for: paneId)
+            || tsshRuntimes[paneId]?.hasLiveTransport == true
+    }
+
+    func tsshRuntime(
+        for paneId: UUID,
+        server: Server,
+        credentials: ServerCredentials
+    ) -> TSSHRuntime {
+        if let runtime = tsshRuntimes[paneId] { return runtime }
+        let runtime = TSSHRuntime(
+            paneID: paneId,
+            server: server,
+            credentials: credentials,
+            sshClientFactory: sshClientFactory,
+            ownerAccess: makeTSSHOwnerAccess()
+        )
+        tsshRuntimes[paneId] = runtime
+        sessionAccess.send(.activeTransport(paneId, .tssh))
+        return runtime
+    }
+
+    func sendTSSHInput(_ data: Data, for paneId: UUID) {
+        tsshRuntimes[paneId]?.send(data)
+    }
+
+    func resizeTSSH(
+        for paneId: UUID,
+        cols: Int,
+        rows: Int,
+        pixelSize: TerminalPixelSize?
+    ) {
+        guard let runtime = tsshRuntimes[paneId] else { return }
+        runtime.resize(cols: cols, rows: rows, pixelSize: pixelSize)
+        runtime.startIfNeeded()
+    }
+
+    func unregisterTSSHRuntime(for paneId: UUID, ifOwnedByToken token: UUID? = nil) async {
+        guard let runtime = tsshRuntimes[paneId],
+              token == nil || runtime.identityToken == token else { return }
+        tsshRuntimes.removeValue(forKey: paneId)
+        await runtime.close()
+    }
+
+    func unregisterTSSHRuntimeIfPaneWasRemoved(for paneId: UUID) {
+        guard !sessionAccess.containsPane(paneId),
+              let runtime = tsshRuntimes.removeValue(forKey: paneId) else { return }
+        Task { await runtime.close() }
     }
 
     func activeSSHRoute(for paneId: UUID) -> (client: SSHClient, shellId: UUID)? {
@@ -331,8 +380,15 @@ final class TerminalTransportCoordinator {
         moshRecovery.hasCheckpoint(for: paneId)
     }
 
+    func hasTSSHCheckpoint(for paneId: UUID) -> Bool {
+        TSSHResumeStore.shared.hasCheckpoint(for: paneId)
+    }
+
     func prepareResumableSessionsForApplicationBackground() async {
         await registry.forEachRuntime { runtime in
+            await runtime.prepareForApplicationBackground()
+        }
+        for runtime in tsshRuntimes.values {
             await runtime.prepareForApplicationBackground()
         }
         for route in activeMoshRoutes() {
@@ -353,6 +409,9 @@ final class TerminalTransportCoordinator {
 
     func resumeResumableSessionsFromApplicationBackground() async {
         await registry.forEachRuntime { runtime in
+            await runtime.resumeFromApplicationBackground()
+        }
+        for runtime in tsshRuntimes.values {
             await runtime.resumeFromApplicationBackground()
         }
         for route in activeMoshRoutes() {
@@ -381,6 +440,7 @@ final class TerminalTransportCoordinator {
         let detachedRuntime = runtime.flatMap {
             detachEternalTerminalRuntime(for: paneId, ifOwnedBy: $0) ? $0 : nil
         }
+        tsshRuntimes[paneId]?.abortConnection()
 
         if let client,
            !registry.hasOtherClientReferences(using: client, excluding: paneId) {
@@ -507,7 +567,9 @@ final class TerminalTransportCoordinator {
             logMessage: "Cleared stale pane shell-start in-flight flag for",
             paneId: paneId
         )
-        return result.inFlight || registry.runtime(for: paneId)?.isStartInFlight == true
+        return result.inFlight
+            || registry.runtime(for: paneId)?.isStartInFlight == true
+            || tsshRuntimes[paneId]?.isStartInFlight == true
     }
 
     func isCurrentShellOwner(
@@ -542,6 +604,7 @@ final class TerminalTransportCoordinator {
     ) {
         let shellOwnership = detachSSHOwnership(for: paneId)
         let runtime = registry.runtime(for: paneId)
+        let tsshRuntime = tsshRuntimes.removeValue(forKey: paneId)
         if let runtime {
             _ = registry.detachRuntime(runtime, for: paneId)
         }
@@ -565,11 +628,14 @@ final class TerminalTransportCoordinator {
                 }
                 await runtime.close()
             }
+            if let tsshRuntime {
+                await tsshRuntime.close()
+            }
         }
     }
 
     func beginApplicationTermination(paneIds: Set<UUID>) -> Task<Void, Never> {
-        let ownedPaneIds = paneIds.union(registry.ownedPaneIds)
+        let ownedPaneIds = paneIds.union(registry.ownedPaneIds).union(tsshRuntimes.keys)
         for paneId in ownedPaneIds {
             registry.cancelConnectionTask(for: paneId)
         }
@@ -580,6 +646,9 @@ final class TerminalTransportCoordinator {
             for paneId in ownedPaneIds {
                 await self.unregisterSSHClient(for: paneId)
                 await self.unregisterEternalTerminalRuntime(for: paneId)
+                if let runtime = self.tsshRuntimes.removeValue(forKey: paneId) {
+                    await runtime.close(preserveServer: true, deleteResumeState: false)
+                }
             }
         }
     }
@@ -607,6 +676,9 @@ final class TerminalTransportCoordinator {
         for runtime in drainedTransports.runtimes {
             await runtime.close()
         }
+        let tssh = Array(tsshRuntimes.values)
+        tsshRuntimes.removeAll()
+        for runtime in tssh { await runtime.close() }
     }
     #endif
 
@@ -671,6 +743,27 @@ final class TerminalTransportCoordinator {
                     sessionAccess.send(.activeTransport(paneId, .ssh))
                 }
                 await runtime.close()
+            }
+        )
+    }
+
+    private func makeTSSHOwnerAccess() -> TSSHRuntimeOwnerAccess {
+        TSSHRuntimeOwnerAccess(
+            isCurrent: { [weak self] paneID, token in
+                self?.tsshRuntimes[paneID]?.identityToken == token
+            },
+            updateConnectionState: { [weak self] paneID, state in
+                self?.sessionAccess.send(.connectionState(paneID, state))
+            },
+            markTransport: { [weak self] paneID in
+                self?.sessionAccess.send(.activeTransport(paneID, .tssh))
+            },
+            handleShellEnd: { [weak self] paneID, token in
+                self?.sessionAccess.send(.shellEnd(
+                    paneID,
+                    .transportInterrupted,
+                    .tssh(runtimeToken: token)
+                ))
             }
         )
     }
@@ -852,6 +945,11 @@ final class TerminalTransportCoordinator {
             try moshRecovery.deleteCheckpoint(for: paneId)
         } catch {
             logger.error("Failed to delete Mosh recovery snapshot: \(error.localizedDescription, privacy: .public)")
+        }
+        do {
+            try TSSHResumeStore.shared.delete(for: paneId)
+        } catch {
+            logger.error("Failed to delete TSSH recovery state: \(error.localizedDescription, privacy: .public)")
         }
     }
 

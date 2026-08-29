@@ -24,6 +24,13 @@ Moved the durable `SCALAR_FP` family outcome onto [Complete AArch64 ISA-on-ISA c
 
 Recorded that the 266 unique `SCALAR_FP` leaves have production decode and EL0 classification. Durable outcome, extra-vector contract, and remaining optional-FP blockers live on [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md). `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
 
+## [2026-08-29] record | Add native TSSH delivery and security boundaries
+
+Added the native TSSH story, its vendor foundation, terminal transport, and
+integration tasks, and the source-backed security boundary model. Kept TSSH in
+the native app transport layer while Herdr remains authoritative for terminal
+topology.
+
 ## [2026-08-26] record | Pin current upstream Linux, mlibc, and Coreutils releases
 
 OrlixKernel tracks Linux 6.12.105 (`v6.12.105` on `stable/linux.git`), the current 6.12 longterm release. It does not move to mainline 7.2. OrlixMLibC tracks mlibc 7.0.0 (`7c2a178142625cc9852e59a1a090468c61a62d3b`). GNU Coreutils stays at 9.11 (`c01fd163a47468a8296fb369f5233853bb551bb6`), which is the current Coreutils stable tag. mlibc 7.0.0 already contains TLSDESC relocation and `renameat2`, so those Orlix patches are removed. The pthread guard, freeable `posix_memalign`, and locale `MB_CUR_MAX` patches are refreshed against 7.0.0.

@@ -11,6 +11,8 @@ extension ServerTransportSelection {
             return String(localized: "Mosh")
         case .eternalTerminal:
             return String(localized: "Eternal Terminal")
+        case .tssh:
+            return String(localized: "TSSH")
         case .cloudflare:
             return String(localized: "Cloudflare")
         }
@@ -26,6 +28,8 @@ extension ServerTransportSelection {
             return "antenna.radiowaves.left.and.right"
         case .eternalTerminal:
             return "arrow.trianglehead.2.clockwise.rotate.90"
+        case .tssh:
+            return "wave.3.right.circle.fill"
         case .cloudflare:
             return "shield.lefthalf.filled"
         }
@@ -394,6 +398,7 @@ struct ServerFormSheet: View {
             .onChange(of: form.host) { _ in resetConnectionTestState() }
             .onChange(of: form.port) { _ in resetConnectionTestState() }
             .onChange(of: form.eternalTerminalPort) { _ in resetConnectionTestState() }
+            .onChange(of: form.tsshProfile) { _ in resetConnectionTestState() }
             .onChange(of: form.username) { _ in resetConnectionTestState() }
             .onChange(of: form.transportSelection) { _ in handleCredentialIntentChange() }
             .onChange(of: form.authMethod) { _ in handleCredentialIntentChange() }
@@ -596,6 +601,10 @@ struct ServerFormSheet: View {
                     .foregroundStyle(.secondary)
             }
 
+            if form.transportSelection == .tssh {
+                tsshConfigurationFields
+            }
+
             if form.transportSelection == .cloudflare {
                 Picker("Cloudflare Access", selection: $form.cloudflareAccessMode) {
                     ForEach(CloudflareAccessMode.allCases) { mode in
@@ -665,6 +674,138 @@ struct ServerFormSheet: View {
         } header: {
             sectionHeader("Authentication")
         }
+    }
+
+    @ViewBuilder
+    private var tsshConfigurationFields: some View {
+        Picker("TSSH Mode", selection: $form.tsshProfile.transportMode) {
+            Text("KCP").tag(TSSHTransportMode.kcp)
+            Text("QUIC").tag(TSSHTransportMode.quic)
+        }
+
+        HStack(spacing: 12) {
+            TextField(
+                "UDP From",
+                text: tsshIntegerBinding(\.udpPortMinimum),
+                prompt: Text("61000")
+            )
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+
+            TextField(
+                "UDP To",
+                text: tsshIntegerBinding(\.udpPortMaximum),
+                prompt: Text("61999")
+            )
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+        }
+
+        TextField(
+            "tsshd Path",
+            text: Binding(
+                get: { form.tsshProfile.serverPath ?? "" },
+                set: { form.tsshProfile.serverPath = $0.isEmpty ? nil : $0 }
+            ),
+            prompt: Text("Auto-detect")
+        )
+        .autocorrectionDisabled()
+        #if os(iOS)
+        .textInputAutocapitalization(.never)
+        #endif
+
+        TextField("MTU", text: tsshIntegerBinding(\.mtu), prompt: Text("Default"))
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+
+        Toggle("Keep typed input during reconnect", isOn: $form.tsshProfile.keepPendingInput)
+        Toggle("Replay pending output after reconnect", isOn: $form.tsshProfile.keepPendingOutput)
+        Toggle("Forward SSH agent", isOn: $form.tsshProfile.sshAgentForwarding)
+        Toggle("Keep tunnels in background", isOn: $form.tsshProfile.keepTunnelsInBackground)
+        Toggle("Use as VPN transport", isOn: $form.tsshProfile.vpnEnabled)
+        if form.tsshProfile.vpnEnabled {
+            Toggle("Block QUIC inside VPN", isOn: $form.tsshProfile.blockQUICInVPN)
+        }
+
+        ForEach($form.tsshProfile.forwards) { $rule in
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Forward", selection: $rule.direction) {
+                    Text("Local").tag(TSSHForwardDirection.local)
+                    Text("Remote").tag(TSSHForwardDirection.remote)
+                    Text("Dynamic").tag(TSSHForwardDirection.dynamic)
+                }
+
+                TextField("Bind Address", text: $rule.bindAddress)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                TextField(
+                    "Bind Port",
+                    text: Binding(
+                        get: { String(rule.bindPort) },
+                        set: { if let value = Int($0) { rule.bindPort = value } }
+                    )
+                )
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+
+                if rule.direction != .dynamic {
+                    TextField("Target Host", text: $rule.targetHost)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                    TextField(
+                        "Target Port",
+                        text: Binding(
+                            get: { String(rule.targetPort) },
+                            set: { if let value = Int($0) { rule.targetPort = value } }
+                        )
+                    )
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                }
+
+                Button(role: .destructive) {
+                    form.tsshProfile.forwards.removeAll { $0.id == rule.id }
+                } label: {
+                    Label("Remove Forward", systemImage: "trash")
+                }
+            }
+        }
+
+        Button {
+            form.tsshProfile.forwards.append(TSSHPortForwardRule(
+                direction: .local,
+                bindPort: 0,
+                targetHost: "127.0.0.1",
+                targetPort: 22
+            ))
+        } label: {
+            Label("Add Port Forward", systemImage: "plus")
+        }
+
+        Text("TSSH uses verified SSH only to start tsshd. The terminal then uses the native KCP or QUIC transport over UDP.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private func tsshIntegerBinding(_ keyPath: WritableKeyPath<TSSHProfile, Int>) -> Binding<String> {
+        Binding(
+            get: { String(form.tsshProfile[keyPath: keyPath]) },
+            set: { value in
+                if let number = Int(value) {
+                    form.tsshProfile[keyPath: keyPath] = number
+                }
+                resetConnectionTestState()
+            }
+        )
     }
 
     private var connectionSection: some View {

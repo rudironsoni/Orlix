@@ -9,6 +9,7 @@ final class TerminalPaneConnectionCoordinator {
     private enum Backend {
         case ssh(TerminalPaneSSHCoordinator)
         case eternalTerminal(EternalTerminalPaneCoordinator)
+        case tssh(TSSHPaneCoordinator)
     }
 
     let tabManager: TerminalTabManager
@@ -26,7 +27,14 @@ final class TerminalPaneConnectionCoordinator {
         sshFailureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     ) {
         self.tabManager = tabManager
-        if server.connectionMode == .eternalTerminal {
+        if server.connectionMode == .tssh {
+            backend = .tssh(TSSHPaneCoordinator(
+                paneId: paneId,
+                server: server,
+                credentials: credentials,
+                tabManager: tabManager
+            ))
+        } else if server.connectionMode == .eternalTerminal {
             backend = .eternalTerminal(EternalTerminalPaneCoordinator(
                 paneId: paneId,
                 server: server,
@@ -49,6 +57,7 @@ final class TerminalPaneConnectionCoordinator {
         switch backend {
         case .ssh(let coordinator): coordinator.paneId
         case .eternalTerminal(let coordinator): coordinator.paneId
+        case .tssh(let coordinator): coordinator.paneId
         }
     }
 
@@ -69,6 +78,7 @@ final class TerminalPaneConnectionCoordinator {
         switch backend {
         case .ssh(let coordinator): coordinator.sendToSSH(data)
         case .eternalTerminal(let coordinator): coordinator.send(data)
+        case .tssh(let coordinator): coordinator.send(data)
         }
     }
 
@@ -79,6 +89,8 @@ final class TerminalPaneConnectionCoordinator {
             coordinator.handleResize(cols: cols, rows: rows, pixelSize: pixelSize)
         case .eternalTerminal(let coordinator):
             coordinator.handleResize(cols: cols, rows: rows, pixelSize: pixelSize)
+        case .tssh(let coordinator):
+            coordinator.handleResize(cols: cols, rows: rows, pixelSize: pixelSize)
         }
     }
 
@@ -87,6 +99,7 @@ final class TerminalPaneConnectionCoordinator {
         switch backend {
         case .ssh(let coordinator): coordinator.startSSHConnection(terminal: terminal)
         case .eternalTerminal(let coordinator): coordinator.start(terminal: terminal)
+        case .tssh(let coordinator): coordinator.start(terminal: terminal)
         }
     }
 
@@ -96,7 +109,62 @@ final class TerminalPaneConnectionCoordinator {
         case .ssh:
             break
         case .eternalTerminal(let coordinator): coordinator.cancel()
+        case .tssh(let coordinator): coordinator.cancel()
         }
+    }
+}
+
+@MainActor
+private final class TSSHPaneCoordinator {
+    let paneId: UUID
+    let server: Server
+    let credentials: ServerCredentials
+    let tabManager: TerminalTabManager
+
+    init(
+        paneId: UUID,
+        server: Server,
+        credentials: ServerCredentials,
+        tabManager: TerminalTabManager
+    ) {
+        self.paneId = paneId
+        self.server = server
+        self.credentials = credentials
+        self.tabManager = tabManager
+    }
+
+    func start(terminal: any TerminalSurface) {
+        let runtime = tabManager.transportCoordinator.tsshRuntime(
+            for: paneId,
+            server: server,
+            credentials: credentials
+        )
+        runtime.attach(to: terminal)
+        if let geometry = terminal.terminalGeometry {
+            runtime.resize(
+                cols: geometry.columns,
+                rows: geometry.rows,
+                pixelSize: geometry.pixelSize
+            )
+        }
+        runtime.startIfNeeded()
+    }
+
+    func send(_ data: Data) {
+        tabManager.transportCoordinator.sendTSSHInput(data, for: paneId)
+    }
+
+    func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
+        tabManager.transportCoordinator.resizeTSSH(
+            for: paneId,
+            cols: cols,
+            rows: rows,
+            pixelSize: pixelSize
+        )
+    }
+
+    func cancel() {
+        tabManager.transportCoordinator.unregisterTSSHRuntimeIfPaneWasRemoved(for: paneId)
     }
 }
 

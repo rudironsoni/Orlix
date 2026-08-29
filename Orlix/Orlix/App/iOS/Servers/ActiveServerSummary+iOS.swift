@@ -19,7 +19,9 @@ nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
         connectionMode: SSHConnectionMode?,
         hasResumeCheckpoint: Bool
     ) {
-        if (connectionMode == .eternalTerminal || connectionMode == .mosh),
+        if (connectionMode == .eternalTerminal
+            || connectionMode == .mosh
+            || connectionMode == .tssh),
            hasResumeCheckpoint {
             switch connectionState {
             case .disconnected, .idle:
@@ -103,6 +105,8 @@ struct ActiveServerSummary: Identifiable {
                         tabManager.transportCoordinator.hasEternalTerminalCheckpoint(for: $0.paneId)
                     case .mosh:
                         tabManager.transportCoordinator.hasMoshCheckpoint(for: $0.paneId)
+                    case .tssh:
+                        tabManager.transportCoordinator.hasTSSHCheckpoint(for: $0.paneId)
                     case .standard, .tailscale, .cloudflare, .none:
                         false
                     }

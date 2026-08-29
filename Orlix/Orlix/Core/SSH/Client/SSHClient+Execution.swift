@@ -23,4 +23,8 @@ extension SSHClient {
             return try await session.execute(command, maxOutputBytes: maxOutputBytes)
         }
     }
+
+    func remoteEndpointHost() async -> String? {
+        await session?.remoteEndpointHost()
+    }
 }

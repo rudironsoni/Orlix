@@ -1107,6 +1107,11 @@ final class TerminalTabManager {
                     for: paneId,
                     ifOwnedByToken: token
                 )
+            case .tssh(let token):
+                await transportCoordinator?.unregisterTSSHRuntime(
+                    for: paneId,
+                    ifOwnedByToken: token
+                )
             case nil:
                 break
             }

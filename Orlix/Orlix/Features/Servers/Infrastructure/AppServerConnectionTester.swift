@@ -58,6 +58,7 @@ nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
     case sshOnly
     case mosh(portRange: ClosedRange<Int>)
     case eternalTerminal(port: UInt16)
+    case tssh(portRange: ClosedRange<Int>)
 
     init(server: Server) {
         switch server.connectionMode {
@@ -69,6 +70,10 @@ nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
             let port = server.eternalTerminalPort
             let resolvedPort: UInt16 = (1...Int(UInt16.max)).contains(port) ? UInt16(port) : 2_022
             self = .eternalTerminal(port: resolvedPort)
+        case .tssh:
+            self = .tssh(
+                portRange: server.tsshProfile.udpPortMinimum...server.tsshProfile.udpPortMaximum
+            )
         }
     }
 }
@@ -174,6 +179,12 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
                         await session.close()
                         throw error
                     }
+                case .tssh:
+                    try await TSSHBootstrap.probe(
+                        server: server,
+                        credentials: credentials,
+                        client: client
+                    )
                 }
             }
             try Task.checkCancellation()

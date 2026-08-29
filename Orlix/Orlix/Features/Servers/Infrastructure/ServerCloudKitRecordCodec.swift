@@ -5,7 +5,7 @@ import os.log
 nonisolated enum ServerCloudKitRecordCodec {
     static let recordType = "Server"
     static let recordKeys = [
-        "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
+        "workspaceId", "name", "host", "port", "eternalTerminalPort", "tsshProfile", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
         "wakeOnLANConfiguration", "autoWakeOnLANEnabled",
@@ -87,6 +87,9 @@ nonisolated enum ServerCloudKitRecordCodec {
             host: host,
             port: port,
             eternalTerminalPort: validPort(record["eternalTerminalPort"]) ?? 2022,
+            tsshProfile: (record["tsshProfile"] as? Data)
+                .flatMap { try? JSONDecoder().decode(TSSHProfile.self, from: $0) }
+                ?? TSSHProfile(),
             username: username,
             connectionMode: connectionMode,
             authMethod: authMethod,
@@ -124,6 +127,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         record["host"] = server.host
         record["port"] = server.port
         record["eternalTerminalPort"] = server.eternalTerminalPort
+        record["tsshProfile"] = try? JSONEncoder().encode(server.tsshProfile)
         record["username"] = server.username
         record["connectionMode"] = server.connectionMode == .standard
             ? nil
