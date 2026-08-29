@@ -660,6 +660,9 @@ targets:
       - path: Orlix/Orlix/PrivacyInfo.xcprivacy
         createIntermediateGroups: true
         buildPhase: resources
+      - path: Orlix/OrlixStoreKit.storekit
+        createIntermediateGroups: true
+        buildPhase: resources
       - path: docs/sources/release/orlix-app-release-inputs.json
         createIntermediateGroups: true
         buildPhase: resources
@@ -945,6 +948,8 @@ targets:
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests
         createIntermediateGroups: true
+        excludes:
+          - ArchitectureInvariantTests.swift
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -953,6 +958,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.test-app.tests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
+  OrlixArchitectureTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests/ArchitectureInvariantTests.swift
+        createIntermediateGroups: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.architecture-tests
   OrlixKernelConformanceTests:
     type: bundle.unit-test
     platform: iOS
@@ -1079,7 +1095,6 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: false
-      storeKitConfiguration: Orlix/OrlixStoreKit.storekit
       targets:
         - name: OrlixTests
   "Orlix UI Tests":
@@ -1121,6 +1136,15 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixOSTestAppTests
+  "Orlix Architecture Tests":
+    build:
+      targets:
+        OrlixArchitectureTests: test
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - name: OrlixArchitectureTests
   "OrlixOS Runtime Tests":
     build:
       targets:

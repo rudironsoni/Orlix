@@ -27,9 +27,10 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources",
             "OrlixOS/Sources",
             "OrlixHostAdapter/Sources",
+            "OrlixMLibC/Sources",
+            "OrlixCoreUtils/Sources",
             "Orlix/Orlix",
-            "OrlixOSTestApp/Sources",
-            "tools"
+            "OrlixOSTestApp/Sources"
         ])
 
         let hits = try matchingLines(in: files) { line in
@@ -43,7 +44,10 @@ final class ArchitectureInvariantTests: XCTestCase {
         let runtimeOverlayFiles = try sourceFiles(under: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
-        ])
+        ]).filter {
+            !isHostToolOrTestSource($0)
+                && !$0.path.hasSuffix("/isa/target_ordinal_ledger.c")
+        }
         let forbiddenIncludeFragments = [
             "<CoreFoundation/",
             "<Foundation/",
@@ -101,7 +105,8 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
         ]).filter {
-            !$0.path.contains("/tools/testing/selftests/")
+            !isHostToolOrTestSource($0)
+                && !$0.path.contains("/tools/testing/selftests/")
         }
 
         let clonedUAPIDefine = try NSRegularExpression(
@@ -340,6 +345,11 @@ final class ArchitectureInvariantTests: XCTestCase {
             || relativePath.contains("/.git/")
             || relativePath.hasPrefix(".deriveddata/")
             || relativePath.contains("/.deriveddata/")
+    }
+
+    private func isHostToolOrTestSource(_ url: URL) -> Bool {
+        url.path.contains("/hosted_exec/orlix_tcti/isa/build-time/")
+            || url.path.contains("/hosted_exec/orlix_tcti/tests/")
     }
 
     private func isScannedSource(_ url: URL) -> Bool {

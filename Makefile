@@ -53,6 +53,7 @@ ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMUL
 ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_APP_TEST_ONLY ?=
+ORLIX_UI_TEST_ONLY ?=
 ORLIX_APP_BUILD_DESTINATION ?= generic/platform=iOS Simulator
 ORLIX_APP_BUILD_CONFIGURATION ?= Debug
 ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
@@ -127,7 +128,7 @@ ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check app-build app-only-build app-build-isolation-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj tssh-vendor-prepare run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check app-build app-only-build app-build-isolation-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests app-ui-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj tssh-vendor-prepare run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: vvterm-sync vvterm-sync-resolve vvterm-reconcile vvterm-sync-complete vvterm-source-check vvterm-sync-tests vvterm-upstream-tests
@@ -163,7 +164,8 @@ help:
 	@printf '%s\n' '  orlixos-xcframework build the sole public OrlixOS.xcframework SDK'
 	@printf '%s\n' '  app-build           build the full native Orlix app with OrlixOS'
 	@printf '%s\n' '  app-only-build      build the native Orlix app without OrlixOS'
-	@printf '%s\n' '  app-tests           run native Orlix app and UI tests'
+	@printf '%s\n' '  app-tests           run native Orlix unit, UI, and architecture tests'
+	@printf '%s\n' '  app-ui-tests        run native Orlix UI tests'
 	@printf '%s\n' '  app-build-isolation-check verify the Orlix and Orlix App Only target graphs'
 	@printf '%s\n' '  runtime-tests       run app-hosted OrlixOS runtime integration tests'
 	@printf '%s\n' ''
@@ -799,14 +801,31 @@ app-tests: xcodeproj
 		-scheme "Orlix Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_TEST_DESTINATION)' \
-		$(if $(ORLIX_APP_TEST_ONLY),-only-testing:$(ORLIX_APP_TEST_ONLY)) \
+		$(if $(ORLIX_APP_TEST_ONLY),'-only-testing:$(ORLIX_APP_TEST_ONLY)') \
 		test
+	@if [ -z '$(ORLIX_APP_TEST_ONLY)' ]; then \
+		PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+			-project Orlix.xcodeproj \
+			-scheme "Orlix UI Tests" \
+			-configuration Debug \
+			-destination '$(ORLIX_TEST_DESTINATION)' \
+			$(if $(ORLIX_UI_TEST_ONLY),'-only-testing:$(ORLIX_UI_TEST_ONLY)') \
+			test; \
+	fi
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
-		-scheme "OrlixOSTestApp Tests" \
+		-scheme "Orlix Architecture Tests" \
+		-configuration Debug \
+		-destination 'platform=macOS' \
+		test
+
+app-ui-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "Orlix UI Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_TEST_DESTINATION)' \
-		-only-testing:OrlixOSTestAppTests/ArchitectureInvariantTests \
+		$(if $(ORLIX_UI_TEST_ONLY),'-only-testing:$(ORLIX_UI_TEST_ONLY)') \
 		test
 
 runtime-tests: xcodeproj

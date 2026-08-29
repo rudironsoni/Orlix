@@ -118,10 +118,39 @@ enum RemoteFileItemProviderAdapter {
     }
 
     private static func loadURL(from provider: NSItemProvider) async throws -> URL {
-        if let url = try? await loadInPlaceURL(from: provider) {
+        if let url = try? await loadURLDataRepresentation(from: provider) {
             return url
         }
-        return try await loadURLItem(from: provider)
+        if let url = try? await loadURLItem(from: provider) {
+            return url
+        }
+        return try await loadInPlaceURL(from: provider)
+    }
+
+    private static func loadURLDataRepresentation(from provider: NSItemProvider) async throws -> URL {
+        let data: Data = try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(
+                forTypeIdentifier: UTType.fileURL.identifier
+            ) { data, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(
+                        throwing: RemoteFileBrowserError.failed(
+                            String(localized: "The dropped item could not be resolved to a local file or folder.")
+                        )
+                    )
+                }
+            }
+        }
+        guard let url = localFileURL(from: data) else {
+            throw RemoteFileBrowserError.failed(
+                String(localized: "The dropped item could not be resolved to a local file or folder.")
+            )
+        }
+        return url
     }
 
     private static func loadInPlaceURL(from provider: NSItemProvider) async throws -> URL {
