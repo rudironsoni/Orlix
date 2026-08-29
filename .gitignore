@@ -68,6 +68,8 @@ AuthKey_*.p8
 .DS_Store
 Orlix.xcodeproj/
 OrlixKernel.xcodeproj/
+/Orlix/.vvterm-sync-state.json
+/Orlix/.vvterm-sync-conflicts.txt
 
 # Build artifacts
 /build/
