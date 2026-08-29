@@ -7,9 +7,9 @@ struct DefaultLocalInstanceTerminalView: View {
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Orlix Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Orlix Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.darkTheme) private var terminalThemeName = "Orlix Dark"
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.lightTheme) private var terminalThemeNameLight = "Orlix Light"
+    @AppStorage(TerminalThemeUserDefaultsKeys.live.usesPerAppearanceTheme) private var usePerAppearanceTheme = true
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
 
     private var effectiveThemeName: String {

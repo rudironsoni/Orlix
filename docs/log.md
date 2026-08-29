@@ -991,3 +991,12 @@ and reviewed App Store screenshots are complete. Removed the stale
 `TerminalPresets` evidence path because the implemented preset and layout code
 is owned by `TerminalAccessories`. The beta runner installs the Metal toolchain
 and builds the pinned vendor artifacts before it validates release inputs.
+
+## [2026-08-29] fix | Add reviewed App Store screenshots
+
+Added reviewed 6.9-inch iPhone screenshots for the welcome, server workspace,
+and local Orlix Linux terminal surfaces. Fixed the release simulator build by
+accepting Ghostty's current macOS archive name, removing stale XcodeGen source
+paths, linking the production TCTI proof providers, and using the current
+terminal theme storage keys. The release app builds, installs, and launches on
+the dedicated screenshot simulator.

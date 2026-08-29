@@ -162,7 +162,7 @@ __vendor-build:
 	    local macos_lib
 	    local ios_lib
 	    local sim_lib
-	    macos_lib=$$(find "$${xcframework}" -path "*/macos-*/libghostty*.a" -type f -print -quit)
+	    macos_lib=$$(find "$${xcframework}" -path "*/macos-*/*ghostty*.a" -type f -print -quit)
 	    ios_lib=$$(find "$${xcframework}" -path "*/ios-arm64/libghostty*.a" -type f -print -quit)
 	    sim_lib=$$(find "$${xcframework}" -path "*/ios-arm64-simulator/libghostty*.a" -type f -print -quit)
 

@@ -438,13 +438,9 @@ targets:
     sources:
       - path: Orlix/Orlix/App
         createIntermediateGroups: true
-      - path: Orlix/Orlix/Compatibility
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core
         createIntermediateGroups: true
       - path: Orlix/Orlix/Features
-        createIntermediateGroups: true
-      - path: Orlix/Orlix/GhosttyTerminal
         createIntermediateGroups: true
       - path: Orlix/OrlixShared
         createIntermediateGroups: true
@@ -585,13 +581,9 @@ targets:
         createIntermediateGroups: true
         excludes:
           - Orlix.swift
-      - path: Orlix/Orlix/Compatibility
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core
         createIntermediateGroups: true
       - path: Orlix/Orlix/Features
-        createIntermediateGroups: true
-      - path: Orlix/Orlix/GhosttyTerminal
         createIntermediateGroups: true
       - path: Orlix/OrlixShared
         createIntermediateGroups: true
