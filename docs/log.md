@@ -980,3 +980,14 @@ source. Advanced the source pin to `31120756133d22e526d01c630c680bd949dda730`,
 updated packages and native artifacts, and preserved OrlixOS and telemetry
 overlays. Source and release-input checks pass. Xcode tests remain blocked on
 the missing optional Metal toolchain component.
+
+## [2026-08-29] implement | Add approved TestFlight release automation
+
+Added protected-tag beta automation and manual App Review promotion. The
+release harness binds each promotion to the exact commit, build number, IPA
+hash, successful beta run, internal tester group, and checked-in store assets.
+Public distribution remains fail-closed until the release approval manifest
+and reviewed App Store screenshots are complete. Removed the stale
+`TerminalPresets` evidence path because the implemented preset and layout code
+is owned by `TerminalAccessories`. The beta runner installs the Metal toolchain
+and builds the pinned vendor artifacts before it validates release inputs.

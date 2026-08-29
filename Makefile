@@ -34,10 +34,13 @@ ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
 ORLIX_ALLOW_PROVISIONING_UPDATES ?= YES
 ORLIX_BETA_BUMP_BUILD_NUMBER ?= YES
+ORLIX_BETA_BUILD_NUMBER ?=
+ORLIX_BETA_BUILD_NUMBER_FILE ?= $(ORLIX_BETA_ARCHIVE_DIR)/build-number
 ORLIX_ASC_API_KEY_PATH ?=
 ORLIX_ASC_API_KEY_ID ?=
 ORLIX_ASC_API_ISSUER_ID ?=
 ORLIX_FASTLANE_API_KEY_PATH ?= $(HOME)/.config/fastlane/appstore_api_key.json
+ORLIX_FASTLANE ?= bundle exec fastlane
 ORLIX_BETA_IPA_PATH ?= $(ORLIX_BETA_EXPORT_DIR)/Orlix.ipa
 ORLIX_OPENPANEL_CLIENT_ID ?=
 ORLIX_SIGNOZ_INGESTION_KEY ?=
@@ -121,7 +124,7 @@ ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: vvterm-sync vvterm-sync-resolve vvterm-reconcile vvterm-sync-complete vvterm-source-check vvterm-sync-tests vvterm-upstream-tests
@@ -166,6 +169,10 @@ help:
 	@printf '%s\n' '  beta-archive        generate Xcode project and archive Orlix Release'
 	@printf '%s\n' '  beta-validate-archive inspect required app/framework/payload archive contents'
 	@printf '%s\n' '  beta-export-archive export archived Orlix for upload'
+	@printf '%s\n' '  beta-upload         upload the exact exported IPA to TestFlight'
+	@printf '%s\n' '  beta-distribute     assign the processed beta to one internal group'
+	@printf '%s\n' '  app-store-promote   submit the exact approved beta build for App Review'
+	@printf '%s\n' '  release-workflow-check validate release policy, tests, and workflow YAML'
 
 __orlix-root-gnu-make-contract-source-check:
 	@set -euo pipefail; \
@@ -286,26 +293,28 @@ beta-prerequisites: check-build-tools __release-inputs-check
 	command -v xcodebuild >/dev/null 2>&1 || { echo "xcodebuild is required" >&2; exit 1; }; \
 	test -f project.yml || { echo "missing XcodeGen source: project.yml" >&2; exit 1; }
 
-beta-bump-build-number: beta-prerequisites
+beta-bump-build-number: beta-resolve-build-number
+	@printf '%s\n' "beta-bump-build-number is a compatibility alias; project.yml was not changed"
+
+beta-resolve-build-number: beta-prerequisites
 	@set -euo pipefail; \
-	if [ "$(ORLIX_BETA_BUMP_BUILD_NUMBER)" != YES ]; then \
-		printf '%s\n' "skipping TestFlight build number bump (ORLIX_BETA_BUMP_BUILD_NUMBER=$(ORLIX_BETA_BUMP_BUILD_NUMBER))"; \
-		exit 0; \
-	fi; \
-	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
-	[[ "$$current" =~ ^[0-9]+$$ ]] || { echo "CURRENT_PROJECT_VERSION must be an integer in project.yml, got: $$current" >&2; exit 1; }; \
-	marketing="$$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
-	latest=""; \
-	if [ -s "$(ORLIX_FASTLANE_API_KEY_PATH)" ] && command -v fastlane >/dev/null 2>&1; then \
-		latest="$$(fastlane run latest_testflight_build_number api_key_path:"$(ORLIX_FASTLANE_API_KEY_PATH)" app_identifier:"$(ORLIX_APP_BUNDLE_ID)" version:"$$marketing" initial_build_number:0 | awk '/Result:/ { print $$NF }' | tail -n 1)"; \
-	fi; \
-	if [[ "$$latest" =~ ^[0-9]+$$ ]] && [ "$$latest" -ge "$$current" ]; then \
-		next="$$((latest + 1))"; \
+	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
+	PYTHONPATH="$(ORLIX_RELEASE_SUPPORT_DIR)" python3 -m orlix_release_ci project-identity --project project.yml --output "$(ORLIX_RELEASE_IDENTITY_PATH)"; \
+	current="$$(jq -r '.project_build_number' "$(ORLIX_RELEASE_IDENTITY_PATH)")"; \
+	marketing="$$(jq -r '.marketing_version' "$(ORLIX_RELEASE_IDENTITY_PATH)")"; \
+	if [ -n "$(ORLIX_BETA_BUILD_NUMBER)" ]; then \
+		next="$(ORLIX_BETA_BUILD_NUMBER)"; \
 	else \
-		next="$$((current + 1))"; \
+		test -s "$(ORLIX_FASTLANE_API_KEY_PATH)" || { echo "ORLIX_BETA_BUILD_NUMBER or ORLIX_FASTLANE_API_KEY_PATH is required" >&2; exit 1; }; \
+		latest="$$( $(ORLIX_FASTLANE) run latest_testflight_build_number api_key_path:"$(ORLIX_FASTLANE_API_KEY_PATH)" app_identifier:"$(ORLIX_APP_BUNDLE_ID)" version:"$$marketing" initial_build_number:0 | awk '/Result:/ { print $$NF }' | tail -n 1)"; \
+		[[ "$$latest" =~ ^[0-9]+$$ ]] || { echo "could not resolve latest TestFlight build number" >&2; exit 1; }; \
+		if [ "$$latest" -ge "$$current" ]; then next="$$((latest + 1))"; else next="$$((current + 1))"; fi; \
 	fi; \
-	perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
-	printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next"
+	[[ "$$next" =~ ^[1-9][0-9]*$$ ]] || { echo "beta build number must be a positive integer, got: $$next" >&2; exit 1; }; \
+	tmp="$(ORLIX_BETA_BUILD_NUMBER_FILE).tmp"; \
+	printf '%s\n' "$$next" > "$$tmp"; \
+	mv "$$tmp" "$(ORLIX_BETA_BUILD_NUMBER_FILE)"; \
+	printf '%s\n' "resolved TestFlight build $$marketing ($$next); project.yml was not changed"
 
 beta-signing-diagnostics:
 	@set -euo pipefail; \
@@ -846,11 +855,12 @@ agent-task-envelope-check:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
 	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
 
-beta-archive: beta-bump-build-number
+beta-archive: beta-resolve-build-number
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
+	build_number="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")"; \
 	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }; \
-	archive_settings=(DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" CODE_SIGN_STYLE="$(ORLIX_CODE_SIGN_STYLE)"); \
+	archive_settings=(DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" CODE_SIGN_STYLE="$(ORLIX_CODE_SIGN_STYLE)" CURRENT_PROJECT_VERSION="$$build_number"); \
 	case "$(ORLIX_ANALYTICS_ENABLED)" in YES|NO) ;; *) echo "ORLIX_ANALYTICS_ENABLED must be YES or NO" >&2; exit 2;; esac; \
 	case "$(ORLIX_OBSERVABILITY_ENABLED)" in YES|NO) ;; *) echo "ORLIX_OBSERVABILITY_ENABLED must be YES or NO" >&2; exit 2;; esac; \
 	archive_settings+=(ORLIX_ANALYTICS_ENABLED="$(ORLIX_ANALYTICS_ENABLED)" ORLIX_OBSERVABILITY_ENABLED="$(ORLIX_OBSERVABILITY_ENABLED)"); \
@@ -902,6 +912,15 @@ beta-validate-archive:
 	$(MAKE) --no-print-directory __exported-app-check ORLIX_EXPORTED_APP="$$app"; \
 	printf '%s\n' "validated beta archive contents: $(ORLIX_BETA_ARCHIVE_PATH)"
 
+beta-export-options:
+	@set -euo pipefail; \
+	[ -n "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" ] || { echo "ORLIX_BETA_EXPORT_OPTIONS_PLIST is required" >&2; exit 1; }; \
+	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required" >&2; exit 1; }; \
+	mkdir -p "$$(dirname "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)")"; \
+	plutil -create xml1 "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)"; \
+	/usr/libexec/PlistBuddy -c 'Add :method string app-store-connect' -c 'Add :signingStyle string automatic' -c 'Add :teamID string $(ORLIX_DEVELOPMENT_TEAM)' -c 'Add :uploadSymbols bool true' "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)"; \
+	echo "wrote runtime App Store export options: $(ORLIX_BETA_EXPORT_OPTIONS_PLIST)"
+
 beta-export-archive: beta-validate-archive
 	@set -euo pipefail; \
 	[ -n "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" ] || { echo "ORLIX_BETA_EXPORT_OPTIONS_PLIST is required to export the archive" >&2; exit 1; }; \
@@ -920,19 +939,59 @@ beta-export-archive: beta-validate-archive
 	-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
 	-exportOptionsPlist "$(ORLIX_BETA_EXPORT_OPTIONS_PLIST)" \
 	$${xcodebuild_signing_flags[@]+"$${xcodebuild_signing_flags[@]}"} \
-	-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
+		-exportPath "$(ORLIX_BETA_EXPORT_DIR)"
+
+beta-validate-export:
+	@set -euo pipefail; \
+	test -f "$(ORLIX_BETA_IPA_PATH)" || { echo "missing exported IPA: $(ORLIX_BETA_IPA_PATH)" >&2; exit 1; }; \
+	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-beta-export.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	/usr/bin/ditto -x -k "$(ORLIX_BETA_IPA_PATH)" "$$tmp"; \
+	app="$$(find "$$tmp/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"; \
+	[ -n "$$app" ] || { echo "exported IPA does not contain an app" >&2; exit 1; }; \
+	$(MAKE) --no-print-directory __exported-app-check ORLIX_EXPORTED_APP="$$app" ORLIX_REQUIRE_PUBLIC_DISTRIBUTION="$(ORLIX_REQUIRE_PUBLIC_DISTRIBUTION)"
+
+beta-upload-prerequisites: __release-tag-check __release-public-approval-check
+	@$(MAKE) --no-print-directory beta-validate-export ORLIX_REQUIRE_PUBLIC_DISTRIBUTION=true
 
 beta-upload:
 	@set -euo pipefail; \
-	command -v fastlane >/dev/null 2>&1 || { echo "fastlane required to upload TestFlight build" >&2; exit 1; }; \
 	test -s "$(ORLIX_FASTLANE_API_KEY_PATH)" || { echo "missing fastlane App Store Connect API key JSON: $(ORLIX_FASTLANE_API_KEY_PATH)" >&2; exit 1; }; \
 	test -f "$(ORLIX_BETA_IPA_PATH)" || { echo "missing exported IPA: $(ORLIX_BETA_IPA_PATH)" >&2; exit 1; }; \
-	fastlane pilot upload \
+	$(ORLIX_FASTLANE) pilot upload \
 		--api_key_path "$(ORLIX_FASTLANE_API_KEY_PATH)" \
 		--app_identifier "$(ORLIX_APP_BUNDLE_ID)" \
 		--ipa "$(ORLIX_BETA_IPA_PATH)" \
-		--uses_non_exempt_encryption false \
-		--skip_waiting_for_build_processing true
+		--uses_non_exempt_encryption false
+
+beta-distribute:
+	@set -euo pipefail; \
+	test -s "$(ORLIX_FASTLANE_API_KEY_PATH)" || { echo "missing fastlane App Store Connect API key JSON: $(ORLIX_FASTLANE_API_KEY_PATH)" >&2; exit 1; }; \
+	test -f "$(ORLIX_RELEASE_IDENTITY_PATH)" || { echo "missing release identity: $(ORLIX_RELEASE_IDENTITY_PATH)" >&2; exit 1; }; \
+	test -f "$(ORLIX_BETA_BUILD_NUMBER_FILE)" || { echo "missing beta build number: $(ORLIX_BETA_BUILD_NUMBER_FILE)" >&2; exit 1; }; \
+	[ -n "$(ORLIX_TESTFLIGHT_INTERNAL_GROUP)" ] || { echo "ORLIX_TESTFLIGHT_INTERNAL_GROUP is required" >&2; exit 1; }; \
+	ORLIX_MARKETING_VERSION="$$(jq -r '.marketing_version' "$(ORLIX_RELEASE_IDENTITY_PATH)")" \
+	ORLIX_BUILD_NUMBER="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")" \
+	ORLIX_TESTFLIGHT_INTERNAL_GROUP="$(ORLIX_TESTFLIGHT_INTERNAL_GROUP)" \
+	ORLIX_FASTLANE_API_KEY_PATH="$(ORLIX_FASTLANE_API_KEY_PATH)" \
+	$(ORLIX_FASTLANE) ios distribute_internal
+
+beta-release-report: __release-report-write
+
+app-store-release-report-check: __release-tag-check __release-report-check __release-public-approval-check __release-metadata-check
+	@echo "pass: exact TestFlight beta is eligible for App Review submission"
+
+app-store-promote: app-store-release-report-check
+	@set -euo pipefail; \
+	test -s "$(ORLIX_FASTLANE_API_KEY_PATH)" || { echo "missing fastlane App Store Connect API key JSON: $(ORLIX_FASTLANE_API_KEY_PATH)" >&2; exit 1; }; \
+	ORLIX_MARKETING_VERSION="$$(jq -r '.marketing_version' "$(ORLIX_RELEASE_REPORT_SELECTION)")" \
+	ORLIX_BUILD_NUMBER="$$(jq -r '.build_number' "$(ORLIX_RELEASE_REPORT_SELECTION)")" \
+	ORLIX_FASTLANE_API_KEY_PATH="$(ORLIX_FASTLANE_API_KEY_PATH)" \
+	ORLIX_STORE_METADATA_PATH="$(ORLIX_STORE_METADATA_PATH)" \
+	ORLIX_STORE_SCREENSHOTS_PATH="$(ORLIX_STORE_SCREENSHOTS_PATH)" \
+	$(ORLIX_FASTLANE) ios promote_to_review
+
+release-workflow-check: __release-workflow-tests
 
 xcodeproj:
 	@$(KERNEL_MAKE) xcodeproj

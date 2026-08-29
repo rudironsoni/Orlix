@@ -1,0 +1,1 @@
+terminal,ssh,shell,developer,remote,workspace

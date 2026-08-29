@@ -136,19 +136,19 @@ __vendor-build:
 	    log_info "Building GhosttyKit.xcframework..."
 
 	    local zig_flags=(
-	        -Dapp-runtime=none
-	        -Demit-xcframework=true
-	        -Demit-macos-app=false
-	        -Demit-exe=false
-	        -Demit-docs=false
-	        -Demit-webdata=false
-	        -Demit-helpgen=false
-	        -Demit-terminfo=false
-	        -Demit-termcap=false
-	        -Demit-themes=false
-	        -Doptimize=ReleaseFast
-	        -Dstrip
-	        -Dxcframework-target=universal
+	        '-Dapp-runtime=none'
+	        '-Demit-xcframework=true'
+	        '-Demit-macos-app=false'
+	        '-Demit-exe=false'
+	        '-Demit-docs=false'
+	        '-Demit-webdata=false'
+	        '-Demit-helpgen=false'
+	        '-Demit-terminfo=false'
+	        '-Demit-termcap=false'
+	        '-Demit-themes=false'
+	        '-Doptimize=ReleaseFast'
+	        '-Dstrip'
+	        '-Dxcframework-target=universal'
 	    )
 
 	    (cd "$${workdir}/ghostty" && zig build "$${zig_flags[@]}" -p "$${workdir}/zig-out")
