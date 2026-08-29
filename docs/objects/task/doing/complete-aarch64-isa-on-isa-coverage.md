@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-08-23
+updated: 2026-08-29
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
@@ -124,62 +124,3 @@ The current runtime HWCAP profile may remain narrower while implementation is in
 Privileged and non-EL0 leaves remain visible in the inventory. Completion proves their architecturally correct EL0 rejection or exception behavior rather than silently discarding them.
 
 Passing mlibc, Coreutils, or another package suite is downstream compatibility evidence. It does not close this task while any of the 4,350 source leaves is unclassified, any applicable EL0 leaf lacks exact production semantics and typed evidence, or any privileged leaf lacks its required EL0 behavior.
-
-The 209 unique `BASE_LOAD_STORE` source leaves now have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. The 152 unique `ADVSIMD_LOAD_STORE` source leaves now have the same production observations through the same `orlix_tcti_memory_proof.h` fixtures and capture walk. STL1 and LDAP1 are proved for structure transfer only. The 498 unique `BASE_ATOMICS` source leaves now have production observations for `REGISTERS`, `MEMORY`, and `PC` on success, plus `ATOMICITY` and `ORDERING` where the leaf requires them. The 34 unique `BASE_ADD_SUBTRACT` source leaves now have production observations for `REGISTERS`, `PC`, and `FLAGS`. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable for add and subtract. ADDPT and SUBPT stay in this cohort. `FEAT_CPA` is not advertised. The 10 unique `BASE_CONTROL_FLOW` source leaves now have production decode and EL0 classification. The five EL0 leaves B, BL, BR, BLR, and RET have production observations for `REGISTERS` and `PC`. `FLAGS`, `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable for those EL0 leaves. ERET, ERETAA, ERETAB, DRPS, and TEXIT are classified `NON_EL0` and prove EL0 rejection. TEXIT official DDI0602 semantics are unspecified. `FEAT_TEV` is not advertised. The 10 unique `BASE_EXCEPTIONS` source leaves now have production decode and EL0 classification. SVC has production observations for `REGISTERS` and `PC` on the structured syscall exit. BRK, HLT, and UDF prove EL0 structured exits. HVC, SMC, DCPS1, DCPS2, DCPS3, and TENTER prove EL0 rejection. TENTER official DDI0602 semantics are unspecified. Linux keeps syscall dispatch. The 60 unique `BASE_CONDITIONAL` source leaves now have production decode and EL0 classification. The 23 always-on EL0 leaves `B.cond`, `CBZ`/`CBNZ`, `TBZ`/`TBNZ`, `CSEL`/`CSINC`/`CSINV`/`CSNEG`, and `CCMP`/`CCMN` have production observations for `REGISTERS` and `PC`, plus `FLAGS` for the compare forms. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. `BC.cond` (`FEAT_HBC`) and the 36 `FEAT_CMPBR` compare-and-branch leaves are classified `NON_EL0` and prove EL0 rejection. `FEAT_CMPBR` and `FEAT_HBC` are not advertised. The 25 unique `BASE_BITFIELD_UNARY` source leaves now have production decode and EL0 classification. The 19 always-on EL0 leaves `EXTR`, `SBFM`/`BFM`/`UBFM`, and `RBIT`/`REV*`/`CLZ`/`CLS` have production observations for `REGISTERS` and `PC`. `CTZ`/`CNT`/`ABS` (`FEAT_CSSC`) are classified `NON_EL0` and prove EL0 rejection. `FEAT_CSSC` is not advertised. The 16 unique `BASE_MULTIPLY_DIVIDE` source leaves now have production decode and EL0 classification. All 16 EL0 leaves `UDIV`/`SDIV`, `MADD`/`MSUB`, `SMADDL`/`SMSUBL`/`SMULH`, `UMADDL`/`UMSUBL`/`UMULH`, and `MADDPT`/`MSUBPT` have production observations for `REGISTERS` and `PC`. Zero divisor, signed minimum divided by `-1`, W upper-zeroing, long-form source extension, high-half products, accumulator aliasing, and XZR operands are proved. MADDPT and MSUBPT keep PAC tag bits [63:56] and do 56-bit pointer arithmetic. `FEAT_CPA` is not advertised. The 32 unique `ADVSIMD_CRYPTO` source leaves now have production decode and EL0 classification. All 32 EL0 leaves AESE/AESD/AESMC/AESIMC, SHA-1/SHA-256/SHA-512, SHA-3 (EOR3/BCAX/RAX1/XAR), SM3, SM4, and PMULL have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Destructive destinations, source/destination aliasing, PMULL versus PMULL2 source halves, all-zero/all-one polynomial operands, AES round ordering, and Q=0 upper-bit preservation are proved. Crypto `HWCAP` bits are not advertised. The 37 unique `ADVSIMD_PERMUTE_MOVE` source leaves now have production decode and EL0 classification. The 33 always-on EL0 leaves DUP/INS/UMOV/SMOV, ZIP/UZP/TRN/EXT/REV, TBL/TBX, and MOVI have production observations for `FP_SIMD` and `PC`, plus `REGISTERS` for UMOV/SMOV. Lane-index endpoints, Q=0 upper-half rules, table lists wrapping V31, out-of-range TBL zeroing versus TBX preservation, signed SMOV extraction, and overlapping source/destination registers are proved. LUTI2/LUTI4 (`FEAT_LUT`) are classified `NON_EL0` and prove EL0 rejection. `FEAT_LUT` is not advertised. The 240 unique `ADVSIMD_INTEGER` source leaves now have production decode and EL0 classification. The 222 always-on EL0 leaves have production observations for `FP_SIMD` and `PC`. Lane endpoints, signed versus unsigned saturation, QC updates, high-half forms, narrowing destination preservation, variable shift counts outside element width, and overlapping source/destination registers are proved. The 18 optional RDM/DotProd/I8MM leaves are classified `NON_EL0` and prove EL0 rejection. XTN and PMUL stay in this family. `HWCAP_ASIMDRDM`, `HWCAP_ASIMDDP`, and `HWCAP_I8MM` are not advertised. The 268 unique `ADVSIMD_FP` source leaves now have production decode. The 113 always-on EL0 leaves are classified and have production observations for `FP_SIMD` and `PC`. NaN, infinity, signed-zero, subnormal, FPCR rounding, FPSR IOC, Q=0 upper-half clearing, reserved Q=0 2D, and overlapping source/destination registers are proved. The 155 optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE leaves remain unclassified EL0 complete-target blockers. Runtime rejection does not complete them. `HWCAP_FPHP`, `HWCAP_ASIMDHP`, `HWCAP_ASIMDFHM`, `HWCAP_BF16`, FCMA, FRINTTS, FAMINMAX, FP8, and FSCALE are not advertised. Pointer-auth branches and BTI stay in later families. SVE and SME memory families remain open. These landed cohorts do not close the 4,350-leaf audit.
-
-The current audit foundation retains raw source spans for all 4,350 direct
-leaves, binds all pinned inline operation objects as explicit shared-ASL
-absence witnesses with explicit operational-note provenance, authenticates
-the selector and condition identity of all supplemental system accessors
-without changing the direct-leaf denominator, and treats KUnit and kselftest
-source registration as ownership only. Native execution remains unproved
-until a typed result binds each source ordinal and individual obligation to
-an executed production-path case. Runtime HWCAP and HWCAP2 projection
-requires the complete 4,350-leaf provider and remains disabled for every
-unproved extension.
-
-The checked V3 field-domain artifact preserves all 605 qualifier occurrences
-across 362 identity groups and maps every occurrence to lossless semantics.
-The two conditional `MPAMIDR_EL1.HAS_BW_CTRL` declarations remain distinct,
-source-provenanced alternatives with one equal normalized domain, yielding 606
-alternatives with zero
-ambiguous or unresolved occurrences. Malformed tables, references, topology,
-spans, census, and publication transactions fail closed. The runtime projection
-rejects a stale zero-profile mapping,
-and archive-freshness regression coverage rejects a kernel archive that is
-older than durable `arch/orlix` inputs. A narrow typed native-observation
-comparator now records result, register, and bounded-memory observations, but
-it discharges no proof obligation without owning production-path KUnit run
-evidence. LSE128 reserved-selector and near-miss coverage remains pending
-owning run evidence and its remaining architectural obligations stay blocking.
-
-The current typed feature evaluation retains fixed-width values from 1 through
-128 bits. The checked field-domain artifact resolves all 605 occurrences
-without conflation or ambiguity. The direct denominator remains 4,350 leaves while the
-supplemental alias graph records 292 instruction aliases and 171 reachable
-operation aliases without using aliases as proof or denominator substitutions.
-Canonical V3 artifacts bind every row to architecture, build, release, schema,
-timestamp, exact three-source lengths and digests, and reconciliation identity.
-Normal proof graphs remain JSON-free. Official XML provenance is pinned. ADR
-0031 records that no applicable authorization is verified, so the corpus stays
-external and non-redistributed. Independently authored OrlixTCTI semantics and
-owning production-path proof remain open.
-
-LSE128 production resume fault
-matrix expanded fault coverage, but it makes no atomicity or ordering claim.
-Runtime HWCAP and HWCAP2 promotion remains zero.
-
-The checked runtime-capability cohort artifact now covers all 4,350 direct
-instruction leaves and retains 5,592 source-derived candidate memberships over
-the 409 typed feature parameters, including each candidate's exact source
-condition span. Every membership remains explicitly unresolved. The completion
-audit counts those 5,592 unresolved memberships as blocking obligations, and
-the runtime projection cannot use them to authorize HWCAP or HWCAP2 promotion.
-This structural binding does not establish feature applicability,
-satisfiability, implementation, or proof. Linux proof: 6,364 rows; 3,314
-kselftest-owned, 3,050 typed N/A, zero executed. Invalid
-rows fail closed. Execution proof remains open.
-
-Feature-domain SAT: 4,350 applicable, zero impossible or unresolved. The
-checked certificate has 377 common and 364 leaf-scoped operand values;
-canonical replay passes and a source-bound valid-shape mutation fails.
