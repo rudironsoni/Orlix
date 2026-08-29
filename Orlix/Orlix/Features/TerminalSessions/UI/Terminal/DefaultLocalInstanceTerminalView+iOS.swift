@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-#if os(iOS) && ORLIX_APP_WITH_ORLIXOS
+#if os(iOS) && canImport(OrlixOS)
 import OrlixOS
 
 struct DefaultLocalInstanceTerminalView: View {

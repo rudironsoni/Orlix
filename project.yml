@@ -1,11 +1,4 @@
 name: Orlix
-include:
-  - path: project.app-with-orlixos.yml
-    relativePaths: false
-    enable: ${ORLIX_APP_WITH_ORLIXOS_ENABLED}
-  - path: project.app-without-orlixos.yml
-    relativePaths: false
-    enable: ${ORLIX_APP_WITHOUT_ORLIXOS_ENABLED}
 options:
   bundleIdPrefix: com.rudironsoni
   deploymentTarget:
@@ -439,7 +432,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.tests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
-  Orlix:
+  Orlix: &orlix_application_target
     type: application
     platform: iOS
     sources:
@@ -481,6 +474,8 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
+      - target: OrlixOS
+        embed: true
       - target: OrlixLiveActivity
         embed: true
       - target: OrlixPacketTunnel
@@ -582,6 +577,47 @@ targets:
         Release:
           APS_ENVIRONMENT: production
           ORLIX_TELEMETRY_ENVIRONMENT: testflight
+  OrlixAppOnly:
+    <<: *orlix_application_target
+    dependencies:
+      - target: OrlixLiveActivity
+        embed: true
+      - target: OrlixPacketTunnel
+        embed: true
+      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
+        embed: false
+      - package: MLXSwift
+        products:
+          - MLX
+          - MLXNN
+          - MLXFFT
+      - package: SwiftCloudflared
+        product: Cloudflared
+      - package: SwiftMosh
+        products:
+          - MoshCore
+          - MoshBootstrap
+      - package: SwiftET
+        products:
+          - ETSession
+          - ETBootstrap
+      - package: ZIPFoundation
+        product: ZIPFoundation
+      - package: OpenTelemetrySwift
+        product: OpenTelemetryProtocolExporterHTTP
+      - package: OpenTelemetrySwiftCore
+        products:
+          - OpenTelemetryApi
+          - OpenTelemetrySdk
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        <<: *orlix_application_settings
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix
+        PRODUCT_MODULE_NAME: Orlix
+        PRODUCT_NAME: OrlixAppOnly
+      configs:
+        <<: *orlix_application_config_settings
   OrlixTestApp:
     type: application
     platform: iOS
@@ -628,6 +664,8 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
+      - target: OrlixOS
+        embed: true
       - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
         embed: false
       - package: MLXSwift
@@ -1006,6 +1044,13 @@ schemes:
       storeKitConfiguration: Orlix/OrlixStoreKit.storekit
     archive:
       config: Release
+  "Orlix App Only":
+    build:
+      targets:
+        OrlixAppOnly: all
+    run:
+      config: Debug
+      executable: OrlixAppOnly
   "OrlixOS Tests":
     build:
       targets:

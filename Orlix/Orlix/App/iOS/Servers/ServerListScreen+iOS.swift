@@ -79,7 +79,7 @@ struct ServerListScreen: View {
 
     var body: some View {
         List {
-#if ORLIX_APP_WITH_ORLIXOS
+#if canImport(OrlixOS)
             Section("Local") {
                 Button {
                     showingLocalInstance = true
@@ -105,7 +105,7 @@ struct ServerListScreen: View {
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
-#if ORLIX_APP_WITH_ORLIXOS
+#if canImport(OrlixOS)
         .navigationDestination(isPresented: $showingLocalInstance) {
             DefaultLocalInstanceTerminalView()
         }
