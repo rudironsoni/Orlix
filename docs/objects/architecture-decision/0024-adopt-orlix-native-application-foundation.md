@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-08-29
 status: accepted
 external_id: "ADR-0024"
 summary: "Durable Orlix architecture decision ADR 0024."
@@ -11,6 +11,8 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 supersedes:
   - "[ADR 0015](0015-build-orlix-as-the-ios-host-app.md)"
+amended_by:
+  - "[ADR 0032](0032-sync-vvterm-with-three-way-source-snapshots.md)"
 ---
 
 # ADR 0024: Adopt Orlix As The Native Application Foundation

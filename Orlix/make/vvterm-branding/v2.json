@@ -1,0 +1,77 @@
+{
+  "version": 2,
+  "path_replacements": [
+    ["VVTerm/App/VVTermApp.swift", "Orlix/App/Orlix.swift"],
+    ["Aizen Dark", "Orlix Dark"],
+    ["Aizen Light", "Orlix Light"],
+    ["VivyTerm", "Orlix"],
+    ["vivyterm", "orlix"],
+    ["VVTerm", "Orlix"],
+    ["vvterm", "orlix"]
+  ],
+  "text_replacements": [
+    ["struct VVTermApp: App", "struct Orlix: App"],
+    ["iCloud.app.vivy.VivyTerm", "iCloud.com.rudironsoni.orlix"],
+    ["app.vivy.VivyTerm", "com.rudironsoni.orlix"],
+    ["app.vivy.Orlix", "com.rudironsoni.orlix"],
+    ["app.vivy.orlix", "com.rudironsoni.orlix"],
+    ["app.vivy.", "com.rudironsoni."],
+    ["com.vivy.vivyterm", "com.rudironsoni.orlix"],
+    ["com.vivy.Orlix", "com.rudironsoni.orlix"],
+    ["com.vivy.orlix", "com.rudironsoni.orlix"],
+    ["com.vivy.", "com.rudironsoni."],
+    ["group.app.vivy.VivyTerm", "group.com.rudironsoni.orlix"],
+    ["https://github.com/vivy-company/orlix", "https://github.com/rudironsoni/Orlix"],
+    ["github.com/vivy-company/orlix", "github.com/rudironsoni/Orlix"],
+    ["vivy-company/orlix", "rudironsoni/Orlix"],
+    ["mailto:orlix@vivy.company", "https://github.com/rudironsoni/Orlix/issues"],
+    ["mailto:apple@vivy.company", "https://github.com/rudironsoni/Orlix/issues"],
+    ["orlix@vivy.company", "github.com/rudironsoni/Orlix/issues"],
+    ["apple@vivy.company", "github.com/rudironsoni/Orlix/issues"],
+    ["Vivy Technologies Co., Limited", "Orlix"],
+    ["Vivy Technologies", "Orlix"],
+    ["Aizen Dark", "Orlix Dark"],
+    ["Aizen Light", "Orlix Light"],
+    ["vivyterm_pro", "orlix_pro"],
+    ["VivyTerm", "Orlix"],
+    ["vivyterm", "orlix"],
+    ["com.vivy-company.VVTerm", "com.rudironsoni.Orlix"],
+    ["com.vivy-company.vvterm", "com.rudironsoni.orlix"],
+    ["VVTerm", "Orlix"],
+    ["vvterm", "orlix"]
+  ],
+  "preserve_text_paths": [
+    ".contributors",
+    "CLA.md",
+    "CODE_OF_CONDUCT.md",
+    "LICENSE",
+    "LICENSE-APPSTORE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "Makefile",
+    "make/**",
+    ".vvterm-sync-*"
+  ],
+  "preserve_paths": [
+    "Makefile",
+    "make/**",
+    ".vvterm-sync-*"
+  ],
+  "allowed_text_paths": [
+    ".contributors",
+    "CLA.md",
+    "CODE_OF_CONDUCT.md",
+    "LICENSE",
+    "LICENSE-APPSTORE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "Makefile",
+    "make/vvterm-*",
+    "make/vvterm_*",
+    "make/tests/test_vvterm_sync.py"
+  ],
+  "allowed_path_patterns": [
+    "make/vvterm-*",
+    "make/vvterm_*",
+    "make/vvterm-branding/*",
+    "make/tests/test_vvterm_sync.py"
+  ]
+}

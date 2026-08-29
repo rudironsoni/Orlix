@@ -97,7 +97,7 @@ def scan_forbidden_sources(repo_root: Path, fragments: list[str]) -> None:
 
 def validate_manifest(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     manifest = load_json(manifest_path)
-    if manifest.get("schema_version") != 1:
+    if manifest.get("schema_version") != 2:
         fail("unsupported release-input manifest schema")
 
     resolution = manifest.get("swift_package_resolution")

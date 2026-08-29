@@ -1,6 +1,30 @@
 #if os(iOS)
 import SwiftUI
 
+private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
+    @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
+    private var preservesTerminalSizeForKeyboard = false
+
+    let isTerminalSelected: Bool
+    let content: Content
+
+    init(
+        isTerminalSelected: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.isTerminalSelected = isTerminalSelected
+        self.content = content()
+    }
+
+    var body: some View {
+        content.modifier(
+            TerminalKeyboardSafeAreaModifier(
+                isEnabled: preservesTerminalSizeForKeyboard && isTerminalSelected
+            )
+        )
+    }
+}
+
 extension ConnectionTerminalContainer {
     var platformBody: some View {
         sharedBody
@@ -15,22 +39,23 @@ extension ConnectionTerminalContainer {
             } message: {
                 Text(disconnectAlertMessage)
             }
-            .alert("Close this terminal?", isPresented: $showingPaneCloseConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Close", role: .destructive) {
-                    closeFocusedPaneConfirmed()
-                }
-            } message: {
-                Text("The SSH connection will be terminated.")
-            }
-            .sheet(item: $serverToEdit) { editingServer in
+            .terminalCloseConfirmationAlert(
+                isPresented: $showingPaneCloseConfirmation,
+                message: String(localized: "The SSH connection will be terminated."),
+                onClose: closeFocusedPaneConfirmed
+            )
+            .sheet(item: $serverFormIntent) { intent in
                 NavigationStack {
                     ServerFormSheet(
                         serverManager: serverManager,
-                        workspace: serverManager.workspaces.first { $0.id == editingServer.workspaceId },
-                        server: editingServer,
+                        workspace: intent.sourceServer.flatMap { sourceServer in
+                            serverManager.workspaces.first { $0.id == sourceServer.workspaceId }
+                        },
+                        intent: intent,
+                        dependencies: serverFormDependencies,
+                        makeLocalDiscoveryManager: makeLocalDiscoveryManager,
                         onSave: { _ in
-                            serverToEdit = nil
+                            serverFormIntent = nil
                         }
                     )
                 }
@@ -38,48 +63,81 @@ extension ConnectionTerminalContainer {
             }
     }
 
-    func platformChrome<Content: View>(
-        _ content: Content,
-        backgroundColor: Color
-    ) -> some View {
-        VStack(spacing: 0) {
-            if !isZenModeEnabled {
-                headerTabsBar
-            }
+    func platformChrome(backgroundColor: Color) -> some View {
+        TerminalKeyboardSafeAreaHost(isTerminalSelected: selectedView == .terminal) {
+            VStack(spacing: 0) {
+                if !isZenModeEnabled {
+                    headerTabsBar
+                }
 
-            content
+                platformContentStack(backgroundColor: backgroundColor)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(backgroundColor)
+            }
+            .overlay(alignment: .topTrailing) {
+                if isZenModeEnabled {
+                    zenModeOverlay
+                        .transition(.opacity)
+                        .zIndex(10)
+                }
+            }
+            .background(backgroundColor.ignoresSafeArea(.all))
         }
-        .background(backgroundColor.ignoresSafeArea(.all))
-        .modifier(
-            TerminalKeyboardSafeAreaModifier(
-                isEnabled: preservesTerminalSizeForKeyboard
-                    && selectedView == ConnectionViewTab.terminal.id
-            )
-        )
     }
 
     @ViewBuilder
-    var platformContentStack: some View {
-        switch selectedView {
-        case ConnectionViewTab.stats.id:
-            statsLayer
-        case ConnectionViewTab.files.id:
-            filesLayer
-        case ConnectionViewTab.terminal.id:
-            terminalLayer
-        default:
-            terminalLayer
+    private func platformContentStack(backgroundColor: Color) -> some View {
+        Group {
+            switch selectedView {
+            case .stats:
+                statsLayer(backgroundColor: backgroundColor)
+            case .files:
+                filesLayer
+            case .terminal:
+                terminalLayer
+            }
+        }
+        // View switches must swap content without implicit animations: animating
+        // the insertion of the Metal-backed terminal view during the segmented
+        // picker's transition hangs the main thread in a trait-update loop.
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
+    @ViewBuilder
+    private func statsLayer(backgroundColor: Color) -> some View {
+        // Mount stats only while selected. The dashboard nests ViewThatFits,
+        // Grid, and lazy stacks; keeping it in the hierarchy at opacity 0 makes
+        // every layout pass of the other views re-measure it, which explodes
+        // combinatorially and hangs the main thread when the terminal mounts.
+        if selectedView == .stats {
+            ServerStatsView(
+                server: server,
+                backgroundColor: backgroundColor,
+                sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
+                dependencies: statsDependencies,
+                isDockerUnlocked: storeManager.allowsProFeatures
+            )
+            .zIndex(1)
         }
     }
 
     @ViewBuilder
     var terminalLayer: some View {
-        if selectedView == ConnectionViewTab.terminal.id, let tab = selectedTab {
+        if selectedView == .terminal, let tab = selectedTab {
+            let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
             TerminalTabView(
                 tab: tab,
                 server: server,
                 tabManager: tabManager,
-                isSelected: true
+                securityActions: terminalSecurityActions,
+                isSelected: true,
+                isSplitZoomed: terminalContent.state.splitZoomedTabIds.contains(tab.id),
+                appearance: terminalAppearanceSnapshot,
+                voiceSettingsStore: voiceInputRuntimeStore.settingsStore,
+                audioService: voiceRuntime.audioService,
+                voiceRecordingOperation: voiceRuntime.recordingOperation
             )
             // Per-tab identity: without it SwiftUI reuses the previous tab's
             // representable (and its Ghostty view + SSH coordinator) when the
@@ -87,7 +145,7 @@ extension ConnectionTerminalContainer {
             .id(tab.id)
         }
 
-        if selectedView == ConnectionViewTab.terminal.id && serverTabs.isEmpty {
+        if selectedView == .terminal && serverTabs.isEmpty {
             TerminalEmptyStateView(server: server) {
                 openNewTab()
             }
@@ -96,17 +154,16 @@ extension ConnectionTerminalContainer {
 
     @ViewBuilder
     private var headerTabsBar: some View {
-        if selectedView == ConnectionViewTab.terminal.id && serverTabs.count > 1 {
+        if selectedView == .terminal && serverTabs.count > 1 {
             SharedTerminalTabsBar(
                 tabs: serverTabs,
                 selectedTabId: selectedTabIdBinding,
-                titleForTab: { tabManager.displayTitle(for: $0) },
-                paneState: { tabManager.paneStates[$0.focusedPaneId] },
+                projection: terminalToolbarProjection.tabStrip,
                 onClose: { tabManager.closeTab($0) }
             )
         }
 
-        if selectedView == ConnectionViewTab.files.id && serverFileTabs.count > 1 {
+        if selectedView == .files && serverFileTabs.count > 1 {
             RemoteFileTabsBar(
                 tabs: serverFileTabs,
                 selectedTabId: selectedFileTabIdBinding,
@@ -122,9 +179,90 @@ extension ConnectionTerminalContainer {
     }
 
     private func disconnectFromServer() {
+        statsDependencies.runtimeStore.releaseCollector(for: server.id)
         tabManager.disconnectServer(server.id)
         fileBrowser.disconnect(serverId: server.id)
         fileTabManager.disconnect(serverId: server.id)
+    }
+
+    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
+        guard selectedView != .terminal else { return }
+        for tab in serverTabs {
+            for paneId in tab.allPaneIds {
+                tabManager.presentationState.applyVoiceEvent(.pendingReturnDismissed, for: paneId)
+            }
+        }
+    }
+
+    func platformPrepareForPaneClose() {
+        tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
+    }
+
+    private var zenModeOverlay: some View {
+        ZenModeFloatingOverlay(isPanelPresented: $showingZenPanel) { panelWidth in
+            IOSZenModePanel(
+                width: panelWidth,
+                serverName: server.name,
+                selectedView: selectedView,
+                selectedViewBinding: selectedViewBinding,
+                viewTabs: visibleViewTabs,
+                terminalTabs: serverTabs,
+                selectedTerminalTabId: selectedTabIdBinding,
+                terminalTabTitle: { tabManager.titleStore.displayTitle(for: $0) },
+                paneState: { tabManager.sessionState.paneState(for: $0.focusedPaneId) },
+                onCloseTerminalTab: { tabManager.closeTab($0) },
+                fileTabs: serverFileTabs,
+                selectedFileTabId: selectedFileTabIdBinding,
+                fileTabTitle: displayedFileTabTitle(for:),
+                onSelectFileTab: { fileTabManager.selectTab($0) },
+                onCloseFileTab: { tab in
+                    if let removedTab = fileTabManager.closeTab(tab) {
+                        fileBrowser.removeState(for: removedTab.id)
+                    }
+                },
+                onNewTerminalTab: {
+                    showingZenPanel = false
+                    openNewTab(selectTerminalViewOnSuccess: true)
+                },
+                onNewFileTab: {
+                    showingZenPanel = false
+                    openNewFileTab(selectFilesViewOnSuccess: true)
+                },
+                onOpenSettings: {
+                    showingZenPanel = false
+                    onOpenSettings?()
+                },
+                onEditServer: {
+                    showingZenPanel = false
+                    serverFormIntent = .edit(server)
+                },
+                onDuplicateServer: {
+                    showingZenPanel = false
+                    serverFormIntent = .duplicate(server)
+                },
+                onDisconnect: {
+                    showingZenPanel = false
+                    statsDependencies.runtimeStore.releaseCollector(for: server.id)
+                    if let onDisconnectRoute {
+                        onDisconnectRoute()
+                    } else {
+                        disconnectFromServer()
+                    }
+                },
+                onBack: {
+                    showingZenPanel = false
+                    onLeaveRoute?()
+                },
+                onExitZen: exitZenMode
+            )
+        }
+    }
+
+    private func exitZenMode() {
+        showingZenPanel = false
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            isZenModeEnabled = false
+        }
     }
 
     private var disconnectAlertTitle: String {
@@ -155,24 +293,10 @@ extension ConnectionTerminalContainer {
     }
 }
 
-private struct TerminalKeyboardSafeAreaModifier: ViewModifier {
-    let isEnabled: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content.ignoresSafeArea(.keyboard, edges: .bottom)
-        } else {
-            content
-        }
-    }
-}
-
 private struct SharedTerminalTabsBar: View {
     let tabs: [TerminalTab]
     @Binding var selectedTabId: UUID?
-    let titleForTab: (TerminalTab) -> String
-    let paneState: (TerminalTab) -> TerminalPaneState?
+    @ObservedObject var projection: TerminalServerToolbarTabStripProjection
     let onClose: (TerminalTab) -> Void
 
     private let minTabWidth: CGFloat = 120
@@ -189,9 +313,10 @@ private struct SharedTerminalTabsBar: View {
                 if useEqualWidth {
                     HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                         ForEach(tabs) { tab in
+                            let item = tabItem(for: tab)
                             SharedTerminalTabButton(
-                                title: titleForTab(tab),
-                                statusColor: statusColor(for: tab),
+                                title: item?.title ?? tab.title,
+                                statusColor: statusColor(for: item),
                                 isSelected: selectedTabId == tab.id,
                                 fixedWidth: itemWidth,
                                 onSelect: { selectedTabId = tab.id },
@@ -206,9 +331,10 @@ private struct SharedTerminalTabsBar: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: ServerViewTopTabBarMetrics.tabSpacing) {
                             ForEach(tabs) { tab in
+                                let item = tabItem(for: tab)
                                 SharedTerminalTabButton(
-                                    title: titleForTab(tab),
-                                    statusColor: statusColor(for: tab),
+                                    title: item?.title ?? tab.title,
+                                    statusColor: statusColor(for: item),
                                     isSelected: selectedTabId == tab.id,
                                     fixedWidth: nil,
                                     onSelect: { selectedTabId = tab.id },
@@ -241,8 +367,12 @@ private struct SharedTerminalTabsBar: View {
         .padding(.vertical, 6)
     }
 
-    private func statusColor(for tab: TerminalTab) -> Color {
-        switch paneState(tab)?.connectionState ?? .idle {
+    private func tabItem(for tab: TerminalTab) -> TerminalServerToolbarTabItem? {
+        projection.state.items.first { $0.id == tab.id }
+    }
+
+    private func statusColor(for item: TerminalServerToolbarTabItem?) -> Color {
+        switch item?.connectionState ?? .idle {
         case .connected:
             return .green
         case .connecting, .reconnecting:

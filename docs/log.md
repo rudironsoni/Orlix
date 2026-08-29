@@ -971,3 +971,12 @@ requiring a machine-local recovery helper.
 [CORRECTION] Removed copied cohort and proof status from the AArch64 coverage
 task. The task now owns only its durable completion boundary and remaining
 sequence. Current execution evidence stays in structured harness reports.
+
+## [2026-08-29] implement | Add exact vvterm source synchronization
+
+Added a reviewed three-way snapshot workflow that keeps vvterm history outside
+Orlix while preserving the complete application as tracked Xcode-editable
+source. Advanced the source pin to `31120756133d22e526d01c630c680bd949dda730`,
+updated packages and native artifacts, and preserved OrlixOS and telemetry
+overlays. Source and release-input checks pass. Xcode tests remain blocked on
+the missing optional Metal toolchain component.

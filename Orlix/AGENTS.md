@@ -13,7 +13,7 @@ Cross-platform (iOS/macOS) SSH terminal app with iCloud sync and Keychain creden
 ```
 Orlix/
 ├── App/
-│   ├── Orlix.swift              # App entry point and composition root
+│   ├── OrlixApp.swift           # App entry point and composition root
 │   ├── ContentView.swift         # Shared root container
 │   ├── Localization/             # App-scoped localization preferences
 │   └── iOS/                      # iOS app shell and root navigation views
@@ -25,6 +25,7 @@ Orlix/
 │   ├── Security/
 │   ├── Sync/
 │   └── Terminal/
+│       └── Ghostty/              # Shared libghostty bridge
 ├── Features/                     # Feature-first product features
 │   ├── ConnectionViews/
 │   │   ├── Domain/
@@ -76,6 +77,7 @@ Orlix/
 │   ├── TerminalSessions/
 │   │   ├── Domain/
 │   │   ├── Application/
+│   │   ├── Infrastructure/       # Session runtimes and Ghostty surfaces
 │   │   └── UI/
 │   ├── Stats/
 │   │   ├── Domain/
@@ -85,8 +87,6 @@ Orlix/
 │   └── Welcome/
 │       ├── Domain/
 │       └── UI/
-├── GhosttyTerminal/              # libghostty terminal emulation
-├── Compatibility/                # Version/platform compatibility helpers
 └── Resources/                    # Bundled assets, themes, terminfo, l10n
 ```
 
@@ -100,7 +100,7 @@ Current architecture:
 - `Core/Security` owns keychain, device identity, and privacy-mode infrastructure.
 - `Core/Network` owns shared connectivity monitoring and Cloudflare transport support.
 - `Core/UI` owns shared view primitives and presentation helpers reused across features.
-- `Core/Terminal` owns shared clipboard, paste, and terminal text/default helpers.
+- `Core/Terminal` owns shared clipboard, paste, terminal text/default helpers, and the shared libghostty bridge.
 - `Core/Logging` owns shared logging utilities.
 - `Core/SSH` owns shared SSH bootstrap, known-hosts, key generation, environment detection, rich-paste support, tmux/mosh runtime helpers, and `SSHClient`.
 - `Features/ConnectionViews` owns connection view tab configuration types and state.
@@ -115,7 +115,7 @@ Current architecture:
 - `Features/TerminalThemes` owns theme models, validation, storage paths, parsing, and theme management.
 - `Features/TerminalAccessories` owns keyboard accessory models, preferences, settings UI, and accessory validation flows.
 - `Features/TerminalPresets` owns terminal preset models, persistence, and preset form UI.
-- `Features/TerminalSessions` owns terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, and terminal session UI.
+- `Features/TerminalSessions` owns terminal session/tab domain models, session/tab managers, tmux prompt coordination, live activity support, Ghostty runtime surfaces, and platform terminal UI.
 - `Features/VoiceInput` owns transcription/audio capture infrastructure, MLX model management, and transcription settings UI.
 - `Features/Welcome` owns welcome/onboarding copy and presentation.
 - New app code should land in `Features`, `Core`, or `App` based on ownership.
@@ -123,9 +123,35 @@ Current architecture:
 
 Feature-first shape:
 - `Domain`: pure feature types and rules
-- `Application`: feature state, orchestration, coordinators, use-case style logic
+- `Application`: authoritative feature state, user intents, tasks, cancellation, and workflows
 - `Infrastructure`: transport, persistence, adapters, external integrations
-- `UI`: SwiftUI/AppKit/UIKit presentation only
+- `UI`: SwiftUI/AppKit/UIKit presentation that renders state and forwards user intents
+
+Dependency direction:
+- `App` creates one explicit production dependency graph and injects it at app or feature roots.
+- Keep the composition owner plain and non-observable. It assembles live dependencies but does not duplicate feature state.
+- Preview and test compositions must not start live CloudKit, Keychain, network, StoreKit, or other external work.
+- Leaf views, stores, coordinators, clients, repositories, and adapters must not create production dependencies through `.shared`, default live arguments, or hidden service locators.
+- Feature code may depend on neutral `Core` contracts. `Core` must not expose or depend on feature-owned models or policies.
+- Map feature models at Infrastructure boundaries. UI must not own transport, persistence, filesystem or path policy, shell syntax, or long-lived tasks.
+
+Type meanings for new and touched code:
+- `Store`: authoritative observable state.
+- `Coordinator`: one asynchronous workflow or lifecycle, including task replacement and cancellation.
+- `Client`: an external-system boundary.
+- `Repository`: a persistence boundary.
+- `Policy`: a pure deterministic rule.
+- `Projection`: narrow read-only observable state derived from an authoritative owner.
+- `Runtime`: a native resource lifecycle.
+- `Composition`: live, preview, or test dependency assembly.
+- Keep `ObservableObject` while iOS 16.1 and macOS 13.3 are supported. Do not start a whole-app Observation migration.
+- Retire an ambiguous `Manager` name only when its owned implementation already changes. Do not perform naming-only migrations.
+
+State and lifecycle rules:
+- Model closed presentation and workflow states with feature-owned enums instead of independent flags, revision counters, or closure payloads.
+- Store only facts that cannot be derived safely from authoritative state.
+- The owner that starts a task also owns replacement, cancellation, stale-result rejection, and teardown.
+- Prefer one stable dispatcher with typed command IDs for app and toolbar commands.
 
 For Files/SFTP specifically:
 - no non-view logic under `UI`
@@ -137,9 +163,20 @@ For every feature:
 - keep `Domain`, `Application`, `Infrastructure`, and `UI` boundaries intact
 - prefer view-owned dependencies to be injected from the app/screen boundary instead of created inside leaf views
 - if shared cross-feature primitives are needed, extract them into `Core` instead of creating new app-wide bucket folders
+- prefer one primary type per file and match the filename to that type
+- When one type remains the clear lifecycle owner but has distinct capabilities, keep stored state, initialization, and lifecycle in `Type.swift`, then split cohesive capabilities into `Type+Capability.swift` extension files such as `Type+Commands.swift` or `Type+Parsing.swift`.
+- Use capability extension files to clarify one owner, not to hide separate owners. Extract a new type when a capability owns independent state or lifecycle. Swift extensions cannot add stored properties.
+- order files as inputs and owned state, initialization, public intents, then private helpers
+- keep view-owned state private; comments explain reasons and invariants instead of repeating code
+- review ownership when a file exceeds 600 lines; a file over 1,000 lines needs a clear reason
+
+Architecture non-goals:
+- no whole-app architecture rewrite, generic reducer framework, package explosion, mass rename, or UI redesign
+- no behavior change only to reduce a file size
+- use direct cutovers; do not add compatibility service locators or a second app dependency graph
 
 Apple platform UI split pattern:
-- Follow `docs/specs/apple-platform-ui-split-pattern.md` for iOS/macOS UI ownership and migration details.
+- Prefer `Type+iOS.swift` and `Type+macOS.swift` whenever app composition, lifecycle, adapters, or presentation behavior differs by platform. Keep the shared `Type.swift` focused on neutral contracts and shared state.
 - Do not let shared SwiftUI files accumulate large inline `#if os(iOS)` / `#if os(macOS)` branches. If platform layout, lifecycle, modifiers, or state diverge, keep the shared feature shell neutral and move platform presentation into `Type+iOS.swift` and `Type+macOS.swift` files with file-level compile gates.
 - Because Orlix uses one multiplatform target, platform-specific files must still be guarded with `#if os(...)` unless target membership is explicitly changed; folder names such as `iOS/` or `macOS/` are not enough.
 - Avoid `iOS`, `Mac`, `macOS`, and `MacOS` prefixes in product UI type names. Prefer feature/domain names and put platform ownership in the filename or folder.
@@ -154,6 +191,28 @@ Stats UI ownership:
 - Keep reusable cards, charts, gauges, and meters under `Features/Stats/UI/Components`, and detail sheets/rows under `Features/Stats/UI/Details`.
 - Keep platform sheet chrome and close/search presentation behind `DetailPresentation.swift`, `DetailPresentation+iOS.swift`, and `DetailPresentation+macOS.swift`. Product UI types inside those files should use neutral names such as `StatsDetailShell` or `StatsSearchField`; the filename carries the platform ownership.
 - Small inline platform gates are acceptable only for platform constants or narrow modifiers such as native colors, toolbar placement, or iOS detents. If a platform branch grows into a body/layout/lifecycle variant, split it into a platform file.
+
+Status presentation:
+- Keep blocking states local to the screen that owns them.
+- Use `Core/UI/Notices` for shared non-blocking presentation: one top banner for persistent or degraded state and ID-keyed bottom operations for user-initiated progress or failure.
+- Keep destructive decisions in native alerts and confirmation dialogs.
+- Scope notice hosts to their app or feature surface. Do not add a global toast bus or move feature policy into `Core/UI`.
+
+Remote shell and multiplexer ownership:
+- Resolve the remote platform and shell through `SSHClient.remoteEnvironment()` and build startup or working-directory commands through `RemoteShellProfile` and `RemoteTerminalBootstrap`.
+- UI and session orchestration must not construct POSIX, PowerShell, or `cmd.exe` syntax. Runtime capability fallback must not rewrite persisted transport or tmux preferences.
+- Windows tmux-compatible sessions use the explicit psmux backend and must not use POSIX tmux command construction.
+- Probe `psmux`, then `pmux`, and accept `tmux.exe` only after a psmux-specific compatibility check.
+- Apply Orlix-generated tmux or psmux configuration only to Orlix-managed sessions, never external user sessions.
+
+## Product Planning and Repository Documentation
+
+- Keep product ideas, future specifications, roadmap decisions, pricing or packaging strategy, and internal rollout plans in the Orlix Linear project, not in this repository.
+- Search Linear before creating work. Reuse or update an existing issue when it owns the same scope.
+- Create a Linear issue before a large implementation begins, and keep its decisions, acceptance criteria, and status current as the scope changes.
+- Keep repository documentation limited to current architecture, build, test, security, contribution, protocol, and intentionally public user contracts that must evolve with code.
+- Enforce completed behavior with tests and concise current architecture rules instead of retaining speculative or completed implementation plans.
+- Linear is not a secret manager. Do not store credentials, tokens, private keys, customer data, or production secrets in either Linear or the repository.
 
 ## Refactoring Rules
 
@@ -183,6 +242,25 @@ Safe refactor expectation:
 - Keyboard and terminal input changes require focused regression coverage. At minimum, cover the relevant policy/model path in unit tests and the user-visible iOS behavior in XCUITest when software keyboard, accessory bar, hardware keyboard, IME/preedit, backspace repeat, find UI, floating controls, focus, or tab/view switching behavior is touched.
 - Do not rely on "checked on my phone" or manual Xcode testing as the only validation for keyboard/input regressions. Keep simulator UI tests or unit tests that can be rerun by future agents.
 - Before finishing non-documentation code changes, run the narrowest reliable build/test commands that exercise the touched behavior and report exactly what was run. If a test cannot run because of tooling or environment issues, report that as a residual risk.
+
+## Build Storage
+
+- Use Xcode's default Derived Data. Do not pass `-derivedDataPath`.
+- Never put Derived Data in the repository, `.build`, `/tmp`, or `/private/tmp`. Reuse caches and run builds serially.
+- Avoid redundant clean or full builds. Check disk space before large builds, and ask before using an isolated path.
+
+## Test Source Organization
+
+- Put each new test under the same `App`, `Core`, or `Features/<FeatureName>` owner as the production behavior that it verifies. Do not add unrelated tests to the `OrlixTests` or `OrlixUITests` root.
+- In a dense feature test folder, use `Domain`, `Application`, `Infrastructure`, and `UI` when those boundaries identify real owners. Mirror deeper production capability folders only when they prevent another flat list or make ownership clearer.
+- Keep a small single-owner test folder flat. File count and line count are review signals, not design targets. Do not create a folder only to reduce a number.
+- Put environment-dependent tests that cross product owners under `Integration/<Boundary>`, such as `Integration/SSH`. Keep their external prerequisites and skip conditions explicit.
+- Keep test support beside the feature or boundary that owns it. Use top-level `Support` only for helpers with real cross-feature users. Do not create generic `Utils`, `Common`, or broad `Mocks` folders.
+- Name unit files `TypeTests.swift`, cross-boundary files `FlowIntegrationTests.swift`, and UI files `FlowUITests+iOS.swift` or `FlowUITests+macOS.swift`.
+- Group UI tests by feature and platform. Keep file-level `#if os(iOS)` or `#if os(macOS)` gates; a platform folder or filename is not enough for the multiplatform test target.
+- Split an oversized test file only when it contains independent behaviors or suite owners. Prefer separate behavior-named suites and local shared support. Do not split one suite into extensions only to reduce line count.
+- Preserve serialized execution, actor isolation, reset hooks, environment gates, and test identifiers when reorganizing tests. Compare the meaningful test inventory before and after a large test refactor.
+- Do not combine test-source reorganization with XCTest-to-Swift-Testing migration, new product behavior, or unrelated coverage work.
 
 ## Commits
 
@@ -224,10 +302,10 @@ Safe refactor expectation:
 
 ### libghostty
 Pre-built xcframework at `Vendor/libghostty/GhosttyKit.xcframework`
-Build with: `make build type=vendor vendor=ghostty`
+Build with: `./scripts/build.sh ghostty`
 
 ### libssh2 + OpenSSL
-Build with: `make build type=vendor vendor=ssh`
+Build with: `./scripts/build.sh ssh`
 Output: `Vendor/libssh2/{macos,ios,ios-simulator}/`
 
 ## Data Models
@@ -292,6 +370,6 @@ struct ConnectionSession: Identifiable {
 1. **Never apply glass to terminal content** - only navigation/toolbars
 2. **Deduplicate by ID** when syncing from CloudKit
 3. **Pro limits enforced in**: `ServerManager.canAddServer`, `canAddWorkspace`, `ConnectionSessionManager.canOpenNewTab`
-4. **Keychain credentials** are NOT synced - only server metadata syncs via CloudKit
+4. **Keychain credentials** use opt-in iCloud Keychain sync. Device identity, session resume secrets, and derived caches stay device-only.
 5. **iOS keyboard toolbar** provides Esc, Tab, Ctrl, arrows, function keys
 6. **Voice-to-command** uses MLX Whisper/Parakeet on-device or Apple Speech fallback

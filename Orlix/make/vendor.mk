@@ -26,13 +26,13 @@ __vendor-build:
 
 	OPENSSL_VERSION="3.2.0"
 	OPENSSL_SHA256="14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e"
-	LIBSSH2_VERSION="1.11.0"
-	LIBSSH2_SHA256="3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461"
+	LIBSSH2_VERSION="1.11.1"
+	LIBSSH2_SHA256="d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
 	MACOS_DEPLOYMENT_TARGET="13.3"
 	IOS_DEPLOYMENT_TARGET="16.0"
 
 	GHOSTTY_REPO="https://github.com/wiedymi/ghostty.git"
-	GHOSTTY_REF="$${GHOSTTY_REF:-268a0a9d761fb19673f05d28042488e2002300f2}"
+	GHOSTTY_REF="$${GHOSTTY_REF:-02af5158c76036291183e746d436eb8f15356662}"
 	BUNDLE_ID="com.rudironsoni.orlix"
 
 	KEEP_WORKDIR="$${KEEP_WORKDIR:-0}"
@@ -108,50 +108,13 @@ __vendor-build:
 
 	path = Path("$${embedded_path}")
 	text = path.read_text()
-	old = """    /// Sets the window background blur on macOS to the desired value.
-	    /// I do this in Zig as an extern function because I don't know how to
-	    /// call these functions in Swift.
-	    ///
-	    /// This uses an undocumented, non-public API because this is what
-	    /// every terminal appears to use, including Terminal.app.
-	    export fn ghostty_set_window_background_blur(
-	        app: *App,
-	        window: *anyopaque,
-	    ) void {
-	        // This is only supported on macOS
-	        if (comptime builtin.target.os.tag != .macos) return;
-
-	        const config = &app.config;
-
-	        // Do nothing if we don't have background transparency enabled
-	        if (config.@\\"background-opacity\\" >= 1.0) return;
-
-	        const nswindow = objc.Object.fromId(window);
-	        _ = CGSSetWindowBackgroundBlurRadius(
-	            CGSDefaultConnectionForThread(),
-	            nswindow.msgSend(usize, objc.sel(\\"windowNumber\\"), .{}),
-	            @intCast(config.@\\"background-blur\\".cval()),
-	        );
-	    }
-
-	    /// See ghostty_set_window_background_blur
-	    extern \\"c\\" fn CGSSetWindowBackgroundBlurRadius(*anyopaque, usize, c_int) i32;
-	    extern \\"c\\" fn CGSDefaultConnectionForThread() *anyopaque;
-	"""
-	new = """    /// Sets the window background blur on macOS to the desired value.
-	    /// App Store builds must avoid non-public APIs; keep this as a no-op.
-	    export fn ghostty_set_window_background_blur(
-	        app: *App,
-	        window: *anyopaque,
-	    ) void {
-	        _ = app;
-	        _ = window;
-	        return;
-	    }
-	"""
-	if old not in text:
-	    raise SystemExit("Ghostty private blur block not found; aborting.")
-	path.write_text(text.replace(old, new))
+	start_marker = "    /// Sets the window background blur on macOS to the desired value."
+	end_marker = '    extern "c" fn CGSDefaultConnectionForThread() *anyopaque;\n'
+	if start_marker not in text or end_marker not in text: raise SystemExit("Ghostty private blur block not found; aborting.")
+	start = text.index(start_marker)
+	end = text.index(end_marker, start) + len(end_marker)
+	new = "    /// Sets the window background blur on macOS to the desired value.\n    /// App Store builds must avoid non-public APIs; keep this as a no-op.\n    export fn ghostty_set_window_background_blur(\n        app: *App,\n        window: *anyopaque,\n    ) void {\n        _ = app;\n        _ = window;\n    }\n"
+	path.write_text(text[:start] + new + text[end:])
 	PY
 	    fi
 

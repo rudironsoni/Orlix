@@ -42,7 +42,7 @@ That is correct for normal terminal paste, but it breaks down for rich clipboard
 
 The current pipeline is explicitly text-only:
 - [Clipboard.swift](../../../Orlix/Orlix/Core/Terminal/Clipboard.swift)
-- [Ghostty.App.swift](../../../Orlix/Orlix/GhosttyTerminal/Ghostty.App.swift)
+- [GhosttyRuntime.swift](../../../Orlix/Orlix/Features/TerminalSessions/Infrastructure/Ghostty/Runtime/GhosttyRuntime.swift)
 
 ## Why Normal Paste Cannot Solve This
 Terminal paste is fundamentally a byte stream into stdin, not a file transfer channel.
@@ -142,9 +142,9 @@ Add a higher-level paste router in the terminal view layer:
   - `remoteRichPaste`
 
 Likely touchpoints:
-- [GhosttyTerminalView+iOS.swift](../../../Orlix/Orlix/GhosttyTerminal/GhosttyTerminalView+iOS.swift)
-- [GhosttyTerminalView+macOS.swift](../../../Orlix/Orlix/GhosttyTerminal/GhosttyTerminalView+macOS.swift)
-- [TerminalPaneSSHCoordinator.swift](../../../Orlix/Orlix/Features/TerminalSessions/UI/Terminal/TerminalPaneSSHCoordinator.swift)
+- [GhosttyTerminalView+iOS.swift](../../../Orlix/Orlix/Features/TerminalSessions/UI/Ghostty/iOS/View/GhosttyTerminalView+iOS.swift)
+- [GhosttyTerminalView+macOS.swift](../../../Orlix/Orlix/Features/TerminalSessions/UI/Ghostty/macOS/Surface/GhosttyTerminalView+macOS.swift)
+- [TerminalPaneSSHCoordinator.swift](../../../Orlix/Orlix/Features/TerminalSessions/Application/Connection/TerminalPaneSSHCoordinator.swift)
 
 Important distinction:
 - Ghostty clipboard callbacks remain for terminal-native text copy/paste.
@@ -222,7 +222,7 @@ enum RichPasteOutcome {
 Use the existing SSH connection as a control/transfer channel.
 
 V1 preferred implementation after Kitty capability has been ruled out or disabled:
-- add an SSH upload primitive in [SSHClient.swift](../../../Orlix/Orlix/Core/SSH/SSHClient.swift)
+- add an SSH upload primitive in [SSHClient.swift](../../../Orlix/Orlix/Core/SSH/Client/SSHClient.swift)
 - create remote directories with `execute(...)`
 - transfer file bytes with a dedicated SFTP or SCP-style implementation
 

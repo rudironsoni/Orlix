@@ -5,25 +5,52 @@ import SwiftUI
 struct ServerRow: View {
     let server: Server
     let isSelected: Bool
+    let isLocked: Bool
     let onSelect: () -> Void
     let onEdit: (Server) -> Void
     var onMove: ((Server) -> Void)? = nil
-    var onConnect: ((Server) -> Void)? = nil
+    let onDuplicate: (Server) -> Void
+    let onWake: (Server) -> Void
+    let onConnect: (Server) -> Void
     var onLockedTap: (() -> Void)? = nil
 
-    @ObservedObject private var tabManager = TerminalTabManager.shared
-    @ObservedObject private var serverManager = ServerManager.shared
+    @ObservedObject private var serverManager: ServerManager
+    @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
     #endif
 
-    private var isLocked: Bool {
-        serverManager.isServerLocked(server)
+    init(
+        serverManager: ServerManager,
+        terminalNavigation: TerminalSessionNavigationProjection,
+        server: Server,
+        isSelected: Bool,
+        isLocked: Bool,
+        onSelect: @escaping () -> Void,
+        onEdit: @escaping (Server) -> Void,
+        onMove: ((Server) -> Void)? = nil,
+        onDuplicate: @escaping (Server) -> Void,
+        onWake: @escaping (Server) -> Void,
+        onConnect: @escaping (Server) -> Void,
+        onLockedTap: (() -> Void)? = nil
+    ) {
+        _serverManager = ObservedObject(wrappedValue: serverManager)
+        _terminalNavigation = ObservedObject(wrappedValue: terminalNavigation)
+        self.server = server
+        self.isSelected = isSelected
+        self.isLocked = isLocked
+        self.onSelect = onSelect
+        self.onEdit = onEdit
+        self.onMove = onMove
+        self.onDuplicate = onDuplicate
+        self.onWake = onWake
+        self.onConnect = onConnect
+        self.onLockedTap = onLockedTap
     }
 
     private var tabCount: Int {
-        tabManager.tabs(for: server.id).count
+        terminalNavigation.state.tabCountsByServer[server.id, default: 0]
     }
 
     private var selectedForegroundColor: Color {
@@ -72,22 +99,18 @@ struct ServerRow: View {
                             Label("Move to Workspace", systemImage: "arrow.turn.right.up")
                         }
                     }
+                    duplicateButton
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }
                     Button(role: .destructive) {
-                        Task { try? await ServerManager.shared.deleteServer(server) }
+                        Task { try? await serverManager.deleteServer(server) }
                     } label: {
                         Label("Delete Server", systemImage: "trash")
                     }
                 } else {
                     Button {
-                        if let onConnect {
-                            onConnect(server)
-                        } else {
-                            tabManager.selectedViewByServer[server.id] = ViewTabConfigurationManager.shared.effectiveDefaultTab()
-                            tabManager.connectedServerIds.insert(server.id)
-                        }
+                        onConnect(server)
                     } label: {
                         Label("Open Connection", systemImage: "point.forward.to.point.capsulepath.fill")
                     }
@@ -96,17 +119,29 @@ struct ServerRow: View {
                             Label("Move to Workspace", systemImage: "arrow.turn.right.up")
                         }
                     }
+                    duplicateButton
+                    ServerWakeActionButton(
+                        serverID: server.id,
+                        onAction: { onWake(server) }
+                    )
                     Button { onEdit(server) } label: {
                         Label("Server Settings", systemImage: "slider.horizontal.3")
                     }
                     Divider()
                     Button(role: .destructive) {
-                        Task { try? await ServerManager.shared.deleteServer(server) }
+                        Task { try? await serverManager.deleteServer(server) }
                     } label: {
                         Label("Delete Server", systemImage: "trash")
                     }
                 }
             }
+    }
+
+    private var duplicateButton: some View {
+        Button { onDuplicate(server) } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        .accessibilityIdentifier("orlix.serverList.duplicate.\(server.id.uuidString)")
     }
 
     private var serverLabel: some View {

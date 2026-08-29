@@ -4,11 +4,13 @@ import UIKit
 
 #if os(iOS)
 struct DefaultLocalInstanceTerminalView: View {
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Orlix Dark"
     @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Orlix Light"
     @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
+    @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
 
     private var effectiveThemeName: String {
         guard usePerAppearanceTheme else { return terminalThemeName }
@@ -17,7 +19,13 @@ struct DefaultLocalInstanceTerminalView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            DefaultLocalInstanceTerminalRepresentable(size: geometry.size)
+            DefaultLocalInstanceTerminalRepresentable(
+                size: geometry.size,
+                terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                    profile: terminalAccessoryPreferencesManager.profile,
+                    showsDismissKeyboardButton: keyboardDismissButtonEnabled
+                )
+            )
         }
         .background(ThemeColorParser.backgroundColor(for: effectiveThemeName)!)
         .navigationTitle("Orlix")
@@ -29,9 +37,10 @@ struct DefaultLocalInstanceTerminalView: View {
 }
 
 private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
-    @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
 
     let size: CGSize
+    let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -45,6 +54,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
         uiView.installTerminalIfNeeded(
             app: ghosttyApp.app,
             appWrapper: ghosttyApp,
+            terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
             coordinator: context.coordinator
         )
         uiView.updateAvailableSize(size)
@@ -75,7 +85,8 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
 
         func installTerminalIfNeeded(
             app: ghostty_app_t?,
-            appWrapper: Ghostty.App,
+            appWrapper: GhosttyRuntime,
+            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot,
             coordinator: Coordinator
         ) {
             guard terminal == nil, let app else { return }
@@ -89,6 +100,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
                 ghosttyApp: app,
                 appWrapper: appWrapper,
                 paneId: "orlix.local.default",
+                terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
                 useCustomIO: true
             )
             terminal.accessibilityIdentifier = "orlix.local-instance.terminal"

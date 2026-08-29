@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "Orlix używa Face ID do odblokowania aplikacji i chronionych serwerów.";
+"NSLocalNetworkUsageDescription" = "Orlix używa sieci lokalnej do znajdowania, wybudzania i łączenia z serwerami SSH.";

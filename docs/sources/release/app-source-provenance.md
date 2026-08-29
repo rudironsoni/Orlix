@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-27
+updated: 2026-08-29
 status: current
 summary: "Canonical repository source for app source provenance."
 ---
@@ -16,16 +16,15 @@ This document records the immutable source and native artifact inputs for the Or
 ## Source import
 
 - Upstream: `https://github.com/vivy-company/vvterm.git`
-- Pinned upstream commit: `791eebae946b0831ffff3ac839e0f2b75d076458`
-- Retrieval date: 2026-07-13
+- Pinned upstream commit: `31120756133d22e526d01c630c680bd949dda730`
+- Pinned upstream tree: `f0e529842c8f967a5f19748a63399d276215092e`
+- Retrieval date: 2026-08-29
 - Current Orlix fork path: `Orlix`
-- Import method: single-parent source snapshot
-- Upstream tree: `ad7e13ae260293aa5aa2fcce6bcde240617eb383`
-- Orlix snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`
+- Import method: three-way vendored source snapshot
 
-The source snapshot was imported at `Orlix/VVTerm` and then renamed and later flattened into `Orlix`. The snapshot tree exactly matches the pinned upstream tree, but the upstream repository commit ancestry is not part of Orlix history.
+The source snapshot is tracked as normal Orlix files. The upstream repository history is not part of Orlix history. The release record stores the exact upstream commit and tree instead.
 
-Updates must fetch an explicitly reviewed full commit, check it out in a temporary directory, replace the imported source files, and commit the result as a normal single-parent Orlix snapshot. A branch name alone is never a release input:
+`make vvterm-sync VVTERM_COMMIT=<full-reviewed-commit>` fetches the old and new snapshots into temporary repositories, applies the versioned branding policy to both, and performs a three-way merge with the tracked Orlix source. Reviewed conflict decisions live under `Orlix/make/vvterm-resolutions`. `make vvterm-sync-complete VVTERM_COMMIT=<full-reviewed-commit>` records the new immutable source inputs. A branch name alone is never a release input.
 
 ```sh
 git clone --no-checkout https://github.com/vivy-company/vvterm.git /tmp/orlix-app-source
@@ -33,7 +32,7 @@ git -C /tmp/orlix-app-source fetch origin <full-reviewed-commit>
 git -C /tmp/orlix-app-source checkout --detach <full-reviewed-commit>
 ```
 
-Copy the reviewed working tree into `Orlix` without its `.git` directory, then compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline provenance reference. `project.yml` remains the authoritative Orlix project definition.
+The sync keeps legal attribution unchanged, keeps Orlix product identity as a versioned overlay, and keeps OrlixOS local-terminal integration as an explicit manual overlay. The upstream Xcode project is retained only as a baseline provenance reference. `project.yml` remains the authoritative Orlix project definition.
 
 ## Swift package baseline
 
@@ -43,13 +42,13 @@ The pinned baseline `Package.resolved` records:
 | --- | --- | --- |
 | `mlx-swift` | 0.29.1, latest compatible with iOS 16.1 | `072b684acaae80b6a463abab3a103732f33774bf` |
 | `swift-cloudflared` | 0.1.2 | `1be78afe5dae7a20ce0837ce34085f03a77f7587` |
-| `swift-mosh` | 0.1.6 | `bb4eacdf65303b2ecce624a91e98298c4ee94fca` |
+| `swift-et` | 0.1.5 | `2e43ccd70cd74cd46e18a92d20a0ea7547ba42ed` |
+| `swift-mosh` | 0.1.8 | `9677768702727ba9094d4936062a452b9c544480` |
 | `swift-numerics` | 1.1.1 | `0c0290ff6b24942dadb83a929ffaaa1481df04a2` |
-| `swift-umami` | mutable `main` declaration in the source baseline | `e7a14c16d745ec1d7e4355f35407f8407808475a` in the baseline lockfile |
-| `tweetnacl-swiftwrap` | current upstream `master` | `a7776eb5388467ec553b855846e24438288e2da5` |
-| `ZIPFoundation` | 0.9.20 | `22787ffb59de99e5dc1fbfe80b19c97a904ad48d` |
+| `tweetnacl-swiftwrap` | 1.1.0 | `f8fd111642bf2336b11ef9ea828510693106e954` |
+| `ZIPFoundation` | 0.9.9 | `edbeaa39b426e54702194b0a601342322f01e400` |
 
-Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned baseline dependency remains recorded here only so the pristine source graph remains auditable.
+Orlix release inputs use immutable revisions in `project.yml`. SwiftUmami is absent from the Orlix graph. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`.
 
 ## Authoritative release inputs
 
@@ -62,11 +61,11 @@ This check proves engineering release-input integrity only. It does not approve 
 ## Native source versions and rebuild entry points
 
 - Ghostty fork repository: `https://github.com/wiedymi/ghostty.git`
-- Ghostty source commit: `268a0a9d761fb19673f05d28042488e2002300f2`
+- Ghostty source commit: `02af5158c76036291183e746d436eb8f15356662`
 - OpenSSL: 3.2.0
 - OpenSSL source archive SHA-256: `14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e`
-- libssh2: 1.11.0
-- libssh2 source archive SHA-256: `3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461`
+- libssh2: 1.11.1
+- libssh2 source archive SHA-256: `d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7`
 
 The imported rebuild entry points are:
 
@@ -79,25 +78,25 @@ The Ghostty Make rule must default to the full pinned commit above, not the muta
 
 ## Committed native artifact hashes
 
-Hashes use SHA-256 and were recomputed after the Orlix identity correction. The six Ghostty archives received a length-preserving replacement of a stale embedded source-product identifier with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed foreign developer workspace paths. The resulting archives passed format checks and the final application linked successfully.
+Hashes use SHA-256. The compatibility archives are byte copies of the exact current `GhosttyKit.xcframework` slices. A clean Ghostty rebuild requires Zig 0.16. The nine OpenSSL and libssh2 archives come from the reviewed vvterm source snapshot.
 
 | Artifact | SHA-256 |
 | --- | --- |
-| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64-simulator/libghostty-fat.a` | `988be2b71cd39268d6bd37ad837c4eefe7d303e628c97b2e1904c82a8e9f3434` |
-| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64/libghostty-fat.a` | `be381b87be062209f3df3436ab6323a2ccaab90b4d7085285cb247b02d3c011e` |
-| `Vendor/libghostty/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a` | `24657ed0d641468e33adb4e94f57482a1c888373eb95530095e60f302aa9d961` |
-| `Vendor/libghostty/ios-simulator/lib/libghostty.a` | `a6f574a9ae82841c5352040a250a088ea709666872b1632f7e4365ffd0932d4e` |
-| `Vendor/libghostty/ios/lib/libghostty.a` | `174ba3a25d226c4e8d389be1414d525d2329beb97662efc45b4937f71ab9b9d4` |
-| `Vendor/libghostty/lib/libghostty.a` | `4d7e2fde81f3b2a65510eebb7f4b5283cb6bed4fa640887d2d86aeca20b1d5ba` |
-| `Vendor/libssh2/ios-simulator/lib/libcrypto.a` | `dfeea8d36da6f355a7c6fde456f4fddecc3bf0a744f54d72d56ee35283493b44` |
-| `Vendor/libssh2/ios-simulator/lib/libssh2.a` | `903fb853fd3a89f237e38e48cab0487ae3470c7dcbaa655c008988ab15888eab` |
-| `Vendor/libssh2/ios-simulator/lib/libssl.a` | `c674f7ab79f41e4d4cc37b5a1c24ec9ee7532b07093fe78f9bd2189b21c530b1` |
-| `Vendor/libssh2/ios/lib/libcrypto.a` | `36c18281e9bd8a38a5f4398c1c928fd8b021622239beac3e01786819b86803f5` |
-| `Vendor/libssh2/ios/lib/libssh2.a` | `77e1817bd3a5e30cb71ea7779e368df77e4e26cd8fed050edd14676b342f7cf1` |
-| `Vendor/libssh2/ios/lib/libssl.a` | `d4772f6bb8c3e271f255b6ac16fbe72a9070537e28fa778b10adca6dc0d0fe70` |
-| `Vendor/libssh2/macos/lib/libcrypto.a` | `5cf352407c36053b23b33c03c3873481c1201fee54b912cf3465388a7aa1107c` |
-| `Vendor/libssh2/macos/lib/libssh2.a` | `ada64acbb596b5d22ae8a7d58c5b00499004dad8f636ea0e57770b688b463de7` |
-| `Vendor/libssh2/macos/lib/libssl.a` | `783e6581ccd9cf57757b1cf011460688b759b2df20875ff01a6ff2186dcbc0f0` |
+| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64-simulator/libghostty-internal.a` | `cbd282ed129307d339d5e683ba2991488b41c5b1101fada605717383487913de` |
+| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64/libghostty-internal.a` | `55868b8e16e3c353f68781dc735eb96846d80e727ced0b7923e746684d475872` |
+| `Vendor/libghostty/GhosttyKit.xcframework/macos-arm64_x86_64/ghostty-internal.a` | `9e99fa3d59f5880e74d75b30981aea3d4c08304fcb4e3044f6a85fb0cbbcad0c` |
+| `Vendor/libghostty/ios-simulator/lib/libghostty.a` | `cbd282ed129307d339d5e683ba2991488b41c5b1101fada605717383487913de` |
+| `Vendor/libghostty/ios/lib/libghostty.a` | `55868b8e16e3c353f68781dc735eb96846d80e727ced0b7923e746684d475872` |
+| `Vendor/libghostty/lib/libghostty.a` | `9e99fa3d59f5880e74d75b30981aea3d4c08304fcb4e3044f6a85fb0cbbcad0c` |
+| `Vendor/libssh2/ios-simulator/lib/libcrypto.a` | `c618efac6f2ac9be1835674d77a43bde6b68eb2260c0c9ee2271bcfc1cf407f3` |
+| `Vendor/libssh2/ios-simulator/lib/libssh2.a` | `808a31d31ffc68a24a01eb4e46818016e4f7a04d76986a1a6711c1c818eda3c5` |
+| `Vendor/libssh2/ios-simulator/lib/libssl.a` | `8c63c4680bb489f96c641fc9ed88521349199007e222a13f9970cd381800c64e` |
+| `Vendor/libssh2/ios/lib/libcrypto.a` | `3c2e4ab5c97be967260ddcd59ff937f4bbf1cc46fae213cf752b26881a7ba69a` |
+| `Vendor/libssh2/ios/lib/libssh2.a` | `bc6f1296c3259c450f2c0474b6ca53da8d75e4f9b77de1d929826b59a08490cc` |
+| `Vendor/libssh2/ios/lib/libssl.a` | `770a4621bb427e9611a9aff86d3253be405b0236852dcaf7780dd8add3d98b3a` |
+| `Vendor/libssh2/macos/lib/libcrypto.a` | `fc13163d3dfce34f74ff06feb057a9eae546c729aa3ce4c1e87cc8121fdbde03` |
+| `Vendor/libssh2/macos/lib/libssh2.a` | `18e3a6157d62389311d713cdfb5b5d6c36fe4f43a9f3ede9296df2f55e4b515d` |
+| `Vendor/libssh2/macos/lib/libssl.a` | `db8e9f2ce6f9aa1c1a5ae9a768048170784acc9e720f2c0b3e600896d5f3ac8d` |
 
 ## Licenses and notices
 

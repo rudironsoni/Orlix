@@ -1,6 +1,6 @@
 //
 //  LoggerExtension.swift
-//  orlix
+//  Orlix
 //
 //  Unified logging utility for the application
 //
@@ -52,7 +52,7 @@ enum DebugLogConfiguration {
         var values: [String] = []
         values.append(contentsOf: argumentValues(named: "--orlix-debug-log", in: arguments))
         values.append(contentsOf: argumentValues(named: "--orlix-debug-logs", in: arguments))
-        if let environmentValue = environment["ORLIX_DEBUG_LOGS"] {
+        if let environmentValue = environment["VVTERM_DEBUG_LOGS"] {
             values.append(environmentValue)
         }
         return Set(values.flatMap(splitCategories).map(normalize))
@@ -86,5 +86,11 @@ enum DebugLogConfiguration {
 
     nonisolated private static func normalize(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+enum LogPrivacy {
+    nonisolated static func errorClass(_ error: Error) -> String {
+        String(reflecting: type(of: error))
     }
 }

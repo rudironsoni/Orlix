@@ -19,7 +19,7 @@ from typing import Iterable
 
 UPSTREAM_REPOSITORY = "https://github.com/vivy-company/vvterm.git"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
-BRAND_TOKEN = re.compile(r"VVTerm|vvterm")
+BRAND_TOKEN = re.compile(r"VVTerm|vvterm|VivyTerm|vivyterm|Aizen|app\.vivy|com\.vivy")
 CONFLICT_MARKERS = (b"<<<<<<< ", b"=======", b">>>>>>> ")
 IGNORED_SCAN_PARTS = {".build", "__pycache__", "xcuserdata"}
 
@@ -81,6 +81,8 @@ def path_matches(path: str, patterns: Iterable[str]) -> bool:
 
 
 def mapped_path(path: str, policy: dict) -> str:
+    if path_matches(path, policy.get("preserve_paths", [])):
+        return path
     result = path
     for old, new in policy["path_replacements"]:
         result = result.replace(old, new)
@@ -158,6 +160,34 @@ def copy_tree(source: Path, destination: Path, *, keep_git: bool = False) -> Non
             shutil.copy2(child, target, follow_symlinks=False)
 
 
+def materialize_ghostty_compatibility_layout(source_root: Path) -> None:
+    """Expose the current GhosttyKit slices through Orlix's existing linker layout."""
+    vendor = source_root / "Vendor/libghostty"
+    xcframework = vendor / "GhosttyKit.xcframework"
+    slices = (
+        ("macos-arm64_x86_64", "ghostty-internal.a", "."),
+        ("ios-arm64", "libghostty-internal.a", "ios"),
+        ("ios-arm64-simulator", "libghostty-internal.a", "ios-simulator"),
+    )
+    for slice_name, archive_name, destination_name in slices:
+        slice_root = xcframework / slice_name
+        archive = slice_root / archive_name
+        headers = slice_root / "Headers"
+        if not archive.is_file() or not headers.is_dir():
+            raise SyncError(f"GhosttyKit slice is incomplete: {slice_name}")
+        destination = vendor / destination_name
+        (destination / "lib").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(archive, destination / "lib/libghostty.a")
+        shutil.copytree(headers, destination / "include", dirs_exist_ok=True, copy_function=shutil.copy2)
+
+    shutil.copytree(
+        xcframework / "macos-arm64_x86_64/Headers",
+        vendor / "include",
+        dirs_exist_ok=True,
+        copy_function=shutil.copy2,
+    )
+
+
 def export_tracked_subtree(repo_root: Path, prefix: str, destination: Path) -> None:
     remove_tree_contents(destination)
     output = run(["git", "ls-files", "-z", "--", prefix], cwd=repo_root).stdout
@@ -229,6 +259,19 @@ def fetch_snapshot(repository: str, commit: str, destination: Path) -> str:
     tree = run(["git", "rev-parse", "FETCH_HEAD^{tree}"], cwd=destination).stdout.decode().strip()
     run(["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"], cwd=destination)
     return tree
+
+
+def copy_one_file(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() or destination.is_symlink():
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
+    if source.is_symlink():
+        destination.symlink_to(os.readlink(source))
+    else:
+        shutil.copy2(source, destination, follow_symlinks=False)
 
 
 def git_commit_all(repo: Path, message: str) -> str:
@@ -352,6 +395,92 @@ def perform_sync(repo_root: Path, target_commit: str) -> None:
         print("run make vvterm-sync-complete VVTERM_COMMIT=" + target_commit)
 
 
+def validated_resolution_paths(resolution: dict, expected: set[str]) -> tuple[list[str], list[str], list[str]]:
+    actions = tuple(resolution.get(name, []) for name in ("upstream", "delete", "manual"))
+    for action_paths in actions:
+        if not isinstance(action_paths, list) or not all(isinstance(path, str) for path in action_paths):
+            raise SyncError("resolution actions must be arrays of relative paths")
+        for path in action_paths:
+            candidate = Path(path)
+            if candidate.is_absolute() or ".." in candidate.parts:
+                raise SyncError(f"unsafe resolution path: {path!r}")
+    selected = [path for action_paths in actions for path in action_paths]
+    if len(selected) != len(set(selected)):
+        raise SyncError("resolution manifest assigns one path more than once")
+    selected_set = set(selected)
+    if selected_set != expected:
+        missing = sorted(expected - selected_set)
+        extra = sorted(selected_set - expected)
+        raise SyncError(f"resolution manifest mismatch; missing={missing}, extra={extra}")
+    return actions
+
+
+def apply_resolution(repo_root: Path, resolution_file: Path) -> None:
+    state_file = state_path(repo_root)
+    pending_conflicts = conflict_path(repo_root)
+    if not state_file.is_file() or not pending_conflicts.is_file():
+        raise SyncError("no pending vvterm conflict state exists")
+    state = load_json(state_file)
+    resolution = load_json(resolution_file)
+    if resolution.get("commit") != state.get("new_commit"):
+        raise SyncError("resolution manifest commit does not match the pending sync")
+    policy_version = int(resolution.get("branding_policy_version", 0))
+    selected_policy_path = policy_path(repo_root, policy_version)
+    policy = load_json(selected_policy_path)
+    expected = {
+        line.strip()
+        for line in pending_conflicts.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    upstream_paths, delete_paths, manual_paths = validated_resolution_paths(resolution, expected)
+
+    with tempfile.TemporaryDirectory(prefix="orlix-vvterm-resolution.") as temporary:
+        work = Path(temporary)
+        checkout = work / "upstream"
+        tree = fetch_snapshot(UPSTREAM_REPOSITORY, str(state["new_commit"]), checkout)
+        if tree != state.get("new_tree"):
+            raise SyncError(f"resolution source tree mismatch: expected {state.get('new_tree')}, got {tree}")
+        normalized = work / "normalized"
+        normalize_tree(checkout, normalized, policy)
+        source_root = repo_root / str(state["path"])
+        for relative in upstream_paths:
+            source = normalized / relative
+            if not source.is_file() and not source.is_symlink():
+                raise SyncError(f"reviewed upstream resolution path is missing: {relative}")
+            copy_one_file(source, source_root / relative)
+        for relative in delete_paths:
+            destination = source_root / relative
+            if destination.is_dir() and not destination.is_symlink():
+                raise SyncError(f"reviewed delete path unexpectedly names a directory: {relative}")
+            destination.unlink(missing_ok=True)
+
+    state["new_branding_policy_version"] = policy_version
+    state["new_branding_policy_sha256"] = file_sha256(selected_policy_path)
+    state["conflicts"] = manual_paths
+    write_json(state_file, state)
+    pending_conflicts.write_text("\n".join(manual_paths) + ("\n" if manual_paths else ""), encoding="utf-8")
+    print(f"applied {len(upstream_paths)} upstream and {len(delete_paths)} delete resolutions")
+    print(f"manual conflicts remaining: {len(manual_paths)}")
+
+
+def reconcile_pending_source(repo_root: Path) -> None:
+    pending = state_path(repo_root)
+    if not pending.is_file():
+        raise SyncError("no pending vvterm sync state exists")
+    state = load_json(pending)
+    version = int(state["new_branding_policy_version"])
+    policy = load_json(policy_path(repo_root, version))
+    source_root = repo_root / str(state["path"])
+    with tempfile.TemporaryDirectory(prefix="orlix-vvterm-reconcile.") as temporary:
+        normalized = Path(temporary) / "normalized"
+        normalize_tree(source_root, normalized, policy)
+        replace_tracked_subtree(repo_root, str(state["path"]), normalized)
+    materialize_ghostty_compatibility_layout(source_root)
+    state["new_branding_policy_sha256"] = file_sha256(policy_path(repo_root, version))
+    write_json(state_path(repo_root), state)
+    print(f"applied vvterm branding policy v{version}")
+
+
 def text_files(root: Path) -> Iterable[tuple[Path, bytes]]:
     for path in root.rglob("*"):
         if any(part in IGNORED_SCAN_PARTS for part in path.relative_to(root).parts):
@@ -371,7 +500,10 @@ def text_files(root: Path) -> Iterable[tuple[Path, bytes]]:
 def check_conflict_markers(root: Path) -> list[str]:
     failures: list[str] = []
     for path, data in text_files(root):
-        if any(line.startswith(CONFLICT_MARKERS) for line in data.splitlines()):
+        if any(
+            line.startswith(b"<<<<<<< ") or line == b"=======" or line.startswith(b">>>>>>> ")
+            for line in data.splitlines()
+        ):
             failures.append(path.relative_to(root).as_posix())
     return failures
 
@@ -522,6 +654,9 @@ def parse_args() -> argparse.Namespace:
     sync_parser.add_argument("--commit", required=True)
     complete_parser = subparsers.add_parser("complete")
     complete_parser.add_argument("--commit", required=True)
+    resolve_parser = subparsers.add_parser("resolve")
+    resolve_parser.add_argument("--manifest", required=True, type=Path)
+    subparsers.add_parser("reconcile")
     subparsers.add_parser("check")
     tests_parser = subparsers.add_parser("upstream-tests")
     tests_parser.add_argument("--destination", required=True)
@@ -536,6 +671,10 @@ def main() -> int:
             perform_sync(root, arguments.commit)
         elif arguments.command == "complete":
             complete_sync(root, arguments.commit)
+        elif arguments.command == "resolve":
+            apply_resolution(root, arguments.manifest)
+        elif arguments.command == "reconcile":
+            reconcile_pending_source(root)
         elif arguments.command == "check":
             check_source(root)
         elif arguments.command == "upstream-tests":

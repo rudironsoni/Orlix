@@ -13,7 +13,6 @@ import UIKit
 // MARK: - Contact Option
 
 private struct ContactOption: Identifiable {
-    let id = UUID()
     let title: String
     let subtitle: String
     let icon: String
@@ -21,17 +20,21 @@ private struct ContactOption: Identifiable {
     let iconText: String?
     let color: Color
     let url: String
+
+    var id: String { url }
 }
 
 private let contactOptions: [ContactOption] = [
-    ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/Orlix/issues")
+    ContactOption(title: String(localized: "Developer"), subtitle: "@wiedymi", icon: "", iconImage: nil, iconText: "𝕏", color: .primary, url: "https://x.com/wiedymi"),
+    ContactOption(title: String(localized: "Discord"), subtitle: String(localized: "Join Community"), icon: "", iconImage: "DiscordLogo", iconText: nil, color: Color(red: 0.345, green: 0.396, blue: 0.949), url: "https://discord.gg/zemMZtrkSb"),
+    ContactOption(title: String(localized: "Email"), subtitle: "github.com/rudironsoni/Orlix/issues", icon: "envelope.fill", iconImage: nil, iconText: nil, color: .orange, url: "https://github.com/rudironsoni/Orlix/issues")
 ]
 
 // MARK: - About Settings View
 
 struct AboutSettingsView: View {
-    @StateObject private var storeManager = StoreManager.shared
-    @State private var showingReviewSheet = false
+    @Environment(\.openURL) private var openURL
+    @State private var isShowingOpenSourceLicenses = false
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
@@ -77,7 +80,7 @@ struct AboutSettingsView: View {
 
     private var copyrightLine: String {
         let year = Calendar.current.component(.year, from: Date())
-        return String(format: String(localized: "© %lld Orlix"), Int64(year))
+        return "© \(year) Orlix"
     }
 
     var body: some View {
@@ -98,11 +101,8 @@ struct AboutSettingsView: View {
                     Text(verbatim: "Version \(appVersion) (\(buildNumber))")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .onTapGesture(count: 7) {
-                            showingReviewSheet = true
-                        }
 
-                    Text("Professional SSH client\nfor iPhone & iPad")
+                    Text("Professional SSH client\nfor macOS & iOS")
                         .font(.footnote)
                         .foregroundStyle(subtitleColor)
                         .multilineTextAlignment(.center)
@@ -111,40 +111,22 @@ struct AboutSettingsView: View {
                 .padding(.vertical, 20)
             }
 
-            Section("Support") {
+            Section("Help & Feedback") {
+                Link(destination: URL(string: "https://apps.apple.com/app/id6757482822?action=write-review")!) {
+                    Label("Rate Orlix", systemImage: "star")
+                }
+                .tint(.primary)
+                .foregroundStyle(.primary)
+
                 Link(destination: URL(string: "https://github.com/rudironsoni/Orlix/issues")!) {
                     Label("Report an Issue", systemImage: "exclamationmark.bubble")
                 }
                 .tint(.primary)
                 .foregroundStyle(.primary)
-            }
 
-            Section("Links") {
-                Link(destination: URL(string: "https://github.com/rudironsoni/Orlix")!) {
-                    Label("Visit Website", systemImage: "globe")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-
-                Link(destination: URL(string: "https://github.com/rudironsoni/Orlix")!) {
-                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-            }
-
-            Section("Legal") {
-                Link(destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!) {
-                    Label("Terms of Use (EULA)", systemImage: "doc.text")
-                }
-                .tint(.primary)
-                .foregroundStyle(.primary)
-            }
-
-            Section("Get in Touch") {
                 ForEach(contactOptions) { option in
                     Button {
-                        openURL(option.url)
+                        openExternalURL(option.url)
                     } label: {
                         HStack(spacing: 14) {
                             Group {
@@ -184,10 +166,41 @@ struct AboutSettingsView: View {
                 }
             }
 
+            Section("Links") {
+                Link(destination: URL(string: "https://orlix.com")!) {
+                    Label("Visit Website", systemImage: "globe")
+                }
+                .tint(.primary)
+                .foregroundStyle(.primary)
+
+                Link(destination: URL(string: "https://github.com/rudironsoni/Orlix")!) {
+                    Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                .tint(.primary)
+                .foregroundStyle(.primary)
+            }
+
+            Section("Open Source") {
+                Button {
+                    isShowingOpenSourceLicenses = true
+                } label: {
+                    HStack {
+                        Label("Open Source & Licenses", systemImage: "doc.text.magnifyingglass")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("orlix.settings.openSourceLicenses")
+            }
+
             Section {
                 #if os(iOS)
                 Button {
-                    openURL("https://github.com/rudironsoni/Orlix")
+                    openExternalURL("https://x.com/vivytech")
                 } label: {
                     HStack {
                         Text(verbatim: copyrightLine)
@@ -210,168 +223,14 @@ struct AboutSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $showingReviewSheet) {
-            ReviewModeSheet()
-                .adaptiveSoftScrollEdges()
-        }
         .adaptiveSoftScrollEdges()
+        .sheet(isPresented: $isShowingOpenSourceLicenses) {
+            OpenSourceLicensesView()
+        }
     }
 
-    private func openURL(_ urlString: String) {
+    private func openExternalURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        #if os(macOS)
-        NSWorkspace.shared.open(url)
-        #else
-        UIApplication.shared.open(url)
-        #endif
-    }
-}
-
-// MARK: - Review Mode Sheet
-
-private struct ReviewModeSheet: View {
-    @ObservedObject private var storeManager = StoreManager.shared
-    @State private var reviewCode = ""
-    @State private var reviewError: String?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    statusCard
-                    if storeManager.isReviewModeEnabled {
-                        enabledSection
-                    } else {
-                        codeSection
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(24)
-                #if os(macOS)
-                .frame(minWidth: 420, maxWidth: 520)
-                #endif
-            }
-            .navigationTitle("App Review")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .adaptiveSoftScrollEdges()
-    }
-
-    private var header: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.16))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.green)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Review Mode")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                Text("Unlocks Pro features and loads demo servers for App Review.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var statusCard: some View {
-        HStack {
-            Text("Status")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(storeManager.isReviewModeEnabled ? "Enabled" : "Disabled")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(storeManager.isReviewModeEnabled ? Color.green.opacity(0.18) : Color.secondary.opacity(0.12))
-                )
-                .foregroundStyle(storeManager.isReviewModeEnabled ? .green : .secondary)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
-    }
-
-    private var enabledSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Review mode is active on this device.")
-                .font(.subheadline)
-            Text("Pro features are unlocked. Review mode expires after 5 hours or when the app restarts.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Button("Disable Review Mode") {
-                storeManager.setReviewModeEnabled(false)
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
-    }
-
-    private var codeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Enter the review code to enable Pro access for App Review.")
-                .font(.subheadline)
-            #if os(iOS)
-            TextField("Review Code", text: $reviewCode)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
-            #else
-            TextField("Review Code", text: $reviewCode)
-                .textFieldStyle(.roundedBorder)
-            #endif
-
-            Button("Enable Review Mode") {
-                let success = storeManager.enableReviewMode(code: reviewCode)
-                if success {
-                    reviewError = nil
-                    reviewCode = ""
-                } else {
-                    reviewError = String(localized: "Invalid review code.")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(reviewCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            if let reviewError {
-                Text(reviewError)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-
-            Text("Review mode is local-only and expires after 5 hours or when the app restarts.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
+        openURL(url)
     }
 }

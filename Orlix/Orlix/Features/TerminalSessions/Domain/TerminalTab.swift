@@ -64,38 +64,49 @@ struct TerminalTab: Identifiable, Equatable, Codable {
 // MARK: - Terminal Pane State
 
 /// State for a single terminal pane (leaf in split tree)
-struct TerminalPaneState {
+struct TerminalPaneState: Equatable {
     let paneId: UUID
     let tabId: UUID
     let serverId: UUID
     var connectionState: ConnectionState
+    var disconnectReason: TerminalDisconnectReason?
     private(set) var hasEstablishedConnection: Bool
     var lastActivity: Date
-    var tmuxStatus: TmuxStatus
+    var remoteSessionStatus: RemoteSessionStatus
     var workingDirectory: String?
     var presentationOverrides: TerminalPresentationOverrides
     var seedPaneId: UUID?
-    /// Runtime transport for this pane (never persisted).
-    var activeTransport: ShellTransport
-    /// Set only when this pane is running over SSH fallback from Mosh.
-    var moshFallbackReason: MoshFallbackReason?
+    /// Runtime transport and any valid Mosh fallback data for this pane (never persisted).
+    var transportState: ShellTransportState
+    /// Minimal non-secret context needed to recognize remote-session lifecycle markers
+    /// when an existing Mosh or ET session resumes after process relaunch.
+    var remoteSessionResumeContext: RemoteSessionLifecycleContext?
+    /// True after a startup action may have been dispatched. Automatic recovery
+    /// must not dispatch it again until normal completion clears this guard.
+    var startupActionReplayPending: Bool
 
     init(paneId: UUID, tabId: UUID, serverId: UUID) {
         self.paneId = paneId
         self.tabId = tabId
         self.serverId = serverId
         self.connectionState = .connecting
+        self.disconnectReason = nil
         self.hasEstablishedConnection = false
         self.lastActivity = Date()
-        self.tmuxStatus = .unknown
+        self.remoteSessionStatus = .unknown
         self.workingDirectory = nil
         self.presentationOverrides = .empty
         self.seedPaneId = nil
-        self.activeTransport = .ssh
-        self.moshFallbackReason = nil
+        self.transportState = .ssh
+        self.remoteSessionResumeContext = nil
+        self.startupActionReplayPending = false
     }
 
     mutating func markConnectionEstablished() {
         hasEstablishedConnection = true
     }
+
+    var activeTransport: ShellTransport { transportState.transport }
+    var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 }

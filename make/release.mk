@@ -26,7 +26,7 @@ __release-inputs-check: __release-manifest-check
 	done; \
 	manifest="$(ORLIX_RELEASE_MANIFEST)"; \
 	[ -f "$$manifest" ] || { echo "missing release-input manifest: $$manifest" >&2; exit 1; }; \
-	jq -e '.schema_version == 1' "$$manifest" >/dev/null || { echo "unsupported release-input manifest schema" >&2; exit 1; }; \
+	jq -e '.schema_version == 2' "$$manifest" >/dev/null || { echo "unsupported release-input manifest schema" >&2; exit 1; }; \
 	jq -e '(.swift_packages | length > 0) and all(.swift_packages[]; (.revision | test("^[0-9a-f]{40}$$")) and (.url | type == "string" and length > 0))' "$$manifest" >/dev/null || { echo "every Swift package must use a full commit and URL" >&2; exit 1; }; \
 	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-release-inputs.XXXXXX")"; \
 	trap 'rm -rf "$$tmp"' EXIT; \

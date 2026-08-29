@@ -3,6 +3,7 @@ import SwiftUI
 struct NoticeBannerView: View {
     let item: NoticeItem
     var surfaceStyle: NoticeSurfaceStyle = .standard
+    @State private var isShowingDetail = false
 
     var body: some View {
         NoticeGlassGroup(spacing: 10) {
@@ -25,10 +26,20 @@ struct NoticeBannerView: View {
 
                 Spacer(minLength: 8)
 
+                if item.detail != nil {
+                    Button(String(localized: "Details")) {
+                        isShowingDetail = true
+                    }
+                    .noticeSecondaryButtonStyle()
+                    .font(.caption.weight(.semibold))
+                    .accessibilityIdentifier("orlix.notice.details")
+                }
+
                 if let action = item.action {
                     Button(action.title, role: action.role, action: action.handler)
                         .noticeSecondaryButtonStyle()
                         .font(.caption.weight(.semibold))
+                        .accessibilityIdentifier("orlix.notice.action.\(action.id)")
                 }
 
                 if let dismissAction = item.dismissAction {
@@ -38,6 +49,8 @@ struct NoticeBannerView: View {
                             .foregroundStyle(surfaceStyle.secondaryForegroundColor)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "Dismiss"))
+                    .accessibilityIdentifier("orlix.notice.dismiss")
                 }
             }
             .padding(.horizontal, 14)
@@ -50,7 +63,13 @@ struct NoticeBannerView: View {
                 shadowRadius: 14,
                 shadowY: 8
             )
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("orlix.notice.banner")
+        }
+        .sheet(isPresented: $isShowingDetail) {
+            if let detail = item.detail {
+                NoticeDetailView(detail: detail)
+            }
         }
     }
 
@@ -80,4 +99,49 @@ struct NoticeBannerView: View {
         }
     }
 
+}
+
+private struct NoticeDetailView: View {
+    let detail: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var didCopy = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(detail)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .accessibilityIdentifier("orlix.notice.detailText")
+            }
+            .navigationTitle(String(localized: "Diagnostics"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Close")) {
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("orlix.notice.detailClose")
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Clipboard.copy(detail)
+                        didCopy = true
+                    } label: {
+                        Label(
+                            didCopy ? String(localized: "Copied") : String(localized: "Copy Diagnostics"),
+                            systemImage: didCopy ? "checkmark" : "doc.on.doc"
+                        )
+                    }
+                    .accessibilityIdentifier("orlix.notice.copyDiagnostics")
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 560, minHeight: 420)
+        #endif
+    }
 }
