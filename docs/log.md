@@ -965,3 +965,9 @@ Removed the machine-specific external-storage recovery procedure from the
 repository agent rules. Orlix verification now relies on repository-owned Make
 targets and reports unavailable app-hosted evidence directly instead of
 requiring a machine-local recovery helper.
+
+## [2026-08-29] correct | Remove volatile TCTI progress from the task object
+
+[CORRECTION] Removed copied cohort and proof status from the AArch64 coverage
+task. The task now owns only its durable completion boundary and remaining
+sequence. Current execution evidence stays in structured harness reports.
