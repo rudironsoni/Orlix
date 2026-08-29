@@ -36,7 +36,8 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
         #expect(terminal.setMouseReportingSuppressed(true))
         #expect(terminal.isMouseReportingSuppressed)
-        #expect(!surface.mouseCaptured)
+        #expect(terminal.isMouseCapturedForHostInteraction == false)
+        #expect(surface.sendMouseButton(.init(action: .press, button: .left, mods: [])) == false)
         #expect(observedStates == [true])
 
         #expect(terminal.setMouseReportingSuppressed(true))
@@ -44,7 +45,9 @@ struct GhosttyTerminalInteractionOwnershipTests {
 
         #expect(terminal.setMouseReportingSuppressed(false))
         #expect(!terminal.isMouseReportingSuppressed)
-        #expect(surface.mouseCaptured)
+        #expect(terminal.isMouseCapturedForHostInteraction)
+        #expect(surface.sendMouseButton(.init(action: .press, button: .left, mods: [])))
+        _ = surface.sendMouseButton(.init(action: .release, button: .left, mods: []))
         #expect(observedStates == [true, false])
 
         terminal.cleanup()
@@ -73,6 +76,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
         defer { terminal.cleanup() }
         terminal.setupWriteCallback()
         terminal.feedData(Data("\u{1B}[?1000h\u{1B}[?1006h".utf8))
+        terminal.keyboardUITestSetHardwareKeyboardAttached(false)
 
         let toolbar = try #require(terminal.resolvedInputAccessoryView() as? TerminalInputAccessoryView)
         let button = try #require(findView(

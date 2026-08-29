@@ -9,6 +9,10 @@
 import UIKit
 
 extension GhosttyTerminalView {
+    var isMouseCapturedForHostInteraction: Bool {
+        surface?.mouseCaptured == true && !isMouseReportingSuppressed
+    }
+
     @discardableResult
     func setMouseReportingSuppressed(
         _ isSuppressed: Bool,

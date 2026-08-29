@@ -65,7 +65,7 @@ extension GhosttyTerminalView: UIGestureRecognizerDelegate {
 extension GhosttyTerminalView {
     var allowsHostTextSelection: Bool {
         TerminalSelectionRoutingPolicy.shouldAllowHostSelection(
-            terminalMouseCaptured: surface?.mouseCaptured == true,
+            terminalMouseCaptured: isMouseCapturedForHostInteraction,
             selectionInteractionActive: hasActiveSelectionInteraction
         )
     }
@@ -155,7 +155,7 @@ extension GhosttyTerminalView {
 
         guard let surface,
               TerminalPointerInputRoutingPolicy.shouldSendDirectTouchClick(
-                  terminalMouseCaptured: surface.mouseCaptured,
+                  terminalMouseCaptured: isMouseCapturedForHostInteraction,
                   terminalInputAvailable: true,
                   selectionInteractionActive: selectionWasActive
               ) else {
@@ -227,7 +227,7 @@ extension GhosttyTerminalView {
         if TerminalPointerInputRoutingPolicy.shouldShowHostContextMenu(
             button: button,
             terminalHandledButtonPress: handled,
-            terminalMouseCaptured: surface.mouseCaptured
+            terminalMouseCaptured: isMouseCapturedForHostInteraction
         ) {
             showPointerContextMenu(at: location)
         }

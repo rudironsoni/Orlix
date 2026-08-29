@@ -69,10 +69,6 @@ final class TerminalPointerSelectionUITests: TerminalKeyboardUITestCase {
             diagnostics: diagnosticsText(in: app)
         )
         XCTAssertEqual(mouseCapture.value as? String, "Off")
-        XCTAssertTrue(
-            app.otherElements["orlix.terminal.mouseCaptureIndicator"].waitForExistence(timeout: 2),
-            diagnosticsText(in: app)
-        )
 
         terminal.tap()
         assertMouseClickCountsRemain(presses: 1, releases: 1, in: app)

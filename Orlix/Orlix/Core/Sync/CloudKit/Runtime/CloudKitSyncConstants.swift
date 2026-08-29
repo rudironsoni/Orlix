@@ -8,6 +8,9 @@ nonisolated enum CloudKitSyncConstants {
 
     static let syncEnabledKey = "iCloudSyncEnabled"
     static let pendingCloudKitSyncQueueStorageKey = "\(appPrefix).pendingCloudKitSyncQueue"
+    static let terminalThemeNameKey = "terminalThemeName"
+    static let terminalThemeNameLightKey = "terminalThemeNameLight"
+    static let terminalUsePerAppearanceThemeKey = "terminalUsePerAppearanceTheme"
 
     static func changeTokenKey(for zoneName: String = recordZoneName) -> String {
         "\(appPrefix).cloudkit.\(zoneName).token"

@@ -92,7 +92,7 @@ class GhosttyTerminalView: UIView {
 
     /// Reports a successful per-surface mouse reporting override change.
     var onMouseReportingSuppressionChange: ((Bool) -> Void)?
-    private(set) var isMouseReportingSuppressed = false
+    var isMouseReportingSuppressed = false
 
     /// App-owned pane actions invoked by local iPad keyboard shortcuts.
     var onPaneKeyboardShortcut: ((TerminalSplitCommand) -> Void)?

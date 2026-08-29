@@ -242,7 +242,7 @@ final class TerminalTabManager {
         snapshotStore: any TerminalTabSnapshotStoring,
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
-        remoteSessionConfiguration: TerminalRemoteSessionConfiguration = .testing,
+        remoteSessionConfiguration: TerminalRemoteSessionConfiguration? = nil,
         remoteSessions: any TerminalRemoteSessionServicing = UnavailableTerminalRemoteSessionService(),
         terminalSurfaceStore: any TerminalSurfaceStoring,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
@@ -254,7 +254,7 @@ final class TerminalTabManager {
                 networkReadinessPublisher: networkReadinessPublisher,
                 liveActivityRefresh: liveActivityRefresh
             ),
-            remoteSessionConfiguration: remoteSessionConfiguration,
+            remoteSessionConfiguration: remoteSessionConfiguration ?? .testing,
             remoteSessions: remoteSessions,
             terminalSurfaceStore: terminalSurfaceStore,
             eternalTerminalResumeStore: eternalTerminalResumeStore,

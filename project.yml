@@ -720,7 +720,7 @@ targets:
       - path: Orlix/OrlixUITests
         createIntermediateGroups: true
     dependencies:
-      - target: OrlixTestApp
+      - target: Orlix
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
@@ -995,12 +995,20 @@ schemes:
       targets:
         OrlixTestApp: all
         OrlixTests: test
-        OrlixUITests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - name: OrlixTests
+  "Orlix UI Tests":
+    build:
+      targets:
+        Orlix: all
+        OrlixUITests: test
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
         - name: OrlixUITests
   "Orlix Release UI Tests":
     build:

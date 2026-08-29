@@ -200,13 +200,13 @@ struct TerminalFontStoreTests {
 
     private func makeStore(
         repository: TerminalFontRepositoryStub,
-        cloud: TerminalFontCloudStub = TerminalFontCloudStub(),
+        cloud: TerminalFontCloudStub? = nil,
         isSyncEnabled: Bool = false
     ) -> TerminalFontStore {
         TerminalFontStore(
             dependencies: TerminalFontStoreDependencies(
                 repository: repository,
-                cloud: cloud,
+                cloud: cloud ?? TerminalFontCloudStub(),
                 mutationQueue: TerminalFontQueueStub(),
                 syncLifecycle: TerminalFontLifecycleStub(),
                 loadCatalog: { customFamilies in
