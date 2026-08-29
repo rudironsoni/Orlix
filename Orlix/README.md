@@ -1,10 +1,11 @@
 # Orlix
 
-[![macOS](https://img.shields.io/badge/macOS-13.3+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/Orlix)
-[![iOS](https://img.shields.io/badge/iOS-16.1+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/Orlix)
+[![macOS](https://img.shields.io/badge/macOS-13.3+-black?style=flat-square&logo=apple)](https://orlix.com)
+[![iOS](https://img.shields.io/badge/iOS-16.1+-black?style=flat-square&logo=apple)](https://orlix.com)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?style=flat-square&logo=swift&logoColor=white)](https://swift.org)
 [![Source License](https://img.shields.io/badge/Source-GPL%203.0-blue?style=flat-square)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ff69b4?style=flat-square&logo=github)](https://github.com/sponsors/rudironsoni)
+[![Binary License](https://img.shields.io/badge/Binary-App%20Store%20EULA-6e7681?style=flat-square)](LICENSE-APPSTORE.md)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ff69b4?style=flat-square&logo=github)](https://github.com/sponsors/vivy-company)
 
 Your servers. Everywhere.
 
@@ -14,8 +15,6 @@ Your servers. Everywhere.
 
 Orlix is a cross-platform SSH terminal app for Apple platforms. The current codebase targets iOS and macOS, uses Ghostty for terminal rendering, libssh2/OpenSSL for SSH transport, CloudKit for sync, and Keychain for local credential storage.
 
-This is the Orlix application maintained by `rudironsoni`. Its immutable source history and native artifact inputs are recorded in the repository provenance documents. The application retains the required GPL license, copyright notices, and third-party attributions while all current product names, identifiers, targets, schemes, storage namespaces, links, and user-facing identity belong to Orlix.
-
 ## Current State
 
 - Main app target: `Orlix`
@@ -23,7 +22,7 @@ This is the Orlix application maintained by `rudironsoni`. Its immutable source 
 - Runtime targets: `macOS 13.3+` and `iOS 16.1+`
 - Hardware targets: Apple Silicon / arm64 only
 - App-owned code is organized under `Orlix/App`, `Orlix/Core`, and `Orlix/Features`
-- The repo also contains tests, native vendor builds, feature specs under `docs/specs`, and the marketing site under `web/`
+- The repo also contains tests, native vendor builds, and the marketing site under `web/`
 
 ## Implemented Feature Areas
 
@@ -31,12 +30,14 @@ This is the Orlix application maintained by `rudironsoni`. Its immutable source 
 
 - GPU-accelerated terminal rendering via `GhosttyKit`
 - SSH authentication with password, SSH key, and SSH key + passphrase
-- Connection modes for standard SSH, Tailscale, Mosh, and Cloudflare Access
+- Connection modes for standard SSH, Tailscale, Mosh, Eternal Terminal, and Cloudflare Access
 - Multi-session connection management with tabs, split panes, reconnect handling, and persisted session state
 - tmux-aware startup, attach, install, and recovery flows
 - Rich paste and clipboard helpers for terminal input
 - iOS keyboard accessory support, including special keys and custom actions
 - iOS Live Activity status for active terminal connections
+
+Eternal Terminal connections use the configured SSH authentication and SSH port to run `etterminal`, then connect to `etserver` on TCP port `2022` by default. Install Eternal Terminal on the host and allow inbound traffic to the configured ET port. Orlix's working-directory and optional tmux startup, attach, installation, and cleanup behavior also applies to ET sessions.
 
 ### Servers and organization
 
@@ -85,7 +86,7 @@ Orlix/
 │   ├── Security/
 │   ├── SSH/
 │   ├── Sync/
-│   ├── Terminal/
+│   ├── Terminal/                 # Includes the shared Ghostty bridge
 │   └── UI/
 ├── Features/                    # Product features
 │   ├── ConnectionViews/
@@ -99,12 +100,10 @@ Orlix/
 │   ├── Support/
 │   ├── TerminalAccessories/
 │   ├── TerminalPresets/
-│   ├── TerminalSessions/
+│   ├── TerminalSessions/         # Includes Ghostty runtime and platform UI
 │   ├── TerminalThemes/
 │   ├── VoiceInput/
 │   └── Welcome/
-├── GhosttyTerminal/             # Ghostty bridge and terminal host views
-├── Compatibility/               # Version/platform helpers
 └── Resources/                   # Bundled assets, themes, terminfo, localizations
 ```
 
@@ -125,9 +124,8 @@ OrlixShared/                   # Shared Activity attributes and small shared typ
 OrlixTests/                    # Unit and integration tests
 OrlixUITests/                  # UI tests
 Vendor/                         # Vendored native dependencies
-docs/specs/                     # Feature specs and implementation notes
-make/                           # Included Make implementation fragments
-web/                            # Orlix Astro marketing site
+scripts/                        # Vendor build scripts
+web/                            # Astro site for orlix.com
 ```
 
 ## Requirements
@@ -148,18 +146,16 @@ brew install zig cmake
 
 ```bash
 git clone https://github.com/rudironsoni/Orlix.git
-cd Orlix/Orlix
+cd orlix
 
 # Build native vendor libraries (GhosttyKit + libssh2/OpenSSL)
-make build type=vendor vendor=all
+./scripts/build.sh all
 
 # Open the project in Xcode
 open Orlix.xcodeproj
 ```
 
-Use `vendor=ghostty` or `vendor=ssh` to rebuild one native dependency. `make clean`
-removes only project-local `.build` intermediates and preserves tracked `Vendor/`
-artifacts.
+`./scripts/build.sh` supports `all`, `ghostty`, `ssh`, `clean`, and `help`.
 
 ## Dependencies
 
@@ -173,6 +169,7 @@ Swift package dependencies currently resolved by the Xcode project:
 
 - [Cloudflared](https://github.com/wiedymi/swift-cloudflared)
 - [swift-mosh](https://github.com/wiedymi/swift-mosh)
+- [swift-et](https://github.com/wiedymi/swift-et)
 - [mlx-swift](https://github.com/ml-explore/mlx-swift)
 - [ZIPFoundation](https://github.com/weichsel/ZIPFoundation)
 - [swift-numerics](https://github.com/apple/swift-numerics)
@@ -180,7 +177,7 @@ Swift package dependencies currently resolved by the Xcode project:
 
 ## Installation
 
-Orlix does not yet publish an App Store link from this imported project metadata. Release instructions and published distribution links belong to the containing Orlix repository.
+[![Download on the App Store](https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg)](https://apps.apple.com/app/orlix/id6757482822)
 
 ## Pro Tier
 
@@ -198,11 +195,16 @@ Orlix does not yet publish an App Store link from this imported project metadata
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflow
 - [SECURITY.md](SECURITY.md) for vulnerability reporting
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party notices
-- [UPSTREAM-CLA.md](UPSTREAM-CLA.md) for the imported upstream contributor license agreement
-- `docs/specs/` for feature specs such as biometric locks, local discovery, terminal themes, terminal accessories, remote rich clipboard, and the SFTP browser
+- [CLA.md](CLA.md) for the contributor license agreement
 
 ## License
 
-Source code in this imported fork is licensed under GNU GPL v3.0 (`LICENSE`). The imported upstream App Store binary license is retained as [UPSTREAM-APPSTORE-BINARY-LICENSE.md](UPSTREAM-APPSTORE-BINARY-LICENSE.md) for provenance only. It does not define licensing or distribution terms for Orlix binaries.
+Orlix uses a dual-license model:
 
-Copyright © 2026 Orlix contributors
+- Source code in this repository is licensed under GNU GPL v3.0 (`LICENSE`)
+- Official App Store binaries are distributed under Orlix's custom App Store EULA (`LICENSE-APPSTORE.md`, https://orlix.com/terms)
+
+If you obtain Orlix from source and build it yourself, GPL-3.0 applies.
+If you obtain Orlix via the App Store, App Store distribution terms apply to that binary.
+
+Copyright © 2026 Orlix

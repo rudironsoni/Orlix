@@ -124,6 +124,36 @@ class VVTermSyncTests(unittest.TestCase):
 
         self.assertEqual(failures, ["unbranded text: source.swift"])
 
+    def test_materialize_ghostty_compatibility_layout(self) -> None:
+        source = self.root / "Orlix"
+        xcframework = source / "Vendor/libghostty/GhosttyKit.xcframework"
+        slices = (
+            ("macos-arm64_x86_64", "ghostty-internal.a", b"mac"),
+            ("ios-arm64", "libghostty-internal.a", b"ios"),
+            ("ios-arm64-simulator", "libghostty-internal.a", b"sim"),
+        )
+        for slice_name, archive_name, contents in slices:
+            slice_root = xcframework / slice_name
+            (slice_root / "Headers").mkdir(parents=True)
+            (slice_root / "Headers/ghostty.h").write_text(slice_name)
+            (slice_root / archive_name).write_bytes(contents)
+
+        vvterm_sync.materialize_ghostty_compatibility_layout(source)
+
+        vendor = source / "Vendor/libghostty"
+        self.assertEqual((vendor / "lib/libghostty.a").read_bytes(), b"mac")
+        self.assertEqual((vendor / "ios/lib/libghostty.a").read_bytes(), b"ios")
+        self.assertEqual((vendor / "ios-simulator/lib/libghostty.a").read_bytes(), b"sim")
+        self.assertEqual((vendor / "ios/include/ghostty.h").read_text(), "ios-arm64")
+
+    def test_conflict_marker_check_ignores_license_separator(self) -> None:
+        source = self.root / "source"
+        source.mkdir()
+        (source / "license.txt").write_text("========================================\n")
+        (source / "conflict.txt").write_text("=======\n")
+
+        self.assertEqual(vvterm_sync.check_conflict_markers(source), ["conflict.txt"])
+
 
 if __name__ == "__main__":
     unittest.main()

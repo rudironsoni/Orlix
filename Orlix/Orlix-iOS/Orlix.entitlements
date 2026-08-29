@@ -22,6 +22,12 @@
 		<string>group.com.rudironsoni.orlix</string>
 	</array>
 
+    <!-- Fonts installed by the user or another app -->
+    <key>com.apple.developer.user-fonts</key>
+    <array>
+        <string>app-usage</string>
+    </array>
+
     <!-- Network -->
     <key>com.apple.security.network.client</key>
     <true/>

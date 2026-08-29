@@ -1,13 +1,13 @@
 //
 //  WorkspaceNameGenerator.swift
-//  orlix
+//  Orlix
 //
 //  Created by Uladzislau Yakauleu on 17.10.25.
 //
 
 import Foundation
 
-struct WorkspaceNameGenerator {
+nonisolated struct WorkspaceNameGenerator {
     private static let japaneseCities = [
         "Tokyo", "Kyoto", "Osaka", "Yokohama", "Nagoya", "Sapporo",
         "Fukuoka", "Kobe", "Hiroshima", "Sendai", "Nara", "Kamakura",

@@ -3,12 +3,13 @@ type: story
 tags:
   - story
   - native-app-foundation
-updated: 2026-07-26
+updated: 2026-08-29
 status: doing
 summary: "Provide native mobile presentation over the commercially approved Herdr terminal platform once its external gates pass."
 story_of:
   - "[Native app foundation](../../epic/doing/native-app-foundation.md)"
 has_task:
+  - "[Synchronize vvterm upstream source](../../task/doing/synchronize-vvterm-upstream-source.md)"
   - "[Secure Herdr commercial integration](../../task/todo/secure-herdr-commercial-integration.md)"
   - "[Integrate and validate the Herdr terminal platform](../../task/todo/integrate-and-validate-herdr-terminal-platform.md)"
   - "[Keep Herdr authoritative for terminal topology](../../task/doing/keep-herdr-authoritative-for-terminal-topology.md)"

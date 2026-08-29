@@ -1,20 +1,11 @@
 import Foundation
 
-enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
+nonisolated enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
     case bonjour
     case portScan
-
-    var label: String {
-        switch self {
-        case .bonjour:
-            return String(localized: "Bonjour")
-        case .portScan:
-            return String(localized: "Port Scan")
-        }
-    }
 }
 
-struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
+nonisolated struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
     var displayName: String
     var host: String
     var port: Int
@@ -51,31 +42,5 @@ struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
         if let newerLatency = newer.latencyMs {
             latencyMs = newerLatency
         }
-    }
-}
-
-struct ServerFormPrefill: Equatable, Sendable {
-    var name: String
-    var host: String
-    var port: Int
-    var username: String?
-
-    init(
-        name: String,
-        host: String,
-        port: Int = 22,
-        username: String? = nil
-    ) {
-        self.name = name
-        self.host = host
-        self.port = port
-        self.username = username
-    }
-
-    init(discoveredHost: DiscoveredSSHHost) {
-        self.name = discoveredHost.displayName
-        self.host = discoveredHost.host
-        self.port = discoveredHost.port
-        self.username = nil
     }
 }

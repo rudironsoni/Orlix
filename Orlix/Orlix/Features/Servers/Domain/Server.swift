@@ -1,29 +1,33 @@
 import Foundation
 
-// MARK: - Server Model (CloudKit synced)
+// MARK: - Server Model
 
-struct Server: Identifiable, Codable, Hashable {
+nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     var workspaceId: UUID
     var environment: ServerEnvironment
     var name: String
     var host: String
     var port: Int
+    /// TCP port exposed by etserver. SSH still uses `port` for bootstrap.
+    var eternalTerminalPort: Int
     var username: String
     var connectionMode: SSHConnectionMode
     var authMethod: AuthMethod
     var cloudflareAccessMode: CloudflareAccessMode?
     var cloudflareTeamDomainOverride: String?
     var cloudflareAppDomainOverride: String?
+    var wakeOnLANConfiguration: WakeOnLANConfiguration?
+    var autoWakeOnLANEnabled: Bool
     var tags: [String]
     var notes: String?
     var lastConnected: Date?
     var isFavorite: Bool
     var requiresBiometricUnlock: Bool
-    /// Override for tmux persistence (nil = use global default)
-    var tmuxEnabledOverride: Bool?
-    /// Override for tmux startup behavior (nil = use global default)
-    var tmuxStartupBehaviorOverride: TmuxStartupBehavior?
+    var remoteSessionEnabledOverride: Bool?
+    var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
+    var remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior?
+    var remoteShellStartupAction: RemoteShellStartupAction?
     var createdAt: Date
     var updatedAt: Date
 
@@ -34,19 +38,24 @@ struct Server: Identifiable, Codable, Hashable {
         name: String,
         host: String,
         port: Int = 22,
+        eternalTerminalPort: Int = 2022,
         username: String,
         connectionMode: SSHConnectionMode = .standard,
         authMethod: AuthMethod = .password,
         cloudflareAccessMode: CloudflareAccessMode? = nil,
         cloudflareTeamDomainOverride: String? = nil,
         cloudflareAppDomainOverride: String? = nil,
+        wakeOnLANConfiguration: WakeOnLANConfiguration? = nil,
+        autoWakeOnLANEnabled: Bool = false,
         tags: [String] = [],
         notes: String? = nil,
         lastConnected: Date? = nil,
         isFavorite: Bool = false,
         requiresBiometricUnlock: Bool = false,
-        tmuxEnabledOverride: Bool? = nil,
-        tmuxStartupBehaviorOverride: TmuxStartupBehavior? = nil,
+        remoteSessionEnabledOverride: Bool? = nil,
+        remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier = .tmux,
+        remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior? = nil,
+        remoteShellStartupCommand: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -56,19 +65,28 @@ struct Server: Identifiable, Codable, Hashable {
         self.name = name
         self.host = host
         self.port = port
+        self.eternalTerminalPort = (1...65535).contains(eternalTerminalPort)
+            ? eternalTerminalPort
+            : 2022
         self.username = username
         self.connectionMode = connectionMode
         self.authMethod = authMethod
         self.cloudflareAccessMode = cloudflareAccessMode
         self.cloudflareTeamDomainOverride = cloudflareTeamDomainOverride
         self.cloudflareAppDomainOverride = cloudflareAppDomainOverride
+        self.wakeOnLANConfiguration = wakeOnLANConfiguration
+        self.autoWakeOnLANEnabled = autoWakeOnLANEnabled
         self.tags = tags
         self.notes = notes
         self.lastConnected = lastConnected
         self.isFavorite = isFavorite
         self.requiresBiometricUnlock = requiresBiometricUnlock
-        self.tmuxEnabledOverride = tmuxEnabledOverride
-        self.tmuxStartupBehaviorOverride = tmuxStartupBehaviorOverride
+        self.remoteSessionEnabledOverride = remoteSessionEnabledOverride
+        self.remoteSessionBackendIdentifier = remoteSessionBackendIdentifier
+        self.remoteSessionStartupBehaviorOverride = remoteSessionStartupBehaviorOverride
+        self.remoteShellStartupAction = remoteShellStartupCommand.flatMap {
+            try? RemoteShellStartupAction(command: $0)
+        }
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -87,12 +105,15 @@ struct Server: Identifiable, Codable, Hashable {
         case name
         case host
         case port
+        case eternalTerminalPort
         case username
         case connectionMode
         case authMethod
         case cloudflareAccessMode
         case cloudflareTeamDomainOverride
         case cloudflareAppDomainOverride
+        case wakeOnLANConfiguration
+        case autoWakeOnLANEnabled
         case tags
         case notes
         case lastConnected
@@ -100,6 +121,10 @@ struct Server: Identifiable, Codable, Hashable {
         case requiresBiometricUnlock
         case tmuxEnabledOverride
         case tmuxStartupBehaviorOverride
+        case remoteSessionEnabledOverride
+        case remoteSessionBackendIdentifier
+        case remoteSessionStartupBehaviorOverride
+        case remoteShellStartupCommand
         case createdAt
         case updatedAt
     }
@@ -112,6 +137,8 @@ struct Server: Identifiable, Codable, Hashable {
         name = try container.decode(String.self, forKey: .name)
         host = try container.decode(String.self, forKey: .host)
         port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 22
+        let decodedETPort = try container.decodeIfPresent(Int.self, forKey: .eternalTerminalPort) ?? 2022
+        eternalTerminalPort = (1...65535).contains(decodedETPort) ? decodedETPort : 2022
         username = try container.decode(String.self, forKey: .username)
         connectionMode = try container.decodeIfPresent(SSHConnectionMode.self, forKey: .connectionMode) ?? .standard
         authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .password
@@ -122,17 +149,46 @@ struct Server: Identifiable, Codable, Hashable {
         }
         cloudflareTeamDomainOverride = try container.decodeIfPresent(String.self, forKey: .cloudflareTeamDomainOverride)
         cloudflareAppDomainOverride = try container.decodeIfPresent(String.self, forKey: .cloudflareAppDomainOverride)
+        wakeOnLANConfiguration = try container.decodeIfPresent(
+            WakeOnLANConfiguration.self,
+            forKey: .wakeOnLANConfiguration
+        )
+        autoWakeOnLANEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoWakeOnLANEnabled
+        ) ?? false
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         lastConnected = try container.decodeIfPresent(Date.self, forKey: .lastConnected)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         requiresBiometricUnlock = try container.decodeIfPresent(Bool.self, forKey: .requiresBiometricUnlock) ?? false
-        tmuxEnabledOverride = try container.decodeIfPresent(Bool.self, forKey: .tmuxEnabledOverride)
-        if let raw = try container.decodeIfPresent(String.self, forKey: .tmuxStartupBehaviorOverride) {
-            tmuxStartupBehaviorOverride = TmuxStartupBehavior(rawValue: raw)
-        } else {
-            tmuxStartupBehaviorOverride = nil
-        }
+        let legacyTmuxEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .tmuxEnabledOverride
+        )
+        let legacyTmuxStartupBehavior = try container.decodeIfPresent(
+            String.self,
+            forKey: .tmuxStartupBehaviorOverride
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+        remoteSessionEnabledOverride = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .remoteSessionEnabledOverride
+        ) ?? legacyTmuxEnabled
+        remoteSessionBackendIdentifier = RemoteSessionBackendIdentifier(
+            rawValue: try container.decodeIfPresent(
+                String.self,
+                forKey: .remoteSessionBackendIdentifier
+            ) ?? RemoteSessionBackendIdentifier.tmux.rawValue
+        )
+        remoteSessionStartupBehaviorOverride = try container.decodeIfPresent(
+            String.self,
+            forKey: .remoteSessionStartupBehaviorOverride
+        ).flatMap(RemoteSessionStartupBehavior.init(persistedRawValue:))
+            ?? legacyTmuxStartupBehavior
+        remoteShellStartupAction = try container.decodeIfPresent(
+            String.self,
+            forKey: .remoteShellStartupCommand
+        ).flatMap { try? RemoteShellStartupAction(command: $0) }
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
@@ -145,28 +201,49 @@ struct Server: Identifiable, Codable, Hashable {
         try container.encode(name, forKey: .name)
         try container.encode(host, forKey: .host)
         try container.encode(port, forKey: .port)
+        try container.encode(eternalTerminalPort, forKey: .eternalTerminalPort)
         try container.encode(username, forKey: .username)
         try container.encode(connectionMode, forKey: .connectionMode)
         try container.encode(authMethod, forKey: .authMethod)
         try container.encodeIfPresent(cloudflareAccessMode, forKey: .cloudflareAccessMode)
         try container.encodeIfPresent(cloudflareTeamDomainOverride, forKey: .cloudflareTeamDomainOverride)
         try container.encodeIfPresent(cloudflareAppDomainOverride, forKey: .cloudflareAppDomainOverride)
+        try container.encodeIfPresent(
+            wakeOnLANConfiguration,
+            forKey: .wakeOnLANConfiguration
+        )
+        try container.encode(autoWakeOnLANEnabled, forKey: .autoWakeOnLANEnabled)
         try container.encode(tags, forKey: .tags)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(lastConnected, forKey: .lastConnected)
         try container.encode(isFavorite, forKey: .isFavorite)
         try container.encode(requiresBiometricUnlock, forKey: .requiresBiometricUnlock)
-        try container.encodeIfPresent(tmuxEnabledOverride, forKey: .tmuxEnabledOverride)
-        try container.encodeIfPresent(tmuxStartupBehaviorOverride, forKey: .tmuxStartupBehaviorOverride)
+        try container.encodeIfPresent(
+            remoteSessionEnabledOverride,
+            forKey: .remoteSessionEnabledOverride
+        )
+        try container.encode(
+            remoteSessionBackendIdentifier.rawValue,
+            forKey: .remoteSessionBackendIdentifier
+        )
+        try container.encodeIfPresent(
+            remoteSessionStartupBehaviorOverride?.rawValue,
+            forKey: .remoteSessionStartupBehaviorOverride
+        )
+        try container.encodeIfPresent(
+            remoteShellStartupAction?.command,
+            forKey: .remoteShellStartupCommand
+        )
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 
-enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable {
+nonisolated enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case standard
     case tailscale
     case mosh
+    case eternalTerminal
     case cloudflare
 
     var id: String { rawValue }
@@ -183,52 +260,30 @@ enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable {
+nonisolated enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case oauth
     case serviceToken
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .oauth:
-            return String(localized: "OAuth")
-        case .serviceToken:
-            return String(localized: "Service Token")
-        }
-    }
 }
 
 // MARK: - Authentication Method
 
-enum AuthMethod: String, Codable, CaseIterable, Identifiable {
+nonisolated enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
     case password
     case sshKey
     case sshKeyWithPassphrase
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .password: return String(localized: "Password")
-        case .sshKey: return String(localized: "SSH Key")
-        case .sshKeyWithPassphrase: return String(localized: "SSH Key + Passphrase")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .password: return "key.fill"
-        case .sshKey: return "lock.doc.fill"
-        case .sshKeyWithPassphrase: return "lock.shield.fill"
-        }
-    }
 }
 
 // MARK: - Server Credentials (for authentication)
 
-struct ServerCredentials {
+nonisolated struct ServerCredentials: Sendable {
     let serverId: UUID
+    var credentialBinding: ServerCredentialBinding?
     var password: String?
     var privateKey: Data?
     var publicKey: Data?
@@ -254,6 +309,7 @@ struct SSHKeyEntry: Identifiable, Codable, Hashable {
     var name: String
     var hasPassphrase: Bool
     var createdAt: Date
+    var updatedAt: Date
     var keyType: SSHKeyType?
     var publicKey: String?
 
@@ -262,6 +318,7 @@ struct SSHKeyEntry: Identifiable, Codable, Hashable {
         name: String,
         hasPassphrase: Bool = false,
         createdAt: Date = Date(),
+        updatedAt: Date? = nil,
         keyType: SSHKeyType? = nil,
         publicKey: String? = nil
     ) {
@@ -269,7 +326,29 @@ struct SSHKeyEntry: Identifiable, Codable, Hashable {
         self.name = name
         self.hasPassphrase = hasPassphrase
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
         self.keyType = keyType
         self.publicKey = publicKey
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case hasPassphrase
+        case createdAt
+        case updatedAt
+        case keyType
+        case publicKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        hasPassphrase = try container.decode(Bool.self, forKey: .hasPassphrase)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        keyType = try container.decodeIfPresent(SSHKeyType.self, forKey: .keyType)
+        publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
     }
 }

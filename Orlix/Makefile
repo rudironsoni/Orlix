@@ -29,6 +29,8 @@ help:
 	@printf '%s\n' '  run                           build and run the Orlix iOS host app'
 	@printf '%s\n' '  clean                         remove project-local build intermediates only'
 	@printf '%s\n' '  vvterm-sync                  merge one exact upstream snapshot into tracked Orlix source'
+	@printf '%s\n' '  vvterm-sync-resolve          apply one reviewed conflict-resolution manifest'
+	@printf '%s\n' '  vvterm-reconcile             apply the pending versioned branding policy'
 	@printf '%s\n' '  vvterm-sync-complete         validate a resolved sync and advance source provenance'
 	@printf '%s\n' '  vvterm-source-check          validate the tracked source snapshot and branding contract'
 	@printf '%s\n' '  vvterm-upstream-tests        test the exact pristine upstream source revision'

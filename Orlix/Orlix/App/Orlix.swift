@@ -1,19 +1,82 @@
 //
-//  Orlix.swift
+//  OrlixApp.swift
 //  Orlix
 //
 
 import SwiftUI
 #if os(iOS)
+import UIKit
 import WidgetKit
+#elseif os(macOS)
+import AppKit
 #endif
 
 @main
 struct Orlix: App {
     init() {
-        TerminalDefaults.applyIfNeeded()
+        let composition = AppComposition.live()
+        networkMonitor = composition.networkMonitor
+        tabManager = composition.tabManager
+        voiceInputRuntimeStore = composition.voiceInputRuntimeStore
+        statsRuntimeStore = composition.statsRuntimeStore
+        makeLocalDiscoveryManager = composition.makeLocalDiscoveryManager
+        serverFormDependencies = composition.serverFormDependencies
+        voiceModelManagers = composition.voiceModelManagers
+        statsSecurityApprovalActions = composition.statsSecurityApprovalActions
+        terminalSecurityActions = composition.terminalSecurityActions
+        onWelcomeCompleted = composition.onWelcomeCompleted
+        _ghosttyApp = StateObject(wrappedValue: composition.ghosttyApp)
+        _storeManager = StateObject(wrappedValue: composition.storeManager)
+        _appLockManager = StateObject(wrappedValue: composition.appLockManager)
+        _serverManager = StateObject(wrappedValue: composition.serverManager)
+        _serverWakeCoordinator = StateObject(
+            wrappedValue: composition.serverWakeCoordinator
+        )
+        _engagementTracker = StateObject(wrappedValue: composition.engagementTracker)
+        _remoteFileBrowserStore = StateObject(wrappedValue: composition.remoteFileBrowserStore)
+        _terminalFontStore = StateObject(
+            wrappedValue: composition.terminalFontStore
+        )
+        _terminalThemeManager = StateObject(wrappedValue: composition.terminalThemeManager)
+        _terminalAccessoryPreferencesManager = StateObject(
+            wrappedValue: composition.terminalAccessoryPreferencesManager
+        )
+        _statsPreferencesStore = StateObject(wrappedValue: composition.statsPreferencesStore)
+        _serverVolumeVisibilityStore = StateObject(
+            wrappedValue: composition.serverVolumeVisibilityStore
+        )
+        _viewTabConfigurationManager = StateObject(
+            wrappedValue: composition.viewTabConfigurationManager
+        )
+        _syncSettingsCoordinator = StateObject(wrappedValue: composition.syncSettingsCoordinator)
+        _sshKeySettingsCoordinator = StateObject(
+            wrappedValue: composition.sshKeySettingsCoordinator
+        )
+        _knownHostSettingsCoordinator = StateObject(
+            wrappedValue: composition.knownHostSettingsCoordinator
+        )
+        #if os(iOS)
+        analyticsOptOutAction = composition.analyticsOptOutAction
+        #else
+        _workspaceSelectionStore = StateObject(wrappedValue: composition.workspaceSelectionStore)
+        aboutWindowPresenter = composition.aboutWindowPresenter
+        settingsWindowPresenter = composition.settingsWindowPresenter
+        #endif
+
+        appDelegate.configure(
+            tabManager: composition.tabManager,
+            serverManager: composition.serverManager,
+            appLockManager: composition.appLockManager,
+            lifecycleDependencies: composition.appLifecycleDependencies
+        )
+        #if os(macOS)
+        MacConnectionToolbarController.shared.configure(tabManager: composition.tabManager)
+        #endif
+        composition.storeManager.start()
+
         #if os(iOS)
         OrlixLauncherWidgetRefresh.refreshIfNeeded()
+        composition.analyticsTracker.prepareAppleAdsAttribution()
         #endif
     }
 
@@ -23,17 +86,44 @@ struct Orlix: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
+    @StateObject private var ghosttyApp: GhosttyRuntime
     #if os(iOS)
-    @StateObject private var ghosttyApp = Ghostty.App(autoStart: false)
-    #else
-    @StateObject private var ghosttyApp = Ghostty.App()
+    @StateObject private var screenAwakeCoordinator = TerminalScreenAwakeCoordinator()
+    private let analyticsOptOutAction: AnalyticsOptOutAction
     #endif
-    @StateObject private var appLockManager = AppLockManager.shared
-    @StateObject private var storeManager = StoreManager.shared
+    @StateObject private var appLockManager: AppLockManager
+    @StateObject private var serverManager: ServerManager
+    @StateObject private var serverWakeCoordinator: ServerWakeCoordinator
+    @StateObject private var engagementTracker: EngagementTracker
+    private let networkMonitor: NetworkMonitor
+    private let tabManager: TerminalTabManager
+    @StateObject private var storeManager: StoreManager
     @StateObject private var remoteFileTabManager = RemoteFileTabManager()
-    @StateObject private var remoteFileBrowserStore = Orlix.makeRemoteFileBrowserStore()
-    @StateObject private var terminalThemeManager = TerminalThemeManager.shared
-    @StateObject private var terminalAccessoryPreferencesManager = TerminalAccessoryPreferencesManager.shared
+    @StateObject private var remoteFileBrowserStore: RemoteFileBrowserStore
+    @StateObject private var terminalFontStore: TerminalFontStore
+    @StateObject private var terminalThemeManager: TerminalThemeManager
+    @StateObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @StateObject private var statsPreferencesStore: PreferencesStore
+    @StateObject private var serverVolumeVisibilityStore: ServerVolumeVisibilityStore
+    #if os(macOS)
+    @StateObject private var workspaceSelectionStore: WorkspaceSelectionStore
+    #endif
+    private let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    @StateObject private var viewTabConfigurationManager: ViewTabConfigurationManager
+    @StateObject private var syncSettingsCoordinator: SyncSettingsCoordinator
+    @StateObject private var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+    @StateObject private var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
+    private let onWelcomeCompleted: @MainActor () -> Void
+    private let statsRuntimeStore: ServerStatsRuntimeStore
+    private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    private let serverFormDependencies: ServerFormDependencies
+    private let voiceModelManagers: VoiceSettingsModelManagerOwner
+    private let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
+    private let terminalSecurityActions: TerminalSecurityActions
+    #if os(macOS)
+    private let aboutWindowPresenter: AboutWindowPresenter
+    private let settingsWindowPresenter: SettingsWindowPresenter
+    #endif
 
     // Welcome screen flag
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
@@ -43,51 +133,175 @@ struct Orlix: App {
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
 
     // Terminal settings to watch for changes
-    @AppStorage(TerminalDefaults.fontNameKey) private var terminalFontName = TerminalDefaults.defaultFontName
     @AppStorage(TerminalDefaults.fontSizeKey) private var terminalFontSize = TerminalDefaults.defaultFontSize
+    @AppStorage(TerminalDefaults.contentPaddingHorizontalKey)
+    private var terminalContentPaddingHorizontal = TerminalDefaults.defaultContentPadding
+    @AppStorage(TerminalDefaults.contentPaddingVerticalKey)
+    private var terminalContentPaddingVertical = TerminalDefaults.defaultContentPadding
     @AppStorage(TerminalDefaults.cursorStyleKey) private var terminalCursorStyle = TerminalDefaults.defaultCursorStyle.rawValue
     @AppStorage(TerminalDefaults.cursorBlinkKey) private var terminalCursorBlink = TerminalDefaults.defaultCursorBlink
     #if os(macOS)
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var terminalOptionAsAltMode = TerminalOptionAsAltMode.none.rawValue
     #endif
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Orlix Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Orlix Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
+    @AppStorage(TerminalRemoteClipboardReadPolicy.userDefaultsKey)
+    private var remoteClipboardReadPolicy = TerminalRemoteClipboardReadPolicy.defaultValue.rawValue
 
-    private var terminalOptionAsAltReloadToken: String {
+    private var terminalOptionAsAltModeRawValue: String {
         #if os(macOS)
         terminalOptionAsAltMode
         #else
-        ""
+        TerminalOptionAsAltMode.none.rawValue
         #endif
     }
 
-    private var activeCustomThemeVersionToken: String {
-        let activeThemes = terminalThemeManager.customThemes.filter { !$0.isDeleted }
-        let byName = Dictionary(
-            activeThemes.map { ($0.name, $0) },
-            uniquingKeysWith: { current, candidate in
-                current.updatedAt >= candidate.updatedAt ? current : candidate
-            }
+    private var ghosttyRuntimeConfiguration: Ghostty.RuntimeConfiguration {
+        Ghostty.RuntimeConfiguration(
+            fontSelection: TerminalFontSelectionPolicy.resolve(
+                primaryFamily: terminalFontStore.preference.primaryFamily,
+                cjkFamily: terminalFontStore.preference.cjkFamily,
+                catalog: terminalFontStore.catalog,
+                allowsProFeatures: storeManager.allowsProFeatures
+            ),
+            fontSize: terminalFontSize,
+            contentPadding: TerminalContentPadding(
+                horizontal: terminalContentPaddingHorizontal,
+                vertical: terminalContentPaddingVertical
+            ),
+            cursorStyleRawValue: terminalCursorStyle,
+            cursorBlink: terminalCursorBlink,
+            optionAsAltModeRawValue: terminalOptionAsAltModeRawValue,
+            remoteClipboardReadPolicyRawValue: remoteClipboardReadPolicy
         )
-
-        let darkVersion = byName[terminalThemeName]?.updatedAt.timeIntervalSince1970 ?? 0
-        let lightVersion = byName[terminalThemeNameLight]?.updatedAt.timeIntervalSince1970 ?? 0
-
-        if usePerAppearanceTheme {
-            return "\(darkVersion):\(lightVersion)"
-        }
-
-        return "\(darkVersion)"
     }
+
+    private var statsDependencies: ServerStatsScreenDependencies {
+        ServerStatsScreenDependencies(
+            runtimeStore: statsRuntimeStore,
+            preferencesStore: statsPreferencesStore,
+            volumeVisibilityStore: serverVolumeVisibilityStore,
+            securityApprovalActions: statsSecurityApprovalActions
+        )
+    }
+
+    #if DEBUG
+    private var usesSyncSettingsUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--orlix-ui-test-sync-settings-harness"
+        )
+    }
+
+    private var usesTrustedHostsSettingsUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--orlix-ui-test-trusted-hosts-settings-harness"
+        )
+    }
+
+    private var usesServerDuplicateUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--orlix-ui-test-server-duplicate-harness"
+        )
+    }
+    #endif
 
     #if os(iOS) && DEBUG
     private var usesTerminalKeyboardUITestHarness: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-terminal-keyboard-harness")
     }
 
+    private var usesTerminalSplitKeyboardUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--orlix-ui-test-terminal-split-keyboard-harness"
+        )
+    }
+
+    private var usesTerminalReconnectUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-terminal-reconnect-harness")
+    }
+
+    private var usesTerminalScreenAwakeUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-terminal-screen-awake-harness")
+    }
+
     private var usesNoticePresentationUITestHarness: Bool {
         Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-notice-harness")
+    }
+
+    private var usesStatsStorageUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-stats-storage-harness")
+    }
+
+    private var usesStatsCardsLayoutUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-stats-cards-layout-harness")
+    }
+
+    private var usesTerminalZenModeUITestHarness: Bool {
+        Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-terminal-zen-mode-harness")
+    }
+    #endif
+
+    #if os(macOS)
+    @ViewBuilder
+    private var macOSRootContent: some View {
+        #if DEBUG
+        if usesSyncSettingsUITestHarness {
+            SyncSettingsUITestHarness()
+        } else if usesTrustedHostsSettingsUITestHarness {
+            TrustedHostsSettingsUITestHarness()
+        } else if usesServerDuplicateUITestHarness {
+            ServerDuplicateUITestHarness(
+                serverManager: serverManager,
+                dependencies: serverFormDependencies,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
+            )
+        } else if Foundation.ProcessInfo.processInfo.arguments.contains(
+            "--orlix-ui-test-mac-terminal-recovery-harness"
+        ) {
+            MacTerminalRecoveryUITestHarness(
+                simulatesSuccess: !Foundation.ProcessInfo.processInfo.arguments.contains(
+                    "--orlix-ui-test-mac-terminal-recovery-failure"
+                )
+            )
+        } else {
+            macOSAppContent
+        }
+        #else
+        macOSAppContent
+        #endif
+    }
+
+    private var macOSAppContent: some View {
+        ContentView(
+            serverManager: serverManager,
+            serverWakeCoordinator: serverWakeCoordinator,
+            engagementTracker: engagementTracker,
+            tabManager: tabManager,
+            fileTabs: remoteFileTabManager,
+            fileBrowser: remoteFileBrowserStore,
+            statsDependencies: statsDependencies,
+            terminalSecurityActions: terminalSecurityActions,
+            serverFormDependencies: serverFormDependencies,
+            workspaceSelectionStore: workspaceSelectionStore,
+            voiceInputRuntimeStore: voiceInputRuntimeStore,
+            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+            onOpenSettings: { settingsWindowPresenter.show() }
+        )
+            .environmentObject(ghosttyApp)
+            .environmentObject(terminalThemeManager)
+            .environmentObject(terminalAccessoryPreferencesManager)
+            .modifier(AppearanceModifier())
+            .task(id: ghosttyRuntimeConfiguration) {
+                ghosttyApp.applyConfiguration(ghosttyRuntimeConfiguration)
+            }
+            .sheet(isPresented: .init(
+                get: { !hasSeenWelcome },
+                set: { if !$0 { hasSeenWelcome = true } }
+            )) {
+                WelcomeView(
+                    hasSeenWelcome: $hasSeenWelcome,
+                    onCompleted: onWelcomeCompleted
+                )
+                    .adaptiveSoftScrollEdges()
+            }
     }
     #endif
 
@@ -95,11 +309,58 @@ struct Orlix: App {
     @ViewBuilder
     private var iOSRootContent: some View {
         #if DEBUG
-        if usesNoticePresentationUITestHarness {
+        if usesSyncSettingsUITestHarness {
+            SyncSettingsUITestHarness()
+        } else if usesTrustedHostsSettingsUITestHarness {
+            TrustedHostsSettingsUITestHarness()
+        } else if usesServerDuplicateUITestHarness {
+            ServerDuplicateUITestHarness(
+                serverManager: serverManager,
+                dependencies: serverFormDependencies,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
+            )
+        } else if usesNoticePresentationUITestHarness {
             NoticePresentationUITestHarness()
                 .modifier(AppearanceModifier())
+        } else if usesStatsCardsLayoutUITestHarness {
+            StatsCardsLayoutUITestHarness()
+                .modifier(AppearanceModifier())
+        } else if usesTerminalZenModeUITestHarness {
+            TerminalZenModeUITestHarness(tabManager: tabManager)
+                .environmentObject(ghosttyApp)
+                .modifier(AppearanceModifier())
+        } else if usesStatsStorageUITestHarness {
+            StatsStorageUITestHarness()
+                .modifier(AppearanceModifier())
+        } else if usesTerminalScreenAwakeUITestHarness {
+            TerminalScreenAwakeUITestHarness()
+                .modifier(AppearanceModifier())
+        } else if usesTerminalReconnectUITestHarness {
+            TerminalReconnectUITestHarness(
+                tabManager: tabManager,
+                serverManager: serverManager,
+                serverWakeCoordinator: serverWakeCoordinator,
+                fileBrowser: remoteFileBrowserStore,
+                engagementTracker: engagementTracker,
+                statsDependencies: statsDependencies,
+                terminalSecurityActions: terminalSecurityActions,
+                serverFormDependencies: serverFormDependencies,
+                voiceModelManagers: voiceModelManagers,
+                voiceInputRuntimeStore: voiceInputRuntimeStore,
+                makeLocalDiscoveryManager: makeLocalDiscoveryManager
+            )
+                .environmentObject(ghosttyApp)
+                .environmentObject(terminalThemeManager)
+                .environmentObject(terminalAccessoryPreferencesManager)
+                .modifier(AppearanceModifier())
+        } else if usesTerminalSplitKeyboardUITestHarness {
+            TerminalSplitKeyboardUITestHarness(tabManager: tabManager)
+                .environmentObject(ghosttyApp)
+                .environmentObject(terminalThemeManager)
+                .environmentObject(terminalAccessoryPreferencesManager)
+                .modifier(AppearanceModifier())
         } else if usesTerminalKeyboardUITestHarness {
-            TerminalKeyboardUITestHarness()
+            TerminalKeyboardUITestHarness(tabManager: tabManager)
                 .environmentObject(ghosttyApp)
                 .environmentObject(terminalThemeManager)
                 .environmentObject(terminalAccessoryPreferencesManager)
@@ -114,21 +375,35 @@ struct Orlix: App {
 
     private var iOSAppContent: some View {
         iOSContentView(
+            serverManager: serverManager,
+            serverWakeCoordinator: serverWakeCoordinator,
+            engagementTracker: engagementTracker,
+            tabManager: tabManager,
             fileTabs: remoteFileTabManager,
-            fileBrowser: remoteFileBrowserStore
+            fileBrowser: remoteFileBrowserStore,
+            statsDependencies: statsDependencies,
+            terminalSecurityActions: terminalSecurityActions,
+            serverFormDependencies: serverFormDependencies,
+            voiceModelManagers: voiceModelManagers,
+            voiceInputRuntimeStore: voiceInputRuntimeStore,
+            makeLocalDiscoveryManager: makeLocalDiscoveryManager,
+            analyticsOptOutAction: analyticsOptOutAction
         )
             .environmentObject(ghosttyApp)
             .environmentObject(terminalThemeManager)
             .environmentObject(terminalAccessoryPreferencesManager)
             .modifier(AppearanceModifier())
-            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
-                ghosttyApp.reloadConfig()
+            .task(id: ghosttyRuntimeConfiguration) {
+                ghosttyApp.applyConfiguration(ghosttyRuntimeConfiguration)
             }
             .sheet(isPresented: .init(
                 get: { !hasSeenWelcome },
                 set: { if !$0 { hasSeenWelcome = true } }
             )) {
-                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+                WelcomeView(
+                    hasSeenWelcome: $hasSeenWelcome,
+                    onCompleted: onWelcomeCompleted
+                )
                     .adaptiveSoftScrollEdges()
             }
     }
@@ -138,29 +413,13 @@ struct Orlix: App {
         WindowGroup("", id: "main") {
             let appLocale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
             AppLockContainer {
-                NoticeAppHost {
+                NoticeAppHost(networkMonitor: networkMonitor) {
                     Group {
                         #if os(iOS)
                         iOSRootContent
+                            .environmentObject(screenAwakeCoordinator)
                         #else
-                        ContentView(
-                            fileTabs: remoteFileTabManager,
-                            fileBrowser: remoteFileBrowserStore
-                        )
-                            .environmentObject(ghosttyApp)
-                            .environmentObject(terminalThemeManager)
-                            .environmentObject(terminalAccessoryPreferencesManager)
-                            .modifier(AppearanceModifier())
-                            .task(id: "\(terminalFontName)\(terminalFontSize)\(terminalCursorStyle)\(terminalCursorBlink)\(terminalOptionAsAltReloadToken)\(terminalThemeName)\(terminalThemeNameLight)\(usePerAppearanceTheme)\(activeCustomThemeVersionToken)") {
-                                ghosttyApp.reloadConfig()
-                            }
-                            .sheet(isPresented: .init(
-                                get: { !hasSeenWelcome },
-                                set: { if !$0 { hasSeenWelcome = true } }
-                            )) {
-                                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
-                                    .adaptiveSoftScrollEdges()
-                            }
+                        macOSRootContent
                         #endif
                     }
                     .adaptiveSoftScrollEdges()
@@ -168,22 +427,31 @@ struct Orlix: App {
                     .environment(\.privacyModeEnabled, privacyModeEnabled)
                     .onAppear {
                         AppLanguage.applySelection(appLanguage)
-                        ServerManager.shared.handleAppLanguageChange()
+                        serverManager.handleAppLanguageChange()
                     }
                     .onChange(of: appLanguage) { newValue in
                         AppLanguage.applySelection(newValue)
-                        ServerManager.shared.handleAppLanguageChange()
+                        serverManager.handleAppLanguageChange()
                     }
                 }
             }
             .environmentObject(appLockManager)
+            .environmentObject(serverManager)
             .environmentObject(storeManager)
+            .environmentObject(terminalFontStore)
+            .environmentObject(viewTabConfigurationManager)
+            .environmentObject(syncSettingsCoordinator)
+            .environmentObject(sshKeySettingsCoordinator)
+            .environmentObject(knownHostSettingsCoordinator)
         }
         #if os(macOS)
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1100, height: 700)
         .commands {
-            OrlixCommands()
+            OrlixCommands(
+                aboutWindowPresenter: aboutWindowPresenter,
+                settingsWindowPresenter: settingsWindowPresenter
+            )
         }
         #endif
     }
@@ -203,31 +471,3 @@ private enum OrlixLauncherWidgetRefresh {
     }
 }
 #endif
-
-private extension Orlix {
-    static func makeRemoteFileBrowserStore() -> RemoteFileBrowserStore {
-        let adapter = SSHSFTPAdapter(borrowedClientProvider: { serverId in
-            TerminalTabManager.shared.sharedStatsClient(for: serverId)
-        })
-
-        return RemoteFileBrowserStore(
-            remoteFileServiceAdapter: adapter,
-            serverProvider: { serverId in
-                ServerManager.shared.servers.first { $0.id == serverId }
-            },
-            workingDirectoryProvider: { serverId in
-                if let selectedTab = TerminalTabManager.shared.selectedTab(for: serverId),
-                   let path = TerminalTabManager.shared.workingDirectory(for: selectedTab.focusedPaneId) {
-                    return path
-                }
-
-                if let anyPane = TerminalTabManager.shared.paneStates.values.first(where: { $0.serverId == serverId }),
-                   let path = TerminalTabManager.shared.workingDirectory(for: anyPane.paneId) {
-                    return path
-                }
-
-                return nil
-            }
-        )
-    }
-}

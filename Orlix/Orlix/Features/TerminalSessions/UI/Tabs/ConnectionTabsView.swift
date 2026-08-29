@@ -5,52 +5,119 @@
 
 import SwiftUI
 
+struct TerminalServerToolbarProjectionHost<Content: View>: View {
+    @StateObject private var projection: TerminalServerToolbarProjection
+    private let content: (TerminalServerToolbarProjection) -> Content
+
+    init(
+        serverId: UUID,
+        tabManager: TerminalTabManager,
+        @ViewBuilder content: @escaping (TerminalServerToolbarProjection) -> Content
+    ) {
+        _projection = StateObject(
+            wrappedValue: TerminalServerToolbarProjection(
+                serverId: serverId,
+                tabManager: tabManager
+            )
+        )
+        self.content = content
+    }
+
+    var body: some View {
+        content(projection)
+    }
+}
+
 // MARK: - Connection Terminal Container
 
 struct ConnectionTerminalContainer: View {
-    @ObservedObject var tabManager: TerminalTabManager
+    let tabManager: TerminalTabManager
+    let terminalToolbarProjection: TerminalServerToolbarProjection
+    @ObservedObject var terminalContent: TerminalServerContentProjection
+    @ObservedObject private var remoteSessionCoordinator: TerminalRemoteSessionCoordinator
     @ObservedObject var fileTabManager: RemoteFileTabManager
     let serverManager: ServerManager
     let fileBrowser: RemoteFileBrowserStore
+    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    let statsDependencies: ServerStatsScreenDependencies
+    let terminalSecurityActions: TerminalSecurityActions
+    let serverFormDependencies: ServerFormDependencies
+    let voiceInputRuntimeStore: VoiceInputRuntimeStore
     let server: Server
     @Binding var isZenModeEnabled: Bool
     let isSidebarVisible: Bool
     let onToggleSidebar: () -> Void
+    let onOpenSettings: (() -> Void)?
+    let onLeaveRoute: (() -> Void)?
+    let onDisconnectRoute: (() -> Void)?
 
-    @EnvironmentObject var ghosttyApp: Ghostty.App
+    @EnvironmentObject var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject var storeManager: StoreManager
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @Environment(\.colorScheme) private var colorScheme
-    @ObservedObject private var viewTabConfig = ViewTabConfigurationManager.shared
-
-    /// Theme name from settings
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Orlix Dark"
-    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Orlix Light"
-    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
-    #if os(iOS)
-    @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) var preservesTerminalSizeForKeyboard = false
-    #endif
+    @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
 
     /// Disconnect confirmation
     @State var showingDisconnectConfirmation = false
     /// Confirmation before closing the focused split pane via a command/panel
     /// (the in-pane close button has its own confirmation in TerminalTabView).
     @State var showingPaneCloseConfirmation = false
-    @State var serverToEdit: Server?
+    @State var serverFormIntent: ServerFormIntent?
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
     @State var showingFileTabLimitAlert = false
     @State var showingSplitPaneUpgradeAlert = false
     @State var showingZenPanel = false
-    #if os(macOS)
-    @State var zenWindowSafeAreaInsets = EdgeInsets()
-    #endif
 
-    /// Selected view type - persisted per server
-    var selectedView: String {
-        viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+    init(
+        tabManager: TerminalTabManager,
+        terminalToolbarProjection: TerminalServerToolbarProjection,
+        fileTabManager: RemoteFileTabManager,
+        serverManager: ServerManager,
+        fileBrowser: RemoteFileBrowserStore,
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory,
+        statsDependencies: ServerStatsScreenDependencies,
+        terminalSecurityActions: TerminalSecurityActions,
+        serverFormDependencies: ServerFormDependencies,
+        voiceInputRuntimeStore: VoiceInputRuntimeStore,
+        server: Server,
+        isZenModeEnabled: Binding<Bool>,
+        isSidebarVisible: Bool,
+        onToggleSidebar: @escaping () -> Void,
+        onOpenSettings: (() -> Void)?,
+        onLeaveRoute: (() -> Void)?,
+        onDisconnectRoute: (() -> Void)?
+    ) {
+        self.tabManager = tabManager
+        self.terminalToolbarProjection = terminalToolbarProjection
+        _terminalContent = ObservedObject(wrappedValue: terminalToolbarProjection.content)
+        _remoteSessionCoordinator = ObservedObject(wrappedValue: tabManager.remoteSessionCoordinator)
+        self.fileTabManager = fileTabManager
+        self.serverManager = serverManager
+        self.fileBrowser = fileBrowser
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+        self.statsDependencies = statsDependencies
+        self.terminalSecurityActions = terminalSecurityActions
+        self.serverFormDependencies = serverFormDependencies
+        self.voiceInputRuntimeStore = voiceInputRuntimeStore
+        self.server = server
+        _isZenModeEnabled = isZenModeEnabled
+        self.isSidebarVisible = isSidebarVisible
+        self.onToggleSidebar = onToggleSidebar
+        self.onOpenSettings = onOpenSettings
+        self.onLeaveRoute = onLeaveRoute
+        self.onDisconnectRoute = onDisconnectRoute
     }
 
-    var visibleViewTabs: [ConnectionViewTab] {
+    /// Selected view type - persisted per server
+    var selectedView: ConnectionViewTabID {
+        viewTabConfig.effectiveView(
+            for: terminalContent.state.selectedView
+        )
+    }
+
+    var visibleViewTabs: [ConnectionViewTabID] {
         viewTabConfig.currentVisibleTabs
     }
 
@@ -58,19 +125,31 @@ struct ConnectionTerminalContainer: View {
         visibleViewTabs.count > 1
     }
 
-    private var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+    var terminalAppearance: TerminalColorAppearance {
+        colorScheme == .dark ? .dark : .light
     }
 
-    var selectedViewBinding: Binding<String> {
+    var terminalAppearanceSnapshot: TerminalAppearanceSnapshot {
+        terminalThemeManager.appearanceSnapshot(for: terminalAppearance)
+    }
+
+    var selectedViewBinding: Binding<ConnectionViewTabID> {
         Binding(
-            get: { viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id]) },
+            get: {
+                viewTabConfig.effectiveView(
+                    for: terminalContent.state.selectedView
+                )
+            },
             set: { newValue in
-                let current = viewTabConfig.effectiveView(for: tabManager.selectedViewByServer[server.id])
+                let current = viewTabConfig.effectiveView(
+                    for: tabManager.connectionViewSelections.selection(for: server.id)
+                )
                 guard current != newValue else { return }
                 DispatchQueue.main.async {
-                    tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: newValue)
+                    tabManager.sessionState.selectView(
+                        viewTabConfig.effectiveView(for: newValue),
+                        for: server.id
+                    )
                 }
             }
         )
@@ -78,12 +157,12 @@ struct ConnectionTerminalContainer: View {
 
     /// Tabs for THIS server only
     var serverTabs: [TerminalTab] {
-        tabManager.tabs(for: server.id)
+        terminalContent.state.tabs
     }
 
     /// Effective selected tab ID for this server.
     var selectedTabId: UUID? {
-        if let selectedId = tabManager.selectedTabByServer[server.id],
+        if let selectedId = terminalContent.state.selectedTabId,
            serverTabs.contains(where: { $0.id == selectedId }) {
             return selectedId
         }
@@ -97,8 +176,8 @@ struct ConnectionTerminalContainer: View {
                 let validId = newValue.flatMap { requestedId in
                     serverTabs.contains(where: { $0.id == requestedId }) ? requestedId : serverTabs.first?.id
                 }
-                guard tabManager.selectedTabByServer[server.id] != validId else { return }
-                tabManager.selectedTabByServer[server.id] = validId
+                guard tabManager.sessionState.selectedTabId(for: server.id) != validId else { return }
+                tabManager.sessionState.selectTab(validId, for: server.id)
             }
         )
     }
@@ -136,57 +215,52 @@ struct ConnectionTerminalContainer: View {
         fileTabManager.selectedTab(for: server.id)
     }
 
-    private var tmuxAttachPromptBinding: Binding<TmuxAttachPrompt?> {
+    private var remoteSessionAttachPromptBinding: Binding<RemoteSessionAttachPrompt?> {
         Binding(
             get: {
-                guard let prompt = tabManager.tmuxAttachPrompt else { return nil }
-                guard tabManager.paneStates[prompt.id]?.serverId == server.id else { return nil }
+                guard let prompt = remoteSessionCoordinator.attachPrompt else { return nil }
+                guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return nil }
                 return prompt
             },
             set: { newValue in
-                guard newValue == nil, let prompt = tabManager.tmuxAttachPrompt else { return }
-                guard tabManager.paneStates[prompt.id]?.serverId == server.id else { return }
-                tabManager.cancelTmuxAttachPrompt(paneId: prompt.id)
+                guard newValue == nil,
+                      let prompt = remoteSessionCoordinator.attachPrompt else { return }
+                guard tabManager.sessionState.paneState(for: prompt.paneId)?.serverId == server.id else { return }
+                remoteSessionCoordinator.cancelPrompt(requestID: prompt.id)
             }
         )
     }
 
     private var liveTerminalBackgroundColor: Color {
-        ThemeColorParser.backgroundColor(for: effectiveThemeName)!
+        Color.fromHex(terminalAppearanceSnapshot.activeTheme.palette.backgroundHex)
     }
 
     var sharedBody: some View {
         let backgroundColor = liveTerminalBackgroundColor
 
-        return platformChrome(
-            contentLayer
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(backgroundColor),
-            backgroundColor: backgroundColor
-        )
+        return platformChrome(backgroundColor: backgroundColor)
             .onAppear {
-                updateTerminalBackgroundColor()
+                voiceInputRuntimeStore.synchronize(
+                    tabIDs: Set(serverTabs.map(\.id)),
+                    for: server.id
+                )
                 repairSelectedTabSelectionIfNeeded()
-                handleSelectedViewChange(selectedView)
+                platformHandleSelectedViewChange(selectedView)
                 ensureInitialFileTabIfNeeded()
             }
-            .onChange(of: terminalThemeName) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: terminalThemeNameLight) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: usePerAppearanceTheme) { _ in
-                updateTerminalBackgroundColor()
-            }
-            .onChange(of: colorScheme) { _ in
-                updateTerminalBackgroundColor()
+            .task(id: terminalAppearanceSnapshot) {
+                let snapshot = terminalThemeManager.activateAppearance(terminalAppearance)
+                ghosttyApp.applyAppearance(snapshot)
             }
             .onChange(of: selectedView) { newValue in
-                handleSelectedViewChange(newValue)
+                platformHandleSelectedViewChange(newValue)
                 ensureInitialFileTabIfNeeded()
             }
-            .onChangeCompat(of: serverTabs.map(\.id)) { _ in
+            .onChange(of: serverTabs.map(\.id)) { tabIDs in
+                voiceInputRuntimeStore.synchronize(
+                    tabIDs: Set(tabIDs),
+                    for: server.id
+                )
                 repairSelectedTabSelectionIfNeeded()
             }
             .onChange(of: isZenModeEnabled) { newValue in
@@ -194,46 +268,12 @@ struct ConnectionTerminalContainer: View {
                     showingZenPanel = false
                 }
             }
+            .onDisappear {
+                statsDependencies.runtimeStore.releaseCollector(for: server.id)
+            }
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
             .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .splitPaneProFeatureAlert(isPresented: $showingSplitPaneUpgradeAlert)
-            .sheet(item: tmuxAttachPromptBinding) { prompt in
-                TmuxAttachPromptSheet(
-                    prompt: prompt,
-                    onConfirm: { selection in
-                        tabManager.resolveTmuxAttachPrompt(paneId: prompt.id, selection: selection)
-                    }
-                )
-                .adaptiveSoftScrollEdges()
-            }
-    }
-
-    @ViewBuilder
-    private var contentLayer: some View {
-        #if os(iOS)
-        // View switches must swap content without implicit animations: animating
-        // the insertion of the Metal-backed terminal view during the segmented
-        // picker's transition hangs the main thread in a trait-update loop.
-        platformContentStack
-            .transaction { transaction in
-                transaction.animation = nil
-            }
-        #else
-        contentStack
-        #endif
-    }
-
-    @ViewBuilder
-    private var contentStack: some View {
-        ZStack {
-            statsLayer
-
-            if selectedView == "files" {
-                filesLayer
-            }
-
-            terminalLayer
-        }
     }
 
     @ViewBuilder
@@ -243,6 +283,7 @@ struct ConnectionTerminalContainer: View {
                 browser: fileBrowser,
                 server: server,
                 fileTab: selectedFileTab,
+                appearance: terminalAppearanceSnapshot,
                 initialPath: selectedFileTab.seedPath
             ) { currentPath in
                 fileTabManager.updateLastKnownPath(currentPath, for: selectedFileTab.id)
@@ -257,45 +298,24 @@ struct ConnectionTerminalContainer: View {
         }
     }
 
-    @ViewBuilder
-    var statsLayer: some View {
-        #if os(iOS)
-        // Mount stats only while selected. The dashboard nests ViewThatFits,
-        // Grid, and lazy stacks; keeping it in the ZStack at opacity 0 makes
-        // every layout pass of the other views re-measure it, which explodes
-        // combinatorially and hangs the main thread when the terminal mounts.
-        if selectedView == "stats" {
-            ServerStatsView(
-                server: server,
-                isVisible: true,
-                backgroundColor: liveTerminalBackgroundColor,
-                sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
-                statsCollector: ServerStatsCollector()
-            )
-            .zIndex(1)
-        }
-        #else
-        // Stats view - always in hierarchy, visibility controlled by opacity
-        // Pass isVisible to pause/resume collection when hidden
-        ServerStatsView(
-            server: server,
-            isVisible: selectedView == "stats",
-            backgroundColor: liveTerminalBackgroundColor,
-            sharedClientProvider: { tabManager.sharedStatsClient(for: server.id) },
-            statsCollector: ServerStatsCollector()
-        )
-            .opacity(selectedView == "stats" ? 1 : 0)
-            .allowsHitTesting(selectedView == "stats")
-            .zIndex(selectedView == "stats" ? 1 : 0)
-        #endif
-    }
-
     var body: some View {
         platformBody
+            .sheet(item: remoteSessionAttachPromptBinding) { prompt in
+                RemoteSessionAttachPromptSheet(
+                    prompt: prompt,
+                    onConfirm: { selection in
+                        tabManager.remoteSessionCoordinator.resolvePrompt(
+                            requestID: prompt.id,
+                            selection: selection
+                        )
+                    }
+                )
+                .adaptiveSoftScrollEdges()
+            }
     }
 
     func handleNewTabCommand() {
-        if selectedView == ConnectionViewTab.files.id {
+        if selectedView == .files {
             openNewFileTab(selectFilesViewOnSuccess: true)
         } else {
             openNewTab(selectTerminalViewOnSuccess: true)
@@ -303,36 +323,31 @@ struct ConnectionTerminalContainer: View {
     }
 
     private func ensureInitialFileTabIfNeeded() {
-        guard selectedView == ConnectionViewTab.files.id else { return }
+        guard selectedView == .files else { return }
 
-        let seedPath = selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
+        let seedPath = selectedTab.flatMap {
+            tabManager.sessionState.paneState(for: $0.focusedPaneId)?.workingDirectory
+        }
         DispatchQueue.main.async {
-            guard selectedView == ConnectionViewTab.files.id else { return }
-            guard let fileTab = fileTabManager.ensureInitialTab(for: server, seedPath: seedPath) else { return }
+            guard selectedView == .files else { return }
+            guard let fileTab = fileTabManager.ensureInitialTab(
+                for: server,
+                seedPath: seedPath,
+                hasProAccess: storeManager.allowsProFeatures
+            ) else { return }
             fileBrowser.prepareNewTab(fileTab, duplicating: nil)
         }
     }
 
     private func repairSelectedTabSelectionIfNeeded() {
-        let currentId = tabManager.selectedTabByServer[server.id]
+        let currentId = tabManager.sessionState.selectedTabId(for: server.id)
         let repairedId = selectedTabId
         guard currentId != repairedId else { return }
-        tabManager.selectedTabByServer[server.id] = repairedId
-    }
-
-    private func handleSelectedViewChange(_ selectedView: String) {
-        #if os(iOS)
-        guard selectedView != ConnectionViewTab.terminal.id else { return }
-        for tab in serverTabs {
-            for paneId in tab.allPaneIds {
-                tabManager.setTerminalPendingVoiceReturn(false, for: paneId)
-            }
-        }
-        #endif
+        tabManager.sessionState.selectTab(repairedId, for: server.id)
     }
 
     func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
-        guard tabManager.canOpenNewTab else {
+        guard tabManager.sessionState.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
             showingTabLimitAlert = true
             return
         }
@@ -342,7 +357,10 @@ struct ConnectionTerminalContainer: View {
                 let tab = try await tabManager.openTab(for: server)
                 await MainActor.run {
                     if selectTerminalViewOnSuccess {
-                        tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.terminal.id)
+                        tabManager.sessionState.selectView(
+                            viewTabConfig.effectiveView(for: .terminal),
+                            for: server.id
+                        )
                     }
                     selectedTabIdBinding.wrappedValue = tab.id
                 }
@@ -353,22 +371,39 @@ struct ConnectionTerminalContainer: View {
     }
 
     func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
-        guard fileTabManager.canOpenNewTab(for: server.id) else {
+        guard fileTabManager.canOpenNewTab(
+            for: server.id,
+            hasProAccess: storeManager.allowsProFeatures
+        ) else {
             showingFileTabLimitAlert = true
             return
         }
 
         let sourceTab = selectedFileTab
         let seedPath = sourceTab.flatMap { fileBrowser.lastVisitedPath(for: $0) }
-            ?? selectedTab.flatMap { tabManager.workingDirectory(for: $0.focusedPaneId) }
-        let newTab = sourceTab.flatMap { fileTabManager.duplicateTab($0, seedPath: seedPath) }
-            ?? fileTabManager.openTab(for: server, seedPath: seedPath)
+            ?? selectedTab.flatMap {
+                tabManager.sessionState.paneState(for: $0.focusedPaneId)?.workingDirectory
+            }
+        let newTab = sourceTab.flatMap {
+            fileTabManager.duplicateTab(
+                $0,
+                seedPath: seedPath,
+                hasProAccess: storeManager.allowsProFeatures
+            )
+        } ?? fileTabManager.openTab(
+            for: server,
+            seedPath: seedPath,
+            hasProAccess: storeManager.allowsProFeatures
+        )
 
         guard let newTab else { return }
         fileBrowser.prepareNewTab(newTab, duplicating: sourceTab)
 
         if selectFilesViewOnSuccess {
-            tabManager.selectedViewByServer[server.id] = viewTabConfig.effectiveView(for: ConnectionViewTab.files.id)
+            tabManager.sessionState.selectView(
+                viewTabConfig.effectiveView(for: .files),
+                for: server.id
+            )
         }
     }
 
@@ -445,7 +480,7 @@ struct ConnectionTerminalContainer: View {
         ServerViewTabActions(
             openNew: handleNewTabCommand,
             closeSelected: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     closeSelectedFileTab()
                 } else if let selectedTab {
                     // Close the focused split pane first (with confirmation,
@@ -459,21 +494,21 @@ struct ConnectionTerminalContainer: View {
                 }
             },
             selectPrevious: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectPreviousFileTab()
                 } else {
                     selectPreviousTab()
                 }
             },
             selectNext: {
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectNextFileTab()
                 } else {
                     selectNextTab()
                 }
             },
             selectIndex: { index in
-                if selectedView == ConnectionViewTab.files.id {
+                if selectedView == .files {
                     selectFileTab(at: index)
                 } else {
                     selectTab(at: index)
@@ -496,22 +531,13 @@ struct ConnectionTerminalContainer: View {
     /// matching the in-pane close button's confirmation.
     func requestCloseFocusedPane() {
         guard selectedTab != nil else { return }
+        platformPrepareForPaneClose()
         showingPaneCloseConfirmation = true
     }
 
     func closeFocusedPaneConfirmed() {
         guard let selectedTab else { return }
         tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
-    }
-
-    private func updateTerminalBackgroundColor() {
-        let themeName = effectiveThemeName
-        Task.detached(priority: .utility) {
-            let resolved = ThemeColorParser.backgroundColor(for: themeName)!
-            await MainActor.run {
-                UserDefaults.standard.set(resolved.toHex(), forKey: "terminalBackgroundColor")
-            }
-        }
     }
 
 }

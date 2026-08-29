@@ -1,6 +1,6 @@
 //
 //  TerminalTextCleaner.swift
-//  orlix
+//  Orlix
 //
 
 import Foundation

@@ -4,7 +4,7 @@ import Foundation
 import ActivityKit
 
 @available(iOS 16.1, *)
-enum OrlixLiveActivityStatus: String, Codable, Hashable {
+nonisolated enum OrlixLiveActivityStatus: String, Codable, Hashable {
     case connected
     case connecting
     case reconnecting
@@ -25,7 +25,7 @@ enum OrlixLiveActivityStatus: String, Codable, Hashable {
 }
 
 @available(iOS 16.1, *)
-struct OrlixActivityAttributes: ActivityAttributes {
+nonisolated struct OrlixActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var status: OrlixLiveActivityStatus
         var activeCount: Int

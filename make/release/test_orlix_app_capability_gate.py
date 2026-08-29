@@ -100,9 +100,9 @@ class CapabilityGateTests(unittest.TestCase):
 
     def test_privacy_required_reason_union_drift_fails(self) -> None:
         value = copy.deepcopy(self.manifest)
-        value["exported_product"]["privacy_required_reason_union"].pop(
-            "NSPrivacyAccessedAPICategoryFileTimestamp"
-        )
+        value["exported_product"]["privacy_required_reason_union"][
+            "NSPrivacyAccessedAPICategoryUserDefaults"
+        ] = ["invalid"]
         with self.assertRaisesRegex(gate.GateError, "required-reason declarations differ"):
             gate.validate_manifest(self.write_manifest(value), REPO_ROOT)
 

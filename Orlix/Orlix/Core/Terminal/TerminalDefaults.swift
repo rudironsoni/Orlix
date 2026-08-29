@@ -4,13 +4,14 @@
 //
 
 import Foundation
+import CoreFoundation
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
 import AppKit
 #endif
 
-enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable {
+nonisolated enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable, Sendable {
     case block
     case bar
     case underline
@@ -28,13 +29,70 @@ enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum TerminalZoomAction {
+nonisolated enum TerminalZoomAction: Equatable, Sendable {
     case zoomIn
     case zoomOut
     case reset
 }
 
-enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable {
+nonisolated enum TerminalZoomShortcutKey: Sendable {
+    case equal
+    case literalPlus
+    case minus
+    case zero
+    case keypadPlus
+    case keypadMinus
+    case keypadZero
+}
+
+nonisolated enum TerminalZoomShortcutRouting {
+    nonisolated static func key(forCommandInput input: String) -> TerminalZoomShortcutKey? {
+        switch input {
+        case "=": .equal
+        case "+": .literalPlus
+        case "-": .minus
+        case "0": .zero
+        default: nil
+        }
+    }
+
+    nonisolated static func resolvedKey(
+        physicalKey: TerminalZoomShortcutKey?,
+        characters: String
+    ) -> TerminalZoomShortcutKey? {
+        if characters == "+" {
+            return .literalPlus
+        }
+        return physicalKey
+    }
+
+    nonisolated static func action(
+        for key: TerminalZoomShortcutKey,
+        hasCommandModifier: Bool,
+        hasShiftModifier: Bool,
+        hasControlModifier: Bool,
+        hasAlternateModifier: Bool
+    ) -> TerminalZoomAction? {
+        guard hasCommandModifier,
+              !hasControlModifier,
+              !hasAlternateModifier else {
+            return nil
+        }
+
+        switch key {
+        case .equal:
+            return .zoomIn
+        case .literalPlus, .keypadPlus:
+            return .zoomIn
+        case .minus, .keypadMinus:
+            return hasShiftModifier ? nil : .zoomOut
+        case .zero, .keypadZero:
+            return hasShiftModifier ? nil : .reset
+        }
+    }
+}
+
+nonisolated enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable, Sendable {
     case none
     case left
     case right
@@ -60,17 +118,17 @@ enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum TerminalOptionKeySide {
+nonisolated enum TerminalOptionKeySide: Sendable {
     case left
     case right
 }
 
-struct TerminalZoomResult: Hashable {
+nonisolated struct TerminalZoomResult: Hashable, Sendable {
     let presentationOverrides: TerminalPresentationOverrides
     let effectiveFontSize: Double
 }
 
-struct TerminalPresentationOverrides: Codable, Hashable, Sendable {
+nonisolated struct TerminalPresentationOverrides: Codable, Hashable, Sendable {
     nonisolated static let empty = TerminalPresentationOverrides()
 
     var fontSize: Double?
@@ -83,11 +141,14 @@ struct TerminalPresentationOverrides: Codable, Hashable, Sendable {
         fontSize == nil
     }
 
-    func resolvedFontSize(defaults: UserDefaults = .standard) -> Double {
+    @MainActor func resolvedFontSize(defaults: UserDefaults = .standard) -> Double {
         fontSize ?? TerminalDefaults.storedFontSize(defaults: defaults)
     }
 
-    func applyingZoom(_ action: TerminalZoomAction, defaults: UserDefaults = .standard) -> TerminalPresentationOverrides {
+    @MainActor func applyingZoom(
+        _ action: TerminalZoomAction,
+        defaults: UserDefaults = .standard
+    ) -> TerminalPresentationOverrides {
         var overrides = self
         let currentFontSize = resolvedFontSize(defaults: defaults)
 
@@ -104,7 +165,7 @@ struct TerminalPresentationOverrides: Codable, Hashable, Sendable {
     }
 }
 
-enum TerminalZoomPresentation {
+nonisolated enum TerminalZoomPresentation {
     static let pinchZoomInThreshold = 1.12
     static let pinchZoomOutThreshold = 0.89
     static let magnificationStepThreshold = 0.12
@@ -124,35 +185,53 @@ enum TerminalZoomPresentation {
     }
 }
 
-enum TerminalDefaults {
+nonisolated enum TerminalDefaults {
     static let fontNameKey = "terminalFontName"
+    static let cjkFontNameKey = "terminalCJKFontName"
     static let fontSizeKey = "terminalFontSize"
     static let cursorStyleKey = "terminalCursorStyle"
     static let cursorBlinkKey = "terminalCursorBlink"
+    static let contentPaddingHorizontalKey = "terminalContentPaddingHorizontal"
+    static let contentPaddingVerticalKey = "terminalContentPaddingVertical"
     static let sshAutoReconnectKey = "sshAutoReconnect"
+    static let keepScreenAwakeKey = "terminalKeepScreenAwake"
     static let optionAsAltModeKey = "terminalOptionAsAltMode"
     static let preserveTerminalSizeForKeyboardKey = "terminalPreserveSizeForKeyboard"
-    static let legacyDefaultFontName = "JetBrainsMono Nerd Font"
-    static let minimumFontSize = 4.0
-    static let maximumFontSize = 32.0
-    static let fontSizeStep = 1.0
-    static let defaultCursorStyle: TerminalCursorStyle = .block
-    static let defaultCursorBlink = true
-    #if os(macOS)
-    static let defaultPrimaryFontName = "Menlo"
-    static let macOSFallbackFontFamilies = [
-        "Apple SD Gothic Neo",
-        legacyDefaultFontName
+    nonisolated static let legacyDefaultFontName = "JetBrainsMono Nerd Font"
+    nonisolated static let bundledFontFamilyNames = [
+        legacyDefaultFontName,
+        "Hack Nerd Font",
+        "FiraCode Nerd Font",
+        "MesloLGS Nerd Font"
     ]
+    nonisolated static let symbolFallbackFontFamily = legacyDefaultFontName
+    #if os(macOS)
+    nonisolated static let automaticTextFallbackFontFamilies = ["Apple SD Gothic Neo"]
+    #else
+    nonisolated static let automaticTextFallbackFontFamilies: [String] = []
+    #endif
+    nonisolated static let minimumFontSize = 4.0
+    nonisolated static let maximumFontSize = 32.0
+    nonisolated static let fontSizeStep = 1.0
+    nonisolated static let minimumContentPadding = 0.0
+    nonisolated static let maximumContentPadding = 32.0
+    nonisolated static let contentPaddingStep = 1.0
+    nonisolated static let defaultContentPadding = 0.0
+    nonisolated static let defaultCursorStyle: TerminalCursorStyle = .block
+    nonisolated static let defaultCursorBlink = true
+    nonisolated static let defaultKeepScreenAwake = true
+    #if os(macOS)
+    nonisolated static let defaultPrimaryFontName = "Menlo"
     #endif
 
-    static func applyIfNeeded() {
+    @MainActor static func applyIfNeeded() {
         applyIfNeeded(defaults: .standard)
     }
 
-    static func applyIfNeeded(defaults: UserDefaults) {
+    @MainActor static func applyIfNeeded(defaults: UserDefaults) {
         seedFontDefaultsIfNeeded(defaults: defaults)
         seedCursorDefaultsIfNeeded(defaults: defaults)
+        sanitizeStoredContentPadding(defaults: defaults)
 
         if defaults.object(forKey: ImagePasteBehavior.userDefaultsKey) == nil {
             let imagePasteBehavior = RichClipboardSettings.resolvedImagePasteBehavior(defaults: defaults)
@@ -164,7 +243,30 @@ enum TerminalDefaults {
         min(max(fontSize.rounded(), minimumFontSize), maximumFontSize)
     }
 
-    static func storedFontSize(defaults: UserDefaults = .standard) -> Double {
+    nonisolated static func clampedContentPadding(_ padding: Double) -> Double {
+        guard padding.isFinite else { return defaultContentPadding }
+        return min(
+            max(padding.rounded(), minimumContentPadding),
+            maximumContentPadding
+        )
+    }
+
+    nonisolated static func storedContentPadding(
+        defaults: UserDefaults = .standard
+    ) -> TerminalContentPadding {
+        TerminalContentPadding(
+            horizontal: storedContentPaddingValue(
+                forKey: contentPaddingHorizontalKey,
+                defaults: defaults
+            ),
+            vertical: storedContentPaddingValue(
+                forKey: contentPaddingVerticalKey,
+                defaults: defaults
+            )
+        )
+    }
+
+    @MainActor static func storedFontSize(defaults: UserDefaults = .standard) -> Double {
         let stored = defaults.object(forKey: fontSizeKey) as? Double ?? defaultFontSize
         return clampedFontSize(stored)
     }
@@ -173,12 +275,16 @@ enum TerminalDefaults {
         (defaults.object(forKey: sshAutoReconnectKey) as? Bool) ?? true
     }
 
+    static func keepScreenAwakeEnabled(defaults: UserDefaults = .standard) -> Bool {
+        (defaults.object(forKey: keepScreenAwakeKey) as? Bool) ?? defaultKeepScreenAwake
+    }
+
     static func optionAsAltMode(defaults: UserDefaults = .standard) -> TerminalOptionAsAltMode {
         guard let rawValue = defaults.string(forKey: optionAsAltModeKey) else { return .none }
         return TerminalOptionAsAltMode(rawValue: rawValue) ?? .none
     }
 
-    static var defaultFontSize: Double {
+    @MainActor static var defaultFontSize: Double {
         #if os(macOS)
         return 12.0
         #elseif os(iOS)
@@ -205,7 +311,7 @@ enum TerminalDefaults {
     }
     #endif
 
-    private static func seedFontDefaultsIfNeeded(defaults: UserDefaults) {
+    @MainActor private static func seedFontDefaultsIfNeeded(defaults: UserDefaults) {
         #if os(macOS)
         seedMacOSFontDefaultsIfNeeded(defaults: defaults)
         #else
@@ -236,8 +342,34 @@ enum TerminalDefaults {
         }
     }
 
+    private static func sanitizeStoredContentPadding(defaults: UserDefaults) {
+        for key in [contentPaddingHorizontalKey, contentPaddingVerticalKey] {
+            guard let storedValue = defaults.object(forKey: key) else { continue }
+
+            let resolvedValue = storedContentPaddingValue(forKey: key, defaults: defaults)
+            guard let number = storedValue as? NSNumber,
+                  CFGetTypeID(number) != CFBooleanGetTypeID(),
+                  number.doubleValue.isFinite,
+                  number.doubleValue == resolvedValue else {
+                defaults.set(resolvedValue, forKey: key)
+                continue
+            }
+        }
+    }
+
+    private static func storedContentPaddingValue(
+        forKey key: String,
+        defaults: UserDefaults
+    ) -> Double {
+        guard let number = defaults.object(forKey: key) as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return defaultContentPadding
+        }
+        return clampedContentPadding(number.doubleValue)
+    }
+
     #if os(macOS)
-    private static func seedMacOSFontDefaultsIfNeeded(defaults: UserDefaults) {
+    @MainActor private static func seedMacOSFontDefaultsIfNeeded(defaults: UserDefaults) {
         let storedFontName = defaults.string(forKey: fontNameKey)
         let normalizedStoredFontName = storedFontName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedFontSize = defaults.object(forKey: fontSizeKey) as? Double
@@ -272,7 +404,7 @@ enum TerminalDefaults {
         fontAvailability(storedFontName) ? storedFontName : defaultPrimaryFontName
     }
 
-    private static func isAvailableMacOSFont(named fontName: String) -> Bool {
+    @MainActor private static func isAvailableMacOSFont(named fontName: String) -> Bool {
         NSFont(name: fontName, size: 12) != nil
     }
     #endif
