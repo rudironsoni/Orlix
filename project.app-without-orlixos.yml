@@ -1,0 +1,29 @@
+targets:
+  Orlix:
+    preBuildScripts:
+      - name: Reject App-Only Release Builds
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" != Debug ]; then
+              echo "OrlixOS is required for non-Debug Orlix builds. Regenerate with ORLIX_APP_WITH_ORLIXOS=YES." >&2
+              exit 1
+          fi
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+          - $(inherited)
+          - ORLIX_APP_WITHOUT_ORLIXOS
+  OrlixTestApp:
+    preBuildScripts:
+      - name: Reject App-Only Release Builds
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" != Debug ]; then
+              echo "OrlixOS is required for non-Debug Orlix builds. Regenerate with ORLIX_APP_WITH_ORLIXOS=YES." >&2
+              exit 1
+          fi
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+          - $(inherited)
+          - ORLIX_APP_WITHOUT_ORLIXOS

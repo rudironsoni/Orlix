@@ -1,4 +1,11 @@
 name: Orlix
+include:
+  - path: project.app-with-orlixos.yml
+    relativePaths: false
+    enable: ${ORLIX_APP_WITH_ORLIXOS_ENABLED}
+  - path: project.app-without-orlixos.yml
+    relativePaths: false
+    enable: ${ORLIX_APP_WITHOUT_ORLIXOS_ENABLED}
 options:
   bundleIdPrefix: com.rudironsoni
   deploymentTarget:
@@ -474,8 +481,6 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
-      - target: OrlixOS
-        embed: true
       - target: OrlixLiveActivity
         embed: true
       - target: OrlixPacketTunnel
@@ -623,8 +628,6 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
-      - target: OrlixOS
-        embed: true
       - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
         embed: false
       - package: MLXSwift
@@ -1031,6 +1034,7 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: false
+      storeKitConfiguration: Orlix/OrlixStoreKit.storekit
       targets:
         - name: OrlixTests
   "Orlix UI Tests":

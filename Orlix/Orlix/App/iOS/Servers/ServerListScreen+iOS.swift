@@ -79,6 +79,7 @@ struct ServerListScreen: View {
 
     var body: some View {
         List {
+#if ORLIX_APP_WITH_ORLIXOS
             Section("Local") {
                 Button {
                     showingLocalInstance = true
@@ -87,6 +88,7 @@ struct ServerListScreen: View {
                 }
                 .accessibilityIdentifier("orlix.local-instance.open")
             }
+#endif
             serversSection
             activeConnectionsSection
         }
@@ -103,9 +105,11 @@ struct ServerListScreen: View {
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
+#if ORLIX_APP_WITH_ORLIXOS
         .navigationDestination(isPresented: $showingLocalInstance) {
             DefaultLocalInstanceTerminalView()
         }
+#endif
         .toolbar {
             ToolbarItem(placement: .principal) {
                 workspaceToolbarButton

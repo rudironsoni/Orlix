@@ -52,6 +52,21 @@ ORLIX_BETA_SIMULATOR_ID ?= ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
+ORLIX_APP_TEST_ONLY ?=
+ORLIX_APP_BUILD_DESTINATION ?= generic/platform=iOS Simulator
+ORLIX_APP_BUILD_CONFIGURATION ?= Debug
+ORLIX_APP_WITH_ORLIXOS ?= YES
+ifeq ($(ORLIX_APP_WITH_ORLIXOS),YES)
+ORLIX_APP_WITH_ORLIXOS_ENABLED := true
+ORLIX_APP_WITHOUT_ORLIXOS_ENABLED := false
+else ifeq ($(ORLIX_APP_WITH_ORLIXOS),NO)
+ORLIX_APP_WITH_ORLIXOS_ENABLED := false
+ORLIX_APP_WITHOUT_ORLIXOS_ENABLED := true
+else
+$(error invalid ORLIX_APP_WITH_ORLIXOS='$(ORLIX_APP_WITH_ORLIXOS)'; expected YES or NO)
+endif
+export ORLIX_APP_WITH_ORLIXOS_ENABLED
+export ORLIX_APP_WITHOUT_ORLIXOS_ENABLED
 ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
 ORLIX_TCTI_DERIVED_DATA_PATH ?= $(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/DerivedData
 ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS ?= 330
@@ -124,7 +139,7 @@ ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj tssh-vendor-prepare run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check app-build app-build-isolation-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj tssh-vendor-prepare run clean mrproper __app-build-mode-check __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: vvterm-sync vvterm-sync-resolve vvterm-reconcile vvterm-sync-complete vvterm-source-check vvterm-sync-tests vvterm-upstream-tests
@@ -158,8 +173,11 @@ help:
 	@printf '%s\n' '  hostadapter-tests   run private Darwin transport and memory tests'
 	@printf '%s\n' '  orlixos-tests       run OrlixOS unit tests'
 	@printf '%s\n' '  orlixos-xcframework build the sole public OrlixOS.xcframework SDK'
+	@printf '%s\n' '  app-build           build the native Orlix app; set ORLIX_APP_WITH_ORLIXOS=NO for app-only Debug'
 	@printf '%s\n' '  app-tests           run native Orlix app and UI tests'
+	@printf '%s\n' '  app-build-isolation-check verify app build graphs with OrlixOS enabled and disabled'
 	@printf '%s\n' '  runtime-tests       run app-hosted OrlixOS runtime integration tests'
+	@printf '%s\n' '  xcodeproj ORLIX_APP_WITH_ORLIXOS=NO generate a Debug app-only project'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Beta targets:'
 	@printf '%s\n' '  beta-prerequisites  verify local TestFlight build prerequisites'
@@ -793,6 +811,7 @@ app-tests: xcodeproj
 		-scheme "Orlix Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_TEST_DESTINATION)' \
+		$(if $(ORLIX_APP_TEST_ONLY),-only-testing:$(ORLIX_APP_TEST_ONLY)) \
 		test
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -995,6 +1014,40 @@ release-workflow-check: __release-workflow-tests
 
 xcodeproj: tssh-vendor-prepare
 	@$(KERNEL_MAKE) xcodeproj
+
+app-build: __app-build-mode-check xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme Orlix \
+		-configuration "$(ORLIX_APP_BUILD_CONFIGURATION)" \
+		-destination '$(ORLIX_APP_BUILD_DESTINATION)' \
+		CODE_SIGNING_ALLOWED=NO \
+		build
+
+__app-build-mode-check:
+	@if [ "$(ORLIX_APP_WITH_ORLIXOS)" = NO ] && [ "$(ORLIX_APP_BUILD_CONFIGURATION)" != Debug ]; then \
+		echo "OrlixOS is required for non-Debug Orlix builds. Set ORLIX_APP_WITH_ORLIXOS=YES." >&2; \
+		exit 1; \
+	fi
+
+app-build-isolation-check:
+	@set -euo pipefail; \
+	command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen is required" >&2; exit 1; }; \
+	command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }; \
+	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-app-build-isolation.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	ORLIX_APP_WITH_ORLIXOS_ENABLED=true ORLIX_APP_WITHOUT_ORLIXOS_ENABLED=false \
+		xcodegen dump --spec project.yml --type parsed-json --file "$$tmp/with.json"; \
+	ORLIX_APP_WITH_ORLIXOS_ENABLED=false ORLIX_APP_WITHOUT_ORLIXOS_ENABLED=true \
+		xcodegen dump --spec project.yml --type parsed-json --file "$$tmp/without.json"; \
+	for target in Orlix OrlixTestApp; do \
+		[ "$$(jq --arg target "$$target" '[.targets[$$target].dependencies[] | select(.target == "OrlixOS")] | length' "$$tmp/with.json")" -eq 1 ] || { echo "$$target must depend on OrlixOS when enabled" >&2; exit 1; }; \
+		[ "$$(jq --arg target "$$target" '[.targets[$$target].dependencies[] | select(.target == "OrlixOS")] | length' "$$tmp/without.json")" -eq 0 ] || { echo "$$target still depends on OrlixOS when disabled" >&2; exit 1; }; \
+		jq -e --arg target "$$target" '.targets[$$target].settings.base.SWIFT_ACTIVE_COMPILATION_CONDITIONS | index("ORLIX_APP_WITH_ORLIXOS") != null' "$$tmp/with.json" >/dev/null || { echo "$$target lacks the enabled compilation condition" >&2; exit 1; }; \
+		jq -e --arg target "$$target" '.targets[$$target].settings.base.SWIFT_ACTIVE_COMPILATION_CONDITIONS | index("ORLIX_APP_WITHOUT_ORLIXOS") != null' "$$tmp/without.json" >/dev/null || { echo "$$target lacks the disabled compilation condition" >&2; exit 1; }; \
+		jq -e --arg target "$$target" '[.targets[$$target].prebuildScripts[] | select(.name == "Reject App-Only Release Builds")] | length == 1' "$$tmp/without.json" >/dev/null || { echo "$$target lacks the app-only Release guard" >&2; exit 1; }; \
+	done; \
+	echo 'Orlix app build isolation: passed'
 
 tssh-vendor-prepare:
 	@$(APP_MAKE) build type=vendor vendor=tssh
