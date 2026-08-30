@@ -66,6 +66,14 @@ struct TSSHProfileTests {
         TSSHProfile(forwards: [
             TSSHPortForwardRule(
                 direction: .local,
+                bindPort: 0,
+                targetHost: "127.0.0.1",
+                targetPort: 22
+            ),
+        ]),
+        TSSHProfile(forwards: [
+            TSSHPortForwardRule(
+                direction: .local,
                 bindPort: 8_080,
                 targetHost: "",
                 targetPort: 80

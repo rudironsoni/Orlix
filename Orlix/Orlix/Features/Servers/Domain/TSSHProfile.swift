@@ -48,8 +48,7 @@ nonisolated struct TSSHPortForwardRule: Identifiable, Codable, Hashable, Sendabl
     }
 
     var isValid: Bool {
-        guard (0...65_535).contains(bindPort) else { return false }
-        if direction == .remote && bindPort == 0 { return false }
+        guard (1...65_535).contains(bindPort) else { return false }
         if direction == .dynamic { return true }
         return !targetHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (1...65_535).contains(targetPort)

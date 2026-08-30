@@ -828,7 +828,7 @@ struct ServerFormSheet: View {
         Button {
             form.tsshProfile.forwards.append(TSSHPortForwardRule(
                 direction: .local,
-                bindPort: 0,
+                bindPort: 8_080,
                 targetHost: "127.0.0.1",
                 targetPort: 22
             ))

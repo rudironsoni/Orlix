@@ -121,6 +121,8 @@ final class TSSHRuntime {
     private var lastRemoteSessionEvent: RemoteSessionEvent?
     private var standaloneStartupActionAwaitingExit = false
     private var terminalEventGate = TSSHTerminalEventGate()
+    private var cancelledStartPreservesServer = false
+    private var cancelledStartDeletesResumeState = true
     private var startupReady = false
     private var isClosing = false
 
@@ -179,6 +181,8 @@ final class TSSHRuntime {
 
     func startIfNeeded() {
         guard !isClosing, transport == nil, startTask == nil else { return }
+        cancelledStartPreservesServer = false
+        cancelledStartDeletesResumeState = true
         startupReady = false
         ownerAccess.markTransport(paneID)
         ownerAccess.updateConnectionState(paneID, .connecting)
@@ -212,9 +216,16 @@ final class TSSHRuntime {
 
     func prepareForApplicationBackground() async {
         agentBridge?.suspend()
-        guard let resumeState else { return }
-        do { try resumeStore.save(resumeState, for: paneID) }
-        catch { logger.error("Cannot persist TSSH resume state: \(error.localizedDescription, privacy: .public)") }
+        guard transport != nil, session != nil, let resumeState else { return }
+        let refreshedState = resumeState.refreshed(at: Date())
+        do {
+            try resumeStore.save(refreshedState, for: paneID)
+            self.resumeState = refreshedState
+        } catch {
+            logger.error(
+                "Cannot persist TSSH resume state: \(error.localizedDescription, privacy: .public)"
+            )
+        }
         guard !server.tsshProfile.keepTunnelsInBackground,
               let forwarder else { return }
         callGate.emergencyCloseForwarder(forwarder)
@@ -241,6 +252,8 @@ final class TSSHRuntime {
         isClosing = true
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
+            cancelledStartPreservesServer = preserveServer
+            cancelledStartDeletesResumeState = deleteResumeState
             pendingStart.cancel()
             await pendingStart.value
         }
@@ -276,6 +289,8 @@ final class TSSHRuntime {
     func prepareForReconnect() async {
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
+            cancelledStartPreservesServer = true
+            cancelledStartDeletesResumeState = false
             pendingStart.cancel()
             await pendingStart.value
         }
@@ -319,27 +334,39 @@ final class TSSHRuntime {
             if try await resumeSavedSession() { return }
             try await startFreshSession()
         } catch is CancellationError {
-            await discardFailedStart()
+            await discardFailedStart(
+                preserveServer: cancelledStartPreservesServer,
+                deleteResumeState: cancelledStartDeletesResumeState
+            )
             return
         } catch {
-            await discardFailedStart()
+            await discardFailedStart(preserveServer: false, deleteResumeState: true)
             await reportFailure(error)
         }
     }
 
-    private func discardFailedStart() async {
+    private func discardFailedStart(
+        preserveServer: Bool,
+        deleteResumeState: Bool
+    ) async {
         invalidateConnectionGeneration()
         let transportFallback = transport.map(scheduleTransportFallback)
-        if let forwarder { await callGate.closeForwarder(forwarder) }
-        if let session { await callGate.closeSession(session) }
-        if let transport { await callGate.closeTransport(transport, preserveServer: false) }
+        if preserveServer {
+            if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
+            if let session { callGate.forgetSession(session) }
+            if let transport { callGate.emergencyAbandon(transport) }
+        } else {
+            if let forwarder { await callGate.closeForwarder(forwarder) }
+            if let session { await callGate.closeSession(session) }
+            if let transport { await callGate.closeTransport(transport, preserveServer: false) }
+        }
         await stopOwnedVPN()
         transportFallback?.cancel()
-        try? resumeStore.delete(for: paneID)
+        if deleteResumeState { try? resumeStore.delete(for: paneID) }
         self.forwarder = nil
         self.session = nil
         self.transport = nil
-        resumeState = nil
+        if deleteResumeState { resumeState = nil }
         outputBridge = nil
         stateBridge = nil
         healthBridge = nil

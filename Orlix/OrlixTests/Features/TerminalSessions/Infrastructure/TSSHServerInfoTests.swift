@@ -256,4 +256,37 @@ struct TSSHServerInfoTests {
         changedPolicy.tsshProfile.sshAgentForwarding = true
         #expect(!TSSHResumeCompatibilityPolicy.canResume(state, with: changedPolicy))
     }
+
+    @Test
+    func refreshingALiveResumeStateOnlyUpdatesItsTimestamp() throws {
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":7,"ServerID":2}"#
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            host: server.host,
+            info: info,
+            sessionID: 42,
+            profile: server.tsshProfile,
+            savedAt: Date(timeIntervalSince1970: 1)
+        )
+        let refreshedAt = Date(timeIntervalSince1970: 2)
+
+        let refreshed = state.refreshed(at: refreshedAt)
+
+        #expect(refreshed.savedAt == refreshedAt)
+        #expect(refreshed.serverIdentity == state.serverIdentity)
+        #expect(refreshed.host == state.host)
+        #expect(refreshed.info == state.info)
+        #expect(refreshed.sessionID == state.sessionID)
+        #expect(refreshed.profile == state.profile)
+    }
 }

@@ -12,6 +12,17 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
     var isExpired: Bool {
         Date().timeIntervalSince(savedAt) >= 86_400
     }
+
+    func refreshed(at date: Date) -> Self {
+        Self(
+            serverIdentity: serverIdentity,
+            host: host,
+            info: info,
+            sessionID: sessionID,
+            profile: profile,
+            savedAt: date
+        )
+    }
 }
 
 nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
