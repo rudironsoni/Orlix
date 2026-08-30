@@ -166,14 +166,16 @@ nonisolated struct TSSHProfile: Codable, Hashable, Sendable {
               (1...300).contains(connectTimeoutSeconds),
               (0...864_000).contains(aliveTimeoutSeconds),
               (0...3_600).contains(heartbeatTimeoutSeconds),
-              !vpnDNSServers.isEmpty,
-              vpnDNSServers.count <= 8,
-              vpnDNSServers.allSatisfy(TSSHVPNNetworkPolicy.isIPAddress),
-              vpnExcludedRoutes.count <= 64,
-              vpnExcludedRoutes.allSatisfy({
-                  TSSHVPNNetworkPolicy.parseExcludedRoute($0) != nil
-              }),
               forwards.allSatisfy(\.isValid) else { return false }
+        if vpnEnabled {
+            guard !vpnDNSServers.isEmpty,
+                  vpnDNSServers.count <= 8,
+                  vpnDNSServers.allSatisfy(TSSHVPNNetworkPolicy.isIPAddress),
+                  vpnExcludedRoutes.count <= 64,
+                  vpnExcludedRoutes.allSatisfy({
+                      TSSHVPNNetworkPolicy.parseExcludedRoute($0) != nil
+                  }) else { return false }
+        }
         guard let serverPath else { return true }
         let trimmed = serverPath.trimmingCharacters(in: .whitespacesAndNewlines)
         return !trimmed.isEmpty

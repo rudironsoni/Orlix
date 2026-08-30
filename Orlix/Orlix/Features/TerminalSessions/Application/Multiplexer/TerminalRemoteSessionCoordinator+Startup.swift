@@ -102,6 +102,31 @@ extension TerminalRemoteSessionCoordinator {
         )
     }
 
+    func tsshStartupPlan(
+        for paneID: UUID,
+        serverID: UUID,
+        client: SSHClient,
+        runtimeToken: UUID,
+        validateOwner: () throws -> Void
+    ) async throws -> TerminalShellStartupPlan {
+        let backendIdentifier = backendIdentifier(for: serverID)
+        return try await startupPlan(
+            for: paneID,
+            serverID: serverID,
+            client: client,
+            backendIdentifier: backendIdentifier,
+            availabilityResolver: {
+                await self.remoteSessions.availability(
+                    for: backendIdentifier,
+                    using: client
+                )
+            },
+            transport: .tssh,
+            requestID: runtimeToken,
+            validateOwner: validateOwner
+        )
+    }
+
     private func startupPlan(
         for paneID: UUID,
         serverID: UUID,

@@ -43,7 +43,8 @@ struct TSSHConcurrencyTests {
         let firstOwner = UUID()
         let secondOwner = UUID()
 
-        try coordinator.acquire(firstOwner)
+        #expect(try coordinator.acquire(firstOwner) == .vacant)
+        #expect(try coordinator.acquire(firstOwner) == .existingOwner)
         #expect(throws: TSSHRuntimeError.self) {
             try coordinator.acquire(secondOwner)
         }

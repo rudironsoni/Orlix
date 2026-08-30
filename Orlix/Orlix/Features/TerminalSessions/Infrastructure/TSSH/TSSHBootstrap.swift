@@ -36,6 +36,11 @@ nonisolated enum TSSHBootstrap {
     ) async throws -> TSSHBootstrapResult {
         guard server.tsshProfile.isValid else { throw TSSHRuntimeError.invalidProfile }
 
+        let environment = await client.remoteEnvironment()
+        guard supports(environment: environment) else {
+            throw TSSHRuntimeError.unsupportedRemoteEnvironment
+        }
+
         let command = startCommand(profile: server.tsshProfile)
         let output: String
         do {
@@ -57,6 +62,10 @@ nonisolated enum TSSHBootstrap {
         let info = try TSSHServerInfo.parse(output: output).assigningClientIDIfNeeded()
         let host = await client.remoteEndpointHost() ?? server.host
         return TSSHBootstrapResult(host: host, info: info)
+    }
+
+    static func supports(environment: RemoteEnvironment) -> Bool {
+        environment.platform != .windows && environment.shellProfile.family == .posix
     }
 
     static func startCommand(profile: TSSHProfile, nonce: UUID = UUID()) -> String {

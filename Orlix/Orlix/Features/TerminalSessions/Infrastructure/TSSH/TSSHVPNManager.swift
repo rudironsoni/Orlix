@@ -33,15 +33,22 @@ nonisolated struct TSSHVPNStartupMonitor: Sendable {
 
 @MainActor
 final class TSSHVPNOwnershipCoordinator {
+    enum Acquisition: Equatable {
+        case existingOwner
+        case vacant
+    }
+
     private(set) var ownerID: UUID?
 
-    func acquire(_ requestedOwnerID: UUID) throws {
+    func acquire(_ requestedOwnerID: UUID) throws -> Acquisition {
         guard ownerID == nil || ownerID == requestedOwnerID else {
             throw TSSHRuntimeError.vpnStartFailed(
                 "Another TSSH pane already owns the system VPN tunnel."
             )
         }
+        let acquisition: Acquisition = ownerID == nil ? .vacant : .existingOwner
         ownerID = requestedOwnerID
+        return acquisition
     }
 
     func isOwned(by requestedOwnerID: UUID) -> Bool {
@@ -110,13 +117,14 @@ final class TSSHVPNManager {
 
     func installAndStart(_ configuration: TSSHVPNConfiguration, ownerID: UUID) async throws {
         guard let json = configuration.json else { throw TSSHRuntimeError.invalidProfile }
-        try ownership.acquire(ownerID)
+        let acquisition = try ownership.acquire(ownerID)
         var retainsOwnership = false
         defer {
             if !retainsOwnership { ownership.release(ownerID) }
         }
         let manager = try await loadManager()
-        let existingOwnerID = (manager.protocolConfiguration as? NETunnelProviderProtocol)?
+        let existingProvider = manager.protocolConfiguration as? NETunnelProviderProtocol
+        let existingOwnerID = existingProvider?
             .providerConfiguration?["tsshOwnerID"] as? String
         if existingOwnerID == ownerID.uuidString {
             switch manager.connection.status {
@@ -131,11 +139,37 @@ final class TSSHVPNManager {
                 break
             }
         } else if existingOwnerID != nil {
+            let canReclaimActiveTunnel = acquisition == .vacant
+                && existingProvider?.providerConfiguration?["tsshHost"] as? String
+                    == configuration.tsshHost
+            if canReclaimActiveTunnel {
+                switch manager.connection.status {
+                case .connecting, .connected, .reasserting:
+                    var providerConfiguration = existingProvider?.providerConfiguration ?? [:]
+                    providerConfiguration["tsshOwnerID"] = ownerID.uuidString
+                    existingProvider?.providerConfiguration = providerConfiguration
+                    manager.protocolConfiguration = existingProvider
+                    try await manager.saveToPreferences()
+                    try await manager.loadFromPreferences()
+                    try await waitUntilConnected(manager.connection)
+                    retainsOwnership = true
+                    return
+                default:
+                    break
+                }
+            }
             switch manager.connection.status {
-            case .connecting, .connected, .reasserting, .disconnecting:
+            case .connecting, .connected, .reasserting:
+                if acquisition == .vacant {
+                    manager.connection.stopVPNTunnel()
+                    try await waitUntilDisconnected(manager.connection)
+                    break
+                }
                 throw TSSHRuntimeError.vpnStartFailed(
                     "Another TSSH pane already owns the system VPN tunnel."
                 )
+            case .disconnecting:
+                try await waitUntilDisconnected(manager.connection)
             default:
                 break
             }
@@ -201,6 +235,18 @@ final class TSSHVPNManager {
             case .waiting:
                 try await Task.sleep(for: .milliseconds(100))
             }
+        }
+    }
+
+    private func waitUntilDisconnected(_ connection: NEVPNConnection) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while connection.status != .disconnected && connection.status != .invalid {
+            guard ContinuousClock.now < deadline else {
+                throw TSSHRuntimeError.vpnStartFailed(
+                    "The previous VPN tunnel did not stop within 30 seconds."
+                )
+            }
+            try await Task.sleep(for: .milliseconds(100))
         }
     }
 

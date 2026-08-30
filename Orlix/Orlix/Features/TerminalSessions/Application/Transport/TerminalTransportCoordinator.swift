@@ -752,16 +752,44 @@ final class TerminalTransportCoordinator {
             isCurrent: { [weak self] paneID, token in
                 self?.tsshRuntimes[paneID]?.identityToken == token
             },
+            startupPlan: { [weak self] paneID, serverID, client, token in
+                guard let self else { throw CancellationError() }
+                return try await self.remoteSessionCoordinator.tsshStartupPlan(
+                    for: paneID,
+                    serverID: serverID,
+                    client: client,
+                    runtimeToken: token,
+                    validateOwner: { [weak self] in
+                        try Task.checkCancellation()
+                        guard self?.tsshRuntimes[paneID]?.identityToken == token else {
+                            throw CancellationError()
+                        }
+                    }
+                )
+            },
+            resumeContext: { [weak self] paneID in
+                self?.sessionAccess.paneState(paneID)?.remoteSessionResumeContext
+            },
+            setResumeContext: { [weak self] paneID, context in
+                self?.sessionAccess.send(.eternalTerminalResumeContext(paneID, context))
+            },
+            setStartupActionReplayPending: { [weak self] paneID, isPending in
+                self?.sessionAccess.send(.startupActionReplayPending(paneID, isPending))
+            },
+            remoteSessionAttached: { [weak self] paneID in
+                self?.remoteSessionCoordinator.confirmManagedSession(for: paneID)
+                self?.sessionAccess.send(.startupActionReplayPending(paneID, false))
+            },
             updateConnectionState: { [weak self] paneID, state in
                 self?.sessionAccess.send(.connectionState(paneID, state))
             },
             markTransport: { [weak self] paneID in
                 self?.sessionAccess.send(.activeTransport(paneID, .tssh))
             },
-            handleShellEnd: { [weak self] paneID, token in
+            handleShellEnd: { [weak self] paneID, token, reason in
                 self?.sessionAccess.send(.shellEnd(
                     paneID,
-                    .transportInterrupted,
+                    reason,
                     .tssh(runtimeToken: token)
                 ))
             }

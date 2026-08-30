@@ -145,6 +145,7 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
 
 nonisolated enum TSSHRuntimeError: LocalizedError, Sendable {
     case invalidProfile
+    case unsupportedRemoteEnvironment
     case tsshdNotFound
     case invalidServerResponse
     case bootstrapFailed(String)
@@ -157,6 +158,8 @@ nonisolated enum TSSHRuntimeError: LocalizedError, Sendable {
         switch self {
         case .invalidProfile:
             return "The TSSH profile is invalid."
+        case .unsupportedRemoteEnvironment:
+            return "TSSH requires a POSIX remote shell."
         case .tsshdNotFound:
             return "tsshd is not installed on the remote host."
         case .invalidServerResponse:

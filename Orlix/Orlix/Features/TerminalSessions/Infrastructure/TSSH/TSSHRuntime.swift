@@ -4,9 +4,23 @@ import os.log
 @MainActor
 struct TSSHRuntimeOwnerAccess {
     let isCurrent: (_ paneID: UUID, _ token: UUID) -> Bool
+    let startupPlan: (
+        _ paneID: UUID,
+        _ serverID: UUID,
+        _ client: SSHClient,
+        _ token: UUID
+    ) async throws -> TerminalShellStartupPlan
+    let resumeContext: (_ paneID: UUID) -> RemoteSessionLifecycleContext?
+    let setResumeContext: (_ paneID: UUID, _ context: RemoteSessionLifecycleContext?) -> Void
+    let setStartupActionReplayPending: (_ paneID: UUID, _ isPending: Bool) -> Void
+    let remoteSessionAttached: (_ paneID: UUID) -> Void
     let updateConnectionState: (_ paneID: UUID, _ state: ConnectionState) -> Void
     let markTransport: (_ paneID: UUID) -> Void
-    let handleShellEnd: (_ paneID: UUID, _ token: UUID) -> Void
+    let handleShellEnd: (
+        _ paneID: UUID,
+        _ token: UUID,
+        _ reason: TerminalShellEndReason
+    ) -> Void
 }
 
 nonisolated struct TSSHForwardStatus: Equatable, Sendable {
@@ -69,6 +83,10 @@ final class TSSHRuntime {
     private var ownsVPN = false
     private var forwardStatuses: [UUID: TSSHForwardStatus] = [:]
     private var connectionGeneration = UUID()
+    private var remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
+    private var lastRemoteSessionEvent: RemoteSessionEvent?
+    private var standaloneStartupActionAwaitingExit = false
     private var isClosing = false
 
     var isStartInFlight: Bool { startTask != nil }
@@ -321,6 +339,7 @@ final class TSSHRuntime {
                 try Task.checkCancellation()
                 try await enableAgentIfRequested(profile: currentProfile, on: transport)
                 let generation = connectionGeneration
+                restoreRemoteSessionLifecycle()
                 let outputBridge = makeOutputBridge(generation: generation)
                 self.outputBridge = outputBridge
                 let attached = try await callGate.attachSession(
@@ -404,6 +423,13 @@ final class TSSHRuntime {
             client: sshClient
         )
         try Task.checkCancellation()
+        let startupPlan = try await ownerAccess.startupPlan(
+            paneID,
+            server.id,
+            sshClient,
+            identityToken
+        )
+        try Task.checkCancellation()
         let transport = try await connect(
             bootstrap.host,
             info: bootstrap.info,
@@ -416,14 +442,14 @@ final class TSSHRuntime {
         let generation = connectionGeneration
         let outputBridge = makeOutputBridge(generation: generation)
         self.outputBridge = outputBridge
-        let command = server.remoteShellStartupAction?.command
+        acceptStartupPlan(startupPlan)
         let opened = try await callGate.openSession(
             on: transport,
             term: RemoteTerminalBootstrap.defaultTerminalType.rawValue,
             rows: rows,
             columns: columns,
             requestAgent: server.tsshProfile.sshAgentForwarding,
-            command: command,
+            command: startupPlan.command,
             output: outputBridge
         )
         session = opened.0
@@ -649,7 +675,7 @@ final class TSSHRuntime {
                     guard let self,
                           self.isCurrent,
                           self.connectionGeneration == generation else { return }
-                    self.surface?.receiveTerminalOutput(data)
+                    self.consumeOutput(data)
                 }
             },
             failure: { [weak self] message in
@@ -688,7 +714,58 @@ final class TSSHRuntime {
 
     private func shellEnded() {
         guard isCurrent, !isClosing else { return }
-        ownerAccess.handleShellEnd(paneID, identityToken)
+        let reason: TerminalShellEndReason
+        if standaloneStartupActionAwaitingExit {
+            standaloneStartupActionAwaitingExit = false
+            reason = .standaloneStartupActionCompleted
+        } else {
+            reason = TerminalShellEndReason.resolve(
+                lifecycle: remoteSessionLifecycle,
+                event: lastRemoteSessionEvent,
+                sessionExists: nil
+            )
+        }
+        ownerAccess.handleShellEnd(paneID, identityToken, reason)
+    }
+
+    private func acceptStartupPlan(_ plan: TerminalShellStartupPlan) {
+        standaloneStartupActionAwaitingExit = plan.mayExecuteStandaloneUserStartupAction
+        ownerAccess.setStartupActionReplayPending(
+            paneID,
+            plan.mayExecuteUserStartupAction
+        )
+        setRemoteSessionLifecycle(plan.remoteSessionLifecycle)
+        ownerAccess.setResumeContext(paneID, plan.remoteSessionLifecycle)
+    }
+
+    private func restoreRemoteSessionLifecycle() {
+        setRemoteSessionLifecycle(ownerAccess.resumeContext(paneID))
+    }
+
+    private func setRemoteSessionLifecycle(_ context: RemoteSessionLifecycleContext?) {
+        remoteSessionLifecycle = context
+        remoteSessionLifecycleParser = context.map {
+            RemoteSessionLifecycleStreamParser(observation: $0.observation)
+        }
+        lastRemoteSessionEvent = nil
+    }
+
+    private func consumeOutput(_ data: Data) {
+        guard var parser = remoteSessionLifecycleParser else {
+            surface?.receiveTerminalOutput(data)
+            return
+        }
+        let result = parser.consume(data)
+        remoteSessionLifecycleParser = parser
+        if !result.output.isEmpty {
+            surface?.receiveTerminalOutput(result.output)
+        }
+        if result.events.contains(.attached) {
+            ownerAccess.remoteSessionAttached(paneID)
+        }
+        if let event = result.events.last {
+            lastRemoteSessionEvent = event
+        }
     }
 
     private func reportFailure(_ error: Error) async {

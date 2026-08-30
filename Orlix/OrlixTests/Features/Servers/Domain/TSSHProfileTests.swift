@@ -59,9 +59,9 @@ struct TSSHProfileTests {
         TSSHProfile(mtu: 575),
         TSSHProfile(connectTimeoutSeconds: 0),
         TSSHProfile(heartbeatTimeoutSeconds: 3_601),
-        TSSHProfile(vpnDNSServers: []),
-        TSSHProfile(vpnDNSServers: ["dns.example.com"]),
-        TSSHProfile(vpnExcludedRoutes: ["private.example.com"]),
+        TSSHProfile(vpnEnabled: true, vpnDNSServers: []),
+        TSSHProfile(vpnEnabled: true, vpnDNSServers: ["dns.example.com"]),
+        TSSHProfile(vpnEnabled: true, vpnExcludedRoutes: ["private.example.com"]),
         TSSHProfile(serverPath: "bad\npath"),
         TSSHProfile(forwards: [
             TSSHPortForwardRule(
@@ -74,6 +74,17 @@ struct TSSHProfileTests {
     ])
     func rejectsInvalidProfiles(_ profile: TSSHProfile) {
         #expect(!profile.isValid)
+    }
+
+    @Test
+    func ignoresInactiveVPNSettings() {
+        let profile = TSSHProfile(
+            vpnEnabled: false,
+            vpnDNSServers: [],
+            vpnExcludedRoutes: ["private.example.com"]
+        )
+
+        #expect(profile.isValid)
     }
 
     @Test

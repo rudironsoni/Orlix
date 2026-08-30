@@ -105,6 +105,23 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func bootstrapRequiresNonWindowsPOSIXEnvironment() {
+        #expect(TSSHBootstrap.supports(environment: .fallbackPOSIX))
+        #expect(!TSSHBootstrap.supports(environment: RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "powershell.exe"),
+            activeShellName: "powershell.exe",
+            powerShellExecutable: "powershell.exe"
+        )))
+        #expect(!TSSHBootstrap.supports(environment: RemoteEnvironment(
+            platform: .linux,
+            shellProfile: .unknown(),
+            activeShellName: nil,
+            powerShellExecutable: nil
+        )))
+    }
+
+    @Test
     func resumeFailurePolicyDiscardsPermanentAndRepeatedFailures() {
         #expect(TSSHResumeFailurePolicy.shouldDiscard(
             after: 1,
