@@ -64,6 +64,16 @@ nonisolated enum TSSHResumeFailurePolicy {
     }
 }
 
+nonisolated struct TSSHTerminalEventGate {
+    private var deliveredGeneration: UUID?
+
+    mutating func claim(_ generation: UUID) -> Bool {
+        guard deliveredGeneration != generation else { return false }
+        deliveredGeneration = generation
+        return true
+    }
+}
+
 nonisolated func tsshPublishedTransportState(
     isHealthy: Bool,
     startupReady: Bool
@@ -110,6 +120,7 @@ final class TSSHRuntime {
     private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
     private var lastRemoteSessionEvent: RemoteSessionEvent?
     private var standaloneStartupActionAwaitingExit = false
+    private var terminalEventGate = TSSHTerminalEventGate()
     private var startupReady = false
     private var isClosing = false
 
@@ -784,14 +795,14 @@ final class TSSHRuntime {
                 Task { @MainActor [weak self] in
                     guard let self,
                           self.connectionGeneration == generation else { return }
-                    self.shellEnded()
+                    self.deliverShellEnded(for: generation)
                 }
             },
             close: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self,
                           self.connectionGeneration == generation else { return }
-                    self.shellEnded()
+                    self.deliverShellEnded(for: generation)
                 }
             }
         )
@@ -799,6 +810,12 @@ final class TSSHRuntime {
 
     private var isCurrent: Bool {
         ownerAccess.isCurrent(paneID, identityToken)
+    }
+
+    private func deliverShellEnded(for generation: UUID) {
+        guard connectionGeneration == generation,
+              terminalEventGate.claim(generation) else { return }
+        shellEnded()
     }
 
     private func didConnect() {

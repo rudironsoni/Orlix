@@ -87,6 +87,23 @@ struct TSSHConcurrencyTests {
     }
 
     @Test
+    func terminalExitAndCloseDeliverOnlyOncePerGeneration() {
+        var gate = TSSHTerminalEventGate()
+        let firstGeneration = UUID()
+        let secondGeneration = UUID()
+
+        let firstExit = gate.claim(firstGeneration)
+        let duplicateClose = gate.claim(firstGeneration)
+        let nextExit = gate.claim(secondGeneration)
+        let nextDuplicateClose = gate.claim(secondGeneration)
+
+        #expect(firstExit)
+        #expect(!duplicateClose)
+        #expect(nextExit)
+        #expect(!nextDuplicateClose)
+    }
+
+    @Test
     func asynchronousForwardFailureProducesVisibleTerminalNotice() throws {
         let notice = tsshForwardFailureNotice(
             id: "8B40B930-7F97-4A71-AF08-ECE01F2D0D92",
