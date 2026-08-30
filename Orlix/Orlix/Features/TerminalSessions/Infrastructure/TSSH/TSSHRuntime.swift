@@ -35,6 +35,10 @@ nonisolated struct TSSHForwardStatus: Equatable, Sendable {
     var bytesOut: Int64
 }
 
+nonisolated func tsshForwardFailureNotice(id: String, message: String) -> Data {
+    Data("\r\n\u{001B}[31mTSSH port forward \(id) failed: \(message)\u{001B}[0m\r\n".utf8)
+}
+
 nonisolated enum TSSHResumeLifecyclePolicy {
     static func shouldAwaitStandaloneStartupAction(
         hasRemoteSessionLifecycle: Bool,
@@ -88,6 +92,7 @@ final class TSSHRuntime {
     private var rows = 24
     private var startTask: Task<Void, Never>?
     private var writeTask: Task<Void, Never>?
+    private var resizeTask: Task<Void, Never>?
     private var transport: TSSHTransportRef?
     private var session: TSSHSessionRef?
     private var forwarder: TSSHForwarderRef?
@@ -145,9 +150,19 @@ final class TSSHRuntime {
         columns = cols
         self.rows = rows
         guard let session else { return }
-        Task {
-            do { try await callGate.resize(session, rows: rows, columns: cols) }
-            catch { logger.warning("TSSH resize failed: \(error.localizedDescription, privacy: .public)") }
+        let precedingResize = resizeTask
+        resizeTask = Task { [weak self] in
+            _ = await precedingResize?.result
+            guard let self,
+                  !Task.isCancelled,
+                  !self.isClosing,
+                  self.session == session else { return }
+            do { try await self.callGate.resize(session, rows: rows, columns: cols) }
+            catch {
+                self.logger.warning(
+                    "TSSH resize failed: \(error.localizedDescription, privacy: .public)"
+                )
+            }
         }
     }
 
@@ -211,6 +226,8 @@ final class TSSHRuntime {
         startTask = nil
         writeTask?.cancel()
         writeTask = nil
+        resizeTask?.cancel()
+        resizeTask = nil
         let transportFallback = transport.map(scheduleTransportFallback)
         if let forwarder { await callGate.closeForwarder(forwarder) }
         if let session {
@@ -244,6 +261,8 @@ final class TSSHRuntime {
         startTask = nil
         writeTask?.cancel()
         writeTask = nil
+        resizeTask?.cancel()
+        resizeTask = nil
         if let session { callGate.forgetSession(session) }
         if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
         if let transport { callGate.emergencyAbandon(transport) }
@@ -605,6 +624,9 @@ final class TSSHRuntime {
                 case .failed(let id, let message):
                     self.updateForward(id: id) { $0.state = .failed(message) }
                     self.logger.error("TSSH forward \(id, privacy: .public) failed: \(message, privacy: .public)")
+                    self.surface?.receiveTerminalOutput(
+                        tsshForwardFailureNotice(id: id, message: message)
+                    )
                 case .stopped(let id):
                     self.updateForward(id: id) { $0.state = .stopped }
                 case .opened(let id, _):

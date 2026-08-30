@@ -87,6 +87,18 @@ struct TSSHConcurrencyTests {
     }
 
     @Test
+    func asynchronousForwardFailureProducesVisibleTerminalNotice() throws {
+        let notice = tsshForwardFailureNotice(
+            id: "8B40B930-7F97-4A71-AF08-ECE01F2D0D92",
+            message: "bind: address already in use"
+        )
+        let rendered = try #require(String(data: notice, encoding: .utf8))
+
+        #expect(rendered.contains("TSSH port forward 8B40B930-7F97-4A71-AF08-ECE01F2D0D92 failed"))
+        #expect(rendered.contains("bind: address already in use"))
+    }
+
+    @Test
     func postConnectVPNDropFailsClosedAtTheOwningPane() {
         #expect(tsshVPNPostConnectDecision(for: .connected) == .healthy)
         #expect(tsshVPNPostConnectDecision(for: .reasserting) == .healthy)

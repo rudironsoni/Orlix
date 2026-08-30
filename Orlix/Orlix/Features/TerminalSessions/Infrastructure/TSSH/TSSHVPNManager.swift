@@ -154,6 +154,7 @@ final class TSSHVPNManager {
     private let startupTimeoutSeconds: TimeInterval = 30
     private var statusMonitorTask: Task<Void, Never>?
     private var monitoredOwnerID: UUID?
+    private var teardownRetryTasks: [UUID: Task<Void, Never>] = [:]
 
     private init() {}
 
@@ -292,15 +293,46 @@ final class TSSHVPNManager {
     }
 
     func stop(ifOwnedBy ownerID: UUID) async throws {
-        cancelStatusMonitoring(ifOwnedBy: ownerID)
-        let manager = try await loadManager()
+        defer {
+            cancelStatusMonitoring(ifOwnedBy: ownerID)
+            ownership.release(ownerID)
+        }
+        let manager: NETunnelProviderManager
+        do {
+            manager = try await loadManager()
+        } catch {
+            scheduleStopRetry(ownerID: ownerID)
+            throw error
+        }
         guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
               provider.providerConfiguration?["tsshOwnerID"] as? String == ownerID.uuidString,
               ownership.ownerID == nil || ownership.isOwned(by: ownerID) else {
             return
         }
         manager.connection.stopVPNTunnel()
-        ownership.release(ownerID)
+    }
+
+    private func scheduleStopRetry(ownerID: UUID) {
+        teardownRetryTasks[ownerID]?.cancel()
+        teardownRetryTasks[ownerID] = Task { [weak self] in
+            guard let self else { return }
+            defer { self.teardownRetryTasks[ownerID] = nil }
+            for delaySeconds in [1, 2, 4] {
+                do {
+                    try await Task.sleep(for: .seconds(delaySeconds))
+                    let manager = try await self.loadManager()
+                    guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
+                          provider.providerConfiguration?["tsshOwnerID"] as? String
+                            == ownerID.uuidString else { return }
+                    manager.connection.stopVPNTunnel()
+                    return
+                } catch is CancellationError {
+                    return
+                } catch {
+                    continue
+                }
+            }
+        }
     }
 
     private func beginStatusMonitoring(
