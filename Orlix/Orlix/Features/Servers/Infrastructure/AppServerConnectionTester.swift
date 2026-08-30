@@ -58,7 +58,7 @@ nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting
             ))
             await callGate.closeTransport(transport, preserveServer: false)
         } catch {
-            await TSSHBootstrap.terminateServer(pid: bootstrap.serverPID, using: client)
+            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: client)
             throw error
         }
     }

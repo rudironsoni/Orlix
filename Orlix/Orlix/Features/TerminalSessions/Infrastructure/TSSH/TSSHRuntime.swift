@@ -499,7 +499,7 @@ final class TSSHRuntime {
             )
             self.transport = connectedTransport
         } catch {
-            await TSSHBootstrap.terminateServer(pid: bootstrap.serverPID, using: sshClient)
+            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
             throw error
         }
         let transport = connectedTransport

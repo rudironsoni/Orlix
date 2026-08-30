@@ -3,7 +3,12 @@ import Foundation
 nonisolated struct TSSHBootstrapResult: Sendable {
     let host: String
     let info: TSSHServerInfo
-    let serverPID: Int32
+    let serverProcess: TSSHServerProcessIdentity
+}
+
+nonisolated struct TSSHServerProcessIdentity: Sendable {
+    let pid: Int32
+    let supervisorPath: String
 }
 
 nonisolated enum TSSHBootstrap {
@@ -42,11 +47,11 @@ nonisolated enum TSSHBootstrap {
             throw TSSHRuntimeError.unsupportedRemoteEnvironment
         }
 
-        let command = startCommand(profile: server.tsshProfile)
+        let launch = launchCommand(profile: server.tsshProfile)
         let output: String
         do {
             output = try await client.execute(
-                command,
+                launch.command,
                 timeout: .seconds(45),
                 maxOutputBytes: 64 * 1024
             )
@@ -60,7 +65,10 @@ nonisolated enum TSSHBootstrap {
         if output.contains("TSSHD_NOT_FOUND") {
             throw TSSHRuntimeError.tsshdNotFound
         }
-        let serverPID = try parseServerPID(output: output)
+        let serverProcess = TSSHServerProcessIdentity(
+            pid: try parseServerPID(output: output),
+            supervisorPath: launch.supervisorPath
+        )
         let info: TSSHServerInfo
         do {
             let parsedInfo = try TSSHServerInfo.parse(output: output)
@@ -69,11 +77,11 @@ nonisolated enum TSSHBootstrap {
                 for: server.tsshProfile
             ).assigningClientIDIfNeeded()
         } catch {
-            await terminateServer(pid: serverPID, using: client)
+            await terminateServer(serverProcess, using: client)
             throw error
         }
         let host = await client.remoteEndpointHost() ?? server.host
-        return TSSHBootstrapResult(host: host, info: info, serverPID: serverPID)
+        return TSSHBootstrapResult(host: host, info: info, serverProcess: serverProcess)
     }
 
     static func parseServerPID(output: String) throws -> Int32 {
@@ -88,9 +96,11 @@ nonisolated enum TSSHBootstrap {
         return pid
     }
 
-    static func terminateServer(pid: Int32, using client: SSHClient) async {
-        let body = "kill -TERM \(pid) 2>/dev/null || true"
-        let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+    static func terminateServer(
+        _ identity: TSSHServerProcessIdentity,
+        using client: SSHClient
+    ) async {
+        let command = terminationCommand(for: identity)
         await Task.detached {
             _ = try? await client.execute(
                 command,
@@ -98,6 +108,18 @@ nonisolated enum TSSHBootstrap {
                 maxOutputBytes: 4 * 1024
             )
         }.value
+    }
+
+    static func terminationCommand(for identity: TSSHServerProcessIdentity) -> String {
+        let body = """
+        pid=\(identity.pid)
+        supervisor=\(RemoteTerminalBootstrap.shellQuoted(identity.supervisorPath))
+        command=$(ps -p "$pid" -o args= 2>/dev/null || true)
+        case "$command" in
+          *"$supervisor"*) kill -TERM "$pid" 2>/dev/null || true ;;
+        esac
+        """
+        return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
     }
 
     static func validatedServerInfo(
@@ -120,6 +142,13 @@ nonisolated enum TSSHBootstrap {
     }
 
     static func startCommand(profile: TSSHProfile, nonce: UUID = UUID()) -> String {
+        launchCommand(profile: profile, nonce: nonce).command
+    }
+
+    private static func launchCommand(
+        profile: TSSHProfile,
+        nonce: UUID = UUID()
+    ) -> (command: String, supervisorPath: String) {
         let binary = profile.serverPath ?? "tsshd"
         var arguments = [
             "--attachable",
@@ -137,40 +166,73 @@ nonisolated enum TSSHBootstrap {
         }
 
         let outputPath = "/tmp/orlix-tsshd-\(nonce.uuidString).out"
+        let supervisorPath = "/tmp/orlix-tsshd-\(nonce.uuidString).sh"
         let quotedArguments = arguments.map(RemoteTerminalBootstrap.shellQuoted).joined(separator: " ")
         let script = """
         export PATH="\(pathEntries.joined(separator: ":")):$PATH"
         umask 077
         binary=\(RemoteTerminalBootstrap.shellQuoted(binary))
         output=\(RemoteTerminalBootstrap.shellQuoted(outputPath))
-        trap 'rm -f "$output"' EXIT HUP INT TERM
+        supervisor=\(RemoteTerminalBootstrap.shellQuoted(supervisorPath))
+        pid=
+        ready=0
+        cleanup() {
+          if [ "$ready" -ne 1 ] && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            kill -TERM "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          fi
+          rm -f "$output"
+          if [ "$ready" -ne 1 ]; then rm -f "$supervisor"; fi
+          return 0
+        }
+        trap cleanup EXIT
+        trap 'exit 1' HUP INT TERM
         if ! { [ -x "$binary" ] || command -v "$binary" >/dev/null 2>&1; }; then
           printf '%s\\n' TSSHD_NOT_FOUND
           exit 127
         fi
+        cat >"$supervisor" <<'ORLIX_TSSHD_SUPERVISOR'
+        #!/bin/sh
+        child=
+        cleanup() {
+          trap - EXIT HUP INT TERM
+          if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+            kill -TERM "$child" 2>/dev/null || true
+            wait "$child" 2>/dev/null || true
+          fi
+          rm -f "$0"
+        }
+        trap cleanup EXIT
+        trap 'exit 143' HUP INT TERM
+        "$@" &
+        child=$!
+        wait "$child"
+        ORLIX_TSSHD_SUPERVISOR
+        chmod 700 "$supervisor"
         : > "$output"
-        nohup "$binary" \(quotedArguments) >"$output" 2>&1 </dev/null &
+        nohup "$supervisor" "$binary" \(quotedArguments) >"$output" 2>&1 </dev/null &
         pid=$!
         printf 'ORLIX_TSSHD_PID=%s\n' "$pid"
         count=0
         while [ "$count" -lt 300 ]; do
           if grep -q '}' "$output" 2>/dev/null; then
             cat "$output"
-            rm -f "$output"
+            ready=1
             exit 0
           fi
           if ! kill -0 "$pid" 2>/dev/null; then
             cat "$output"
-            rm -f "$output"
             exit 1
           fi
           count=$((count + 1))
           sleep 0.1
         done
         cat "$output"
-        rm -f "$output"
         exit 1
         """
-        return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
+        return (
+            RemoteTerminalBootstrap.wrapPOSIXShellCommand(script),
+            supervisorPath
+        )
     }
 }

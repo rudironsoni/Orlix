@@ -102,7 +102,9 @@ struct TSSHServerInfoTests {
         #expect(command.contains("nohup"))
         #expect(command.contains("ORLIX_TSSHD_PID"))
         #expect(command.contains("umask 077"))
-        #expect(command.contains("trap 'rm -f \\\"\\$output\\\"'"))
+        #expect(command.contains("ORLIX_TSSHD_SUPERVISOR"))
+        #expect(command.contains("trap cleanup EXIT"))
+        #expect(command.contains("kill -TERM \\\"\\$pid\\\""))
     }
 
     @Test
@@ -116,6 +118,19 @@ struct TSSHServerInfoTests {
         #expect(throws: TSSHRuntimeError.self) {
             try TSSHBootstrap.parseServerPID(output: "ORLIX_TSSHD_PID=1")
         }
+    }
+
+    @Test
+    func bootstrapCleanupVerifiesTheUniqueSupervisorBeforeKilling() {
+        let identity = TSSHServerProcessIdentity(
+            pid: 321,
+            supervisorPath: "/tmp/orlix-tsshd-1234.sh"
+        )
+        let command = TSSHBootstrap.terminationCommand(for: identity)
+
+        #expect(command.contains("ps -p"))
+        #expect(command.contains("orlix-tsshd-1234.sh"))
+        #expect(command.contains("kill -TERM"))
     }
 
     @Test
