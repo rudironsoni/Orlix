@@ -105,6 +105,32 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func bootstrapRejectsModeAndPortOutsideRequestedProfile() throws {
+        let profile = TSSHProfile(
+            transportMode: .kcp,
+            udpPortMinimum: 61_000,
+            udpPortMaximum: 61_100
+        )
+        let accepted = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61050,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc"}"#
+        )
+        let wrongMode = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61050,"Mode":"QUIC","ServerCert":"aa","ClientCert":"bb","ClientKey":"cc","ProxyKey":"dd"}"#
+        )
+        let wrongPort = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":62000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc"}"#
+        )
+
+        #expect(try TSSHBootstrap.validatedServerInfo(accepted, for: profile) == accepted)
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.validatedServerInfo(wrongMode, for: profile)
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.validatedServerInfo(wrongPort, for: profile)
+        }
+    }
+
+    @Test
     func bootstrapRequiresNonWindowsPOSIXEnvironment() {
         #expect(TSSHBootstrap.supports(environment: .fallbackPOSIX))
         #expect(!TSSHBootstrap.supports(environment: RemoteEnvironment(

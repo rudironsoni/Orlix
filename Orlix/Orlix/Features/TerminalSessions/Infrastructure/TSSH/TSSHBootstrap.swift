@@ -59,9 +59,28 @@ nonisolated enum TSSHBootstrap {
         if output.contains("TSSHD_NOT_FOUND") {
             throw TSSHRuntimeError.tsshdNotFound
         }
-        let info = try TSSHServerInfo.parse(output: output).assigningClientIDIfNeeded()
+        let parsedInfo = try TSSHServerInfo.parse(output: output)
+        let info = try validatedServerInfo(
+            parsedInfo,
+            for: server.tsshProfile
+        ).assigningClientIDIfNeeded()
         let host = await client.remoteEndpointHost() ?? server.host
         return TSSHBootstrapResult(host: host, info: info)
+    }
+
+    static func validatedServerInfo(
+        _ info: TSSHServerInfo,
+        for profile: TSSHProfile
+    ) throws -> TSSHServerInfo {
+        let expectedMode: TSSHServerInfo.Mode = switch profile.transportMode {
+        case .kcp: .kcp
+        case .quic: .quic
+        }
+        guard info.mode == expectedMode,
+              (profile.udpPortMinimum...profile.udpPortMaximum).contains(info.port) else {
+            throw TSSHRuntimeError.invalidServerResponse
+        }
+        return info
     }
 
     static func supports(environment: RemoteEnvironment) -> Bool {
