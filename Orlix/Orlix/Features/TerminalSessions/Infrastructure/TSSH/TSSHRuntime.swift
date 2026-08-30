@@ -180,12 +180,22 @@ final class TSSHRuntime {
 
     func send(_ data: Data) {
         guard let session else { return }
+        let generation = connectionGeneration
         let precedingWrite = writeTask
         writeTask = Task { [weak self] in
             _ = await precedingWrite?.result
-            guard let self, !Task.isCancelled, !self.isClosing else { return }
+            guard let self,
+                  !Task.isCancelled,
+                  !self.isClosing,
+                  self.connectionGeneration == generation,
+                  self.session == session else { return }
             do { try await self.callGate.write(data, to: session) }
-            catch { await self.reportFailure(error) }
+            catch {
+                guard !Task.isCancelled,
+                      self.connectionGeneration == generation,
+                      self.session == session else { return }
+                await self.reportFailure(error)
+            }
         }
     }
 
@@ -407,7 +417,11 @@ final class TSSHRuntime {
                 )
                 try resumeStore.save(resumeState!, for: paneID)
                 try await startForwarding(on: transport, profile: currentProfile)
-                try await startVPNIfRequested(profile: currentProfile)
+                try await startVPNIfRequested(
+                    host: savedHost,
+                    info: state.info,
+                    profile: currentProfile
+                )
                 didConnect()
                 return true
             } catch {
@@ -467,20 +481,28 @@ final class TSSHRuntime {
             credentials: credentials,
             client: sshClient
         )
-        try Task.checkCancellation()
-        let startupPlan = try await ownerAccess.startupPlan(
-            paneID,
-            server.id,
-            sshClient,
-            identityToken
-        )
-        try Task.checkCancellation()
-        let transport = try await connect(
-            bootstrap.host,
-            info: bootstrap.info,
-            profile: server.tsshProfile
-        )
-        self.transport = transport
+        let startupPlan: TerminalShellStartupPlan
+        let connectedTransport: TSSHTransportRef
+        do {
+            try Task.checkCancellation()
+            startupPlan = try await ownerAccess.startupPlan(
+                paneID,
+                server.id,
+                sshClient,
+                identityToken
+            )
+            try Task.checkCancellation()
+            connectedTransport = try await connect(
+                bootstrap.host,
+                info: bootstrap.info,
+                profile: server.tsshProfile
+            )
+            self.transport = connectedTransport
+        } catch {
+            await TSSHBootstrap.terminateServer(pid: bootstrap.serverPID, using: sshClient)
+            throw error
+        }
+        let transport = connectedTransport
         try Task.checkCancellation()
         try await enableAgentIfRequested(profile: server.tsshProfile, on: transport)
 
@@ -510,7 +532,11 @@ final class TSSHRuntime {
         try resumeStore.save(state, for: paneID)
         resumeState = state
         try await startForwarding(on: transport, profile: server.tsshProfile)
-        try await startVPNIfRequested(profile: server.tsshProfile)
+        try await startVPNIfRequested(
+            host: bootstrap.host,
+            info: bootstrap.info,
+            profile: server.tsshProfile
+        )
         didConnect()
     }
 
@@ -690,22 +716,17 @@ final class TSSHRuntime {
         agentBridge = bridge
     }
 
-    private func startVPNIfRequested(profile: TSSHProfile) async throws {
+    private func startVPNIfRequested(
+        host: String,
+        info: TSSHServerInfo,
+        profile: TSSHProfile
+    ) async throws {
         guard profile.vpnEnabled else { return }
-        let client = sshClientFactory.makeClient(
-            connectTimeout: .seconds(profile.connectTimeoutSeconds)
-        )
         do {
-            let bootstrap = try await TSSHBootstrap.start(
-                server: server,
-                credentials: credentials,
-                client: client
-            )
-            await client.disconnect()
             try await TSSHVPNManager.shared.installAndStart(
                 TSSHVPNConfiguration(
-                    host: bootstrap.host,
-                    info: bootstrap.info,
+                    reusing: host,
+                    info: info,
                     profile: profile
                 ),
                 ownerID: identityToken,
@@ -716,7 +737,6 @@ final class TSSHRuntime {
             )
             ownsVPN = true
         } catch {
-            await client.disconnect()
             logger.error("TSSH VPN failed to start: \(error.localizedDescription, privacy: .public)")
             throw TSSHRuntimeError.vpnStartFailed(error.localizedDescription)
         }

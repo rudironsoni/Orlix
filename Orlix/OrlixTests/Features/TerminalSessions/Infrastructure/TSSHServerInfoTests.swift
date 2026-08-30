@@ -100,8 +100,22 @@ struct TSSHServerInfoTests {
         #expect(command.contains("--mtu"))
         #expect(command.contains("1280"))
         #expect(command.contains("nohup"))
+        #expect(command.contains("ORLIX_TSSHD_PID"))
         #expect(command.contains("umask 077"))
         #expect(command.contains("trap 'rm -f \\\"\\$output\\\"'"))
+    }
+
+    @Test
+    func bootstrapRequiresAValidServerPID() throws {
+        #expect(try TSSHBootstrap.parseServerPID(
+            output: "ORLIX_TSSHD_PID=321\n{\"Mode\":\"KCP\"}"
+        ) == 321)
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseServerPID(output: "{\"Mode\":\"KCP\"}")
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseServerPID(output: "ORLIX_TSSHD_PID=1")
+        }
     }
 
     @Test

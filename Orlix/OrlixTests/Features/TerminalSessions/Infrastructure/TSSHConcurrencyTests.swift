@@ -158,4 +158,19 @@ struct TSSHConcurrencyTests {
             requestedConfiguration: original
         ))
     }
+
+    @Test
+    func VPNReusesTheTerminalEndpointWithADistinctClientIdentity() throws {
+        let info = try TSSHServerInfo.parse(output: #"{"ServerVer":"0.2.2","ProtoVer":1,"Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ProxyMode":"TCP","MTU":1400,"ClientID":7,"ServerID":9}"#)
+        let configuration = TSSHVPNConfiguration(
+            reusing: "vpn.example.com",
+            info: info,
+            profile: TSSHProfile(vpnEnabled: true)
+        )
+
+        #expect(configuration.tsshHost == "vpn.example.com")
+        #expect(configuration.tsshPort == info.port)
+        #expect(configuration.tsshServerID == info.serverID)
+        #expect(configuration.tsshClientID == 8)
+    }
 }

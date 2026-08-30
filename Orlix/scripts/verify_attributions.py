@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -245,11 +245,20 @@ def verify_native_artifacts(errors: list[str]) -> None:
         return
 
     for line in NATIVE_ARTIFACT_MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
-        match = re.fullmatch(r"([0-9a-f]{64})  (Vendor/.+\.a)", line)
+        match = re.fullmatch(r"([0-9a-f]{64})  (Vendor/[^\r\n]+)", line)
         if not match:
             errors.append(f"Invalid native artifact manifest line: {line}")
             continue
         expected_hash, relative_path = match.groups()
+        manifest_path = PurePosixPath(relative_path)
+        if (
+            manifest_path.is_absolute()
+            or manifest_path.parts[0] != "Vendor"
+            or any(part in {"", ".", ".."} for part in manifest_path.parts)
+            or manifest_path.as_posix() != relative_path
+        ):
+            errors.append(f"Invalid native artifact manifest path: {relative_path}")
+            continue
         declared.add(relative_path)
         artifact_path = REPOSITORY_ROOT / relative_path
         if not artifact_path.is_file():
@@ -261,7 +270,8 @@ def verify_native_artifacts(errors: list[str]) -> None:
         path.relative_to(REPOSITORY_ROOT).as_posix()
         for path in (REPOSITORY_ROOT / "Vendor").rglob("*.a")
     }
-    compare("Native artifact file set", sorted(declared), sorted(actual), errors)
+    declared_archives = {path for path in declared if path.endswith(".a")}
+    compare("Native artifact file set", sorted(declared_archives), sorted(actual), errors)
 
 
 def verify_model_assets(

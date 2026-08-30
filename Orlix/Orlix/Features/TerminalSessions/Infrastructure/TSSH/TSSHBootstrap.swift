@@ -3,6 +3,7 @@ import Foundation
 nonisolated struct TSSHBootstrapResult: Sendable {
     let host: String
     let info: TSSHServerInfo
+    let serverPID: Int32
 }
 
 nonisolated enum TSSHBootstrap {
@@ -59,13 +60,44 @@ nonisolated enum TSSHBootstrap {
         if output.contains("TSSHD_NOT_FOUND") {
             throw TSSHRuntimeError.tsshdNotFound
         }
-        let parsedInfo = try TSSHServerInfo.parse(output: output)
-        let info = try validatedServerInfo(
-            parsedInfo,
-            for: server.tsshProfile
-        ).assigningClientIDIfNeeded()
+        let serverPID = try parseServerPID(output: output)
+        let info: TSSHServerInfo
+        do {
+            let parsedInfo = try TSSHServerInfo.parse(output: output)
+            info = try validatedServerInfo(
+                parsedInfo,
+                for: server.tsshProfile
+            ).assigningClientIDIfNeeded()
+        } catch {
+            await terminateServer(pid: serverPID, using: client)
+            throw error
+        }
         let host = await client.remoteEndpointHost() ?? server.host
-        return TSSHBootstrapResult(host: host, info: info)
+        return TSSHBootstrapResult(host: host, info: info, serverPID: serverPID)
+    }
+
+    static func parseServerPID(output: String) throws -> Int32 {
+        let prefix = "ORLIX_TSSHD_PID="
+        guard let line = output.split(whereSeparator: \.isNewline).first(where: {
+            $0.hasPrefix(prefix)
+        }),
+        let pid = Int32(line.dropFirst(prefix.count)),
+        pid > 1 else {
+            throw TSSHRuntimeError.invalidServerResponse
+        }
+        return pid
+    }
+
+    static func terminateServer(pid: Int32, using client: SSHClient) async {
+        let body = "kill -TERM \(pid) 2>/dev/null || true"
+        let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
+        await Task.detached {
+            _ = try? await client.execute(
+                command,
+                timeout: .seconds(5),
+                maxOutputBytes: 4 * 1024
+            )
+        }.value
     }
 
     static func validatedServerInfo(
@@ -119,6 +151,7 @@ nonisolated enum TSSHBootstrap {
         : > "$output"
         nohup "$binary" \(quotedArguments) >"$output" 2>&1 </dev/null &
         pid=$!
+        printf 'ORLIX_TSSHD_PID=%s\n' "$pid"
         count=0
         while [ "$count" -lt 300 ]; do
           if grep -q '}' "$output" 2>/dev/null; then

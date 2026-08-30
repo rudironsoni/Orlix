@@ -120,6 +120,10 @@ nonisolated struct TSSHVPNConfiguration: Encodable, Sendable {
         blockQUIC = profile.blockQUICInVPN
     }
 
+    init(reusing host: String, info: TSSHServerInfo, profile: TSSHProfile) {
+        self.init(host: host, info: info.advancingClientID(), profile: profile)
+    }
+
     private var encodedData: Data? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

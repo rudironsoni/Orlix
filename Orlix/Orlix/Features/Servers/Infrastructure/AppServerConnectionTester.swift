@@ -46,16 +46,21 @@ nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting
             server: server,
             client: client
         )
-        let transport = try await callGate.connect(TSSHTransportParameters(
-            host: bootstrap.host,
-            info: bootstrap.info,
-            mtu: server.tsshProfile.mtu,
-            connectTimeoutSeconds: server.tsshProfile.connectTimeoutSeconds,
-            aliveTimeoutSeconds: server.tsshProfile.aliveTimeoutSeconds,
-            heartbeatTimeoutSeconds: server.tsshProfile.heartbeatTimeoutSeconds,
-            debugLabel: "connection-test:\(server.username)@\(server.host)"
-        ))
-        await callGate.closeTransport(transport, preserveServer: false)
+        do {
+            let transport = try await callGate.connect(TSSHTransportParameters(
+                host: bootstrap.host,
+                info: bootstrap.info,
+                mtu: server.tsshProfile.mtu,
+                connectTimeoutSeconds: server.tsshProfile.connectTimeoutSeconds,
+                aliveTimeoutSeconds: server.tsshProfile.aliveTimeoutSeconds,
+                heartbeatTimeoutSeconds: server.tsshProfile.heartbeatTimeoutSeconds,
+                debugLabel: "connection-test:\(server.username)@\(server.host)"
+            ))
+            await callGate.closeTransport(transport, preserveServer: false)
+        } catch {
+            await TSSHBootstrap.terminateServer(pid: bootstrap.serverPID, using: client)
+            throw error
+        }
     }
 }
 
