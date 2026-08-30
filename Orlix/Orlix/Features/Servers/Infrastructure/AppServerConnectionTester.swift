@@ -19,6 +19,46 @@ nonisolated protocol ServerMoshConnectionTesting: Sendable {
     ) async throws
 }
 
+nonisolated protocol ServerTSSHConnectionTesting: Sendable {
+    func testServerConnection(
+        server: Server,
+        using client: SSHClient,
+        portRange: ClosedRange<Int>
+    ) async throws
+}
+
+nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting {
+    private let callGate: TSSHCallGate
+
+    init(callGate: TSSHCallGate = .shared) {
+        self.callGate = callGate
+    }
+
+    func testServerConnection(
+        server: Server,
+        using client: SSHClient,
+        portRange: ClosedRange<Int>
+    ) async throws {
+        guard portRange == server.tsshProfile.udpPortMinimum...server.tsshProfile.udpPortMaximum else {
+            throw TSSHRuntimeError.invalidProfile
+        }
+        let bootstrap = try await TSSHBootstrap.startUsingConnectedClient(
+            server: server,
+            client: client
+        )
+        let transport = try await callGate.connect(TSSHTransportParameters(
+            host: bootstrap.host,
+            info: bootstrap.info,
+            mtu: server.tsshProfile.mtu,
+            connectTimeoutSeconds: server.tsshProfile.connectTimeoutSeconds,
+            aliveTimeoutSeconds: server.tsshProfile.aliveTimeoutSeconds,
+            heartbeatTimeoutSeconds: server.tsshProfile.heartbeatTimeoutSeconds,
+            debugLabel: "connection-test:\(server.username)@\(server.host)"
+        ))
+        await callGate.closeTransport(transport, preserveServer: false)
+    }
+}
+
 extension SSHConnectionOperationService: ServerConnectionOperationRunning {
     func runServerConnectionTest(
         server: Server,
@@ -113,6 +153,7 @@ extension ServerFormDependencies {
             connectionTester: AppServerConnectionTester(
                 connectionOperations: connectionOperations,
                 remoteMosh: remoteMosh,
+                nativeTSSH: NativeServerTSSHConnectionTester(),
                 hostKeys: hostKeys,
                 now: now
             ),
@@ -133,17 +174,20 @@ extension ServerFormDependencies {
 nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
     private let connectionOperations: any ServerConnectionOperationRunning
     private let remoteMosh: any ServerMoshConnectionTesting
+    private let nativeTSSH: any ServerTSSHConnectionTesting
     private let hostKeys: any ServerHostKeyRepository
     private let now: @Sendable () -> Date
 
     init(
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
+        nativeTSSH: any ServerTSSHConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
         now: @escaping @Sendable () -> Date
     ) {
         self.connectionOperations = connectionOperations
         self.remoteMosh = remoteMosh
+        self.nativeTSSH = nativeTSSH
         self.hostKeys = hostKeys
         self.now = now
     }
@@ -179,11 +223,11 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
                         await session.close()
                         throw error
                     }
-                case .tssh:
-                    try await TSSHBootstrap.probe(
+                case .tssh(let portRange):
+                    try await nativeTSSH.testServerConnection(
                         server: server,
-                        credentials: credentials,
-                        client: client
+                        using: client,
+                        portRange: portRange
                     )
                 }
             }

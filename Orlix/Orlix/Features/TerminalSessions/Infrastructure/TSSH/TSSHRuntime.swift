@@ -66,6 +66,7 @@ final class TSSHRuntime {
     private var discardBridge: TSSHDiscardBridge?
     private var forwardBridge: TSSHForwardBridge?
     private var agentBridge: TSSHAgentBridge?
+    private var ownsVPN = false
     private var forwardStatuses: [UUID: TSSHForwardStatus] = [:]
     private var connectionGeneration = UUID()
     private var isClosing = false
@@ -173,6 +174,7 @@ final class TSSHRuntime {
             else { await callGate.closeSession(session) }
         }
         if let transport { await callGate.closeTransport(transport, preserveServer: preserveServer) }
+        await stopOwnedVPN()
         transportFallback?.cancel()
         if deleteResumeState { try? resumeStore.delete(for: paneID) }
         self.forwarder = nil
@@ -188,7 +190,7 @@ final class TSSHRuntime {
         ownerAccess.updateConnectionState(paneID, .disconnected)
     }
 
-    func abortConnection() {
+    func abortConnection() async {
         invalidateConnectionGeneration()
         startTask?.cancel()
         startTask = nil
@@ -197,6 +199,7 @@ final class TSSHRuntime {
         if let session { callGate.forgetSession(session) }
         if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
         if let transport { callGate.emergencyAbandon(transport) }
+        await stopOwnedVPN()
         transport = nil
         session = nil
         forwarder = nil
@@ -243,6 +246,7 @@ final class TSSHRuntime {
         if let forwarder { await callGate.closeForwarder(forwarder) }
         if let session { await callGate.closeSession(session) }
         if let transport { await callGate.closeTransport(transport, preserveServer: false) }
+        await stopOwnedVPN()
         transportFallback?.cancel()
         try? resumeStore.delete(for: paneID)
         self.forwarder = nil
@@ -283,24 +287,33 @@ final class TSSHRuntime {
             return false
         }
         guard var state = loadedState else { return false }
+        let currentIdentity = TSSHResumeServerIdentity(server: server)
+        guard TSSHResumeCompatibilityPolicy.canResume(state, with: server) else {
+            try? resumeStore.delete(for: paneID)
+            logger.info("Discarded TSSH resume state after server settings changed")
+            return false
+        }
+        let currentProfile = server.tsshProfile
+        let currentHost = server.host.trimmingCharacters(in: .whitespacesAndNewlines)
         let expiresAt = state.savedAt.addingTimeInterval(86_400)
         var backoffSeconds = 1
         var attempt = 0
         while !Task.isCancelled, !isClosing, Date() < expiresAt {
             attempt += 1
             state = TSSHResumeState(
-                host: state.host,
+                serverIdentity: currentIdentity,
+                host: currentHost,
                 info: state.info.advancingClientID(),
                 sessionID: state.sessionID,
-                profile: state.profile,
+                profile: currentProfile,
                 savedAt: state.savedAt
             )
             try resumeStore.save(state, for: paneID)
             do {
-                let transport = try await connect(state.host, info: state.info, profile: state.profile)
+                let transport = try await connect(currentHost, info: state.info, profile: currentProfile)
                 self.transport = transport
                 try Task.checkCancellation()
-                try await enableAgentIfRequested(profile: state.profile, on: transport)
+                try await enableAgentIfRequested(profile: currentProfile, on: transport)
                 let generation = connectionGeneration
                 let outputBridge = makeOutputBridge(generation: generation)
                 self.outputBridge = outputBridge
@@ -315,15 +328,16 @@ final class TSSHRuntime {
                 session = attached.0
                 try Task.checkCancellation()
                 resumeState = TSSHResumeState(
-                    host: state.host,
+                    serverIdentity: currentIdentity,
+                    host: currentHost,
                     info: state.info,
                     sessionID: attached.1,
-                    profile: state.profile,
+                    profile: currentProfile,
                     savedAt: Date()
                 )
                 try resumeStore.save(resumeState!, for: paneID)
-                try await startForwarding(on: transport, profile: state.profile)
-                await startVPNIfRequested(profile: state.profile)
+                try await startForwarding(on: transport, profile: currentProfile)
+                await startVPNIfRequested(profile: currentProfile)
                 didConnect()
                 return true
             } catch {
@@ -404,6 +418,7 @@ final class TSSHRuntime {
         session = opened.0
         try Task.checkCancellation()
         let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
             host: bootstrap.host,
             info: bootstrap.info,
             sessionID: opened.1,
@@ -597,11 +612,22 @@ final class TSSHRuntime {
                 host: bootstrap.host,
                 info: bootstrap.info,
                 profile: profile
-            ))
+            ), ownerID: identityToken)
+            ownsVPN = true
         } catch {
             await client.disconnect()
             logger.error("TSSH VPN failed to start: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func stopOwnedVPN() async {
+        guard ownsVPN else { return }
+        do {
+            try await TSSHVPNManager.shared.stop(ifOwnedBy: identityToken)
+        } catch {
+            logger.error("TSSH VPN failed to stop: \(error.localizedDescription, privacy: .public)")
+        }
+        ownsVPN = false
     }
 
     private func makeOutputBridge(generation: UUID) -> TSSHOutputBridge {

@@ -119,4 +119,39 @@ struct TSSHServerInfoTests {
             errorDescription: "network is unreachable"
         ))
     }
+
+    @Test
+    func resumeCompatibilityRejectsChangedEndpointAndPolicy() throws {
+        let serverID = UUID()
+        let server = Server(
+            id: serverID,
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            host: server.host,
+            info: info,
+            sessionID: 42,
+            profile: server.tsshProfile,
+            savedAt: Date()
+        )
+
+        #expect(TSSHResumeCompatibilityPolicy.canResume(state, with: server))
+
+        var changedHost = server
+        changedHost.host = "other.example.com"
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(state, with: changedHost))
+
+        var changedPolicy = server
+        changedPolicy.tsshProfile.sshAgentForwarding = true
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(state, with: changedPolicy))
+    }
 }

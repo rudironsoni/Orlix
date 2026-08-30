@@ -141,8 +141,16 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
             && (transportSelection != .tssh || tsshProfile.isValid)
+            && (transportSelection != .tssh || hasValidTSSHAgentCredentials)
             && hasValidCredentials
             && remoteShellStartupAction.isValid
+    }
+
+    var hasValidTSSHAgentCredentials: Bool {
+        guard tsshProfile.sshAgentForwarding else { return true }
+        return authMethod == .sshKey
+            && !sshKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !sshPublicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var effectiveUsername: String {

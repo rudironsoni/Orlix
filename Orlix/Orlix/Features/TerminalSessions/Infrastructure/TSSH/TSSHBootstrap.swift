@@ -27,6 +27,15 @@ nonisolated enum TSSHBootstrap {
         guard server.tsshProfile.isValid else { throw TSSHRuntimeError.invalidProfile }
         _ = try await client.connect(to: server, credentials: credentials)
 
+        return try await startUsingConnectedClient(server: server, client: client)
+    }
+
+    static func startUsingConnectedClient(
+        server: Server,
+        client: SSHClient
+    ) async throws -> TSSHBootstrapResult {
+        guard server.tsshProfile.isValid else { throw TSSHRuntimeError.invalidProfile }
+
         let command = startCommand(profile: server.tsshProfile)
         let output: String
         do {
@@ -48,30 +57,6 @@ nonisolated enum TSSHBootstrap {
         let info = try TSSHServerInfo.parse(output: output).assigningClientIDIfNeeded()
         let host = await client.remoteEndpointHost() ?? server.host
         return TSSHBootstrapResult(host: host, info: info)
-    }
-
-    static func probe(server: Server, credentials: ServerCredentials, client: SSHClient) async throws {
-        _ = try await client.connect(to: server, credentials: credentials)
-        let binary = server.tsshProfile.serverPath ?? "tsshd"
-        let script = """
-        export PATH="\(pathEntries.joined(separator: ":")):$PATH"
-        umask 077
-        binary=\(RemoteTerminalBootstrap.shellQuoted(binary))
-        if [ -x "$binary" ] || command -v "$binary" >/dev/null 2>&1; then
-          "$binary" --version 2>/dev/null || true
-          exit 0
-        fi
-        printf '%s\\n' TSSHD_NOT_FOUND
-        exit 127
-        """
-        let output = try await client.execute(
-            RemoteTerminalBootstrap.wrapPOSIXShellCommand(script),
-            timeout: .seconds(10),
-            maxOutputBytes: 16 * 1024
-        )
-        guard !output.contains("TSSHD_NOT_FOUND") else {
-            throw TSSHRuntimeError.tsshdNotFound
-        }
     }
 
     static func startCommand(profile: TSSHProfile, nonce: UUID = UUID()) -> String {

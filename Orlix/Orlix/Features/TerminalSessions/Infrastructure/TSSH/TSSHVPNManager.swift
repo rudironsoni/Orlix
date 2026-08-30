@@ -52,7 +52,7 @@ final class TSSHVPNManager {
     static let shared = TSSHVPNManager()
     private init() {}
 
-    func installAndStart(_ configuration: TSSHVPNConfiguration) async throws {
+    func installAndStart(_ configuration: TSSHVPNConfiguration, ownerID: UUID) async throws {
         guard let json = configuration.json else { throw TSSHRuntimeError.invalidProfile }
         let manager = try await loadManager()
         let previousKey = (manager.protocolConfiguration as? NETunnelProviderProtocol)?
@@ -65,6 +65,7 @@ final class TSSHVPNManager {
         provider.providerConfiguration = [
             "tsshConfigKey": configKey,
             "tsshHost": configuration.tsshHost,
+            "tsshOwnerID": ownerID.uuidString,
         ]
         manager.protocolConfiguration = provider
         manager.localizedDescription = "Orlix TSSH VPN"
@@ -82,8 +83,12 @@ final class TSSHVPNManager {
         }
     }
 
-    func stop() async throws {
+    func stop(ifOwnedBy ownerID: UUID) async throws {
         let manager = try await loadManager()
+        guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
+              provider.providerConfiguration?["tsshOwnerID"] as? String == ownerID.uuidString else {
+            return
+        }
         manager.connection.stopVPNTunnel()
     }
 

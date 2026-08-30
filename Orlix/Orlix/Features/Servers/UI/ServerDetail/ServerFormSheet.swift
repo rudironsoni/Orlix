@@ -745,6 +745,11 @@ struct ServerFormSheet: View {
         Toggle("Keep typed input during reconnect", isOn: $form.tsshProfile.keepPendingInput)
         Toggle("Replay pending output after reconnect", isOn: $form.tsshProfile.keepPendingOutput)
         Toggle("Forward SSH agent", isOn: $form.tsshProfile.sshAgentForwarding)
+        if form.tsshProfile.sshAgentForwarding && !form.hasValidTSSHAgentCredentials {
+            Text("Agent forwarding requires an unencrypted SSH key and its public key.")
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
         if form.tsshProfile.sshAgentForwarding {
             Picker("SSH agent approval", selection: $form.tsshProfile.sshAgentApprovalMode) {
                 Text("Automatic").tag(TSSHAgentApprovalMode.automatic)

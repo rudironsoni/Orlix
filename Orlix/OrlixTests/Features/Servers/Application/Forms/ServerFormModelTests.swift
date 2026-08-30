@@ -88,6 +88,27 @@ struct ServerFormModelTests {
     }
 
     @Test
+    func tsshAgentForwardingRejectsPasswordAndEncryptedKeyAuthentication() {
+        var model = validPasswordModel()
+        model.transportSelection = .tssh
+        model.tsshProfile.sshAgentForwarding = true
+
+        #expect(!model.isValid)
+
+        model.authMethod = .sshKeyWithPassphrase
+        model.sshKey = "ENCRYPTED PRIVATE KEY"
+        model.sshPassphrase = "secret"
+        model.sshPublicKey = "ssh-ed25519 AAAA"
+        #expect(!model.isValid)
+
+        model.authMethod = .sshKey
+        #expect(model.isValid)
+
+        model.sshPublicKey = ""
+        #expect(!model.isValid)
+    }
+
+    @Test
     func connectionSnapshotChangesOnlyWithConnectionFacts() {
         var model = validPasswordModel()
         let snapshot = model.connectionSnapshot
