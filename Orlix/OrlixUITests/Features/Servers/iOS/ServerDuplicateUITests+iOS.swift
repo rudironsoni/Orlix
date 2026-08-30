@@ -25,6 +25,13 @@ final class ServerDuplicateUITests: XCTestCase {
         assertPrefilledDraft(in: app)
         XCTAssertTrue(app.buttons["Add"].exists)
 
+        let transport = app.descendants(matching: .any)["orlix.serverForm.transport"]
+        XCTAssertTrue(transport.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["orlix.serverForm.tsshMode"]
+                .waitForExistence(timeout: 5)
+        )
+
         app.buttons["Cancel"].tap()
         XCTAssertTrue(
             app.textFields["orlix.serverForm.name"].waitForNonExistence(timeout: 5)

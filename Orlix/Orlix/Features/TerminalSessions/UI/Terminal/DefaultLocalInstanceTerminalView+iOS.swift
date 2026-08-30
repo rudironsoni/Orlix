@@ -1,9 +1,8 @@
+import OrlixOS
 import SwiftUI
 import UIKit
 
-#if os(iOS) && canImport(OrlixOS)
-import OrlixOS
-
+#if os(iOS)
 struct DefaultLocalInstanceTerminalView: View {
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager

@@ -589,6 +589,7 @@ struct ServerFormSheet: View {
                         .tag(transport)
                 }
             }
+            .accessibilityIdentifier("orlix.serverForm.transport")
 
             if form.transportSelection == .eternalTerminal {
                 TextField("ET Port", text: $form.eternalTerminalPort, prompt: Text("2022"))
@@ -682,6 +683,7 @@ struct ServerFormSheet: View {
             Text("KCP").tag(TSSHTransportMode.kcp)
             Text("QUIC").tag(TSSHTransportMode.quic)
         }
+        .accessibilityIdentifier("orlix.serverForm.tsshMode")
 
         HStack(spacing: 12) {
             TextField(

@@ -432,7 +432,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.tests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
-  Orlix: &orlix_application_target
+  Orlix:
     type: application
     platform: iOS
     sources:
@@ -577,47 +577,6 @@ targets:
         Release:
           APS_ENVIRONMENT: production
           ORLIX_TELEMETRY_ENVIRONMENT: testflight
-  OrlixAppOnly:
-    <<: *orlix_application_target
-    dependencies:
-      - target: OrlixLiveActivity
-        embed: true
-      - target: OrlixPacketTunnel
-        embed: true
-      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
-        embed: false
-      - package: MLXSwift
-        products:
-          - MLX
-          - MLXNN
-          - MLXFFT
-      - package: SwiftCloudflared
-        product: Cloudflared
-      - package: SwiftMosh
-        products:
-          - MoshCore
-          - MoshBootstrap
-      - package: SwiftET
-        products:
-          - ETSession
-          - ETBootstrap
-      - package: ZIPFoundation
-        product: ZIPFoundation
-      - package: OpenTelemetrySwift
-        product: OpenTelemetryProtocolExporterHTTP
-      - package: OpenTelemetrySwiftCore
-        products:
-          - OpenTelemetryApi
-          - OpenTelemetrySdk
-      - sdk: AppIntents.framework
-    settings:
-      base:
-        <<: *orlix_application_settings
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix
-        PRODUCT_MODULE_NAME: Orlix
-        PRODUCT_NAME: OrlixAppOnly
-      configs:
-        <<: *orlix_application_config_settings
   OrlixTestApp:
     type: application
     platform: iOS
@@ -667,6 +626,8 @@ targets:
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
+      - target: OrlixOS
+        embed: true
       - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
         embed: false
       - package: MLXSwift
@@ -808,27 +769,6 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
         TEST_TARGET_NAME: Orlix
-  OrlixAppOnlyUITests:
-    type: bundle.ui-testing
-    platform: iOS
-    sources:
-      - path: Orlix/OrlixUITests
-        createIntermediateGroups: true
-        excludes:
-          - DefaultLocalInstanceUITests.swift
-    dependencies:
-      - target: OrlixAppOnly
-    settings:
-      base:
-        CODE_SIGN_STYLE: Automatic
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.app-only-ui-tests
-        SWIFT_APPROACHABLE_CONCURRENCY: YES
-        SWIFT_EMIT_LOC_STRINGS: NO
-        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
-        SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: 1,2
-        TEST_TARGET_NAME: OrlixAppOnly
   OrlixOSTestApp:
     type: application
     platform: iOS
@@ -1080,13 +1020,6 @@ schemes:
       storeKitConfiguration: Orlix/OrlixStoreKit.storekit
     archive:
       config: Release
-  "Orlix App Only":
-    build:
-      targets:
-        OrlixAppOnly: all
-    run:
-      config: Debug
-      executable: OrlixAppOnly
   "OrlixOS Tests":
     build:
       targets:
@@ -1127,16 +1060,16 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixUITests
-  "Orlix App Only Release UI Tests":
+  "Orlix Release UI Tests":
     build:
       targets:
-        OrlixAppOnly: all
-        OrlixAppOnlyUITests: test
+        Orlix: all
+        OrlixUITests: test
     test:
       config: Release
       gatherCoverageData: false
       targets:
-        - name: OrlixAppOnlyUITests
+        - name: OrlixUITests
   "OrlixHostAdapter Tests":
     build:
       targets:

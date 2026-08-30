@@ -1571,7 +1571,7 @@
     "live_activity_widget_kind": "com.rudironsoni.orlix.live-activity",
     "privacy_manifest_relative_path": "PrivacyInfo.xcprivacy",
     "privacy_manifest_source": "Orlix/Orlix/PrivacyInfo.xcprivacy",
-    "privacy_manifest_source_sha256": "af1441f4e96ec1a5cc52f0c0ee2292c29e8d21015fb936259f121c3717086ed0",
+    "privacy_manifest_source_sha256": "3165601855219eb61c44431b385a16f03557455670598208f1b27a91cab2a6ff",
     "privacy_manifest_union_status": "source_reviewed_export_unverified",
     "package_license_notice_status": "blocked_shipped_dependency_notice_inventory_unverified",
     "privacy_required_reason_union": {

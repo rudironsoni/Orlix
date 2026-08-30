@@ -31,6 +31,12 @@ struct ServerDuplicateUITestHarness: View {
         )
     }
 
+    private var tsshSourceServer: Server {
+        var server = sourceServer
+        server.connectionMode = .tssh
+        return server
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -41,7 +47,7 @@ struct ServerDuplicateUITestHarness: View {
                     onTap: {},
                     onEdit: { formIntent = .edit(sourceServer) },
                     onMove: {},
-                    onDuplicate: { formIntent = .duplicate(sourceServer) },
+                    onDuplicate: { formIntent = .duplicate(tsshSourceServer) },
                     onWake: { wakeActionCount += 1 }
                 )
                 .accessibilityIdentifier("orlix.serverDuplicateTest.row")
