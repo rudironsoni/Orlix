@@ -55,6 +55,88 @@ nonisolated struct TSSHTransportHealth: Equatable, Sendable {
     let lastReconnectError: String?
 }
 
+private nonisolated final class TSSHCancellableContinuation<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private let discardLateValue: @Sendable (Value) -> Void
+    private var continuation: CheckedContinuation<Value, any Error>?
+    private var isCancelled = false
+    private var isComplete = false
+
+    init(discardLateValue: @Sendable @escaping (Value) -> Void) {
+        self.discardLateValue = discardLateValue
+    }
+
+    func install(_ continuation: CheckedContinuation<Value, any Error>) {
+        lock.lock()
+        if isCancelled {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func cancel() {
+        let continuation: CheckedContinuation<Value, any Error>?
+        lock.lock()
+        guard !isComplete, !isCancelled else {
+            lock.unlock()
+            return
+        }
+        isCancelled = true
+        continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(throwing: CancellationError())
+    }
+
+    func complete(_ result: Result<Value, any Error>) {
+        let continuation: CheckedContinuation<Value, any Error>?
+        let lateValue: Value?
+        let wasCancelled: Bool
+        lock.lock()
+        guard !isComplete else {
+            lock.unlock()
+            return
+        }
+        isComplete = true
+        continuation = self.continuation
+        self.continuation = nil
+        wasCancelled = isCancelled
+        lateValue = wasCancelled ? try? result.get() : nil
+        lock.unlock()
+        if let lateValue { discardLateValue(lateValue) }
+        if !wasCancelled { continuation?.resume(with: result) }
+    }
+}
+
+nonisolated func tsshPerformCancellable<Value: Sendable>(
+    on queue: DispatchQueue,
+    operation: @Sendable @escaping () throws -> Value,
+    discardLateValue: @Sendable @escaping (Value) -> Void
+) async throws -> Value {
+    let state = TSSHCancellableContinuation(discardLateValue: discardLateValue)
+    return try await withTaskCancellationHandler {
+        let value = try await withCheckedThrowingContinuation { continuation in
+            state.install(continuation)
+            queue.async {
+                do { state.complete(.success(try operation())) }
+                catch { state.complete(.failure(error)) }
+            }
+        }
+        do {
+            try Task.checkCancellation()
+            return value
+        } catch {
+            discardLateValue(value)
+            throw error
+        }
+    } onCancel: {
+        state.cancel()
+    }
+}
+
 private nonisolated final class TSSHRegistry: @unchecked Sendable {
     struct Storage {
         var transports: [TSSHTransportRef: IosbridgeTransport] = [:]
@@ -133,15 +215,19 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed(validation)
         }
         nonisolated(unsafe) let nativeConfig = config
-        let transport: IosbridgeTransport = try await perform {
-            var error: NSError?
-            guard let transport = IosbridgeConnectTransport(nativeConfig, &error) else {
-                throw TSSHRuntimeError.transportFailed(
-                    error?.localizedDescription ?? "Native connection failed"
-                )
-            }
-            return transport
-        }
+        let transport: IosbridgeTransport = try await tsshPerformCancellable(
+            on: queue,
+            operation: {
+                var error: NSError?
+                guard let transport = IosbridgeConnectTransport(nativeConfig, &error) else {
+                    throw TSSHRuntimeError.transportFailed(
+                        error?.localizedDescription ?? "Native connection failed"
+                    )
+                }
+                return transport
+            },
+            discardLateValue: { $0.abandon() }
+        )
         let reference = TSSHTransportRef(id: UUID())
         registry.withLock { $0.transports[reference] = transport }
         return reference
