@@ -163,7 +163,10 @@ final class TSSHRuntime {
         guard !isClosing else { return }
         isClosing = true
         invalidateConnectionGeneration()
-        startTask?.cancel()
+        if let pendingStart = startTask {
+            pendingStart.cancel()
+            await pendingStart.value
+        }
         startTask = nil
         writeTask?.cancel()
         writeTask = nil
@@ -192,7 +195,10 @@ final class TSSHRuntime {
 
     func abortConnection() async {
         invalidateConnectionGeneration()
-        startTask?.cancel()
+        if let pendingStart = startTask {
+            pendingStart.cancel()
+            await pendingStart.value
+        }
         startTask = nil
         writeTask?.cancel()
         writeTask = nil
