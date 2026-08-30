@@ -823,6 +823,9 @@ tssh-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		-only-testing:OrlixTests/TSSHProfileTests \
 		-only-testing:OrlixTests/TSSHServerInfoTests \
+		-only-testing:OrlixTests/TSSHConcurrencyTests \
+		-only-testing:OrlixTests/TSSHAgentCredentialTests \
+		-only-testing:OrlixTests/TSSHStartupPlanTests \
 		-only-testing:OrlixTests/TSSHNativeLiveTests \
 		test
 

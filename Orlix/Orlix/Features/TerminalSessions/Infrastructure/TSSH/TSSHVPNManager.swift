@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import NetworkExtension
 
@@ -28,6 +29,24 @@ nonisolated struct TSSHVPNStartupMonitor: Sendable {
         @unknown default:
             return .failed("The VPN entered an unknown state during startup.")
         }
+    }
+}
+
+nonisolated enum TSSHVPNPostConnectDecision: Equatable, Sendable {
+    case healthy
+    case failed(String)
+}
+
+nonisolated func tsshVPNPostConnectDecision(for status: NEVPNStatus) -> TSSHVPNPostConnectDecision {
+    switch status {
+    case .connected, .connecting, .reasserting:
+        return .healthy
+    case .disconnecting, .disconnected:
+        return .failed("The TSSH VPN disconnected after startup.")
+    case .invalid:
+        return .failed("The TSSH VPN became invalid after startup.")
+    @unknown default:
+        return .failed("The TSSH VPN entered an unknown state after startup.")
     }
 }
 
@@ -101,10 +120,31 @@ nonisolated struct TSSHVPNConfiguration: Encodable, Sendable {
         blockQUIC = profile.blockQUICInVPN
     }
 
+    private var encodedData: Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(self)
+    }
+
     var json: String? {
-        guard let data = try? JSONEncoder().encode(self) else { return nil }
+        guard let data = encodedData else { return nil }
         return String(data: data, encoding: .utf8)
     }
+
+    var fingerprint: String? {
+        guard let data = encodedData else { return nil }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+nonisolated func tsshVPNConfigurationMatches(
+    existingHost: String?,
+    existingFingerprint: String?,
+    requestedConfiguration: TSSHVPNConfiguration
+) -> Bool {
+    guard let requestedFingerprint = requestedConfiguration.fingerprint else { return false }
+    return existingHost == requestedConfiguration.tsshHost
+        && existingFingerprint == requestedFingerprint
 }
 
 @MainActor
@@ -112,11 +152,20 @@ final class TSSHVPNManager {
     static let shared = TSSHVPNManager()
     private let ownership = TSSHVPNOwnershipCoordinator()
     private let startupTimeoutSeconds: TimeInterval = 30
+    private var statusMonitorTask: Task<Void, Never>?
+    private var monitoredOwnerID: UUID?
 
     private init() {}
 
-    func installAndStart(_ configuration: TSSHVPNConfiguration, ownerID: UUID) async throws {
-        guard let json = configuration.json else { throw TSSHRuntimeError.invalidProfile }
+    func installAndStart(
+        _ configuration: TSSHVPNConfiguration,
+        ownerID: UUID,
+        onUnexpectedDisconnect: @MainActor @Sendable @escaping (String) async -> Void
+    ) async throws {
+        guard let json = configuration.json,
+              let configurationFingerprint = configuration.fingerprint else {
+            throw TSSHRuntimeError.invalidProfile
+        }
         let acquisition = try ownership.acquire(ownerID)
         var retainsOwnership = false
         defer {
@@ -126,22 +175,48 @@ final class TSSHVPNManager {
         let existingProvider = manager.protocolConfiguration as? NETunnelProviderProtocol
         let existingOwnerID = existingProvider?
             .providerConfiguration?["tsshOwnerID"] as? String
-        if existingOwnerID == ownerID.uuidString {
+        let existingConfigurationMatches = tsshVPNConfigurationMatches(
+            existingHost: existingProvider?.providerConfiguration?["tsshHost"] as? String,
+            existingFingerprint: existingProvider?
+                .providerConfiguration?["tsshConfigFingerprint"] as? String,
+            requestedConfiguration: configuration
+        )
+        if existingOwnerID == ownerID.uuidString && existingConfigurationMatches {
             switch manager.connection.status {
             case .connected:
+                beginStatusMonitoring(
+                    manager.connection,
+                    ownerID: ownerID,
+                    onUnexpectedDisconnect: onUnexpectedDisconnect
+                )
                 retainsOwnership = true
                 return
             case .connecting, .reasserting:
                 try await waitUntilConnected(manager.connection)
+                beginStatusMonitoring(
+                    manager.connection,
+                    ownerID: ownerID,
+                    onUnexpectedDisconnect: onUnexpectedDisconnect
+                )
                 retainsOwnership = true
                 return
             default:
                 break
             }
+        } else if existingOwnerID == ownerID.uuidString {
+            cancelStatusMonitoring(ifOwnedBy: ownerID)
+            switch manager.connection.status {
+            case .connecting, .connected, .reasserting:
+                manager.connection.stopVPNTunnel()
+                try await waitUntilDisconnected(manager.connection)
+            case .disconnecting:
+                try await waitUntilDisconnected(manager.connection)
+            default:
+                break
+            }
         } else if existingOwnerID != nil {
             let canReclaimActiveTunnel = acquisition == .vacant
-                && existingProvider?.providerConfiguration?["tsshHost"] as? String
-                    == configuration.tsshHost
+                && existingConfigurationMatches
             if canReclaimActiveTunnel {
                 switch manager.connection.status {
                 case .connecting, .connected, .reasserting:
@@ -152,6 +227,11 @@ final class TSSHVPNManager {
                     try await manager.saveToPreferences()
                     try await manager.loadFromPreferences()
                     try await waitUntilConnected(manager.connection)
+                    beginStatusMonitoring(
+                        manager.connection,
+                        ownerID: ownerID,
+                        onUnexpectedDisconnect: onUnexpectedDisconnect
+                    )
                     retainsOwnership = true
                     return
                 default:
@@ -183,6 +263,7 @@ final class TSSHVPNManager {
         provider.serverAddress = configuration.tsshHost
         provider.providerConfiguration = [
             "tsshConfigKey": configKey,
+            "tsshConfigFingerprint": configurationFingerprint,
             "tsshHost": configuration.tsshHost,
             "tsshOwnerID": ownerID.uuidString,
         ]
@@ -200,12 +281,18 @@ final class TSSHVPNManager {
             throw error
         }
         retainsOwnership = true
+        beginStatusMonitoring(
+            manager.connection,
+            ownerID: ownerID,
+            onUnexpectedDisconnect: onUnexpectedDisconnect
+        )
         if let previousKey, previousKey != configKey {
             try? TSSHVPNSecretStore.delete(key: previousKey)
         }
     }
 
     func stop(ifOwnedBy ownerID: UUID) async throws {
+        cancelStatusMonitoring(ifOwnedBy: ownerID)
         let manager = try await loadManager()
         guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
               provider.providerConfiguration?["tsshOwnerID"] as? String == ownerID.uuidString,
@@ -214,6 +301,39 @@ final class TSSHVPNManager {
         }
         manager.connection.stopVPNTunnel()
         ownership.release(ownerID)
+    }
+
+    private func beginStatusMonitoring(
+        _ connection: NEVPNConnection,
+        ownerID: UUID,
+        onUnexpectedDisconnect: @MainActor @Sendable @escaping (String) async -> Void
+    ) {
+        statusMonitorTask?.cancel()
+        monitoredOwnerID = ownerID
+        statusMonitorTask = Task { [weak self, weak connection] in
+            guard let self, let connection else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled, self.ownership.isOwned(by: ownerID) else { return }
+                guard case .failed(let message) = tsshVPNPostConnectDecision(
+                    for: connection.status
+                ) else {
+                    continue
+                }
+                self.ownership.release(ownerID)
+                self.monitoredOwnerID = nil
+                self.statusMonitorTask = nil
+                await onUnexpectedDisconnect(message)
+                return
+            }
+        }
+    }
+
+    private func cancelStatusMonitoring(ifOwnedBy ownerID: UUID) {
+        guard monitoredOwnerID == ownerID else { return }
+        statusMonitorTask?.cancel()
+        statusMonitorTask = nil
+        monitoredOwnerID = nil
     }
 
     private func waitUntilConnected(_ connection: NEVPNConnection) async throws {

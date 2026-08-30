@@ -1157,16 +1157,18 @@
       ],
       "feature_ledger_ids": [],
       "source_evidence": [
-        "docs/objects/epic/doing/native-app-foundation.md"
+        "Orlix/Orlix/Features/TerminalSessions/Infrastructure/TSSH",
+        "Orlix/OrlixPacketTunnel/PacketTunnelProvider.swift",
+        "Orlix/Vendor/native-artifacts.sha256"
       ],
       "platform_states": {
-        "ios": "planned",
-        "ipados": "planned",
+        "ios": "built_unverified",
+        "ipados": "built_unverified",
         "macos": "deferred"
       },
       "internal_invocation_allowed": {
-        "ios": false,
-        "ipados": false,
+        "ios": true,
+        "ipados": true,
         "macos": false
       },
       "public_advertising_allowed": {
@@ -1174,9 +1176,8 @@
         "ipados": false,
         "macos": false
       },
-      "action": "Implement through the pinned trzsz-ssh core and approved Network Extension, then run the full interoperability gate.",
+      "action": "Run the full remote interoperability and Network Extension approval gates before public advertising.",
       "approval_requirements": [
-        "implementation",
         "network_extension_approval",
         "remote_interoperability",
         "public_distribution_approval"

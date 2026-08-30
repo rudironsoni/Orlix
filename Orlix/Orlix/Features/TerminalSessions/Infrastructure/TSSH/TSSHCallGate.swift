@@ -179,6 +179,17 @@ actor TSSHCallGate {
         }
     }
 
+    private nonisolated func performCancellable<Result: Sendable>(
+        _ operation: @Sendable @escaping () throws -> Result,
+        discardLateValue: @Sendable @escaping (Result) -> Void = { _ in }
+    ) async throws -> Result {
+        try await tsshPerformCancellable(
+            on: queue,
+            operation: operation,
+            discardLateValue: discardLateValue
+        )
+    }
+
     func connect(_ parameters: TSSHTransportParameters) async throws -> TSSHTransportRef {
         guard let config = IosbridgeNewTransportConfig() else {
             throw TSSHRuntimeError.transportFailed("Cannot create native configuration")
@@ -245,7 +256,7 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native transport")
         }
         nonisolated(unsafe) let native = transport
-        try await perform {
+        try await performCancellable {
             try native.setKeepPendingInput(keepPendingInput)
             try native.setKeepPendingOutput(keepPendingOutput)
             native.setStateCallback(state)
@@ -262,7 +273,7 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native transport")
         }
         nonisolated(unsafe) let native = transport
-        try await perform { try native.enableAgentForwarding(callback) }
+        try await performCancellable { try native.enableAgentForwarding(callback) }
     }
 
     func openSession(
@@ -278,15 +289,20 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native transport")
         }
         nonisolated(unsafe) let native = transport
-        let session: IosbridgeTransportSession = try await perform {
+        let session: IosbridgeTransportSession = try await performCancellable({
             let session = try native.newSession()
-            session.setOutputCallback(output)
-            if requestAgent { try session.requestAgentForwarding() }
-            try session.requestPty(term, rows: rows, cols: columns)
-            if let command { try session.startCommand(command) }
-            else { try session.shell() }
-            return session
-        }
+            do {
+                session.setOutputCallback(output)
+                if requestAgent { try session.requestAgentForwarding() }
+                try session.requestPty(term, rows: rows, cols: columns)
+                if let command { try session.startCommand(command) }
+                else { try session.shell() }
+                return session
+            } catch {
+                try? session.close()
+                throw error
+            }
+        }, discardLateValue: { try? $0.close() })
         let reference = TSSHSessionRef(id: UUID())
         registry.withLock { $0.sessions[reference] = session }
         return (reference, session.getID())
@@ -304,7 +320,7 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native transport")
         }
         nonisolated(unsafe) let native = transport
-        let session: IosbridgeTransportSession = try await perform {
+        let session: IosbridgeTransportSession = try await performCancellable({
             let session = try native.attachSession(
                 sessionID,
                 term: term,
@@ -313,7 +329,7 @@ actor TSSHCallGate {
             )
             session.setOutputCallback(output)
             return session
-        }
+        }, discardLateValue: { try? $0.close() })
         let reference = TSSHSessionRef(id: UUID())
         registry.withLock { $0.sessions[reference] = session }
         return (reference, session.getID())
@@ -450,7 +466,7 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native transport")
         }
         nonisolated(unsafe) let native = transport
-        let forwarder: IosbridgePortForwarder = try await perform {
+        let forwarder: IosbridgePortForwarder = try await performCancellable({
             var error: NSError?
             guard let forwarder = IosbridgeNewPortForwarder(native, callback, &error) else {
                 throw TSSHRuntimeError.transportFailed(
@@ -458,7 +474,7 @@ actor TSSHCallGate {
                 )
             }
             return forwarder
-        }
+        }, discardLateValue: { $0.close() })
         let reference = TSSHForwarderRef(id: UUID())
         registry.withLock { $0.forwarders[reference] = forwarder }
         return reference
@@ -472,7 +488,7 @@ actor TSSHCallGate {
             throw TSSHRuntimeError.transportFailed("Unknown native forwarder")
         }
         nonisolated(unsafe) let native = forwarder
-        try await perform {
+        try await performCancellable {
             guard let config = IosbridgeNewForwardConfig() else {
                 throw TSSHRuntimeError.transportFailed("Cannot create forward configuration")
             }

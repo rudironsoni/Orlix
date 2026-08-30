@@ -60,6 +60,14 @@ nonisolated enum TSSHResumeFailurePolicy {
     }
 }
 
+nonisolated func tsshPublishedTransportState(
+    isHealthy: Bool,
+    startupReady: Bool
+) -> ConnectionState {
+    guard isHealthy else { return .reconnecting(attempt: 1) }
+    return startupReady ? .connected : .connecting
+}
+
 @MainActor
 final class TSSHRuntime {
     let paneID: UUID
@@ -97,6 +105,7 @@ final class TSSHRuntime {
     private var remoteSessionLifecycleParser: RemoteSessionLifecycleStreamParser?
     private var lastRemoteSessionEvent: RemoteSessionEvent?
     private var standaloneStartupActionAwaitingExit = false
+    private var startupReady = false
     private var isClosing = false
 
     var isStartInFlight: Bool { startTask != nil }
@@ -124,7 +133,10 @@ final class TSSHRuntime {
         self.surface = surface
         if transport != nil {
             ownerAccess.markTransport(paneID)
-            ownerAccess.updateConnectionState(paneID, .connected)
+            ownerAccess.updateConnectionState(
+                paneID,
+                tsshPublishedTransportState(isHealthy: true, startupReady: startupReady)
+            )
         }
     }
 
@@ -141,6 +153,7 @@ final class TSSHRuntime {
 
     func startIfNeeded() {
         guard !isClosing, transport == nil, startTask == nil else { return }
+        startupReady = false
         ownerAccess.markTransport(paneID)
         ownerAccess.updateConnectionState(paneID, .connecting)
         startTask = Task { [weak self] in
@@ -218,6 +231,7 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        startupReady = false
         ownerAccess.updateConnectionState(paneID, .disconnected)
     }
 
@@ -244,6 +258,7 @@ final class TSSHRuntime {
         forwardBridge = nil
         agentBridge = nil
         resumeState = nil
+        startupReady = false
         try? resumeStore.delete(for: paneID)
     }
 
@@ -293,6 +308,7 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        startupReady = false
     }
 
     private func scheduleTransportFallback(
@@ -506,7 +522,10 @@ final class TSSHRuntime {
                       self.connectionGeneration == generation else { return }
                 self.ownerAccess.updateConnectionState(
                     self.paneID,
-                    healthy ? .connected : .reconnecting(attempt: 1)
+                    tsshPublishedTransportState(
+                        isHealthy: healthy,
+                        startupReady: self.startupReady
+                    )
                 )
             }
         }
@@ -518,7 +537,13 @@ final class TSSHRuntime {
                       !self.isClosing else { return }
                 switch event {
                 case .state("connected"):
-                    self.ownerAccess.updateConnectionState(self.paneID, .connected)
+                    self.ownerAccess.updateConnectionState(
+                        self.paneID,
+                        tsshPublishedTransportState(
+                            isHealthy: true,
+                            startupReady: self.startupReady
+                        )
+                    )
                 case .state("connecting"):
                     self.ownerAccess.updateConnectionState(self.paneID, .connecting)
                 case .state("reconnecting"), .state("disconnected"):
@@ -655,11 +680,18 @@ final class TSSHRuntime {
                 client: client
             )
             await client.disconnect()
-            try await TSSHVPNManager.shared.installAndStart(TSSHVPNConfiguration(
-                host: bootstrap.host,
-                info: bootstrap.info,
-                profile: profile
-            ), ownerID: identityToken)
+            try await TSSHVPNManager.shared.installAndStart(
+                TSSHVPNConfiguration(
+                    host: bootstrap.host,
+                    info: bootstrap.info,
+                    profile: profile
+                ),
+                ownerID: identityToken,
+                onUnexpectedDisconnect: { [weak self] message in
+                    guard let self else { return }
+                    await self.handleUnexpectedVPNDisconnect(message)
+                }
+            )
             ownsVPN = true
         } catch {
             await client.disconnect()
@@ -676,6 +708,12 @@ final class TSSHRuntime {
             logger.error("TSSH VPN failed to stop: \(error.localizedDescription, privacy: .public)")
         }
         ownsVPN = false
+    }
+
+    private func handleUnexpectedVPNDisconnect(_ message: String) async {
+        guard ownsVPN, isCurrent, !isClosing else { return }
+        await abortConnection()
+        await reportFailure(TSSHRuntimeError.vpnStartFailed(message))
     }
 
     private func makeOutputBridge(generation: UUID) -> TSSHOutputBridge {
@@ -718,6 +756,7 @@ final class TSSHRuntime {
 
     private func didConnect() {
         guard isCurrent, !isClosing, !Task.isCancelled else { return }
+        startupReady = true
         ownerAccess.markTransport(paneID)
         ownerAccess.updateConnectionState(paneID, .connected)
     }

@@ -96,6 +96,30 @@ __vendor-build:
 	audit_tssh() {
 	    local framework="$$VENDOR_TSSH/TrzszSSH.xcframework"
 	    local vpn_framework="$$VENDOR_TSSH/VPNTunnel.xcframework"
+	    local artifact_manifest="$$PROJECT_ROOT/Vendor/native-artifacts.sha256"
+	    [ -f "$$artifact_manifest" ] || {
+	        log_error "Missing tracked native artifact manifest: $$artifact_manifest"
+	        exit 1
+	    }
+	    local expected_tssh_artifacts actual_tssh_artifacts
+	    expected_tssh_artifacts="$$(awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print $$2 }' "$$artifact_manifest" | sort)"
+	    actual_tssh_artifacts="$$(
+	        cd "$$PROJECT_ROOT"
+	        find Vendor/trzsz-ssh -type f -name '*.a' -print | sort
+	    )"
+	    [ -n "$$expected_tssh_artifacts" ] &&
+	    [ "$$actual_tssh_artifacts" = "$$expected_tssh_artifacts" ] || {
+	        log_error "Installed TSSH archives do not match the tracked artifact inventory"
+	        exit 1
+	    }
+	    (
+	        cd "$$PROJECT_ROOT"
+	        awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print }' "$$artifact_manifest" |
+	            shasum -a 256 -c - >/dev/null
+	    ) || {
+	        log_error "Installed TSSH archive hash does not match the tracked artifact manifest"
+	        exit 1
+	    }
 	    local info="$$framework/Info.plist"
 	    [ -f "$$info" ] || { log_error "Missing TSSH XCFramework metadata: $$info"; exit 1; }
 	    plutil -lint "$$info" >/dev/null

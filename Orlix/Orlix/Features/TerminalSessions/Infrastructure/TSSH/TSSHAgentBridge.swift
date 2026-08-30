@@ -129,15 +129,15 @@ private nonisolated struct TSSHAgentIdentity: @unchecked Sendable {
         guard let privateKey = credentials.privateKey,
               let publicKey = credentials.publicKey,
               let publicLine = String(data: publicKey, encoding: .utf8),
-              let publicBlob = Self.publicBlob(from: publicLine) else {
+              let suppliedPublicBlob = Self.publicBlob(from: publicLine) else {
             throw Self.failure("The active SSH key has no public identity")
         }
-        self.publicBlob = publicBlob
-        self.comment = comment
 
         guard let pem = String(data: privateKey, encoding: .utf8) else {
             throw Self.failure("The active SSH private key is not text")
         }
+        let resolvedKey: Key
+        let derivedPublicBlob: Data
         if pem.contains("BEGIN RSA PRIVATE KEY") {
             let der = try Self.decodePEM(pem, label: "RSA PRIVATE KEY")
             let attributes: [CFString: Any] = [
@@ -148,15 +148,25 @@ private nonisolated struct TSSHAgentIdentity: @unchecked Sendable {
             guard let secKey = SecKeyCreateWithData(der as CFData, attributes as CFDictionary, &error) else {
                 throw error?.takeRetainedValue() ?? Self.failure("Cannot import RSA key")
             }
-            key = .rsa(secKey)
-            return
-        }
-        if pem.contains("BEGIN OPENSSH PRIVATE KEY") {
+            resolvedKey = .rsa(secKey)
+            derivedPublicBlob = try Self.rsaPublicBlob(from: secKey)
+        } else if pem.contains("BEGIN OPENSSH PRIVATE KEY") {
             let seed = try Self.decodeEd25519Seed(pem)
-            key = .ed25519(try Curve25519.Signing.PrivateKey(rawRepresentation: seed))
-            return
+            let signingKey = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
+            resolvedKey = .ed25519(signingKey)
+            var blob = Data()
+            blob.appendSSHString(Data("ssh-ed25519".utf8))
+            blob.appendSSHString(signingKey.publicKey.rawRepresentation)
+            derivedPublicBlob = blob
+        } else {
+            throw Self.failure("This SSH key format cannot be forwarded")
         }
-        throw Self.failure("This SSH key format cannot be forwarded")
+        guard suppliedPublicBlob == derivedPublicBlob else {
+            throw Self.failure("The SSH public key does not match the private key")
+        }
+        publicBlob = derivedPublicBlob
+        self.comment = comment
+        key = resolvedKey
     }
 
     func sign(_ data: Data, flags: Int32) throws -> Data {
@@ -236,12 +246,81 @@ private nonisolated struct TSSHAgentIdentity: @unchecked Sendable {
         return privateBytes.prefix(32)
     }
 
+    static func rsaPublicBlob(from privateKey: SecKey) throws -> Data {
+        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            throw failure("Cannot derive RSA public key")
+        }
+        var error: Unmanaged<CFError>?
+        guard let der = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            throw error?.takeRetainedValue() ?? failure("Cannot export RSA public key")
+        }
+        var outerReader = ASN1Reader(data: der)
+        let sequence = try outerReader.readElement(tag: 0x30)
+        guard outerReader.isAtEnd else {
+            throw failure("Invalid RSA public key")
+        }
+        var sequenceReader = ASN1Reader(data: sequence)
+        let modulus = try sequenceReader.readElement(tag: 0x02)
+        let exponent = try sequenceReader.readElement(tag: 0x02)
+        guard sequenceReader.isAtEnd else {
+            throw failure("Invalid RSA public key")
+        }
+        var blob = Data()
+        blob.appendSSHString(Data("ssh-rsa".utf8))
+        blob.appendSSHMPInt(exponent)
+        blob.appendSSHMPInt(modulus)
+        return blob
+    }
+
     static func failure(_ message: String) -> NSError {
         NSError(
             domain: "com.rudironsoni.orlix.tssh-agent",
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: message]
         )
+    }
+}
+
+private nonisolated struct ASN1Reader {
+    let data: Data
+    var offset = 0
+
+    var isAtEnd: Bool { offset == data.count }
+
+    mutating func readElement(tag: UInt8) throws -> Data {
+        guard offset < data.count, data[offset] == tag else {
+            throw TSSHAgentIdentity.failure("Invalid RSA public key")
+        }
+        offset += 1
+        let length = try readLength()
+        guard length >= 0, offset <= data.count - length else {
+            throw TSSHAgentIdentity.failure("Invalid RSA public key")
+        }
+        defer { offset += length }
+        return data.subdata(in: offset..<(offset + length))
+    }
+
+    private mutating func readLength() throws -> Int {
+        guard offset < data.count else {
+            throw TSSHAgentIdentity.failure("Invalid RSA public key")
+        }
+        let first = data[offset]
+        offset += 1
+        if first < 0x80 { return Int(first) }
+        let byteCount = Int(first & 0x7f)
+        guard byteCount > 0, byteCount <= MemoryLayout<Int>.size,
+              offset <= data.count - byteCount else {
+            throw TSSHAgentIdentity.failure("Invalid RSA public key")
+        }
+        var length = 0
+        for _ in 0..<byteCount {
+            guard length <= (Int.max >> 8) else {
+                throw TSSHAgentIdentity.failure("Invalid RSA public key")
+            }
+            length = (length << 8) | Int(data[offset])
+            offset += 1
+        }
+        return length
     }
 }
 
@@ -274,5 +353,18 @@ private nonisolated extension Data {
         append(UInt8((length >> 8) & 0xff))
         append(UInt8(length & 0xff))
         append(value)
+    }
+
+    mutating func appendSSHMPInt(_ value: Data) {
+        var normalized = value
+        while normalized.count > 1, normalized.first == 0 {
+            normalized.removeFirst()
+        }
+        if let first = normalized.first, first & 0x80 != 0 {
+            var positive = Data([0])
+            positive.append(normalized)
+            normalized = positive
+        }
+        appendSSHString(normalized)
     }
 }
