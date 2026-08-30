@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import NetworkExtension
 import VPNTunnel
@@ -33,17 +34,48 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
             completionHandler(error)
             return
         }
+        guard let policyData = configJSON.data(using: .utf8),
+              let policy = try? JSONDecoder().decode(
+                  TSSHVPNNetworkPolicy.self,
+                  from: policyData
+              ) else {
+            completionHandler(PacketTunnelError.invalidConfiguration)
+            return
+        }
 
-        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: host)
         let routeHost = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        let resolvedHosts = Self.resolveHostAddresses(routeHost)
+        guard !resolvedHosts.isEmpty else {
+            completionHandler(PacketTunnelError.unresolvedHost(routeHost))
+            return
+        }
+        let settings = NEPacketTunnelNetworkSettings(
+            tunnelRemoteAddress: resolvedHosts[0]
+        )
         let ipv4 = NEIPv4Settings(
             addresses: ["198.18.0.2"],
             subnetMasks: ["255.255.255.252"]
         )
         ipv4.includedRoutes = [.default()]
-        if routeHost.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil {
-            ipv4.excludedRoutes = [NEIPv4Route(destinationAddress: routeHost, subnetMask: "255.255.255.255")]
+        var ipv4Routes: [NEIPv4Route] = []
+        var ipv6Routes: [NEIPv6Route] = []
+        for route in policy.excludedRoutes + resolvedHosts.compactMap(
+            TSSHVPNNetworkPolicy.parseExcludedRoute
+        ) {
+            switch route {
+            case .ipv4(let address, let subnetMask):
+                ipv4Routes.append(NEIPv4Route(
+                    destinationAddress: address,
+                    subnetMask: subnetMask
+                ))
+            case .ipv6(let address, let prefixLength):
+                ipv6Routes.append(NEIPv6Route(
+                    destinationAddress: address,
+                    networkPrefixLength: NSNumber(value: prefixLength)
+                ))
+            }
         }
+        ipv4.excludedRoutes = ipv4Routes
         settings.ipv4Settings = ipv4
 
         let ipv6 = NEIPv6Settings(
@@ -51,17 +83,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
             networkPrefixLengths: [64]
         )
         ipv6.includedRoutes = [.default()]
-        if routeHost.contains(":") {
-            ipv6.excludedRoutes = [
-                NEIPv6Route(destinationAddress: routeHost, networkPrefixLength: 128),
-            ]
-        }
+        ipv6.excludedRoutes = ipv6Routes
         settings.ipv6Settings = ipv6
 
-        let dns = NEDNSSettings(servers: ["1.1.1.1", "1.0.0.1"])
+        let dns = NEDNSSettings(servers: policy.dnsServers)
         dns.matchDomains = [""]
         settings.dnsSettings = dns
-        settings.mtu = 1_400
+        settings.mtu = NSNumber(value: policy.mtu)
 
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else {
@@ -136,6 +164,37 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         state.callback = callback
         stateLock.unlock()
     }
+
+    private static func resolveHostAddresses(_ host: String) -> [String] {
+        if TSSHVPNNetworkPolicy.isIPAddress(host) { return [host] }
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_DGRAM
+        var result: UnsafeMutablePointer<addrinfo>?
+        let status = host.withCString { getaddrinfo($0, nil, &hints, &result) }
+        guard status == 0, let result else { return [] }
+        defer { freeaddrinfo(result) }
+
+        var addresses: [String] = []
+        var cursor: UnsafeMutablePointer<addrinfo>? = result
+        while let info = cursor?.pointee {
+            var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            if getnameinfo(
+                info.ai_addr,
+                info.ai_addrlen,
+                &buffer,
+                socklen_t(buffer.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            ) == 0 {
+                let address = String(cString: buffer)
+                if !addresses.contains(address) { addresses.append(address) }
+            }
+            cursor = info.ai_next
+        }
+        return addresses
+    }
 }
 
 private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProtocol {
@@ -149,12 +208,14 @@ private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProto
 
 private enum PacketTunnelError: LocalizedError {
     case invalidConfiguration
+    case unresolvedHost(String)
     case stopped
     case nativeFailure(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidConfiguration: return "The Orlix VPN configuration is invalid."
+        case .unresolvedHost(let host): return "The Orlix VPN host could not be resolved: \(host)"
         case .stopped: return "The Orlix VPN provider stopped."
         case .nativeFailure(let message): return message
         }

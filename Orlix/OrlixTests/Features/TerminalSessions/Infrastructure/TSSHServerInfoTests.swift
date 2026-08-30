@@ -103,4 +103,20 @@ struct TSSHServerInfoTests {
         #expect(command.contains("umask 077"))
         #expect(command.contains("trap 'rm -f \\\"\\$output\\\"'"))
     }
+
+    @Test
+    func resumeFailurePolicyDiscardsPermanentAndRepeatedFailures() {
+        #expect(TSSHResumeFailurePolicy.shouldDiscard(
+            after: 1,
+            errorDescription: "attach to session [42] failed: session [42] not found"
+        ))
+        #expect(!TSSHResumeFailurePolicy.shouldDiscard(
+            after: 2,
+            errorDescription: "network is unreachable"
+        ))
+        #expect(TSSHResumeFailurePolicy.shouldDiscard(
+            after: 3,
+            errorDescription: "network is unreachable"
+        ))
+    }
 }

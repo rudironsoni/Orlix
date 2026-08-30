@@ -36,7 +36,7 @@ nonisolated struct TSSHVPNConfiguration: Encodable, Sendable {
         tsshServerID = info.serverID
         trzszMTU = profile.mtu > 0 ? profile.mtu : info.mtu
         dnsServers = profile.vpnDNSServers
-        excludedRoutes = Array(Set(profile.vpnExcludedRoutes + [host])).sorted()
+        excludedRoutes = Array(Set(profile.vpnExcludedRoutes)).sorted()
         mtu = profile.mtu > 0 ? profile.mtu : 1_400
         blockQUIC = profile.blockQUICInVPN
     }

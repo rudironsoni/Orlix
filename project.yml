@@ -739,6 +739,7 @@ targets:
           - Info.plist
           - OrlixPacketTunnel.entitlements
       - path: Orlix/Orlix/Features/TerminalSessions/Infrastructure/TSSH/TSSHVPNSecretStore.swift
+      - path: Orlix/OrlixShared/TSSHVPNNetworkPolicy.swift
     dependencies:
       - framework: Orlix/Vendor/trzsz-ssh/VPNTunnel.xcframework
         embed: false
@@ -795,12 +796,33 @@ targets:
       - path: Orlix/OrlixUITests
         createIntermediateGroups: true
     dependencies:
-      - target: OrlixAppOnly
+      - target: Orlix
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.ui-tests
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_EMIT_LOC_STRINGS: NO
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+        TEST_TARGET_NAME: Orlix
+  OrlixAppOnlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Orlix/OrlixUITests
+        createIntermediateGroups: true
+        excludes:
+          - DefaultLocalInstanceUITests.swift
+    dependencies:
+      - target: OrlixAppOnly
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.app-only-ui-tests
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_EMIT_LOC_STRINGS: NO
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
@@ -1098,7 +1120,7 @@ schemes:
   "Orlix UI Tests":
     build:
       targets:
-        OrlixAppOnly: all
+        Orlix: all
         OrlixUITests: test
     test:
       config: Debug
@@ -1109,12 +1131,12 @@ schemes:
     build:
       targets:
         OrlixAppOnly: all
-        OrlixUITests: test
+        OrlixAppOnlyUITests: test
     test:
       config: Release
       gatherCoverageData: false
       targets:
-        - name: OrlixUITests
+        - name: OrlixAppOnlyUITests
   "OrlixHostAdapter Tests":
     build:
       targets:

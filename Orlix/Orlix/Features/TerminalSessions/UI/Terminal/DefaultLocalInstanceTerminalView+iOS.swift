@@ -104,10 +104,11 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
                 terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
                 useCustomIO: true
             )
-            terminal.accessibilityIdentifier = "orlix.local-instance.terminal"
-            terminal.accessibilityLabel = "Orlix local terminal"
-            terminal.accessibilityValue = "initializing"
-            terminal.isAccessibilityElement = true
+            terminal.isAccessibilityElement = false
+            terminal.imeProxyTextView.accessibilityIdentifier = "orlix.local-instance.terminal"
+            terminal.imeProxyTextView.accessibilityLabel = "Orlix local terminal"
+            terminal.imeProxyTextView.accessibilityValue = "initializing"
+            terminal.imeProxyTextView.isAccessibilityElement = true
             terminal.acceptsTerminalInput = true
             terminal.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             coordinator.attach(to: terminal)
@@ -220,7 +221,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             output = session.attachOutput { [weak self] data in
                 DispatchQueue.main.async {
                     self?.terminal?.feedData(data)
-                    self?.terminal?.accessibilityValue = "output"
+                    self?.terminal?.imeProxyTextView.accessibilityValue = "output"
                 }
             }
 
@@ -253,7 +254,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
 
         @MainActor
         private func showError(_ message: String) {
-            terminal?.accessibilityValue = "failed"
+            terminal?.imeProxyTextView.accessibilityValue = "failed"
             terminal?.feedData(Data("\r\n\u{001B}[31m\(message)\u{001B}[0m\r\n".utf8))
         }
     }

@@ -20,6 +20,22 @@ nonisolated struct TSSHForwardStatus: Equatable, Sendable {
     var bytesOut: Int64
 }
 
+nonisolated enum TSSHResumeFailurePolicy {
+    static let maximumAttempts = 3
+
+    static func shouldDiscard(after attempt: Int, errorDescription: String) -> Bool {
+        if attempt >= maximumAttempts { return true }
+        let description = errorDescription.lowercased()
+        return description.contains("session [") && (
+            description.contains("not found")
+                || description.contains("is closed")
+                || description.contains("attach is not allowed")
+                || description.contains("not a pty session")
+                || description.contains("invalid session state")
+        )
+    }
+}
+
 @MainActor
 final class TSSHRuntime {
     let paneID: UUID
@@ -190,6 +206,8 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        resumeState = nil
+        try? resumeStore.delete(for: paneID)
     }
 
     func statistics() async -> TSSHTransportStatistics? {
@@ -267,7 +285,9 @@ final class TSSHRuntime {
         guard var state = loadedState else { return false }
         let expiresAt = state.savedAt.addingTimeInterval(86_400)
         var backoffSeconds = 1
+        var attempt = 0
         while !Task.isCancelled, !isClosing, Date() < expiresAt {
+            attempt += 1
             state = TSSHResumeState(
                 host: state.host,
                 info: state.info.advancingClientID(),
@@ -307,13 +327,18 @@ final class TSSHRuntime {
                 didConnect()
                 return true
             } catch {
-                if let session { callGate.forgetSession(session) }
-                if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
-                if let transport { callGate.emergencyAbandon(transport) }
-                invalidateConnectionGeneration()
-                transport = nil
-                session = nil
-                forwarder = nil
+                let shouldDiscard = TSSHResumeFailurePolicy.shouldDiscard(
+                    after: attempt,
+                    errorDescription: error.localizedDescription
+                )
+                await cleanupFailedResume(preserveServer: !shouldDiscard)
+                if shouldDiscard {
+                    try? resumeStore.delete(for: paneID)
+                    logger.info(
+                        "Saved TSSH session is unavailable after \(attempt) attempt(s); starting a new session"
+                    )
+                    return false
+                }
                 logger.info(
                     "Saved TSSH attach failed, retrying in \(backoffSeconds)s: \(error.localizedDescription, privacy: .public)"
                 )
@@ -323,6 +348,24 @@ final class TSSHRuntime {
         }
         try? resumeStore.delete(for: paneID)
         return false
+    }
+
+    private func cleanupFailedResume(preserveServer: Bool) async {
+        if preserveServer {
+            if let session { callGate.forgetSession(session) }
+            if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
+            if let transport { callGate.emergencyAbandon(transport) }
+        } else {
+            if let forwarder { await callGate.closeForwarder(forwarder) }
+            if let session { await callGate.closeSession(session) }
+            if let transport {
+                await callGate.closeTransport(transport, preserveServer: false)
+            }
+        }
+        invalidateConnectionGeneration()
+        transport = nil
+        session = nil
+        forwarder = nil
     }
 
     private func startFreshSession() async throws {

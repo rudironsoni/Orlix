@@ -168,9 +168,11 @@ nonisolated struct TSSHProfile: Codable, Hashable, Sendable {
               (0...3_600).contains(heartbeatTimeoutSeconds),
               !vpnDNSServers.isEmpty,
               vpnDNSServers.count <= 8,
-              vpnDNSServers.allSatisfy({ Self.isSafeNetworkValue($0) }),
+              vpnDNSServers.allSatisfy(TSSHVPNNetworkPolicy.isIPAddress),
               vpnExcludedRoutes.count <= 64,
-              vpnExcludedRoutes.allSatisfy({ Self.isSafeNetworkValue($0) }),
+              vpnExcludedRoutes.allSatisfy({
+                  TSSHVPNNetworkPolicy.parseExcludedRoute($0) != nil
+              }),
               forwards.allSatisfy(\.isValid) else { return false }
         guard let serverPath else { return true }
         let trimmed = serverPath.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -180,11 +182,4 @@ nonisolated struct TSSHProfile: Codable, Hashable, Sendable {
             && !trimmed.contains("\0")
     }
 
-    private static func isSafeNetworkValue(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty
-            && trimmed.utf8.count <= 255
-            && !trimmed.contains("\n")
-            && !trimmed.contains("\0")
-    }
 }

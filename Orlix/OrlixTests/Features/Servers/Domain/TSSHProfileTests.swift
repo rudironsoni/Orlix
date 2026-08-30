@@ -60,6 +60,8 @@ struct TSSHProfileTests {
         TSSHProfile(connectTimeoutSeconds: 0),
         TSSHProfile(heartbeatTimeoutSeconds: 3_601),
         TSSHProfile(vpnDNSServers: []),
+        TSSHProfile(vpnDNSServers: ["dns.example.com"]),
+        TSSHProfile(vpnExcludedRoutes: ["private.example.com"]),
         TSSHProfile(serverPath: "bad\npath"),
         TSSHProfile(forwards: [
             TSSHPortForwardRule(
@@ -114,5 +116,34 @@ struct TSSHProfileTests {
         #expect(profile.connectTimeoutSeconds == 30)
         #expect(profile.vpnDNSServers == ["1.1.1.1", "1.0.0.1"])
         #expect(profile.isValid)
+    }
+
+    @Test
+    func vpnNetworkPolicyDecodesValidatedDNSRoutesAndMTU() throws {
+        let data = Data(#"{"dnsServers":["9.9.9.9","2606:4700:4700::1111"],"excludedRoutes":["10.0.0.0/8","fd00::/64","192.0.2.1"],"mtu":1280}"#.utf8)
+
+        let policy = try JSONDecoder().decode(TSSHVPNNetworkPolicy.self, from: data)
+
+        #expect(policy.dnsServers == ["9.9.9.9", "2606:4700:4700::1111"])
+        #expect(policy.excludedRoutes == [
+            .ipv4(address: "10.0.0.0", subnetMask: "255.0.0.0"),
+            .ipv6(address: "fd00::", prefixLength: 64),
+            .ipv4(address: "192.0.2.1", subnetMask: "255.255.255.255"),
+        ])
+        #expect(policy.mtu == 1_280)
+    }
+
+    @Test(arguments: [
+        #"{"dnsServers":["dns.example.com"],"excludedRoutes":[],"mtu":1400}"#,
+        #"{"dnsServers":["1.1.1.1"],"excludedRoutes":["private.example.com"],"mtu":1400}"#,
+        #"{"dnsServers":["1.1.1.1"],"excludedRoutes":[],"mtu":575}"#,
+    ])
+    func vpnNetworkPolicyRejectsInvalidSettings(json: String) {
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(
+                TSSHVPNNetworkPolicy.self,
+                from: Data(json.utf8)
+            )
+        }
     }
 }
