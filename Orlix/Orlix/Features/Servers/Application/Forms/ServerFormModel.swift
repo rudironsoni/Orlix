@@ -149,8 +149,10 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var hasValidTSSHAgentCredentials: Bool {
         guard tsshProfile.sshAgentForwarding else { return true }
         return authMethod == .sshKey
-            && !sshKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !sshPublicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && TSSHAgentCredentialValidator.isSupported(
+                privateKey: sshKey,
+                publicKey: sshPublicKey
+            )
     }
 
     var effectiveUsername: String {

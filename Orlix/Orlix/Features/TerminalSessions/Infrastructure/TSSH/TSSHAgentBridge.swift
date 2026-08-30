@@ -4,6 +4,15 @@ import LocalAuthentication
 import Security
 @preconcurrency import TrzszSSH
 
+nonisolated enum TSSHAgentCredentialValidator {
+    static func isSupported(privateKey: String, publicKey: String) -> Bool {
+        var credentials = ServerCredentials(serverId: UUID())
+        credentials.privateKey = Data(privateKey.utf8)
+        credentials.publicKey = Data(publicKey.utf8)
+        return (try? TSSHAgentIdentity(credentials: credentials, comment: "")) != nil
+    }
+}
+
 nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtocol, @unchecked Sendable {
     private let identity: TSSHAgentIdentity
     private let approvalMode: TSSHAgentApprovalMode
@@ -252,7 +261,7 @@ private nonisolated struct SSHWireReader {
     }
 
     mutating func readString() -> Data? {
-        guard let length = readUInt32(), length <= UInt32(Int.max) else { return nil }
+        guard let length = readUInt32() else { return nil }
         return read(count: Int(length))
     }
 }

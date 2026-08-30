@@ -88,7 +88,7 @@ struct ServerFormModelTests {
     }
 
     @Test
-    func tsshAgentForwardingRejectsPasswordAndEncryptedKeyAuthentication() {
+    func tsshAgentForwardingRejectsUnsupportedCredentials() throws {
         var model = validPasswordModel()
         model.transportSelection = .tssh
         model.tsshProfile.sshAgentForwarding = true
@@ -102,10 +102,12 @@ struct ServerFormModelTests {
         #expect(!model.isValid)
 
         model.authMethod = .sshKey
-        #expect(model.isValid)
-
-        model.sshPublicKey = ""
         #expect(!model.isValid)
+
+        let key = try SSHKeyGenerator.generate(type: .ed25519)
+        model.sshKey = String(decoding: key.privateKey, as: UTF8.self)
+        model.sshPublicKey = key.publicKey
+        #expect(model.isValid)
     }
 
     @Test

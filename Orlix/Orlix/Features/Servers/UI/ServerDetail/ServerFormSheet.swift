@@ -746,7 +746,7 @@ struct ServerFormSheet: View {
         Toggle("Replay pending output after reconnect", isOn: $form.tsshProfile.keepPendingOutput)
         Toggle("Forward SSH agent", isOn: $form.tsshProfile.sshAgentForwarding)
         if form.tsshProfile.sshAgentForwarding && !form.hasValidTSSHAgentCredentials {
-            Text("Agent forwarding requires an unencrypted SSH key and its public key.")
+            Text("Agent forwarding requires a supported RSA or Ed25519 key and its public key.")
                 .font(.caption)
                 .foregroundStyle(.red)
         }

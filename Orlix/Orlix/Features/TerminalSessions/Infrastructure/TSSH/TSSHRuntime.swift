@@ -294,7 +294,7 @@ final class TSSHRuntime {
             return false
         }
         let currentProfile = server.tsshProfile
-        let currentHost = server.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedHost = state.host
         let expiresAt = state.savedAt.addingTimeInterval(86_400)
         var backoffSeconds = 1
         var attempt = 0
@@ -302,7 +302,7 @@ final class TSSHRuntime {
             attempt += 1
             state = TSSHResumeState(
                 serverIdentity: currentIdentity,
-                host: currentHost,
+                host: savedHost,
                 info: state.info.advancingClientID(),
                 sessionID: state.sessionID,
                 profile: currentProfile,
@@ -310,7 +310,7 @@ final class TSSHRuntime {
             )
             try resumeStore.save(state, for: paneID)
             do {
-                let transport = try await connect(currentHost, info: state.info, profile: currentProfile)
+                let transport = try await connect(savedHost, info: state.info, profile: currentProfile)
                 self.transport = transport
                 try Task.checkCancellation()
                 try await enableAgentIfRequested(profile: currentProfile, on: transport)
@@ -329,7 +329,7 @@ final class TSSHRuntime {
                 try Task.checkCancellation()
                 resumeState = TSSHResumeState(
                     serverIdentity: currentIdentity,
-                    host: currentHost,
+                    host: savedHost,
                     info: state.info,
                     sessionID: attached.1,
                     profile: currentProfile,
@@ -337,10 +337,15 @@ final class TSSHRuntime {
                 )
                 try resumeStore.save(resumeState!, for: paneID)
                 try await startForwarding(on: transport, profile: currentProfile)
-                await startVPNIfRequested(profile: currentProfile)
+                try await startVPNIfRequested(profile: currentProfile)
                 didConnect()
                 return true
             } catch {
+                if let runtimeError = error as? TSSHRuntimeError,
+                   case .vpnStartFailed = runtimeError {
+                    await cleanupFailedResume(preserveServer: true)
+                    throw runtimeError
+                }
                 let shouldDiscard = TSSHResumeFailurePolicy.shouldDiscard(
                     after: attempt,
                     errorDescription: error.localizedDescription
@@ -428,7 +433,7 @@ final class TSSHRuntime {
         try resumeStore.save(state, for: paneID)
         resumeState = state
         try await startForwarding(on: transport, profile: server.tsshProfile)
-        await startVPNIfRequested(profile: server.tsshProfile)
+        try await startVPNIfRequested(profile: server.tsshProfile)
         didConnect()
     }
 
@@ -596,7 +601,7 @@ final class TSSHRuntime {
         agentBridge = bridge
     }
 
-    private func startVPNIfRequested(profile: TSSHProfile) async {
+    private func startVPNIfRequested(profile: TSSHProfile) async throws {
         guard profile.vpnEnabled else { return }
         let client = sshClientFactory.makeClient(
             connectTimeout: .seconds(profile.connectTimeoutSeconds)
@@ -617,6 +622,7 @@ final class TSSHRuntime {
         } catch {
             await client.disconnect()
             logger.error("TSSH VPN failed to start: \(error.localizedDescription, privacy: .public)")
+            throw TSSHRuntimeError.vpnStartFailed(error.localizedDescription)
         }
     }
 

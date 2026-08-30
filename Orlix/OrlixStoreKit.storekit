@@ -25,7 +25,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.rudironsoni.orlix.pro.lifetime",
+      "productID" : "com.rudironsoni.Orlix.pro.lifetime",
       "referenceName" : "Pro Lifetime",
       "type" : "NonConsumable"
     }
@@ -162,7 +162,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.rudironsoni.orlix.pro.monthly",
+          "productID" : "com.rudironsoni.Orlix.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Pro Monthly",
           "subscriptionGroupID" : "orlix_pro",
@@ -206,7 +206,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.rudironsoni.orlix.pro.yearly",
+          "productID" : "com.rudironsoni.Orlix.pro.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Pro Yearly",
           "subscriptionGroupID" : "orlix_pro",

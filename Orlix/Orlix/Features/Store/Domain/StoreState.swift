@@ -107,9 +107,9 @@ nonisolated enum PaywallSource: String, Equatable, Sendable {
 }
 
 nonisolated enum OrlixProducts {
-    static let proMonthly = "com.rudironsoni.orlix.pro.monthly"
-    static let proYearly = "com.rudironsoni.orlix.pro.yearly"
-    static let proLifetime = "com.rudironsoni.orlix.pro.lifetime"
+    static let proMonthly = "com.rudironsoni.Orlix.pro.monthly"
+    static let proYearly = "com.rudironsoni.Orlix.pro.yearly"
+    static let proLifetime = "com.rudironsoni.Orlix.pro.lifetime"
 
     static let subscriptionGroupId = "orlix_pro"
     static let allProducts = [proMonthly, proYearly, proLifetime]
