@@ -80,6 +80,20 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func resumeReservesTheSurvivingVPNClientIdentity() throws {
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":7,"ServerID":2}"#
+        )
+
+        #expect(info.advancingClientIDForResume(vpnEnabled: false).clientID == 8)
+        #expect(info.advancingClientIDForResume(vpnEnabled: true).clientID == 9)
+
+        var maximumClient = info
+        maximumClient.clientID = UInt64.max
+        #expect(maximumClient.advancingClientIDForResume(vpnEnabled: true).clientID == 2)
+    }
+
+    @Test
     func bootstrapCommandUsesAttachableModeAndConfiguredBounds() {
         let profile = TSSHProfile(
             transportMode: .quic,

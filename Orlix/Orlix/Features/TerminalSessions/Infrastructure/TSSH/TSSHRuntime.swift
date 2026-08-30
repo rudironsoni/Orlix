@@ -273,7 +273,7 @@ final class TSSHRuntime {
         ownerAccess.updateConnectionState(paneID, .disconnected)
     }
 
-    func abortConnection() async {
+    func prepareForReconnect() async {
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
             pendingStart.cancel()
@@ -297,9 +297,7 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
-        resumeState = nil
         startupReady = false
-        try? resumeStore.delete(for: paneID)
     }
 
     func statistics() async -> TSSHTransportStatistics? {
@@ -393,7 +391,9 @@ final class TSSHRuntime {
             state = TSSHResumeState(
                 serverIdentity: currentIdentity,
                 host: savedHost,
-                info: state.info.advancingClientID(),
+                info: state.info.advancingClientIDForResume(
+                    vpnEnabled: currentProfile.vpnEnabled
+                ),
                 sessionID: state.sessionID,
                 profile: currentProfile,
                 savedAt: state.savedAt
@@ -770,7 +770,7 @@ final class TSSHRuntime {
 
     private func handleUnexpectedVPNDisconnect(_ message: String) async {
         guard ownsVPN, isCurrent, !isClosing else { return }
-        await abortConnection()
+        await prepareForReconnect()
         await reportFailure(TSSHRuntimeError.vpnStartFailed(message))
     }
 

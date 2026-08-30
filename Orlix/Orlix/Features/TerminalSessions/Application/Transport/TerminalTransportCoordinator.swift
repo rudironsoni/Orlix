@@ -440,7 +440,7 @@ final class TerminalTransportCoordinator {
         let detachedRuntime = runtime.flatMap {
             detachEternalTerminalRuntime(for: paneId, ifOwnedBy: $0) ? $0 : nil
         }
-        await tsshRuntimes[paneId]?.abortConnection()
+        await tsshRuntimes[paneId]?.prepareForReconnect()
 
         if let client,
            !registry.hasOtherClientReferences(using: client, excluding: paneId) {

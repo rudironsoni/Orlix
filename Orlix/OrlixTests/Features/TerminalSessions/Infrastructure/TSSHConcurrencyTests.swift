@@ -1,9 +1,84 @@
 import Foundation
+import MoshBootstrap
 import NetworkExtension
 import Testing
 @testable import Orlix
 
+private nonisolated struct TSSHHostKeyVerifierStub: SSHHostKeyVerifying {
+    func verify(_ candidate: SSHHostKeyCandidate) -> SSHHostKeyVerificationDecision {
+        .trusted
+    }
+}
+
+private actor TSSHMoshBootstrapStub: SSHMoshBootstrapping {
+    func bootstrapConnectInfo(
+        terminalType: RemoteTerminalType,
+        startCommand: String?,
+        portRange: ClosedRange<Int>,
+        execute: @escaping SSHMoshCommandExecutor
+    ) async throws -> MoshServerConnectInfo {
+        throw SSHError.notConnected
+    }
+
+    func terminateMoshServer(
+        pid: Int32,
+        execute: @escaping SSHMoshCommandExecutor
+    ) async {}
+}
+
+private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecked Sendable {
+    private(set) var deletedPaneIDs: [UUID] = []
+
+    func load(for paneID: UUID) throws -> TSSHResumeState? { nil }
+    func hasCheckpoint(for paneID: UUID) -> Bool { true }
+    func save(_ state: TSSHResumeState, for paneID: UUID) throws {}
+    func delete(for paneID: UUID) throws { deletedPaneIDs.append(paneID) }
+}
+
 struct TSSHConcurrencyTests {
+    @Test @MainActor
+    func reconnectPreservesTheAttachableSessionCheckpoint() async {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let store = TSSHResumeStoreSpy()
+        let runtime = TSSHRuntime(
+            paneID: paneID,
+            server: server,
+            credentials: ServerCredentials(serverId: server.id),
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: store,
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        await runtime.prepareForReconnect()
+
+        #expect(store.deletedPaneIDs.isEmpty)
+    }
+
     @Test
     func cancellingNativeOperationReturnsBeforeBlockingWorkFinishes() async throws {
         let operationStarted = DispatchSemaphore(value: 0)

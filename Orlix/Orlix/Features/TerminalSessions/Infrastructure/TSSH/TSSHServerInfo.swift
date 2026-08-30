@@ -141,6 +141,12 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
         copy.clientID = clientID == UInt64.max ? 1 : max(1, clientID + 1)
         return copy
     }
+
+    func advancingClientIDForResume(vpnEnabled: Bool) -> Self {
+        let nextClient = advancingClientID()
+        guard vpnEnabled else { return nextClient }
+        return nextClient.advancingClientID()
+    }
 }
 
 nonisolated enum TSSHRuntimeError: LocalizedError, Sendable {
