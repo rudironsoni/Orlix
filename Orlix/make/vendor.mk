@@ -105,11 +105,14 @@ __vendor-build:
 	    expected_tssh_artifacts="$$(awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print $$2 }' "$$artifact_manifest" | sort)"
 	    actual_tssh_artifacts="$$(
 	        cd "$$PROJECT_ROOT"
-	        find Vendor/trzsz-ssh -type f -name '*.a' -print | sort
+	        find \
+	            Vendor/trzsz-ssh/TrzszSSH.xcframework \
+	            Vendor/trzsz-ssh/VPNTunnel.xcframework \
+	            -type f -print | sort
 	    )"
 	    [ -n "$$expected_tssh_artifacts" ] &&
 	    [ "$$actual_tssh_artifacts" = "$$expected_tssh_artifacts" ] || {
-	        log_error "Installed TSSH archives do not match the tracked artifact inventory"
+	        log_error "Installed TSSH files do not match the tracked artifact inventory"
 	        exit 1
 	    }
 	    (
@@ -117,7 +120,7 @@ __vendor-build:
 	        awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print }' "$$artifact_manifest" |
 	            shasum -a 256 -c - >/dev/null
 	    ) || {
-	        log_error "Installed TSSH archive hash does not match the tracked artifact manifest"
+	        log_error "Installed TSSH file hash does not match the tracked artifact manifest"
 	        exit 1
 	    }
 	    local info="$$framework/Info.plist"
