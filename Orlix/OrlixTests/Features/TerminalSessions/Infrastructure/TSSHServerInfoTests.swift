@@ -138,6 +138,22 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func resumeRestoresPendingStandaloneStartupAction() {
+        #expect(TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: false,
+            replayPending: true
+        ))
+        #expect(!TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: true,
+            replayPending: true
+        ))
+        #expect(!TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: false,
+            replayPending: false
+        ))
+    }
+
+    @Test
     func resumeCompatibilityRejectsChangedEndpointAndPolicy() throws {
         let serverID = UUID()
         let server = Server(

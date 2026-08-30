@@ -770,6 +770,9 @@ final class TerminalTransportCoordinator {
             resumeContext: { [weak self] paneID in
                 self?.sessionAccess.paneState(paneID)?.remoteSessionResumeContext
             },
+            startupActionReplayPending: { [weak self] paneID in
+                self?.sessionAccess.paneState(paneID)?.startupActionReplayPending == true
+            },
             setResumeContext: { [weak self] paneID, context in
                 self?.sessionAccess.send(.eternalTerminalResumeContext(paneID, context))
             },

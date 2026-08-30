@@ -136,12 +136,26 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         configJSON: String,
         completionHandler: @escaping (Error?) -> Void
     ) {
-        let callback = PacketTunnelCallback { [weak self] reason in
-            self?.cancelTunnelWithError(PacketTunnelError.nativeFailure(reason))
-        }
+        let startup = PacketTunnelStartupCompletion(completionHandler)
+        let callback = PacketTunnelCallback(
+            ready: {
+                startup.succeed()
+            },
+            failure: { [weak self] reason, wasReady in
+                let error = PacketTunnelError.nativeFailure(reason)
+                if wasReady {
+                    self?.cancelTunnelWithError(error)
+                } else {
+                    self?.updateState(isRunning: false, callback: nil)
+                    var nativeError: NSError?
+                    _ = VpntunnelStopTunnel(&nativeError)
+                    startup.fail(error)
+                }
+            }
+        )
         var nativeError: NSError?
         guard VpntunnelStartTunnel(configJSON, callback, &nativeError) else {
-            completionHandler(
+            startup.fail(
                 nativeError ?? PacketTunnelError.nativeFailure("Native VPN start failed")
             )
             return
@@ -149,7 +163,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         updateState(isRunning: true, callback: callback)
         readPacketsFromSystem()
         packetQueue.async { [weak self] in self?.writePacketsToSystem() }
-        completionHandler(nil)
+        callback.activate()
     }
 
     private var isRunning: Bool {
@@ -197,13 +211,86 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
     }
 }
 
+private final class PacketTunnelStartupCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completion: ((Error?) -> Void)?
+
+    init(_ completion: @escaping (Error?) -> Void) {
+        self.completion = completion
+    }
+
+    func succeed() { finish(nil) }
+    func fail(_ error: Error) { finish(error) }
+
+    private func finish(_ error: Error?) {
+        lock.lock()
+        let completion = self.completion
+        self.completion = nil
+        lock.unlock()
+        completion?(error)
+    }
+}
+
 private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProtocol {
-    private let failure: (String) -> Void
-    init(failure: @escaping (String) -> Void) { self.failure = failure }
-    func onTunnelReady() {}
+    private let lock = NSLock()
+    private let ready: () -> Void
+    private let failure: (_ reason: String, _ wasReady: Bool) -> Void
+    private var isActivated = false
+    private var didBecomeReady = false
+    private var terminationReason: String?
+
+    init(
+        ready: @escaping () -> Void,
+        failure: @escaping (_ reason: String, _ wasReady: Bool) -> Void
+    ) {
+        self.ready = ready
+        self.failure = failure
+    }
+
+    func activate() {
+        lock.lock()
+        isActivated = true
+        let reason = terminationReason
+        let becameReady = didBecomeReady
+        lock.unlock()
+        if let reason {
+            failure(reason, becameReady)
+        } else if becameReady {
+            ready()
+        }
+    }
+
+    func onTunnelReady() {
+        lock.lock()
+        guard !didBecomeReady, terminationReason == nil else {
+            lock.unlock()
+            return
+        }
+        didBecomeReady = true
+        let shouldNotify = isActivated
+        lock.unlock()
+        if shouldNotify { ready() }
+    }
     func onStatsUpdate(_ bytesIn: Int64, bytesOut: Int64, activeConns: Int) {}
-    func onTunnelDisconnected(_ reason: String?) { failure(reason ?? "Tunnel disconnected") }
-    func onTunnelError(_ message: String?) { failure(message ?? "Tunnel failed") }
+    func onTunnelDisconnected(_ reason: String?) {
+        terminate(reason ?? "Tunnel disconnected")
+    }
+    func onTunnelError(_ message: String?) {
+        terminate(message ?? "Tunnel failed")
+    }
+
+    private func terminate(_ reason: String) {
+        lock.lock()
+        guard terminationReason == nil else {
+            lock.unlock()
+            return
+        }
+        terminationReason = reason
+        let wasReady = didBecomeReady
+        let shouldNotify = isActivated
+        lock.unlock()
+        if shouldNotify { failure(reason, wasReady) }
+    }
 }
 
 private enum PacketTunnelError: LocalizedError {

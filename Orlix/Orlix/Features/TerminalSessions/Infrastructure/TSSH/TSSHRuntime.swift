@@ -11,6 +11,7 @@ struct TSSHRuntimeOwnerAccess {
         _ token: UUID
     ) async throws -> TerminalShellStartupPlan
     let resumeContext: (_ paneID: UUID) -> RemoteSessionLifecycleContext?
+    let startupActionReplayPending: (_ paneID: UUID) -> Bool
     let setResumeContext: (_ paneID: UUID, _ context: RemoteSessionLifecycleContext?) -> Void
     let setStartupActionReplayPending: (_ paneID: UUID, _ isPending: Bool) -> Void
     let remoteSessionAttached: (_ paneID: UUID) -> Void
@@ -32,6 +33,15 @@ nonisolated struct TSSHForwardStatus: Equatable, Sendable {
     var activeConnections: Int
     var bytesIn: Int64
     var bytesOut: Int64
+}
+
+nonisolated enum TSSHResumeLifecyclePolicy {
+    static func shouldAwaitStandaloneStartupAction(
+        hasRemoteSessionLifecycle: Bool,
+        replayPending: Bool
+    ) -> Bool {
+        !hasRemoteSessionLifecycle && replayPending
+    }
 }
 
 nonisolated enum TSSHResumeFailurePolicy {
@@ -739,7 +749,13 @@ final class TSSHRuntime {
     }
 
     private func restoreRemoteSessionLifecycle() {
-        setRemoteSessionLifecycle(ownerAccess.resumeContext(paneID))
+        let context = ownerAccess.resumeContext(paneID)
+        standaloneStartupActionAwaitingExit = TSSHResumeLifecyclePolicy
+            .shouldAwaitStandaloneStartupAction(
+                hasRemoteSessionLifecycle: context != nil,
+                replayPending: ownerAccess.startupActionReplayPending(paneID)
+            )
+        setRemoteSessionLifecycle(context)
     }
 
     private func setRemoteSessionLifecycle(_ context: RemoteSessionLifecycleContext?) {
