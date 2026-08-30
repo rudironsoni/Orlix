@@ -52,13 +52,65 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
     private struct Checkpoint: Codable {
         let host: String
         let serverVersion: String
+        let protocolVersion: Int
         let port: Int
         let mode: TSSHServerInfo.Mode
-        let clientID: Int64
-        let serverID: Int64
+        let proxyMode: String
+        let mtu: Int
+        let clientID: UInt64
+        let serverID: UInt64
         let sessionID: Int64
         let profile: TSSHProfile
         let savedAt: Date
+
+        private enum CodingKeys: String, CodingKey {
+            case host, serverVersion, protocolVersion, port, mode, proxyMode, mtu
+            case clientID, serverID, sessionID, profile, savedAt
+        }
+
+        init(
+            host: String,
+            serverVersion: String,
+            protocolVersion: Int,
+            port: Int,
+            mode: TSSHServerInfo.Mode,
+            proxyMode: String,
+            mtu: Int,
+            clientID: UInt64,
+            serverID: UInt64,
+            sessionID: Int64,
+            profile: TSSHProfile,
+            savedAt: Date
+        ) {
+            self.host = host
+            self.serverVersion = serverVersion
+            self.protocolVersion = protocolVersion
+            self.port = port
+            self.mode = mode
+            self.proxyMode = proxyMode
+            self.mtu = mtu
+            self.clientID = clientID
+            self.serverID = serverID
+            self.sessionID = sessionID
+            self.profile = profile
+            self.savedAt = savedAt
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            host = try container.decode(String.self, forKey: .host)
+            serverVersion = try container.decode(String.self, forKey: .serverVersion)
+            protocolVersion = try container.decodeIfPresent(Int.self, forKey: .protocolVersion) ?? 0
+            port = try container.decode(Int.self, forKey: .port)
+            mode = try container.decode(TSSHServerInfo.Mode.self, forKey: .mode)
+            proxyMode = try container.decodeIfPresent(String.self, forKey: .proxyMode) ?? ""
+            mtu = try container.decodeIfPresent(Int.self, forKey: .mtu) ?? 0
+            clientID = try container.decode(UInt64.self, forKey: .clientID)
+            serverID = try container.decode(UInt64.self, forKey: .serverID)
+            sessionID = try container.decode(Int64.self, forKey: .sessionID)
+            profile = try container.decode(TSSHProfile.self, forKey: .profile)
+            savedAt = try container.decode(Date.self, forKey: .savedAt)
+        }
     }
 
     private let fileManager: FileManager
@@ -93,6 +145,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
 
         let info = TSSHServerInfo(
             serverVersion: checkpoint.serverVersion,
+            protocolVersion: checkpoint.protocolVersion,
             port: checkpoint.port,
             mode: checkpoint.mode,
             serverCertHex: secret.serverCertHex,
@@ -101,6 +154,8 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             kcpPassHex: secret.kcpPassHex,
             kcpSaltHex: secret.kcpSaltHex,
             proxyKeyHex: secret.proxyKeyHex,
+            proxyMode: checkpoint.proxyMode,
+            mtu: checkpoint.mtu,
             clientID: checkpoint.clientID,
             serverID: checkpoint.serverID
         )
@@ -139,8 +194,11 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let checkpoint = Checkpoint(
             host: state.host,
             serverVersion: state.info.serverVersion,
+            protocolVersion: state.info.protocolVersion,
             port: state.info.port,
             mode: state.info.mode,
+            proxyMode: state.info.proxyMode,
+            mtu: state.info.mtu,
             clientID: state.info.clientID,
             serverID: state.info.serverID,
             sessionID: state.sessionID,

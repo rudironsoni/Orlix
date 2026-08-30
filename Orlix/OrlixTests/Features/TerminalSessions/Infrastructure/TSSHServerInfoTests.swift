@@ -7,16 +7,19 @@ struct TSSHServerInfoTests {
     func parsesKCPServerInfoFromMixedBootstrapOutput() throws {
         let output = """
         tsshd starting
-        {"ServerVer":"0.2.2","Port":61001,"Mode":"KCP","Pass":"aabb","Salt":"ccdd","ProxyKey":"eeff","ClientID":7,"ServerID":9}
+        {"ServerVer":"0.2.2","ProtoVer":2,"Port":61001,"Mode":"KCP","Pass":"aabb","Salt":"ccdd","ProxyKey":"eeff","ProxyMode":"TCP","MTU":1280,"ClientID":7,"ServerID":9}
         """
 
         let info = try TSSHServerInfo.parse(output: output)
 
         #expect(info.serverVersion == "0.2.2")
+        #expect(info.protocolVersion == 2)
         #expect(info.port == 61_001)
         #expect(info.mode == .kcp)
         #expect(info.clientID == 7)
         #expect(info.serverID == 9)
+        #expect(info.proxyMode == "TCP")
+        #expect(info.mtu == 1_280)
         #expect(info.hasRequiredCredentials)
     }
 
@@ -42,6 +45,16 @@ struct TSSHServerInfoTests {
         }
         #expect(throws: TSSHRuntimeError.self) {
             try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ProxyMode":"UDP"}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","MTU":575}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
                 output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"QUIC","ProxyKey":"dd"}"#
             )
         }
@@ -59,9 +72,10 @@ struct TSSHServerInfoTests {
 
     @Test
     func reattachAdvancesClientIdentityWithoutOverflow() throws {
-        let output = #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":9223372036854775807,"ServerID":3}"#
+        let output = #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":18446744073709551615,"ServerID":16138835072071328626}"#
         let info = try TSSHServerInfo.parse(output: output)
 
+        #expect(info.serverID == 16_138_835_072_071_328_626)
         #expect(info.advancingClientID().clientID == 1)
     }
 

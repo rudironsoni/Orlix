@@ -9,6 +9,17 @@ struct TSSHRuntimeOwnerAccess {
     let handleShellEnd: (_ paneID: UUID, _ token: UUID) -> Void
 }
 
+nonisolated struct TSSHForwardStatus: Equatable, Sendable {
+    enum State: Equatable, Sendable { case starting, ready, failed(String), stopped }
+
+    let id: UUID
+    var state: State
+    var actualPort: Int
+    var activeConnections: Int
+    var bytesIn: Int64
+    var bytesOut: Int64
+}
+
 @MainActor
 final class TSSHRuntime {
     let paneID: UUID
@@ -39,6 +50,7 @@ final class TSSHRuntime {
     private var discardBridge: TSSHDiscardBridge?
     private var forwardBridge: TSSHForwardBridge?
     private var agentBridge: TSSHAgentBridge?
+    private var forwardStatuses: [UUID: TSSHForwardStatus] = [:]
     private var connectionGeneration = UUID()
     private var isClosing = false
 
@@ -105,6 +117,7 @@ final class TSSHRuntime {
     }
 
     func prepareForApplicationBackground() async {
+        agentBridge?.suspend()
         guard let resumeState else { return }
         do { try resumeStore.save(resumeState, for: paneID) }
         catch { logger.error("Cannot persist TSSH resume state: \(error.localizedDescription, privacy: .public)") }
@@ -116,6 +129,7 @@ final class TSSHRuntime {
     }
 
     func resumeFromApplicationBackground() async {
+        agentBridge?.resume()
         guard let transport else {
             startIfNeeded()
             return
@@ -183,6 +197,15 @@ final class TSSHRuntime {
         return await callGate.statistics(for: transport)
     }
 
+    func health() async -> TSSHTransportHealth? {
+        guard let transport else { return nil }
+        return await callGate.health(for: transport)
+    }
+
+    func forwardingStatus() -> [TSSHForwardStatus] {
+        forwardStatuses.values.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
     private func start() async {
         do {
             if try await resumeSavedSession() { return }
@@ -242,60 +265,70 @@ final class TSSHRuntime {
             return false
         }
         guard var state = loadedState else { return false }
-        state = TSSHResumeState(
-            host: state.host,
-            info: state.info.advancingClientID(),
-            sessionID: state.sessionID,
-            profile: state.profile,
-            savedAt: Date()
-        )
-        try resumeStore.save(state, for: paneID)
-        do {
-            let transport = try await connect(state.host, info: state.info, profile: state.profile)
-            self.transport = transport
-            try Task.checkCancellation()
-            try await enableAgentIfRequested(profile: state.profile, on: transport)
-            let generation = connectionGeneration
-            let outputBridge = makeOutputBridge(generation: generation)
-            self.outputBridge = outputBridge
-            let attached = try await callGate.attachSession(
-                on: transport,
-                sessionID: state.sessionID,
-                term: RemoteTerminalBootstrap.defaultTerminalType.rawValue,
-                rows: rows,
-                columns: columns,
-                output: outputBridge
-            )
-            session = attached.0
-            try Task.checkCancellation()
-            resumeState = TSSHResumeState(
+        let expiresAt = state.savedAt.addingTimeInterval(86_400)
+        var backoffSeconds = 1
+        while !Task.isCancelled, !isClosing, Date() < expiresAt {
+            state = TSSHResumeState(
                 host: state.host,
-                info: state.info,
-                sessionID: attached.1,
+                info: state.info.advancingClientID(),
+                sessionID: state.sessionID,
                 profile: state.profile,
-                savedAt: Date()
+                savedAt: state.savedAt
             )
-            try resumeStore.save(resumeState!, for: paneID)
-            try await startForwarding(on: transport, profile: state.profile)
-            await startVPNIfRequested(profile: state.profile)
-            didConnect()
-            return true
-        } catch {
-            if let session { callGate.forgetSession(session) }
-            if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
-            if let transport { callGate.emergencyAbandon(transport) }
-            invalidateConnectionGeneration()
-            transport = nil
-            session = nil
-            forwarder = nil
-            try? resumeStore.delete(for: paneID)
-            logger.info("Saved TSSH attach failed, starting a new session: \(error.localizedDescription, privacy: .public)")
-            return false
+            try resumeStore.save(state, for: paneID)
+            do {
+                let transport = try await connect(state.host, info: state.info, profile: state.profile)
+                self.transport = transport
+                try Task.checkCancellation()
+                try await enableAgentIfRequested(profile: state.profile, on: transport)
+                let generation = connectionGeneration
+                let outputBridge = makeOutputBridge(generation: generation)
+                self.outputBridge = outputBridge
+                let attached = try await callGate.attachSession(
+                    on: transport,
+                    sessionID: state.sessionID,
+                    term: RemoteTerminalBootstrap.defaultTerminalType.rawValue,
+                    rows: rows,
+                    columns: columns,
+                    output: outputBridge
+                )
+                session = attached.0
+                try Task.checkCancellation()
+                resumeState = TSSHResumeState(
+                    host: state.host,
+                    info: state.info,
+                    sessionID: attached.1,
+                    profile: state.profile,
+                    savedAt: Date()
+                )
+                try resumeStore.save(resumeState!, for: paneID)
+                try await startForwarding(on: transport, profile: state.profile)
+                await startVPNIfRequested(profile: state.profile)
+                didConnect()
+                return true
+            } catch {
+                if let session { callGate.forgetSession(session) }
+                if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
+                if let transport { callGate.emergencyAbandon(transport) }
+                invalidateConnectionGeneration()
+                transport = nil
+                session = nil
+                forwarder = nil
+                logger.info(
+                    "Saved TSSH attach failed, retrying in \(backoffSeconds)s: \(error.localizedDescription, privacy: .public)"
+                )
+                try await Task.sleep(for: .seconds(backoffSeconds))
+                backoffSeconds = min(backoffSeconds * 2, 30)
+            }
         }
+        try? resumeStore.delete(for: paneID)
+        return false
     }
 
     private func startFreshSession() async throws {
-        let sshClient = sshClientFactory.makeClient(connectTimeout: .seconds(30))
+        let sshClient = sshClientFactory.makeClient(
+            connectTimeout: .seconds(server.tsshProfile.connectTimeoutSeconds)
+        )
         defer { Task { await sshClient.disconnect() } }
         let bootstrap = try await TSSHBootstrap.start(
             server: server,
@@ -352,6 +385,9 @@ final class TSSHRuntime {
             host: host,
             info: info,
             mtu: profile.mtu,
+            connectTimeoutSeconds: profile.connectTimeoutSeconds,
+            aliveTimeoutSeconds: profile.aliveTimeoutSeconds,
+            heartbeatTimeoutSeconds: profile.heartbeatTimeoutSeconds,
             debugLabel: "\(server.username)@\(server.host)"
         ))
         if Task.isCancelled {
@@ -428,11 +464,27 @@ final class TSSHRuntime {
         guard !profile.forwards.isEmpty else { return }
         let generation = connectionGeneration
         let bridge = TSSHForwardBridge { [weak self] event in
-            if case .failed(let id, let message) = event {
-                Task { @MainActor [weak self] in
-                    guard let self,
-                          self.connectionGeneration == generation else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.connectionGeneration == generation else { return }
+                switch event {
+                case .ready(let id, let port):
+                    self.updateForward(id: id) { status in
+                        status.state = .ready
+                        status.actualPort = port
+                    }
+                case .failed(let id, let message):
+                    self.updateForward(id: id) { $0.state = .failed(message) }
                     self.logger.error("TSSH forward \(id, privacy: .public) failed: \(message, privacy: .public)")
+                case .stopped(let id):
+                    self.updateForward(id: id) { $0.state = .stopped }
+                case .opened(let id, _):
+                    self.updateForward(id: id) { $0.activeConnections += 1 }
+                case .closed(let id, _, let bytesIn, let bytesOut):
+                    self.updateForward(id: id) { status in
+                        status.activeConnections = max(0, status.activeConnections - 1)
+                        status.bytesIn += bytesIn
+                        status.bytesOut += bytesOut
+                    }
                 }
             }
         }
@@ -441,6 +493,14 @@ final class TSSHRuntime {
         forwardBridge = bridge
         for rule in profile.forwards {
             try Task.checkCancellation()
+            forwardStatuses[rule.id] = TSSHForwardStatus(
+                id: rule.id,
+                state: .starting,
+                actualPort: rule.bindPort,
+                activeConnections: 0,
+                bytesIn: 0,
+                bytesOut: 0
+            )
             try await callGate.startForward(
                 TSSHForwardParameters(
                     id: rule.id.uuidString,
@@ -455,19 +515,34 @@ final class TSSHRuntime {
         }
     }
 
+    private func updateForward(
+        id: String,
+        _ update: (inout TSSHForwardStatus) -> Void
+    ) {
+        guard let uuid = UUID(uuidString: id), var status = forwardStatuses[uuid] else { return }
+        update(&status)
+        forwardStatuses[uuid] = status
+    }
+
     private func enableAgentIfRequested(
         profile: TSSHProfile,
         on transport: TSSHTransportRef
     ) async throws {
         guard profile.sshAgentForwarding else { return }
-        let bridge = try TSSHAgentBridge(credentials: credentials, comment: server.name)
+        let bridge = try TSSHAgentBridge(
+            credentials: credentials,
+            comment: server.name,
+            approvalMode: profile.sshAgentApprovalMode
+        )
         try await callGate.enableAgent(bridge, on: transport)
         agentBridge = bridge
     }
 
     private func startVPNIfRequested(profile: TSSHProfile) async {
         guard profile.vpnEnabled else { return }
-        let client = sshClientFactory.makeClient(connectTimeout: .seconds(30))
+        let client = sshClientFactory.makeClient(
+            connectTimeout: .seconds(profile.connectTimeoutSeconds)
+        )
         do {
             let bootstrap = try await TSSHBootstrap.start(
                 server: server,

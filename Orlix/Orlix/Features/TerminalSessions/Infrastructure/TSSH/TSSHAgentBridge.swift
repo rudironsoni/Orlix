@@ -1,16 +1,33 @@
 import CryptoKit
 import Foundation
+import LocalAuthentication
 import Security
 @preconcurrency import TrzszSSH
 
 nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtocol, @unchecked Sendable {
     private let identity: TSSHAgentIdentity
+    private let approvalMode: TSSHAgentApprovalMode
+    private let stateLock = NSLock()
+    private var sessionApproved = false
+    private var suspended = false
 
-    init(credentials: ServerCredentials, comment: String) throws {
+    init(
+        credentials: ServerCredentials,
+        comment: String,
+        approvalMode: TSSHAgentApprovalMode
+    ) throws {
         identity = try TSSHAgentIdentity(credentials: credentials, comment: comment)
+        self.approvalMode = approvalMode
     }
 
+    func suspend() { stateLock.withLock { suspended = true } }
+    func resume() { stateLock.withLock { suspended = false } }
+
     func listIdentities(_ error: NSErrorPointer) -> String {
+        guard !stateLock.withLock({ suspended }) else {
+            error?.pointee = TSSHAgentIdentity.failure("SSH agent is unavailable in the background")
+            return "[]"
+        }
         let value = [[
             "blob": identity.publicBlob.base64EncodedString(),
             "comment": identity.comment,
@@ -31,7 +48,61 @@ nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtoco
         guard data.count <= 1_048_576 else {
             throw TSSHAgentIdentity.failure("The SSH agent signing request is too large")
         }
+        try authorizeSigning()
         return try identity.sign(data, flags: flags)
+    }
+
+    private func authorizeSigning() throws {
+        guard !stateLock.withLock({ suspended }) else {
+            throw TSSHAgentIdentity.failure("SSH agent is unavailable in the background")
+        }
+        switch approvalMode {
+        case .automatic:
+            return
+        case .perSession where stateLock.withLock({ sessionApproved }):
+            return
+        case .perSession, .perRequest:
+            break
+        }
+
+        let context = LAContext()
+        var authorizationError: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authorizationError) else {
+            throw authorizationError ?? TSSHAgentIdentity.failure("Device-owner approval is unavailable")
+        }
+        let result = TSSHAgentApprovalResult()
+        let semaphore = DispatchSemaphore(value: 0)
+        context.evaluatePolicy(
+            .deviceOwnerAuthentication,
+            localizedReason: "Approve SSH agent signing for \(identity.comment)"
+        ) { approved, error in
+            result.set(approved: approved, error: error)
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 30) == .success else {
+            context.invalidate()
+            throw TSSHAgentIdentity.failure("SSH agent approval timed out")
+        }
+        let decision = result.get()
+        guard decision.approved else {
+            throw decision.error ?? TSSHAgentIdentity.failure("SSH agent signing was denied")
+        }
+        if approvalMode == .perSession {
+            stateLock.withLock { sessionApproved = true }
+        }
+    }
+}
+
+private nonisolated final class TSSHAgentApprovalResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: (approved: Bool, error: Error?) = (false, nil)
+
+    func set(approved: Bool, error: Error?) {
+        lock.withLock { value = (approved, error) }
+    }
+
+    func get() -> (approved: Bool, error: Error?) {
+        lock.withLock { value }
     }
 }
 

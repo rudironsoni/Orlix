@@ -11,6 +11,8 @@ struct TSSHProfileTests {
         #expect(profile.udpPortMinimum == 61_000)
         #expect(profile.udpPortMaximum == 61_999)
         #expect(profile.mtu == 0)
+        #expect(profile.connectTimeoutSeconds == 30)
+        #expect(profile.vpnDNSServers == ["1.1.1.1", "1.0.0.1"])
         #expect(profile.isValid)
     }
 
@@ -32,9 +34,15 @@ struct TSSHProfileTests {
             keepPendingInput: true,
             keepPendingOutput: true,
             sshAgentForwarding: true,
+            sshAgentApprovalMode: .perSession,
             keepTunnelsInBackground: true,
             vpnEnabled: true,
             blockQUICInVPN: true,
+            vpnDNSServers: ["9.9.9.9"],
+            vpnExcludedRoutes: ["10.0.0.0/8"],
+            connectTimeoutSeconds: 45,
+            aliveTimeoutSeconds: 90,
+            heartbeatTimeoutSeconds: 15,
             forwards: [forward]
         )
 
@@ -49,6 +57,9 @@ struct TSSHProfileTests {
         TSSHProfile(udpPortMinimum: 0),
         TSSHProfile(udpPortMinimum: 62_000, udpPortMaximum: 61_000),
         TSSHProfile(mtu: 575),
+        TSSHProfile(connectTimeoutSeconds: 0),
+        TSSHProfile(heartbeatTimeoutSeconds: 3_601),
+        TSSHProfile(vpnDNSServers: []),
         TSSHProfile(serverPath: "bad\npath"),
         TSSHProfile(forwards: [
             TSSHPortForwardRule(
@@ -91,5 +102,17 @@ struct TSSHProfileTests {
         #expect(decoded.connectionMode == .tssh)
         #expect(decoded.tsshProfile == profile)
         #expect(ServerTransportSelection(server: decoded) == .tssh)
+    }
+
+    @Test
+    func oldProfileDataUsesSafeFeatureDefaults() throws {
+        let data = Data(#"{"transportMode":"kcp","udpPortMinimum":61000,"udpPortMaximum":61999,"mtu":0}"#.utf8)
+
+        let profile = try JSONDecoder().decode(TSSHProfile.self, from: data)
+
+        #expect(profile.sshAgentApprovalMode == .perRequest)
+        #expect(profile.connectTimeoutSeconds == 30)
+        #expect(profile.vpnDNSServers == ["1.1.1.1", "1.0.0.1"])
+        #expect(profile.isValid)
     }
 }

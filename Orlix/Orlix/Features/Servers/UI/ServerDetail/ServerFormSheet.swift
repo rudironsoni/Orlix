@@ -721,13 +721,51 @@ struct ServerFormSheet: View {
             .keyboardType(.numberPad)
             #endif
 
+        HStack(spacing: 12) {
+            TextField(
+                "Connect Timeout",
+                text: tsshIntegerBinding(\.connectTimeoutSeconds),
+                prompt: Text("30")
+            )
+            TextField(
+                "Alive Timeout",
+                text: tsshIntegerBinding(\.aliveTimeoutSeconds),
+                prompt: Text("0")
+            )
+            TextField(
+                "Heartbeat Timeout",
+                text: tsshIntegerBinding(\.heartbeatTimeoutSeconds),
+                prompt: Text("0")
+            )
+        }
+        #if os(iOS)
+        .keyboardType(.numberPad)
+        #endif
+
         Toggle("Keep typed input during reconnect", isOn: $form.tsshProfile.keepPendingInput)
         Toggle("Replay pending output after reconnect", isOn: $form.tsshProfile.keepPendingOutput)
         Toggle("Forward SSH agent", isOn: $form.tsshProfile.sshAgentForwarding)
+        if form.tsshProfile.sshAgentForwarding {
+            Picker("SSH agent approval", selection: $form.tsshProfile.sshAgentApprovalMode) {
+                Text("Automatic").tag(TSSHAgentApprovalMode.automatic)
+                Text("Per session").tag(TSSHAgentApprovalMode.perSession)
+                Text("Per request").tag(TSSHAgentApprovalMode.perRequest)
+            }
+        }
         Toggle("Keep tunnels in background", isOn: $form.tsshProfile.keepTunnelsInBackground)
         Toggle("Use as VPN transport", isOn: $form.tsshProfile.vpnEnabled)
         if form.tsshProfile.vpnEnabled {
             Toggle("Block QUIC inside VPN", isOn: $form.tsshProfile.blockQUICInVPN)
+            TextField("VPN DNS servers", text: tsshListBinding(\.vpnDNSServers))
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+            TextField("VPN excluded routes", text: tsshListBinding(\.vpnExcludedRoutes))
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
         }
 
         ForEach($form.tsshProfile.forwards) { $rule in
@@ -803,6 +841,21 @@ struct ServerFormSheet: View {
                 if let number = Int(value) {
                     form.tsshProfile[keyPath: keyPath] = number
                 }
+                resetConnectionTestState()
+            }
+        )
+    }
+
+    private func tsshListBinding(
+        _ keyPath: WritableKeyPath<TSSHProfile, [String]>
+    ) -> Binding<String> {
+        Binding(
+            get: { form.tsshProfile[keyPath: keyPath].joined(separator: ", ") },
+            set: { value in
+                form.tsshProfile[keyPath: keyPath] = value
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
                 resetConnectionTestState()
             }
         )

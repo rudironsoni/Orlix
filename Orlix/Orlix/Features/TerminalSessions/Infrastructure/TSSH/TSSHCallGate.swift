@@ -5,11 +5,16 @@ import os.log
 nonisolated struct TSSHTransportRef: Hashable, Sendable { fileprivate let id: UUID }
 nonisolated struct TSSHSessionRef: Hashable, Sendable { fileprivate let id: UUID }
 nonisolated struct TSSHForwarderRef: Hashable, Sendable { fileprivate let id: UUID }
+nonisolated struct TSSHAuxiliaryStreamRef: Hashable, Sendable { fileprivate let id: UUID }
+nonisolated struct TSSHExecRef: Hashable, Sendable { fileprivate let id: UUID }
 
 nonisolated struct TSSHTransportParameters: Sendable {
     let host: String
     let info: TSSHServerInfo
     let mtu: Int
+    let connectTimeoutSeconds: Int
+    let aliveTimeoutSeconds: Int
+    let heartbeatTimeoutSeconds: Int
     let debugLabel: String
 }
 
@@ -25,10 +30,29 @@ nonisolated struct TSSHForwardParameters: Sendable {
 nonisolated struct TSSHTransportStatistics: Equatable, Sendable {
     let mode: String
     let smoothedRTTMilliseconds: Int64
+    let rttVarianceMilliseconds: Int64
+    let minimumRTTMilliseconds: Int64
+    let latestRTTMilliseconds: Int64
+    let retransmissionTimeoutMilliseconds: Int64
     let bytesSent: Int64
     let bytesReceived: Int64
+    let packetsSent: Int64
+    let packetsReceived: Int64
+    let bytesLost: Int64
     let packetsLost: Int64
     let retransmittedSegments: Int64
+    let hasMinimumRTT: Bool
+    let hasRetransmissionTimeout: Bool
+    let hasLoss: Bool
+    let retransmissionsAreGlobal: Bool
+}
+
+nonisolated struct TSSHTransportHealth: Equatable, Sendable {
+    let mode: String
+    let isAlive: Bool
+    let isTimedOut: Bool
+    let lastActiveAt: Date?
+    let lastReconnectError: String?
 }
 
 private nonisolated final class TSSHRegistry: @unchecked Sendable {
@@ -36,6 +60,8 @@ private nonisolated final class TSSHRegistry: @unchecked Sendable {
         var transports: [TSSHTransportRef: IosbridgeTransport] = [:]
         var sessions: [TSSHSessionRef: IosbridgeTransportSession] = [:]
         var forwarders: [TSSHForwarderRef: IosbridgePortForwarder] = [:]
+        var auxiliaryStreams: [TSSHAuxiliaryStreamRef: (IosbridgeTransport, Int64)] = [:]
+        var execs: [TSSHExecRef: (IosbridgeTransport, Int64)] = [:]
     }
 
     private let lock = NSLock()
@@ -81,9 +107,13 @@ actor TSSHCallGate {
         config.port = info.port
         config.serverVersion = info.serverVersion
         config.mode = info.mode.rawValue
-        config.clientID = info.clientID
-        config.serverID = info.serverID
-        config.mtu = parameters.mtu
+        config.clientID = Int64(bitPattern: info.clientID)
+        config.serverID = Int64(bitPattern: info.serverID)
+        config.proxyMode = info.proxyMode
+        config.mtu = parameters.mtu > 0 ? parameters.mtu : info.mtu
+        config.connectTimeoutSec = parameters.connectTimeoutSeconds
+        config.aliveTimeoutSec = parameters.aliveTimeoutSeconds
+        config.heartbeatTimeoutSec = parameters.heartbeatTimeoutSeconds
         config.debugLabel = parameters.debugLabel
         config.proxyKey = info.proxyKeyHex ?? ""
         if let pass = info.kcpPassHex, let salt = info.kcpSaltHex {
@@ -231,6 +261,10 @@ actor TSSHCallGate {
         guard let transport = registry.withLock({ $0.transports[reference] }) else {
             return
         }
+        registry.withLock { storage in
+            storage.auxiliaryStreams = storage.auxiliaryStreams.filter { $0.value.0 !== transport }
+            storage.execs = storage.execs.filter { $0.value.0 !== transport }
+        }
         nonisolated(unsafe) let native = transport
         if preserveServer {
             _ = registry.withLock { $0.transports.removeValue(forKey: reference) }
@@ -271,10 +305,45 @@ actor TSSHCallGate {
             return TSSHTransportStatistics(
                 mode: stats.mode,
                 smoothedRTTMilliseconds: stats.srttMs,
+                rttVarianceMilliseconds: stats.rttVarMs,
+                minimumRTTMilliseconds: stats.minRttMs,
+                latestRTTMilliseconds: stats.latestRttMs,
+                retransmissionTimeoutMilliseconds: stats.rtoMs,
                 bytesSent: stats.bytesSent,
                 bytesReceived: stats.bytesReceived,
+                packetsSent: stats.packetsSent,
+                packetsReceived: stats.packetsReceived,
+                bytesLost: stats.bytesLost,
                 packetsLost: stats.packetsLost,
-                retransmittedSegments: stats.retransSegs
+                retransmittedSegments: stats.retransSegs,
+                hasMinimumRTT: stats.hasMinRtt,
+                hasRetransmissionTimeout: stats.hasRto,
+                hasLoss: stats.hasLoss,
+                retransmissionsAreGlobal: stats.retransIsGlobal
+            )
+        }
+    }
+
+    func health(for reference: TSSHTransportRef) async -> TSSHTransportHealth? {
+        guard let transport = registry.withLock({ $0.transports[reference] }) else { return nil }
+        nonisolated(unsafe) let native = transport
+        return try? await perform {
+            let reconnectError: String?
+            do {
+                try native.getLastReconnectError()
+                reconnectError = nil
+            } catch {
+                reconnectError = error.localizedDescription
+            }
+            let milliseconds = native.getLastActiveTime()
+            return TSSHTransportHealth(
+                mode: native.getMode(),
+                isAlive: !native.isClosed(),
+                isTimedOut: native.isTimeout(),
+                lastActiveAt: milliseconds > 0
+                    ? Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1_000)
+                    : nil,
+                lastReconnectError: reconnectError
             )
         }
     }
@@ -358,6 +427,139 @@ actor TSSHCallGate {
         }
         nonisolated(unsafe) let native = transport
         return try await perform { try native.runCommand(command) }
+    }
+
+    func dialTCP(host: String, port: Int, on reference: TSSHTransportRef) async throws -> TSSHAuxiliaryStreamRef {
+        guard !host.isEmpty, (1...65_535).contains(port),
+              let transport = registry.withLock({ $0.transports[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Invalid TCP dial request")
+        }
+        nonisolated(unsafe) let native = transport
+        let channel: Int64 = try await perform {
+            var channel: Int64 = 0
+            try native.dialTCP(host, port: port, ret0_: &channel)
+            return channel
+        }
+        let stream = TSSHAuxiliaryStreamRef(id: UUID())
+        registry.withLock { $0.auxiliaryStreams[stream] = (transport, channel) }
+        return stream
+    }
+
+    func dialUnix(path: String, on reference: TSSHTransportRef) async throws -> TSSHAuxiliaryStreamRef {
+        guard !path.isEmpty, path.utf8.count <= 1_024,
+              let transport = registry.withLock({ $0.transports[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Invalid Unix socket dial request")
+        }
+        nonisolated(unsafe) let native = transport
+        let channel: Int64 = try await perform {
+            var channel: Int64 = 0
+            try native.dialUnix(path, ret0_: &channel)
+            return channel
+        }
+        let stream = TSSHAuxiliaryStreamRef(id: UUID())
+        registry.withLock { $0.auxiliaryStreams[stream] = (transport, channel) }
+        return stream
+    }
+
+    func read(_ reference: TSSHAuxiliaryStreamRef, maximumBytes: Int) async throws -> Data? {
+        guard let (transport, channel) = registry.withLock({ $0.auxiliaryStreams[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Unknown auxiliary stream")
+        }
+        nonisolated(unsafe) let native = transport
+        let boundedMaximum = Int32(max(1, min(maximumBytes, 1_048_576)))
+        return try await perform {
+            let data = try native.streamLocalRead(channel, maxBytes: boundedMaximum)
+            return data.isEmpty ? nil : data
+        }
+    }
+
+    func write(_ data: Data, to reference: TSSHAuxiliaryStreamRef) async throws -> Int {
+        guard data.count <= 1_048_576,
+              let (transport, channel) = registry.withLock({ $0.auxiliaryStreams[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Invalid auxiliary stream write")
+        }
+        nonisolated(unsafe) let native = transport
+        return try await perform {
+            var written: Int32 = 0
+            try native.streamLocalWrite(channel, data: data, ret0_: &written)
+            return Int(written)
+        }
+    }
+
+    func close(_ reference: TSSHAuxiliaryStreamRef) async {
+        guard let (transport, channel) = registry.withLock({ $0.auxiliaryStreams.removeValue(forKey: reference) }) else { return }
+        nonisolated(unsafe) let native = transport
+        _ = try? await perform { try native.streamLocalClose(channel) }
+    }
+
+    func openExec(_ command: String, on reference: TSSHTransportRef) async throws -> TSSHExecRef {
+        guard !command.isEmpty, command.utf8.count <= 65_536,
+              let transport = registry.withLock({ $0.transports[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Invalid exec request")
+        }
+        nonisolated(unsafe) let native = transport
+        let handle: Int64 = try await perform {
+            var handle: Int64 = 0
+            try native.openExec(command, ret0_: &handle)
+            return handle
+        }
+        let exec = TSSHExecRef(id: UUID())
+        registry.withLock { $0.execs[exec] = (transport, handle) }
+        return exec
+    }
+
+    func readExec(_ reference: TSSHExecRef, standardError: Bool, maximumBytes: Int) async throws -> Data? {
+        guard let (transport, handle) = registry.withLock({ $0.execs[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Unknown exec request")
+        }
+        nonisolated(unsafe) let native = transport
+        let boundedMaximum = max(1, min(maximumBytes, 1_048_576))
+        return try await perform {
+            do {
+                let data = standardError
+                    ? try native.execReadStderr(handle, maxBytes: boundedMaximum)
+                    : try native.execRead(handle, maxBytes: boundedMaximum)
+                return data.isEmpty ? nil : data
+            } catch {
+                // gomobile reports a nil byte slice plus nil Go error as
+                // `nilError`. A completed exec means this is clean EOF.
+                if native.execExitCode(handle) >= 0 || String(describing: error) == "nilError" {
+                    return nil
+                }
+                throw error
+            }
+        }
+    }
+
+    func writeExec(_ data: Data, to reference: TSSHExecRef) async throws -> Int {
+        guard data.count <= 1_048_576,
+              let (transport, handle) = registry.withLock({ $0.execs[reference] }) else {
+            throw TSSHRuntimeError.transportFailed("Invalid exec write")
+        }
+        nonisolated(unsafe) let native = transport
+        return try await perform {
+            var written: Int32 = 0
+            try native.execWrite(handle, data: data, ret0_: &written)
+            return Int(written)
+        }
+    }
+
+    func closeExecInput(_ reference: TSSHExecRef) async throws {
+        guard let (transport, handle) = registry.withLock({ $0.execs[reference] }) else { return }
+        nonisolated(unsafe) let native = transport
+        try await perform { try native.execCloseStdin(handle) }
+    }
+
+    func execExitCode(_ reference: TSSHExecRef) async -> Int? {
+        guard let (transport, handle) = registry.withLock({ $0.execs[reference] }) else { return nil }
+        nonisolated(unsafe) let native = transport
+        return try? await perform { native.execExitCode(handle) }
+    }
+
+    func closeExec(_ reference: TSSHExecRef) async {
+        guard let (transport, handle) = registry.withLock({ $0.execs.removeValue(forKey: reference) }) else { return }
+        nonisolated(unsafe) let native = transport
+        _ = try? await perform { try native.execClose(handle) }
     }
 
     func enableStreamLocalForwarding(

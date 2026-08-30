@@ -7,6 +7,7 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
     }
 
     let serverVersion: String
+    let protocolVersion: Int
     let port: Int
     let mode: Mode
     let serverCertHex: String?
@@ -15,11 +16,14 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
     let kcpPassHex: String?
     let kcpSaltHex: String?
     let proxyKeyHex: String?
-    var clientID: Int64
-    let serverID: Int64
+    let proxyMode: String
+    let mtu: Int
+    var clientID: UInt64
+    let serverID: UInt64
 
     private struct BootstrapResponse: Decodable {
         let serverVersion: String
+        let protocolVersion: Int?
         let port: Int
         let mode: Mode
         let serverCertHex: String?
@@ -28,11 +32,14 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
         let kcpPassHex: String?
         let kcpSaltHex: String?
         let proxyKeyHex: String?
-        let clientID: Int64?
-        let serverID: Int64?
+        let proxyMode: String?
+        let mtu: Int?
+        let clientID: UInt64?
+        let serverID: UInt64?
 
         private enum CodingKeys: String, CodingKey {
             case serverVersion = "ServerVer"
+            case protocolVersion = "ProtoVer"
             case port = "Port"
             case mode = "Mode"
             case serverCertHex = "ServerCert"
@@ -41,6 +48,8 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
             case kcpPassHex = "Pass"
             case kcpSaltHex = "Salt"
             case proxyKeyHex = "ProxyKey"
+            case proxyMode = "ProxyMode"
+            case mtu = "MTU"
             case clientID = "ClientID"
             case serverID = "ServerID"
         }
@@ -67,11 +76,9 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
         }
         let clientID = response.clientID ?? 0
         let serverID = response.serverID ?? 0
-        guard clientID >= 0, serverID >= 0 else {
-            throw TSSHRuntimeError.invalidServerResponse
-        }
         let result = Self(
             serverVersion: response.serverVersion,
+            protocolVersion: response.protocolVersion ?? 0,
             port: response.port,
             mode: response.mode,
             serverCertHex: response.serverCertHex,
@@ -80,10 +87,16 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
             kcpPassHex: response.kcpPassHex,
             kcpSaltHex: response.kcpSaltHex,
             proxyKeyHex: response.proxyKeyHex,
+            proxyMode: response.proxyMode ?? "",
+            mtu: response.mtu ?? 0,
             clientID: clientID,
             serverID: serverID
         )
-        guard result.hasRequiredCredentials else {
+        guard result.hasRequiredCredentials,
+              result.protocolVersion >= 0,
+              result.protocolVersion <= 1_000,
+              result.proxyMode.isEmpty || result.proxyMode == "TCP",
+              result.mtu == 0 || (576...9_000).contains(result.mtu) else {
             throw TSSHRuntimeError.invalidServerResponse
         }
         return result
@@ -119,13 +132,13 @@ nonisolated struct TSSHServerInfo: Codable, Equatable, Sendable {
     func assigningClientIDIfNeeded() -> Self {
         guard clientID == 0 else { return self }
         var copy = self
-        copy.clientID = Int64.random(in: 1...Int64.max)
+        copy.clientID = UInt64.random(in: 1...UInt64.max)
         return copy
     }
 
     func advancingClientID() -> Self {
         var copy = self
-        copy.clientID = clientID == Int64.max ? 1 : max(1, clientID + 1)
+        copy.clientID = clientID == UInt64.max ? 1 : max(1, clientID + 1)
         return copy
     }
 }

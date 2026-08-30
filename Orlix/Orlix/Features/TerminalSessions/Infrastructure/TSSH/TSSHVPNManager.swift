@@ -32,12 +32,12 @@ nonisolated struct TSSHVPNConfiguration: Encodable, Sendable {
         tsshClientCert = info.clientCertHex
         tsshClientKey = info.clientKeyHex
         tsshProxyKey = info.proxyKeyHex
-        tsshClientID = UInt64(max(1, info.clientID))
-        tsshServerID = UInt64(max(0, info.serverID))
-        trzszMTU = profile.mtu
-        dnsServers = ["1.1.1.1", "1.0.0.1"]
-        excludedRoutes = [host]
-        mtu = 1_400
+        tsshClientID = max(1, info.clientID)
+        tsshServerID = info.serverID
+        trzszMTU = profile.mtu > 0 ? profile.mtu : info.mtu
+        dnsServers = profile.vpnDNSServers
+        excludedRoutes = Array(Set(profile.vpnExcludedRoutes + [host])).sorted()
+        mtu = profile.mtu > 0 ? profile.mtu : 1_400
         blockQUIC = profile.blockQUICInVPN
     }
 
