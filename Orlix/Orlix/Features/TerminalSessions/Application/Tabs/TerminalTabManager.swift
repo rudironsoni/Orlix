@@ -1010,7 +1010,8 @@ final class TerminalTabManager {
         #endif
         switch connectionState {
         case .connecting, .reconnecting:
-            if sessionState.paneState(for: paneId)?.activeTransport != .eternalTerminal {
+            let activeTransport = sessionState.paneState(for: paneId)?.activeTransport
+            if activeTransport != .eternalTerminal, activeTransport != .tssh {
                 setPaneTransport(.ssh, for: paneId)
             }
         case .disconnected, .failed:

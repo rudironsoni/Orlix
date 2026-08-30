@@ -614,14 +614,19 @@ final class TSSHRuntime {
                 )
             }
         }
-        try await callGate.configure(
-            transport,
-            keepPendingInput: profile.keepPendingInput,
-            keepPendingOutput: profile.keepPendingOutput,
-            state: state,
-            health: health,
-            discard: discard
-        )
+        do {
+            try await callGate.configure(
+                transport,
+                keepPendingInput: profile.keepPendingInput,
+                keepPendingOutput: profile.keepPendingOutput,
+                state: state,
+                health: health,
+                discard: discard
+            )
+        } catch {
+            callGate.emergencyAbandon(transport)
+            throw error
+        }
         if Task.isCancelled {
             callGate.emergencyAbandon(transport)
             throw CancellationError()
