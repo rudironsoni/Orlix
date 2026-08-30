@@ -154,6 +154,7 @@ final class TSSHVPNManager {
     private let startupTimeoutSeconds: TimeInterval = 30
     private var statusMonitorTask: Task<Void, Never>?
     private var monitoredOwnerID: UUID?
+    private var monitoredManager: NETunnelProviderManager?
     private var teardownRetryTasks: [UUID: Task<Void, Never>] = [:]
 
     private init() {}
@@ -186,7 +187,7 @@ final class TSSHVPNManager {
             switch manager.connection.status {
             case .connected:
                 beginStatusMonitoring(
-                    manager.connection,
+                    manager,
                     ownerID: ownerID,
                     onUnexpectedDisconnect: onUnexpectedDisconnect
                 )
@@ -195,7 +196,7 @@ final class TSSHVPNManager {
             case .connecting, .reasserting:
                 try await waitUntilConnected(manager.connection)
                 beginStatusMonitoring(
-                    manager.connection,
+                    manager,
                     ownerID: ownerID,
                     onUnexpectedDisconnect: onUnexpectedDisconnect
                 )
@@ -229,7 +230,7 @@ final class TSSHVPNManager {
                     try await manager.loadFromPreferences()
                     try await waitUntilConnected(manager.connection)
                     beginStatusMonitoring(
-                        manager.connection,
+                        manager,
                         ownerID: ownerID,
                         onUnexpectedDisconnect: onUnexpectedDisconnect
                     )
@@ -283,7 +284,7 @@ final class TSSHVPNManager {
         }
         retainsOwnership = true
         beginStatusMonitoring(
-            manager.connection,
+            manager,
             ownerID: ownerID,
             onUnexpectedDisconnect: onUnexpectedDisconnect
         )
@@ -336,17 +337,19 @@ final class TSSHVPNManager {
     }
 
     private func beginStatusMonitoring(
-        _ connection: NEVPNConnection,
+        _ manager: NETunnelProviderManager,
         ownerID: UUID,
         onUnexpectedDisconnect: @MainActor @Sendable @escaping (String) async -> Void
     ) {
         statusMonitorTask?.cancel()
         monitoredOwnerID = ownerID
-        statusMonitorTask = Task { [weak self, weak connection] in
-            guard let self, let connection else { return }
+        monitoredManager = manager
+        statusMonitorTask = Task { [weak self] in
+            guard let self else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled, self.ownership.isOwned(by: ownerID) else { return }
+                guard let connection = self.monitoredManager?.connection else { return }
                 guard case .failed(let message) = tsshVPNPostConnectDecision(
                     for: connection.status
                 ) else {
@@ -354,6 +357,7 @@ final class TSSHVPNManager {
                 }
                 self.ownership.release(ownerID)
                 self.monitoredOwnerID = nil
+                self.monitoredManager = nil
                 self.statusMonitorTask = nil
                 await onUnexpectedDisconnect(message)
                 return
@@ -366,6 +370,7 @@ final class TSSHVPNManager {
         statusMonitorTask?.cancel()
         statusMonitorTask = nil
         monitoredOwnerID = nil
+        monitoredManager = nil
     }
 
     private func waitUntilConnected(_ connection: NEVPNConnection) async throws {
