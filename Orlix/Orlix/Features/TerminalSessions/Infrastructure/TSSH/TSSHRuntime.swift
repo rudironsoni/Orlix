@@ -432,7 +432,12 @@ final class TSSHRuntime {
     func closeForSecurityBindingReplacement() async {
         if transport == nil,
            let savedState = try? resumeStore.load(for: paneID) {
-            try? stageCleanup(for: savedState)
+            do {
+                try stageCleanup(for: savedState)
+            } catch {
+                await close(preserveServer: true, deleteResumeState: false)
+                return
+            }
             await processDeferredCleanupBeforeRemoval()
         }
         await close()
@@ -693,7 +698,7 @@ final class TSSHRuntime {
                 )
                 await cleanupFailedResume(preserveServer: !shouldDiscard)
                 if shouldDiscard {
-                    try? stageCleanup(for: state)
+                    try stageCleanup(for: state)
                     logger.info(
                         "Saved TSSH session is unavailable after \(attempt) attempt(s); starting a new session"
                     )
@@ -707,7 +712,7 @@ final class TSSHRuntime {
             }
         }
         await cleanupFailedResume(preserveServer: false)
-        try? stageCleanup(for: state)
+        try stageCleanup(for: state)
         return false
     }
 
