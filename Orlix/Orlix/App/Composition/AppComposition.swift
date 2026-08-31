@@ -141,6 +141,12 @@ struct AppComposition {
                 didDeleteServerLocalData: { serverID in
                     serverDeletionTerminalCleanup.handleServerDeletion(serverID)
                 },
+                didUpdateServerSecurityBinding: { server, credentials in
+                    serverDeletionTerminalCleanup.handleServerSecurityUpdate(
+                        server,
+                        credentials: credentials
+                    )
+                },
                 revokeUnclaimedTSSHVPN: { serverID in
                     try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel(
                         forServerID: serverID

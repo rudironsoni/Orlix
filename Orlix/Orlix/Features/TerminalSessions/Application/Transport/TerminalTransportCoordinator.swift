@@ -175,6 +175,32 @@ final class TerminalTransportCoordinator {
         beginTSSHRuntimeTeardown(runtime, for: paneId)
     }
 
+    func invalidateTSSHRuntimes(
+        forServerID serverID: UUID,
+        unlessBoundTo server: Server,
+        credentials: ServerCredentials
+    ) {
+        let staleRequestPaneIDs = tsshRuntimeRequests.compactMap { paneId, request in
+            request.server.id == serverID
+                && !request.isBound(to: server, credentials: credentials)
+                ? paneId
+                : nil
+        }
+        let staleRuntimes = tsshRuntimes.filter { _, runtime in
+            runtime.isForServer(serverID)
+                && !runtime.isBound(to: server, credentials: credentials)
+        }
+        for paneId in staleRequestPaneIDs {
+            tsshRuntimeRequests.removeValue(forKey: paneId)
+        }
+        for (paneId, _) in staleRuntimes {
+            tsshRuntimes.removeValue(forKey: paneId)
+        }
+        for (paneId, runtime) in staleRuntimes {
+            beginTSSHRuntimeTeardown(runtime, for: paneId)
+        }
+    }
+
     func invalidateTSSHRuntimesForTrustReset(host: String? = nil, port: Int? = nil) {
         let staleRuntimes = tsshRuntimes.filter { _, runtime in
             guard let host, let port else { return true }

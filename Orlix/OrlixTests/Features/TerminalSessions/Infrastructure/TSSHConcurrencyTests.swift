@@ -36,18 +36,29 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     private(set) var cleanupSavePaneIDs: [UUID] = []
     private(set) var savedCleanupStates: [TSSHResumeCleanupState] = []
     var loadedState: TSSHResumeState?
+    var recoveredCleanupState: TSSHResumeCleanupState?
+    var loadError: Error?
     var saveCleanupError: Error?
 
     init(
         loadedState: TSSHResumeState? = nil,
+        recoveredCleanupState: TSSHResumeCleanupState? = nil,
+        loadError: Error? = nil,
         saveCleanupError: Error? = nil
     ) {
         self.loadedState = loadedState
+        self.recoveredCleanupState = recoveredCleanupState
+        self.loadError = loadError
         self.saveCleanupError = saveCleanupError
     }
 
-    func load(for paneID: UUID) throws -> TSSHResumeState? { loadedState }
-    func recoverCleanupState(for paneID: UUID) -> TSSHResumeCleanupState? { nil }
+    func load(for paneID: UUID) throws -> TSSHResumeState? {
+        if let loadError { throw loadError }
+        return loadedState
+    }
+    func recoverCleanupState(for paneID: UUID) -> TSSHResumeCleanupState? {
+        recoveredCleanupState
+    }
     func hasCheckpoint(for paneID: UUID) -> Bool { true }
     func save(_ state: TSSHResumeState, for paneID: UUID) throws {}
     func delete(for paneID: UUID) throws { deletedPaneIDs.append(paneID) }
@@ -246,6 +257,68 @@ struct TSSHConcurrencyTests {
 
         #expect(resumeStore.cleanupSavePaneIDs == [paneID])
         #expect(resumeStore.deletedPaneIDs.isEmpty)
+    }
+
+    @Test @MainActor
+    func securityBindingReplacementRecoversCleanupWhenCheckpointLoadFails() async {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server),
+            password: "current-password"
+        )
+        let recoveredState = TSSHResumeCleanupState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
+            credentials: nil,
+            createdAt: Date()
+        )
+        let resumeStore = TSSHResumeStoreSpy(
+            recoveredCleanupState: recoveredState,
+            loadError: TSSHResumeStoreError.corruptState
+        )
+        let runtime = TSSHRuntime(
+            paneID: paneID,
+            server: server,
+            credentials: credentials,
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: resumeStore,
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        await runtime.closeForSecurityBindingReplacement()
+
+        #expect(resumeStore.cleanupSavePaneIDs == [paneID])
+        #expect(resumeStore.savedCleanupStates.first?.credentials == credentials)
+        #expect(resumeStore.deletedPaneIDs.contains(paneID))
     }
 
     @Test @MainActor

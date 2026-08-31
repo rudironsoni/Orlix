@@ -252,6 +252,10 @@ final class TSSHRuntime {
                 == trustedHostFingerprint(requestedServer.host, requestedServer.port)
     }
 
+    func isForServer(_ serverID: UUID) -> Bool {
+        server.id == serverID
+    }
+
     func matchesTrustedHost(host: String, port: Int) -> Bool {
         let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return TSSHResumeServerIdentity(server: server).host == normalizedHost
@@ -533,15 +537,51 @@ final class TSSHRuntime {
     }
 
     func closeForSecurityBindingReplacement() async {
-        if transport == nil,
-           let savedState = try? resumeStore.load(for: paneID) {
+        if transport == nil {
+            let savedState: TSSHResumeState?
             do {
-                try stageCleanup(for: savedState)
+                savedState = try resumeStore.load(for: paneID)
             } catch {
-                await close(preserveServer: true, deleteResumeState: false)
+                let loadError = error
+                guard let recoveredState = resumeStore.recoverCleanupState(for: paneID) else {
+                    await close(preserveServer: true, deleteResumeState: false)
+                    return
+                }
+                let recoveryCredentials = recoveredState.serverIdentity.matchesEndpoint(of: server)
+                    && credentials.isAuthorized(for: server)
+                    ? credentials
+                    : recoveredState.credentials
+                do {
+                    try resumeStore.saveCleanup(
+                        TSSHResumeCleanupState(
+                            serverIdentity: recoveredState.serverIdentity,
+                            serverProcess: recoveredState.serverProcess,
+                            credentials: recoveryCredentials,
+                            createdAt: recoveredState.createdAt
+                        ),
+                        for: paneID
+                    )
+                    try resumeStore.delete(for: paneID)
+                } catch {
+                    logger.warning(
+                        "Preserved TSSH checkpoint after cleanup recovery failed: \(error.localizedDescription, privacy: .public); load error: \(loadError.localizedDescription, privacy: .public)"
+                    )
+                    await close(preserveServer: true, deleteResumeState: false)
+                    return
+                }
+                await processDeferredCleanupBeforeRemoval()
+                await close()
                 return
             }
-            await processDeferredCleanupBeforeRemoval()
+            if let savedState {
+                do {
+                    try stageCleanup(for: savedState)
+                } catch {
+                    await close(preserveServer: true, deleteResumeState: false)
+                    return
+                }
+                await processDeferredCleanupBeforeRemoval()
+            }
         }
         await close()
     }

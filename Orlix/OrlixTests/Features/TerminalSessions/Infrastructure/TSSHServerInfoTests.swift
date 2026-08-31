@@ -145,6 +145,8 @@ struct TSSHServerInfoTests {
         #expect(command.contains("ps -p"))
         #expect(command.contains("orlix-tsshd-1234.sh"))
         #expect(command.contains("kill -TERM"))
+        #expect(command.contains("while kill -0"))
+        #expect(command.contains("[ \"$attempts\" -lt 20 ] || exit 1"))
         #expect(command.contains("ORLIX_TSSHD_TERMINATED=1"))
         #expect(command.contains("ORLIX_TSSHD_ABSENT=1"))
     }

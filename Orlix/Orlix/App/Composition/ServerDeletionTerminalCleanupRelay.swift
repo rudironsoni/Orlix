@@ -12,4 +12,12 @@ final class ServerDeletionTerminalCleanupRelay {
     func handleServerDeletion(_ serverID: UUID) {
         tabManager?.disconnectServer(serverID)
     }
+
+    func handleServerSecurityUpdate(_ server: Server, credentials: ServerCredentials) {
+        tabManager?.transportCoordinator.invalidateTSSHRuntimes(
+            forServerID: server.id,
+            unlessBoundTo: server,
+            credentials: credentials
+        )
+    }
 }

@@ -138,6 +138,9 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         guard journal.phase == .complete else {
             throw OrlixError.serverDataMutationRecoveryPending
         }
+        if previousServer != nil {
+            dependencies.didUpdateServerSecurityBinding(savedServer, credentials)
+        }
         await remoteSyncCoordinator.drainPendingMutations()
 
         if case .create = mutation {

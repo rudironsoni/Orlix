@@ -134,7 +134,13 @@ nonisolated enum TSSHBootstrap {
         fi
         case "$command" in
           *"$supervisor"*)
-            kill -TERM "$pid" 2>/dev/null || true
+            kill -TERM "$pid" 2>/dev/null || exit 1
+            attempts=0
+            while kill -0 "$pid" 2>/dev/null; do
+              [ "$attempts" -lt 20 ] || exit 1
+              sleep 0.1
+              attempts=$((attempts + 1))
+            done
             printf '%s\n' ORLIX_TSSHD_TERMINATED=1
             ;;
           *) exit 1 ;;
