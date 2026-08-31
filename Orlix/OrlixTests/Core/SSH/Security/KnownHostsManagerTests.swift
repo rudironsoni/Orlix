@@ -80,7 +80,12 @@ struct KnownHostsManagerTests {
     @Test
     func changedKeyKeepsOldFingerprintUntilExactApproval() {
         let manager = makeManager()
+        var invalidatedEndpoints: [String] = []
+        manager.setFingerprintMutationHandler { host, port in
+            invalidatedEndpoints.append("\(host):\(port)")
+        }
         manager.save(entry: entry(host: "example.com", port: 22, fingerprint: "SHA256:old"))
+        invalidatedEndpoints.removeAll()
         let challenge = approvalChallenge(from: manager.evaluate(
             host: "example.com",
             port: 22,
@@ -93,6 +98,22 @@ struct KnownHostsManagerTests {
         #expect(manager.entry(for: "example.com", port: 22)?.fingerprint == "SHA256:old")
         #expect(manager.approve(challenge))
         #expect(manager.entry(for: "example.com", port: 22)?.fingerprint == "SHA256:new")
+        #expect(invalidatedEndpoints == ["example.com:22"])
+    }
+
+    @Test
+    func directFingerprintReplacementInvalidatesTheEndpoint() {
+        let manager = makeManager()
+        var invalidatedEndpoints: [String] = []
+        manager.setFingerprintMutationHandler { host, port in
+            invalidatedEndpoints.append("\(host):\(port)")
+        }
+        manager.save(entry: entry(host: "example.com", port: 22, fingerprint: "SHA256:old"))
+        invalidatedEndpoints.removeAll()
+
+        manager.save(entry: entry(host: " EXAMPLE.COM. ", port: 22, fingerprint: "SHA256:new"))
+
+        #expect(invalidatedEndpoints == ["example.com:22"])
     }
 
     @Test

@@ -251,6 +251,14 @@ struct AppComposition {
             applicationIsActive: applicationIsActive
         )
         serverDeletionTerminalCleanup.bind(to: tabManager)
+        knownHostsManager.setFingerprintMutationHandler { [weak tabManager] host, port in
+            Task { @MainActor [weak tabManager] in
+                tabManager?.transportCoordinator.invalidateTSSHRuntimesForTrustReset(
+                    host: host,
+                    port: port
+                )
+            }
+        }
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
             effects: .live(
