@@ -312,6 +312,117 @@ struct TSSHConcurrencyTests {
         #expect(!fileManager.fileExists(atPath: checkpoint.path))
     }
 
+    @Test
+    func checkpointRecoveryRetainsEndpointBoundCleanupCredentials() throws {
+        let paneID = UUID()
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appendingPathComponent(
+            "TSSHResumeStoreTests.\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let service = "com.rudironsoni.orlix.tssh-resume.tests.\(UUID().uuidString)"
+        let serviceQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+        ]
+        defer {
+            SecItemDelete(serviceQuery as CFDictionary)
+            try? fileManager.removeItem(at: root)
+        }
+        let store = TSSHResumeStore(fileManager: fileManager, root: root, service: service)
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "old.example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server),
+            password: "old-password"
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+        )
+        try store.save(
+            TSSHResumeState(
+                serverIdentity: TSSHResumeServerIdentity(server: server),
+                sshHostKeyFingerprint: "SHA256:trusted",
+                serverProcess: TSSHServerProcessIdentity(
+                    pid: 123,
+                    supervisorPath: "/tmp/orlix-tsshd-test.sh"
+                ),
+                host: server.host,
+                info: info,
+                sessionID: 42,
+                profile: server.tsshProfile,
+                cleanupCredentials: credentials,
+                savedAt: Date()
+            ),
+            for: paneID
+        )
+
+        #expect(store.recoverCleanupState(for: paneID)?.credentials == credentials)
+    }
+
+    @Test
+    func corruptCleanupReferenceRecoversAndPurgesItsVersionedSecret() throws {
+        let paneID = UUID()
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appendingPathComponent(
+            "TSSHResumeStoreTests.\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let service = "com.rudironsoni.orlix.tssh-resume.tests.\(UUID().uuidString)"
+        let serviceQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+        ]
+        defer {
+            SecItemDelete(serviceQuery as CFDictionary)
+            try? fileManager.removeItem(at: root)
+        }
+        let store = TSSHResumeStore(fileManager: fileManager, root: root, service: service)
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let state = TSSHResumeCleanupState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
+            credentials: ServerCredentials(
+                serverId: server.id,
+                credentialBinding: ServerCredentialBinding(server: server),
+                password: "password"
+            ),
+            createdAt: Date()
+        )
+        try store.saveCleanup(state, for: paneID)
+        let cleanupReference = root
+            .appendingPathComponent(paneID.uuidString)
+            .appendingPathExtension("cleanup.json")
+        try Data("{".utf8).write(to: cleanupReference, options: .atomic)
+
+        #expect(try store.loadCleanup(for: paneID) == state)
+        try store.deleteCleanup(for: paneID)
+
+        #expect(try keychainAccounts(service: service).allSatisfy { account in
+            !account.hasPrefix("\(paneID.uuidString).cleanup.")
+        })
+        #expect(!fileManager.fileExists(atPath: cleanupReference.path))
+    }
+
     @Test(arguments: [
         (preservationRequested: true, hasCheckpoint: true, expected: true),
         (preservationRequested: true, hasCheckpoint: false, expected: false),

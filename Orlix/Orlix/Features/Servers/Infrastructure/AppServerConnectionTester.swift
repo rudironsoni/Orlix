@@ -57,6 +57,10 @@ nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting
                 debugLabel: "connection-test:\(server.username)@\(server.host)"
             ))
             await callGate.closeTransport(transport, preserveServer: false)
+            try await TSSHBootstrap.terminateServerForCleanup(
+                bootstrap.serverProcess,
+                using: client
+            )
         } catch {
             await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: client)
             throw error

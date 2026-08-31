@@ -9,7 +9,30 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
     let info: TSSHServerInfo
     let sessionID: Int64
     let profile: TSSHProfile
+    let cleanupCredentials: ServerCredentials?
     let savedAt: Date
+
+    init(
+        serverIdentity: TSSHResumeServerIdentity,
+        sshHostKeyFingerprint: String,
+        serverProcess: TSSHServerProcessIdentity,
+        host: String,
+        info: TSSHServerInfo,
+        sessionID: Int64,
+        profile: TSSHProfile,
+        cleanupCredentials: ServerCredentials? = nil,
+        savedAt: Date
+    ) {
+        self.serverIdentity = serverIdentity
+        self.sshHostKeyFingerprint = sshHostKeyFingerprint
+        self.serverProcess = serverProcess
+        self.host = host
+        self.info = info
+        self.sessionID = sessionID
+        self.profile = profile
+        self.cleanupCredentials = cleanupCredentials
+        self.savedAt = savedAt
+    }
 
     var isExpired: Bool {
         Date().timeIntervalSince(savedAt) >= 86_400
@@ -24,6 +47,7 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
             info: info,
             sessionID: sessionID,
             profile: profile,
+            cleanupCredentials: cleanupCredentials,
             savedAt: date
         )
     }
@@ -112,6 +136,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let kcpPassHex: String?
         let kcpSaltHex: String?
         let proxyKeyHex: String?
+        let cleanupCredentials: ServerCredentials?
     }
 
     private struct Checkpoint: Codable {
@@ -268,6 +293,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             info: info,
             sessionID: checkpoint.sessionID,
             profile: checkpoint.profile,
+            cleanupCredentials: secret.cleanupCredentials,
             savedAt: checkpoint.savedAt
         )
         return state
@@ -278,10 +304,16 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         guard let data = try? Data(contentsOf: checkpointURL),
               let checkpoint = try? JSONDecoder().decode(Checkpoint.self, from: data)
         else { return nil }
+        let secretData = try? readSecret(
+            account: checkpoint.secretAccount ?? paneID.uuidString
+        )
+        let cleanupCredentials = secretData.flatMap {
+            try? JSONDecoder().decode(Secret.self, from: $0).cleanupCredentials
+        }
         return TSSHResumeCleanupState(
             serverIdentity: checkpoint.serverIdentity,
             serverProcess: checkpoint.serverProcess,
-            credentials: nil,
+            credentials: cleanupCredentials,
             createdAt: checkpoint.savedAt
         )
     }
@@ -300,7 +332,8 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             clientKeyHex: state.info.clientKeyHex,
             kcpPassHex: state.info.kcpPassHex,
             kcpSaltHex: state.info.kcpSaltHex,
-            proxyKeyHex: state.info.proxyKeyHex
+            proxyKeyHex: state.info.proxyKeyHex,
+            cleanupCredentials: state.cleanupCredentials
         )
         let checkpointURL = url(for: paneID)
         let previousSecretAccount: String? = if fileManager.fileExists(
@@ -402,8 +435,11 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
                 from: data
             )
         } catch {
-            if let storeError = error as? TSSHResumeStoreError { throw storeError }
-            throw TSSHResumeStoreError.corruptState
+            if let recovered = try recoverVersionedCleanupState(for: paneID) {
+                return recovered
+            }
+            try deleteCleanup(for: paneID)
+            return nil
         }
     }
 
@@ -450,6 +486,9 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             from: Data(contentsOf: cleanupURL)
         ) {
             try deleteSecret(account: reference.secretAccount)
+        }
+        for account in try versionedCleanupSecretAccounts(for: paneID) {
+            try deleteSecret(account: account)
         }
         if fileManager.fileExists(atPath: cleanupURL.path) {
             try fileManager.removeItem(at: cleanupURL)
@@ -514,6 +553,37 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
     }
 
     private func versionedResumeSecretAccounts(for paneID: UUID) throws -> [String] {
+        let prefix = "\(paneID.uuidString)."
+        return try secretAccounts().filter { account in
+            guard account.hasPrefix(prefix) else { return false }
+            return UUID(uuidString: String(account.dropFirst(prefix.count))) != nil
+        }
+    }
+
+    private func versionedCleanupSecretAccounts(for paneID: UUID) throws -> [String] {
+        let prefix = "\(paneID.uuidString).cleanup."
+        return try secretAccounts().filter { account in
+            guard account.hasPrefix(prefix) else { return false }
+            return UUID(uuidString: String(account.dropFirst(prefix.count))) != nil
+        }
+    }
+
+    private func recoverVersionedCleanupState(
+        for paneID: UUID
+    ) throws -> TSSHResumeCleanupState? {
+        var recovered: TSSHResumeCleanupState?
+        for account in try versionedCleanupSecretAccounts(for: paneID) {
+            guard let data = try readSecret(account: account),
+                  let state = try? JSONDecoder().decode(TSSHResumeCleanupState.self, from: data)
+            else { continue }
+            if recovered == nil || state.createdAt > recovered!.createdAt {
+                recovered = state
+            }
+        }
+        return recovered
+    }
+
+    private func secretAccounts() throws -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -535,13 +605,8 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         } else {
             throw TSSHResumeStoreError.secureStorage(errSecDecode)
         }
-        let prefix = "\(paneID.uuidString)."
         return attributes.compactMap { item in
-            guard let account = item[kSecAttrAccount as String] as? String,
-                  account.hasPrefix(prefix),
-                  UUID(uuidString: String(account.dropFirst(prefix.count))) != nil
-            else { return nil }
-            return account
+            item[kSecAttrAccount as String] as? String
         }
     }
 

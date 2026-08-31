@@ -654,6 +654,7 @@ final class TSSHRuntime {
                 ),
                 sessionID: state.sessionID,
                 profile: currentProfile,
+                cleanupCredentials: state.cleanupCredentials,
                 savedAt: state.savedAt
             )
             do {
@@ -691,6 +692,7 @@ final class TSSHRuntime {
                     info: state.info,
                     sessionID: attached.1,
                     profile: currentProfile,
+                    cleanupCredentials: credentials,
                     savedAt: Date()
                 )
                 try resumeStore.save(resumeState!, for: paneID)
@@ -742,7 +744,12 @@ final class TSSHRuntime {
                 TSSHResumeCleanupState(
                     serverIdentity: state.serverIdentity,
                     serverProcess: state.serverProcess,
-                    credentials: credentials,
+                    credentials: state.cleanupCredentials ?? (
+                        state.serverIdentity.matchesEndpoint(of: server)
+                            && credentials.isAuthorized(for: server)
+                            ? credentials
+                            : nil
+                    ),
                     createdAt: Date()
                 ),
                 for: paneID
@@ -833,6 +840,7 @@ final class TSSHRuntime {
             info: bootstrap.info,
             sessionID: opened.1,
             profile: server.tsshProfile,
+            cleanupCredentials: credentials,
             savedAt: Date()
         )
         try resumeStore.save(state, for: paneID)
