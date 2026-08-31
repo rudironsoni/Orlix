@@ -421,14 +421,32 @@ final class TSSHRuntime {
             if preserveServer { callGate.forgetSession(session) }
             else { await callGate.closeSession(session) }
         }
-        if let transport { await callGate.closeTransport(transport, preserveServer: preserveServer) }
+        let transportCloseWasVerified = if let transport {
+            await callGate.closeTransport(transport, preserveServer: preserveServer)
+        } else {
+            true
+        }
+        var canDeleteResumeState = deleteResumeState
+        if deleteResumeState, !preserveServer, !transportCloseWasVerified {
+            do {
+                canDeleteResumeState = try Self.stagePersistedCleanupBeforeRemoval(
+                    paneID: paneID,
+                    resumeStore: resumeStore
+                )
+                if canDeleteResumeState {
+                    await processDeferredCleanupBeforeRemoval()
+                }
+            } catch {
+                canDeleteResumeState = false
+            }
+        }
         await stopOwnedVPN()
         transportFallback?.cancel()
-        if deleteResumeState { try? resumeStore.delete(for: paneID) }
+        if canDeleteResumeState { try? resumeStore.delete(for: paneID) }
         self.forwarder = nil
         self.session = nil
         self.transport = nil
-        resumeState = nil
+        if canDeleteResumeState { resumeState = nil }
         outputBridge = nil
         stateBridge = nil
         healthBridge = nil

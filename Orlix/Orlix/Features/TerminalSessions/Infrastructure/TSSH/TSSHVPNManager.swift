@@ -324,7 +324,7 @@ final class TSSHVPNManager {
         do {
             manager = try await loadManager()
         } catch {
-            scheduleStopRetry(ownerID: ownerID)
+            scheduleTeardownRetry(ownerID: ownerID)
             throw error
         }
         guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
@@ -332,7 +332,12 @@ final class TSSHVPNManager {
               ownership.ownerID == nil || ownership.isOwned(by: ownerID) else {
             return
         }
-        manager.connection.stopVPNTunnel()
+        do {
+            try await removePersistedConfiguration(manager, ownerID: ownerID)
+        } catch {
+            scheduleTeardownRetry(ownerID: ownerID)
+            throw error
+        }
     }
 
     func stopUnclaimedPersistedTunnel(forServerID serverID: UUID) async throws {
@@ -365,7 +370,7 @@ final class TSSHVPNManager {
         try await manager.saveToPreferences()
     }
 
-    private func scheduleStopRetry(ownerID: UUID) {
+    private func scheduleTeardownRetry(ownerID: UUID) {
         teardownRetryTasks[ownerID]?.cancel()
         teardownRetryTasks[ownerID] = Task { [weak self] in
             guard let self else { return }
@@ -378,17 +383,8 @@ final class TSSHVPNManager {
                     guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
                           provider.providerConfiguration?["tsshOwnerID"] as? String
                             == ownerID.uuidString else { return }
-                    switch manager.connection.status {
-                    case .connecting, .connected, .reasserting:
-                        manager.connection.stopVPNTunnel()
-                        try await self.waitUntilDisconnected(manager.connection)
-                        return
-                    case .disconnecting:
-                        try await self.waitUntilDisconnected(manager.connection)
-                        return
-                    default:
-                        return
-                    }
+                    try await self.removePersistedConfiguration(manager, ownerID: ownerID)
+                    return
                 } catch is CancellationError {
                     return
                 } catch {
@@ -396,6 +392,29 @@ final class TSSHVPNManager {
                 }
             }
         }
+    }
+
+    private func removePersistedConfiguration(
+        _ manager: NETunnelProviderManager,
+        ownerID: UUID
+    ) async throws {
+        guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
+              provider.providerConfiguration?["tsshOwnerID"] as? String
+                == ownerID.uuidString else { return }
+        switch manager.connection.status {
+        case .connecting, .connected, .reasserting:
+            manager.connection.stopVPNTunnel()
+            try await waitUntilDisconnected(manager.connection)
+        case .disconnecting:
+            try await waitUntilDisconnected(manager.connection)
+        default:
+            break
+        }
+        let configKey = provider.providerConfiguration?["tsshConfigKey"] as? String
+        if let configKey {
+            try TSSHVPNSecretStore.delete(key: configKey)
+        }
+        try await manager.removeFromPreferences()
     }
 
     private func beginStatusMonitoring(

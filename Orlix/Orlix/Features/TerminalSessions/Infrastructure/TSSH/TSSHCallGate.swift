@@ -359,9 +359,10 @@ actor TSSHCallGate {
         _ = registry.withLock { $0.sessions.removeValue(forKey: reference) }
     }
 
-    func closeTransport(_ reference: TSSHTransportRef, preserveServer: Bool) async {
+    @discardableResult
+    func closeTransport(_ reference: TSSHTransportRef, preserveServer: Bool) async -> Bool {
         guard let transport = registry.withLock({ $0.transports[reference] }) else {
-            return
+            return true
         }
         registry.withLock { storage in
             storage.auxiliaryStreams = storage.auxiliaryStreams.filter { $0.value.0 !== transport }
@@ -371,6 +372,7 @@ actor TSSHCallGate {
         if preserveServer {
             _ = registry.withLock { $0.transports.removeValue(forKey: reference) }
             await performWithoutThrowing { native.abandon() }
+            return false
         } else {
             let registry = self.registry
             let queue = self.queue
@@ -380,9 +382,16 @@ actor TSSHCallGate {
                       registry.withLock({ $0.transports[reference] != nil }) else { return }
                 queue.async { native.abandon() }
             }
-            _ = try? await perform { try native.close() }
+            let closeWasVerified: Bool
+            do {
+                try await perform { try native.close() }
+                closeWasVerified = true
+            } catch {
+                closeWasVerified = false
+            }
             fallback.cancel()
             _ = registry.withLock { $0.transports.removeValue(forKey: reference) }
+            return closeWasVerified
         }
     }
 
