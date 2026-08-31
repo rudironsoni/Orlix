@@ -167,7 +167,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
                     guard self?.isCurrentGeneration(startupID) == true else { return }
                     self?.cancelTunnelWithError(error)
                 } else {
-                    self?.clearStartup(ifCurrent: startupID)
+                    guard self?.clearStartup(ifCurrent: startupID) == true else { return }
                     var nativeError: NSError?
                     _ = VpntunnelStopTunnel(&nativeError)
                     startup.fail(error)
@@ -221,12 +221,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         return state.generation == id
     }
 
-    private func clearStartup(ifCurrent id: UUID) {
+    @discardableResult
+    private func clearStartup(ifCurrent id: UUID) -> Bool {
         stateLock.lock()
-        if state.generation == id {
-            state = State()
+        guard state.generation == id else {
+            stateLock.unlock()
+            return false
         }
+        state = State()
         stateLock.unlock()
+        return true
     }
 
     private func promoteStartupToRunning(

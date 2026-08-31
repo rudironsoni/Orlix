@@ -967,44 +967,49 @@ final class TSSHRuntime {
             throw error
         }
         let transport = connectedTransport
-        try Task.checkCancellation()
-        try await enableAgentIfRequested(profile: server.tsshProfile, on: transport)
+        do {
+            try Task.checkCancellation()
+            try await enableAgentIfRequested(profile: server.tsshProfile, on: transport)
 
-        let generation = connectionGeneration
-        let outputBridge = makeOutputBridge(generation: generation)
-        self.outputBridge = outputBridge
-        acceptStartupPlan(startupPlan)
-        let opened = try await callGate.openSession(
-            on: transport,
-            term: RemoteTerminalBootstrap.defaultTerminalType.rawValue,
-            rows: rows,
-            columns: columns,
-            requestAgent: server.tsshProfile.sshAgentForwarding,
-            command: startupPlan.command,
-            output: outputBridge
-        )
-        session = opened.0
-        try Task.checkCancellation()
-        let state = TSSHResumeState(
-            serverIdentity: TSSHResumeServerIdentity(server: server),
-            sshHostKeyFingerprint: try currentResumeHostKeyFingerprint(),
-            serverProcess: bootstrap.serverProcess,
-            host: bootstrap.host,
-            info: bootstrap.info,
-            sessionID: opened.1,
-            profile: server.tsshProfile,
-            cleanupCredentials: credentials,
-            savedAt: Date()
-        )
-        try resumeStore.save(state, for: paneID)
-        resumeState = state
-        try await startForwarding(on: transport, profile: server.tsshProfile)
-        try await startVPNIfRequested(
-            host: bootstrap.host,
-            info: bootstrap.info,
-            profile: server.tsshProfile
-        )
-        didConnect()
+            let generation = connectionGeneration
+            let outputBridge = makeOutputBridge(generation: generation)
+            self.outputBridge = outputBridge
+            acceptStartupPlan(startupPlan)
+            let opened = try await callGate.openSession(
+                on: transport,
+                term: RemoteTerminalBootstrap.defaultTerminalType.rawValue,
+                rows: rows,
+                columns: columns,
+                requestAgent: server.tsshProfile.sshAgentForwarding,
+                command: startupPlan.command,
+                output: outputBridge
+            )
+            session = opened.0
+            try Task.checkCancellation()
+            let state = TSSHResumeState(
+                serverIdentity: TSSHResumeServerIdentity(server: server),
+                sshHostKeyFingerprint: try currentResumeHostKeyFingerprint(),
+                serverProcess: bootstrap.serverProcess,
+                host: bootstrap.host,
+                info: bootstrap.info,
+                sessionID: opened.1,
+                profile: server.tsshProfile,
+                cleanupCredentials: credentials,
+                savedAt: Date()
+            )
+            try resumeStore.save(state, for: paneID)
+            resumeState = state
+            try await startForwarding(on: transport, profile: server.tsshProfile)
+            try await startVPNIfRequested(
+                host: bootstrap.host,
+                info: bootstrap.info,
+                profile: server.tsshProfile
+            )
+            didConnect()
+        } catch {
+            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
+            throw error
+        }
     }
 
     private func currentResumeHostKeyFingerprint() throws -> String {
