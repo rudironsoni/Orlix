@@ -476,7 +476,7 @@ final class TSSHRuntime {
             } catch {
                 if let runtimeError = error as? TSSHRuntimeError,
                    case .vpnStartFailed = runtimeError {
-                    await cleanupFailedResume(preserveServer: true)
+                    await cleanupFailedResume(preserveServer: false)
                     throw runtimeError
                 }
                 let shouldDiscard = TSSHResumeFailurePolicy.shouldDiscard(
