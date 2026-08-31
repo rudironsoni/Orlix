@@ -449,6 +449,71 @@ final class TSSHRuntime {
         )
     }
 
+    static func stagePersistedCleanupBeforeRemoval(
+        paneID: UUID,
+        resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared
+    ) throws -> Bool {
+        guard let state = try resumeStore.load(for: paneID) else { return false }
+        try resumeStore.saveCleanup(
+            TSSHResumeCleanupState(
+                serverIdentity: state.serverIdentity,
+                serverProcess: state.serverProcess,
+                credentials: state.cleanupCredentials,
+                createdAt: Date()
+            ),
+            for: paneID
+        )
+        try resumeStore.delete(for: paneID)
+        return true
+    }
+
+    static func processPersistedCleanupBeforeRemoval(
+        paneID: UUID,
+        resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared,
+        sshClientFactory: SSHClientFactory
+    ) async {
+        await TSSHDeferredCleanup.process(
+            paneID: paneID,
+            resumeStore: resumeStore,
+            sshClientFactory: sshClientFactory,
+            fallbackServer: nil,
+            fallbackCredentials: nil
+        )
+        do {
+            guard try stagePersistedCleanupBeforeRemoval(
+                paneID: paneID,
+                resumeStore: resumeStore
+            ) else { return }
+        } catch {
+            return
+        }
+        await TSSHDeferredCleanup.process(
+            paneID: paneID,
+            resumeStore: resumeStore,
+            sshClientFactory: sshClientFactory,
+            fallbackServer: nil,
+            fallbackCredentials: nil
+        )
+    }
+
+    func closeForRemoval() async {
+        await processDeferredCleanupBeforeRemoval()
+        if transport == nil {
+            do {
+                if try Self.stagePersistedCleanupBeforeRemoval(
+                    paneID: paneID,
+                    resumeStore: resumeStore
+                ) {
+                    await processDeferredCleanupBeforeRemoval()
+                }
+            } catch {
+                await close(preserveServer: true, deleteResumeState: false)
+                return
+            }
+        }
+        await close()
+    }
+
     func closeForSecurityBindingReplacement() async {
         if transport == nil,
            let savedState = try? resumeStore.load(for: paneID) {

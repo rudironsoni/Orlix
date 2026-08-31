@@ -34,6 +34,7 @@ private nonisolated enum TSSHResumeStoreSpyError: Error {
 private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecked Sendable {
     private(set) var deletedPaneIDs: [UUID] = []
     private(set) var cleanupSavePaneIDs: [UUID] = []
+    private(set) var savedCleanupStates: [TSSHResumeCleanupState] = []
     var loadedState: TSSHResumeState?
     var saveCleanupError: Error?
 
@@ -53,6 +54,7 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState? { nil }
     func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {
         cleanupSavePaneIDs.append(paneID)
+        savedCleanupStates.append(state)
         if let saveCleanupError { throw saveCleanupError }
     }
     func deleteCleanup(for paneID: UUID) throws {}
@@ -244,6 +246,49 @@ struct TSSHConcurrencyTests {
 
         #expect(resumeStore.cleanupSavePaneIDs == [paneID])
         #expect(resumeStore.deletedPaneIDs.isEmpty)
+    }
+
+    @Test @MainActor
+    func restoredPaneRemovalStagesCheckpointBeforeDeletingIt() throws {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server),
+            password: "password"
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
+            host: server.host,
+            info: try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+            ),
+            sessionID: 42,
+            profile: server.tsshProfile,
+            cleanupCredentials: credentials,
+            savedAt: Date()
+        )
+        let resumeStore = TSSHResumeStoreSpy(loadedState: state)
+
+        #expect(try TSSHRuntime.stagePersistedCleanupBeforeRemoval(
+            paneID: paneID,
+            resumeStore: resumeStore
+        ))
+        #expect(resumeStore.cleanupSavePaneIDs == [paneID])
+        #expect(resumeStore.savedCleanupStates.first?.credentials == credentials)
+        #expect(resumeStore.deletedPaneIDs == [paneID])
     }
 
     @Test

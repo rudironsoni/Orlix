@@ -731,7 +731,7 @@ final class TerminalTransportCoordinator {
             _ = registry.detachRuntime(runtime, for: paneId)
         }
         if deletingResumableState {
-            deleteResumableState(for: paneId)
+            deleteNonTSSHResumableState(for: paneId)
         }
 
         let registry = registry
@@ -751,8 +751,12 @@ final class TerminalTransportCoordinator {
                 await runtime.close()
             }
             if let tsshRuntime {
-                await tsshRuntime.processDeferredCleanupBeforeRemoval()
-                await tsshRuntime.close()
+                await tsshRuntime.closeForRemoval()
+            } else if deletingResumableState {
+                await TSSHRuntime.processPersistedCleanupBeforeRemoval(
+                    paneID: paneId,
+                    sshClientFactory: self.sshClientFactory
+                )
             }
         }
     }
@@ -1089,7 +1093,7 @@ final class TerminalTransportCoordinator {
         sessionAccess.send(.activeTransport(paneId, .eternalTerminal))
     }
 
-    private func deleteResumableState(for paneId: UUID) {
+    private func deleteNonTSSHResumableState(for paneId: UUID) {
         do {
             try eternalTerminalResumeStore.deleteResumeState(for: paneId)
         } catch {
@@ -1099,11 +1103,6 @@ final class TerminalTransportCoordinator {
             try moshRecovery.deleteCheckpoint(for: paneId)
         } catch {
             logger.error("Failed to delete Mosh recovery snapshot: \(error.localizedDescription, privacy: .public)")
-        }
-        do {
-            try TSSHResumeStore.shared.delete(for: paneId)
-        } catch {
-            logger.error("Failed to delete TSSH recovery state: \(error.localizedDescription, privacy: .public)")
         }
     }
 

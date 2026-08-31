@@ -127,6 +127,24 @@ struct RemoteSessionModelsTests {
 
         #expect(first.token != second.token)
         #expect(first.operationID != second.operationID)
+        #expect(first.token.utf8.count == 32)
+        #expect(RemoteSessionLifecycleEnvelope.isValidToken(first.token))
+        #expect(RemoteSessionLifecycleEnvelope.isValidToken(second.token))
+    }
+
+    @Test
+    func lifecycleTokensAcceptOnlyShellSafeASCII() throws {
+        _ = try RemoteSessionLifecycleEnvelope(
+            token: "AZaz09-_",
+            operationID: UUID()
+        )
+
+        #expect(throws: RemoteSessionLifecycleEnvelope.ValidationError.invalidToken) {
+            try RemoteSessionLifecycleEnvelope(token: "unicode-é", operationID: UUID())
+        }
+        #expect(throws: RemoteSessionLifecycleEnvelope.ValidationError.invalidToken) {
+            try RemoteSessionLifecycleEnvelope(token: "has space", operationID: UUID())
+        }
     }
 
     @Test(arguments: [

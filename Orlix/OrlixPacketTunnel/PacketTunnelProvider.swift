@@ -161,9 +161,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
             ready: {
                 startup.succeed()
             },
-            failure: { [weak self] reason, wasReady in
+            failure: { [weak self] reason, readinessWasDelivered in
                 let error = PacketTunnelError.nativeFailure(reason)
-                if wasReady {
+                if readinessWasDelivered {
                     guard self?.isCurrentGeneration(startupID) == true else { return }
                     self?.cancelTunnelWithError(error)
                 } else {
@@ -305,14 +305,14 @@ private final class PacketTunnelStartupCompletion: @unchecked Sendable {
 private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProtocol {
     private let lock = NSLock()
     private let ready: () -> Void
-    private let failure: (_ reason: String, _ wasReady: Bool) -> Void
+    private let failure: (_ reason: String, _ readinessWasDelivered: Bool) -> Void
     private var isActivated = false
     private var didBecomeReady = false
     private var terminationReason: String?
 
     init(
         ready: @escaping () -> Void,
-        failure: @escaping (_ reason: String, _ wasReady: Bool) -> Void
+        failure: @escaping (_ reason: String, _ readinessWasDelivered: Bool) -> Void
     ) {
         self.ready = ready
         self.failure = failure
@@ -325,7 +325,7 @@ private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProto
         let becameReady = didBecomeReady
         lock.unlock()
         if let reason {
-            failure(reason, becameReady)
+            failure(reason, false)
         } else if becameReady {
             ready()
         }
@@ -357,10 +357,10 @@ private final class PacketTunnelCallback: NSObject, VpntunnelTunnelCallbackProto
             return
         }
         terminationReason = reason
-        let wasReady = didBecomeReady
+        let readinessWasDelivered = isActivated && didBecomeReady
         let shouldNotify = isActivated
         lock.unlock()
-        if shouldNotify { failure(reason, wasReady) }
+        if shouldNotify { failure(reason, readinessWasDelivered) }
     }
 }
 
