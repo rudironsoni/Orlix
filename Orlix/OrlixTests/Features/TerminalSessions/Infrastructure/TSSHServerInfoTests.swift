@@ -239,6 +239,7 @@ struct TSSHServerInfoTests {
         )
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
             host: server.host,
             info: info,
             sessionID: 42,
@@ -246,15 +247,46 @@ struct TSSHServerInfoTests {
             savedAt: Date()
         )
 
-        #expect(TSSHResumeCompatibilityPolicy.canResume(state, with: server))
+        #expect(TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
 
         var changedHost = server
         changedHost.host = "other.example.com"
-        #expect(!TSSHResumeCompatibilityPolicy.canResume(state, with: changedHost))
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: changedHost,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
 
         var changedPolicy = server
         changedPolicy.tsshProfile.sshAgentForwarding = true
-        #expect(!TSSHResumeCompatibilityPolicy.canResume(state, with: changedPolicy))
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: changedPolicy,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        var updatedServer = server
+        updatedServer.updatedAt = server.updatedAt.addingTimeInterval(1)
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: updatedServer,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: nil
+        ))
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: "SHA256:replacement"
+        ))
     }
 
     @Test
@@ -272,6 +304,7 @@ struct TSSHServerInfoTests {
         )
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
             host: server.host,
             info: info,
             sessionID: 42,
@@ -284,9 +317,25 @@ struct TSSHServerInfoTests {
 
         #expect(refreshed.savedAt == refreshedAt)
         #expect(refreshed.serverIdentity == state.serverIdentity)
+        #expect(refreshed.sshHostKeyFingerprint == state.sshHostKeyFingerprint)
         #expect(refreshed.host == state.host)
         #expect(refreshed.info == state.info)
         #expect(refreshed.sessionID == state.sessionID)
         #expect(refreshed.profile == state.profile)
+    }
+
+    @Test
+    func resumeRetryExpiresBeforeTheNextAttempt() {
+        let now = Date(timeIntervalSince1970: 100)
+        #expect(TSSHResumeFailurePolicy.retryWouldExpire(
+            now: now,
+            retryDelaySeconds: 2,
+            expiresAt: now.addingTimeInterval(2)
+        ))
+        #expect(!TSSHResumeFailurePolicy.retryWouldExpire(
+            now: now,
+            retryDelaySeconds: 1,
+            expiresAt: now.addingTimeInterval(2)
+        ))
     }
 }

@@ -62,6 +62,14 @@ nonisolated enum TSSHResumeFailurePolicy {
                 || description.contains("invalid session state")
         )
     }
+
+    static func retryWouldExpire(
+        now: Date,
+        retryDelaySeconds: Int,
+        expiresAt: Date
+    ) -> Bool {
+        now.addingTimeInterval(TimeInterval(retryDelaySeconds)) >= expiresAt
+    }
 }
 
 nonisolated struct TSSHTerminalEventGate {
@@ -99,6 +107,7 @@ final class TSSHRuntime {
     private let resumeStore: any TSSHResumeStoring
     private let callGate: TSSHCallGate
     private let ownerAccess: TSSHRuntimeOwnerAccess
+    private let trustedHostFingerprint: @Sendable (String, Int) -> String?
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Orlix",
         category: "TSSHRuntime"
@@ -130,6 +139,7 @@ final class TSSHRuntime {
     private var terminalEventGate = TSSHTerminalEventGate()
     private var cancelledStartPreservesServer = false
     private var cancelledStartDeletesResumeState = true
+    private var resumeHostKeyFingerprint: String?
     private var startupReady = false
     private var isClosing = false
 
@@ -143,6 +153,9 @@ final class TSSHRuntime {
         sshClientFactory: SSHClientFactory,
         resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared,
         callGate: TSSHCallGate = .shared,
+        trustedHostFingerprint: @escaping @Sendable (String, Int) -> String? = { host, port in
+            KnownHostsManager.shared.entry(for: host, port: port)?.fingerprint
+        },
         ownerAccess: TSSHRuntimeOwnerAccess
     ) {
         self.paneID = paneID
@@ -151,6 +164,7 @@ final class TSSHRuntime {
         self.sshClientFactory = sshClientFactory
         self.resumeStore = resumeStore
         self.callGate = callGate
+        self.trustedHostFingerprint = trustedHostFingerprint
         self.ownerAccess = ownerAccess
     }
 
@@ -414,11 +428,16 @@ final class TSSHRuntime {
         }
         guard var state = loadedState else { return false }
         let currentIdentity = TSSHResumeServerIdentity(server: server)
-        guard TSSHResumeCompatibilityPolicy.canResume(state, with: server) else {
+        guard TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: trustedHostFingerprint(server.host, server.port)
+        ) else {
             try? resumeStore.delete(for: paneID)
             logger.info("Discarded TSSH resume state after server settings changed")
             return false
         }
+        resumeHostKeyFingerprint = state.sshHostKeyFingerprint
         let currentProfile = server.tsshProfile
         let savedHost = state.host
         let expiresAt = state.savedAt.addingTimeInterval(86_400)
@@ -428,6 +447,7 @@ final class TSSHRuntime {
             attempt += 1
             state = TSSHResumeState(
                 serverIdentity: currentIdentity,
+                sshHostKeyFingerprint: state.sshHostKeyFingerprint,
                 host: savedHost,
                 info: state.info.advancingClientIDForResume(
                     vpnEnabled: currentProfile.vpnEnabled
@@ -458,6 +478,7 @@ final class TSSHRuntime {
                 try Task.checkCancellation()
                 resumeState = TSSHResumeState(
                     serverIdentity: currentIdentity,
+                    sshHostKeyFingerprint: state.sshHostKeyFingerprint,
                     host: savedHost,
                     info: state.info,
                     sessionID: attached.1,
@@ -482,6 +503,10 @@ final class TSSHRuntime {
                 let shouldDiscard = TSSHResumeFailurePolicy.shouldDiscard(
                     after: attempt,
                     errorDescription: error.localizedDescription
+                ) || TSSHResumeFailurePolicy.retryWouldExpire(
+                    now: Date(),
+                    retryDelaySeconds: backoffSeconds,
+                    expiresAt: expiresAt
                 )
                 await cleanupFailedResume(preserveServer: !shouldDiscard)
                 if shouldDiscard {
@@ -498,6 +523,7 @@ final class TSSHRuntime {
                 backoffSeconds = min(backoffSeconds * 2, 30)
             }
         }
+        await cleanupFailedResume(preserveServer: false)
         try? resumeStore.delete(for: paneID)
         return false
     }
@@ -572,6 +598,7 @@ final class TSSHRuntime {
         try Task.checkCancellation()
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: try currentResumeHostKeyFingerprint(),
             host: bootstrap.host,
             info: bootstrap.info,
             sessionID: opened.1,
@@ -587,6 +614,16 @@ final class TSSHRuntime {
             profile: server.tsshProfile
         )
         didConnect()
+    }
+
+    private func currentResumeHostKeyFingerprint() throws -> String {
+        if let resumeHostKeyFingerprint { return resumeHostKeyFingerprint }
+        guard let fingerprint = trustedHostFingerprint(server.host, server.port),
+              !fingerprint.isEmpty else {
+            throw TSSHRuntimeError.resumeStateUnavailable
+        }
+        resumeHostKeyFingerprint = fingerprint
+        return fingerprint
     }
 
     private func connect(

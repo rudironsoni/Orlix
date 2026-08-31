@@ -3,6 +3,7 @@ import Security
 
 nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
     let serverIdentity: TSSHResumeServerIdentity
+    let sshHostKeyFingerprint: String
     let host: String
     let info: TSSHServerInfo
     let sessionID: Int64
@@ -16,6 +17,7 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
     func refreshed(at date: Date) -> Self {
         Self(
             serverIdentity: serverIdentity,
+            sshHostKeyFingerprint: sshHostKeyFingerprint,
             host: host,
             info: info,
             sessionID: sessionID,
@@ -30,19 +32,27 @@ nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
     let host: String
     let port: Int
     let username: String
+    let updatedAt: Date
 
     init(server: Server) {
         id = server.id
         host = server.host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         port = server.port
         username = server.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedAt = server.updatedAt
     }
 }
 
 nonisolated enum TSSHResumeCompatibilityPolicy {
-    static func canResume(_ state: TSSHResumeState, with server: Server) -> Bool {
+    static func canResume(
+        _ state: TSSHResumeState,
+        with server: Server,
+        trustedHostFingerprint: String?
+    ) -> Bool {
         state.serverIdentity == TSSHResumeServerIdentity(server: server)
             && state.profile == server.tsshProfile
+            && !state.sshHostKeyFingerprint.isEmpty
+            && state.sshHostKeyFingerprint == trustedHostFingerprint
     }
 }
 
@@ -84,6 +94,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
 
     private struct Checkpoint: Codable {
         let serverIdentity: TSSHResumeServerIdentity
+        let sshHostKeyFingerprint: String
         let host: String
         let serverVersion: String
         let protocolVersion: Int
@@ -98,12 +109,14 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let savedAt: Date
 
         private enum CodingKeys: String, CodingKey {
-            case serverIdentity, host, serverVersion, protocolVersion, port, mode, proxyMode, mtu
+            case serverIdentity, sshHostKeyFingerprint, host, serverVersion, protocolVersion
+            case port, mode, proxyMode, mtu
             case clientID, serverID, sessionID, profile, savedAt
         }
 
         init(
             serverIdentity: TSSHResumeServerIdentity,
+            sshHostKeyFingerprint: String,
             host: String,
             serverVersion: String,
             protocolVersion: Int,
@@ -118,6 +131,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             savedAt: Date
         ) {
             self.serverIdentity = serverIdentity
+            self.sshHostKeyFingerprint = sshHostKeyFingerprint
             self.host = host
             self.serverVersion = serverVersion
             self.protocolVersion = protocolVersion
@@ -135,6 +149,10 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             serverIdentity = try container.decode(TSSHResumeServerIdentity.self, forKey: .serverIdentity)
+            sshHostKeyFingerprint = try container.decodeIfPresent(
+                String.self,
+                forKey: .sshHostKeyFingerprint
+            ) ?? ""
             host = try container.decode(String.self, forKey: .host)
             serverVersion = try container.decode(String.self, forKey: .serverVersion)
             protocolVersion = try container.decodeIfPresent(Int.self, forKey: .protocolVersion) ?? 0
@@ -199,6 +217,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         guard info.hasRequiredCredentials else { throw TSSHResumeStoreError.corruptState }
         let state = TSSHResumeState(
             serverIdentity: checkpoint.serverIdentity,
+            sshHostKeyFingerprint: checkpoint.sshHostKeyFingerprint,
             host: checkpoint.host,
             info: info,
             sessionID: checkpoint.sessionID,
@@ -231,6 +250,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         try writeSecret(try JSONEncoder().encode(secret), account: paneID.uuidString)
         let checkpoint = Checkpoint(
             serverIdentity: state.serverIdentity,
+            sshHostKeyFingerprint: state.sshHostKeyFingerprint,
             host: state.host,
             serverVersion: state.info.serverVersion,
             protocolVersion: state.info.protocolVersion,
