@@ -1,6 +1,7 @@
 import Foundation
 import MoshBootstrap
 import NetworkExtension
+import Security
 import Testing
 @testable import Orlix
 
@@ -243,6 +244,72 @@ struct TSSHConcurrencyTests {
 
         #expect(resumeStore.cleanupSavePaneIDs == [paneID])
         #expect(resumeStore.deletedPaneIDs.isEmpty)
+    }
+
+    @Test
+    func corruptCheckpointDeletionPurgesVersionedSecrets() throws {
+        let paneID = UUID()
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appendingPathComponent(
+            "TSSHResumeStoreTests.\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let service = "com.rudironsoni.orlix.tssh-resume.tests.\(UUID().uuidString)"
+        let serviceQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+        ]
+        defer {
+            SecItemDelete(serviceQuery as CFDictionary)
+            try? fileManager.removeItem(at: root)
+        }
+        let store = TSSHResumeStore(
+            fileManager: fileManager,
+            root: root,
+            service: service
+        )
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+        )
+        try store.save(
+            TSSHResumeState(
+                serverIdentity: TSSHResumeServerIdentity(server: server),
+                sshHostKeyFingerprint: "SHA256:trusted",
+                serverProcess: TSSHServerProcessIdentity(
+                    pid: 123,
+                    supervisorPath: "/tmp/orlix-tsshd-test.sh"
+                ),
+                host: server.host,
+                info: info,
+                sessionID: 42,
+                profile: server.tsshProfile,
+                savedAt: Date()
+            ),
+            for: paneID
+        )
+        #expect(try keychainAccounts(service: service).contains { account in
+            account.hasPrefix("\(paneID.uuidString).")
+        })
+
+        let checkpoint = root
+            .appendingPathComponent(paneID.uuidString)
+            .appendingPathExtension("json")
+        try Data("{".utf8).write(to: checkpoint, options: .atomic)
+        try store.delete(for: paneID)
+
+        #expect(try keychainAccounts(service: service).allSatisfy { account in
+            !account.hasPrefix("\(paneID.uuidString).")
+        })
+        #expect(!fileManager.fileExists(atPath: checkpoint.path))
     }
 
     @Test(arguments: [
@@ -507,5 +574,23 @@ struct TSSHConcurrencyTests {
         #expect(configuration.tsshPort == info.port)
         #expect(configuration.tsshServerID == info.serverID)
         #expect(configuration.tsshClientID == 8)
+    }
+
+    private func keychainAccounts(service: String) throws -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess else {
+            throw TSSHResumeStoreError.secureStorage(status)
+        }
+        let attributes = result as? [[String: Any]] ?? []
+        return attributes.compactMap { $0[kSecAttrAccount as String] as? String }
     }
 }

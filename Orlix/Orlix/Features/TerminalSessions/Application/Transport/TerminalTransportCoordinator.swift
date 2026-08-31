@@ -45,6 +45,11 @@ final class TerminalTransportCoordinator {
         }
     }
 
+    private struct TSSHRuntimeTeardown {
+        let id: UUID
+        let task: Task<Void, Never>
+    }
+
     private typealias SSHOwnership = (
         registration: SSHShellRegistry.Registration?,
         pendingStart: SSHShellRegistry.StartContext?
@@ -57,6 +62,7 @@ final class TerminalTransportCoordinator {
     private let sshClientFactory: SSHClientFactory
     private var tsshRuntimes: [UUID: TSSHRuntime] = [:]
     private var tsshRuntimeRequests: [UUID: TSSHRuntimeRequest] = [:]
+    private var tsshRuntimeTeardowns: [UUID: TSSHRuntimeTeardown] = [:]
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -130,8 +136,10 @@ final class TerminalTransportCoordinator {
             server: server,
             credentials: credentials
         )
+        await awaitTSSHRuntimeTeardown(for: paneId)
         if let staleRuntime = tsshRuntimes.removeValue(forKey: paneId) {
-            await staleRuntime.closeForSecurityBindingReplacement()
+            beginTSSHRuntimeTeardown(staleRuntime, for: paneId)
+            await awaitTSSHRuntimeTeardown(for: paneId)
         }
         guard tsshRuntimeRequests[paneId]?.id == requestID,
               sessionAccess.containsPane(paneId) else { return nil }
@@ -160,7 +168,7 @@ final class TerminalTransportCoordinator {
         guard let runtime = tsshRuntimes[paneId],
               !runtime.isBound(to: server, credentials: credentials) else { return }
         tsshRuntimes.removeValue(forKey: paneId)
-        Task { await runtime.closeForSecurityBindingReplacement() }
+        beginTSSHRuntimeTeardown(runtime, for: paneId)
     }
 
     func invalidateTSSHRuntimesForTrustReset(host: String? = nil, port: Int? = nil) {
@@ -183,11 +191,33 @@ final class TerminalTransportCoordinator {
             tsshRuntimeRequests.removeValue(forKey: paneId)
             tsshRuntimes.removeValue(forKey: paneId)
         }
-        Task {
-            for (_, runtime) in staleRuntimes {
-                await runtime.closeForSecurityBindingReplacement()
-            }
+        for (paneId, runtime) in staleRuntimes {
+            beginTSSHRuntimeTeardown(runtime, for: paneId)
         }
+    }
+
+    private func beginTSSHRuntimeTeardown(_ runtime: TSSHRuntime, for paneId: UUID) {
+        let previousTask = tsshRuntimeTeardowns[paneId]?.task
+        let teardownID = UUID()
+        let task = Task {
+            if let previousTask {
+                await previousTask.value
+            }
+            await runtime.closeForSecurityBindingReplacement()
+        }
+        tsshRuntimeTeardowns[paneId] = TSSHRuntimeTeardown(id: teardownID, task: task)
+        Task { [weak self] in
+            await task.value
+            guard self?.tsshRuntimeTeardowns[paneId]?.id == teardownID else { return }
+            self?.tsshRuntimeTeardowns.removeValue(forKey: paneId)
+        }
+    }
+
+    private func awaitTSSHRuntimeTeardown(for paneId: UUID) async {
+        guard let teardown = tsshRuntimeTeardowns[paneId] else { return }
+        await teardown.task.value
+        guard tsshRuntimeTeardowns[paneId]?.id == teardown.id else { return }
+        tsshRuntimeTeardowns.removeValue(forKey: paneId)
     }
 
     func sendTSSHInput(_ data: Data, for paneId: UUID) {

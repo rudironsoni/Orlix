@@ -208,13 +208,18 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
 
     private let fileManager: FileManager
     private let root: URL
-    private let service = "com.rudironsoni.orlix.tssh-resume"
+    private let service: String
 
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        root: URL? = nil,
+        service: String = "com.rudironsoni.orlix.tssh-resume"
+    ) {
         self.fileManager = fileManager
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
-        root = base.appendingPathComponent("TSSHResume", isDirectory: true)
+        self.root = root ?? base.appendingPathComponent("TSSHResume", isDirectory: true)
+        self.service = service
     }
 
     func load(for paneID: UUID) throws -> TSSHResumeState? {
@@ -372,6 +377,9 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         if let secretAccount {
             try deleteSecret(account: secretAccount)
         }
+        for account in try versionedResumeSecretAccounts(for: paneID) {
+            try deleteSecret(account: account)
+        }
         try deleteSecret(account: paneID.uuidString)
         if fileManager.fileExists(atPath: checkpoint.path) {
             try fileManager.removeItem(at: checkpoint)
@@ -502,6 +510,38 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw TSSHResumeStoreError.secureStorage(status)
+        }
+    }
+
+    private func versionedResumeSecretAccounts(for paneID: UUID) throws -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess else {
+            throw TSSHResumeStoreError.secureStorage(status)
+        }
+        let attributes: [[String: Any]]
+        if let items = result as? [[String: Any]] {
+            attributes = items
+        } else if let item = result as? [String: Any] {
+            attributes = [item]
+        } else {
+            throw TSSHResumeStoreError.secureStorage(errSecDecode)
+        }
+        let prefix = "\(paneID.uuidString)."
+        return attributes.compactMap { item in
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  account.hasPrefix(prefix),
+                  UUID(uuidString: String(account.dropFirst(prefix.count))) != nil
+            else { return nil }
+            return account
         }
     }
 
