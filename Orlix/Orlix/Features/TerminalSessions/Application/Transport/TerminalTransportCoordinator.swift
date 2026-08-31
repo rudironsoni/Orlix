@@ -38,6 +38,7 @@ final class TerminalTransportCoordinator {
 
         func isBound(to requestedServer: Server, credentials requestedCredentials: ServerCredentials) -> Bool {
             server.id == requestedServer.id
+                && server.connectionMode == requestedServer.connectionMode
                 && ServerCredentialBinding(server: server)
                     == ServerCredentialBinding(server: requestedServer)
                 && server.tsshProfile == requestedServer.tsshProfile
@@ -227,6 +228,7 @@ final class TerminalTransportCoordinator {
     }
 
     private func beginTSSHRuntimeTeardown(_ runtime: TSSHRuntime, for paneId: UUID) {
+        runtime.revokeAgentForwarding()
         let previousTask = tsshRuntimeTeardowns[paneId]?.task
         let teardownID = UUID()
         let task = Task {

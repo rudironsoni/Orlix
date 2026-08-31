@@ -72,7 +72,61 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     func pendingCleanupPaneIDs() -> [UUID] { [] }
 }
 
+private nonisolated final class TSSHAgentForwardingBridgeSpy:
+    TSSHAgentForwardingBridge,
+    @unchecked Sendable {
+    private let lock = NSLock()
+    private var suspended = false
+
+    var isSuspended: Bool { lock.withLock { suspended } }
+
+    func suspend() { lock.withLock { suspended = true } }
+    func resume() { lock.withLock { suspended = false } }
+}
+
 struct TSSHConcurrencyTests {
+    @Test @MainActor
+    func closeSuspendsAgentForwardingBeforeTeardown() async {
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            username: "root",
+            connectionMode: .tssh
+        )
+        let agentBridge = TSSHAgentForwardingBridgeSpy()
+        let runtime = TSSHRuntime(
+            paneID: UUID(),
+            server: server,
+            credentials: ServerCredentials(serverId: server.id),
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: TSSHResumeStoreSpy(),
+            agentBridge: agentBridge,
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        await runtime.close()
+
+        #expect(agentBridge.isSuspended)
+    }
+
     @Test @MainActor
     func cachedRuntimeRequiresExactEndpointProfileAndCredentials() {
         let paneID = UUID()

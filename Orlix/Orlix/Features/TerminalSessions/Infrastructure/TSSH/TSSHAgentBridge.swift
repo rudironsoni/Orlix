@@ -13,7 +13,16 @@ nonisolated enum TSSHAgentCredentialValidator {
     }
 }
 
-nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtocol, @unchecked Sendable {
+nonisolated protocol TSSHAgentForwardingBridge: AnyObject, Sendable {
+    func suspend()
+    func resume()
+}
+
+nonisolated final class TSSHAgentBridge:
+    NSObject,
+    IosbridgeAgentCallbackProtocol,
+    TSSHAgentForwardingBridge,
+    @unchecked Sendable {
     private let identity: TSSHAgentIdentity
     private let approvalMode: TSSHAgentApprovalMode
     private let stateLock = NSLock()

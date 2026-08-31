@@ -222,7 +222,7 @@ final class TSSHRuntime {
     private var healthBridge: TSSHHealthBridge?
     private var discardBridge: TSSHDiscardBridge?
     private var forwardBridge: TSSHForwardBridge?
-    private var agentBridge: TSSHAgentBridge?
+    private var agentBridge: (any TSSHAgentForwardingBridge)?
     private var ownsVPN = false
     private var forwardStatuses: [UUID: TSSHForwardStatus] = [:]
     private var connectionGeneration = UUID()
@@ -245,6 +245,7 @@ final class TSSHRuntime {
 
     func isBound(to requestedServer: Server, credentials requestedCredentials: ServerCredentials) -> Bool {
         server.id == requestedServer.id
+            && server.connectionMode == requestedServer.connectionMode
             && ServerCredentialBinding(server: server) == ServerCredentialBinding(server: requestedServer)
             && server.tsshProfile == requestedServer.tsshProfile
             && credentials == requestedCredentials
@@ -270,6 +271,7 @@ final class TSSHRuntime {
         resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared,
         callGate: TSSHCallGate = .shared,
         agentForwardingAllowed: Bool = true,
+        agentBridge: (any TSSHAgentForwardingBridge)? = nil,
         trustedHostFingerprint: @escaping @Sendable (String, Int) -> String? = { host, port in
             KnownHostsManager.shared.entry(for: host, port: port)?.fingerprint
         },
@@ -281,6 +283,7 @@ final class TSSHRuntime {
         self.sshClientFactory = sshClientFactory
         self.resumeStore = resumeStore
         self.callGate = callGate
+        self.agentBridge = agentBridge
         isAgentForwardingAllowed = agentForwardingAllowed
         self.trustedHostFingerprint = trustedHostFingerprint
         securityBindingHostKeyFingerprint = trustedHostFingerprint(server.host, server.port)
@@ -407,6 +410,7 @@ final class TSSHRuntime {
     func close(preserveServer: Bool = false, deleteResumeState: Bool = true) async {
         guard !isClosing else { return }
         isClosing = true
+        revokeAgentForwarding()
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
             cancelledStartPreservesServer = preserveServer
@@ -529,6 +533,7 @@ final class TSSHRuntime {
     }
 
     func closeForRemoval() async {
+        revokeAgentForwarding()
         await processDeferredCleanupBeforeRemoval()
         if transport == nil {
             do {
@@ -547,6 +552,7 @@ final class TSSHRuntime {
     }
 
     func closeForSecurityBindingReplacement() async {
+        revokeAgentForwarding()
         if transport == nil {
             let savedState: TSSHResumeState?
             do {
@@ -607,6 +613,7 @@ final class TSSHRuntime {
     }
 
     func prepareForReconnect() async {
+        revokeAgentForwarding()
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
             cancelledStartPreservesServer = true
@@ -678,6 +685,7 @@ final class TSSHRuntime {
         preserveServer: Bool,
         deleteResumeState: Bool
     ) async {
+        revokeAgentForwarding()
         invalidateConnectionGeneration()
         let transportFallback = transport.map(scheduleTransportFallback)
         let transportCloseWasVerified: Bool
@@ -909,6 +917,7 @@ final class TSSHRuntime {
     }
 
     private func cleanupFailedResume(preserveServer: Bool) async {
+        revokeAgentForwarding()
         if preserveServer {
             if let session { callGate.forgetSession(session) }
             if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
@@ -1191,6 +1200,10 @@ final class TSSHRuntime {
         }
         try await callGate.enableAgent(bridge, on: transport)
         agentBridge = bridge
+    }
+
+    func revokeAgentForwarding() {
+        agentBridge?.suspend()
     }
 
     private func startVPNIfRequested(
