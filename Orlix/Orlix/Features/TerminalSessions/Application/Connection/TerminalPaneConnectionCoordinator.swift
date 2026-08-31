@@ -22,6 +22,7 @@ final class TerminalPaneConnectionCoordinator {
     private var connectionMode: SSHConnectionMode
     private var backend: Backend
     private var backendGeneration = UUID()
+    private var backendReplacementTask: Task<Void, Never>?
 
     init(
         paneId: UUID,
@@ -144,7 +145,9 @@ final class TerminalPaneConnectionCoordinator {
             sshFailureOutput: sshFailureOutput
         )
         cancel(previousBackend)
-        Task { @MainActor [weak self] in
+        let previousReplacementTask = backendReplacementTask
+        backendReplacementTask = Task { @MainActor [weak self] in
+            await previousReplacementTask?.value
             guard let self else { return }
             await self.unregister(previousBackend)
             guard self.backendGeneration == generation,

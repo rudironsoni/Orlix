@@ -119,7 +119,8 @@ extension SSHSession {
     func execute(
         _ command: String,
         maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes,
-        retainPartialOutputOnFailure: Bool = false
+        retainPartialOutputOnFailure: Bool = false,
+        partialOutputCapture: SSHCommandPartialOutputCapture? = nil
     ) async throws -> String {
         guard libssh2Session != nil else {
             throw SSHError.notConnected
@@ -134,6 +135,7 @@ extension SSHSession {
                     command: command,
                     maximumOutputBytes: maxOutputBytes,
                     retainsPartialOutputOnFailure: retainPartialOutputOnFailure,
+                    partialOutputCapture: partialOutputCapture,
                     continuation: continuation
                 )
                 execRequests[request.id] = request

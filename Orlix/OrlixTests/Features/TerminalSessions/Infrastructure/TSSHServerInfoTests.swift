@@ -158,6 +158,34 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func bootstrapRetainsCleanupIdentityAcrossTheHardDeadline() async throws {
+        let partialOutputCapture = SSHCommandPartialOutputCapture()
+
+        do {
+            _ = try await SSHClient.runCommandWithDeadline(
+                .milliseconds(10),
+                partialOutputCapture: partialOutputCapture
+            ) {
+                partialOutputCapture.append(Data("""
+                ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor
+                ORLIX_TSSHD_PID=654
+                """.utf8))
+                try await Task.sleep(for: .seconds(10))
+                return ""
+            }
+            Issue.record("Expected the hard deadline to fail")
+        } catch let error as SSHCommandExecutionError {
+            #expect(try TSSHBootstrap.serverProcessIdentity(
+                output: error.partialOutput
+            ) == TSSHServerProcessIdentity(
+                pid: 654,
+                supervisorPath: "/tmp/orlix-tsshd.private/supervisor"
+            ))
+            #expect(error.localizedDescription == SSHError.timeout.localizedDescription)
+        }
+    }
+
+    @Test
     func bootstrapRequiresAnAbsolutePrivateSupervisorPath() throws {
         #expect(try TSSHBootstrap.parseSupervisorPath(
             output: "ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor\n"

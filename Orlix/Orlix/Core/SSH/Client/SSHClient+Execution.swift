@@ -16,15 +16,46 @@ extension SSHClient {
             throw SSHError.notConnected
         }
         let effectiveTimeout = timeout ?? execTimeout
-        return try await SSHClient.runWithDeadline(
+        let partialOutputCapture = retainPartialOutputOnFailure
+            ? SSHCommandPartialOutputCapture()
+            : nil
+        return try await SSHClient.runCommandWithDeadline(
             effectiveTimeout,
+            partialOutputCapture: partialOutputCapture,
             onTimeout: { session.abort() }
         ) {
             try Task.checkCancellation()
             return try await session.execute(
                 command,
                 maxOutputBytes: maxOutputBytes,
-                retainPartialOutputOnFailure: retainPartialOutputOnFailure
+                retainPartialOutputOnFailure: retainPartialOutputOnFailure,
+                partialOutputCapture: partialOutputCapture
+            )
+        }
+    }
+
+    nonisolated static func runCommandWithDeadline(
+        _ timeout: Duration,
+        partialOutputCapture: SSHCommandPartialOutputCapture?,
+        onTimeout: @escaping @Sendable () -> Void = {},
+        operation: @escaping @Sendable () async throws -> String
+    ) async throws -> String {
+        do {
+            return try await runWithDeadline(
+                timeout,
+                onTimeout: onTimeout,
+                operation: operation
+            )
+        } catch {
+            guard !(error is SSHCommandExecutionError),
+                  let partialOutputCapture else {
+                throw error
+            }
+            let partialOutput = partialOutputCapture.output()
+            guard !partialOutput.isEmpty else { throw error }
+            throw SSHCommandExecutionError(
+                underlyingDescription: error.localizedDescription,
+                partialOutput: partialOutput
             )
         }
     }
