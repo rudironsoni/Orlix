@@ -141,8 +141,10 @@ struct AppComposition {
                 didDeleteServerLocalData: { serverID in
                     serverDeletionTerminalCleanup.handleServerDeletion(serverID)
                 },
-                revokeUnclaimedTSSHVPN: {
-                    try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel()
+                revokeUnclaimedTSSHVPN: { serverID in
+                    try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel(
+                        forServerID: serverID
+                    )
                 },
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,

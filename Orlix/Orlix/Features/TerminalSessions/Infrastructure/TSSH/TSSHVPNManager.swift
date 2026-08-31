@@ -151,6 +151,13 @@ nonisolated func tsshVPNConfigurationMatches(
         && existingFingerprint == requestedFingerprint
 }
 
+nonisolated func tsshVPNPersistedServerMatches(
+    existingServerID: String?,
+    requestedServerID: UUID
+) -> Bool {
+    existingServerID == requestedServerID.uuidString
+}
+
 @MainActor
 final class TSSHVPNManager {
     static let shared = TSSHVPNManager()
@@ -165,6 +172,7 @@ final class TSSHVPNManager {
 
     func installAndStart(
         _ configuration: TSSHVPNConfiguration,
+        serverID: UUID,
         ownerID: UUID,
         onUnexpectedDisconnect: @MainActor @Sendable @escaping (String) async -> Void
     ) async throws {
@@ -181,12 +189,17 @@ final class TSSHVPNManager {
         let existingProvider = manager.protocolConfiguration as? NETunnelProviderProtocol
         let existingOwnerID = existingProvider?
             .providerConfiguration?["tsshOwnerID"] as? String
+        let existingServerMatches = tsshVPNPersistedServerMatches(
+            existingServerID: existingProvider?
+                .providerConfiguration?["orlixServerID"] as? String,
+            requestedServerID: serverID
+        )
         let existingConfigurationMatches = tsshVPNConfigurationMatches(
             existingHost: existingProvider?.providerConfiguration?["tsshHost"] as? String,
             existingFingerprint: existingProvider?
                 .providerConfiguration?["tsshConfigFingerprint"] as? String,
             requestedConfiguration: configuration
-        )
+        ) && existingServerMatches
         if existingOwnerID == ownerID.uuidString && existingConfigurationMatches {
             switch manager.connection.status {
             case .connected:
@@ -272,6 +285,7 @@ final class TSSHVPNManager {
             "tsshConfigFingerprint": configurationFingerprint,
             "tsshHost": configuration.tsshHost,
             "tsshOwnerID": ownerID.uuidString,
+            "orlixServerID": serverID.uuidString,
         ]
         manager.protocolConfiguration = provider
         manager.localizedDescription = "Orlix TSSH VPN"
@@ -317,11 +331,18 @@ final class TSSHVPNManager {
         manager.connection.stopVPNTunnel()
     }
 
-    func stopUnclaimedPersistedTunnel() async throws {
+    func stopUnclaimedPersistedTunnel(forServerID serverID: UUID) async throws {
         guard ownership.ownerID == nil else { return }
+        let revocationID = UUID()
+        _ = try ownership.acquire(revocationID)
+        defer { ownership.release(revocationID) }
         let manager = try await loadManager()
         guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
-              provider.providerConfiguration?["tsshOwnerID"] as? String != nil else {
+              provider.providerConfiguration?["tsshOwnerID"] as? String != nil,
+              tsshVPNPersistedServerMatches(
+                  existingServerID: provider.providerConfiguration?["orlixServerID"] as? String,
+                  requestedServerID: serverID
+              ) else {
             return
         }
         switch manager.connection.status {

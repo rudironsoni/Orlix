@@ -146,6 +146,24 @@ struct TSSHConcurrencyTests {
     }
 
     @Test
+    func persistedVPNRevocationRequiresTheMutatedServerIdentity() {
+        let serverID = UUID()
+
+        #expect(tsshVPNPersistedServerMatches(
+            existingServerID: serverID.uuidString,
+            requestedServerID: serverID
+        ))
+        #expect(!tsshVPNPersistedServerMatches(
+            existingServerID: UUID().uuidString,
+            requestedServerID: serverID
+        ))
+        #expect(!tsshVPNPersistedServerMatches(
+            existingServerID: nil,
+            requestedServerID: serverID
+        ))
+    }
+
+    @Test
     func VPNStartupRequiresConnectedAndRejectsFailedStates() {
         var monitor = TSSHVPNStartupMonitor()
         #expect(monitor.decision(for: .disconnected, elapsedSeconds: 0) == .waiting)

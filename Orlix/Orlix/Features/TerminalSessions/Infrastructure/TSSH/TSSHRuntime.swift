@@ -813,7 +813,7 @@ final class TSSHRuntime {
         profile: TSSHProfile
     ) async throws {
         guard profile.vpnEnabled else {
-            try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel()
+            try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel(forServerID: server.id)
             return
         }
         do {
@@ -823,6 +823,7 @@ final class TSSHRuntime {
                     info: info,
                     profile: profile
                 ),
+                serverID: server.id,
                 ownerID: identityToken,
                 onUnexpectedDisconnect: { [weak self] message in
                     guard let self else { return }
