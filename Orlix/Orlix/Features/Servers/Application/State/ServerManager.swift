@@ -107,10 +107,8 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         case .update:
             previousServer = previousServers.first { $0.id == savedServer.id }
         }
-        if let previousServer,
-           previousServer.connectionMode == .tssh,
-           previousServer.tsshProfile.vpnEnabled {
-            try await dependencies.revokeUnclaimedTSSHVPN(previousServer.id)
+        if let previousServer {
+            try await revokePersistedVPNs(for: [previousServer])
         }
         let transactionID = dependencies.makeID()
         let plan = ServerDataMutationPlan(
@@ -168,9 +166,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             throw OrlixError.authorizationRequired
         }
 
-        if storedServer.connectionMode == .tssh, storedServer.tsshProfile.vpnEnabled {
-            try await dependencies.revokeUnclaimedTSSHVPN(storedServer.id)
-        }
+        try await revokePersistedVPNs(for: [storedServer])
 
         try await deleteServerData(storedServer)
     }
@@ -320,6 +316,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             throw OrlixError.workspaceDeletionChanged
         }
 
+        try await revokePersistedVPNs(for: currentPlan.deletedServers)
         let dataPlan = ServerDataMutationPlan(workspaceDeletion: currentPlan)
         let journal = try serverDataMutationTransaction.commit(dataPlan)
         applyCommittedServerDataMutation(journal)
@@ -548,6 +545,13 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         applyCommittedServerDataMutation(journal)
         guard journal.phase == .complete else {
             throw OrlixError.serverDataMutationRecoveryPending
+        }
+    }
+
+    private func revokePersistedVPNs(for servers: [Server]) async throws {
+        for server in servers where server.connectionMode == .tssh
+                && server.tsshProfile.vpnEnabled {
+            try await dependencies.revokeUnclaimedTSSHVPN(server.id)
         }
     }
 

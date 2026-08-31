@@ -102,6 +102,7 @@ struct ServerManagerDependencies {
                 credentialRepository: credentialRepository,
                 knownHosts: knownHosts,
                 didDeleteServerLocalData: didDeleteServerLocalData,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
                 isRemoteSchemaError: isRemoteSchemaError,
                 now: now,
                 makeID: makeID

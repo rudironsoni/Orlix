@@ -274,12 +274,16 @@ struct ServerManagerMutationTransactionTests {
     @Test
     func workspaceDeletionRemovesLocalDataForEachDeletedServer() async throws {
         let workspace = makeWorkspace()
-        let first = makeServer(workspaceID: workspace.id)
-        let second = makeServer(
+        var first = makeServer(workspaceID: workspace.id)
+        first.connectionMode = .tssh
+        first.tsshProfile.vpnEnabled = true
+        var second = makeServer(
             workspaceID: workspace.id,
             id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
             name: "Second"
         )
+        second.connectionMode = .tssh
+        second.tsshProfile.vpnEnabled = true
         let local = ServerLocalRepositoryFake(
             servers: [first, second],
             workspaces: [workspace]
@@ -288,17 +292,20 @@ struct ServerManagerMutationTransactionTests {
         credentials.values[first.id] = ServerCredentials(serverId: first.id)
         credentials.values[second.id] = ServerCredentials(serverId: second.id)
         var deletedServerIDs: [UUID] = []
+        var revokedServerIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             credentials: credentials,
             sync: ServerSyncRepositoryFake(),
-            didDeleteServerLocalData: { deletedServerIDs.append($0) }
+            didDeleteServerLocalData: { deletedServerIDs.append($0) },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
         )
 
         try await manager.deleteWorkspace(workspace)
 
         #expect(deletedServerIDs.count == 2)
         #expect(Set(deletedServerIDs) == Set([first.id, second.id]))
+        #expect(revokedServerIDs == [first.id, second.id])
     }
 
     @Test

@@ -104,6 +104,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
     }
 
     private struct Checkpoint: Codable {
+        let secretAccount: String?
         let serverIdentity: TSSHResumeServerIdentity
         let sshHostKeyFingerprint: String
         let serverProcess: TSSHServerProcessIdentity
@@ -121,13 +122,14 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let savedAt: Date
 
         private enum CodingKeys: String, CodingKey {
-            case serverIdentity, sshHostKeyFingerprint, serverProcess, host
+            case secretAccount, serverIdentity, sshHostKeyFingerprint, serverProcess, host
             case serverVersion, protocolVersion
             case port, mode, proxyMode, mtu
             case clientID, serverID, sessionID, profile, savedAt
         }
 
         init(
+            secretAccount: String,
             serverIdentity: TSSHResumeServerIdentity,
             sshHostKeyFingerprint: String,
             serverProcess: TSSHServerProcessIdentity,
@@ -144,6 +146,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             profile: TSSHProfile,
             savedAt: Date
         ) {
+            self.secretAccount = secretAccount
             self.serverIdentity = serverIdentity
             self.sshHostKeyFingerprint = sshHostKeyFingerprint
             self.serverProcess = serverProcess
@@ -163,6 +166,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            secretAccount = try container.decodeIfPresent(String.self, forKey: .secretAccount)
             serverIdentity = try container.decode(TSSHResumeServerIdentity.self, forKey: .serverIdentity)
             sshHostKeyFingerprint = try container.decodeIfPresent(
                 String.self,
@@ -210,7 +214,9 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         } catch {
             throw TSSHResumeStoreError.corruptState
         }
-        guard let secretData = try readSecret(account: paneID.uuidString) else {
+        guard let secretData = try readSecret(
+            account: checkpoint.secretAccount ?? paneID.uuidString
+        ) else {
             throw TSSHResumeStoreError.corruptState
         }
         let secret: Secret
@@ -263,8 +269,20 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             kcpSaltHex: state.info.kcpSaltHex,
             proxyKeyHex: state.info.proxyKeyHex
         )
-        try writeSecret(try JSONEncoder().encode(secret), account: paneID.uuidString)
+        let checkpointURL = url(for: paneID)
+        let previousSecretAccount: String? = if fileManager.fileExists(
+            atPath: checkpointURL.path
+        ) {
+            (try? JSONDecoder().decode(
+                Checkpoint.self,
+                from: Data(contentsOf: checkpointURL)
+            ).secretAccount) ?? paneID.uuidString
+        } else {
+            nil
+        }
+        let secretAccount = "\(paneID.uuidString).\(UUID().uuidString)"
         let checkpoint = Checkpoint(
+            secretAccount: secretAccount,
             serverIdentity: state.serverIdentity,
             sshHostKeyFingerprint: state.sshHostKeyFingerprint,
             serverProcess: state.serverProcess,
@@ -281,6 +299,9 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             profile: state.profile,
             savedAt: state.savedAt
         )
+        let stagedURL = root.appendingPathComponent(
+            ".\(paneID.uuidString).\(UUID().uuidString).tmp"
+        )
         do {
             try fileManager.createDirectory(
                 at: root,
@@ -288,26 +309,42 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
             )
             let data = try JSONEncoder().encode(checkpoint)
-            try data.write(to: url(for: paneID), options: .atomic)
+            try data.write(to: stagedURL, options: .atomic)
             try fileManager.setAttributes(
                 [
                     .posixPermissions: 0o600,
                     .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
                 ],
-                ofItemAtPath: url(for: paneID).path
+                ofItemAtPath: stagedURL.path
             )
+            try writeSecret(try JSONEncoder().encode(secret), account: secretAccount)
+            if fileManager.fileExists(atPath: checkpointURL.path) {
+                try fileManager.replaceItemAt(checkpointURL, withItemAt: stagedURL)
+            } else {
+                try fileManager.moveItem(at: stagedURL, to: checkpointURL)
+            }
         } catch {
-            try? deleteSecret(account: paneID.uuidString)
-            if fileManager.fileExists(atPath: url(for: paneID).path) {
-                try? fileManager.removeItem(at: url(for: paneID))
+            try? deleteSecret(account: secretAccount)
+            if fileManager.fileExists(atPath: stagedURL.path) {
+                try? fileManager.removeItem(at: stagedURL)
             }
             throw TSSHResumeStoreError.checkpointStorage
+        }
+        if let previousSecretAccount, previousSecretAccount != secretAccount {
+            try? deleteSecret(account: previousSecretAccount)
         }
     }
 
     func delete(for paneID: UUID) throws {
-        try deleteSecret(account: paneID.uuidString)
         let checkpoint = url(for: paneID)
+        let secretAccount = try? JSONDecoder().decode(
+            Checkpoint.self,
+            from: Data(contentsOf: checkpoint)
+        ).secretAccount
+        if let secretAccount {
+            try deleteSecret(account: secretAccount)
+        }
+        try deleteSecret(account: paneID.uuidString)
         if fileManager.fileExists(atPath: checkpoint.path) {
             try fileManager.removeItem(at: checkpoint)
         }

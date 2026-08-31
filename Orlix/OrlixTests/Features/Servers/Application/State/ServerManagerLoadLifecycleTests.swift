@@ -442,7 +442,9 @@ struct ServerManagerLoadLifecycleTests {
     @Test
     func emptyFullFetchWithCompleteDeletionEvidenceCanReplaceLocalData() async {
         let workspace = makeWorkspace(name: "Deleted remotely")
-        let server = makeServer(workspaceID: workspace.id)
+        var server = makeServer(workspaceID: workspace.id)
+        server.connectionMode = .tssh
+        server.tsshProfile.vpnEnabled = true
         let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
         let checkpoint = ServerRemoteChangeCheckpoint(id: UUID())
         let remote = ServerRemoteRepositoryFake(isAvailable: true)
@@ -457,12 +459,14 @@ struct ServerManagerLoadLifecycleTests {
             )
         }
         var deletedLocalDataIDs: [UUID] = []
+        var revokedServerIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             remote: remote,
             sync: ServerSyncRepositoryFake(),
             isSyncEnabled: { true },
-            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
         )
 
         await manager.loadData()
@@ -473,6 +477,7 @@ struct ServerManagerLoadLifecycleTests {
         #expect(manager.stateStore.ambiguousCloudRecovery == nil)
         #expect(remote.acceptedCheckpoints == [checkpoint])
         #expect(deletedLocalDataIDs == [server.id])
+        #expect(revokedServerIDs == [server.id])
     }
 
     @Test
@@ -942,7 +947,8 @@ struct ServerManagerLoadLifecycleTests {
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
         startsAutomatically: Bool = false,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManager {
         ServerManager(
             dependencies: makeDependencies(
@@ -952,7 +958,8 @@ struct ServerManagerLoadLifecycleTests {
                 preferences: preferences,
                 isSyncEnabled: isSyncEnabled,
                 isRemoteSchemaError: isRemoteSchemaError,
-                didDeleteServerLocalData: didDeleteServerLocalData
+                didDeleteServerLocalData: didDeleteServerLocalData,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN
             ),
             startsAutomatically: startsAutomatically
         )
@@ -1018,7 +1025,8 @@ struct ServerManagerLoadLifecycleTests {
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManagerDependencies {
         let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
         let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
@@ -1042,6 +1050,7 @@ struct ServerManagerLoadLifecycleTests {
             actionAuthorizer: ProtectedServerActionAuthorizerFake(),
             knownHosts: ServerKnownHostRepositoryFake(),
             didDeleteServerLocalData: didDeleteServerLocalData,
+            revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
             isRemoteSchemaError: isRemoteSchemaError,
             now: now,
             makeID: makeID

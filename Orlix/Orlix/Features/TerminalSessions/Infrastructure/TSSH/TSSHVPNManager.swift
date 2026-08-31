@@ -181,6 +181,7 @@ final class TSSHVPNManager {
             throw TSSHRuntimeError.invalidProfile
         }
         let acquisition = try ownership.acquire(ownerID)
+        teardownRetryTasks.removeValue(forKey: ownerID)?.cancel()
         var retainsOwnership = false
         defer {
             if !retainsOwnership { ownership.release(ownerID) }
