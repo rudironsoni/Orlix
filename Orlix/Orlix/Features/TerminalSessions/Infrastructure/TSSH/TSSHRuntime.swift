@@ -1,6 +1,24 @@
 import Foundation
 import os.log
 
+nonisolated func tsshNeedsPostExecResize(command: String?) -> Bool {
+    command != nil
+}
+
+@MainActor
+func prepareTSSHFreshSession<StartupPlan, Bootstrap>(
+    connectSSH: () async throws -> Void,
+    resolveStartupPlan: () async throws -> StartupPlan,
+    launchServer: () async throws -> Bootstrap
+) async throws -> (startupPlan: StartupPlan, bootstrap: Bootstrap) {
+    try await connectSSH()
+    try Task.checkCancellation()
+    let startupPlan = try await resolveStartupPlan()
+    try Task.checkCancellation()
+    let bootstrap = try await launchServer()
+    return (startupPlan, bootstrap)
+}
+
 @MainActor
 struct TSSHRuntimeOwnerAccess {
     let isCurrent: (_ paneID: UUID, _ token: UUID) -> Bool
@@ -223,6 +241,7 @@ final class TSSHRuntime {
     private var discardBridge: TSSHDiscardBridge?
     private var forwardBridge: TSSHForwardBridge?
     private var agentBridge: (any TSSHAgentForwardingBridge)?
+    private var agentBridgeGeneration: UUID?
     private var ownsVPN = false
     private var forwardStatuses: [UUID: TSSHForwardStatus] = [:]
     private var connectionGeneration = UUID()
@@ -237,6 +256,8 @@ final class TSSHRuntime {
     private var securityBindingHostKeyFingerprint: String?
     private var startupReady = false
     private var isClosing = false
+    private var teardownInProgress = false
+    private var revokedAgentAuthorityGeneration: UUID?
     private var isApplicationInBackground = false
     private var isAgentForwardingAllowed: Bool
 
@@ -284,6 +305,7 @@ final class TSSHRuntime {
         self.resumeStore = resumeStore
         self.callGate = callGate
         self.agentBridge = agentBridge
+        agentBridgeGeneration = agentBridge == nil ? nil : connectionGeneration
         isAgentForwardingAllowed = agentForwardingAllowed
         self.trustedHostFingerprint = trustedHostFingerprint
         securityBindingHostKeyFingerprint = trustedHostFingerprint(server.host, server.port)
@@ -322,8 +344,13 @@ final class TSSHRuntime {
         }
     }
 
+    func beginTeardown() {
+        teardownInProgress = true
+        revokeAgentForwarding()
+    }
+
     func startIfNeeded() {
-        guard !isClosing, transport == nil, startTask == nil else { return }
+        guard !isClosing, !teardownInProgress, transport == nil, startTask == nil else { return }
         cancelledStartPreservesServer = false
         cancelledStartDeletesResumeState = true
         startupReady = false
@@ -400,7 +427,12 @@ final class TSSHRuntime {
     }
 
     private func synchronizeAgentAvailability() {
-        if isApplicationInBackground || !isAgentForwardingAllowed {
+        if teardownInProgress
+            || agentBridgeGeneration != connectionGeneration
+            || revokedAgentAuthorityGeneration == agentBridgeGeneration
+            || isClosing
+            || isApplicationInBackground
+            || !isAgentForwardingAllowed {
             agentBridge?.suspend()
         } else {
             agentBridge?.resume()
@@ -410,6 +442,7 @@ final class TSSHRuntime {
     func close(preserveServer: Bool = false, deleteResumeState: Bool = true) async {
         guard !isClosing else { return }
         isClosing = true
+        teardownInProgress = true
         revokeAgentForwarding()
         await stopOwnedVPN()
         invalidateConnectionGeneration()
@@ -440,6 +473,9 @@ final class TSSHRuntime {
             preserveServer: preserveServer,
             transportCloseWasVerified: transportCloseWasVerified
         )
+        if !transportCloseWasVerified, let transport {
+            callGate.emergencyAbandon(transport)
+        }
         // A cancelled startup can finish acquiring VPN ownership while its task unwinds.
         await stopOwnedVPN()
         transportFallback?.cancel()
@@ -454,6 +490,7 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        agentBridgeGeneration = nil
         startupReady = false
         ownerAccess.updateConnectionState(paneID, .disconnected)
     }
@@ -540,6 +577,8 @@ final class TSSHRuntime {
     }
 
     func closeForRemoval() async {
+        guard !isClosing else { return }
+        teardownInProgress = true
         revokeAgentForwarding()
         await processDeferredCleanupBeforeRemoval()
         if transport == nil {
@@ -559,6 +598,8 @@ final class TSSHRuntime {
     }
 
     func closeForSecurityBindingReplacement() async {
+        guard !isClosing else { return }
+        teardownInProgress = true
         revokeAgentForwarding()
         if transport == nil {
             let savedState: TSSHResumeState?
@@ -620,7 +661,11 @@ final class TSSHRuntime {
     }
 
     func prepareForReconnect() async {
+        guard !teardownInProgress, !isClosing else { return }
+        teardownInProgress = true
         revokeAgentForwarding()
+        agentBridge = nil
+        agentBridgeGeneration = nil
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
             cancelledStartPreservesServer = true
@@ -646,7 +691,9 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        agentBridgeGeneration = nil
         startupReady = false
+        teardownInProgress = false
     }
 
     func statistics() async -> TSSHTransportStatistics? {
@@ -715,6 +762,9 @@ final class TSSHRuntime {
             preserveServer: preserveServer,
             transportCloseWasVerified: transportCloseWasVerified
         )
+        if !transportCloseWasVerified, let transport {
+            callGate.emergencyAbandon(transport)
+        }
         await stopOwnedVPN()
         transportFallback?.cancel()
         if canDeleteResumeState { try? resumeStore.delete(for: paneID) }
@@ -728,6 +778,7 @@ final class TSSHRuntime {
         discardBridge = nil
         forwardBridge = nil
         agentBridge = nil
+        agentBridgeGeneration = nil
         startupReady = false
     }
 
@@ -867,7 +918,7 @@ final class TSSHRuntime {
             } catch {
                 if let runtimeError = error as? TSSHRuntimeError,
                    case .vpnStartFailed = runtimeError {
-                    await cleanupFailedResume(preserveServer: false)
+                    try await cleanupFailedResume(preserveServer: false)
                     throw runtimeError
                 }
                 let shouldDiscard = TSSHResumeFailurePolicy.shouldDiscard(
@@ -878,7 +929,7 @@ final class TSSHRuntime {
                     retryDelaySeconds: backoffSeconds,
                     expiresAt: expiresAt
                 )
-                await cleanupFailedResume(preserveServer: !shouldDiscard)
+                try await cleanupFailedResume(preserveServer: !shouldDiscard)
                 if shouldDiscard {
                     try stageCleanup(for: state)
                     logger.info(
@@ -893,7 +944,7 @@ final class TSSHRuntime {
                 backoffSeconds = min(backoffSeconds * 2, 30)
             }
         }
-        await cleanupFailedResume(preserveServer: false)
+        try await cleanupFailedResume(preserveServer: false)
         try stageCleanup(for: state)
         return false
     }
@@ -924,8 +975,9 @@ final class TSSHRuntime {
         await processDeferredCleanupBeforeRemoval()
     }
 
-    private func cleanupFailedResume(preserveServer: Bool) async {
+    private func cleanupFailedResume(preserveServer: Bool) async throws {
         revokeAgentForwarding()
+        var transportCloseWasVerified = true
         if preserveServer {
             if let session { callGate.forgetSession(session) }
             if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
@@ -934,11 +986,29 @@ final class TSSHRuntime {
             if let forwarder { await callGate.closeForwarder(forwarder) }
             if let session { await callGate.closeSession(session) }
             if let transport {
-                await callGate.closeTransport(transport, preserveServer: false)
+                transportCloseWasVerified = await callGate.closeTransport(
+                    transport,
+                    preserveServer: false
+                )
             }
         }
+        let cleanupWasStaged = await resumeStateDeletionAllowed(
+            requested: !preserveServer && !transportCloseWasVerified,
+            preserveServer: preserveServer,
+            transportCloseWasVerified: transportCloseWasVerified
+        )
+        if !transportCloseWasVerified, cleanupWasStaged, let transport {
+            callGate.emergencyAbandon(transport)
+        }
+        if !transportCloseWasVerified, !cleanupWasStaged {
+            session = nil
+            forwarder = nil
+            throw TSSHRuntimeError.resumeCheckpointUpdateFailed
+        }
         invalidateConnectionGeneration()
-        transport = nil
+        if preserveServer || transportCloseWasVerified || cleanupWasStaged {
+            transport = nil
+        }
         session = nil
         forwarder = nil
     }
@@ -948,21 +1018,33 @@ final class TSSHRuntime {
             connectTimeout: .seconds(server.tsshProfile.connectTimeoutSeconds)
         )
         defer { Task { await sshClient.disconnect() } }
-        let bootstrap = try await TSSHBootstrap.start(
-            server: server,
-            credentials: credentials,
-            client: sshClient
+        let preparation = try await prepareTSSHFreshSession(
+            connectSSH: {
+                _ = try await sshClient.connect(to: self.server, credentials: self.credentials)
+            },
+            resolveStartupPlan: {
+                try await self.ownerAccess.startupPlan(
+                    self.paneID,
+                    self.server.id,
+                    sshClient,
+                    self.identityToken
+                )
+            },
+            launchServer: {
+                try await TSSHBootstrap.startUsingConnectedClient(
+                    server: self.server,
+                    client: sshClient,
+                    failedLaunchCleanup: { [weak self] identity in
+                        guard let self else { throw CancellationError() }
+                        try await self.cleanupServerOrStage(identity)
+                    }
+                )
+            }
         )
-        let startupPlan: TerminalShellStartupPlan
+        let startupPlan = preparation.startupPlan
+        let bootstrap = preparation.bootstrap
         let connectedTransport: TSSHTransportRef
         do {
-            try Task.checkCancellation()
-            startupPlan = try await ownerAccess.startupPlan(
-                paneID,
-                server.id,
-                sshClient,
-                identityToken
-            )
             try Task.checkCancellation()
             connectedTransport = try await connect(
                 bootstrap.host,
@@ -971,7 +1053,7 @@ final class TSSHRuntime {
             )
             self.transport = connectedTransport
         } catch {
-            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
+            try await cleanupServerOrStage(bootstrap.serverProcess)
             throw error
         }
         let transport = connectedTransport
@@ -993,6 +1075,13 @@ final class TSSHRuntime {
                 output: outputBridge
             )
             session = opened.0
+            schedulePostExecResizeIfNeeded(
+                command: startupPlan.command,
+                session: opened.0,
+                generation: generation,
+                rows: rows,
+                columns: columns
+            )
             try Task.checkCancellation()
             let state = TSSHResumeState(
                 serverIdentity: TSSHResumeServerIdentity(server: server),
@@ -1020,9 +1109,63 @@ final class TSSHRuntime {
                 hasCheckpoint: resumeStore.hasCheckpoint(for: paneID)
             )
             if !preserveCheckpointedServer {
-                await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
+                try await cleanupServerOrStage(bootstrap.serverProcess)
             }
             throw error
+        }
+    }
+
+    private func schedulePostExecResizeIfNeeded(
+        command: String?,
+        session: TSSHSessionRef,
+        generation: UUID,
+        rows: Int,
+        columns: Int
+    ) {
+        guard tsshNeedsPostExecResize(command: command) else { return }
+        let precedingResize = resizeTask
+        resizeTask = Task { [weak self] in
+            _ = await precedingResize?.result
+            try? await Task.sleep(for: .milliseconds(10))
+            guard let self,
+                  !Task.isCancelled,
+                  !self.isClosing,
+                  self.connectionGeneration == generation,
+                  self.session == session else { return }
+            do {
+                try await self.callGate.resize(session, rows: rows, columns: columns)
+            } catch {
+                self.logger.warning(
+                    "TSSH post-exec resize failed: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+    }
+
+    private func cleanupServerOrStage(
+        _ identity: TSSHServerProcessIdentity
+    ) async throws {
+        do {
+            try await TSSHBootstrap.terminateServer(
+                identity,
+                on: server,
+                credentials: credentials,
+                sshClientFactory: sshClientFactory
+            )
+        } catch {
+            do {
+                try resumeStore.saveCleanup(
+                    TSSHResumeCleanupState(
+                        serverIdentity: TSSHResumeServerIdentity(server: server),
+                        serverProcess: identity,
+                        credentials: credentials,
+                        createdAt: Date()
+                    ),
+                    for: UUID()
+                )
+            } catch {
+                throw TSSHRuntimeError.resumeCheckpointUpdateFailed
+            }
         }
     }
 
@@ -1209,6 +1352,7 @@ final class TSSHRuntime {
         on transport: TSSHTransportRef
     ) async throws {
         guard profile.sshAgentForwarding else { return }
+        let generation = connectionGeneration
         let bridge = try TSSHAgentBridge(
             credentials: credentials,
             comment: server.name,
@@ -1218,10 +1362,27 @@ final class TSSHRuntime {
             bridge.suspend()
         }
         try await callGate.enableAgent(bridge, on: transport)
+        installAgentBridgeAfterNativeEnable(bridge, generation: generation)
+    }
+
+    func installAgentBridgeAfterNativeEnable(
+        _ bridge: any TSSHAgentForwardingBridge,
+        generation: UUID? = nil
+    ) {
+        let authorityGeneration = generation ?? connectionGeneration
         agentBridge = bridge
+        agentBridgeGeneration = authorityGeneration
+        if revokedAgentAuthorityGeneration == authorityGeneration
+            || connectionGeneration != authorityGeneration
+            || teardownInProgress
+            || isClosing
+            || Task.isCancelled {
+            bridge.suspend()
+        }
     }
 
     func revokeAgentForwarding() {
+        revokedAgentAuthorityGeneration = connectionGeneration
         agentBridge?.suspend()
     }
 

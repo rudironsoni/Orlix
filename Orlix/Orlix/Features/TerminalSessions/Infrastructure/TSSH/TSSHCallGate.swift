@@ -390,7 +390,9 @@ actor TSSHCallGate {
                 closeWasVerified = false
             }
             fallback.cancel()
-            _ = registry.withLock { $0.transports.removeValue(forKey: reference) }
+            if closeWasVerified {
+                _ = registry.withLock { $0.transports.removeValue(forKey: reference) }
+            }
             return closeWasVerified
         }
     }

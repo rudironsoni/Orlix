@@ -85,6 +85,36 @@ private nonisolated final class TSSHAgentForwardingBridgeSpy:
 }
 
 struct TSSHConcurrencyTests {
+    @Test @MainActor
+    func freshServerStartsOnlyAfterRemoteSessionSelection() async throws {
+        var phases: [String] = []
+
+        let preparation = try await prepareTSSHFreshSession(
+            connectSSH: {
+                phases.append("connectSSH")
+            },
+            resolveStartupPlan: {
+                phases.append("resolveStartupPlan")
+                return "herdr"
+            },
+            launchServer: {
+                phases.append("launchTSSHD")
+                return 61116
+            }
+        )
+
+        #expect(phases == ["connectSSH", "resolveStartupPlan", "launchTSSHD"])
+        #expect(preparation.startupPlan == "herdr")
+        #expect(preparation.bootstrap == 61116)
+    }
+
+    @Test
+    func execSessionsRequireAPostOpenResizeForInteractivePrograms() {
+        #expect(tsshNeedsPostExecResize(command: "tmux new-session -A -s main"))
+        #expect(tsshNeedsPostExecResize(command: "herdr session attach default"))
+        #expect(!tsshNeedsPostExecResize(command: nil))
+    }
+
     @Test
     func simulatorSkipsSystemVPNManagerCallsForTerminalOnlyTSSH() {
         #expect(
@@ -157,6 +187,97 @@ struct TSSHConcurrencyTests {
         await runtime.close()
 
         #expect(agentBridge.isSuspended)
+    }
+
+    @Test @MainActor
+    func lateAgentEnableRemainsSuspendedAfterRuntimeRevocation() {
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            username: "root",
+            connectionMode: .tssh
+        )
+        let runtime = TSSHRuntime(
+            paneID: UUID(),
+            server: server,
+            credentials: ServerCredentials(serverId: server.id),
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: TSSHResumeStoreSpy(),
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+        let lateBridge = TSSHAgentForwardingBridgeSpy()
+
+        runtime.beginTeardown()
+        runtime.installAgentBridgeAfterNativeEnable(lateBridge)
+        runtime.setAgentForwardingAllowed(false)
+        runtime.setAgentForwardingAllowed(true)
+
+        #expect(lateBridge.isSuspended)
+    }
+
+    @Test @MainActor
+    func reconnectRestoresAgentAuthorityForTheNewGeneration() async {
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            username: "root",
+            connectionMode: .tssh
+        )
+        let oldGenerationBridge = TSSHAgentForwardingBridgeSpy()
+        let runtime = TSSHRuntime(
+            paneID: UUID(),
+            server: server,
+            credentials: ServerCredentials(serverId: server.id),
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: TSSHResumeStoreSpy(),
+            agentBridge: oldGenerationBridge,
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+        let nextGenerationBridge = TSSHAgentForwardingBridgeSpy()
+
+        await runtime.prepareForReconnect()
+        runtime.setAgentForwardingAllowed(false)
+        runtime.setAgentForwardingAllowed(true)
+        runtime.installAgentBridgeAfterNativeEnable(nextGenerationBridge)
+
+        #expect(oldGenerationBridge.isSuspended)
+        #expect(!nextGenerationBridge.isSuspended)
     }
 
     @Test @MainActor

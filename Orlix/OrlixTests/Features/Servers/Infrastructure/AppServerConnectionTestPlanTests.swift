@@ -58,6 +58,7 @@ private actor ServerTSSHConnectionTesterFake: ServerTSSHConnectionTesting {
 
     func testServerConnection(
         server: Server,
+        credentials: ServerCredentials,
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws {

@@ -187,6 +187,18 @@ nonisolated enum RemoteTmuxCommandBuilder {
             )
         }
 
+        if transport == .tssh, let lifecycleEnvelope {
+            return tsshManagedBody(
+                sessionName: sessionName,
+                workingDirectory: workingDirectory,
+                initialCommand: initialCommand,
+                backend: backend,
+                themeStyle: themeStyle,
+                lifecycleEnvelope: lifecycleEnvelope,
+                createIfMissing: true
+            )
+        }
+
         let createCommand = createSessionCommand(
             sessionName: sessionName,
             workingDirectory: workingDirectory,
@@ -230,6 +242,19 @@ nonisolated enum RemoteTmuxCommandBuilder {
                 reportsCreationFailure: reportsCreationFailure,
                 requiresManagedMarker: requiresManagedMarker,
                 ownership: ownership
+            )
+        }
+        if transport == .tssh,
+           ownership == .managed,
+           let lifecycleEnvelope {
+            return tsshManagedBody(
+                sessionName: sessionName,
+                workingDirectory: nil,
+                initialCommand: nil,
+                backend: backend,
+                themeStyle: themeStyle,
+                lifecycleEnvelope: lifecycleEnvelope,
+                createIfMissing: false
             )
         }
 
@@ -303,6 +328,89 @@ nonisolated enum RemoteTmuxCommandBuilder {
         elif \(requiresManagedMarker ? "\(tmuxProbe) has-session -t \(exactSession) 2>/dev/null || \(tmuxProbe) has-session -t \(plainSession) 2>/dev/null" : "false"); then \
         \(collision); \
         else \(missingCommand)\(creationStatusCapture); fi\(lifecycleReport)
+        """
+    }
+
+    private static func tsshManagedBody(
+        sessionName: String,
+        workingDirectory: String?,
+        initialCommand: String?,
+        backend: RemoteTmuxBackend,
+        themeStyle: RemoteSessionThemeStyle,
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope,
+        createIfMissing: Bool
+    ) -> String {
+        let tmux = tmuxCommand(includeUTF8: false, backend: backend)
+        let tmuxUTF8 = tmuxCommand(includeUTF8: true, backend: backend)
+        let session = RemoteTerminalBootstrap.shellQuoted(sessionName)
+        let exactSession = RemoteTerminalBootstrap.shellQuoted("=\(sessionName)")
+        let optionTarget = RemoteTerminalBootstrap.shellQuoted("=\(sessionName):")
+        let sessionConfiguration = managedSessionConfigurationCommand(
+            sessionName: sessionName,
+            backend: backend,
+            transport: .tssh
+        )
+        let windowsConfiguration = managedWindowsConfigurationCommand(
+            sessionName: sessionName,
+            backend: backend,
+            themeStyle: themeStyle
+        )
+        let attached = RemoteTerminalBootstrap.shellQuoted(
+            RemoteSessionLifecycleMarker.sequence(
+                envelope: lifecycleEnvelope,
+                event: .attached
+            )
+        )
+        let detached = RemoteTerminalBootstrap.shellQuoted(
+            RemoteSessionLifecycleMarker.sequence(
+                envelope: lifecycleEnvelope,
+                event: .detached
+            )
+        )
+        let terminated = RemoteTerminalBootstrap.shellQuoted(
+            RemoteSessionLifecycleMarker.sequence(
+                envelope: lifecycleEnvelope,
+                event: .terminated
+            )
+        )
+        let creationFailed = RemoteTerminalBootstrap.shellQuoted(
+            RemoteSessionLifecycleMarker.sequence(
+                envelope: lifecycleEnvelope,
+                event: .creationFailed
+            )
+        )
+
+        let missingCommand: String
+        if createIfMissing, let workingDirectory {
+            let directory = shellDirectoryArgument(workingDirectory)
+            let command = initialCommand.map {
+                " " + RemoteTerminalBootstrap.wrapPOSIXShellCommand($0)
+            } ?? ""
+            missingCommand = """
+            if ! \(tmux) new-session -d -s \(session) -c \(directory)\(command) 2>/dev/null || \
+            ! \(tmux) set-option -q -t \(optionTarget) @orlix-managed 1; then \
+            \(tmux) kill-session -t \(exactSession) 2>/dev/null || true; \
+            printf '%s' \(creationFailed); exit 1; fi; orlixTmuxCreated=1
+            """
+        } else {
+            missingCommand = "printf '%s' \(terminated); exit 0"
+        }
+
+        return """
+        \(RemoteTerminalBootstrap.shellPathExport()); \
+        orlixTmuxCreated=0; \
+        if \(tmux) has-session -t \(exactSession) 2>/dev/null; then \
+        if ! \(tmux) show-options -v -q -t \(optionTarget) @orlix-managed 2>/dev/null | grep -Fqx '1'; then \
+        printf '%s' \(creationFailed); exit 1; fi; \
+        else \(missingCommand); fi; \
+        if ! \(sessionConfiguration) || ! \(windowsConfiguration); then \
+        if [ "$orlixTmuxCreated" -eq 1 ]; then \(tmux) kill-session -t \(exactSession) 2>/dev/null || true; fi; \
+        printf '%s' \(creationFailed); exit 1; fi; \
+        printf '%s' \(attached); \
+        \(tmuxUTF8) attach-session -t \(exactSession); orlixTmuxStatus=$?; \
+        if \(tmux) has-session -t \(exactSession) 2>/dev/null; then \
+        printf '%s' \(detached); else printf '%s' \(terminated); fi; \
+        exit "$orlixTmuxStatus"
         """
     }
 

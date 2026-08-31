@@ -51,6 +51,12 @@ final class TerminalTransportCoordinator {
         let task: Task<Void, Never>
     }
 
+    private enum TSSHRuntimeTeardownReason {
+        case securityBindingReplacement
+        case shellEnd
+        case removal
+    }
+
     private typealias SSHOwnership = (
         registration: SSHShellRegistry.Registration?,
         pendingStart: SSHShellRegistry.StartContext?
@@ -225,8 +231,12 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    private func beginTSSHRuntimeTeardown(_ runtime: TSSHRuntime, for paneId: UUID) {
-        runtime.revokeAgentForwarding()
+    private func beginTSSHRuntimeTeardown(
+        _ runtime: TSSHRuntime,
+        for paneId: UUID,
+        reason: TSSHRuntimeTeardownReason = .securityBindingReplacement
+    ) {
+        runtime.beginTeardown()
         let previousTask = tsshRuntimeTeardowns[paneId]?.task
         let teardownID = UUID()
         let task = Task {
@@ -234,7 +244,14 @@ final class TerminalTransportCoordinator {
             if let previousTask {
                 await previousTask.value
             }
-            await runtime.closeForSecurityBindingReplacement()
+            switch reason {
+            case .securityBindingReplacement:
+                await runtime.closeForSecurityBindingReplacement()
+            case .shellEnd:
+                await runtime.close()
+            case .removal:
+                await runtime.closeForRemoval()
+            }
         }
         tsshRuntimeTeardowns[paneId] = TSSHRuntimeTeardown(id: teardownID, task: task)
         Task { [weak self] in
@@ -271,14 +288,15 @@ final class TerminalTransportCoordinator {
               token == nil || runtime.identityToken == token else { return }
         tsshRuntimes.removeValue(forKey: paneId)
         tsshRuntimeRequests.removeValue(forKey: paneId)
-        await runtime.close()
+        beginTSSHRuntimeTeardown(runtime, for: paneId, reason: .shellEnd)
+        await awaitTSSHRuntimeTeardown(for: paneId)
     }
 
     func unregisterTSSHRuntimeIfPaneWasRemoved(for paneId: UUID) {
         guard !sessionAccess.containsPane(paneId) else { return }
         tsshRuntimeRequests.removeValue(forKey: paneId)
         guard let runtime = tsshRuntimes.removeValue(forKey: paneId) else { return }
-        Task { await runtime.close() }
+        beginTSSHRuntimeTeardown(runtime, for: paneId, reason: .removal)
     }
 
     func activeSSHRoute(for paneId: UUID) -> (client: SSHClient, shellId: UUID)? {
@@ -754,6 +772,9 @@ final class TerminalTransportCoordinator {
         let shellOwnership = detachSSHOwnership(for: paneId)
         let runtime = registry.runtime(for: paneId)
         let tsshRuntime = tsshRuntimes.removeValue(forKey: paneId)
+        if let tsshRuntime {
+            beginTSSHRuntimeTeardown(tsshRuntime, for: paneId, reason: .removal)
+        }
         if let runtime {
             _ = registry.detachRuntime(runtime, for: paneId)
         }
@@ -777,9 +798,7 @@ final class TerminalTransportCoordinator {
                 }
                 await runtime.close()
             }
-            if let tsshRuntime {
-                await tsshRuntime.closeForRemoval()
-            } else if deletingResumableState {
+            if tsshRuntime == nil, deletingResumableState {
                 await TSSHRuntime.processPersistedCleanupBeforeRemoval(
                     paneID: paneId,
                     sshClientFactory: self.sshClientFactory

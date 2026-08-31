@@ -22,6 +22,7 @@ nonisolated protocol ServerMoshConnectionTesting: Sendable {
 nonisolated protocol ServerTSSHConnectionTesting: Sendable {
     func testServerConnection(
         server: Server,
+        credentials: ServerCredentials,
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws
@@ -29,25 +30,44 @@ nonisolated protocol ServerTSSHConnectionTesting: Sendable {
 
 nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting {
     private let callGate: TSSHCallGate
+    private let connectionOperations: any ServerConnectionOperationRunning
+    private let resumeStore: any TSSHResumeStoring
 
-    init(callGate: TSSHCallGate = .shared) {
+    init(
+        callGate: TSSHCallGate = .shared,
+        connectionOperations: any ServerConnectionOperationRunning,
+        resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared
+    ) {
         self.callGate = callGate
+        self.connectionOperations = connectionOperations
+        self.resumeStore = resumeStore
     }
 
     func testServerConnection(
         server: Server,
+        credentials: ServerCredentials,
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws {
         guard portRange == server.tsshProfile.udpPortMinimum...server.tsshProfile.udpPortMaximum else {
             throw TSSHRuntimeError.invalidProfile
         }
+        let cleanupID = UUID()
         let bootstrap = try await TSSHBootstrap.startUsingConnectedClient(
             server: server,
-            client: client
+            client: client,
+            failedLaunchCleanup: { identity in
+                try await cleanupServerOrStage(
+                    identity,
+                    server: server,
+                    credentials: credentials,
+                    cleanupID: cleanupID
+                )
+            }
         )
+        let transport: TSSHTransportRef
         do {
-            let transport = try await callGate.connect(TSSHTransportParameters(
+            transport = try await callGate.connect(TSSHTransportParameters(
                 host: bootstrap.host,
                 info: bootstrap.info,
                 mtu: server.tsshProfile.mtu,
@@ -56,14 +76,75 @@ nonisolated struct NativeServerTSSHConnectionTester: ServerTSSHConnectionTesting
                 heartbeatTimeoutSeconds: server.tsshProfile.heartbeatTimeoutSeconds,
                 debugLabel: "connection-test:\(server.username)@\(server.host)"
             ))
-            await callGate.closeTransport(transport, preserveServer: false)
-            try await TSSHBootstrap.terminateServerForCleanup(
-                bootstrap.serverProcess,
-                using: client
-            )
         } catch {
-            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: client)
-            throw error
+            let connectionError = error
+            try await cleanupServerOrStage(
+                bootstrap.serverProcess,
+                server: server,
+                credentials: credentials,
+                cleanupID: cleanupID
+            )
+            throw connectionError
+        }
+        let transportCloseWasVerified = await callGate.closeTransport(
+            transport,
+            preserveServer: false
+        )
+        if !transportCloseWasVerified {
+            callGate.emergencyAbandon(transport)
+        }
+        try await cleanupServerOrStage(
+            bootstrap.serverProcess,
+            server: server,
+            credentials: credentials,
+            cleanupID: cleanupID
+        )
+        guard transportCloseWasVerified else {
+            throw TSSHRuntimeError.transportFailed(
+                "The connection-test transport did not close cleanly."
+            )
+        }
+    }
+
+    private func cleanupServerOrStage(
+        _ identity: TSSHServerProcessIdentity,
+        server: Server,
+        credentials: ServerCredentials,
+        cleanupID: UUID
+    ) async throws {
+        do {
+            try await cleanupServer(identity, server: server, credentials: credentials)
+            try? resumeStore.deleteCleanup(for: cleanupID)
+        } catch {
+            do {
+                try resumeStore.saveCleanup(
+                    TSSHResumeCleanupState(
+                        serverIdentity: TSSHResumeServerIdentity(server: server),
+                        serverProcess: identity,
+                        credentials: credentials,
+                        createdAt: Date()
+                    ),
+                    for: cleanupID
+                )
+            } catch {
+                throw TSSHRuntimeError.resumeCheckpointUpdateFailed
+            }
+        }
+    }
+
+    private func cleanupServer(
+        _ identity: TSSHServerProcessIdentity,
+        server: Server,
+        credentials: ServerCredentials
+    ) async throws {
+        try await connectionOperations.runServerConnectionTest(
+            server: server,
+            credentials: credentials
+        ) { cleanupClient in
+            try await TSSHBootstrap.terminateServerForCleanup(
+                identity,
+                using: cleanupClient
+            )
         }
     }
 }
@@ -162,7 +243,9 @@ extension ServerFormDependencies {
             connectionTester: AppServerConnectionTester(
                 connectionOperations: connectionOperations,
                 remoteMosh: remoteMosh,
-                nativeTSSH: NativeServerTSSHConnectionTester(),
+                nativeTSSH: NativeServerTSSHConnectionTester(
+                    connectionOperations: connectionOperations
+                ),
                 hostKeys: hostKeys,
                 now: now
             ),
@@ -235,6 +318,7 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
                 case .tssh(let portRange):
                     try await nativeTSSH.testServerConnection(
                         server: server,
+                        credentials: credentials,
                         using: client,
                         portRange: portRange
                     )

@@ -28,17 +28,35 @@ nonisolated enum TSSHBootstrap {
     static func start(
         server: Server,
         credentials: ServerCredentials,
-        client: SSHClient
+        client: SSHClient,
+        sshClientFactory: SSHClientFactory,
+        failedLaunchCleanup: (@Sendable (TSSHServerProcessIdentity) async throws -> Void)? = nil
     ) async throws -> TSSHBootstrapResult {
         guard server.tsshProfile.isValid else { throw TSSHRuntimeError.invalidProfile }
         _ = try await client.connect(to: server, credentials: credentials)
 
-        return try await startUsingConnectedClient(server: server, client: client)
+        return try await startUsingConnectedClient(
+            server: server,
+            client: client,
+            failedLaunchCleanup: { identity in
+                if let failedLaunchCleanup {
+                    try await failedLaunchCleanup(identity)
+                } else {
+                    try await terminateServer(
+                        identity,
+                        on: server,
+                        credentials: credentials,
+                        sshClientFactory: sshClientFactory
+                    )
+                }
+            }
+        )
     }
 
     static func startUsingConnectedClient(
         server: Server,
-        client: SSHClient
+        client: SSHClient,
+        failedLaunchCleanup: (@Sendable (TSSHServerProcessIdentity) async throws -> Void)? = nil
     ) async throws -> TSSHBootstrapResult {
         guard server.tsshProfile.isValid else { throw TSSHRuntimeError.invalidProfile }
 
@@ -60,8 +78,12 @@ nonisolated enum TSSHBootstrap {
             if let executionError = error as? SSHCommandExecutionError,
                let serverProcess = try? serverProcessIdentity(
                    output: executionError.partialOutput
-               ) {
-                await terminateServer(serverProcess, using: client)
+                ) {
+                if let failedLaunchCleanup {
+                    try await failedLaunchCleanup(serverProcess)
+                } else {
+                    await terminateServer(serverProcess, using: client)
+                }
             }
             let description = error.localizedDescription
             if description.contains("not found") || description.contains("TSSHD_NOT_FOUND") {
@@ -81,7 +103,11 @@ nonisolated enum TSSHBootstrap {
                 for: server.tsshProfile
             ).assigningClientIDIfNeeded()
         } catch {
-            await terminateServer(serverProcess, using: client)
+            if let failedLaunchCleanup {
+                try await failedLaunchCleanup(serverProcess)
+            } else {
+                await terminateServer(serverProcess, using: client)
+            }
             throw error
         }
         let host = await client.remoteEndpointHost() ?? server.host
@@ -126,6 +152,25 @@ nonisolated enum TSSHBootstrap {
         using client: SSHClient
     ) async {
         try? await terminateServerForCleanup(identity, using: client)
+    }
+
+    static func terminateServer(
+        _ identity: TSSHServerProcessIdentity,
+        on server: Server,
+        credentials: ServerCredentials,
+        sshClientFactory: SSHClientFactory
+    ) async throws {
+        let cleanupClient = sshClientFactory.makeClient(
+            connectTimeout: .seconds(server.tsshProfile.connectTimeoutSeconds)
+        )
+        do {
+            _ = try await cleanupClient.connect(to: server, credentials: credentials)
+            try await terminateServerForCleanup(identity, using: cleanupClient)
+        } catch {
+            await cleanupClient.disconnect()
+            throw error
+        }
+        await cleanupClient.disconnect()
     }
 
     static func terminateServerForCleanup(
