@@ -6,7 +6,7 @@ nonisolated struct TSSHBootstrapResult: Sendable {
     let serverProcess: TSSHServerProcessIdentity
 }
 
-nonisolated struct TSSHServerProcessIdentity: Sendable {
+nonisolated struct TSSHServerProcessIdentity: Codable, Equatable, Sendable {
     let pid: Int32
     let supervisorPath: String
 }
@@ -100,14 +100,27 @@ nonisolated enum TSSHBootstrap {
         _ identity: TSSHServerProcessIdentity,
         using client: SSHClient
     ) async {
+        try? await terminateServerForCleanup(identity, using: client)
+    }
+
+    static func terminateServerForCleanup(
+        _ identity: TSSHServerProcessIdentity,
+        using client: SSHClient
+    ) async throws {
         let command = terminationCommand(for: identity)
-        await Task.detached {
-            _ = try? await client.execute(
+        let output = try await Task.detached {
+            try await client.execute(
                 command,
                 timeout: .seconds(5),
                 maxOutputBytes: 4 * 1024
             )
         }.value
+        guard output.contains("ORLIX_TSSHD_TERMINATED=1")
+                || output.contains("ORLIX_TSSHD_ABSENT=1") else {
+            throw TSSHRuntimeError.bootstrapFailed(
+                "The saved TSSH supervisor identity did not match the remote process."
+            )
+        }
     }
 
     static func terminationCommand(for identity: TSSHServerProcessIdentity) -> String {
@@ -115,8 +128,16 @@ nonisolated enum TSSHBootstrap {
         pid=\(identity.pid)
         supervisor=\(RemoteTerminalBootstrap.shellQuoted(identity.supervisorPath))
         command=$(ps -p "$pid" -o args= 2>/dev/null || true)
+        if [ -z "$command" ]; then
+          printf '%s\n' ORLIX_TSSHD_ABSENT=1
+          exit 0
+        fi
         case "$command" in
-          *"$supervisor"*) kill -TERM "$pid" 2>/dev/null || true ;;
+          *"$supervisor"*)
+            kill -TERM "$pid" 2>/dev/null || true
+            printf '%s\n' ORLIX_TSSHD_TERMINATED=1
+            ;;
+          *) exit 1 ;;
         esac
         """
         return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"

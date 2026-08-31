@@ -58,7 +58,12 @@ nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtoco
             throw TSSHAgentIdentity.failure("The SSH agent signing request is too large")
         }
         try authorizeSigning()
-        return try identity.sign(data, flags: flags)
+        return try stateLock.withLock {
+            guard !suspended else {
+                throw TSSHAgentIdentity.failure("SSH agent is unavailable in the background")
+            }
+            return try identity.sign(data, flags: flags)
+        }
     }
 
     private func authorizeSigning() throws {
@@ -96,8 +101,13 @@ nonisolated final class TSSHAgentBridge: NSObject, IosbridgeAgentCallbackProtoco
         guard decision.approved else {
             throw decision.error ?? TSSHAgentIdentity.failure("SSH agent signing was denied")
         }
-        if approvalMode == .perSession {
-            stateLock.withLock { sessionApproved = true }
+        try stateLock.withLock {
+            guard !suspended else {
+                throw TSSHAgentIdentity.failure("SSH agent is unavailable in the background")
+            }
+            if approvalMode == .perSession {
+                sessionApproved = true
+            }
         }
     }
 }

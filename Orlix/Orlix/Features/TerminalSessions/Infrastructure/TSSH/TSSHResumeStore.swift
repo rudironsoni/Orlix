@@ -4,6 +4,7 @@ import Security
 nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
     let serverIdentity: TSSHResumeServerIdentity
     let sshHostKeyFingerprint: String
+    let serverProcess: TSSHServerProcessIdentity
     let host: String
     let info: TSSHServerInfo
     let sessionID: Int64
@@ -18,6 +19,7 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
         Self(
             serverIdentity: serverIdentity,
             sshHostKeyFingerprint: sshHostKeyFingerprint,
+            serverProcess: serverProcess,
             host: host,
             info: info,
             sessionID: sessionID,
@@ -25,6 +27,12 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
             savedAt: date
         )
     }
+}
+
+nonisolated struct TSSHResumeCleanupState: Codable, Equatable, Sendable {
+    let serverIdentity: TSSHResumeServerIdentity
+    let serverProcess: TSSHServerProcessIdentity
+    let createdAt: Date
 }
 
 nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
@@ -61,6 +69,9 @@ nonisolated protocol TSSHResumeStoring: Sendable {
     func hasCheckpoint(for paneID: UUID) -> Bool
     func save(_ state: TSSHResumeState, for paneID: UUID) throws
     func delete(for paneID: UUID) throws
+    func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState?
+    func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws
+    func deleteCleanup(for paneID: UUID) throws
 }
 
 nonisolated enum TSSHResumeStoreError: LocalizedError, Sendable {
@@ -95,6 +106,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
     private struct Checkpoint: Codable {
         let serverIdentity: TSSHResumeServerIdentity
         let sshHostKeyFingerprint: String
+        let serverProcess: TSSHServerProcessIdentity
         let host: String
         let serverVersion: String
         let protocolVersion: Int
@@ -109,7 +121,8 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let savedAt: Date
 
         private enum CodingKeys: String, CodingKey {
-            case serverIdentity, sshHostKeyFingerprint, host, serverVersion, protocolVersion
+            case serverIdentity, sshHostKeyFingerprint, serverProcess, host
+            case serverVersion, protocolVersion
             case port, mode, proxyMode, mtu
             case clientID, serverID, sessionID, profile, savedAt
         }
@@ -117,6 +130,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         init(
             serverIdentity: TSSHResumeServerIdentity,
             sshHostKeyFingerprint: String,
+            serverProcess: TSSHServerProcessIdentity,
             host: String,
             serverVersion: String,
             protocolVersion: Int,
@@ -132,6 +146,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         ) {
             self.serverIdentity = serverIdentity
             self.sshHostKeyFingerprint = sshHostKeyFingerprint
+            self.serverProcess = serverProcess
             self.host = host
             self.serverVersion = serverVersion
             self.protocolVersion = protocolVersion
@@ -153,6 +168,10 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
                 String.self,
                 forKey: .sshHostKeyFingerprint
             ) ?? ""
+            serverProcess = try container.decode(
+                TSSHServerProcessIdentity.self,
+                forKey: .serverProcess
+            )
             host = try container.decode(String.self, forKey: .host)
             serverVersion = try container.decode(String.self, forKey: .serverVersion)
             protocolVersion = try container.decodeIfPresent(Int.self, forKey: .protocolVersion) ?? 0
@@ -218,16 +237,13 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let state = TSSHResumeState(
             serverIdentity: checkpoint.serverIdentity,
             sshHostKeyFingerprint: checkpoint.sshHostKeyFingerprint,
+            serverProcess: checkpoint.serverProcess,
             host: checkpoint.host,
             info: info,
             sessionID: checkpoint.sessionID,
             profile: checkpoint.profile,
             savedAt: checkpoint.savedAt
         )
-        if state.isExpired {
-            try? delete(for: paneID)
-            return nil
-        }
         return state
     }
 
@@ -251,6 +267,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let checkpoint = Checkpoint(
             serverIdentity: state.serverIdentity,
             sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+            serverProcess: state.serverProcess,
             host: state.host,
             serverVersion: state.info.serverVersion,
             protocolVersion: state.info.protocolVersion,
@@ -296,8 +313,53 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         }
     }
 
+    func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState? {
+        let cleanupURL = cleanupURL(for: paneID)
+        guard fileManager.fileExists(atPath: cleanupURL.path) else { return nil }
+        do {
+            return try JSONDecoder().decode(
+                TSSHResumeCleanupState.self,
+                from: Data(contentsOf: cleanupURL)
+            )
+        } catch {
+            throw TSSHResumeStoreError.corruptState
+        }
+    }
+
+    func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {
+        do {
+            try fileManager.createDirectory(
+                at: root,
+                withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+            )
+            let cleanupURL = cleanupURL(for: paneID)
+            try JSONEncoder().encode(state).write(to: cleanupURL, options: .atomic)
+            try fileManager.setAttributes(
+                [
+                    .posixPermissions: 0o600,
+                    .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
+                ],
+                ofItemAtPath: cleanupURL.path
+            )
+        } catch {
+            throw TSSHResumeStoreError.checkpointStorage
+        }
+    }
+
+    func deleteCleanup(for paneID: UUID) throws {
+        let cleanupURL = cleanupURL(for: paneID)
+        if fileManager.fileExists(atPath: cleanupURL.path) {
+            try fileManager.removeItem(at: cleanupURL)
+        }
+    }
+
     private func url(for paneID: UUID) -> URL {
         root.appendingPathComponent(paneID.uuidString).appendingPathExtension("json")
+    }
+
+    private func cleanupURL(for paneID: UUID) -> URL {
+        root.appendingPathComponent(paneID.uuidString).appendingPathExtension("cleanup.json")
     }
 
     private func readSecret(account: String) throws -> Data? {

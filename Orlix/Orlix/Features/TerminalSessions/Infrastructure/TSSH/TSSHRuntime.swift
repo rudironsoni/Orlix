@@ -256,6 +256,7 @@ final class TSSHRuntime {
 
     func resumeFromApplicationBackground() async {
         agentBridge?.resume()
+        await cleanupStaleServerIfNeeded()
         guard let transport else {
             startIfNeeded()
             return
@@ -352,7 +353,9 @@ final class TSSHRuntime {
 
     private func start() async {
         do {
+            await cleanupStaleServerIfNeeded()
             if try await resumeSavedSession() { return }
+            await cleanupStaleServerIfNeeded()
             try await startFreshSession()
         } catch is CancellationError {
             let preserveServer = tsshShouldPreserveCancelledStartServer(
@@ -427,14 +430,19 @@ final class TSSHRuntime {
             return false
         }
         guard var state = loadedState else { return false }
+        if state.isExpired {
+            try stageCleanup(for: state)
+            logger.info("Staged expired TSSH session for remote cleanup")
+            return false
+        }
         let currentIdentity = TSSHResumeServerIdentity(server: server)
         guard TSSHResumeCompatibilityPolicy.canResume(
             state,
             with: server,
             trustedHostFingerprint: trustedHostFingerprint(server.host, server.port)
         ) else {
-            try? resumeStore.delete(for: paneID)
-            logger.info("Discarded TSSH resume state after server settings changed")
+            try stageCleanup(for: state)
+            logger.info("Staged incompatible TSSH session for remote cleanup")
             return false
         }
         resumeHostKeyFingerprint = state.sshHostKeyFingerprint
@@ -448,6 +456,7 @@ final class TSSHRuntime {
             state = TSSHResumeState(
                 serverIdentity: currentIdentity,
                 sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+                serverProcess: state.serverProcess,
                 host: savedHost,
                 info: state.info.advancingClientIDForResume(
                     vpnEnabled: currentProfile.vpnEnabled
@@ -479,6 +488,7 @@ final class TSSHRuntime {
                 resumeState = TSSHResumeState(
                     serverIdentity: currentIdentity,
                     sshHostKeyFingerprint: state.sshHostKeyFingerprint,
+                    serverProcess: state.serverProcess,
                     host: savedHost,
                     info: state.info,
                     sessionID: attached.1,
@@ -526,6 +536,52 @@ final class TSSHRuntime {
         await cleanupFailedResume(preserveServer: false)
         try? resumeStore.delete(for: paneID)
         return false
+    }
+
+    private func stageCleanup(for state: TSSHResumeState) throws {
+        try resumeStore.saveCleanup(
+            TSSHResumeCleanupState(
+                serverIdentity: state.serverIdentity,
+                serverProcess: state.serverProcess,
+                createdAt: Date()
+            ),
+            for: paneID
+        )
+        try resumeStore.delete(for: paneID)
+    }
+
+    private func cleanupStaleServerIfNeeded() async {
+        let cleanup: TSSHResumeCleanupState
+        do {
+            guard let pending = try resumeStore.loadCleanup(for: paneID) else { return }
+            cleanup = pending
+        } catch {
+            logger.warning(
+                "Cannot load TSSH remote cleanup state: \(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+        guard cleanup.serverIdentity.id == server.id else { return }
+        var cleanupServer = server
+        cleanupServer.host = cleanup.serverIdentity.host
+        cleanupServer.port = cleanup.serverIdentity.port
+        cleanupServer.username = cleanup.serverIdentity.username
+        let sshClient = sshClientFactory.makeClient(
+            connectTimeout: .seconds(server.tsshProfile.connectTimeoutSeconds)
+        )
+        defer { Task { await sshClient.disconnect() } }
+        do {
+            _ = try await sshClient.connect(to: cleanupServer, credentials: credentials)
+            try await TSSHBootstrap.terminateServerForCleanup(
+                cleanup.serverProcess,
+                using: sshClient
+            )
+            try resumeStore.deleteCleanup(for: paneID)
+        } catch {
+            logger.warning(
+                "Deferred TSSH remote cleanup for a later retry: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     private func cleanupFailedResume(preserveServer: Bool) async {
@@ -599,6 +655,7 @@ final class TSSHRuntime {
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
             sshHostKeyFingerprint: try currentResumeHostKeyFingerprint(),
+            serverProcess: bootstrap.serverProcess,
             host: bootstrap.host,
             info: bootstrap.info,
             sessionID: opened.1,

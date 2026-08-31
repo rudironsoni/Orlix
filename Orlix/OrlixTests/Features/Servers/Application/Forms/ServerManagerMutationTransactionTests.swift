@@ -159,6 +159,34 @@ struct ServerManagerMutationTransactionTests {
     }
 
     @Test
+    func editingVPNServerRevokesItsPersistedTunnel() async throws {
+        let workspace = makeWorkspace()
+        var storedServer = makeServer(workspaceID: workspace.id)
+        storedServer.connectionMode = .tssh
+        storedServer.tsshProfile.vpnEnabled = true
+        var editedServer = storedServer
+        editedServer.tsshProfile.blockQUICInVPN = true
+        let local = ServerLocalRepositoryFake(
+            servers: [storedServer],
+            workspaces: [workspace]
+        )
+        var revokedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            credentials: ServerManagerCredentialRepositoryFake(),
+            sync: ServerSyncRepositoryFake(),
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
+        )
+
+        _ = try await manager.apply(
+            .update(editedServer),
+            credentials: ServerCredentials(serverId: editedServer.id)
+        )
+
+        #expect(revokedServerIDs == [storedServer.id])
+    }
+
+    @Test
     func deleteQueueFailureKeepsCompletedLocalDeletionForRecovery() async throws {
         let workspace = makeWorkspace()
         let server = makeServer(workspaceID: workspace.id)
@@ -465,7 +493,8 @@ struct ServerManagerMutationTransactionTests {
         local: ServerLocalRepositoryFake,
         credentials: ServerManagerCredentialRepositoryFake,
         sync: ServerSyncRepositoryFake,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManager {
         let now = { Date(timeIntervalSinceReferenceDate: 10_000) }
         var ids = (1...20).map {
@@ -493,6 +522,7 @@ struct ServerManagerMutationTransactionTests {
                 actionAuthorizer: ProtectedServerActionAuthorizerFake(),
                 knownHosts: ServerKnownHostRepositoryFake(),
                 didDeleteServerLocalData: didDeleteServerLocalData,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
                 isRemoteSchemaError: { _ in false },
                 now: now,
                 makeID: makeID

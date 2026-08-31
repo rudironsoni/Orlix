@@ -33,6 +33,9 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     func hasCheckpoint(for paneID: UUID) -> Bool { true }
     func save(_ state: TSSHResumeState, for paneID: UUID) throws {}
     func delete(for paneID: UUID) throws { deletedPaneIDs.append(paneID) }
+    func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState? { nil }
+    func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {}
+    func deleteCleanup(for paneID: UUID) throws {}
 }
 
 struct TSSHConcurrencyTests {

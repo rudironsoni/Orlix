@@ -145,6 +145,8 @@ struct TSSHServerInfoTests {
         #expect(command.contains("ps -p"))
         #expect(command.contains("orlix-tsshd-1234.sh"))
         #expect(command.contains("kill -TERM"))
+        #expect(command.contains("ORLIX_TSSHD_TERMINATED=1"))
+        #expect(command.contains("ORLIX_TSSHD_ABSENT=1"))
     }
 
     @Test
@@ -240,6 +242,10 @@ struct TSSHServerInfoTests {
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
             sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
             host: server.host,
             info: info,
             sessionID: 42,
@@ -305,6 +311,10 @@ struct TSSHServerInfoTests {
         let state = TSSHResumeState(
             serverIdentity: TSSHResumeServerIdentity(server: server),
             sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
             host: server.host,
             info: info,
             sessionID: 42,
@@ -318,6 +328,7 @@ struct TSSHServerInfoTests {
         #expect(refreshed.savedAt == refreshedAt)
         #expect(refreshed.serverIdentity == state.serverIdentity)
         #expect(refreshed.sshHostKeyFingerprint == state.sshHostKeyFingerprint)
+        #expect(refreshed.serverProcess == state.serverProcess)
         #expect(refreshed.host == state.host)
         #expect(refreshed.info == state.info)
         #expect(refreshed.sessionID == state.sessionID)

@@ -109,8 +109,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
         if let previousServer,
            previousServer.connectionMode == .tssh,
-           previousServer.tsshProfile.vpnEnabled,
-           savedServer.connectionMode != .tssh || !savedServer.tsshProfile.vpnEnabled {
+           previousServer.tsshProfile.vpnEnabled {
             try await dependencies.revokeUnclaimedTSSHVPN(previousServer.id)
         }
         let transactionID = dependencies.makeID()
