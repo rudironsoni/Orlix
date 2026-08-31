@@ -63,6 +63,7 @@ final class TerminalTransportCoordinator {
     private var tsshRuntimes: [UUID: TSSHRuntime] = [:]
     private var tsshRuntimeRequests: [UUID: TSSHRuntimeRequest] = [:]
     private var tsshRuntimeTeardowns: [UUID: TSSHRuntimeTeardown] = [:]
+    private var tsshAgentForwardingAllowed: Bool
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -87,7 +88,8 @@ final class TerminalTransportCoordinator {
         remoteMosh: any TerminalRemoteMoshServicing,
         eternalTerminalRuntimeDependencies: EternalTerminalRuntimeDependencies,
         sessionAccess: TerminalTransportSessionAccess,
-        remoteSessionCoordinator: TerminalRemoteSessionCoordinator
+        remoteSessionCoordinator: TerminalRemoteSessionCoordinator,
+        initialTSSHAgentForwardingAllowed: Bool
     ) {
         self.lifetime = lifetime
         self.sshClientFactory = sshClientFactory
@@ -100,6 +102,7 @@ final class TerminalTransportCoordinator {
         self.eternalTerminalRuntimeDependencies = eternalTerminalRuntimeDependencies
         self.sessionAccess = sessionAccess
         self.remoteSessionCoordinator = remoteSessionCoordinator
+        tsshAgentForwardingAllowed = initialTSSHAgentForwardingAllowed
         Task { @MainActor in
             await TSSHRuntime.processPersistedDeferredCleanup(
                 sshClientFactory: sshClientFactory
@@ -148,6 +151,7 @@ final class TerminalTransportCoordinator {
             server: server,
             credentials: credentials,
             sshClientFactory: sshClientFactory,
+            agentForwardingAllowed: tsshAgentForwardingAllowed,
             ownerAccess: makeTSSHOwnerAccess()
         )
         tsshRuntimes[paneId] = runtime
@@ -537,6 +541,14 @@ final class TerminalTransportCoordinator {
                     ) == true
                 }
             )
+        }
+    }
+
+    func setTSSHAgentForwardingAllowed(_ allowed: Bool) {
+        guard tsshAgentForwardingAllowed != allowed else { return }
+        tsshAgentForwardingAllowed = allowed
+        for runtime in tsshRuntimes.values {
+            runtime.setAgentForwardingAllowed(allowed)
         }
     }
 

@@ -107,11 +107,17 @@ final class TerminalTabManager {
                     runtimeEvents.send(event)
                 }
             ),
-            remoteSessionCoordinator: remoteSessionCoordinator
+            remoteSessionCoordinator: remoteSessionCoordinator,
+            initialTSSHAgentForwardingAllowed: !dependencies.appLock.initialIsLocked
         )
         runtimeEvents
             .sink { [weak self] event in
                 self?.handleTransportSessionEvent(event)
+            }
+            .store(in: &stateCancellables)
+        dependencies.appLock.updates
+            .sink { [weak self] isLocked in
+                self?.transportCoordinator.setTSSHAgentForwardingAllowed(!isLocked)
             }
             .store(in: &stateCancellables)
         #if os(iOS)

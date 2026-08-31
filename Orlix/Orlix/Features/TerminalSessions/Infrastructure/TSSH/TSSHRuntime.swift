@@ -237,6 +237,8 @@ final class TSSHRuntime {
     private var securityBindingHostKeyFingerprint: String?
     private var startupReady = false
     private var isClosing = false
+    private var isApplicationInBackground = false
+    private var isAgentForwardingAllowed: Bool
 
     var isStartInFlight: Bool { startTask != nil }
     var hasLiveTransport: Bool { transport != nil }
@@ -263,6 +265,7 @@ final class TSSHRuntime {
         sshClientFactory: SSHClientFactory,
         resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared,
         callGate: TSSHCallGate = .shared,
+        agentForwardingAllowed: Bool = true,
         trustedHostFingerprint: @escaping @Sendable (String, Int) -> String? = { host, port in
             KnownHostsManager.shared.entry(for: host, port: port)?.fingerprint
         },
@@ -274,6 +277,7 @@ final class TSSHRuntime {
         self.sshClientFactory = sshClientFactory
         self.resumeStore = resumeStore
         self.callGate = callGate
+        isAgentForwardingAllowed = agentForwardingAllowed
         self.trustedHostFingerprint = trustedHostFingerprint
         securityBindingHostKeyFingerprint = trustedHostFingerprint(server.host, server.port)
         self.ownerAccess = ownerAccess
@@ -347,7 +351,8 @@ final class TSSHRuntime {
     }
 
     func prepareForApplicationBackground() async {
-        agentBridge?.suspend()
+        isApplicationInBackground = true
+        synchronizeAgentAvailability()
         guard transport != nil, session != nil, let resumeState else { return }
         let refreshedState = resumeState.refreshed(at: Date())
         do {
@@ -366,7 +371,8 @@ final class TSSHRuntime {
     }
 
     func resumeFromApplicationBackground() async {
-        agentBridge?.resume()
+        isApplicationInBackground = false
+        synchronizeAgentAvailability()
         await cleanupStaleServerIfNeeded()
         guard let transport else {
             startIfNeeded()
@@ -377,6 +383,20 @@ final class TSSHRuntime {
             try await startForwarding(on: transport, profile: server.tsshProfile)
         } catch {
             await reportFailure(error)
+        }
+    }
+
+    func setAgentForwardingAllowed(_ allowed: Bool) {
+        guard isAgentForwardingAllowed != allowed else { return }
+        isAgentForwardingAllowed = allowed
+        synchronizeAgentAvailability()
+    }
+
+    private func synchronizeAgentAvailability() {
+        if isApplicationInBackground || !isAgentForwardingAllowed {
+            agentBridge?.suspend()
+        } else {
+            agentBridge?.resume()
         }
     }
 
@@ -1014,6 +1034,9 @@ final class TSSHRuntime {
             comment: server.name,
             approvalMode: profile.sshAgentApprovalMode
         )
+        if isApplicationInBackground || !isAgentForwardingAllowed {
+            bridge.suspend()
+        }
         try await callGate.enableAgent(bridge, on: transport)
         agentBridge = bridge
     }

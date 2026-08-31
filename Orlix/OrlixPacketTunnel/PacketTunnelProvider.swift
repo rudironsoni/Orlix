@@ -7,6 +7,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
     private struct State {
         var callback: PacketTunnelCallback?
         var isRunning = false
+        var generation: UUID?
+        var startup: PacketTunnelStartupCompletion?
     }
 
     private let packetQueue = DispatchQueue(
@@ -91,16 +93,29 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         settings.dnsSettings = dns
         settings.mtu = NSNumber(value: policy.mtu)
 
+        let startup = PacketTunnelStartupCompletion(completionHandler)
+        let startupID = UUID()
+        replaceStartup(id: startupID, startup: startup)?.fail(PacketTunnelError.stopped)
+
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else {
-                completionHandler(PacketTunnelError.stopped)
+                startup.fail(PacketTunnelError.stopped)
                 return
             }
             if let error {
-                completionHandler(error)
+                self.clearStartup(ifCurrent: startupID)
+                startup.fail(error)
                 return
             }
-            self.startNativeTunnel(configJSON: configJSON, completionHandler: completionHandler)
+            guard self.isCurrentGeneration(startupID) else {
+                startup.fail(PacketTunnelError.stopped)
+                return
+            }
+            self.startNativeTunnel(
+                configJSON: configJSON,
+                startupID: startupID,
+                startup: startup
+            )
         }
     }
 
@@ -108,9 +123,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         with reason: NEProviderStopReason,
         completionHandler: @escaping () -> Void
     ) {
-        updateState(isRunning: false, callback: nil)
+        let startup = clearState()
         var nativeError: NSError?
         _ = VpntunnelStopTunnel(&nativeError)
+        startup?.fail(PacketTunnelError.stopped)
         completionHandler()
     }
 
@@ -134,9 +150,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
 
     private func startNativeTunnel(
         configJSON: String,
-        completionHandler: @escaping (Error?) -> Void
+        startupID: UUID,
+        startup: PacketTunnelStartupCompletion
     ) {
-        let startup = PacketTunnelStartupCompletion(completionHandler)
+        guard isCurrentGeneration(startupID) else {
+            startup.fail(PacketTunnelError.stopped)
+            return
+        }
         let callback = PacketTunnelCallback(
             ready: {
                 startup.succeed()
@@ -144,9 +164,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
             failure: { [weak self] reason, wasReady in
                 let error = PacketTunnelError.nativeFailure(reason)
                 if wasReady {
+                    guard self?.isCurrentGeneration(startupID) == true else { return }
                     self?.cancelTunnelWithError(error)
                 } else {
-                    self?.updateState(isRunning: false, callback: nil)
+                    self?.clearStartup(ifCurrent: startupID)
                     var nativeError: NSError?
                     _ = VpntunnelStopTunnel(&nativeError)
                     startup.fail(error)
@@ -155,12 +176,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         )
         var nativeError: NSError?
         guard VpntunnelStartTunnel(configJSON, callback, &nativeError) else {
+            clearStartup(ifCurrent: startupID)
             startup.fail(
                 nativeError ?? PacketTunnelError.nativeFailure("Native VPN start failed")
             )
             return
         }
-        updateState(isRunning: true, callback: callback)
+        guard promoteStartupToRunning(id: startupID, callback: callback) else {
+            var stopError: NSError?
+            _ = VpntunnelStopTunnel(&stopError)
+            startup.fail(PacketTunnelError.stopped)
+            return
+        }
         readPacketsFromSystem()
         packetQueue.async { [weak self] in self?.writePacketsToSystem() }
         callback.activate()
@@ -172,11 +199,55 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         return state.isRunning
     }
 
-    private func updateState(isRunning: Bool, callback: PacketTunnelCallback?) {
+    private func replaceStartup(
+        id: UUID,
+        startup: PacketTunnelStartupCompletion
+    ) -> PacketTunnelStartupCompletion? {
         stateLock.lock()
-        state.isRunning = isRunning
-        state.callback = callback
+        let previous = state.startup
+        state = State(
+            callback: nil,
+            isRunning: false,
+            generation: id,
+            startup: startup
+        )
         stateLock.unlock()
+        return previous
+    }
+
+    private func isCurrentGeneration(_ id: UUID) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return state.generation == id
+    }
+
+    private func clearStartup(ifCurrent id: UUID) {
+        stateLock.lock()
+        if state.generation == id {
+            state = State()
+        }
+        stateLock.unlock()
+    }
+
+    private func promoteStartupToRunning(
+        id: UUID,
+        callback: PacketTunnelCallback
+    ) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard state.generation == id else { return false }
+        state.callback = callback
+        state.isRunning = true
+        state.startup = nil
+        return true
+    }
+
+    private func clearState() -> PacketTunnelStartupCompletion? {
+        stateLock.lock()
+        let startup = state.startup
+        state = State()
+        stateLock.unlock()
+        return startup
     }
 
     private static func resolveHostAddresses(_ host: String) -> [String] {
