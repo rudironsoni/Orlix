@@ -548,6 +548,10 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.updateSecurityBinding(
+            server: server,
+            credentials: credentials
+        )
         guard let terminalView = uiView as? GhosttyTerminalView else {
             return
         }

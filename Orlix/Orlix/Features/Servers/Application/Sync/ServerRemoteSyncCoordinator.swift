@@ -405,8 +405,8 @@ final class ServerRemoteSyncCoordinator {
                   previous.tsshProfile.vpnEnabled else { return false }
             guard let current = currentServers[previous.id] else { return true }
             return current.connectionMode != .tssh
-                || current.host != previous.host
-                || current.port != previous.port
+                || ServerCredentialBinding(server: current)
+                    != ServerCredentialBinding(server: previous)
                 || current.tsshProfile != previous.tsshProfile
         }
     }

@@ -31,6 +31,20 @@ nonisolated enum TerminalTransportSessionEvent: Sendable {
 /// Owns terminal transport identities, tasks, resumable state, and cleanup.
 @MainActor
 final class TerminalTransportCoordinator {
+    private struct TSSHRuntimeRequest {
+        let id: UUID
+        let server: Server
+        let credentials: ServerCredentials
+
+        func isBound(to requestedServer: Server, credentials requestedCredentials: ServerCredentials) -> Bool {
+            server.id == requestedServer.id
+                && ServerCredentialBinding(server: server)
+                    == ServerCredentialBinding(server: requestedServer)
+                && server.tsshProfile == requestedServer.tsshProfile
+                && credentials == requestedCredentials
+        }
+    }
+
     private typealias SSHOwnership = (
         registration: SSHShellRegistry.Registration?,
         pendingStart: SSHShellRegistry.StartContext?
@@ -42,6 +56,7 @@ final class TerminalTransportCoordinator {
     }
     private let sshClientFactory: SSHClientFactory
     private var tsshRuntimes: [UUID: TSSHRuntime] = [:]
+    private var tsshRuntimeRequests: [UUID: TSSHRuntimeRequest] = [:]
     #if DEBUG
     private var eternalTerminalResumeStore: any EternalTerminalResumeStoring
     private let defaultEternalTerminalResumeStore: any EternalTerminalResumeStoring
@@ -103,14 +118,23 @@ final class TerminalTransportCoordinator {
         for paneId: UUID,
         server: Server,
         credentials: ServerCredentials
-    ) async -> TSSHRuntime {
+    ) async -> TSSHRuntime? {
+        guard sessionAccess.containsPane(paneId) else { return nil }
         if let runtime = tsshRuntimes[paneId],
            runtime.isBound(to: server, credentials: credentials) {
             return runtime
         }
+        let requestID = UUID()
+        tsshRuntimeRequests[paneId] = TSSHRuntimeRequest(
+            id: requestID,
+            server: server,
+            credentials: credentials
+        )
         if let staleRuntime = tsshRuntimes.removeValue(forKey: paneId) {
             await staleRuntime.closeForSecurityBindingReplacement()
         }
+        guard tsshRuntimeRequests[paneId]?.id == requestID,
+              sessionAccess.containsPane(paneId) else { return nil }
         let runtime = TSSHRuntime(
             paneID: paneId,
             server: server,
@@ -119,8 +143,51 @@ final class TerminalTransportCoordinator {
             ownerAccess: makeTSSHOwnerAccess()
         )
         tsshRuntimes[paneId] = runtime
+        tsshRuntimeRequests.removeValue(forKey: paneId)
         sessionAccess.send(.activeTransport(paneId, .tssh))
         return runtime
+    }
+
+    func invalidateTSSHRuntime(
+        for paneId: UUID,
+        unlessBoundTo server: Server,
+        credentials: ServerCredentials
+    ) {
+        if let request = tsshRuntimeRequests[paneId],
+           !request.isBound(to: server, credentials: credentials) {
+            tsshRuntimeRequests.removeValue(forKey: paneId)
+        }
+        guard let runtime = tsshRuntimes[paneId],
+              !runtime.isBound(to: server, credentials: credentials) else { return }
+        tsshRuntimes.removeValue(forKey: paneId)
+        Task { await runtime.closeForSecurityBindingReplacement() }
+    }
+
+    func invalidateTSSHRuntimesForTrustReset(host: String? = nil, port: Int? = nil) {
+        let staleRuntimes = tsshRuntimes.filter { _, runtime in
+            guard let host, let port else { return true }
+            return runtime.matchesTrustedHost(host: host, port: port)
+        }
+        let staleRequestPaneIDs = tsshRuntimeRequests.compactMap { paneId, request in
+            guard let host, let port else { return paneId }
+            let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let requestHost = request.server.host
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            return requestHost == normalizedHost && request.server.port == port ? paneId : nil
+        }
+        for paneId in staleRequestPaneIDs {
+            tsshRuntimeRequests.removeValue(forKey: paneId)
+        }
+        for (paneId, _) in staleRuntimes {
+            tsshRuntimeRequests.removeValue(forKey: paneId)
+            tsshRuntimes.removeValue(forKey: paneId)
+        }
+        Task {
+            for (_, runtime) in staleRuntimes {
+                await runtime.closeForSecurityBindingReplacement()
+            }
+        }
     }
 
     func sendTSSHInput(_ data: Data, for paneId: UUID) {
@@ -142,12 +209,14 @@ final class TerminalTransportCoordinator {
         guard let runtime = tsshRuntimes[paneId],
               token == nil || runtime.identityToken == token else { return }
         tsshRuntimes.removeValue(forKey: paneId)
+        tsshRuntimeRequests.removeValue(forKey: paneId)
         await runtime.close()
     }
 
     func unregisterTSSHRuntimeIfPaneWasRemoved(for paneId: UUID) {
-        guard !sessionAccess.containsPane(paneId),
-              let runtime = tsshRuntimes.removeValue(forKey: paneId) else { return }
+        guard !sessionAccess.containsPane(paneId) else { return }
+        tsshRuntimeRequests.removeValue(forKey: paneId)
+        guard let runtime = tsshRuntimes.removeValue(forKey: paneId) else { return }
         Task { await runtime.close() }
     }
 

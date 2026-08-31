@@ -349,7 +349,18 @@ struct AppComposition {
             keychain: keychainManager
         )
         let knownHostSettingsCoordinator = KnownHostSettingsLiveComposition.makeCoordinator(
-            knownHosts: knownHostsManager
+            knownHosts: knownHostsManager,
+            invalidateLiveTSSHTrust: { reset in
+                switch reset {
+                case .host(let host, let port):
+                    tabManager.transportCoordinator.invalidateTSSHRuntimesForTrustReset(
+                        host: host,
+                        port: port
+                    )
+                case .all:
+                    tabManager.transportCoordinator.invalidateTSSHRuntimesForTrustReset()
+                }
+            }
         )
         let appLifecycleDependencies = platform.lifecycleDependencies
         let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(

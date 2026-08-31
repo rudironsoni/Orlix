@@ -50,6 +50,14 @@ nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
         username = server.username.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedAt = server.updatedAt
     }
+
+    func matchesEndpoint(of server: Server) -> Bool {
+        id == server.id
+            && host == server.host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            && port == server.port
+            && username == server.username.trimmingCharacters(in: .whitespacesAndNewlines)
+            && server.connectionMode == .tssh
+    }
 }
 
 nonisolated enum TSSHResumeCompatibilityPolicy {
@@ -393,10 +401,9 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
 
     func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {
         let cleanupURL = cleanupURL(for: paneID)
-        let previousSecretAccount = (try? JSONDecoder().decode(
-            CleanupReference.self,
-            from: Data(contentsOf: cleanupURL)
-        ))?.secretAccount
+        guard !fileManager.fileExists(atPath: cleanupURL.path) else {
+            throw TSSHResumeStoreError.checkpointStorage
+        }
         let secretAccount = "\(paneID.uuidString).cleanup.\(UUID().uuidString)"
         let stagedURL = root.appendingPathComponent(
             ".\(paneID.uuidString).cleanup.\(UUID().uuidString).tmp"
@@ -418,20 +425,13 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
                 ],
                 ofItemAtPath: stagedURL.path
             )
-            if fileManager.fileExists(atPath: cleanupURL.path) {
-                _ = try fileManager.replaceItemAt(cleanupURL, withItemAt: stagedURL)
-            } else {
-                try fileManager.moveItem(at: stagedURL, to: cleanupURL)
-            }
+            try fileManager.moveItem(at: stagedURL, to: cleanupURL)
         } catch {
             try? deleteSecret(account: secretAccount)
             if fileManager.fileExists(atPath: stagedURL.path) {
                 try? fileManager.removeItem(at: stagedURL)
             }
             throw TSSHResumeStoreError.checkpointStorage
-        }
-        if let previousSecretAccount, previousSecretAccount != secretAccount {
-            try? deleteSecret(account: previousSecretAccount)
         }
     }
 

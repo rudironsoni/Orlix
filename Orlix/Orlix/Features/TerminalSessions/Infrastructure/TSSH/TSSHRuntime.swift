@@ -142,7 +142,7 @@ private enum TSSHDeferredCleanup {
             cleanupCredentials = persisted
         } else if let fallbackServer,
                   let fallbackCredentials,
-                  cleanup.serverIdentity == TSSHResumeServerIdentity(server: fallbackServer),
+                  cleanup.serverIdentity.matchesEndpoint(of: fallbackServer),
                   fallbackCredentials.isAuthorized(for: fallbackServer) {
             cleanupCredentials = fallbackCredentials
         } else {
@@ -234,6 +234,7 @@ final class TSSHRuntime {
     private var cancelledStartPreservesServer = false
     private var cancelledStartDeletesResumeState = true
     private var resumeHostKeyFingerprint: String?
+    private var securityBindingHostKeyFingerprint: String?
     private var startupReady = false
     private var isClosing = false
 
@@ -245,6 +246,14 @@ final class TSSHRuntime {
             && ServerCredentialBinding(server: server) == ServerCredentialBinding(server: requestedServer)
             && server.tsshProfile == requestedServer.tsshProfile
             && credentials == requestedCredentials
+            && securityBindingHostKeyFingerprint
+                == trustedHostFingerprint(requestedServer.host, requestedServer.port)
+    }
+
+    func matchesTrustedHost(host: String, port: Int) -> Bool {
+        let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return TSSHResumeServerIdentity(server: server).host == normalizedHost
+            && server.port == port
     }
 
     init(
@@ -266,6 +275,7 @@ final class TSSHRuntime {
         self.resumeStore = resumeStore
         self.callGate = callGate
         self.trustedHostFingerprint = trustedHostFingerprint
+        securityBindingHostKeyFingerprint = trustedHostFingerprint(server.host, server.port)
         self.ownerAccess = ownerAccess
     }
 
@@ -558,7 +568,7 @@ final class TSSHRuntime {
         } catch {
             if let recoveredState = resumeStore.recoverCleanupState(for: paneID) {
                 let recoveryCredentials = recoveredState.serverIdentity
-                    == TSSHResumeServerIdentity(server: server)
+                    .matchesEndpoint(of: server)
                     && credentials.isAuthorized(for: server)
                     ? credentials
                     : nil
@@ -575,7 +585,7 @@ final class TSSHRuntime {
                     logger.warning(
                         "Preserved TSSH checkpoint metadata after cleanup staging failed: \(error.localizedDescription, privacy: .public)"
                     )
-                    return false
+                    throw TSSHRuntimeError.resumeCheckpointUpdateFailed
                 }
             } else {
                 try? resumeStore.delete(for: paneID)
@@ -702,16 +712,20 @@ final class TSSHRuntime {
     }
 
     private func stageCleanup(for state: TSSHResumeState) throws {
-        try resumeStore.saveCleanup(
-            TSSHResumeCleanupState(
-                serverIdentity: state.serverIdentity,
-                serverProcess: state.serverProcess,
-                credentials: credentials,
-                createdAt: Date()
-            ),
-            for: paneID
-        )
-        try resumeStore.delete(for: paneID)
+        do {
+            try resumeStore.saveCleanup(
+                TSSHResumeCleanupState(
+                    serverIdentity: state.serverIdentity,
+                    serverProcess: state.serverProcess,
+                    credentials: credentials,
+                    createdAt: Date()
+                ),
+                for: paneID
+            )
+            try resumeStore.delete(for: paneID)
+        } catch {
+            throw TSSHRuntimeError.resumeCheckpointUpdateFailed
+        }
     }
 
     private func cleanupStaleServerIfNeeded() async {
@@ -814,6 +828,7 @@ final class TSSHRuntime {
             throw TSSHRuntimeError.resumeStateUnavailable
         }
         resumeHostKeyFingerprint = fingerprint
+        securityBindingHostKeyFingerprint = fingerprint
         return fingerprint
     }
 

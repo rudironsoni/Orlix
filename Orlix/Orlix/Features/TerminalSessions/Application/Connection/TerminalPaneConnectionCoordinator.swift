@@ -103,6 +103,11 @@ final class TerminalPaneConnectionCoordinator {
         }
     }
 
+    func updateSecurityBinding(server: Server, credentials: ServerCredentials) {
+        guard case .tssh(let coordinator) = backend else { return }
+        coordinator.updateSecurityBinding(server: server, credentials: credentials)
+    }
+
     func cancelConnection() {
         terminal = nil
         switch backend {
@@ -117,9 +122,10 @@ final class TerminalPaneConnectionCoordinator {
 @MainActor
 private final class TSSHPaneCoordinator {
     let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
+    private var server: Server
+    private var credentials: ServerCredentials
     let tabManager: TerminalTabManager
+    private var startTask: Task<Void, Never>?
 
     init(
         paneId: UUID,
@@ -134,12 +140,24 @@ private final class TSSHPaneCoordinator {
     }
 
     func start(terminal: any TerminalSurface) {
-        Task { @MainActor in
-            let runtime = await tabManager.transportCoordinator.tsshRuntime(
+        startTask?.cancel()
+        startTask = Task { @MainActor [weak self, weak terminal] in
+            guard let self, let terminal,
+                  !Task.isCancelled,
+                  tabManager.sessionState.containsPane(paneId) else { return }
+            guard let runtime = await tabManager.transportCoordinator.tsshRuntime(
                 for: paneId,
                 server: server,
                 credentials: credentials
-            )
+            ) else { return }
+            guard !Task.isCancelled,
+                  tabManager.sessionState.containsPane(paneId) else {
+                await tabManager.transportCoordinator.unregisterTSSHRuntime(
+                    for: paneId,
+                    ifOwnedByToken: runtime.identityToken
+                )
+                return
+            }
             runtime.attach(to: terminal)
             if let geometry = terminal.terminalGeometry {
                 runtime.resize(
@@ -150,6 +168,16 @@ private final class TSSHPaneCoordinator {
             }
             runtime.startIfNeeded()
         }
+    }
+
+    func updateSecurityBinding(server: Server, credentials: ServerCredentials) {
+        self.server = server
+        self.credentials = credentials
+        tabManager.transportCoordinator.invalidateTSSHRuntime(
+            for: paneId,
+            unlessBoundTo: server,
+            credentials: credentials
+        )
     }
 
     func send(_ data: Data) {
@@ -166,6 +194,8 @@ private final class TSSHPaneCoordinator {
     }
 
     func cancel() {
+        startTask?.cancel()
+        startTask = nil
         tabManager.transportCoordinator.unregisterTSSHRuntimeIfPaneWasRemoved(for: paneId)
     }
 }

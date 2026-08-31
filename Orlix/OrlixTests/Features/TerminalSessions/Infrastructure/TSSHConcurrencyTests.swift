@@ -99,6 +99,71 @@ struct TSSHConcurrencyTests {
         #expect(!runtime.isBound(to: server, credentials: changedCredentials))
     }
 
+    @Test @MainActor
+    func cachedRuntimeRequiresTheCurrentTrustedHostFingerprint() {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(serverId: server.id)
+        var fingerprint: String? = "SHA256:first"
+        let runtime = TSSHRuntime(
+            paneID: paneID,
+            server: server,
+            credentials: credentials,
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: TSSHResumeStoreSpy(),
+            trustedHostFingerprint: { _, _ in fingerprint },
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        #expect(runtime.isBound(to: server, credentials: credentials))
+        fingerprint = nil
+        #expect(!runtime.isBound(to: server, credentials: credentials))
+    }
+
+    @Test
+    func cleanupIdentityMatchesEndpointAfterMetadataOnlyEdit() {
+        var server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let savedIdentity = TSSHResumeServerIdentity(server: server)
+
+        server.name = "Renamed"
+        server.updatedAt = server.updatedAt.addingTimeInterval(1)
+
+        #expect(savedIdentity.matchesEndpoint(of: server))
+        server.username = "admin"
+        #expect(!savedIdentity.matchesEndpoint(of: server))
+    }
+
     @Test(arguments: [
         (preservationRequested: true, hasCheckpoint: true, expected: true),
         (preservationRequested: true, hasCheckpoint: false, expected: false),
