@@ -803,6 +803,7 @@ final class TSSHRuntime {
                 host: savedHost,
                 info: state.info.advancingClientIDForResume(
                     vpnEnabled: currentProfile.vpnEnabled
+                        && TSSHSystemVPNAvailability.isAvailable
                 ),
                 sessionID: state.sessionID,
                 profile: currentProfile,
@@ -1216,9 +1217,20 @@ final class TSSHRuntime {
         info: TSSHServerInfo,
         profile: TSSHProfile
     ) async throws {
-        guard profile.vpnEnabled else {
+        switch tsshSystemVPNAction(
+            requested: profile.vpnEnabled,
+            systemVPNAvailable: TSSHSystemVPNAvailability.isAvailable
+        ) {
+        case .unavailable:
+            logger.notice(
+                "System VPN is unavailable on Simulator; continuing with TSSH terminal transport"
+            )
+            return
+        case .removePersistedConfiguration:
             try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel(forServerID: server.id)
             return
+        case .start:
+            break
         }
         do {
             try await TSSHVPNManager.shared.installAndStart(

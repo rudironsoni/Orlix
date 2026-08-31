@@ -2,6 +2,30 @@ import CryptoKit
 import Foundation
 import NetworkExtension
 
+nonisolated enum TSSHSystemVPNAction: Equatable, Sendable {
+    case unavailable
+    case removePersistedConfiguration
+    case start
+}
+
+nonisolated enum TSSHSystemVPNAvailability {
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        false
+        #else
+        true
+        #endif
+    }
+}
+
+nonisolated func tsshSystemVPNAction(
+    requested: Bool,
+    systemVPNAvailable: Bool
+) -> TSSHSystemVPNAction {
+    guard systemVPNAvailable else { return .unavailable }
+    return requested ? .start : .removePersistedConfiguration
+}
+
 nonisolated enum TSSHVPNStartupDecision: Equatable, Sendable {
     case waiting
     case connected

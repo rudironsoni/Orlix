@@ -761,7 +761,13 @@ struct ServerFormSheet: View {
         }
         Toggle("Keep tunnels in background", isOn: $form.tsshProfile.keepTunnelsInBackground)
         Toggle("Use as VPN transport", isOn: $form.tsshProfile.vpnEnabled)
-        if form.tsshProfile.vpnEnabled {
+            .disabled(!TSSHSystemVPNAvailability.isAvailable)
+        if !TSSHSystemVPNAvailability.isAvailable {
+            Text("System VPN is unavailable in Simulator. TSSH terminal sessions still work.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        if form.tsshProfile.vpnEnabled && TSSHSystemVPNAvailability.isAvailable {
             Toggle("Block QUIC inside VPN", isOn: $form.tsshProfile.blockQUICInVPN)
             TextField("VPN DNS servers", text: tsshListBinding(\.vpnDNSServers))
                 .autocorrectionDisabled()

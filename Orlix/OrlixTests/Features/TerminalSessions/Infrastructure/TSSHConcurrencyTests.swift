@@ -85,6 +85,38 @@ private nonisolated final class TSSHAgentForwardingBridgeSpy:
 }
 
 struct TSSHConcurrencyTests {
+    @Test
+    func simulatorSkipsSystemVPNManagerCallsForTerminalOnlyTSSH() {
+        #expect(
+            tsshSystemVPNAction(
+                requested: false,
+                systemVPNAvailable: false
+            ) == .unavailable
+        )
+        #expect(
+            tsshSystemVPNAction(
+                requested: true,
+                systemVPNAvailable: false
+            ) == .unavailable
+        )
+    }
+
+    @Test
+    func deviceSystemVPNActionMatchesTheSavedProfile() {
+        #expect(
+            tsshSystemVPNAction(
+                requested: false,
+                systemVPNAvailable: true
+            ) == .removePersistedConfiguration
+        )
+        #expect(
+            tsshSystemVPNAction(
+                requested: true,
+                systemVPNAvailable: true
+            ) == .start
+        )
+    }
+
     @Test @MainActor
     func closeSuspendsAgentForwardingBeforeTeardown() async {
         let server = Server(
