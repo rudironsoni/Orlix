@@ -481,6 +481,46 @@ struct ServerManagerLoadLifecycleTests {
     }
 
     @Test
+    func remoteVPNPolicyChangeRevokesThePersistedTunnel() async {
+        let workspace = makeWorkspace(name: "Remote VPN update")
+        var localServer = makeServer(workspaceID: workspace.id)
+        localServer.connectionMode = .tssh
+        localServer.tsshProfile.vpnEnabled = true
+        var remoteServer = localServer
+        remoteServer.tsshProfile.vpnEnabled = false
+        remoteServer.updatedAt = localServer.updatedAt.addingTimeInterval(1)
+
+        let local = ServerLocalRepositoryFake(
+            servers: [localServer],
+            workspaces: [workspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [remoteServer],
+                workspaces: [],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: false,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        var revokedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
+        )
+
+        await manager.loadData()
+
+        #expect(manager.servers.first?.tsshProfile.vpnEnabled == false)
+        #expect(revokedServerIDs == [localServer.id])
+    }
+
+    @Test
     func durableRemoteDeletionCleansLocalDataWhenCheckpointAcceptanceFails() async {
         let workspace = makeWorkspace(name: "Deleted remotely")
         let server = makeServer(workspaceID: workspace.id)

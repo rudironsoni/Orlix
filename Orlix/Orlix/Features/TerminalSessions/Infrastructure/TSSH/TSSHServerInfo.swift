@@ -157,6 +157,7 @@ nonisolated enum TSSHRuntimeError: LocalizedError, Sendable {
     case bootstrapFailed(String)
     case transportFailed(String)
     case vpnStartFailed(String)
+    case resumeCheckpointUpdateFailed
     case resumeStateExpired
     case resumeStateUnavailable
 
@@ -176,6 +177,8 @@ nonisolated enum TSSHRuntimeError: LocalizedError, Sendable {
             return "TSSH transport failed: \(reason)"
         case .vpnStartFailed(let reason):
             return "TSSH VPN failed to start: \(reason)"
+        case .resumeCheckpointUpdateFailed:
+            return "The saved TSSH session could not be updated."
         case .resumeStateExpired:
             return "The saved TSSH session has expired."
         case .resumeStateUnavailable:

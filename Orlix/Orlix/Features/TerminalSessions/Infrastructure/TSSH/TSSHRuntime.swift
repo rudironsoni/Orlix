@@ -497,6 +497,9 @@ final class TSSHRuntime {
                 deleteResumeState: cancelledStartDeletesResumeState
             )
             return
+        } catch TSSHRuntimeError.resumeCheckpointUpdateFailed {
+            await discardFailedStart(preserveServer: true, deleteResumeState: false)
+            await reportFailure(TSSHRuntimeError.resumeCheckpointUpdateFailed)
         } catch {
             await discardFailedStart(preserveServer: false, deleteResumeState: true)
             await reportFailure(error)
@@ -553,7 +556,30 @@ final class TSSHRuntime {
         do {
             loadedState = try resumeStore.load(for: paneID)
         } catch {
-            try? resumeStore.delete(for: paneID)
+            if let recoveredState = resumeStore.recoverCleanupState(for: paneID) {
+                let recoveryCredentials = recoveredState.serverIdentity
+                    == TSSHResumeServerIdentity(server: server)
+                    && credentials.isAuthorized(for: server)
+                    ? credentials
+                    : nil
+                let cleanupState = TSSHResumeCleanupState(
+                    serverIdentity: recoveredState.serverIdentity,
+                    serverProcess: recoveredState.serverProcess,
+                    credentials: recoveryCredentials,
+                    createdAt: recoveredState.createdAt
+                )
+                do {
+                    try resumeStore.saveCleanup(cleanupState, for: paneID)
+                    try resumeStore.delete(for: paneID)
+                } catch {
+                    logger.warning(
+                        "Preserved TSSH checkpoint metadata after cleanup staging failed: \(error.localizedDescription, privacy: .public)"
+                    )
+                    return false
+                }
+            } else {
+                try? resumeStore.delete(for: paneID)
+            }
             logger.warning(
                 "Discarded invalid TSSH resume state: \(error.localizedDescription, privacy: .public)"
             )
@@ -595,7 +621,14 @@ final class TSSHRuntime {
                 profile: currentProfile,
                 savedAt: state.savedAt
             )
-            try resumeStore.save(state, for: paneID)
+            do {
+                try resumeStore.save(state, for: paneID)
+            } catch {
+                logger.warning(
+                    "Preserved the previous TSSH checkpoint after an update failed: \(error.localizedDescription, privacy: .public)"
+                )
+                throw TSSHRuntimeError.resumeCheckpointUpdateFailed
+            }
             do {
                 let transport = try await connect(savedHost, info: state.info, profile: currentProfile)
                 self.transport = transport

@@ -67,6 +67,7 @@ nonisolated enum TSSHResumeCompatibilityPolicy {
 
 nonisolated protocol TSSHResumeStoring: Sendable {
     func load(for paneID: UUID) throws -> TSSHResumeState?
+    func recoverCleanupState(for paneID: UUID) -> TSSHResumeCleanupState?
     func hasCheckpoint(for paneID: UUID) -> Bool
     func save(_ state: TSSHResumeState, for paneID: UUID) throws
     func delete(for paneID: UUID) throws
@@ -257,6 +258,19 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             savedAt: checkpoint.savedAt
         )
         return state
+    }
+
+    func recoverCleanupState(for paneID: UUID) -> TSSHResumeCleanupState? {
+        let checkpointURL = url(for: paneID)
+        guard let data = try? Data(contentsOf: checkpointURL),
+              let checkpoint = try? JSONDecoder().decode(Checkpoint.self, from: data)
+        else { return nil }
+        return TSSHResumeCleanupState(
+            serverIdentity: checkpoint.serverIdentity,
+            serverProcess: checkpoint.serverProcess,
+            credentials: nil,
+            createdAt: checkpoint.savedAt
+        )
     }
 
     func hasCheckpoint(for paneID: UUID) -> Bool {

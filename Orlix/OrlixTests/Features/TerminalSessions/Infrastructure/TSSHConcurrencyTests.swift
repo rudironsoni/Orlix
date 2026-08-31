@@ -30,6 +30,7 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     private(set) var deletedPaneIDs: [UUID] = []
 
     func load(for paneID: UUID) throws -> TSSHResumeState? { nil }
+    func recoverCleanupState(for paneID: UUID) -> TSSHResumeCleanupState? { nil }
     func hasCheckpoint(for paneID: UUID) -> Bool { true }
     func save(_ state: TSSHResumeState, for paneID: UUID) throws {}
     func delete(for paneID: UUID) throws { deletedPaneIDs.append(paneID) }

@@ -107,8 +107,11 @@ final class ServerRemoteSyncCoordinator {
 
         stateStore.applyRemoteChanges(changes)
         let deletedServers = serversRemovedFrom(previousServers)
+        let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+            previousServers
+        )
         do {
-            try await revokePersistedVPNs(for: deletedServers)
+            try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
             try stateStore.persistCurrentCollectionsForRemoteAcceptance()
             try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
         } catch {
@@ -175,8 +178,11 @@ final class ServerRemoteSyncCoordinator {
             let previousBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
             stateStore.applyRemoteChanges(changes)
             let deletedServers = serversRemovedFrom(previousServers)
+            let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+                previousServers
+            )
             do {
-                try await revokePersistedVPNs(for: deletedServers)
+                try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
                 try stateStore.persistCurrentCollectionsForRemoteAcceptance()
                 try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
             } catch {
@@ -341,10 +347,13 @@ final class ServerRemoteSyncCoordinator {
         _ = stateStore.reconcilePendingBootstrapWorkspaceState()
         try repairOrphanedServers()
         let deletedServers = serversRemovedFrom(previousServers)
+        let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+            previousServers
+        )
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
 
-        try await revokePersistedVPNs(for: deletedServers)
+        try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
 
         do {
             try stateStore.persistCurrentCollectionsForRemoteAcceptance()
@@ -383,6 +392,23 @@ final class ServerRemoteSyncCoordinator {
     private func serversRemovedFrom(_ previousServers: [Server]) -> [Server] {
         let retainedServerIDs = Set(stateStore.servers.map(\.id))
         return previousServers.filter { !retainedServerIDs.contains($0.id) }
+    }
+
+    private func serversRequiringVPNRevocationFrom(
+        _ previousServers: [Server]
+    ) -> [Server] {
+        let currentServers = Dictionary(uniqueKeysWithValues: stateStore.servers.map {
+            ($0.id, $0)
+        })
+        return previousServers.filter { previous in
+            guard previous.connectionMode == .tssh,
+                  previous.tsshProfile.vpnEnabled else { return false }
+            guard let current = currentServers[previous.id] else { return true }
+            return current.connectionMode != .tssh
+                || current.host != previous.host
+                || current.port != previous.port
+                || current.tsshProfile != previous.tsshProfile
+        }
     }
 
     private func cleanLocalData(for removedServers: [Server]) {

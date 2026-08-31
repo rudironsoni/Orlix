@@ -370,19 +370,29 @@ final class TSSHVPNManager {
         teardownRetryTasks[ownerID] = Task { [weak self] in
             guard let self else { return }
             defer { self.teardownRetryTasks[ownerID] = nil }
-            for delaySeconds in [1, 2, 4] {
+            var delaySeconds = 1
+            while !Task.isCancelled {
                 do {
                     try await Task.sleep(for: .seconds(delaySeconds))
                     let manager = try await self.loadManager()
                     guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
                           provider.providerConfiguration?["tsshOwnerID"] as? String
                             == ownerID.uuidString else { return }
-                    manager.connection.stopVPNTunnel()
-                    return
+                    switch manager.connection.status {
+                    case .connecting, .connected, .reasserting:
+                        manager.connection.stopVPNTunnel()
+                        try await self.waitUntilDisconnected(manager.connection)
+                        return
+                    case .disconnecting:
+                        try await self.waitUntilDisconnected(manager.connection)
+                        return
+                    default:
+                        return
+                    }
                 } catch is CancellationError {
                     return
                 } catch {
-                    continue
+                    delaySeconds = min(delaySeconds * 2, 30)
                 }
             }
         }
