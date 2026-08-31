@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-08-31
 status: accepted
 external_id: "ADR-0030"
 summary: "Expose only OrlixOS.xcframework while keeping kernel, libc, Coreutils, TCTI, and host execution private."
@@ -33,7 +33,7 @@ The public local Linux lifecycle type is `OrlixMachine`. The public container su
 
 Herdr retains its own hierarchy: a Session contains Workspaces, each Workspace contains Tabs, and each Tab owns a split layout of Panes. Orlix presents that hierarchy without defining parallel public topology types or an app-specific Herdr session.
 
-The private app-hosted test applications are `OrlixTestApp` for lower implementation-layer proof and `OrlixOSTestApp` for the public OrlixOS product-session path. Neither is a product or public SDK.
+The private app-hosted test applications are `OrlixTerminalTestApp` for the native terminal application and `OrlixOSTestApp` for the OrlixOS Linux userspace and its implementation-layer proof. Neither is a product or public SDK.
 
 Retired public names receive no compatibility aliases. Source, tests, and structured work move to the canonical names instead of preserving duplicate modules, symbols, targets, or type aliases.
 

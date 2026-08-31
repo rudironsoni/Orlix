@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-08-31
 status: accepted
 external_id: "ADR-0014"
 summary: "Durable Orlix architecture decision ADR 0014."
@@ -31,7 +31,7 @@ Commit `project.yml` as the durable XcodeGen source of truth. Do not commit the 
 
 XcodeGen schemes should make local Xcode use clear, but repository `make` targets own non-interactive proof orchestration for the full App Store/development by `iphoneos`/`iphonesimulator` matrix.
 
-The generated project includes `OrlixOS.xcframework` as the sole public SDK, the native `Orlix` application under `Orlix`, `OrlixTestApp` as the private lower-layer XCTest host, and `OrlixOSTestApp` as the private public-SDK product-session host. The production application uses its vendored Ghostty libraries for terminal presentation, while Linux execution remains owned by Orlix.
+The generated project includes `OrlixOS.xcframework` as the sole public SDK and the native `Orlix` application under `Orlix`. `OrlixTerminalTestApp` is the private XCTest host for the terminal application. `OrlixOSTestApp` is the private XCTest host for the OrlixOS Linux userspace and its implementation layers. The production application uses its vendored Ghostty libraries for terminal presentation, while Linux execution remains owned by Orlix.
 
 The full iOS proof matrix should run through repository automation using the Linux-shaped Make surface and XcodeBuildMCP, not implicitly through a generic fast local test target or a separate public command for every milestone.
 

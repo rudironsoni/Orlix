@@ -1015,3 +1015,9 @@ Orlix behavior. Each pane can suppress Ghostty mouse reporting through a
 customizable accessory action or `Cmd+Option+M`. The process-local state
 survives surface view reconstruction, remains isolated by pane, and clears when
 the pane closes. Native macOS command UI remains deferred.
+
+## [2026-08-31] correct | Separate terminal and OrlixOS test hosts
+
+[CORRECTION] Renamed the native terminal application XCTest host to
+`OrlixTerminalTestApp`. `OrlixOSTestApp` remains the separate host for the
+OrlixOS Linux userspace and its private implementation-layer proof.
