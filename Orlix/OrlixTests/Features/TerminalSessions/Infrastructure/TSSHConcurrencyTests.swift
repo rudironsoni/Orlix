@@ -364,6 +364,75 @@ struct TSSHConcurrencyTests {
         #expect(resumeStore.deletedPaneIDs == [paneID])
     }
 
+    @Test @MainActor
+    func unverifiedFailedStartCloseStagesCleanupBeforeDeletingCheckpoint() async throws {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server),
+            password: "password"
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd.private/supervisor"
+            ),
+            host: server.host,
+            info: try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+            ),
+            sessionID: 42,
+            profile: server.tsshProfile,
+            cleanupCredentials: credentials,
+            savedAt: Date()
+        )
+        let resumeStore = TSSHResumeStoreSpy(loadedState: state)
+        let runtime = TSSHRuntime(
+            paneID: paneID,
+            server: server,
+            credentials: credentials,
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: resumeStore,
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        #expect(await runtime.resumeStateDeletionAllowed(
+            requested: true,
+            preserveServer: false,
+            transportCloseWasVerified: false
+        ))
+        #expect(resumeStore.cleanupSavePaneIDs == [paneID])
+        #expect(resumeStore.savedCleanupStates.first?.credentials == credentials)
+        #expect(resumeStore.deletedPaneIDs == [paneID])
+    }
+
     @Test
     func corruptCheckpointDeletionPurgesVersionedSecrets() throws {
         let paneID = UUID()

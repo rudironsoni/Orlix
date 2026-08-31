@@ -47,11 +47,11 @@ nonisolated enum TSSHBootstrap {
             throw TSSHRuntimeError.unsupportedRemoteEnvironment
         }
 
-        let launch = launchCommand(profile: server.tsshProfile)
+        let command = launchCommand(profile: server.tsshProfile)
         let output: String
         do {
             output = try await client.execute(
-                launch.command,
+                command,
                 timeout: .seconds(45),
                 maxOutputBytes: 64 * 1024
             )
@@ -67,7 +67,7 @@ nonisolated enum TSSHBootstrap {
         }
         let serverProcess = TSSHServerProcessIdentity(
             pid: try parseServerPID(output: output),
-            supervisorPath: launch.supervisorPath
+            supervisorPath: try parseSupervisorPath(output: output)
         )
         let info: TSSHServerInfo
         do {
@@ -94,6 +94,20 @@ nonisolated enum TSSHBootstrap {
             throw TSSHRuntimeError.invalidServerResponse
         }
         return pid
+    }
+
+    static func parseSupervisorPath(output: String) throws -> String {
+        let prefix = "ORLIX_TSSHD_SUPERVISOR="
+        guard let line = output.split(whereSeparator: \.isNewline).first(where: {
+            $0.hasPrefix(prefix)
+        }) else {
+            throw TSSHRuntimeError.invalidServerResponse
+        }
+        let path = String(line.dropFirst(prefix.count))
+        guard path.hasPrefix("/"), !path.contains("\0") else {
+            throw TSSHRuntimeError.invalidServerResponse
+        }
+        return path
     }
 
     static func terminateServer(
@@ -169,13 +183,13 @@ nonisolated enum TSSHBootstrap {
     }
 
     static func startCommand(profile: TSSHProfile, nonce: UUID = UUID()) -> String {
-        launchCommand(profile: profile, nonce: nonce).command
+        launchCommand(profile: profile, nonce: nonce)
     }
 
     private static func launchCommand(
         profile: TSSHProfile,
         nonce: UUID = UUID()
-    ) -> (command: String, supervisorPath: String) {
+    ) -> String {
         let binary = profile.serverPath ?? "tsshd"
         var arguments = [
             "--attachable",
@@ -192,15 +206,22 @@ nonisolated enum TSSHBootstrap {
             arguments.append("--kcp")
         }
 
-        let outputPath = "/tmp/orlix-tsshd-\(nonce.uuidString).out"
-        let supervisorPath = "/tmp/orlix-tsshd-\(nonce.uuidString).sh"
         let quotedArguments = arguments.map(RemoteTerminalBootstrap.shellQuoted).joined(separator: " ")
         let script = """
         export PATH="\(pathEntries.joined(separator: ":")):$PATH"
         umask 077
         binary=\(RemoteTerminalBootstrap.shellQuoted(binary))
-        output=\(RemoteTerminalBootstrap.shellQuoted(outputPath))
-        supervisor=\(RemoteTerminalBootstrap.shellQuoted(supervisorPath))
+        workspace=$(mktemp -d "${TMPDIR:-/tmp}/orlix-tsshd.\(nonce.uuidString).XXXXXXXX") || exit 1
+        chmod 700 "$workspace" || { rmdir "$workspace" 2>/dev/null || true; exit 1; }
+        workspace_metadata=$(LC_ALL=C ls -ldn "$workspace") || exit 1
+        set -- $workspace_metadata
+        case "$1" in drwx------*) ;; *) rmdir "$workspace" 2>/dev/null || true; exit 1 ;; esac
+        [ ! -L "$workspace" ] && [ "$3" = "$(id -u)" ] || {
+          rmdir "$workspace" 2>/dev/null || true
+          exit 1
+        }
+        output="$workspace/output"
+        supervisor="$workspace/supervisor"
         pid=
         ready=0
         cleanup() {
@@ -209,7 +230,10 @@ nonisolated enum TSSHBootstrap {
             wait "$pid" 2>/dev/null || true
           fi
           rm -f "$output"
-          if [ "$ready" -ne 1 ]; then rm -f "$supervisor"; fi
+          if [ "$ready" -ne 1 ]; then
+            rm -f "$supervisor"
+            rmdir "$workspace" 2>/dev/null || true
+          fi
           return 0
         }
         trap cleanup EXIT
@@ -227,7 +251,9 @@ nonisolated enum TSSHBootstrap {
             kill -TERM "$child" 2>/dev/null || true
             wait "$child" 2>/dev/null || true
           fi
+          workspace=${0%/*}
           rm -f "$0"
+          rmdir "$workspace" 2>/dev/null || true
         }
         trap cleanup EXIT
         trap 'exit 143' HUP INT TERM
@@ -239,6 +265,7 @@ nonisolated enum TSSHBootstrap {
         : > "$output"
         nohup "$supervisor" "$binary" \(quotedArguments) >"$output" 2>&1 </dev/null &
         pid=$!
+        printf 'ORLIX_TSSHD_SUPERVISOR=%s\n' "$supervisor"
         printf 'ORLIX_TSSHD_PID=%s\n' "$pid"
         count=0
         while [ "$count" -lt 300 ]; do
@@ -257,9 +284,6 @@ nonisolated enum TSSHBootstrap {
         cat "$output"
         exit 1
         """
-        return (
-            RemoteTerminalBootstrap.wrapPOSIXShellCommand(script),
-            supervisorPath
-        )
+        return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 }

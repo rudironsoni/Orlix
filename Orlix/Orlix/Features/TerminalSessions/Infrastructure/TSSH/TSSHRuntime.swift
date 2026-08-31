@@ -430,20 +430,11 @@ final class TSSHRuntime {
         } else {
             true
         }
-        var canDeleteResumeState = deleteResumeState
-        if deleteResumeState, !preserveServer, !transportCloseWasVerified {
-            do {
-                canDeleteResumeState = try Self.stagePersistedCleanupBeforeRemoval(
-                    paneID: paneID,
-                    resumeStore: resumeStore
-                )
-                if canDeleteResumeState {
-                    await processDeferredCleanupBeforeRemoval()
-                }
-            } catch {
-                canDeleteResumeState = false
-            }
-        }
+        let canDeleteResumeState = await resumeStateDeletionAllowed(
+            requested: deleteResumeState,
+            preserveServer: preserveServer,
+            transportCloseWasVerified: transportCloseWasVerified
+        )
         await stopOwnedVPN()
         transportFallback?.cancel()
         if canDeleteResumeState { try? resumeStore.delete(for: paneID) }
@@ -469,6 +460,25 @@ final class TSSHRuntime {
             fallbackServer: server,
             fallbackCredentials: credentials
         )
+    }
+
+    func resumeStateDeletionAllowed(
+        requested: Bool,
+        preserveServer: Bool,
+        transportCloseWasVerified: Bool
+    ) async -> Bool {
+        guard requested else { return false }
+        guard !preserveServer, !transportCloseWasVerified else { return true }
+        do {
+            let staged = try Self.stagePersistedCleanupBeforeRemoval(
+                paneID: paneID,
+                resumeStore: resumeStore
+            )
+            if staged { await processDeferredCleanupBeforeRemoval() }
+            return staged
+        } catch {
+            return false
+        }
     }
 
     static func stagePersistedCleanupBeforeRemoval(
@@ -670,22 +680,33 @@ final class TSSHRuntime {
     ) async {
         invalidateConnectionGeneration()
         let transportFallback = transport.map(scheduleTransportFallback)
+        let transportCloseWasVerified: Bool
         if preserveServer {
             if let forwarder { callGate.emergencyCloseForwarder(forwarder) }
             if let session { callGate.forgetSession(session) }
             if let transport { callGate.emergencyAbandon(transport) }
+            transportCloseWasVerified = true
         } else {
             if let forwarder { await callGate.closeForwarder(forwarder) }
             if let session { await callGate.closeSession(session) }
-            if let transport { await callGate.closeTransport(transport, preserveServer: false) }
+            transportCloseWasVerified = if let transport {
+                await callGate.closeTransport(transport, preserveServer: false)
+            } else {
+                true
+            }
         }
+        let canDeleteResumeState = await resumeStateDeletionAllowed(
+            requested: deleteResumeState,
+            preserveServer: preserveServer,
+            transportCloseWasVerified: transportCloseWasVerified
+        )
         await stopOwnedVPN()
         transportFallback?.cancel()
-        if deleteResumeState { try? resumeStore.delete(for: paneID) }
+        if canDeleteResumeState { try? resumeStore.delete(for: paneID) }
         self.forwarder = nil
         self.session = nil
         self.transport = nil
-        if deleteResumeState { resumeState = nil }
+        if canDeleteResumeState { resumeState = nil }
         outputBridge = nil
         stateBridge = nil
         healthBridge = nil

@@ -115,8 +115,11 @@ struct TSSHServerInfoTests {
         #expect(command.contains("1280"))
         #expect(command.contains("nohup"))
         #expect(command.contains("ORLIX_TSSHD_PID"))
-        #expect(command.contains("umask 077"))
         #expect(command.contains("ORLIX_TSSHD_SUPERVISOR"))
+        #expect(command.contains("umask 077"))
+        #expect(command.contains("mktemp -d"))
+        #expect(command.contains("chmod 700"))
+        #expect(command.contains("[ ! -L"))
         #expect(command.contains("trap cleanup EXIT"))
         #expect(command.contains("kill -TERM \\\"\\$pid\\\""))
     }
@@ -131,6 +134,21 @@ struct TSSHServerInfoTests {
         }
         #expect(throws: TSSHRuntimeError.self) {
             try TSSHBootstrap.parseServerPID(output: "ORLIX_TSSHD_PID=1")
+        }
+    }
+
+    @Test
+    func bootstrapRequiresAnAbsolutePrivateSupervisorPath() throws {
+        #expect(try TSSHBootstrap.parseSupervisorPath(
+            output: "ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor\n"
+        ) == "/tmp/orlix-tsshd.private/supervisor")
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseSupervisorPath(output: "ORLIX_TSSHD_PID=321")
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseSupervisorPath(
+                output: "ORLIX_TSSHD_SUPERVISOR=relative/supervisor"
+            )
         }
     }
 
