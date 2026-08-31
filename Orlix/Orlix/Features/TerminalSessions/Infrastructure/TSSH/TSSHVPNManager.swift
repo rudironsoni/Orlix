@@ -299,6 +299,9 @@ final class TSSHVPNManager {
         } catch {
             manager.connection.stopVPNTunnel()
             try? TSSHVPNSecretStore.delete(key: configKey)
+            if let previousKey, previousKey != configKey {
+                try? TSSHVPNSecretStore.delete(key: previousKey)
+            }
             throw error
         }
         retainsOwnership = true

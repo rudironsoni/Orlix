@@ -32,6 +32,7 @@ nonisolated struct TSSHResumeState: Codable, Equatable, Sendable {
 nonisolated struct TSSHResumeCleanupState: Codable, Equatable, Sendable {
     let serverIdentity: TSSHResumeServerIdentity
     let serverProcess: TSSHServerProcessIdentity
+    let credentials: ServerCredentials?
     let createdAt: Date
 }
 
@@ -72,6 +73,7 @@ nonisolated protocol TSSHResumeStoring: Sendable {
     func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState?
     func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws
     func deleteCleanup(for paneID: UUID) throws
+    func pendingCleanupPaneIDs() -> [UUID]
 }
 
 nonisolated enum TSSHResumeStoreError: LocalizedError, Sendable {
@@ -189,6 +191,10 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             profile = try container.decode(TSSHProfile.self, forKey: .profile)
             savedAt = try container.decode(Date.self, forKey: .savedAt)
         }
+    }
+
+    private struct CleanupReference: Codable {
+        let secretAccount: String
     }
 
     private let fileManager: FileManager
@@ -319,7 +325,7 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
             )
             try writeSecret(try JSONEncoder().encode(secret), account: secretAccount)
             if fileManager.fileExists(atPath: checkpointURL.path) {
-                try fileManager.replaceItemAt(checkpointURL, withItemAt: stagedURL)
+                _ = try fileManager.replaceItemAt(checkpointURL, withItemAt: stagedURL)
             } else {
                 try fileManager.moveItem(at: stagedURL, to: checkpointURL)
             }
@@ -354,40 +360,89 @@ nonisolated final class TSSHResumeStore: TSSHResumeStoring, @unchecked Sendable 
         let cleanupURL = cleanupURL(for: paneID)
         guard fileManager.fileExists(atPath: cleanupURL.path) else { return nil }
         do {
+            let data = try Data(contentsOf: cleanupURL)
+            if let reference = try? JSONDecoder().decode(CleanupReference.self, from: data) {
+                guard let secretData = try readSecret(account: reference.secretAccount) else {
+                    throw TSSHResumeStoreError.corruptState
+                }
+                return try JSONDecoder().decode(TSSHResumeCleanupState.self, from: secretData)
+            }
             return try JSONDecoder().decode(
                 TSSHResumeCleanupState.self,
-                from: Data(contentsOf: cleanupURL)
+                from: data
             )
         } catch {
+            if let storeError = error as? TSSHResumeStoreError { throw storeError }
             throw TSSHResumeStoreError.corruptState
         }
     }
 
     func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {
+        let cleanupURL = cleanupURL(for: paneID)
+        let previousSecretAccount = (try? JSONDecoder().decode(
+            CleanupReference.self,
+            from: Data(contentsOf: cleanupURL)
+        ))?.secretAccount
+        let secretAccount = "\(paneID.uuidString).cleanup.\(UUID().uuidString)"
+        let stagedURL = root.appendingPathComponent(
+            ".\(paneID.uuidString).cleanup.\(UUID().uuidString).tmp"
+        )
         do {
             try fileManager.createDirectory(
                 at: root,
                 withIntermediateDirectories: true,
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
             )
-            let cleanupURL = cleanupURL(for: paneID)
-            try JSONEncoder().encode(state).write(to: cleanupURL, options: .atomic)
+            try writeSecret(try JSONEncoder().encode(state), account: secretAccount)
+            try JSONEncoder().encode(
+                CleanupReference(secretAccount: secretAccount)
+            ).write(to: stagedURL, options: .atomic)
             try fileManager.setAttributes(
                 [
                     .posixPermissions: 0o600,
                     .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
                 ],
-                ofItemAtPath: cleanupURL.path
+                ofItemAtPath: stagedURL.path
             )
+            if fileManager.fileExists(atPath: cleanupURL.path) {
+                _ = try fileManager.replaceItemAt(cleanupURL, withItemAt: stagedURL)
+            } else {
+                try fileManager.moveItem(at: stagedURL, to: cleanupURL)
+            }
         } catch {
+            try? deleteSecret(account: secretAccount)
+            if fileManager.fileExists(atPath: stagedURL.path) {
+                try? fileManager.removeItem(at: stagedURL)
+            }
             throw TSSHResumeStoreError.checkpointStorage
+        }
+        if let previousSecretAccount, previousSecretAccount != secretAccount {
+            try? deleteSecret(account: previousSecretAccount)
         }
     }
 
     func deleteCleanup(for paneID: UUID) throws {
         let cleanupURL = cleanupURL(for: paneID)
+        if let reference = try? JSONDecoder().decode(
+            CleanupReference.self,
+            from: Data(contentsOf: cleanupURL)
+        ) {
+            try deleteSecret(account: reference.secretAccount)
+        }
         if fileManager.fileExists(atPath: cleanupURL.path) {
             try fileManager.removeItem(at: cleanupURL)
+        }
+    }
+
+    func pendingCleanupPaneIDs() -> [UUID] {
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: nil
+        ) else { return [] }
+        return urls.compactMap { url in
+            let suffix = ".cleanup.json"
+            guard url.lastPathComponent.hasSuffix(suffix) else { return nil }
+            return UUID(uuidString: String(url.lastPathComponent.dropLast(suffix.count)))
         }
     }
 

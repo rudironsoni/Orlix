@@ -36,9 +36,68 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
     func loadCleanup(for paneID: UUID) throws -> TSSHResumeCleanupState? { nil }
     func saveCleanup(_ state: TSSHResumeCleanupState, for paneID: UUID) throws {}
     func deleteCleanup(for paneID: UUID) throws {}
+    func pendingCleanupPaneIDs() -> [UUID] { [] }
 }
 
 struct TSSHConcurrencyTests {
+    @Test @MainActor
+    func cachedRuntimeRequiresExactEndpointProfileAndCredentials() {
+        let paneID = UUID()
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            tsshProfile: TSSHProfile(sshAgentForwarding: true),
+            username: "root",
+            connectionMode: .tssh
+        )
+        let credentials = ServerCredentials(
+            serverId: server.id,
+            credentialBinding: ServerCredentialBinding(server: server),
+            password: "first"
+        )
+        let runtime = TSSHRuntime(
+            paneID: paneID,
+            server: server,
+            credentials: credentials,
+            sshClientFactory: SSHClientFactory(
+                runtimeSettings: {
+                    SSHRuntimeSettings(keepAliveEnabled: false, keepAliveIntervalSeconds: 10)
+                },
+                hostKeyVerifier: TSSHHostKeyVerifierStub(),
+                moshBootstrap: TSSHMoshBootstrapStub()
+            ),
+            resumeStore: TSSHResumeStoreSpy(),
+            ownerAccess: TSSHRuntimeOwnerAccess(
+                isCurrent: { _, _ in true },
+                startupPlan: { _, _, _, _ in throw SSHError.notConnected },
+                resumeContext: { _ in nil },
+                startupActionReplayPending: { _ in false },
+                setResumeContext: { _, _ in },
+                setStartupActionReplayPending: { _, _ in },
+                remoteSessionAttached: { _ in },
+                updateConnectionState: { _, _ in },
+                markTransport: { _ in },
+                handleShellEnd: { _, _, _ in }
+            )
+        )
+
+        #expect(runtime.isBound(to: server, credentials: credentials))
+
+        var changedEndpoint = server
+        changedEndpoint.host = "replacement.example.com"
+        #expect(!runtime.isBound(to: changedEndpoint, credentials: credentials))
+
+        var changedProfile = server
+        changedProfile.tsshProfile = TSSHProfile(sshAgentForwarding: false)
+        #expect(!runtime.isBound(to: changedProfile, credentials: credentials))
+
+        var changedCredentials = credentials
+        changedCredentials.password = "second"
+        #expect(!runtime.isBound(to: server, credentials: changedCredentials))
+    }
+
     @Test(arguments: [
         (preservationRequested: true, hasCheckpoint: true, expected: true),
         (preservationRequested: true, hasCheckpoint: false, expected: false),

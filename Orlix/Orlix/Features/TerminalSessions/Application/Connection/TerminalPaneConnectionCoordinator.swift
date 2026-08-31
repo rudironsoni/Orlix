@@ -134,20 +134,22 @@ private final class TSSHPaneCoordinator {
     }
 
     func start(terminal: any TerminalSurface) {
-        let runtime = tabManager.transportCoordinator.tsshRuntime(
-            for: paneId,
-            server: server,
-            credentials: credentials
-        )
-        runtime.attach(to: terminal)
-        if let geometry = terminal.terminalGeometry {
-            runtime.resize(
-                cols: geometry.columns,
-                rows: geometry.rows,
-                pixelSize: geometry.pixelSize
+        Task { @MainActor in
+            let runtime = await tabManager.transportCoordinator.tsshRuntime(
+                for: paneId,
+                server: server,
+                credentials: credentials
             )
+            runtime.attach(to: terminal)
+            if let geometry = terminal.terminalGeometry {
+                runtime.resize(
+                    cols: geometry.columns,
+                    rows: geometry.rows,
+                    pixelSize: geometry.pixelSize
+                )
+            }
+            runtime.startIfNeeded()
         }
-        runtime.startIfNeeded()
     }
 
     func send(_ data: Data) {

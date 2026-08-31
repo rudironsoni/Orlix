@@ -98,6 +98,100 @@ nonisolated func tsshShouldPreserveCancelledStartServer(
 }
 
 @MainActor
+private enum TSSHDeferredCleanup {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Orlix",
+        category: "TSSHDeferredCleanup"
+    )
+
+    static func processAll(
+        resumeStore: any TSSHResumeStoring,
+        sshClientFactory: SSHClientFactory
+    ) async {
+        for paneID in resumeStore.pendingCleanupPaneIDs() {
+            await process(
+                paneID: paneID,
+                resumeStore: resumeStore,
+                sshClientFactory: sshClientFactory,
+                fallbackServer: nil,
+                fallbackCredentials: nil
+            )
+        }
+    }
+
+    static func process(
+        paneID: UUID,
+        resumeStore: any TSSHResumeStoring,
+        sshClientFactory: SSHClientFactory,
+        fallbackServer: Server?,
+        fallbackCredentials: ServerCredentials?
+    ) async {
+        let cleanup: TSSHResumeCleanupState
+        do {
+            guard let pending = try resumeStore.loadCleanup(for: paneID) else { return }
+            cleanup = pending
+        } catch {
+            logger.warning(
+                "Cannot load TSSH remote cleanup state: \(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+
+        let cleanupCredentials: ServerCredentials
+        if let persisted = cleanup.credentials {
+            cleanupCredentials = persisted
+        } else if let fallbackServer,
+                  let fallbackCredentials,
+                  cleanup.serverIdentity == TSSHResumeServerIdentity(server: fallbackServer),
+                  fallbackCredentials.isAuthorized(for: fallbackServer) {
+            cleanupCredentials = fallbackCredentials
+        } else {
+            logger.warning("Deferred legacy TSSH cleanup has no endpoint-bound credentials")
+            return
+        }
+
+        guard cleanupCredentials.serverId == cleanup.serverIdentity.id,
+              let binding = cleanupCredentials.credentialBinding,
+              binding.host == cleanup.serverIdentity.host,
+              binding.port == cleanup.serverIdentity.port,
+              binding.username == cleanup.serverIdentity.username,
+              binding.connectionMode == .tssh else {
+            logger.error("Rejected TSSH cleanup credentials that are not bound to the saved endpoint")
+            return
+        }
+
+        let cleanupServer = Server(
+            id: cleanup.serverIdentity.id,
+            workspaceId: UUID(),
+            name: "Deferred TSSH cleanup",
+            host: cleanup.serverIdentity.host,
+            port: cleanup.serverIdentity.port,
+            username: cleanup.serverIdentity.username,
+            connectionMode: .tssh,
+            authMethod: binding.authMethod,
+            updatedAt: cleanup.serverIdentity.updatedAt
+        )
+        let sshClient = sshClientFactory.makeClient(connectTimeout: .seconds(15))
+        defer { Task { await sshClient.disconnect() } }
+        do {
+            _ = try await sshClient.connect(
+                to: cleanupServer,
+                credentials: cleanupCredentials
+            )
+            try await TSSHBootstrap.terminateServerForCleanup(
+                cleanup.serverProcess,
+                using: sshClient
+            )
+            try resumeStore.deleteCleanup(for: paneID)
+        } catch {
+            logger.warning(
+                "Deferred TSSH remote cleanup for a later retry: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+}
+
+@MainActor
 final class TSSHRuntime {
     let paneID: UUID
     let identityToken = UUID()
@@ -145,6 +239,13 @@ final class TSSHRuntime {
 
     var isStartInFlight: Bool { startTask != nil }
     var hasLiveTransport: Bool { transport != nil }
+
+    func isBound(to requestedServer: Server, credentials requestedCredentials: ServerCredentials) -> Bool {
+        server.id == requestedServer.id
+            && ServerCredentialBinding(server: server) == ServerCredentialBinding(server: requestedServer)
+            && server.tsshProfile == requestedServer.tsshProfile
+            && credentials == requestedCredentials
+    }
 
     init(
         paneID: UUID,
@@ -306,6 +407,35 @@ final class TSSHRuntime {
         agentBridge = nil
         startupReady = false
         ownerAccess.updateConnectionState(paneID, .disconnected)
+    }
+
+    func processDeferredCleanupBeforeRemoval() async {
+        await TSSHDeferredCleanup.process(
+            paneID: paneID,
+            resumeStore: resumeStore,
+            sshClientFactory: sshClientFactory,
+            fallbackServer: server,
+            fallbackCredentials: credentials
+        )
+    }
+
+    func closeForSecurityBindingReplacement() async {
+        if transport == nil,
+           let savedState = try? resumeStore.load(for: paneID) {
+            try? stageCleanup(for: savedState)
+            await processDeferredCleanupBeforeRemoval()
+        }
+        await close()
+    }
+
+    static func processPersistedDeferredCleanup(
+        resumeStore: any TSSHResumeStoring = TSSHResumeStore.shared,
+        sshClientFactory: SSHClientFactory
+    ) async {
+        await TSSHDeferredCleanup.processAll(
+            resumeStore: resumeStore,
+            sshClientFactory: sshClientFactory
+        )
     }
 
     func prepareForReconnect() async {
@@ -520,7 +650,7 @@ final class TSSHRuntime {
                 )
                 await cleanupFailedResume(preserveServer: !shouldDiscard)
                 if shouldDiscard {
-                    try? resumeStore.delete(for: paneID)
+                    try? stageCleanup(for: state)
                     logger.info(
                         "Saved TSSH session is unavailable after \(attempt) attempt(s); starting a new session"
                     )
@@ -534,7 +664,7 @@ final class TSSHRuntime {
             }
         }
         await cleanupFailedResume(preserveServer: false)
-        try? resumeStore.delete(for: paneID)
+        try? stageCleanup(for: state)
         return false
     }
 
@@ -543,6 +673,7 @@ final class TSSHRuntime {
             TSSHResumeCleanupState(
                 serverIdentity: state.serverIdentity,
                 serverProcess: state.serverProcess,
+                credentials: credentials,
                 createdAt: Date()
             ),
             for: paneID
@@ -551,37 +682,7 @@ final class TSSHRuntime {
     }
 
     private func cleanupStaleServerIfNeeded() async {
-        let cleanup: TSSHResumeCleanupState
-        do {
-            guard let pending = try resumeStore.loadCleanup(for: paneID) else { return }
-            cleanup = pending
-        } catch {
-            logger.warning(
-                "Cannot load TSSH remote cleanup state: \(error.localizedDescription, privacy: .public)"
-            )
-            return
-        }
-        guard cleanup.serverIdentity.id == server.id else { return }
-        var cleanupServer = server
-        cleanupServer.host = cleanup.serverIdentity.host
-        cleanupServer.port = cleanup.serverIdentity.port
-        cleanupServer.username = cleanup.serverIdentity.username
-        let sshClient = sshClientFactory.makeClient(
-            connectTimeout: .seconds(server.tsshProfile.connectTimeoutSeconds)
-        )
-        defer { Task { await sshClient.disconnect() } }
-        do {
-            _ = try await sshClient.connect(to: cleanupServer, credentials: credentials)
-            try await TSSHBootstrap.terminateServerForCleanup(
-                cleanup.serverProcess,
-                using: sshClient
-            )
-            try resumeStore.deleteCleanup(for: paneID)
-        } catch {
-            logger.warning(
-                "Deferred TSSH remote cleanup for a later retry: \(error.localizedDescription, privacy: .public)"
-            )
-        }
+        await processDeferredCleanupBeforeRemoval()
     }
 
     private func cleanupFailedResume(preserveServer: Bool) async {

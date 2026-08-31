@@ -79,6 +79,11 @@ final class TerminalTransportCoordinator {
         self.eternalTerminalRuntimeDependencies = eternalTerminalRuntimeDependencies
         self.sessionAccess = sessionAccess
         self.remoteSessionCoordinator = remoteSessionCoordinator
+        Task { @MainActor in
+            await TSSHRuntime.processPersistedDeferredCleanup(
+                sshClientFactory: sshClientFactory
+            )
+        }
     }
 
     var ownedPaneIds: Set<UUID> {
@@ -98,8 +103,14 @@ final class TerminalTransportCoordinator {
         for paneId: UUID,
         server: Server,
         credentials: ServerCredentials
-    ) -> TSSHRuntime {
-        if let runtime = tsshRuntimes[paneId] { return runtime }
+    ) async -> TSSHRuntime {
+        if let runtime = tsshRuntimes[paneId],
+           runtime.isBound(to: server, credentials: credentials) {
+            return runtime
+        }
+        if let staleRuntime = tsshRuntimes.removeValue(forKey: paneId) {
+            await staleRuntime.closeForSecurityBindingReplacement()
+        }
         let runtime = TSSHRuntime(
             paneID: paneId,
             server: server,
@@ -629,6 +640,7 @@ final class TerminalTransportCoordinator {
                 await runtime.close()
             }
             if let tsshRuntime {
+                await tsshRuntime.processDeferredCleanupBeforeRemoval()
                 await tsshRuntime.close()
             }
         }
