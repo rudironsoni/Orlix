@@ -775,7 +775,10 @@ final class TSSHRuntime {
         info: TSSHServerInfo,
         profile: TSSHProfile
     ) async throws {
-        guard profile.vpnEnabled else { return }
+        guard profile.vpnEnabled else {
+            try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel()
+            return
+        }
         do {
             try await TSSHVPNManager.shared.installAndStart(
                 TSSHVPNConfiguration(

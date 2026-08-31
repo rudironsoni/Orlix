@@ -317,6 +317,29 @@ final class TSSHVPNManager {
         manager.connection.stopVPNTunnel()
     }
 
+    func stopUnclaimedPersistedTunnel() async throws {
+        guard ownership.ownerID == nil else { return }
+        let manager = try await loadManager()
+        guard let provider = manager.protocolConfiguration as? NETunnelProviderProtocol,
+              provider.providerConfiguration?["tsshOwnerID"] as? String != nil else {
+            return
+        }
+        switch manager.connection.status {
+        case .connecting, .connected, .reasserting:
+            manager.connection.stopVPNTunnel()
+            try await waitUntilDisconnected(manager.connection)
+        case .disconnecting:
+            try await waitUntilDisconnected(manager.connection)
+        default:
+            break
+        }
+        if let configKey = provider.providerConfiguration?["tsshConfigKey"] as? String {
+            try? TSSHVPNSecretStore.delete(key: configKey)
+        }
+        manager.isEnabled = false
+        try await manager.saveToPreferences()
+    }
+
     private func scheduleStopRetry(ownerID: UUID) {
         teardownRetryTasks[ownerID]?.cancel()
         teardownRetryTasks[ownerID] = Task { [weak self] in

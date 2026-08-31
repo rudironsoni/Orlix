@@ -107,6 +107,12 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         case .update:
             previousServer = previousServers.first { $0.id == savedServer.id }
         }
+        if let previousServer,
+           previousServer.connectionMode == .tssh,
+           previousServer.tsshProfile.vpnEnabled,
+           savedServer.connectionMode != .tssh || !savedServer.tsshProfile.vpnEnabled {
+            try await dependencies.revokeUnclaimedTSSHVPN()
+        }
         let transactionID = dependencies.makeID()
         let plan = ServerDataMutationPlan(
             id: transactionID,
@@ -161,6 +167,10 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
             for: .delete
         ) else {
             throw OrlixError.authorizationRequired
+        }
+
+        if storedServer.connectionMode == .tssh, storedServer.tsshProfile.vpnEnabled {
+            try await dependencies.revokeUnclaimedTSSHVPN()
         }
 
         try await deleteServerData(storedServer)

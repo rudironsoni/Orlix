@@ -284,6 +284,7 @@ extension TerminalTabManagerLifecycleTests {
                         actionAuthorizer: appLockManager,
                         syncRepository: cloudKitSync.coordinator,
                         didDeleteServerLocalData: { _ in },
+                        revokeUnclaimedTSSHVPN: {},
                         defaultWorkspaceName: { "Default" },
                         canonicalDefaultWorkspaceNames: { ["Default"] },
                         now: Date.init,

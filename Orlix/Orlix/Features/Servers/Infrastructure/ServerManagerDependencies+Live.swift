@@ -64,6 +64,7 @@ extension ServerManagerDependencies {
         actionAuthorizer: any ProtectedServerActionAuthorizing,
         syncRepository: any ServerSyncRepository,
         didDeleteServerLocalData: @escaping (UUID) -> Void,
+        revokeUnclaimedTSSHVPN: @escaping () async throws -> Void,
         defaultWorkspaceName: @escaping () -> String,
         canonicalDefaultWorkspaceNames: @escaping () -> Set<String>,
         now: @escaping () -> Date,
@@ -89,6 +90,7 @@ extension ServerManagerDependencies {
             actionAuthorizer: actionAuthorizer,
             knownHosts: knownHosts,
             didDeleteServerLocalData: didDeleteServerLocalData,
+            revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
             isRemoteSchemaError: ServerCloudKitClient.isSchemaError,
             now: now,
             makeID: makeID
