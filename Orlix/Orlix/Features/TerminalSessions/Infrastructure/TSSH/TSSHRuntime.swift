@@ -82,6 +82,13 @@ nonisolated func tsshPublishedTransportState(
     return startupReady ? .connected : .connecting
 }
 
+nonisolated func tsshShouldPreserveCancelledStartServer(
+    preservationRequested: Bool,
+    hasCheckpoint: Bool
+) -> Bool {
+    preservationRequested && hasCheckpoint
+}
+
 @MainActor
 final class TSSHRuntime {
     let paneID: UUID
@@ -334,8 +341,12 @@ final class TSSHRuntime {
             if try await resumeSavedSession() { return }
             try await startFreshSession()
         } catch is CancellationError {
+            let preserveServer = tsshShouldPreserveCancelledStartServer(
+                preservationRequested: cancelledStartPreservesServer,
+                hasCheckpoint: resumeStore.hasCheckpoint(for: paneID)
+            )
             await discardFailedStart(
-                preserveServer: cancelledStartPreservesServer,
+                preserveServer: preserveServer,
                 deleteResumeState: cancelledStartDeletesResumeState
             )
             return

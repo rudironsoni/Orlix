@@ -36,6 +36,22 @@ private nonisolated final class TSSHResumeStoreSpy: TSSHResumeStoring, @unchecke
 }
 
 struct TSSHConcurrencyTests {
+    @Test(arguments: [
+        (preservationRequested: true, hasCheckpoint: true, expected: true),
+        (preservationRequested: true, hasCheckpoint: false, expected: false),
+        (preservationRequested: false, hasCheckpoint: true, expected: false),
+    ])
+    func cancelledStartOnlyPreservesACheckpointedServer(
+        preservationRequested: Bool,
+        hasCheckpoint: Bool,
+        expected: Bool
+    ) {
+        #expect(tsshShouldPreserveCancelledStartServer(
+            preservationRequested: preservationRequested,
+            hasCheckpoint: hasCheckpoint
+        ) == expected)
+    }
+
     @Test @MainActor
     func reconnectPreservesTheAttachableSessionCheckpoint() async {
         let paneID = UUID()
