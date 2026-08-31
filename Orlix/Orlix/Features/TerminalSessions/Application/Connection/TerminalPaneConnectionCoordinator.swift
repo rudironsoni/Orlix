@@ -17,7 +17,11 @@ final class TerminalPaneConnectionCoordinator {
     var isTerminalReady = false
     var preservePane = false
     var lastReportedSize: CGSize = .zero
-    private let backend: Backend
+    private let paneID: UUID
+    private let sshFailureOutput: @MainActor @Sendable (TerminalConnectionFailure) -> Data?
+    private var connectionMode: SSHConnectionMode
+    private var backend: Backend
+    private var backendGeneration = UUID()
 
     init(
         paneId: UUID,
@@ -26,31 +30,49 @@ final class TerminalPaneConnectionCoordinator {
         tabManager: TerminalTabManager,
         sshFailureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     ) {
+        paneID = paneId
         self.tabManager = tabManager
+        self.sshFailureOutput = sshFailureOutput
+        connectionMode = server.connectionMode
+        backend = Self.makeBackend(
+            paneId: paneId,
+            server: server,
+            credentials: credentials,
+            tabManager: tabManager,
+            sshFailureOutput: sshFailureOutput
+        )
+    }
+
+    private static func makeBackend(
+        paneId: UUID,
+        server: Server,
+        credentials: ServerCredentials,
+        tabManager: TerminalTabManager,
+        sshFailureOutput: @escaping @MainActor @Sendable (TerminalConnectionFailure) -> Data?
+    ) -> Backend {
         if server.connectionMode == .tssh {
-            backend = .tssh(TSSHPaneCoordinator(
+            return .tssh(TSSHPaneCoordinator(
                 paneId: paneId,
                 server: server,
                 credentials: credentials,
                 tabManager: tabManager
             ))
         } else if server.connectionMode == .eternalTerminal {
-            backend = .eternalTerminal(EternalTerminalPaneCoordinator(
+            return .eternalTerminal(EternalTerminalPaneCoordinator(
                 paneId: paneId,
                 server: server,
                 credentials: credentials,
                 tabManager: tabManager
             ))
-        } else {
-            backend = .ssh(TerminalPaneSSHCoordinator(
-                paneId: paneId,
-                server: server,
-                credentials: credentials,
-                sshClient: tabManager.transportCoordinator.makeSSHClient(),
-                tabManager: tabManager,
-                failureOutput: sshFailureOutput
-            ))
         }
+        return .ssh(TerminalPaneSSHCoordinator(
+            paneId: paneId,
+            server: server,
+            credentials: credentials,
+            sshClient: tabManager.transportCoordinator.makeSSHClient(),
+            tabManager: tabManager,
+            failureOutput: sshFailureOutput
+        ))
     }
 
     var paneId: UUID {
@@ -104,17 +126,58 @@ final class TerminalPaneConnectionCoordinator {
     }
 
     func updateSecurityBinding(server: Server, credentials: ServerCredentials) {
-        guard case .tssh(let coordinator) = backend else { return }
-        coordinator.updateSecurityBinding(server: server, credentials: credentials)
+        guard connectionMode != server.connectionMode else {
+            guard case .tssh(let coordinator) = backend else { return }
+            coordinator.updateSecurityBinding(server: server, credentials: credentials)
+            return
+        }
+
+        let previousBackend = backend
+        let generation = UUID()
+        connectionMode = server.connectionMode
+        backendGeneration = generation
+        backend = Self.makeBackend(
+            paneId: paneID,
+            server: server,
+            credentials: credentials,
+            tabManager: tabManager,
+            sshFailureOutput: sshFailureOutput
+        )
+        cancel(previousBackend)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.unregister(previousBackend)
+            guard self.backendGeneration == generation,
+                  let terminal = self.terminal else { return }
+            self.installRichPasteInterception(on: terminal)
+            if self.isTerminalReady {
+                self.startConnection(terminal: terminal)
+            }
+        }
     }
 
     func cancelConnection() {
         terminal = nil
+        cancel(backend)
+    }
+
+    private func cancel(_ backend: Backend) {
         switch backend {
         case .ssh:
             break
         case .eternalTerminal(let coordinator): coordinator.cancel()
         case .tssh(let coordinator): coordinator.cancel()
+        }
+    }
+
+    private func unregister(_ backend: Backend) async {
+        switch backend {
+        case .ssh:
+            await tabManager.transportCoordinator.unregisterSSHClient(for: paneID)
+        case .eternalTerminal:
+            await tabManager.transportCoordinator.unregisterEternalTerminalRuntime(for: paneID)
+        case .tssh:
+            await tabManager.transportCoordinator.unregisterTSSHRuntime(for: paneID)
         }
     }
 }

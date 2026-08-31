@@ -20,17 +20,20 @@ actor SSHSession {
         var output = Data()
         var stderr = Data()
         var outputBudget: SSHExecOutputBudget
+        let retainsPartialOutputOnFailure: Bool
         var isStarted = false
 
         init(
             id: UUID,
             command: String,
             maximumOutputBytes: Int,
+            retainsPartialOutputOnFailure: Bool,
             continuation: CheckedContinuation<String, Error>
         ) {
             self.id = id
             self.command = command
             self.outputBudget = SSHExecOutputBudget(maximumBytes: maximumOutputBytes)
+            self.retainsPartialOutputOnFailure = retainsPartialOutputOnFailure
             self.continuation = continuation
         }
     }

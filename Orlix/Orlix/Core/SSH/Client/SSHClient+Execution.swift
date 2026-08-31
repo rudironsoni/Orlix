@@ -6,7 +6,8 @@ extension SSHClient {
     func execute(
         _ command: String,
         timeout: Duration? = nil,
-        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
+        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes,
+        retainPartialOutputOnFailure: Bool = false
     ) async throws -> String {
         guard !isAborted else {
             throw SSHError.notConnected
@@ -20,7 +21,11 @@ extension SSHClient {
             onTimeout: { session.abort() }
         ) {
             try Task.checkCancellation()
-            return try await session.execute(command, maxOutputBytes: maxOutputBytes)
+            return try await session.execute(
+                command,
+                maxOutputBytes: maxOutputBytes,
+                retainPartialOutputOnFailure: retainPartialOutputOnFailure
+            )
         }
     }
 

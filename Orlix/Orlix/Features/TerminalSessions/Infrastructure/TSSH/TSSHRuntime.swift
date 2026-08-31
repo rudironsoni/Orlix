@@ -258,8 +258,8 @@ final class TSSHRuntime {
     }
 
     func matchesTrustedHost(host: String, port: Int) -> Bool {
-        let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return TSSHResumeServerIdentity(server: server).host == normalizedHost
+        let normalizedHost = KnownHostsManager.canonicalHost(host)
+        return KnownHostsManager.canonicalHost(server.host) == normalizedHost
             && server.port == port
     }
 
@@ -411,6 +411,7 @@ final class TSSHRuntime {
         guard !isClosing else { return }
         isClosing = true
         revokeAgentForwarding()
+        await stopOwnedVPN()
         invalidateConnectionGeneration()
         if let pendingStart = startTask {
             cancelledStartPreservesServer = preserveServer
@@ -439,6 +440,7 @@ final class TSSHRuntime {
             preserveServer: preserveServer,
             transportCloseWasVerified: transportCloseWasVerified
         )
+        // A cancelled startup can finish acquiring VPN ownership while its task unwinds.
         await stopOwnedVPN()
         transportFallback?.cancel()
         if canDeleteResumeState { try? resumeStore.delete(for: paneID) }
@@ -464,6 +466,11 @@ final class TSSHRuntime {
             fallbackServer: server,
             fallbackCredentials: credentials
         )
+    }
+
+    func revokeSecuritySensitiveTransports() async {
+        revokeAgentForwarding()
+        await stopOwnedVPN()
     }
 
     func resumeStateDeletionAllowed(
@@ -1008,7 +1015,13 @@ final class TSSHRuntime {
             )
             didConnect()
         } catch {
-            await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
+            let preserveCheckpointedServer = tsshShouldPreserveCancelledStartServer(
+                preservationRequested: cancelledStartPreservesServer,
+                hasCheckpoint: resumeStore.hasCheckpoint(for: paneID)
+            )
+            if !preserveCheckpointedServer {
+                await TSSHBootstrap.terminateServer(bootstrap.serverProcess, using: sshClient)
+            }
             throw error
         }
     }

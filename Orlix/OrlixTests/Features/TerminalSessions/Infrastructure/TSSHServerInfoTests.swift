@@ -138,6 +138,26 @@ struct TSSHServerInfoTests {
     }
 
     @Test
+    func bootstrapRecoversCleanupIdentityFromPartialExecOutput() throws {
+        let partialOutput = """
+        ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor
+        ORLIX_TSSHD_PID=321
+        """
+        let executionError = SSHCommandExecutionError(
+            underlyingDescription: "The exec channel closed before completion.",
+            partialOutput: partialOutput
+        )
+
+        #expect(try TSSHBootstrap.serverProcessIdentity(
+            output: executionError.partialOutput
+        ) == TSSHServerProcessIdentity(
+            pid: 321,
+            supervisorPath: "/tmp/orlix-tsshd.private/supervisor"
+        ))
+        #expect(executionError.localizedDescription == "The exec channel closed before completion.")
+    }
+
+    @Test
     func bootstrapRequiresAnAbsolutePrivateSupervisorPath() throws {
         #expect(try TSSHBootstrap.parseSupervisorPath(
             output: "ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor\n"
@@ -313,6 +333,26 @@ struct TSSHServerInfoTests {
             with: server,
             trustedHostFingerprint: "SHA256:replacement"
         ))
+    }
+
+    @Test
+    func resumeIdentityCanonicalizesATrailingDNSRootLabel() {
+        let serverID = UUID()
+        let workspaceID = UUID()
+        let dotted = Server(
+            id: serverID,
+            workspaceId: workspaceID,
+            name: "TSSH",
+            host: " EXAMPLE.COM. ",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        var plain = dotted
+        plain.host = "example.com"
+
+        #expect(TSSHResumeServerIdentity(server: dotted).host == "example.com")
+        #expect(TSSHResumeServerIdentity(server: dotted).matchesEndpoint(of: plain))
     }
 
     @Test

@@ -69,7 +69,7 @@ nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
 
     init(server: Server) {
         id = server.id
-        host = server.host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        host = KnownHostsManager.canonicalHost(server.host)
         port = server.port
         username = server.username.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedAt = server.updatedAt
@@ -77,7 +77,7 @@ nonisolated struct TSSHResumeServerIdentity: Codable, Equatable, Sendable {
 
     func matchesEndpoint(of server: Server) -> Bool {
         id == server.id
-            && host == server.host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            && host == KnownHostsManager.canonicalHost(server.host)
             && port == server.port
             && username == server.username.trimmingCharacters(in: .whitespacesAndNewlines)
             && server.connectionMode == .tssh

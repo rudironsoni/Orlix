@@ -209,10 +209,8 @@ final class TerminalTransportCoordinator {
         }
         let staleRequestPaneIDs = tsshRuntimeRequests.compactMap { paneId, request in
             guard let host, let port else { return paneId }
-            let normalizedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let requestHost = request.server.host
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
+            let normalizedHost = KnownHostsManager.canonicalHost(host)
+            let requestHost = KnownHostsManager.canonicalHost(request.server.host)
             return requestHost == normalizedHost && request.server.port == port ? paneId : nil
         }
         for paneId in staleRequestPaneIDs {
@@ -232,6 +230,7 @@ final class TerminalTransportCoordinator {
         let previousTask = tsshRuntimeTeardowns[paneId]?.task
         let teardownID = UUID()
         let task = Task {
+            await runtime.revokeSecuritySensitiveTransports()
             if let previousTask {
                 await previousTask.value
             }

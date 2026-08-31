@@ -2,12 +2,20 @@ import Foundation
 import os.log
 
 extension SSHSession {
+    private func executionError(for request: ExecRequest, underlying error: Error) -> Error {
+        guard request.retainsPartialOutputOnFailure, !request.output.isEmpty else { return error }
+        return SSHCommandExecutionError(
+            underlyingDescription: error.localizedDescription,
+            partialOutput: String(data: request.output, encoding: .utf8) ?? ""
+        )
+    }
+
     func failAllExecRequests(error: Error) {
         let requests = execRequests
         execRequests.removeAll()
         for request in requests.values {
             request.channel = nil
-            request.continuation.resume(throwing: error)
+            request.continuation.resume(throwing: executionError(for: request, underlying: error))
         }
     }
 
@@ -91,7 +99,9 @@ extension SSHSession {
         }
 
         if let error = error {
-            request.continuation.resume(throwing: error)
+            request.continuation.resume(
+                throwing: executionError(for: request, underlying: error)
+            )
         } else {
             if !request.stderr.isEmpty,
                let stderr = String(data: request.stderr, encoding: .utf8)?
@@ -108,7 +118,8 @@ extension SSHSession {
 
     func execute(
         _ command: String,
-        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
+        maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes,
+        retainPartialOutputOnFailure: Bool = false
     ) async throws -> String {
         guard libssh2Session != nil else {
             throw SSHError.notConnected
@@ -122,6 +133,7 @@ extension SSHSession {
                     id: requestId,
                     command: command,
                     maximumOutputBytes: maxOutputBytes,
+                    retainsPartialOutputOnFailure: retainPartialOutputOnFailure,
                     continuation: continuation
                 )
                 execRequests[request.id] = request

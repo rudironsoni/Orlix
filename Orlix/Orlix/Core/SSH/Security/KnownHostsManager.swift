@@ -250,7 +250,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         "\(Self.canonicalHost(host)):\(port)"
     }
 
-    private static func canonicalHost(_ host: String) -> String {
+    static func canonicalHost(_ host: String) -> String {
         var value = host
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "en_US_POSIX"))

@@ -53,9 +53,16 @@ nonisolated enum TSSHBootstrap {
             output = try await client.execute(
                 command,
                 timeout: .seconds(45),
-                maxOutputBytes: 64 * 1024
+                maxOutputBytes: 64 * 1024,
+                retainPartialOutputOnFailure: true
             )
         } catch {
+            if let executionError = error as? SSHCommandExecutionError,
+               let serverProcess = try? serverProcessIdentity(
+                   output: executionError.partialOutput
+               ) {
+                await terminateServer(serverProcess, using: client)
+            }
             let description = error.localizedDescription
             if description.contains("not found") || description.contains("TSSHD_NOT_FOUND") {
                 throw TSSHRuntimeError.tsshdNotFound
@@ -65,10 +72,7 @@ nonisolated enum TSSHBootstrap {
         if output.contains("TSSHD_NOT_FOUND") {
             throw TSSHRuntimeError.tsshdNotFound
         }
-        let serverProcess = TSSHServerProcessIdentity(
-            pid: try parseServerPID(output: output),
-            supervisorPath: try parseSupervisorPath(output: output)
-        )
+        let serverProcess = try serverProcessIdentity(output: output)
         let info: TSSHServerInfo
         do {
             let parsedInfo = try TSSHServerInfo.parse(output: output)
@@ -94,6 +98,13 @@ nonisolated enum TSSHBootstrap {
             throw TSSHRuntimeError.invalidServerResponse
         }
         return pid
+    }
+
+    static func serverProcessIdentity(output: String) throws -> TSSHServerProcessIdentity {
+        TSSHServerProcessIdentity(
+            pid: try parseServerPID(output: output),
+            supervisorPath: try parseSupervisorPath(output: output)
+        )
     }
 
     static func parseSupervisorPath(output: String) throws -> String {

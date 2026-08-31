@@ -1,5 +1,12 @@
 import Foundation
 
+nonisolated struct SSHCommandExecutionError: LocalizedError, Sendable {
+    let underlyingDescription: String
+    let partialOutput: String
+
+    var errorDescription: String? { underlyingDescription }
+}
+
 enum SSHError: LocalizedError, Sendable {
     case notConnected
     case connectionFailed(String)
