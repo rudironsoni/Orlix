@@ -6,6 +6,8 @@ status: todo
 summary: "Implement Make-owned CI entry points, protected workflows and environments, tag rulesets, cache policy, and signing trust policy."
 task_of:
   - "[Operate Bazel through protected automation](../../story/todo/operate-bazel-through-protected-automation.md)"
+blocks:
+  - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"
 ---
 
 # Implement Protected Bazel Automation

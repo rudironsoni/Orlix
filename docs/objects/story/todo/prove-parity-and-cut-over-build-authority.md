@@ -8,6 +8,8 @@ story_of:
   - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
   - "[Run parity and perform the Bazel authority cutover](../../task/todo/run-parity-and-perform-bazel-authority-cutover.md)"
+depends_on:
+  - "[Route every Apple build through Bazel](route-every-apple-build-through-bazel.md)"
 ---
 
 # Prove Parity And Cut Over Build Authority

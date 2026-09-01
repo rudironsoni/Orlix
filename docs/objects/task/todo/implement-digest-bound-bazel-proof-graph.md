@@ -6,6 +6,8 @@ status: todo
 summary: "Map all current proof targets to Bazel and bind reports to exact artifact and buildset digests."
 task_of:
   - "[Bind proof to Bazel artifact identities](../../story/todo/bind-proof-to-bazel-artifact-identities.md)"
+blocks:
+  - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
 ---
 
 # Implement The Digest-Bound Bazel Proof Graph

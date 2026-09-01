@@ -1070,3 +1070,11 @@ bad pack header` before XCTest started. The Kernel bootstrap now pins the exact
 Linux tag commit, retries transient fetch failures, and lets this CI lane use
 Greg Kroah-Hartman's stable Linux mirror. The gate also stores its test log and
 `.xcresult` under `Build/iOS15` for every run.
+
+## [2026-09-01] plan | Route every Apple build through Bazel
+
+Added the work sequence for the supported Apple build matrix, universal
+Make-to-Bazel routing, shared cache and signed buildset reuse, and runtime proof
+for each supported iOS, iPadOS, and macOS row. The iOS 15 row keeps its reduced
+feature set, and later-system features remain unavailable until their owning
+matrix row proves them.

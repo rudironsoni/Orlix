@@ -6,6 +6,8 @@ status: todo
 summary: "Implement explicit Bazel targets for HostAdapter, hosted Kernel composition, native layers, OrlixOS, Orlix, extensions, and tests."
 task_of:
   - "[Move the Apple product graph to Bazel](../../story/todo/move-apple-product-graph-to-bazel.md)"
+blocks:
+  - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
 ---
 
 # Implement The Bazel Apple Product Graph

@@ -6,6 +6,8 @@ status: todo
 summary: "Implement clean component promotion, signed buildsets, lock proposal pull requests, provenance, verification, and retention."
 task_of:
   - "[Promote signed component buildsets](../../story/todo/promote-signed-component-buildsets.md)"
+blocks:
+  - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"
 ---
 
 # Implement Component And Buildset Promotion
