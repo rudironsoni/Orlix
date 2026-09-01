@@ -383,6 +383,9 @@ ios15-simulator-gate:
 		-configuration Debug \
 		-destination 'platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)' \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
+		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
+		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
 		test
 
 beta-simulator-gate: beta-prerequisites
