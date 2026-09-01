@@ -54,8 +54,9 @@ jobs:
           sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --no-color
           runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
           test -n "$runtime_id"
-          device_type="$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith("iPhone"))][0].identifier')"
-          test -n "$device_type" -a "$device_type" != null
+          device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"
+          xcrun simctl list devicetypes -j | jq -e --arg identifier "$device_type" \
+            '.devicetypes[] | select(.identifier == $identifier)' >/dev/null
           simulator_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$runtime_id")"
           test -n "$simulator_id"
           xcrun simctl boot "$simulator_id"
