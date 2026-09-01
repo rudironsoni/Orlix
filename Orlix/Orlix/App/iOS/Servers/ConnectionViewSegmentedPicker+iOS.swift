@@ -46,6 +46,7 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
         }
     }
 
+    @available(iOS 16.0, *)
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
         uiView.sizeToFit()
         return uiView.intrinsicContentSize

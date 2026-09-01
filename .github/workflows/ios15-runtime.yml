@@ -1,0 +1,79 @@
+name: iOS 15 runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/ios15-runtime.yml"
+      - "Brewfile"
+      - "Makefile"
+      - "Orlix/**"
+      - "OrlixHostAdapter/**"
+      - "OrlixKernel/**"
+      - "OrlixMLibC/**"
+      - "OrlixOS/**"
+      - "project.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios15-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios15-runtime:
+    name: iOS 15 runtime
+    runs-on: macos-26
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+
+      - name: Install pinned build tools
+        run: |
+          set -euo pipefail
+          brew bundle --file Brewfile
+          test "$(xcodes version)" = "2.0.3"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+
+      - name: Install the iOS 15.5 runtime with xcodes
+        run: |
+          set -euo pipefail
+          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --no-color
+          runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          test -n "$runtime_id"
+          device_type="$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith("iPhone"))][0].identifier')"
+          test -n "$device_type" -a "$device_type" != null
+          simulator_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$runtime_id")"
+          test -n "$simulator_id"
+          xcrun simctl boot "$simulator_id"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Build native dependencies
+        run: make build type=vendor vendor=all
+
+      - name: Run the iOS 15 launch test
+        run: make ios15-simulator-gate
+
+      - name: Store iOS 15 test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios15-runtime-${{ github.sha }}
+          path: |
+            Build/**/*.xcresult
+            Build/**/*.log
+          if-no-files-found: warn
+          retention-days: 14

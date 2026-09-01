@@ -109,10 +109,11 @@ struct SyncSettingsUITestHarness: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             SyncSettingsView()
                 .navigationTitle("iCloud Sync")
         }
+        .navigationViewStyle(.stack)
         .environmentObject(coordinator)
         .accessibilityIdentifier("orlix.syncSettingsTest.root")
     }

@@ -86,7 +86,10 @@ extension GhosttyTerminalView: UITextSearching {
     func decorate(foundTextRange: UITextRange, document: String?, usingStyle style: UITextSearchFoundTextStyle) {
         guard let range = nativeSelectionSnapshot.nativeRange(from: foundTextRange) else { return }
         nativeFindDecorations.removeAll { NSEqualRanges($0.range, range) }
-        nativeFindDecorations.append(TerminalNativeFindDecoration(range: range, style: style))
+        let decorationStyle: TerminalNativeFindDecorationStyle = style == .highlighted
+            ? .highlighted
+            : .found
+        nativeFindDecorations.append(TerminalNativeFindDecoration(range: range, style: decorationStyle))
     }
 
     func clearAllDecoratedFoundText() {
@@ -229,7 +232,7 @@ extension GhosttyTerminalView {
             }
             return false
         }
-        if query.isEmpty {
+        if query.isEmpty, #available(iOS 16.0, *) {
             nativeFindSession?.resetReportedResults()
             nativeFindInteraction?.updateResultCount()
         }

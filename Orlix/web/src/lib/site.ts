@@ -48,7 +48,7 @@ export const faqSchema = [
     name: "What are the system requirements?",
     acceptedAnswer: {
       "@type": "Answer",
-      text: "Orlix requires iOS 16 or later on iPhone and iPad, or macOS 13 Ventura or later on Apple Silicon Macs.",
+      text: "Orlix requires iOS 15 or later on iPhone and iPad, or macOS 13 Ventura or later on Apple Silicon Macs.",
     },
   },
   {
@@ -66,7 +66,7 @@ export const softwareSchema = {
   "@type": "SoftwareApplication",
   name: "Orlix",
   applicationCategory: "UtilitiesApplication",
-  operatingSystem: "iOS 16+, macOS 13+",
+  operatingSystem: "iOS 15+, macOS 13+",
   offers: [
     {
       "@type": "Offer",

@@ -81,7 +81,7 @@ struct TerminalCustomActionLibraryView: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .navigationTitle("Manage Custom Actions")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

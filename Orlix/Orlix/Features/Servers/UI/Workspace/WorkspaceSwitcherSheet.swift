@@ -421,7 +421,7 @@ struct LockedWorkspaceServerManagementSheet: View {
         #endif
         .sheet(item: $serverToMove) { server in
             #if os(iOS)
-            NavigationStack {
+            NavigationView {
                 MoveServerSheet(
                     serverManager: serverManager,
                     server: server,

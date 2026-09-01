@@ -5,7 +5,7 @@ Cross-platform (iOS/macOS) SSH terminal app with iCloud sync and Keychain creden
 ## Target Versions
 
 - **macOS**: 13.3+ (Ventura), arm64 only
-- **iOS**: 16.1+, arm64 only
+- **iOS**: 15.0+, arm64 only. The optional Live Activity extension requires iOS 16.1+.
 - **Xcode**: 16.0+
 
 ## Architecture
@@ -144,7 +144,7 @@ Type meanings for new and touched code:
 - `Projection`: narrow read-only observable state derived from an authoritative owner.
 - `Runtime`: a native resource lifecycle.
 - `Composition`: live, preview, or test dependency assembly.
-- Keep `ObservableObject` while iOS 16.1 and macOS 13.3 are supported. Do not start a whole-app Observation migration.
+- Keep `ObservableObject` while iOS 15.0 and macOS 13.3 are supported. Do not start a whole-app Observation migration.
 - Retire an ambiguous `Manager` name only when its owned implementation already changes. Do not perform naming-only migrations.
 
 State and lifecycle rules:

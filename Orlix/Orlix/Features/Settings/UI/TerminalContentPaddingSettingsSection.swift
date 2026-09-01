@@ -57,7 +57,7 @@ struct TerminalContentPaddingSettingsSection: View {
         identifier: String
     ) -> some View {
         VStack(spacing: 10) {
-            LabeledContent(title) {
+            OrlixLabeledContent(title) {
                 Text(pointLabel(for: value.wrappedValue))
                     .foregroundStyle(.secondary)
             }

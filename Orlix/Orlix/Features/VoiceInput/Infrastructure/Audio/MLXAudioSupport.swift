@@ -5,6 +5,7 @@ enum MLXAudioSupport {
     static var isSupported: Bool {
         #if arch(arm64)
         #if os(iOS) || os(tvOS)
+        guard #available(iOS 16.0, tvOS 16.0, *) else { return false }
         let platform = MLXAudioPlatform.appleMobile
         #elseif os(macOS)
         let platform = MLXAudioPlatform.macOS

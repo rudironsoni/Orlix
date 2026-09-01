@@ -88,6 +88,11 @@ ModuleCache/
 /.clangd-cache/
 /.clang-tidy-build/
 /.cache/
+/.bazelrc.local
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-*
 # (No @.cache variants should be tracked; only .cache is ignored)
 
 # Generated binary

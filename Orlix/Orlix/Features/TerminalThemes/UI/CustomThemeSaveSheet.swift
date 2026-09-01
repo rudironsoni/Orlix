@@ -67,7 +67,7 @@ struct CustomThemeSaveSheet: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
     }
 
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {

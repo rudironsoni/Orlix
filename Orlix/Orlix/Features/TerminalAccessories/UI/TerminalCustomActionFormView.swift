@@ -56,7 +56,7 @@ struct TerminalCustomActionFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("Title", text: $title)
@@ -161,7 +161,7 @@ struct TerminalCustomActionFormView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle(
                 isEditing
                     ? String(localized: "Edit Custom Action")

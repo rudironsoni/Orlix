@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "kernel_info.bzl",
+    "package_info.bzl",
+    "proof_info.bzl",
+    "rootfs_info.bzl",
+    "sysroot_info.bzl",
+])

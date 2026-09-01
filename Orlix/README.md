@@ -1,7 +1,7 @@
 # Orlix
 
 [![macOS](https://img.shields.io/badge/macOS-13.3+-black?style=flat-square&logo=apple)](https://orlix.com)
-[![iOS](https://img.shields.io/badge/iOS-16.1+-black?style=flat-square&logo=apple)](https://orlix.com)
+[![iOS](https://img.shields.io/badge/iOS-15.0+-black?style=flat-square&logo=apple)](https://orlix.com)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?style=flat-square&logo=swift&logoColor=white)](https://swift.org)
 [![Source License](https://img.shields.io/badge/Source-GPL%203.0-blue?style=flat-square)](LICENSE)
 [![Binary License](https://img.shields.io/badge/Binary-App%20Store%20EULA-6e7681?style=flat-square)](LICENSE-APPSTORE.md)
@@ -19,7 +19,7 @@ Orlix is a cross-platform SSH terminal app for Apple platforms. The current code
 
 - Main app target: `Orlix`
 - Companion target: `OrlixLiveActivity`
-- Runtime targets: `macOS 13.3+` and `iOS 16.1+`
+- Runtime targets: `macOS 13.3+` and `iOS 15.0+`
 - Hardware targets: Apple Silicon / arm64 only
 - App-owned code is organized under `Orlix/App`, `Orlix/Core`, and `Orlix/Features`
 - The repo also contains tests, native vendor builds, and the marketing site under `web/`
@@ -133,7 +133,7 @@ web/                            # Astro site for orlix.com
 - Apple Silicon Mac for development
 - Xcode `16.0+`
 - macOS `13.3+`
-- iOS `16.1+`
+- iOS `15.0+`. Live Activities require iOS `16.1+`.
 - `zig` and `cmake`
 
 Install the non-Xcode build tools with Homebrew:
@@ -167,10 +167,10 @@ Native/vendor dependencies:
 
 Swift package dependencies currently resolved by the Xcode project:
 
-- [Cloudflared](https://github.com/wiedymi/swift-cloudflared)
-- [swift-mosh](https://github.com/wiedymi/swift-mosh)
-- [swift-et](https://github.com/wiedymi/swift-et)
-- [mlx-swift](https://github.com/ml-explore/mlx-swift)
+- [Cloudflared](https://github.com/rudironsoni/swift-cloudflared)
+- [swift-mosh](https://github.com/rudironsoni/swift-mosh)
+- [swift-et](https://github.com/rudironsoni/swift-et)
+- [mlx-swift](https://github.com/rudironsoni/mlx-swift)
 - [ZIPFoundation](https://github.com/weichsel/ZIPFoundation)
 - [swift-numerics](https://github.com/apple/swift-numerics)
 - [TweetNacl](https://github.com/bitmark-inc/tweetnacl-swiftwrap.git)

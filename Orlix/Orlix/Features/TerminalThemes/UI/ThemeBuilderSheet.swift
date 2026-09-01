@@ -166,7 +166,7 @@ struct ThemeBuilderSheet: View {
                     }
                 }
             }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
     }
 
     private var terminalPreview: some View {

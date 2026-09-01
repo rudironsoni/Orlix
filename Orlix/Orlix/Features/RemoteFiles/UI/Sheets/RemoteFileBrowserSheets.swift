@@ -25,7 +25,7 @@ struct RemoteFileRenameSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             renameContent
                 .navigationTitle(String(localized: "Rename"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -105,7 +105,7 @@ struct RemoteFileRenameSheet: View {
             }
         }
         #if os(iOS)
-        .scrollContentBackground(.hidden)
+        .orlixScrollContentBackgroundHidden()
         .background(Color.clear)
         #endif
     }
@@ -124,7 +124,7 @@ struct RemoteFileCreateFolderSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             createFolderContent
                 .navigationTitle(String(localized: "New Folder"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -200,7 +200,7 @@ struct RemoteFileCreateFolderSheet: View {
             }
         }
         #if os(iOS)
-        .scrollContentBackground(.hidden)
+        .orlixScrollContentBackgroundHidden()
         .background(Color.clear)
         #endif
     }
@@ -243,7 +243,7 @@ struct RemoteFileMoveSheet: View {
     var body: some View {
         Group {
             #if os(iOS)
-            NavigationStack {
+            NavigationView {
                 moveContent
                     .navigationTitle(String(localized: "Move"))
                     .navigationBarTitleDisplayMode(.inline)
@@ -391,7 +391,7 @@ struct RemoteFileMoveSheet: View {
             }
         }
         #if os(iOS)
-        .scrollContentBackground(.hidden)
+        .orlixScrollContentBackgroundHidden()
         .background(Color.clear)
         #endif
     }
@@ -480,7 +480,7 @@ struct RemoteFileDeleteConfirmationSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             content
                 .navigationTitle(String(localized: "Delete"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -554,7 +554,7 @@ struct RemoteFileDeleteConfirmationSheet: View {
             }
         }
         #if os(iOS)
-        .scrollContentBackground(.hidden)
+        .orlixScrollContentBackgroundHidden()
         .background(Color.clear)
         #endif
     }
@@ -576,7 +576,7 @@ struct RemoteFilePermissionEditorSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .navigationTitle(String(localized: "Permissions"))

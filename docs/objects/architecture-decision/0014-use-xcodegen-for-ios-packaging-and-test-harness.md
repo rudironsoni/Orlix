@@ -3,19 +3,21 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
-status: accepted
+updated: 2026-09-01
+status: superseded
 external_id: "ADR-0014"
 summary: "Durable Orlix architecture decision ADR 0014."
 part_of:
   - "[Orlix](../product/orlix.md)"
+superseded_by:
+  - "[ADR 0036](0036-use-generated-local-and-committed-cloud-xcode-projects.md)"
 ---
 
 # ADR 0014: Use XcodeGen For iOS Packaging And Test Harness
 
 ## Status
 
-Accepted
+Superseded by [ADR 0036](0036-use-generated-local-and-committed-cloud-xcode-projects.md).
 
 ## Context
 

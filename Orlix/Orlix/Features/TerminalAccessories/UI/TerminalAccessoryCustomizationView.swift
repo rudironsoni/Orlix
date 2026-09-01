@@ -160,7 +160,6 @@ struct TerminalAccessoryCustomizationView: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("Customize Accessory Bar")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

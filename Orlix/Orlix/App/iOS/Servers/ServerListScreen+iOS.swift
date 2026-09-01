@@ -103,7 +103,7 @@ struct ServerListScreen: View {
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $showingLocalInstance) {
+        .orlixNavigationDestination(isPresented: $showingLocalInstance) {
             DefaultLocalInstanceTerminalView()
         }
         .toolbar {
@@ -129,7 +129,7 @@ struct ServerListScreen: View {
             }
         }
         .sheet(isPresented: $showingAddWorkspace) {
-            NavigationStack {
+            NavigationView {
                 WorkspaceFormSheet(
                     serverManager: serverManager,
                     onSave: { workspace in
@@ -151,7 +151,7 @@ struct ServerListScreen: View {
                 .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingWorkspacePicker) {
-            NavigationStack {
+            NavigationView {
                 WorkspacePickerSheet(
                     serverManager: serverManager,
                     selectedWorkspace: $selectedWorkspace,
@@ -161,7 +161,7 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverFormIntent) { intent in
-            NavigationStack {
+            NavigationView {
                 ServerFormSheet(
                     serverManager: serverManager,
                     workspace: workspace(for: intent),
@@ -179,7 +179,7 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverToMove) { server in
-            NavigationStack {
+            NavigationView {
                 MoveServerSheet(
                     serverManager: serverManager,
                     server: server,

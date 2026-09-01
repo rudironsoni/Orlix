@@ -519,7 +519,7 @@ struct TerminalRichPastePromptSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             contentBody
                 .navigationTitle(prompt.title)
                 .safeAreaInset(edge: .bottom, spacing: 0) {

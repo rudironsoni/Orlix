@@ -68,6 +68,7 @@ nonisolated enum StatsGridLayoutPolicy {
     }
 }
 
+@available(iOS 16.0, macOS 13.0, *)
 private struct StatsCardsGridLayout: Layout {
     let minimumColumnWidth: CGFloat
     let spacing: CGFloat
@@ -302,20 +303,34 @@ struct StatsBlocksContent: View {
         preferences.visibleBlocks.filter(shouldRenderBlock)
     }
 
+    @ViewBuilder
     private func responsiveGrid(style: StatsVisualStyle) -> some View {
-        StatsCardsGridLayout(
-            minimumColumnWidth: effectiveMinimumColumnWidth(for: style),
-            spacing: style.cardSpacing,
-            preferredColumnSpans: renderedBlocks.map { blockID in
-                blockID == .docker && isDockerUnlocked ? 2 : 1
+        if #available(iOS 16.0, macOS 13.0, *) {
+            StatsCardsGridLayout(
+                minimumColumnWidth: effectiveMinimumColumnWidth(for: style),
+                spacing: style.cardSpacing,
+                preferredColumnSpans: renderedBlocks.map { blockID in
+                    blockID == .docker && isDockerUnlocked ? 2 : 1
+                }
+            ) {
+                ForEach(renderedBlocks, id: \.self) { blockID in
+                    statsBlock(blockID, style: style)
+                        .accessibilityIdentifier("orlix.stats.card.\(blockID.rawValue)")
+                }
             }
-        ) {
-            ForEach(renderedBlocks, id: \.self) { blockID in
-                statsBlock(blockID, style: style)
-                    .accessibilityIdentifier("orlix.stats.card.\(blockID.rawValue)")
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        } else {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: effectiveMinimumColumnWidth(for: style)))],
+                spacing: style.cardSpacing
+            ) {
+                ForEach(renderedBlocks, id: \.self) { blockID in
+                    statsBlock(blockID, style: style)
+                        .accessibilityIdentifier("orlix.stats.card.\(blockID.rawValue)")
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func effectiveMinimumColumnWidth(for style: StatsVisualStyle) -> CGFloat {

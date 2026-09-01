@@ -4,9 +4,9 @@
     "swiftPackages": [
       {
         "identity": "mlx-swift",
-        "location": "https://github.com/ml-explore/mlx-swift",
+        "location": "https://github.com/rudironsoni/mlx-swift",
         "state": {
-          "revision": "072b684acaae80b6a463abab3a103732f33774bf",
+          "revision": "7b6527f6eb6013c5221679ee08112c04aab6825e",
           "version": "0.29.1"
         },
         "classification": "openSource",
@@ -240,7 +240,7 @@
       "id": "mlx-swift",
       "name": "MLX Swift",
       "role": "machineLearningLibrary",
-      "projectURL": "https://github.com/ml-explore/mlx-swift/tree/072b684acaae80b6a463abab3a103732f33774bf",
+      "projectURL": "https://github.com/rudironsoni/mlx-swift/tree/7b6527f6eb6013c5221679ee08112c04aab6825e",
       "licenseName": "MIT and third-party notices",
       "licenseResource": "MLXSwift.txt"
     },

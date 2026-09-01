@@ -737,13 +737,20 @@ struct LockedDockerCard: View {
     let style: StatsVisualStyle
     let action: () -> Void
 
+    @ViewBuilder
     var body: some View {
         Button(action: action) {
             AppleCard(style: style) {
-                ViewThatFits(in: .horizontal) {
-                    wideLayout
-                        .frame(minWidth: Self.wideLayoutMinimumWidth, alignment: .topLeading)
-                    compactLayout
+                Group {
+                    if #available(iOS 16.0, macOS 13.0, *) {
+                        ViewThatFits(in: .horizontal) {
+                            wideLayout
+                                .frame(minWidth: Self.wideLayoutMinimumWidth, alignment: .topLeading)
+                            compactLayout
+                        }
+                    } else {
+                        compactLayout
+                    }
                 }
                 .padding(style.cardPadding)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -847,9 +854,19 @@ struct LockedDockerCard: View {
         .background(Color.blue.opacity(0.12), in: Capsule())
     }
 
+    @ViewBuilder
     private var compactUnlockPill: some View {
-        ViewThatFits(in: .horizontal) {
-            unlockPill
+        if #available(iOS 16.0, macOS 13.0, *) {
+            ViewThatFits(in: .horizontal) {
+                unlockPill
+                compactUnlockLabel
+            }
+        } else {
+            compactUnlockLabel
+        }
+    }
+
+    private var compactUnlockLabel: some View {
             HStack(spacing: 6) {
                 Image(systemName: "lock.open")
                     .font(.caption.weight(.bold))
@@ -861,7 +878,6 @@ struct LockedDockerCard: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 8)
             .background(Color.blue.opacity(0.12), in: Capsule())
-        }
     }
 
     @ViewBuilder

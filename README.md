@@ -65,7 +65,7 @@ make test type=kunit,kselftest
 make clean
 ```
 
-`make setup-env` fetches upstream Linux as a bare clone and generates the disposable Xcode project from `project.yml`. `make build` first runs `make clean`, which removes `Build/`; the kernel build then reclones upstream Linux through the normal bootstrap path. The same build flow materializes upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC`, builds the OrlixMLibC sysroot from upstream mlibc plus durable OrlixMLibC inputs, and stages OrlixOS package/rootfs inputs under `Build/OrlixOS`. It does not prove terminal runtime behavior or build or require `vmlinux` as a normal artifact.
+`make setup-env` fetches upstream Linux as a bare clone and generates the disposable Xcode project from `project.yml`. `make build` preserves `Build/` and delegates the selected product build to the component Makefiles. Use `make rebuild` only when you intentionally need `make clean` before `make build`. The build flow materializes upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC`, builds the OrlixMLibC sysroot from upstream mlibc plus durable OrlixMLibC inputs, and stages OrlixOS package/rootfs inputs under `Build/OrlixOS`. It does not prove terminal runtime behavior or build or require `vmlinux` as a normal artifact.
 
 The Linux compile lane emits per-profile, per-platform OrlixKernel static archives under `Build/OrlixKernel/<profile>/<platform>/OrlixKernel.a`. Xcode links the matching archive into `OrlixKernel.framework`, and framework slices are packaged into `OrlixKernel.xcframework`. The product rootfs payload is carried by the `OrlixOS` framework, with its payload resource name declared in `project.yml`/target metadata.
 

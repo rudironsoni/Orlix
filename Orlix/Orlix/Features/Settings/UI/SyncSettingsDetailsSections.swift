@@ -88,9 +88,9 @@ struct SyncSettingsDetailsSections: View {
     }
 
     private var syncDetailsSection: some View {
-        Section("Sync Details") {
+        Section {
             if let lastSuccessfulSyncDate {
-                LabeledContent("Last Successful Sync") {
+                SyncSettingsDetailsRow(title: String(localized: "Last Successful Sync")) {
                     Text(
                         lastSuccessfulSyncDate,
                         format: .dateTime.year().month().day().hour().minute()
@@ -101,7 +101,7 @@ struct SyncSettingsDetailsSections: View {
             }
 
             if pendingChangeCount > 0 {
-                LabeledContent("Pending Changes") {
+                SyncSettingsDetailsRow(title: String(localized: "Pending Changes")) {
                     Text(pendingChangeCount, format: .number)
                         .foregroundStyle(.secondary)
                 }
@@ -109,7 +109,7 @@ struct SyncSettingsDetailsSections: View {
             }
 
             if let lastError {
-                LabeledContent("Last Sync Error") {
+                SyncSettingsDetailsRow(title: String(localized: "Last Sync Error")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(lastError.category.title)
                         Text(
@@ -140,6 +140,8 @@ struct SyncSettingsDetailsSections: View {
                 )
             }
             .accessibilityIdentifier("orlix.settings.sync.copyDiagnostics")
+        } header: {
+            Text("Sync Details")
         }
     }
 
@@ -154,39 +156,63 @@ struct SyncSettingsDetailsSections: View {
         }
     }
 
-    private var storageStatus: LocalizedStringResource {
+    private var storageStatus: String {
         contentSyncState.rowTitle
     }
 }
 
 private struct SyncSettingsDetailsCountRow: View {
-    let title: LocalizedStringResource
+    let title: String
     let systemImage: String
     let count: Int
     let accessibilityIdentifier: String
 
     var body: some View {
-        LabeledContent {
+        SyncSettingsDetailsRow(title: title, systemImage: systemImage) {
             Text(count, format: .number)
                 .foregroundStyle(.secondary)
-        } label: {
-            Label(title, systemImage: systemImage)
         }
         .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 
 private struct SyncSettingsDetailsStatusRow: View {
-    let title: LocalizedStringResource
+    let title: String
     let systemImage: String
-    let status: LocalizedStringResource
+    let status: String
 
     var body: some View {
-        LabeledContent {
+        SyncSettingsDetailsRow(title: title, systemImage: systemImage) {
             Text(status)
                 .foregroundStyle(.secondary)
-        } label: {
-            Label(title, systemImage: systemImage)
+        }
+    }
+}
+
+private struct SyncSettingsDetailsRow<Content: View>: View {
+    let title: String
+    let systemImage: String?
+    @ViewBuilder let content: () -> Content
+
+    init(
+        title: String,
+        systemImage: String? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content
+    }
+
+    var body: some View {
+        HStack {
+            if let systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
+            }
+            Spacer()
+            content()
         }
     }
 }

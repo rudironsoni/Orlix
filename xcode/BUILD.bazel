@@ -1,0 +1,22 @@
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+
+package(default_visibility = ["//visibility:private"])
+
+xcodeproj(
+    name = "feasibility",
+    install_directory = "Build/XcodeProjects",
+    ios_device_cpus = "arm64",
+    ios_simulator_cpus = "sim_arm64",
+    minimum_xcode_version = "26.6",
+    project_name = "OrlixBazelFeasibility",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            "//bazel/feasibility/apple:SmokeApp",
+            target_environments = [
+                "device",
+                "simulator",
+            ],
+        ),
+    ],
+)

@@ -182,7 +182,7 @@ extension RemoteFileBrowserScreen {
                     await browser.refresh(server: server, tab: fileTab)
                 }
                 .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .orlixScrollContentBackgroundHidden()
                 .background(Color.clear)
             }
 
@@ -206,7 +206,7 @@ extension RemoteFileBrowserScreen {
             }
         }
         .background(Color.clear)
-        .navigationDestination(isPresented: previewBinding) {
+        .orlixNavigationDestination(isPresented: previewBinding) {
             fileNoticeHost {
                 RemoteFileInspectorView(
                     selectedEntry: snapshot.selectedEntry,
@@ -266,46 +266,6 @@ extension RemoteFileBrowserScreen {
             }
         }
         .toolbar {
-            if #available(iOS 26, *) {
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(
-                        systemName: "arrow.turn.up.left",
-                        isDisabled: snapshot.currentPath == "/"
-                    ) {
-                        Task { await browser.goUp(in: fileTab, server: server) }
-                    }
-                }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "arrow.up.doc") {
-                        beginUpload(to: snapshot.currentPath)
-                    }
-                }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "folder.badge.plus") {
-                        beginCreateFolder(in: snapshot.currentPath)
-                    }
-                }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "document.on.document") {
-                        copyPathToClipboard(snapshot.currentPath)
-                    }
-                }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    browserMenu()
-                }
-            } else {
                 ToolbarItemGroup(placement: .bottomBar) {
                     toolbarButton(
                         systemName: "arrow.turn.up.left",
@@ -336,7 +296,6 @@ extension RemoteFileBrowserScreen {
                 ToolbarItemGroup(placement: .bottomBar) {
                     browserMenu()
                 }
-            }
         }
         .onChange(of: snapshot.currentPath) { _ in
             platformState.searchQuery = ""

@@ -139,7 +139,7 @@ private struct ConnectionBannerHandoffHarness: View {
             )
         }
         .sheet(item: $remoteSessionPrompt) { prompt in
-            NavigationStack {
+            NavigationView {
                 Text("Choose how to continue the connection.")
                     .navigationTitle("Choose \(prompt.backendName) session")
                     .navigationBarTitleDisplayMode(.inline)
@@ -166,7 +166,7 @@ private struct NoticeOperationStackHarness: View {
             bottomOperations: noticeHost.bottomOperations,
             bottomInsetBehavior: .contentBottom
         ) {
-            NavigationStack {
+            NavigationView {
                 List(0..<14, id: \.self) { index in
                     Label("Remote item \(index + 1)", systemImage: "folder.fill")
                 }
@@ -298,11 +298,12 @@ private struct NoticeConnectionStatusHarness: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationView {
             Text("Server List")
                 .accessibilityIdentifier("orlix.noticeTest.serverList")
                 .navigationTitle("Servers")
-                .navigationDestination(for: String.self) { _ in
+                .background(NavigationLink(
+                    destination:
                     terminalBackdrop {
                         TerminalConnectionStatusView(
                             presentation: presentation,
@@ -325,8 +326,13 @@ private struct NoticeConnectionStatusHarness: View {
                             }
                             .accessibilityIdentifier("orlix.noticeTest.back")
                         }
-                    }
-                }
+                    },
+                    isActive: Binding(
+                        get: { !path.isEmpty },
+                        set: { if !$0 { path.removeAll() } }
+                    ),
+                    label: EmptyView.init
+                ).hidden())
         }
         .accessibilityIdentifier("orlix.noticeTest.connectionStatus")
         .preferredColorScheme(.dark)
@@ -349,7 +355,7 @@ private struct NoticeFilesPreviewHarness: View {
     @StateObject private var noticeHost = NoticeHostModel()
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 Button {
                     showsPreview = true
@@ -359,7 +365,7 @@ private struct NoticeFilesPreviewHarness: View {
                 .accessibilityIdentifier("orlix.noticeTest.filesEntry")
             }
             .navigationTitle("Files")
-            .navigationDestination(isPresented: $showsPreview) {
+            .orlixNavigationDestination(isPresented: $showsPreview) {
                 NoticeHost(bottomOperation: noticeHost.bottomOperation) {
                     ZStack {
                         Color(uiColor: .systemGroupedBackground)

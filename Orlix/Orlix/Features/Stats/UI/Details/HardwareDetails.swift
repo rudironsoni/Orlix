@@ -19,7 +19,7 @@ struct CPUDetailsSheet: View {
             cpuDetailsList
         }
         #else
-        NavigationStack {
+        NavigationView {
             cpuDetailsList
             .navigationTitle(Text("CPU Details"))
             .navigationBarTitleDisplayMode(.inline)
@@ -127,7 +127,7 @@ struct GPUDetailsSheet: View {
             gpuDetailsList
         }
         #else
-        NavigationStack {
+        NavigationView {
             gpuDetailsList
             .navigationTitle(Text("GPU Details"))
             .navigationBarTitleDisplayMode(.inline)
@@ -293,7 +293,7 @@ struct SystemDetailsSheet: View {
             systemDetailsList
         }
         #else
-        NavigationStack {
+        NavigationView {
             systemDetailsList
             .navigationTitle(Text("System Details"))
             .navigationBarTitleDisplayMode(.inline)

@@ -3,12 +3,14 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-27
+updated: 2026-09-01
 status: accepted
 external_id: "ADR-0019"
 summary: "Durable Orlix architecture decision ADR 0019."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0033](0033-use-bazel-as-the-repository-product-graph.md)"
 ---
 
 # ADR 0019: Keep Make Targets Linux-Shaped

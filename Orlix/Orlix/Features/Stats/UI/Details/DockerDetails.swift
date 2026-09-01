@@ -63,7 +63,7 @@ struct DockerDetailsSheet: View {
             }
         }
         #else
-        NavigationStack {
+        NavigationView {
             dockerList
             .navigationTitle(Text("Docker"))
             .navigationBarTitleDisplayMode(.inline)
@@ -385,7 +385,7 @@ private struct DockerContainerDetailsSheet: View {
                 Text(errorMessage)
             }
             #if os(iOS)
-            .presentationDetents([.medium, .large])
+            .orlixMediumAndLargePresentationDetents()
             #endif
             .onDisappear {
                 actionTask?.cancel()
@@ -406,7 +406,7 @@ private struct DockerContainerDetailsSheet: View {
             containerDetailsList
         }
         #else
-        NavigationStack {
+        NavigationView {
             containerDetailsList
             .navigationTitle(Text("Container Details"))
             .navigationBarTitleDisplayMode(.inline)

@@ -132,7 +132,7 @@ class SpeechRecognitionService: ObservableObject {
             identifiers.append(preferred)
         }
         let supportedMatches = SFSpeechRecognizer.supportedLocales()
-            .filter { $0.language.languageCode?.identifier == languageCode }
+            .filter { $0.languageCode == languageCode }
             .map(\.identifier)
             .sorted()
         identifiers.append(contentsOf: supportedMatches)

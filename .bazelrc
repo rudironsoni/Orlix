@@ -1,0 +1,23 @@
+try-import %workspace%/.bazelrc.local
+
+common --announce_rc
+common --show_timestamps
+
+build --show_result=20
+build --verbose_failures
+build --experimental_disk_cache_gc_max_size=30G
+build --experimental_disk_cache_gc_max_age=30d
+
+test --test_output=errors
+test --flaky_test_attempts=1
+
+build:development --//bazel/config:profile=development
+build:release --//bazel/config:profile=release
+
+build:source --//bazel/config:component_mode=source
+build:promoted --//bazel/config:component_mode=promoted
+
+build:ci --remote_download_outputs=toplevel
+
+build:promotion --//bazel/config:component_mode=source
+build:promotion --remote_upload_local_results=false

@@ -45,7 +45,7 @@ struct WorkspaceFormSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 // Limit Banner
                 if isAtLimit {
@@ -116,7 +116,7 @@ struct WorkspaceFormSheet: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle(isEditing ? String(localized: "Edit Workspace") : String(localized: "New Workspace"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

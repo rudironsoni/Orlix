@@ -1008,3 +1008,54 @@ Orlix behavior. Each pane can suppress Ghostty mouse reporting through a
 customizable accessory action or `Cmd+Option+M`. The process-local state
 survives surface view reconstruction, remains isolated by pane, and clears when
 the pane closes. Native macOS command UI remains deferred.
+
+## [2026-09-01] decide | Adopt the Bazel product graph migration
+
+Added the Bazel migration concept, work hierarchy, and accepted decisions for
+repository product-graph ownership, signed promoted buildsets, parallel
+worktree isolation, local and Xcode Cloud project ownership, and the final
+authority cutover. [CORRECTION] Updated the stale README claim that normal
+`make build` first removes `Build/`; only `make rebuild` requests that clean.
+
+## [2026-09-01] decide | Support iOS and iPadOS 15
+
+Set iOS and iPadOS 15.0 as the minimum for the app and public OrlixOS SDK.
+Keep the optional Live Activity extension at iOS and iPadOS 16.1 because its
+ActivityKit surface is not available on iOS 15. Added iOS 15 to the Bazel
+feasibility gate and deployment-target proof.
+
+## [2026-09-01] record | Pin the SwiftET iOS 15 compatibility fork
+
+Pinned SwiftET to `rudironsoni/swift-et` commit
+`47cb48446af6565b5103ddaa431388c1d5bce366`. The fork lowers the package floor
+to iOS 15 and replaces iOS 16-only `Duration` sleep APIs with an internal
+nanosecond duration. Its iOS 15 simulator compile and host unit suite pass.
+
+Pinned SwiftMosh to `rudironsoni/swift-mosh` commit
+`e476c1e8745cc1d1a353bc72b8ee1d73eb35e197`. This fork only lowers the package
+floor to iOS 15. Its complete package graph compiles for the iOS 15 simulator,
+and its host unit suite passes.
+
+Pinned SwiftCloudflared to `rudironsoni/swift-cloudflared` commit
+`80eb5b73e00effe78c8d6d44d8aab8ffdd63e976`. This fork only lowers the package
+floor to iOS 15. Its Cloudflared product compiles for the iOS 15 simulator,
+and its host unit suite passes.
+
+Pinned MLXSwift to `rudironsoni/mlx-swift` commit
+`7b6527f6eb6013c5221679ee08112c04aab6825e`. The fork lowers the package floor
+to iOS 15, uses the Metal compiler version macro for constant address-space
+selection, removes redundant Winograd constant declarations, and replaces
+iOS 16-only Swift APIs. Its complete package graph compiles for the iOS 15
+simulator, and its host test suite passes. MLX execution stays disabled on
+iOS 15 until runtime proof exists, so Apple Speech remains the fallback.
+
+## [2026-09-01] record | Complete the Bazel migration baseline
+
+Completed the migration plan, current-build inventory, worktree-safe cache
+model, lock-file bootstrap, and initial Bazel Apple smoke target. Moved the
+active migration work to the Xcode 26.6 feasibility experiment. The app now
+compiles with a 15.0 minimum, while the optional Live Activity extension keeps
+its 16.1 minimum. Added a GitHub CI lane that installs iOS 15.5 with pinned
+`xcodes`, creates a dedicated simulator, and runs the app launch smoke test.
+The CI runtime lane owns the minimum-version proof when a developer host does
+not have the old simulator runtime.

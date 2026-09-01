@@ -118,9 +118,9 @@ struct RemoteFileInspectorView: View {
                     Form {
                         metadataFormSection(for: selectedEntry)
                     }
-                    .formStyle(.grouped)
+                    .orlixGroupedFormStyle()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
+                    .orlixScrollContentBackgroundHidden()
                     .background(backgroundColor)
                 } else {
                     ScrollView {
@@ -203,7 +203,7 @@ struct RemoteFileInspectorView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .orlixScrollContentBackgroundHidden()
             .background(backgroundColor)
         }
         .background(backgroundColor)
@@ -319,7 +319,7 @@ struct RemoteFileInspectorView: View {
                 TextEditor(text: $editableText)
                     .font(.system(.footnote, design: .monospaced))
                     .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
+                    .orlixScrollContentBackgroundHidden()
                     .padding(8)
                     .background(previewContainerBackground(useSectionBackground: useSectionBackground))
             } else {
@@ -840,7 +840,7 @@ struct RemoteFileInspectorView: View {
     }
 
     private func metadataFormRow(_ key: String, value: String) -> some View {
-        LabeledContent {
+        OrlixLabeledContent {
             Text(value)
                 .multilineTextAlignment(.trailing)
                 .lineLimit(1)
@@ -1224,7 +1224,7 @@ private struct RemoteFileExpandedMediaPreview: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             mediaContent
                 .navigationTitle(item.title)
                 .navigationBarTitleDisplayMode(.inline)

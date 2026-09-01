@@ -91,7 +91,7 @@ struct PrivacyAppLockSettingsView: View {
                 Text("Biometric lock protects app and server access on this device.")
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.privacyAndAppLock")
         .onAppear {

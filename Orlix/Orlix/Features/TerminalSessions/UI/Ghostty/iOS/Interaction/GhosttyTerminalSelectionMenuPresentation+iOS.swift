@@ -8,6 +8,7 @@
 #if os(iOS)
 import UIKit
 
+@available(iOS 16.0, *)
 extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
     func editMenuInteraction(
         _ interaction: UIEditMenuInteraction,
@@ -33,12 +34,20 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
 extension GhosttyTerminalView {
     func presentNativeSelectionEditMenu(at point: CGPoint) {
         editMenuPresentation = .selection
-        let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: point)
-        editMenuInteraction?.presentEditMenu(with: configuration)
+        if #available(iOS 16.0, *) {
+            let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: point)
+            editMenuInteraction?.presentEditMenu(with: configuration)
+        } else {
+            UIMenuController.shared.showMenu(from: self, rect: selectionMenuSourceRect())
+        }
     }
 
     func dismissEditMenuIfNeeded() {
-        editMenuInteraction?.dismissMenu()
+        if #available(iOS 16.0, *) {
+            editMenuInteraction?.dismissMenu()
+        } else {
+            UIMenuController.shared.hideMenu()
+        }
     }
 
     func normalizedSelectionMenuText() -> String? {

@@ -3,10 +3,12 @@ import SwiftUI
 
 extension SettingsView {
     var platformBody: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 ForEach(visibleRoutes(from: SettingsRouteCatalog.leadingRoutes)) { route in
-                    NavigationLink(value: route) {
+                    NavigationLink {
+                        settingsDestination(for: route)
+                    } label: {
                         routeLabel(for: route)
                     }
                 }
@@ -16,7 +18,9 @@ extension SettingsView {
                     if !routes.isEmpty {
                         Section(group.title) {
                             ForEach(routes) { route in
-                                NavigationLink(value: route) {
+                                NavigationLink {
+                                    settingsDestination(for: route)
+                                } label: {
                                     routeLabel(for: route)
                                 }
                             }
@@ -25,7 +29,9 @@ extension SettingsView {
                 }
 
                 ForEach(visibleRoutes(from: SettingsRouteCatalog.trailingRoutes)) { route in
-                    NavigationLink(value: route) {
+                    NavigationLink {
+                        settingsDestination(for: route)
+                    } label: {
                         routeLabel(for: route)
                     }
                 }
@@ -33,12 +39,6 @@ extension SettingsView {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: Text("Search Settings"))
-            .navigationDestination(for: SettingsRoute.self) { route in
-                destination(for: route)
-                    .navigationTitle(route.title)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .adaptiveSoftScrollEdges()
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -54,8 +54,16 @@ extension SettingsView {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.root")
+    }
+
+    private func settingsDestination(for route: SettingsRoute) -> some View {
+        destination(for: route)
+            .navigationTitle(route.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .adaptiveSoftScrollEdges()
     }
 
 }
