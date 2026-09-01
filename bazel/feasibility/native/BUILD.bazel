@@ -1,0 +1,102 @@
+load(":native_bundle.bzl", "orlix_ghostty_archives", "orlix_ssh_archives")
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//bazel/feasibility:__subpackages__"])
+
+config_setting(
+    name = "ios_device",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:device",
+    ],
+)
+
+config_setting(
+    name = "ios_simulator",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:simulator",
+    ],
+)
+
+config_setting(
+    name = "macos",
+    constraint_values = ["@platforms//os:macos"],
+)
+
+orlix_ghostty_archives(
+    name = "ghostty_archives",
+    ghostty_build = "@orlix_ghostty_source//:source/build.zig",
+    ghostty_source = "@orlix_ghostty_source//:source",
+    tags = ["manual"],
+    zig = "@orlix_ghostty_source//:zig/zig",
+    zig_packages = "@orlix_ghostty_source//:zig_packages",
+    zig_packages_marker = "@orlix_ghostty_source//:zig-pkg/orlix-ready",
+)
+
+orlix_ssh_archives(
+    name = "ssh_archives",
+    cmake = "@orlix_cmake_tool//:CMake.app/Contents/bin/cmake",
+    cmake_runtime = "@orlix_cmake_tool//:runtime",
+    libssh2_cmake = "@orlix_libssh2_source//:CMakeLists.txt",
+    libssh2_source = "@orlix_libssh2_source//:source",
+    openssl_configure = "@orlix_openssl_source//:Configure",
+    openssl_source = "@orlix_openssl_source//:source",
+    tags = ["manual"],
+)
+
+filegroup(name = "apple_archives", srcs = [":ghostty_archives", ":ssh_archives"])
+
+filegroup(name = "ghostty_ios_device_archive", srcs = [":ghostty_archives"], output_group = "ios_device")
+filegroup(name = "ghostty_ios_simulator_archive", srcs = [":ghostty_archives"], output_group = "ios_simulator")
+filegroup(name = "ghostty_macos_archive", srcs = [":ghostty_archives"], output_group = "macos")
+filegroup(name = "ghostty_ios_device_resources", srcs = [":ghostty_archives"], output_group = "ios_device_resources")
+filegroup(name = "ghostty_ios_simulator_resources", srcs = [":ghostty_archives"], output_group = "ios_simulator_resources")
+filegroup(name = "ghostty_macos_resources", srcs = [":ghostty_archives"], output_group = "macos_resources")
+filegroup(name = "ssh_ios_device_archive", srcs = [":ssh_archives"], output_group = "ios_device")
+filegroup(name = "ssh_ios_simulator_archive", srcs = [":ssh_archives"], output_group = "ios_simulator")
+filegroup(name = "ssh_macos_archive", srcs = [":ssh_archives"], output_group = "macos")
+
+cc_import(name = "ghostty_ios_device", static_library = ":ghostty_ios_device_archive")
+cc_import(name = "ghostty_ios_simulator", static_library = ":ghostty_ios_simulator_archive")
+cc_import(name = "ghostty_macos", static_library = ":ghostty_macos_archive")
+cc_import(name = "ssh_ios_device", static_library = ":ssh_ios_device_archive")
+cc_import(name = "ssh_ios_simulator", static_library = ":ssh_ios_simulator_archive")
+cc_import(name = "ssh_macos", static_library = ":ssh_macos_archive")
+
+cc_library(
+    name = "selected",
+    deps = select({
+        ":ios_device": [":ghostty_ios_device", ":ssh_ios_device"],
+        ":ios_simulator": [":ghostty_ios_simulator", ":ssh_ios_simulator"],
+        ":macos": [":ghostty_macos", ":ssh_macos"],
+    }),
+)
+
+cc_library(
+    name = "native_link_smoke",
+    srcs = ["NativeLinkSmoke.c"],
+    alwayslink = True,
+    linkopts = [
+        "-lc++",
+        "-lz",
+        "-framework CoreFoundation",
+        "-framework CoreGraphics",
+        "-framework CoreText",
+        "-framework CoreVideo",
+        "-framework Foundation",
+        "-framework IOSurface",
+        "-framework Metal",
+        "-framework MetalKit",
+        "-framework QuartzCore",
+    ] + select({
+        ":ios_device": ["-framework UIKit"],
+        ":ios_simulator": ["-framework UIKit"],
+        ":macos": ["-framework AppKit", "-framework Carbon"],
+    }),
+    visibility = ["//bazel/feasibility/apple:__pkg__"],
+    deps = [":selected"],
+)
+
+exports_files(["native_bundle.bzl"])

@@ -1,0 +1,11 @@
+load(":kernel_uapi.bzl", "orlix_kernel_uapi")
+
+package(default_visibility = ["//visibility:private"])
+
+orlix_kernel_uapi(
+    name = "uapi",
+    linux_makefile = "@orlix_linux_source//:Makefile",
+    linux_source = "@orlix_linux_source//:source",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)

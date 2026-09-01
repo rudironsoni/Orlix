@@ -4,6 +4,11 @@ package(default_visibility = ["//visibility:private"])
 
 xcodeproj(
     name = "feasibility",
+    bazel_env = {
+        "DEVELOPER_DIR": None,
+        "PATH": None,
+    },
+    bazel_path = "bazel",
     install_directory = "Build/XcodeProjects",
     ios_device_cpus = "arm64",
     ios_simulator_cpus = "sim_arm64",
@@ -13,10 +18,27 @@ xcodeproj(
     top_level_targets = [
         top_level_target(
             "//bazel/feasibility/apple:SmokeApp",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:DependencySmokeApp",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:NativeDependencySmokeApp",
             target_environments = [
                 "device",
                 "simulator",
             ],
         ),
+        top_level_target(
+            "//bazel/feasibility/apple:LiveActivitySmoke",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:NativeSmokeTests",
+            target_environments = ["simulator"],
+        ),
+        "//bazel/feasibility/apple:NativeDependencyMacSmokeApp",
     ],
 )
