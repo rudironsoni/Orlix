@@ -14,6 +14,7 @@ applies:
 has_story:
   - "[Establish Bazel migration governance and baseline](../../story/done/establish-bazel-migration-governance-and-baseline.md)"
   - "[Prove the Bazel Apple feasibility gate](../../story/doing/prove-bazel-apple-feasibility-gate.md)"
+  - "[Route every Apple build through Bazel](../../story/todo/route-every-apple-build-through-bazel.md)"
   - "[Build hermetic upstream component boundaries](../../story/todo/build-hermetic-upstream-component-boundaries.md)"
   - "[Move the Apple product graph to Bazel](../../story/todo/move-apple-product-graph-to-bazel.md)"
   - "[Bind proof to Bazel artifact identities](../../story/todo/bind-proof-to-bazel-artifact-identities.md)"

@@ -25,6 +25,7 @@ export CCACHE_MAXSIZE
 export CCACHE_COMPILERCHECK
 
 .PHONY: __bazel-bootstrap __bazel-version-check __bazel-feasibility-bootstrap __bazel-apple-smoke
+.PHONY: __bazel-apple-dependency-smoke
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
 
 __bazel-bootstrap:
@@ -42,6 +43,9 @@ __bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory
 
 __bazel-apple-smoke: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/apple:SmokeApp --compilation_mode=dbg --config=release --config=source --ios_multi_cpus=sim_arm64 --xcode_version=26.6 --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+
+__bazel-apple-dependency-smoke: __bazel-feasibility-bootstrap
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/apple:DependencySmokeApp --compilation_mode=dbg --config=release --config=source --ios_multi_cpus=sim_arm64 --xcode_version=26.6 --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
 __bazel-migration-inventory:
 	@ruby bazel/migration/inventory.rb --write

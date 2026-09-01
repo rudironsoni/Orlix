@@ -33,6 +33,8 @@ Kbuild, Meson and Ninja, and upstream Autotools and Make remain authoritative in
 
 Apple compilation, linking, resources, tests, packaging, Xcode project generation, rootfs assembly, manifests, proof selection, and release bundles become Bazel-declared product graph operations.
 
+Every Apple product build surface uses this Bazel graph for every row in the supported matrix, including iOS and iPadOS 15, later iOS and iPadOS versions, the optional iOS and iPadOS 16.1 Live Activity extension, and every supported Apple-silicon macOS version. A destination or OS version is a declared graph dimension, not a reason to add an XcodeGen, direct `xcodebuild`, or other parallel build authority. Local Xcode projects, the committed Xcode Cloud discovery project, and Make are frontends to the same Bazel graph.
+
 Apple compilation mode, Orlix profile, destination, source or promoted component mode, signing mode, and proof tier remain independent settings.
 
 ## Consequences
@@ -42,3 +44,5 @@ The final repository has one cross-component product graph without taking owners
 The current Make command names remain stable unless a separate accepted decision changes the public interface. Ordinary `make build` does not call `clean`.
 
 The migration must use narrow providers and the correct split between analysis, execution, workflow-policy, and fault-injection tests.
+
+No Apple OS version becomes supported until its matrix row has a Bazel route, valid cache or promoted-buildset identity, and the required compile, link, runtime, and feature-gate evidence. The iOS 15 reduced feature set remains supported, while later-system features remain gated on rows where their APIs are unavailable.

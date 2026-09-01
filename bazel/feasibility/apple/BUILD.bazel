@@ -10,6 +10,27 @@ swift_library(
     tags = ["manual"],
 )
 
+swift_library(
+    name = "DependencySmokeLibrary",
+    srcs = ["DependencySmoke.swift"],
+    module_name = "OrlixDependencySmoke",
+    tags = ["manual"],
+    deps = [
+        "@swiftpkg_mlx_swift//:MLX",
+        "@swiftpkg_mlx_swift//:MLXFFT",
+        "@swiftpkg_mlx_swift//:MLXNN",
+        "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
+        "@swiftpkg_swift_cloudflared//:Cloudflared",
+        "@swiftpkg_swift_et//:ETBootstrap",
+        "@swiftpkg_swift_et//:ETSession",
+        "@swiftpkg_swift_mosh//:MoshBootstrap",
+        "@swiftpkg_swift_mosh//:MoshCore",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
+    ],
+)
+
 ios_application(
     name = "SmokeApp",
     bundle_id = "com.rudironsoni.orlix.bazel-feasibility",
@@ -21,4 +42,20 @@ ios_application(
     minimum_os_version = "15.0",
     tags = ["manual"],
     deps = [":SmokeAppLibrary"],
+)
+
+ios_application(
+    name = "DependencySmokeApp",
+    bundle_id = "com.rudironsoni.orlix.bazel-dependency-feasibility",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [
+        ":DependencySmokeLibrary",
+        ":SmokeAppLibrary",
+    ],
 )

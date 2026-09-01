@@ -8,6 +8,8 @@ story_of:
   - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
   - "[Run the Bazel Xcode 26.6 feasibility experiment](../../task/doing/run-bazel-xcode-26-6-feasibility-experiment.md)"
+blocks:
+  - "[Route every Apple build through Bazel](../todo/route-every-apple-build-through-bazel.md)"
 ---
 
 # Prove The Bazel Apple Feasibility Gate

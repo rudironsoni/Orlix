@@ -761,7 +761,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 33,
+      "line": 34,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -773,7 +773,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 49,
+      "line": 53,
       "classification": "private",
       "phony": true,
       "prerequisites": [],
