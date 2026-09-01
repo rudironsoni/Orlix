@@ -147,7 +147,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "7bc63ec9f988898121a8b6c264db912e2c52e3649f1ffc22e932a8418a5b7d7d",
+      "source_sha256": "f7b1e37f29f920d2d5325e27caa000a9fa9a99128799aad0a850f3f77907c0fa",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -167,7 +167,8 @@
           },
           "push": {
             "branches": [
-              "main"
+              "main",
+              "fix/build-optimizations"
             ]
           }
         },
@@ -200,11 +201,11 @@
               },
               {
                 "name": "Install pinned build tools",
-                "run": "set -euo pipefail\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\n"
               },
               {
                 "name": "Install the iOS 15.5 runtime with xcodes",
-                "run": "set -euo pipefail\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith(\"iPhone\"))][0].identifier')\"\ntest -n \"$device_type\" -a \"$device_type\" != null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" \\\n  '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Build native dependencies",
