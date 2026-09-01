@@ -14,7 +14,7 @@ on:
       - "OrlixOS/**"
       - "project.yml"
   push:
-    branches: [main]
+    branches: [main, fix/build-optimizations]
 
 permissions:
   contents: read
