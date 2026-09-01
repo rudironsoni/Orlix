@@ -377,16 +377,22 @@ ios15-simulator-gate:
 	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
 	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
 	xcodegen generate --spec project.yml; \
+	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
+	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
+	result_log="$$result_dir/Orlix-iOS15.log"; \
+	mkdir -p "$$result_dir"; \
+	rm -rf "$$result_bundle"; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "Orlix UI Tests" \
 		-configuration Debug \
 		-destination 'platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)' \
+		-resultBundlePath "$$result_bundle" \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
 		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
 		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
 		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
-		test
+		test 2>&1 | tee "$$result_log"
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \

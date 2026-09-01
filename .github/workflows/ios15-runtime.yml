@@ -67,6 +67,8 @@ jobs:
         run: make build type=vendor vendor=all
 
       - name: Run the iOS 15 launch test
+        env:
+          LINUX_REMOTE: https://github.com/gregkh/linux.git
         run: make ios15-simulator-gate
 
       - name: Store iOS 15 test evidence

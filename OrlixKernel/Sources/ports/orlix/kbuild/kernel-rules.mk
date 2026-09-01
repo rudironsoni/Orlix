@@ -11,6 +11,7 @@ ORLIX_PORT_ARCH ?= orlix
 LINUX_UAPI_ARCH ?= arm64
 LINUX_TAG ?= v$(LINUX_VERSION)
 LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+LINUX_TAG_COMMIT ?= 14c37ff05f22da2fa7076d10f6a07c7ede330c83
 ORLIX_HEADERS_INSTALL_JOBS ?= 1
 
 PROFILE ?= release
@@ -1640,8 +1641,20 @@ __bootstrap-linux-upstream:
 	else \
 		git -C "$$upstream_dir" remote set-url origin "$$linux_remote"; \
 	fi; \
-	git -C "$$upstream_dir" fetch --force --depth 1 origin "refs/tags/$$linux_tag:refs/tags/$$linux_tag"; \
+	fetch_status=1; \
+	for fetch_attempt in 1 2 3; do \
+		if git -C "$$upstream_dir" fetch --force --depth 1 origin "refs/tags/$$linux_tag:refs/tags/$$linux_tag"; then \
+			fetch_status=0; \
+			break; \
+		fi; \
+		echo "Linux upstream fetch attempt $$fetch_attempt failed for $$linux_remote" >&2; \
+		rm -f "$$upstream_dir/shallow.lock"; \
+		find "$$upstream_dir/objects/pack" -maxdepth 1 -type f -name 'tmp_*' -delete 2>/dev/null || true; \
+		sleep "$$fetch_attempt"; \
+	done; \
+	[ "$$fetch_status" -eq 0 ] || { echo "Linux upstream fetch failed after 3 attempts: $$linux_remote $$linux_tag" >&2; exit 1; }; \
 	tag_commit="$$(git -C "$$upstream_dir" rev-list -n1 "$$linux_tag")"; \
+	[ "$$tag_commit" = "$(LINUX_TAG_COMMIT)" ] || { echo "expected $$linux_tag at $(LINUX_TAG_COMMIT), got $$tag_commit from $$linux_remote" >&2; exit 1; }; \
 	git -C "$$upstream_dir" update-ref "refs/orlix/linux-$(LINUX_VERSION)" "$$tag_commit"; \
 	git -C "$$upstream_dir" symbolic-ref HEAD "refs/orlix/linux-$(LINUX_VERSION)"; \
 	checked_commit="$$(git -C "$$upstream_dir" rev-list -n1 "refs/orlix/linux-$(LINUX_VERSION)")"; \

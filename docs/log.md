@@ -1060,3 +1060,13 @@ its 16.1 minimum. Added a GitHub CI lane that installs iOS 15.5 with pinned
 `xcodes`, creates a dedicated simulator, and runs the app launch smoke test.
 The CI runtime lane owns the minimum-version proof when a developer host does
 not have the old simulator runtime.
+
+## [2026-09-01] fix | Harden the iOS 15 runtime proof lane
+
+The GitHub macOS runner installed and booted the pinned iOS 15.5 runtime with
+`xcodes`. [CORRECTION] The first product test did not fail because of an iOS 15
+API. The Linux source fetch from kernel.org returned `fatal: protocol error:
+bad pack header` before XCTest started. The Kernel bootstrap now pins the exact
+Linux tag commit, retries transient fetch failures, and lets this CI lane use
+Greg Kroah-Hartman's stable Linux mirror. The gate also stores its test log and
+`.xcresult` under `Build/iOS15` for every run.
