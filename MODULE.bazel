@@ -27,3 +27,23 @@ swift_deps.configure_package(
     name = "mlx-swift",
 )
 use_repo(swift_deps, "swift_package", "swiftpkg_mlx_swift", "swiftpkg_opentelemetry_swift", "swiftpkg_opentelemetry_swift_core", "swiftpkg_swift_cloudflared", "swiftpkg_swift_et", "swiftpkg_swift_mosh", "swiftpkg_swift_numerics", "swiftpkg_tweetnacl_swiftwrap", "swiftpkg_zipfoundation")
+
+native_sources = use_extension(
+    "//bazel/extensions:native_sources.bzl",
+    "native_sources",
+)
+use_repo(
+    native_sources,
+    "orlix_bragi_source",
+    "orlix_cmake_tool",
+    "orlix_compiler_rt_source",
+    "orlix_freestnd_c_source",
+    "orlix_freestnd_cxx_source",
+    "orlix_frigg_source",
+    "orlix_ghostty_source",
+    "orlix_libssh2_source",
+    "orlix_libsmarter_source",
+    "orlix_linux_source",
+    "orlix_mlibc_source",
+    "orlix_openssl_source",
+)

@@ -1,4 +1,6 @@
-load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_unit_test")
+load("@rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
 package(default_visibility = ["//visibility:private"])
@@ -41,7 +43,79 @@ ios_application(
     infoplists = ["Info.plist"],
     minimum_os_version = "15.0",
     tags = ["manual"],
+    visibility = ["//visibility:public"],
     deps = [":SmokeAppLibrary"],
+)
+
+swift_library(
+    name = "NativeLinkProbe",
+    srcs = ["NativeLinkProbe.swift"],
+    module_name = "OrlixNativeLinkProbe",
+    tags = ["manual"],
+)
+
+swift_library(
+    name = "NativeSmokeAppLibrary",
+    srcs = [
+        "NativeSmokeApp.swift",
+        "NativeSmokePreview.swift",
+    ],
+    module_name = "OrlixNativeBazelFeasibility",
+    tags = ["manual"],
+    deps = [":NativeLinkProbe"],
+)
+
+local_provisioning_profile(
+    name = "orlix_ios_provisioning_profile",
+    profile_name = "com.rudironsoni.orlix",
+    tags = ["manual"],
+    team_id = "ZQ3L7M567L",
+)
+
+ios_application(
+    name = "NativeDependencySmokeApp",
+    bundle_id = "com.rudironsoni.Orlix",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    provisioning_profile = ":orlix_ios_provisioning_profile",
+    resources = select({
+        "//bazel/feasibility/native:ios_device": ["//bazel/feasibility/native:ghostty_ios_device_resources"],
+        "//bazel/feasibility/native:ios_simulator": ["//bazel/feasibility/native:ghostty_ios_simulator_resources"],
+        "//conditions:default": [],
+    }),
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":NativeSmokeAppLibrary",
+        "//bazel/feasibility/native:native_link_smoke",
+    ],
+)
+
+swift_library(
+    name = "MacSmokeAppLibrary",
+    srcs = ["MacSmokeApp.swift"],
+    module_name = "OrlixMacBazelFeasibility",
+    tags = ["manual"],
+    deps = [":NativeLinkProbe"],
+)
+
+macos_application(
+    name = "NativeDependencyMacSmokeApp",
+    bundle_id = "com.rudironsoni.orlix.bazel-native-macos-feasibility",
+    infoplists = ["MacInfo.plist"],
+    linkopts = ["-framework GameController"],
+    minimum_os_version = "13.3",
+    resources = ["//bazel/feasibility/native:ghostty_macos_resources"],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":MacSmokeAppLibrary",
+        "//bazel/feasibility/native:native_link_smoke",
+    ],
 )
 
 ios_application(
@@ -54,8 +128,46 @@ ios_application(
     infoplists = ["Info.plist"],
     minimum_os_version = "15.0",
     tags = ["manual"],
+    visibility = ["//visibility:public"],
     deps = [
         ":DependencySmokeLibrary",
         ":SmokeAppLibrary",
     ],
+)
+
+swift_library(
+    name = "LiveActivitySmokeLibrary",
+    srcs = ["LiveActivitySmoke.swift"],
+    module_name = "OrlixLiveActivitySmoke",
+    tags = ["manual"],
+)
+
+ios_extension(
+    name = "LiveActivitySmoke",
+    bundle_id = "com.rudironsoni.orlix.live-activity.bazel-feasibility",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["LiveActivityInfo.plist"],
+    minimum_os_version = "16.1",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":LiveActivitySmokeLibrary"],
+)
+
+swift_library(
+    name = "NativeSmokeTestsLibrary",
+    testonly = True,
+    srcs = ["NativeSmokeTests.swift"],
+    module_name = "OrlixNativeSmokeTests",
+    tags = ["manual"],
+)
+
+ios_unit_test(
+    name = "NativeSmokeTests",
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":NativeSmokeTestsLibrary"],
 )

@@ -21,3 +21,18 @@ build:ci --remote_download_outputs=toplevel
 
 build:promotion --//bazel/config:component_mode=source
 build:promotion --remote_upload_local_results=false
+
+build:rules_xcodeproj --xcode_version=26.6
+build:rules_xcodeproj --//bazel/config:profile=release
+build:rules_xcodeproj --//bazel/config:component_mode=source
+build:rules_xcodeproj --action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj --host_action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj --repo_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_generator --action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_generator --host_action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_indexbuild --xcode_version=26.6
+build:rules_xcodeproj_indexbuild --action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_indexbuild --host_action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_swiftuipreviews --xcode_version=26.6
+build:rules_xcodeproj_swiftuipreviews --action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
+build:rules_xcodeproj_swiftuipreviews --host_action_env=DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
