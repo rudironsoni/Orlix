@@ -1229,7 +1229,7 @@ XCODEBUILD_MCP ?= xcodebuildmcp
 
 LINUX_MAKE ?=
 LINUX_SED ?=
-LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
+LINUX_LLVM_BIN ?= $(shell llvm_bin=""; if [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then llvm_bin=/opt/homebrew/opt/llvm/bin; elif [ -x /usr/local/opt/llvm/bin/llvm-ar ]; then llvm_bin=/usr/local/opt/llvm/bin; fi; lld_bin=""; if [ -x /opt/homebrew/opt/lld/bin/ld.lld ]; then lld_bin=/opt/homebrew/opt/lld/bin; elif [ -x /opt/homebrew/opt/llvm/bin/ld.lld ]; then lld_bin=/opt/homebrew/opt/llvm/bin; elif [ -x /usr/local/opt/lld/bin/ld.lld ]; then lld_bin=/usr/local/opt/lld/bin; elif [ -x /usr/local/opt/llvm/bin/ld.lld ]; then lld_bin=/usr/local/opt/llvm/bin; elif command -v ld.lld >/dev/null 2>&1; then lld_bin=$$(dirname "$$(command -v ld.lld)"); fi; if [ -n "$$lld_bin" ] && [ -n "$$llvm_bin" ] && [ "$$lld_bin" != "$$llvm_bin" ]; then printf '%s:%s\n' "$$lld_bin" "$$llvm_bin"; elif [ -n "$$lld_bin" ]; then printf '%s\n' "$$lld_bin"; else printf '%s\n' "$$llvm_bin"; fi)
 LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/host-compat/include
 ORLIX_COMPILER_LAUNCHER ?= $(shell if command -v ccache >/dev/null 2>&1; then command -v ccache; elif command -v sccache >/dev/null 2>&1; then command -v sccache; fi)
 ORLIX_KERNEL_CC ?= clang
@@ -1877,6 +1877,7 @@ __prepare-kbuild: __prepare-port
 	export PATH; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux Kbuild on this host" >&2; exit 1; }; \
 	command -v llvm-ar >/dev/null 2>&1 || { echo "llvm-ar is required by Linux Kbuild; install LLVM or set LINUX_LLVM_BIN=/path/to/llvm/bin" >&2; exit 1; }; \
+	command -v ld.lld >/dev/null 2>&1 || { echo "ld.lld is required by Linux Kbuild LLVM=1; install LLVM or set LINUX_LLVM_BIN to a directory that contains ld.lld" >&2; exit 1; }; \
 	if [ -s "$$build_dir/.config" ] && \
 		[ "$$build_dir/.config" -nt "$(ORLIX_PROFILE_CONFIG)" ] && \
 		[ "$$build_dir/.config" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
