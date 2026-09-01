@@ -202,7 +202,7 @@
     {
       "name": "beta-simulator-gate",
       "source": "Makefile",
-      "line": 391,
+      "line": 397,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -214,7 +214,7 @@
     {
       "name": "orlix-tcti-semantic-provenance-tests",
       "source": "Makefile",
-      "line": 417,
+      "line": 423,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -224,7 +224,7 @@
     {
       "name": "orlix-tcti-operational-note-pipeline-test",
       "source": "Makefile",
-      "line": 435,
+      "line": 441,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -236,7 +236,7 @@
     {
       "name": "orlix-tcti-isa-maintainer-source-check",
       "source": "Makefile",
-      "line": 438,
+      "line": 444,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -246,7 +246,7 @@
     {
       "name": "orlix-tcti-isa-host-tests",
       "source": "Makefile",
-      "line": 449,
+      "line": 455,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -259,7 +259,7 @@
     {
       "name": "__orlix-tcti-proof-registry-provenance-write",
       "source": "Makefile",
-      "line": 457,
+      "line": 463,
       "classification": "private",
       "phony": true,
       "prerequisites": [],
@@ -269,7 +269,7 @@
     {
       "name": "orlix-tcti-proof-registry-provenance-regression",
       "source": "Makefile",
-      "line": 460,
+      "line": 466,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -279,7 +279,7 @@
     {
       "name": "orlix-tcti-isa-host-tests",
       "source": "Makefile",
-      "line": 507,
+      "line": 513,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -289,7 +289,7 @@
     {
       "name": "orlix-tcti-native-proof-symbol-check",
       "source": "Makefile",
-      "line": 645,
+      "line": 651,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -299,7 +299,7 @@
     {
       "name": "orlix-tcti-native-proof-symbol-check-dependency-regression",
       "source": "Makefile",
-      "line": 648,
+      "line": 654,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -309,7 +309,7 @@
     {
       "name": "orlix-tcti-proof-source-linkage-tests",
       "source": "Makefile",
-      "line": 651,
+      "line": 657,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -319,7 +319,7 @@
     {
       "name": "orlix-tcti-isa-audit",
       "source": "Makefile",
-      "line": 654,
+      "line": 660,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -332,7 +332,7 @@
     {
       "name": "orlix-tcti-kernel-tests",
       "source": "Makefile",
-      "line": 673,
+      "line": 679,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -342,7 +342,7 @@
     {
       "name": "orlix-tcti-kernel-tests",
       "source": "Makefile",
-      "line": 674,
+      "line": 680,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -354,7 +354,7 @@
     {
       "name": "orlix-tcti-xcodebuild-watchdog-tests",
       "source": "Makefile",
-      "line": 708,
+      "line": 714,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -364,7 +364,7 @@
     {
       "name": "mlibc-tests",
       "source": "Makefile",
-      "line": 744,
+      "line": 750,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -376,7 +376,7 @@
     {
       "name": "coreutils-tests",
       "source": "Makefile",
-      "line": 754,
+      "line": 760,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -388,7 +388,7 @@
     {
       "name": "hostadapter-tests",
       "source": "Makefile",
-      "line": 766,
+      "line": 772,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -400,7 +400,7 @@
     {
       "name": "orlixos-tests",
       "source": "Makefile",
-      "line": 801,
+      "line": 807,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -414,7 +414,7 @@
     {
       "name": "app-tests",
       "source": "Makefile",
-      "line": 809,
+      "line": 815,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -426,7 +426,7 @@
     {
       "name": "runtime-tests",
       "source": "Makefile",
-      "line": 824,
+      "line": 830,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -438,7 +438,7 @@
     {
       "name": "docs-check",
       "source": "Makefile",
-      "line": 836,
+      "line": 842,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -448,7 +448,7 @@
     {
       "name": "agent-rules-check",
       "source": "Makefile",
-      "line": 844,
+      "line": 850,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -458,7 +458,7 @@
     {
       "name": "agent-hooks-check",
       "source": "Makefile",
-      "line": 853,
+      "line": 859,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -468,7 +468,7 @@
     {
       "name": "agent-skills-check",
       "source": "Makefile",
-      "line": 856,
+      "line": 862,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -478,7 +478,7 @@
     {
       "name": "agent-subagents-check",
       "source": "Makefile",
-      "line": 859,
+      "line": 865,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -488,7 +488,7 @@
     {
       "name": "agent-mcp-check",
       "source": "Makefile",
-      "line": 862,
+      "line": 868,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -498,7 +498,7 @@
     {
       "name": "agent-task-envelope-check",
       "source": "Makefile",
-      "line": 873,
+      "line": 879,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -508,7 +508,7 @@
     {
       "name": "beta-validate-archive",
       "source": "Makefile",
-      "line": 920,
+      "line": 926,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -518,7 +518,7 @@
     {
       "name": "beta-validate-export",
       "source": "Makefile",
-      "line": 963,
+      "line": 969,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -528,7 +528,7 @@
     {
       "name": "beta-upload-prerequisites",
       "source": "Makefile",
-      "line": 973,
+      "line": 979,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -540,7 +540,7 @@
     {
       "name": "app-store-release-report-check",
       "source": "Makefile",
-      "line": 1000,
+      "line": 1006,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -555,7 +555,7 @@
     {
       "name": "release-workflow-check",
       "source": "Makefile",
-      "line": 1013,
+      "line": 1019,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -567,7 +567,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1041,
+      "line": 1047,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -577,7 +577,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1041,
+      "line": 1047,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -587,7 +587,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1041,
+      "line": 1047,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -597,7 +597,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1064,
+      "line": 1070,
       "classification": "command",
       "phony": true,
       "prerequisites": [],
@@ -607,7 +607,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1072,
+      "line": 1078,
       "classification": "command",
       "phony": true,
       "prerequisites": [],

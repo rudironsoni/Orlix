@@ -147,7 +147,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "f7b1e37f29f920d2d5325e27caa000a9fa9a99128799aad0a850f3f77907c0fa",
+      "source_sha256": "37709820f549223347da1412903380b81466c0e51716830d2bef1e3f22ab731a",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -213,6 +213,9 @@
               },
               {
                 "name": "Run the iOS 15 launch test",
+                "env": {
+                  "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
+                },
                 "run": "make ios15-simulator-gate"
               },
               {
