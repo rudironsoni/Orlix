@@ -1022,7 +1022,8 @@ authority cutover. [CORRECTION] Updated the stale README claim that normal
 Set iOS and iPadOS 15.0 as the minimum for the app and public OrlixOS SDK.
 Keep the optional Live Activity extension at iOS and iPadOS 16.1 because its
 ActivityKit surface is not available on iOS 15. Added iOS 15 to the Bazel
-feasibility gate and deployment-target proof.
+feasibility gate and deployment-target proof. Defined the reduced iOS 15
+feature set and kept newer UI and MLX features behind version gates.
 
 ## [2026-09-01] record | Pin the SwiftET iOS 15 compatibility fork
 
