@@ -30,6 +30,21 @@ Every Swift package and Orlix product target must compile with the iOS 15 deploy
 
 Keep `OrlixLiveActivity` as an optional embedded extension with an independent iOS and iPadOS 16.1 minimum. Protect every call and shared type that uses ActivityKit with the existing availability checks. The app must remain usable on iOS 15 without loading or invoking the extension.
 
+The iOS 15 product is a supported reduced feature set:
+
+| Capability | iOS 15 behavior | Newer-system behavior |
+| --- | --- | --- |
+| SSH, terminal, remote files, settings, and OrlixOS session surfaces | Supported | Supported |
+| Navigation, sheets, charts, and responsive dashboard layout | Compatibility presentation with the same user data and actions | Native newer SwiftUI presentation |
+| Voice transcription | Apple Speech | Apple Speech or MLX on supported iOS 16 or later systems |
+| Live Activities | Not available | Available on iOS 16.1 or later |
+| File-browser toolbar spacing | Standard bottom toolbar | iOS 26 toolbar spacing and presentation |
+
+Do not delete a newer feature to make iOS 15 compile. Keep the feature behind
+an availability or capability gate, and provide a smaller iOS 15 presentation
+or an explicit unavailable state. The gate must prevent unavailable frameworks
+and APIs from loading or executing on iOS 15.
+
 A dependency that requires a later OS version cannot raise the application minimum. Isolate, replace, or patch that dependency under its owning source and license policy. Record the exact dependency change and prove the iOS 15 link and launch result.
 
 ## Consequences
