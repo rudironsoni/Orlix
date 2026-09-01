@@ -3,7 +3,7 @@ import SwiftUI
 
 extension OpenSourceLicensesView {
     var platformBody: some View {
-        NavigationStack {
+        NavigationView {
             OpenSourceLicensesContent(documents: documents)
                 .navigationTitle(Text("Open Source & Licenses"))
                 .toolbar {

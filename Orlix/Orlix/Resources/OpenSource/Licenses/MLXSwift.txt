@@ -1,5 +1,5 @@
 MLX Swift
-Source revision: 072b684acaae80b6a463abab3a103732f33774bf
+Source revision: 7b6527f6eb6013c5221679ee08112c04aab6825e
 
 ===== LICENSE =====
 

@@ -165,7 +165,7 @@ struct TerminalAppearanceSettingsView: View {
             TerminalContentPaddingSettingsSection()
             TerminalThemeSettingsSection()
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.terminalAppearance")
     }

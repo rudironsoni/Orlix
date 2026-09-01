@@ -144,7 +144,7 @@ struct OfflineSafeButton<Label: View>: View {
 }
 
 #Preview("Network Aware View") {
-    NavigationStack {
+    NavigationView {
         List {
             Text("Server 1")
             Text("Server 2")

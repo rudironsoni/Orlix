@@ -222,7 +222,7 @@ struct AboutSettingsView: View {
                 #endif
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .sheet(isPresented: $isShowingOpenSourceLicenses) {
             OpenSourceLicensesView()

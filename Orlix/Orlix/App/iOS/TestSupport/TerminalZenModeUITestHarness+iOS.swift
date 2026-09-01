@@ -19,7 +19,7 @@ struct TerminalZenModeUITestHarness: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             TerminalKeyboardHarnessRepresentable(
                 tabManager: tabManager,
                 terminalView: $terminalView,
@@ -89,7 +89,7 @@ struct TerminalZenModeUITestHarness: View {
                         .accessibilityIdentifier("orlix.terminal.moreMenu")
                     }
                 }
-                .toolbar(isZenModeEnabled ? .hidden : .visible, for: .navigationBar)
+                .orlixNavigationBarHidden(isZenModeEnabled)
         }
         .task {
             ghosttyApp.startIfNeeded()

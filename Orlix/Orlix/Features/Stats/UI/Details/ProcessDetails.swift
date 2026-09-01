@@ -77,7 +77,7 @@ struct ProcessesSheet: View {
             }
         }
         #else
-        NavigationStack {
+        NavigationView {
             processList
             .navigationTitle(Text("Processes"))
             .navigationBarTitleDisplayMode(.inline)
@@ -424,7 +424,7 @@ private struct ProcessDetailsSheet: View {
     var body: some View {
         sheetContent
             #if os(iOS)
-            .presentationDetents([.medium, .large])
+            .orlixMediumAndLargePresentationDetents()
             #endif
             .adaptiveSoftScrollEdges()
     }
@@ -440,7 +440,7 @@ private struct ProcessDetailsSheet: View {
             processDetailsList
         }
         #else
-        NavigationStack {
+        NavigationView {
             processDetailsList
             .navigationTitle(Text("Process Details"))
             .navigationBarTitleDisplayMode(.inline)

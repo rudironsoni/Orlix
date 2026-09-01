@@ -1,3 +1,5 @@
+tap "xcodesorg/made"
+
 brew "autoconf"
 brew "actionlint"
 brew "automake"
@@ -19,4 +21,5 @@ brew "ripgrep"
 brew "sccache"
 brew "texinfo"
 brew "xcodegen"
+brew "xcodesorg/made/xcodes"
 brew "zig"

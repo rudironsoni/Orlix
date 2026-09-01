@@ -18,7 +18,7 @@
     "subtitle": "Connect to servers, keep them organized, browse remote files, and stay in sync with Keychain-secured credentials across your iPhone, iPad, and Mac.",
     "primaryCta": "Try Orlix free",
     "secondaryCta": "View on GitHub",
-    "meta": "Requires iOS 16+ or macOS 13+ (Apple Silicon). Free forever, or <span class=\"text-orange-500 font-medium\">buy lifetime</span>."
+    "meta": "Requires iOS 15+ or macOS 13+ (Apple Silicon). Free forever, or <span class=\"text-orange-500 font-medium\">buy lifetime</span>."
   },
   "why": {
     "title": "Why choose Orlix",
@@ -182,7 +182,7 @@
     },
     "q9": {
       "question": "What are the system requirements?",
-      "answer": "iOS 16+ on iPhone and iPad, or macOS 13+ Ventura on Apple Silicon Macs. Intel Macs are not supported."
+      "answer": "iOS 15+ on iPhone and iPad, or macOS 13+ Ventura on Apple Silicon Macs. Intel Macs are not supported."
     },
     "q10": {
       "question": "Does Orlix include remote file browsing?",

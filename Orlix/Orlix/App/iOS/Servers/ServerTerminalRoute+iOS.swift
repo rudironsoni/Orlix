@@ -187,7 +187,7 @@ struct ServerTerminalRoute: View {
             .navigationBarBackButtonHidden(true)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { navigationToolbar }
-            .toolbar(isZenModeEnabled ? .hidden : .visible, for: .navigationBar)
+            .orlixNavigationBarHidden(isZenModeEnabled)
             .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
             .limitReachedAlert(.fileTabs, isPresented: $showingFileTabLimitAlert)
             .sheet(item: $presentedRouteSheet, onDismiss: updateTerminalRouteActivation) { sheet in
@@ -202,7 +202,7 @@ struct ServerTerminalRoute: View {
                         .modifier(AppearanceModifier())
                         .adaptiveSoftScrollEdges()
                 case .serverForm(let intent):
-                    NavigationStack {
+                    NavigationView {
                         ServerFormSheet(
                             serverManager: serverManager,
                             workspace: intent.sourceServer.flatMap { sourceServer in
@@ -332,8 +332,8 @@ struct ServerTerminalRoute: View {
             .accessibilityIdentifier("orlix.terminal.back")
         }
 
-        if let server = selectedServer, viewTabConfig.currentVisibleTabs.count > 1 {
-            ToolbarItem(placement: .principal) {
+        ToolbarItem(placement: .principal) {
+            if let server = selectedServer, viewTabConfig.currentVisibleTabs.count > 1 {
                 ConnectionViewSegmentedPicker(
                     selection: selectedViewBinding(for: server.id),
                     tabs: viewTabConfig.currentVisibleTabs

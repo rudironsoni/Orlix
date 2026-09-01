@@ -38,24 +38,24 @@ nonisolated enum ProSettingsUserState: Equatable, Sendable {
         }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
         switch self {
         case .checking:
-            "Checking..."
+            String(localized: "Checking...")
         case .free:
-            "Free Tier"
+            String(localized: "Free Tier")
         case .pro:
-            "Pro"
+            String(localized: "Pro")
         case .lifetime:
-            "Pro Lifetime"
+            String(localized: "Pro Lifetime")
         case .subscription(let plan, _):
             switch plan {
             case .monthly:
-                "Pro Monthly"
+                String(localized: "Pro Monthly")
             case .yearly:
-                "Pro Yearly"
+                String(localized: "Pro Yearly")
             case .lifetime:
-                "Pro Lifetime"
+                String(localized: "Pro Lifetime")
             }
         }
     }
@@ -90,12 +90,12 @@ nonisolated enum ProSettingsPrimaryAction: Equatable, Sendable {
     case viewPlans
     case manageSubscription
 
-    var title: LocalizedStringResource {
+    var title: String {
         switch self {
         case .viewPlans:
-            "View Plans"
+            String(localized: "View Plans")
         case .manageSubscription:
-            "Manage Subscription"
+            String(localized: "Manage Subscription")
         }
     }
 }

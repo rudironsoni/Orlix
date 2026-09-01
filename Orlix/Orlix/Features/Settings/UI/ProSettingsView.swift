@@ -42,7 +42,7 @@ struct ProSettingsView: View {
                 .foregroundStyle(.primary)
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.pro")
         .proUpgradePresentation(isPresented: $showingPlans, source: .settings)
@@ -60,7 +60,7 @@ struct ProSettingsView: View {
 
     private var usageSection: some View {
         Section("Usage") {
-            LabeledContent("Servers") {
+            OrlixLabeledContent("Servers") {
                 Text(
                     String(
                         format: String(localized: "%lld of %lld used"),
@@ -71,7 +71,7 @@ struct ProSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            LabeledContent("Workspaces") {
+            OrlixLabeledContent("Workspaces") {
                 Text(
                     String(
                         format: String(localized: "%lld of %lld used"),
@@ -82,7 +82,7 @@ struct ProSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            LabeledContent("Connections") {
+            OrlixLabeledContent("Connections") {
                 Text(
                     String(
                         format: String(localized: "%lld max"),
@@ -184,12 +184,12 @@ struct ProSettingsView: View {
 }
 
 private struct ProSettingsFeatureRow: View {
-    let title: LocalizedStringResource
+    let title: String
     let systemImage: String
-    let value: LocalizedStringResource
+    let value: String
 
     var body: some View {
-        LabeledContent {
+        OrlixLabeledContent {
             Text(value)
                 .foregroundStyle(.secondary)
         } label: {

@@ -79,7 +79,7 @@ struct KeychainSettingsView: View {
                         }
                     }
                 }
-                .formStyle(.grouped)
+                .orlixGroupedFormStyle()
             }
         }
         .toolbar {
@@ -283,7 +283,7 @@ struct AddSSHKeySheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("Key Name") {
                     TextField("e.g., Personal MacBook, Work Key", text: $name)
@@ -324,7 +324,7 @@ struct AddSSHKeySheet: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle("Add SSH Key")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -453,7 +453,7 @@ struct GenerateSSHKeySheet: View {
     @State private var isGenerating = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("Key Name") {
                     TextField("e.g., Personal MacBook, Work Key", text: $name)
@@ -494,7 +494,7 @@ struct GenerateSSHKeySheet: View {
                 }
 
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle("Generate SSH Key")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -559,17 +559,17 @@ struct KeyDetailsSheet: View {
     @State private var copied = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
-                    LabeledContent(String(localized: "Key Name"), value: keyEntry.name)
+                    OrlixLabeledContent(String(localized: "Key Name"), value: keyEntry.name)
                     if let keyType = keyEntry.keyType {
-                        LabeledContent(String(localized: "Key Type"), value: keyType.displayName)
+                        OrlixLabeledContent(String(localized: "Key Type"), value: keyType.displayName)
                     }
-                    LabeledContent(String(localized: "Added")) {
+                    OrlixLabeledContent(String(localized: "Added")) {
                         Text(keyEntry.createdAt, style: .date)
                     }
-                    LabeledContent(String(localized: "Passphrase")) {
+                    OrlixLabeledContent(String(localized: "Passphrase")) {
                         Text(keyEntry.hasPassphrase ? String(localized: "Protected") : "-")
                     }
                 }
@@ -609,7 +609,7 @@ struct KeyDetailsSheet: View {
                     Text(String(localized: "Add this to your server's ~/.ssh/authorized_keys file:"))
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle(String(localized: "SSH Key"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -639,7 +639,7 @@ struct PublicKeyDisplaySheet: View {
     @State private var copied = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Fingerprint")

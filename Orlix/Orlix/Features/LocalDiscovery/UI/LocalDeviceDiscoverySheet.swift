@@ -40,13 +40,13 @@ struct LocalDeviceDiscoverySheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             Form {
                 nearbyHostsSection
                 scanningStatusSection
                 helpSection
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle(String(localized: "Discover Local Devices"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

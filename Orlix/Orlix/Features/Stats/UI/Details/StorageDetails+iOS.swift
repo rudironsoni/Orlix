@@ -17,7 +17,7 @@ struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             content()
                 .navigationTitle(Text("Storage"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -29,7 +29,7 @@ struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
                 }
                 .statsSheetCloseToolbar(placement: .leading)
         }
-        .presentationDetents([.large])
+        .orlixLargePresentationDetent()
     }
 }
 

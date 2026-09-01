@@ -194,9 +194,18 @@ class GhosttyTerminalView: UIView {
     var nativeSelectionInteractionActive: Bool { nativeSelectionLifecycle.interactionIsActive }
     var prefersNativeSelectionFirstResponder: Bool { nativeSelectionLifecycle.keepsFirstResponder }
     var nativeTextInteraction: UITextInteraction?
-    var nativeFindInteraction: UIFindInteraction?
+    private var nativeFindInteractionStorage: AnyObject?
+    private var nativeFindSessionStorage: AnyObject?
     @available(iOS 16.0, *)
-    var nativeFindSession: GhosttyNativeFindSession?
+    var nativeFindInteraction: UIFindInteraction? {
+        get { nativeFindInteractionStorage as? UIFindInteraction }
+        set { nativeFindInteractionStorage = newValue }
+    }
+    @available(iOS 16.0, *)
+    var nativeFindSession: GhosttyNativeFindSession? {
+        get { nativeFindSessionStorage as? GhosttyNativeFindSession }
+        set { nativeFindSessionStorage = newValue }
+    }
     var ghosttyFindReportedTotal: Int?
     var ghosttyFindReportedSelectedIndex: Int?
     let nativeFindDocumentIdentifier = "terminal"
@@ -262,7 +271,12 @@ class GhosttyTerminalView: UIView {
         ]
         return recognizer
     }()
-    var editMenuInteraction: UIEditMenuInteraction?
+    private var editMenuInteractionStorage: AnyObject?
+    @available(iOS 16.0, *)
+    var editMenuInteraction: UIEditMenuInteraction? {
+        get { editMenuInteractionStorage as? UIEditMenuInteraction }
+        set { editMenuInteractionStorage = newValue }
+    }
     weak var terminalTitleEditor: UIAlertController?
     var editMenuPresentation: TerminalEditMenuPresentation = .selection
     var activePointerButton: TerminalPointerButton?
@@ -412,9 +426,11 @@ class GhosttyTerminalView: UIView {
 
         setupNativeTextSelectionInteractions()
         setupNativeFindInteraction()
-        let editMenuInteraction = UIEditMenuInteraction(delegate: self)
-        addInteraction(editMenuInteraction)
-        self.editMenuInteraction = editMenuInteraction
+        if #available(iOS 16.0, *) {
+            let editMenuInteraction = UIEditMenuInteraction(delegate: self)
+            addInteraction(editMenuInteraction)
+            self.editMenuInteraction = editMenuInteraction
+        }
 
         setupConfigReloadObservation()
         setupInputModeObservation()

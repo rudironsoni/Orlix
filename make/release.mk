@@ -92,6 +92,11 @@ __release-inputs-check: __release-manifest-check
 	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-release-inputs.XXXXXX")"; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	xcodegen dump --spec project.yml --type json > "$$tmp/project.json"; \
+	jq -e '.options.deploymentTarget.iOS == "15.0"' "$$tmp/project.json" >/dev/null || { echo "Orlix global iOS deployment target must be 15.0" >&2; exit 1; }; \
+	for target in OrlixKernel OrlixMLibC OrlixCoreUtils OrlixOS Orlix OrlixTestApp OrlixOSTestApp; do \
+		jq -e --arg target "$$target" '.targets[$$target].settings.base.IPHONEOS_DEPLOYMENT_TARGET == "15.0"' "$$tmp/project.json" >/dev/null || { echo "$$target deployment target must be 15.0" >&2; exit 1; }; \
+	done; \
+	jq -e '.targets.OrlixLiveActivity.settings.base.IPHONEOS_DEPLOYMENT_TARGET == "16.1"' "$$tmp/project.json" >/dev/null || { echo "Orlix Live Activity deployment target must be 16.1" >&2; exit 1; }; \
 	jq -S '.packages' "$$tmp/project.json" > "$$tmp/project-packages.json"; \
 	jq -S '.swift_packages' "$$manifest" > "$$tmp/manifest-packages.json"; \
 	if ! cmp -s "$$tmp/project-packages.json" "$$tmp/manifest-packages.json"; then \

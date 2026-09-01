@@ -2,6 +2,7 @@ import SwiftUI
 
 /// A deterministic app-shell preview with no live external dependencies.
 @MainActor
+@available(iOS 16.0, *)
 struct AppPreviewComposition {
     private let workspace = Workspace(
         id: UUID(uuidString: "E6B55295-4694-4B3A-AC1D-A179399B5C09")!,
@@ -24,6 +25,7 @@ struct AppPreviewComposition {
     }
 }
 
+@available(iOS 16.0, *)
 private struct AppPreviewRoot: View {
     let workspace: Workspace
     let server: Server

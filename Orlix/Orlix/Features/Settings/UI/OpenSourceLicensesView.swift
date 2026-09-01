@@ -44,7 +44,7 @@ struct OpenSourceLicensesContent: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .accessibilityIdentifier("orlix.openSourceLicenses")
     }
 }

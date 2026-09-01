@@ -12,7 +12,7 @@ struct TerminalScreenAwakeUITestHarness: View {
     @State private var backgroundReleaseObserved = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TerminalScreenAwakeSettingRow()

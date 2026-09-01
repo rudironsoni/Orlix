@@ -604,7 +604,7 @@ struct TerminalKeyboardUITestHarness: View {
         .sheet(isPresented: $showingSettings, onDismiss: {
             applyRouteActivation(.foregroundActive)
         }) {
-            NavigationStack {
+            NavigationView {
                 List {
                     Section("Terminal") {
                         Text("Keyboard settings")

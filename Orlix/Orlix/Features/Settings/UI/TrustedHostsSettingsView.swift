@@ -24,7 +24,7 @@ struct TrustedHostsSettingsView: View {
                         }
                     }
                 }
-                .formStyle(.grouped)
+                .orlixGroupedFormStyle()
             }
         }
         .adaptiveSoftScrollEdges()

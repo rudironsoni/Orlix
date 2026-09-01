@@ -97,18 +97,20 @@ extension GhosttyTerminalView {
         imeProxyTextView.terminalOwner = nil
         _ = imeProxyTextView.resignFirstResponder()
         keyboardToolbar = nil
-        if let nativeFindInteraction {
-            if nativeFindInteraction.isFindNavigatorVisible {
-                nativeFindInteraction.dismissFindNavigator()
+        if #available(iOS 16.0, *) {
+            if let nativeFindInteraction {
+                if nativeFindInteraction.isFindNavigatorVisible {
+                    nativeFindInteraction.dismissFindNavigator()
+                }
+                removeInteraction(nativeFindInteraction)
+                self.nativeFindInteraction = nil
             }
-            removeInteraction(nativeFindInteraction)
-            self.nativeFindInteraction = nil
+            nativeFindSession = nil
         }
-        nativeFindSession = nil
         nativeSelectionLongPressAnchor = nil
         nativeSelectionLifecycle.cancel()
         nativeSelectionSnapshot = .empty
-        if let editMenuInteraction {
+        if #available(iOS 16.0, *), let editMenuInteraction {
             editMenuInteraction.dismissMenu()
             removeInteraction(editMenuInteraction)
             self.editMenuInteraction = nil

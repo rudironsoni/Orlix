@@ -35,7 +35,7 @@ extension ThemeBuilderSheet {
     }
 
     var platformBody: some View {
-        NavigationStack {
+        NavigationView {
             formContent
                 .environment(\.defaultMinListRowHeight, 34)
                 .modifier(ThemeBuilderCompactListSectionSpacingModifier())
@@ -58,8 +58,8 @@ extension ThemeBuilderSheet {
                         }
                         .disabled(!canSave)
                     }
-                    if onDeleteRequest != nil {
-                        ToolbarItemGroup(placement: .bottomBar) {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        if onDeleteRequest != nil {
                             Button("Remove Theme", role: .destructive) {
                                 showingDeleteConfirmation = true
                             }
@@ -86,7 +86,7 @@ private struct ThemeBuilderCompactListSectionSpacingModifier: ViewModifier {
 private struct ThemeBuilderTransparentNavigationBarModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
-            content.toolbarBackground(.hidden, for: .navigationBar)
+            content.orlixNavigationBarBackgroundHidden()
         } else {
             content
         }

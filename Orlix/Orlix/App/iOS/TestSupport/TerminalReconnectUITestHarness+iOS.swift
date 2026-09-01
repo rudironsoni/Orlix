@@ -161,7 +161,7 @@ struct TerminalReconnectUITestHarness: View {
                     analyticsOptOutAction: analyticsOptOutAction
                 )
             } else {
-                NavigationStack {
+                NavigationView {
                     ServerTerminalRoute(
                         tabManager: tabManager,
                         serverManager: serverManager,

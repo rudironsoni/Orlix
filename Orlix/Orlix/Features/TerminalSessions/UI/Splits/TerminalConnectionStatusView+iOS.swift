@@ -17,7 +17,7 @@ struct TerminalConnectionStatusView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
                 .sheet(isPresented: isPresented) {
-                    NavigationStack {
+                    NavigationView {
                         sheetContent
                             .toolbar {
                                 ToolbarItem(placement: .confirmationAction) {
@@ -29,8 +29,8 @@ struct TerminalConnectionStatusView: View {
                                 }
                             }
                     }
-                    .presentationDetents([.height(sheetHeight), .large])
-                    .presentationDragIndicator(.visible)
+                    .orlixPresentationDetents(height: sheetHeight)
+                    .orlixVisiblePresentationDragIndicator()
                 }
 
             if let statusNotice {

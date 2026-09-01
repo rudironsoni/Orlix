@@ -32,7 +32,7 @@ struct ServerDuplicateUITestHarness: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 #if os(iOS)
                 ServerListRow(
@@ -68,7 +68,7 @@ struct ServerDuplicateUITestHarness: View {
     @ViewBuilder
     private func formSheet(for intent: ServerFormIntent) -> some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             serverForm(for: intent)
         }
         #else

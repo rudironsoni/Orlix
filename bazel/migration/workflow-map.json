@@ -1,0 +1,410 @@
+{
+  "schema": 1,
+  "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
+  "workflows": {
+    ".github/workflows/app-store-review.yml": {
+      "source_sha256": "38afaa5c6995d1564b0c2111edbe62b9fbdfd72aa397bd30577398240b36ad07",
+      "workflow": {
+        "name": "Promote TestFlight beta to App Review",
+        "on": {
+          "workflow_dispatch": {
+            "inputs": {
+              "beta_tag": {
+                "description": "Protected beta tag, for example ios-v0.1-b42",
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "permissions": {
+          "actions": "read",
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "app-store-review-${{ inputs.beta_tag }}",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "submit-for-review": {
+            "name": "Submit exact beta for App Review",
+            "runs-on": "ubuntu-24.04",
+            "environment": "app-store-review",
+            "timeout-minutes": 30,
+            "env": {
+              "ORLIX_RELEASE_REPOSITORY": "${{ github.repository }}",
+              "ORLIX_RELEASE_TAG": "${{ inputs.beta_tag }}",
+              "ORLIX_RELEASE_REPORT_INPUT": "${{ github.workspace }}/beta-evidence/AgentHarness/orlix-release/release.json"
+            },
+            "steps": [
+              {
+                "name": "Check out the protected beta tag",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "ref": "refs/tags/${{ inputs.beta_tag }}",
+                  "fetch-depth": 0
+                }
+              },
+              {
+                "name": "Resolve the tag and successful beta run",
+                "id": "beta",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\ngit fetch --no-tags origin main:refs/remotes/origin/main\ncommit=\"$(git rev-list -n 1 \"refs/tags/$ORLIX_RELEASE_TAG\")\"\ntest -n \"$commit\"\nrun_id=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/testflight-beta.yml/runs?event=push&status=success&head_sha=$commit\" --jq '.workflow_runs[0].id // empty')\"\ntest -n \"$run_id\" || { echo \"No successful beta workflow exists for $ORLIX_RELEASE_TAG at $commit\" >&2; exit 1; }\necho \"commit=$commit\" >> \"$GITHUB_OUTPUT\"\necho \"run_id=$run_id\" >> \"$GITHUB_OUTPUT\"\necho \"ORLIX_RELEASE_COMMIT=$commit\" >> \"$GITHUB_ENV\"\necho \"ORLIX_RELEASE_RUN_ID=$run_id\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Download exact beta evidence",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "orlix-testflight-${{ inputs.beta_tag }}",
+                  "path": "beta-evidence",
+                  "github-token": "${{ github.token }}",
+                  "run-id": "${{ steps.beta.outputs.run_id }}"
+                }
+              },
+              {
+                "name": "Set up Ruby and pinned Fastlane",
+                "uses": "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
+                "with": {
+                  "ruby-version": "3.4.8",
+                  "bundler-cache": true
+                }
+              },
+              {
+                "name": "Materialize App Store Connect credentials",
+                "env": {
+                  "APPSTORE_API_KEY_ID": "${{ vars.APPSTORE_API_KEY_ID }}",
+                  "APPSTORE_ISSUER_ID": "${{ vars.APPSTORE_ISSUER_ID }}",
+                  "APPSTORE_API_PRIVATE_KEY": "${{ secrets.APPSTORE_API_PRIVATE_KEY }}"
+                },
+                "run": "set -euo pipefail\ntest -n \"$APPSTORE_API_PRIVATE_KEY\"\numask 077\nprivate_key=\"$RUNNER_TEMP/AuthKey.p8\"\nexport ORLIX_FASTLANE_API_KEY_PATH=\"$RUNNER_TEMP/appstore-api-key.json\"\nprintf '%s' \"$APPSTORE_API_PRIVATE_KEY\" > \"$private_key\"\nexport private_key\nruby -rjson -e 'File.write(ENV.fetch(\"ORLIX_FASTLANE_API_KEY_PATH\"), JSON.pretty_generate({key_id: ENV.fetch(\"APPSTORE_API_KEY_ID\"), issuer_id: ENV.fetch(\"APPSTORE_ISSUER_ID\"), key_filepath: ENV.fetch(\"private_key\"), in_house: false}))'\necho \"ORLIX_FASTLANE_API_KEY_PATH=$ORLIX_FASTLANE_API_KEY_PATH\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Validate and submit the exact beta",
+                "run": "make app-store-promote"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/grok-pr-review.yml": {
+      "source_sha256": "73f77368b853f53a3f441afe358363f1ec6bfbddcaf7b05cc091ab01d917bc27",
+      "workflow": {
+        "name": "Grok PR Review",
+        "on": {
+          "workflow_dispatch": null
+        },
+        "permissions": {
+          "contents": "read",
+          "pull-requests": "write"
+        },
+        "concurrency": {
+          "group": "grok-review-${{ github.event.pull_request.number }}",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "review": {
+            "if": "${{ !github.event.pull_request.draft\n    && github.event.pull_request.head.repo.full_name == github.repository }}",
+            "runs-on": "ubuntu-latest",
+            "env": {
+              "HAS_GROK_AUTH": "${{ secrets.GROK_AUTH_JSON != '' }}"
+            },
+            "steps": [
+              {
+                "name": "Skip when GROK_AUTH_JSON is unset",
+                "if": "${{ env.HAS_GROK_AUTH != 'true' }}",
+                "run": "echo \"GROK_AUTH_JSON is unset; skipping Grok review.\""
+              },
+              {
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "if": "${{ env.HAS_GROK_AUTH == 'true' }}",
+                "with": {
+                  "ref": "${{ github.event.pull_request.head.sha }}"
+                }
+              },
+              {
+                "name": "Restore trusted reviewer policy from the base revision",
+                "if": "${{ env.HAS_GROK_AUTH == 'true' }}",
+                "env": {
+                  "BASE_SHA": "${{ github.event.pull_request.base.sha }}"
+                },
+                "run": "git fetch --depth 1 origin \"$BASE_SHA\"\ngit checkout \"$BASE_SHA\" -- AGENTS.md CLAUDE.md\n"
+              },
+              {
+                "uses": "0xr3ngar/grok-build-review-action@eded30018cdee4e83dfca14d18f292b860c30cdd",
+                "if": "${{ env.HAS_GROK_AUTH == 'true' }}",
+                "with": {
+                  "grok_auth_json": "${{ secrets.GROK_AUTH_JSON }}",
+                  "roast_level": "professional",
+                  "custom_instructions": "Follow AGENTS.md from the pull request base revision. Orlix compiles\nupstream Linux into an iOS-hosted kernel. Do not suggest edits to\ngenerated trees under Build/. Do not move Linux policy into\nOrlixHostAdapter. Do not invent a parallel OrlixKit API. Fail loud\nwhen evidence is missing.\n"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/ios15-runtime.yml": {
+      "source_sha256": "7bc63ec9f988898121a8b6c264db912e2c52e3649f1ffc22e932a8418a5b7d7d",
+      "workflow": {
+        "name": "iOS 15 runtime",
+        "on": {
+          "workflow_dispatch": null,
+          "pull_request": {
+            "paths": [
+              ".github/workflows/ios15-runtime.yml",
+              "Brewfile",
+              "Makefile",
+              "Orlix/**",
+              "OrlixHostAdapter/**",
+              "OrlixKernel/**",
+              "OrlixMLibC/**",
+              "OrlixOS/**",
+              "project.yml"
+            ]
+          },
+          "push": {
+            "branches": [
+              "main"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "ios15-runtime-${{ github.event.pull_request.number || github.ref }}",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "ios15-runtime": {
+            "name": "iOS 15 runtime",
+            "runs-on": "macos-26",
+            "timeout-minutes": 180,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Install pinned build tools",
+                "run": "set -euo pipefail\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\n"
+              },
+              {
+                "name": "Install the iOS 15.5 runtime with xcodes",
+                "run": "set -euo pipefail\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith(\"iPhone\"))][0].identifier')\"\ntest -n \"$device_type\" -a \"$device_type\" != null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Build native dependencies",
+                "run": "make build type=vendor vendor=all"
+              },
+              {
+                "name": "Run the iOS 15 launch test",
+                "run": "make ios15-simulator-gate"
+              },
+              {
+                "name": "Store iOS 15 test evidence",
+                "if": "always()",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "ios15-runtime-${{ github.sha }}",
+                  "path": "Build/**/*.xcresult\nBuild/**/*.log\n",
+                  "if-no-files-found": "warn",
+                  "retention-days": 14
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/testflight-beta.yml": {
+      "source_sha256": "96d6ed627cb48cc3e07526032111c531e5634079ba5f2cd53462145b178f8a49",
+      "workflow": {
+        "name": "TestFlight beta",
+        "on": {
+          "push": {
+            "tags": [
+              "ios-v*-b*"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "testflight-beta-${{ github.ref_name }}",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "build-and-submit": {
+            "name": "Build and submit beta",
+            "runs-on": "macos-26",
+            "environment": "testflight-internal",
+            "timeout-minutes": 180,
+            "env": {
+              "ORLIX_RELEASE_REPOSITORY": "${{ github.repository }}",
+              "ORLIX_RELEASE_TAG": "${{ github.ref_name }}",
+              "ORLIX_RELEASE_COMMIT": "${{ github.sha }}",
+              "ORLIX_RELEASE_RUN_ID": "${{ github.run_id }}",
+              "ORLIX_RELEASE_XCODE_VERSION": "26.6",
+              "ORLIX_RELEASE_UPLOAD_BACKEND": "appstore-api",
+              "ORLIX_DEVELOPMENT_TEAM": "${{ vars.APPLE_TEAM_ID }}",
+              "ORLIX_ASC_API_KEY_ID": "${{ vars.APPSTORE_API_KEY_ID }}",
+              "ORLIX_ASC_API_ISSUER_ID": "${{ vars.APPSTORE_ISSUER_ID }}",
+              "ORLIX_TESTFLIGHT_INTERNAL_GROUP": "${{ vars.TESTFLIGHT_INTERNAL_GROUP }}",
+              "ORLIX_BETA_EXPORT_OPTIONS_PLIST": "${{ github.workspace }}/Build/Release/ExportOptions.plist",
+              "ORLIX_ANALYTICS_ENABLED": "NO",
+              "ORLIX_OBSERVABILITY_ENABLED": "NO"
+            },
+            "steps": [
+              {
+                "name": "Check out the release tag",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "fetch-depth": 0
+                }
+              },
+              {
+                "name": "Fetch the protected release base",
+                "run": "git fetch --no-tags origin main:refs/remotes/origin/main"
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Install the Metal toolchain",
+                "run": "xcodebuild -downloadComponent MetalToolchain"
+              },
+              {
+                "name": "Set up Ruby and pinned Fastlane",
+                "uses": "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
+                "with": {
+                  "ruby-version": "3.4.8",
+                  "bundler-cache": true
+                }
+              },
+              {
+                "name": "Install build tools",
+                "run": "brew bundle --file Brewfile"
+              },
+              {
+                "name": "Check runner capacity",
+                "run": "set -euo pipefail\ndf -h .\navailable_kib=\"$(df -Pk . | awk 'NR == 2 { print $4 }')\"\ntest \"$available_kib\" -ge 10485760 || {\n  echo \"At least 10 GiB of free disk is required\" >&2\n  exit 1\n}\n"
+              },
+              {
+                "name": "Materialize App Store Connect credentials",
+                "env": {
+                  "APPSTORE_API_PRIVATE_KEY": "${{ secrets.APPSTORE_API_PRIVATE_KEY }}"
+                },
+                "run": "set -euo pipefail\ntest -n \"$APPSTORE_API_PRIVATE_KEY\"\numask 077\nexport ORLIX_FASTLANE_API_KEY_PATH=\"$RUNNER_TEMP/appstore-api-key.json\"\nexport ORLIX_ASC_API_KEY_PATH=\"$RUNNER_TEMP/AuthKey.p8\"\nprintf '%s' \"$APPSTORE_API_PRIVATE_KEY\" > \"$ORLIX_ASC_API_KEY_PATH\"\nruby -rjson -e 'File.write(ENV.fetch(\"ORLIX_FASTLANE_API_KEY_PATH\"), JSON.pretty_generate({key_id: ENV.fetch(\"ORLIX_ASC_API_KEY_ID\"), issuer_id: ENV.fetch(\"ORLIX_ASC_API_ISSUER_ID\"), key_filepath: ENV.fetch(\"ORLIX_ASC_API_KEY_PATH\"), in_house: false}))'\necho \"ORLIX_FASTLANE_API_KEY_PATH=$ORLIX_FASTLANE_API_KEY_PATH\" >> \"$GITHUB_ENV\"\necho \"ORLIX_ASC_API_KEY_PATH=$ORLIX_ASC_API_KEY_PATH\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Import distribution certificate",
+                "uses": "Apple-Actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
+                "with": {
+                  "p12-file-base64": "${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64 }}",
+                  "p12-password": "${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}"
+                }
+              },
+              {
+                "name": "Download app provisioning profile",
+                "uses": "Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594",
+                "with": {
+                  "bundle-id": "com.rudironsoni.orlix",
+                  "profile-type": "IOS_APP_STORE",
+                  "issuer-id": "${{ vars.APPSTORE_ISSUER_ID }}",
+                  "api-key-id": "${{ vars.APPSTORE_API_KEY_ID }}",
+                  "api-private-key": "${{ secrets.APPSTORE_API_PRIVATE_KEY }}"
+                }
+              },
+              {
+                "name": "Download Live Activity provisioning profile",
+                "uses": "Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594",
+                "with": {
+                  "bundle-id": "com.rudironsoni.orlix.live-activity",
+                  "profile-type": "IOS_APP_STORE",
+                  "issuer-id": "${{ vars.APPSTORE_ISSUER_ID }}",
+                  "api-key-id": "${{ vars.APPSTORE_API_KEY_ID }}",
+                  "api-private-key": "${{ secrets.APPSTORE_API_PRIVATE_KEY }}"
+                }
+              },
+              {
+                "name": "Build pinned native vendor artifacts",
+                "run": "make build type=vendor vendor=all"
+              },
+              {
+                "name": "Validate tag and release inputs",
+                "run": "make __release-tag-check beta-prerequisites"
+              },
+              {
+                "name": "Select an iOS simulator",
+                "run": "set -euo pipefail\nsimulator_id=\"$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith(\"iPhone\"))][0].udid')\"\ntest -n \"$simulator_id\" -a \"$simulator_id\" != null\necho \"ORLIX_BETA_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Run the beta simulator gate",
+                "run": "make beta-simulator-gate"
+              },
+              {
+                "name": "Archive and export the exact build",
+                "run": "set -euo pipefail\nmake beta-export-options\nmake beta-archive\nmake beta-export-archive\nmake beta-validate-export\n"
+              },
+              {
+                "name": "Enforce beta upload eligibility",
+                "run": "make beta-upload-prerequisites"
+              },
+              {
+                "name": "Upload and wait for TestFlight processing",
+                "uses": "Apple-Actions/upload-testflight-build@5e75ff58276689011512ba87a381d93dc67dbcf8",
+                "with": {
+                  "app-path": "Build/Release/Export/Orlix.ipa",
+                  "app-type": "ios",
+                  "issuer-id": "${{ vars.APPSTORE_ISSUER_ID }}",
+                  "api-key-id": "${{ vars.APPSTORE_API_KEY_ID }}",
+                  "api-private-key": "${{ secrets.APPSTORE_API_PRIVATE_KEY }}",
+                  "backend": "appstore-api",
+                  "uses-non-exempt-encryption": false,
+                  "wait-for-processing": true
+                }
+              },
+              {
+                "name": "Assign the processed build to internal testers",
+                "run": "make beta-distribute"
+              },
+              {
+                "name": "Write the immutable beta release report",
+                "run": "make beta-release-report"
+              },
+              {
+                "name": "Store beta evidence",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "orlix-testflight-${{ github.ref_name }}",
+                  "path": "Build/AgentHarness/orlix-release/release.json\nBuild/Release/release-identity.json\nBuild/Release/build-number\nBuild/Release/Export/Orlix.ipa\n",
+                  "if-no-files-found": "error",
+                  "retention-days": 30
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
