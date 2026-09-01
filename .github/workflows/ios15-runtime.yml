@@ -43,6 +43,7 @@ jobs:
       - name: Install pinned build tools
         run: |
           set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
           brew bundle --file Brewfile
           test "$(xcodes version)" = "2.0.3"
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
