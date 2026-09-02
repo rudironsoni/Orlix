@@ -120,3 +120,4 @@ init.*.zsh
 /.tokensave/
 __pycache__/
 *.py[cod]
+OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/

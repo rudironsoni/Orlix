@@ -1,2 +1,2 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "generations/current/target_feature_artifact.def"
+#include <target_feature_artifact.def>

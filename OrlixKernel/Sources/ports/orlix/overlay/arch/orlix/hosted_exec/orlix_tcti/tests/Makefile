@@ -19,27 +19,27 @@ $(foreach variable,$(ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES),$(if $(filter u
 
 override ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS = \
 	$(src)/../isa/inventory.def \
-	$(src)/../isa/generations/current/source_manifest.def \
+	$(ORLIX_TCTI_ISA_BUILD)/source_manifest.def \
 	$(src)/../isa/target_classification.def
 override ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/source_manifest.def \
+	$(ORLIX_TCTI_ISA_BUILD)/source_manifest.def \
 	$(src)/../isa/target_classification.def \
-	$(src)/../isa/generations/current/target_system_accessor_reconciliation.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_system_accessor_reconciliation.def
 override ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_runtime_capability_cohort_artifact.def
 override ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def \
-	$(src)/../isa/generations/current/target_feature_artifact.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_runtime_capability_cohort_artifact.def \
+	$(ORLIX_TCTI_ISA_BUILD)/target_feature_artifact.def
 override ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS = \
 	$(src)/../isa/target_execution_slice_map.def \
-	$(src)/../isa/generations/current/source_manifest.def
+	$(ORLIX_TCTI_ISA_BUILD)/source_manifest.def
 override ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_artifact.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_feature_artifact.def
 override ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
-	$(src)/../isa/generations/current/target_feature_artifact.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_feature_field_domain_binding.def \
+	$(ORLIX_TCTI_ISA_BUILD)/target_feature_artifact.def
 override ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_applicability.def
+	$(ORLIX_TCTI_ISA_BUILD)/target_feature_applicability.def
 override ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS = \
 	$(src)/../isa/source_bound_proof.def \
 	$(src)/../isa/proof_registry_projection.def
@@ -183,3 +183,4 @@ $(obj)/target_proof_registry_test.o: \
 	$(src)/proof_registry_projection_synthetic_source_bound.def
 
 ccflags-y += -I$(obj)
+ccflags-y += -I$(ORLIX_TCTI_ISA_BUILD)

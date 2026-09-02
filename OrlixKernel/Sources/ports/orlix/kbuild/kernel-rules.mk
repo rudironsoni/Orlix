@@ -1387,7 +1387,7 @@ __candidate-source-revision-tests:
 	grep -Fq '#include "target_refresh_artifacts.def"' "$$publisher_source" || fail 'target_refresh does not consume its publisher-owned X-macro declaration'; \
 	$(orlix_tcti_target_refresh_artifact_parser) "$$publisher_declaration" > "$$publisher_actual"; \
 	: > "$$publisher_expected"; \
-	for contributor in "$${canonical_inputs[@]}"; do contributor_rel="$${contributor##*/isa/}"; case "$$contributor_rel" in generations/current/manifest) ;; generations/current/*) printf '%s\n' "$${contributor_rel##*/}" >> "$$publisher_expected" ;; esac; done; \
+	for contributor in "$${canonical_inputs[@]}"; do case "$$contributor" in */orlix-tcti-isa/manifest) ;; */orlix-tcti-isa/*) printf '%s\n' "$${contributor##*/}" >> "$$publisher_expected" ;; esac; done; \
 	cmp -s "$$publisher_expected" "$$publisher_actual" || fail 'canonical contributor declaration diverges from target_refresh publisher artifacts'; \
 	contract_make=( $(MAKE) -f $(CURDIR)/OrlixKernel/Makefile ); contract_check() { "$${contract_make[@]}" "$$@" __orlix-tcti-instruction-artifact-contract-check; }; \
 	contract_inputs="$${canonical_inputs[*]}"; contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs" || fail 'canonical publisher/direct-consumer contract failed'; \
@@ -1440,7 +1440,7 @@ __candidate-source-revision-tests:
 	if contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$${contract_without_source_bound[*]}"; then fail 'direct Kbuild contributor absent from canonical declaration was accepted'; fi; \
 	if contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs $${canonical_inputs[0]}"; then fail 'duplicate canonical contributor was accepted'; fi; \
 	if contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/other/source_manifest.def"; then fail 'basename alias canonical contributor was accepted'; fi; \
-	if contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/./source_manifest.def"; then fail 'path alias canonical contributor was accepted'; fi; \
+	if contract_check ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs $(ORLIX_TCTI_ISA_BUILD)/./source_manifest.def"; then fail 'path alias canonical contributor was accepted'; fi; \
 	mkdir "$$tmp/bin"; real_shasum="$$(command -v shasum)"; \
 	printf '%s\n' '#!/bin/sh' 'if [ -n "$${ORLIX_TCTI_TEST_SHASUM_MATCH:-}" ]; then case "$${ORLIX_TCTI_TEST_SHASUM_MODE}" in fail) exit 97 ;; malformed) printf "not-a-sha256  -\\n" ;; empty) : ;; extra) printf "%064d  -\\nextra\\n" 0 ;; *) exit 98 ;; esac; exit 0; fi' 'exec "$$ORLIX_TCTI_REAL_SHASUM" "$$@"' > "$$tmp/bin/shasum"; chmod +x "$$tmp/bin/shasum"; \
 	for aggregate in candidate profile archive artifact; do for mode in fail malformed empty extra; do \
@@ -1815,7 +1815,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 	mv "$$port_tmp_dir" "$$port_dir"; \
 	echo "prepared Orlix kernel port tree: $$port_dir (profile $(PROFILE))"
 
-__prepare-kbuild: __prepare-port
+__prepare-kbuild: __prepare-port __orlix-tcti-isa-prepare
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
 	linux_make="$(LINUX_MAKE)"; \

@@ -4,8 +4,9 @@
 # the checked-in OrlixTCTI ISA artifacts. Developer entry points are owned by
 # the parent OrlixKernel Make surface; this file is not a standalone Makefile.
 
+ORLIX_TCTI_ISA_BUILD ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-isa
 ORLIX_TCTI_ISA_BUILD_TIME_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time
-ORLIX_TCTI_ISA_CANONICAL_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa
+ORLIX_TCTI_ISA_CANONICAL_ROOT := $(ORLIX_TCTI_ISA_BUILD)
 ORLIX_TCTI_ISA_TEST_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests
 ORLIX_TCTI_ISA_MAINTAINER_OUT := $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-target-refresh
 ORLIX_TCTI_ISA_MAINTAINER_CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
@@ -193,6 +194,7 @@ __tcti-isa-refresh: __tcti-isa-check
 		$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES) \
 		target_refresh.c $(filter-out target_refresh.c,$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES)) \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh'
+	@mkdir -p '$(ORLIX_TCTI_ISA_BUILD)'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh' \
 		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
 		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)' \
