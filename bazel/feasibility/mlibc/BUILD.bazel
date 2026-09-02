@@ -21,4 +21,5 @@ orlix_mlibc_sysroot(
     patches = "//OrlixMLibC/Sources/patches:files",
     tags = ["manual"],
     uapi = "//bazel/feasibility/kernel:uapi",
+    visibility = ["//bazel/feasibility:__subpackages__"],
 )

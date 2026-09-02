@@ -1,0 +1,33 @@
+load(":providers.bzl", "config_flags_test", "sysroot_uapi_only_test", "uapi_providers_test")
+
+package(default_visibility = ["//visibility:private"])
+
+uapi_providers_test(
+    name = "uapi_providers_test",
+    target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+sysroot_uapi_only_test(
+    name = "sysroot_uapi_only_test",
+    target_under_test = "//bazel/feasibility/mlibc:sysroot",
+)
+
+config_flags_test(
+    name = "profile_flag_test",
+    target_under_test = "//bazel/config:profile",
+)
+
+config_flags_test(
+    name = "component_mode_flag_test",
+    target_under_test = "//bazel/config:component_mode",
+)
+
+config_flags_test(
+    name = "apple_destination_flag_test",
+    target_under_test = "//bazel/config:apple_destination",
+)
+
+config_flags_test(
+    name = "signing_mode_flag_test",
+    target_under_test = "//bazel/config:signing_mode",
+)
