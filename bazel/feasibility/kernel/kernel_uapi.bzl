@@ -48,6 +48,10 @@ hostcc="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
 test -x "$hostcc"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 test -n "$sdkroot"
+case "$linux_makefile" in
+  *orlix_linux_source*/Makefile) ;;
+  *) echo "kernel UAPI must invoke upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
+esac
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-linux-uapi.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
@@ -124,5 +128,57 @@ orlix_kernel_uapi = rule(
     attrs = {
         "linux_source": attr.label(mandatory = True),
         "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
+    },
+)
+
+_ALLOWED_DESTINATIONS = {
+    "iphoneos": True,
+    "iphonesimulator": True,
+}
+
+_ALLOWED_PROFILES = {
+    "development": True,
+    "release": True,
+}
+
+def _kernel_uapi_variant_impl(ctx):
+    if ctx.attr.destination not in _ALLOWED_DESTINATIONS:
+        fail("unsupported Apple destination %s" % ctx.attr.destination)
+    if ctx.attr.profile not in _ALLOWED_PROFILES:
+        fail("unsupported Orlix profile %s" % ctx.attr.profile)
+    uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
+    archive = ctx.attr.uapi[OrlixLinuxArchiveInfo]
+    stamped = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
+    ctx.actions.write(
+        stamped,
+        "{\n  \"arch\": \"arm64\",\n  \"component\": \"OrlixKernel\",\n  \"destination\": \"%s\",\n  \"kbuild_target\": \"headers_install\",\n  \"linux_revision\": \"6.12.105\",\n  \"profile\": \"%s\"\n}\n" % (
+            ctx.attr.destination,
+            ctx.attr.profile,
+        ),
+    )
+    return [
+        DefaultInfo(files = depset([stamped], transitive = [ctx.attr.uapi[DefaultInfo].files])),
+        OrlixInstalledUapiInfo(
+            arch = uapi.arch,
+            headers = uapi.headers,
+            linux_revision = uapi.linux_revision,
+            uapi_digest = uapi.uapi_digest,
+        ),
+        OrlixLinuxArchiveInfo(
+            archive = archive.archive,
+            build_manifest = stamped,
+            destination = ctx.attr.destination,
+            profile = ctx.attr.profile,
+            source_input_digest = archive.source_input_digest,
+            symbol_manifest = stamped,
+        ),
+    ]
+
+orlix_kernel_uapi_variant = rule(
+    implementation = _kernel_uapi_variant_impl,
+    attrs = {
+        "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo, OrlixLinuxArchiveInfo]),
+        "destination": attr.string(mandatory = True),
+        "profile": attr.string(mandatory = True),
     },
 )
