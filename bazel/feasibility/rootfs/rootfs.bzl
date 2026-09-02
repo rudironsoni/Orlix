@@ -73,8 +73,8 @@ trap '/bin/rm -rf "$work"' EXIT
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$base_tree/bin/true"' 0755 0 0' > "$work/initramfs.list"
 "$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
 test -s "$initramfs_out"
-/usr/bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=1 status=none
-/usr/bin/dd if=/dev/zero of="$state_ext4" bs=1048576 count=1 status=none
+/bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=1 status=none
+/bin/dd if=/dev/zero of="$state_ext4" bs=1048576 count=1 status=none
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$base_tree" "$base_ext4"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
 /usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
