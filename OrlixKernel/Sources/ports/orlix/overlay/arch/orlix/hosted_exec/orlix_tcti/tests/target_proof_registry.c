@@ -687,15 +687,15 @@ proof_registry_projection[] = {
 #define FLAG_MANIPULATION_CASE_ARRAY \
 	"orlix_tcti_flag_manipulation_test_cases"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
+	"Build/OrlixKernel/orlix-tcti-isa/manifest"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256 \
 	"1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE \
-	"#include \"../isa/generations/current/target_asl_availability.def\""
+	"#include <target_asl_availability.def>"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT_NAME \
 	"target_asl_availability.def"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/target_asl_availability.def"
+	"Build/OrlixKernel/orlix-tcti-isa/target_asl_availability.def"
 #define FLAG_MANIPULATION_CONDITION \
 	"54434e4401070000002f0700000017070000000c010000000101010000000101010000000101020000000e0000000a464541545f466c61674d"
 #define SOURCE_LEAF_CLASSIFICATION_SOURCE \

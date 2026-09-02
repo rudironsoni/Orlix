@@ -58,7 +58,7 @@ struct tchange_semantics_absence_row {
 	locator, offset, length, digest) \
 	{ ordinal, name, locator, offset, length, digest },
 static const struct tchange_semantics_absence_row tchange_semantics_absence[] = {
-#include "../isa/generations/current/target_asl_availability.def"
+#include <target_asl_availability.def>
 };
 #undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
 #undef ORLIX_TCTI_A64_ASL_XML_ROW

@@ -17,9 +17,12 @@ ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS := $(shell $(orlix_tcti_target_refresh_artif
 ifneq ($(.SHELLSTATUS),0)
 $(error failed to parse target-refresh publisher declaration: $(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION))
 endif
+ORLIX_TCTI_ISA_BUILD ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-isa
+export ORLIX_TCTI_ISA_BUILD
+
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS := \
-	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest \
-	$(addprefix OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/,$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS)) \
+	$(ORLIX_TCTI_ISA_BUILD)/manifest \
+	$(addprefix $(ORLIX_TCTI_ISA_BUILD)/,$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS)) \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/inventory.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_classification.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_execution_slice_map.def \
@@ -43,7 +46,8 @@ if awk 'function trim_start(value) { sub(/^[[:space:]]+/, "", value); return val
 direct_test_root="$${ORLIX_TCTI_CONTRACT_FIXTURE_ROOT:-$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_TEST_ROOT)}"; \
 durable_isa_root="$$(cd "$$direct_test_root/../isa" && pwd -P)" || { echo "missing durable ISA source root for direct Kbuild graph: $$direct_test_root/../isa" >&2; exit 1; }; \
 durable_isa_real_root="$$(realpath "$$durable_isa_root")" || { echo "cannot resolve durable ISA source root: $$durable_isa_root" >&2; exit 1; }; \
-direct_test_prefix="$$direct_test_root/../isa/"; durable_isa_prefix="$$durable_isa_root/"; durable_isa_real_prefix="$$durable_isa_real_root/"; \
+prepared_isa_root="$$(cd "$(ORLIX_TCTI_ISA_BUILD)" && pwd -P)" || { echo "missing prepared ISA tables in Build: $(ORLIX_TCTI_ISA_BUILD)" >&2; exit 1; }; \
+direct_test_prefix="$$direct_test_root/../isa/"; durable_isa_prefix="$$durable_isa_root/"; durable_isa_real_prefix="$$durable_isa_real_root/"; prepared_isa_prefix="$$prepared_isa_root/"; \
 graph_root="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-tcti-instruction-artifact-contract.XXXXXX")" || { echo 'cannot create direct Kbuild graph fixture' >&2; exit 1; }; \
 trap 'rm -rf "$$graph_root"' EXIT; \
 graph_makefile="$$graph_root/graph.mk"; graph_database="$$graph_root/make.database"; graph_paths="$$graph_root/effective.paths"; direct_artifacts_file="$$graph_root/direct.artifacts"; \
@@ -56,26 +60,30 @@ normalize_effective_path() { effective_path="$$1"; effective_dir="$${effective_p
 while IFS= read -r effective_path; do \
 	[ -n "$$effective_path" ] || continue; \
 	case "$$effective_path" in \
-		"$$direct_test_prefix"*) direct_artifact="$${effective_path#$$direct_test_prefix}" ;; \
-		"$$durable_isa_prefix"*) direct_artifact="$${effective_path#$$durable_isa_prefix}" ;; \
+		"$$direct_test_prefix"*) direct_artifact="$${effective_path#$$direct_test_prefix}"; expected_root="$$durable_isa_root" ;; \
+		"$$durable_isa_prefix"*) direct_artifact="$${effective_path#$$durable_isa_prefix}"; expected_root="$$durable_isa_root" ;; \
+		"$$prepared_isa_prefix"*) direct_artifact="$${effective_path#$$prepared_isa_prefix}"; expected_root="$$prepared_isa_root" ;; \
 		*) echo "direct Kbuild prerequisite is outside the durable ISA source root: $$effective_path" >&2; exit 1 ;; \
 	esac; \
 	case "$$direct_artifact" in ''|*//*|*/./*|*/../*|./*|/*) echo "path alias in direct Kbuild prerequisite: $$effective_path" >&2; exit 1 ;; esac; \
 	normalized_effective_path="$$(normalize_effective_path "$$effective_path")" || { echo "cannot normalize direct Kbuild prerequisite: $$effective_path" >&2; exit 1; }; \
-	expected_effective_path="$$(normalize_effective_path "$$durable_isa_root/$$direct_artifact")" || { echo "cannot normalize canonical direct Kbuild prerequisite: $$direct_artifact" >&2; exit 1; }; \
+	expected_effective_path="$$(normalize_effective_path "$$expected_root/$$direct_artifact")" || { echo "cannot normalize canonical direct Kbuild prerequisite: $$direct_artifact" >&2; exit 1; }; \
 	[ "$$normalized_effective_path" = "$$expected_effective_path" ] || { echo "direct Kbuild prerequisite aliases the durable ISA source root: $$effective_path" >&2; exit 1; }; \
 	resolved_effective_path="$$(realpath "$$effective_path" 2>/dev/null)" || { echo "cannot resolve direct Kbuild prerequisite: $$effective_path" >&2; exit 1; }; \
-	case "$$resolved_effective_path" in "$$durable_isa_real_prefix"*) ;; *) echo "direct Kbuild prerequisite escapes the durable ISA source root: $$effective_path -> $$resolved_effective_path" >&2; exit 1 ;; esac; \
+	case "$$resolved_effective_path" in "$$durable_isa_real_prefix"*|"$$prepared_isa_prefix"*) ;; *) echo "direct Kbuild prerequisite escapes the durable ISA source root: $$effective_path -> $$resolved_effective_path" >&2; exit 1 ;; esac; \
 	[ -s "$$normalized_effective_path" ] || { echo "missing direct Kbuild prerequisite: $$normalized_effective_path" >&2; exit 1; }; \
 	printf '%s\n' "$$direct_artifact" >> "$$direct_artifacts_file"; \
 done < "$$graph_paths"; \
 sort -u "$$direct_artifacts_file" -o "$$direct_artifacts_file"; \
 direct_artifacts=( $$(cat "$$direct_artifacts_file") ); \
-if [ -n "$${ORLIX_TCTI_CONTRACT_FIXTURE_ROOT:-}" ]; then generation_root="$$durable_isa_root/generations/current"; isa_root="$$durable_isa_root"; else generation_root='OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current'; isa_root='OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa'; fi; \
+if [ -n "$${ORLIX_TCTI_CONTRACT_FIXTURE_ROOT:-}" ]; then generation_root="$$durable_isa_root"; isa_root="$$durable_isa_root"; else generation_root='$(ORLIX_TCTI_ISA_BUILD)'; isa_root='OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa'; fi; \
 seen_canonical=(); \
 for canonical_input in "$${canonical_inputs[@]}"; do \
 	[ -n "$$canonical_input" ] || { echo 'empty canonical contributor' >&2; exit 1; }; \
-	[[ "$$canonical_input" != *//* && "$$canonical_input" != */./* && "$$canonical_input" != */../* && "$$canonical_input" != ./* && "$$canonical_input" != /* ]] || { echo "path alias in canonical contributor: $$canonical_input" >&2; exit 1; }; \
+	case "$$canonical_input" in \
+		"$(ORLIX_TCTI_ISA_BUILD)"/*) ;; \
+		*//*|*/./*|*/../*|./*|/*) echo "path alias in canonical contributor: $$canonical_input" >&2; exit 1 ;; \
+	esac; \
 	for seen_input in "$${seen_canonical[@]:-}"; do [ "$$canonical_input" != "$$seen_input" ] || { echo "duplicate canonical contributor: $$canonical_input" >&2; exit 1; }; done; \
 	seen_canonical+=("$$canonical_input"); \
 done; \
@@ -84,13 +92,19 @@ for publisher_artifact in "$${publisher_artifacts[@]}"; do \
 	[ "$$found" -eq 1 ] || { echo "publisher artifact absent from canonical declaration: $$publisher_artifact" >&2; exit 1; }; \
 done; \
 for direct_artifact in "$${direct_artifacts[@]}"; do \
-	found=0; for canonical_input in "$${canonical_inputs[@]}"; do [ "$$canonical_input" = "$$isa_root/$$direct_artifact" ] && found=1; done; \
+	found=0; for canonical_input in "$${canonical_inputs[@]}"; do \
+		[ "$$canonical_input" = "$$isa_root/$$direct_artifact" ] && found=1; \
+		[ "$$canonical_input" = "$$generation_root/$$direct_artifact" ] && found=1; \
+	done; \
 	[ "$$found" -eq 1 ] || { echo "direct Kbuild input absent from canonical declaration: $$direct_artifact" >&2; exit 1; }; \
 done; \
 for canonical_input in "$${canonical_inputs[@]}"; do \
 	[ "$$canonical_input" = "$$generation_root/manifest" ] && continue; \
 	owned=0; for publisher_artifact in "$${publisher_artifacts[@]}"; do [ "$$canonical_input" = "$$generation_root/$$publisher_artifact" ] && owned=1; done; \
-	for direct_artifact in "$${direct_artifacts[@]}"; do [ "$$canonical_input" = "$$isa_root/$$direct_artifact" ] && owned=1; done; \
+	for direct_artifact in "$${direct_artifacts[@]}"; do \
+		[ "$$canonical_input" = "$$isa_root/$$direct_artifact" ] && owned=1; \
+		[ "$$canonical_input" = "$$generation_root/$$direct_artifact" ] && owned=1; \
+	done; \
 	[ "$$owned" -eq 1 ] || { echo "canonical contributor has no exact publisher or direct Kbuild owner: $$canonical_input" >&2; exit 1; }; \
 done;
 endef
@@ -128,8 +142,30 @@ $(1)="$$( \
 )" || $(2);
 endef
 
-.PHONY: __orlix-tcti-instruction-artifact-inputs-source-check __orlix-tcti-instruction-artifact-cleanup-failure-source-check __orlix-tcti-instruction-artifact-contract-check __orlix-tcti-target-refresh-publisher-list-source-check
-__orlix-tcti-instruction-artifact-contract-check:
+.PHONY: __orlix-tcti-isa-prepare __orlix-tcti-instruction-artifact-inputs-source-check __orlix-tcti-instruction-artifact-cleanup-failure-source-check __orlix-tcti-instruction-artifact-contract-check __orlix-tcti-target-refresh-publisher-list-source-check
+
+__orlix-tcti-isa-prepare:
+	@set -euo pipefail; \
+	dest='$(ORLIX_TCTI_ISA_BUILD)'; \
+	mkdir -p "$$dest"; \
+	if [ -s "$$dest/manifest" ] && [ -s "$$dest/target_instruction_artifact_generated.h" ]; then \
+		exit 0; \
+	fi; \
+	echo "preparing generated ISA tables in $$dest"; \
+	$(MAKE) --no-print-directory -f OrlixKernel/Makefile __tcti-isa-refresh; \
+	current="$$dest/generations/current"; \
+	if [ -e "$$current/manifest" ]; then \
+		for f in "$$current"/*; do \
+			base="$${f##*/}"; \
+			ln -f "$$f" "$$dest/$$base" 2>/dev/null || cp -f "$$f" "$$dest/$$base"; \
+		done; \
+	fi; \
+	[ -s "$$dest/manifest" ] && [ -s "$$dest/target_instruction_artifact_generated.h" ] || { \
+		echo "ISA prepare did not produce tables in $$dest" >&2; \
+		exit 1; \
+	}
+
+__orlix-tcti-instruction-artifact-contract-check: __orlix-tcti-isa-prepare
 	@set -euo pipefail; \
 	$(orlix_tcti_instruction_artifact_contract_check)
 

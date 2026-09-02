@@ -15,7 +15,7 @@
 #define ORLIX_TCTI_FLAG_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_flag_manipulation_source_bound_test.c"
 #define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
+	"Build/OrlixKernel/orlix-tcti-isa/manifest"
 #define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST_SHA256 \
 	"1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab"
 
@@ -48,7 +48,7 @@ struct orlix_tcti_flag_semantic_provenance_row {
 
 #define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
 #define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
-#include "../isa/generations/current/target_asl_availability.def"
+#include <target_asl_availability.def>
 #undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
 #undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
 #undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
@@ -64,7 +64,7 @@ struct orlix_tcti_flag_semantic_provenance_row {
 #define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
 static const struct orlix_tcti_flag_semantic_provenance_row
 	orlix_tcti_flag_semantic_provenance_rows[] = {
-#include "../isa/generations/current/target_asl_availability.def"
+#include <target_asl_availability.def>
 };
 #undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
 #undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW

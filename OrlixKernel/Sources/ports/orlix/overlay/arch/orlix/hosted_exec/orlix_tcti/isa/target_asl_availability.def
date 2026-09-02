@@ -1,2 +1,2 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "generations/current/target_asl_availability.def"
+#include <target_asl_availability.def>
