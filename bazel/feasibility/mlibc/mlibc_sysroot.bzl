@@ -51,7 +51,12 @@ compiler_rt_marker="$exec_root/${15}"
 digest_in="$exec_root/${16}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
-test "$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')" = "Xcode 26.6"
+xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
+xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
+case "$xcode_name|$xcode_build" in
+  "Xcode 26.6|Build version 17F113"|"Xcode 27.0|Build version 27A5252f") ;;
+  *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
+esac
 meson_bin="$(/usr/bin/command -v meson)"
 ninja_bin="$(/usr/bin/command -v ninja)"
 test -n "$meson_bin"; test -n "$ninja_bin"
