@@ -25,4 +25,6 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertEqual(len(linux.group(1)), 64)
         self.assertEqual(len(mlibc.group(1)), 64)
         self.assertIn("linux-6.12.105", text)
+        self.assertIn('name = "orlix_linux_source"', text)
+        self.assertIn('extra_exports = ["usr/gen_init_cpio.c"]', text)
         self.assertIn("headers_install", Path(__file__).resolve().parents[1].joinpath("feasibility/kernel/kernel_uapi.bzl").read_text(encoding="utf-8"))

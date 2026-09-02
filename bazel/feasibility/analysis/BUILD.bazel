@@ -2,6 +2,8 @@ load(
     ":providers.bzl",
     "config_flags_test",
     "no_wrapper_makefile_test",
+    "package_tree_test",
+    "rootfs_info_test",
     "sysroot_uapi_only_test",
     "uapi_providers_test",
     "variant_stamp_test",
@@ -52,8 +54,32 @@ variant_stamp_test(
 )
 
 variant_stamp_test(
+    name = "uapi_iphonesimulator_development_stamp_test",
+    expected_destination = "iphonesimulator",
+    expected_profile = "development",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphonesimulator_development",
+)
+
+variant_stamp_test(
+    name = "uapi_iphoneos_release_stamp_test",
+    expected_destination = "iphoneos",
+    expected_profile = "release",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphoneos_release",
+)
+
+variant_stamp_test(
     name = "uapi_iphoneos_development_stamp_test",
     expected_destination = "iphoneos",
     expected_profile = "development",
     target_under_test = "//bazel/feasibility/kernel:uapi_iphoneos_development",
+)
+
+package_tree_test(
+    name = "true_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:true",
+)
+
+rootfs_info_test(
+    name = "rootfs_info_test",
+    target_under_test = "//bazel/feasibility/rootfs:rootfs",
 )

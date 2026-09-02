@@ -2,6 +2,8 @@
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixKernelAppleProductInfo", "OrlixLinuxArchiveInfo")
+load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
+load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
 def _uapi_providers_test_impl(ctx):
@@ -67,3 +69,42 @@ def _no_wrapper_makefile_test_impl(ctx):
     return analysistest.end(env)
 
 no_wrapper_makefile_test = analysistest.make(_no_wrapper_makefile_test_impl)
+
+def _package_tree_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixPackageTreeInfo in target)
+    asserts.false(env, OrlixLinuxArchiveInfo in target)
+    asserts.false(env, OrlixKernelAppleProductInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixGuestPackage":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.false(env, "kbuild-archive.tar" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixOS/Sources/make" in joined)
+            asserts.true(env, "packages/true/configure" in joined)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+package_tree_test = analysistest.make(_package_tree_test_impl)
+
+def _rootfs_info_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixRootfsInfo in target)
+    asserts.false(env, OrlixLinuxArchiveInfo in target)
+    asserts.false(env, OrlixKernelAppleProductInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixRootfs":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.false(env, "OrlixOS/Sources/make" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.true(env, "gen_init_cpio.c" in joined)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+rootfs_info_test = analysistest.make(_rootfs_info_test_impl)
