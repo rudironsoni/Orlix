@@ -1,4 +1,4 @@
-load(":kernel_uapi.bzl", "orlix_kernel_uapi")
+load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -9,3 +9,22 @@ orlix_kernel_uapi(
     tags = ["manual"],
     visibility = ["//bazel/feasibility:__subpackages__"],
 )
+
+[
+    orlix_kernel_uapi_variant(
+        name = "uapi_%s_%s" % (destination, profile),
+        destination = destination,
+        profile = profile,
+        tags = ["manual"],
+        uapi = ":uapi",
+        visibility = ["//bazel/feasibility:__subpackages__"],
+    )
+    for destination in [
+        "iphoneos",
+        "iphonesimulator",
+    ]
+    for profile in [
+        "development",
+        "release",
+    ]
+]

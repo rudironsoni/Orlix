@@ -1,4 +1,11 @@
-load(":providers.bzl", "config_flags_test", "sysroot_uapi_only_test", "uapi_providers_test")
+load(
+    ":providers.bzl",
+    "config_flags_test",
+    "no_wrapper_makefile_test",
+    "sysroot_uapi_only_test",
+    "uapi_providers_test",
+    "variant_stamp_test",
+)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -30,4 +37,23 @@ config_flags_test(
 config_flags_test(
     name = "signing_mode_flag_test",
     target_under_test = "//bazel/config:signing_mode",
+)
+
+no_wrapper_makefile_test(
+    name = "no_wrapper_makefile_test",
+    target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+variant_stamp_test(
+    name = "uapi_iphonesimulator_release_stamp_test",
+    expected_destination = "iphonesimulator",
+    expected_profile = "release",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphonesimulator_release",
+)
+
+variant_stamp_test(
+    name = "uapi_iphoneos_development_stamp_test",
+    expected_destination = "iphoneos",
+    expected_profile = "development",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphoneos_development",
 )
