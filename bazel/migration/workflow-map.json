@@ -147,7 +147,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "37709820f549223347da1412903380b81466c0e51716830d2bef1e3f22ab731a",
+      "source_sha256": "145db925b47b2e49e4170249f582ed3466d341721cb6683e6c7bf5cd75fe7637",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -201,7 +201,7 @@
               },
               {
                 "name": "Install pinned build tools",
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\nllvm_bin=\"$(brew --prefix llvm)/bin\"\nlld_bin=\"$(brew --prefix lld)/bin\"\ntest -x \"$lld_bin/ld.lld\" || test -x \"$llvm_bin/ld.lld\"\necho \"$lld_bin\" >> \"$GITHUB_PATH\"\necho \"$llvm_bin\" >> \"$GITHUB_PATH\"\n"
               },
               {
                 "name": "Install the iOS 15.5 runtime with xcodes",
