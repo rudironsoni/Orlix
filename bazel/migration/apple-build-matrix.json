@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "status": "active",
+  "authority": "Make plus XcodeGen remain product-compile authority. Bazel stays inert until the single cutover.",
+  "toolchain_pin": {
+    "bazel": "9.2.0",
+    "xcode": "26.6",
+    "xcode_build": "17F113",
+    "apple_sdk": "26.5",
+    "rules_apple": "4.5.3",
+    "rules_swift": "3.6.1",
+    "rules_xcodeproj": "4.1.0"
+  },
+  "notes": [
+    "An installed SDK or simulator does not create a supported row.",
+    "iOS 15.5 runtime proof is GitHub Actions with pinned xcodes. The user directed a skip because Actions quota is exhausted.",
+    "Later-system features stay behind availability or capability gates. The iOS 15 product is the reduced feature set from ADR 0038."
+  ],
+  "rows": [
+    {
+      "id": "ios-15.0-app-sdk-compile",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "proof": "Xcode 26.6 compile of the Orlix app and OrlixOS SDK at MinimumOSVersion 15.0; Bazel NativeDependencySmokeApp simulator IPA MinimumOSVersion 15.0"
+    },
+    {
+      "id": "ipados-15.0-app-sdk-compile",
+      "apple_os": "iPadOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "proof": "Same 15.0 floor as iOS. No separate iPadOS product binary."
+    },
+    {
+      "id": "ios-15.5-ci-runtime",
+      "apple_os": "iOS",
+      "runtime": "15.5",
+      "destination": "iphonesimulator",
+      "result": "gated",
+      "gate": "GitHub Actions workflow .github/workflows/ios15-runtime.yml with xcodes 2.0.3 and make ios15-simulator-gate",
+      "proof": "blocked. Actions quota exhausted. User directed skip. Last run 33581955557 did not start. Weak AppIntents is unproven on iOS 15.5."
+    },
+    {
+      "id": "ios-16.1-live-activity",
+      "apple_os": "iOS",
+      "deployment": "16.1",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "gate": "optional extension; not loaded or invoked from the iOS 15 smoke",
+      "proof": "LiveActivitySmoke MinimumOSVersion 16.1; NativeDependencySmokeApp 15.0 IPA does not embed it"
+    },
+    {
+      "id": "iphoneos-15.0-device-compile",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphoneos",
+      "result": "supported",
+      "proof": "NativeDependencySmokeApp device IPA signed Apple Distribution team ZQ3L7M567L, application-identifier ZQ3L7M567L.com.rudironsoni.Orlix"
+    },
+    {
+      "id": "macos-13.3-apple-silicon",
+      "apple_os": "macOS",
+      "deployment": "13.3",
+      "destination": "macos",
+      "result": "supported",
+      "proof": "NativeDependencyMacSmokeApp.zip LSMinimumSystemVersion 13.3"
+    },
+    {
+      "id": "product-orlix-app-archive",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphoneos",
+      "result": "gated",
+      "gate": "product archive stays unverified until a Bazel-owned Orlix app exists",
+      "proof": "only native smoke apps are signed"
+    },
+    {
+      "id": "xcode-27-local-cache",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "gated",
+      "gate": "local cache identity Xcode 27.0 / 27A5252f; not the product pin",
+      "proof": "make __bazel-apple-smoke with ORLIX_XCODE_VERSION=27.0 writes bazel-9.2.0-xcode-27A5252f. Product pin remains 26.6 / 17F113."
+    },
+    {
+      "id": "unknown-xcode",
+      "apple_os": "iOS",
+      "deployment": "unspecified",
+      "destination": "unspecified",
+      "result": "unsupported",
+      "proof": "Make bootstrap rejects any Xcode identity that is not 26.6/17F113 or 27.0/27A5252f before disk-cache write."
+    }
+  ],
+  "feature_gates": [
+    {
+      "feature": "Live Activities / ActivityKit",
+      "ios_15": "unavailable",
+      "newer": "available on iOS 16.1+"
+    },
+    {
+      "feature": "AppIntents.framework",
+      "ios_15": "weak-linked; must not required-load",
+      "newer": "available on iOS 16+"
+    },
+    {
+      "feature": "MLX execution",
+      "ios_15": "disabled; Apple Speech remains the transcription provider",
+      "newer": "MLX on supported iOS 16+"
+    }
+  ],
+  "make_operations": [
+    {
+      "public_name": "build",
+      "later_bazel": "product compile via Make-owned Bazel route",
+      "now": "XcodeGen plus component Make"
+    },
+    {
+      "public_name": "rebuild",
+      "later_bazel": "clean then product compile",
+      "now": "XcodeGen plus component Make"
+    },
+    {
+      "public_name": "test",
+      "later_bazel": "hosted proof selection",
+      "now": "current Make proof graph"
+    },
+    {
+      "public_name": "runtime-tests",
+      "later_bazel": "OrlixOS session proof",
+      "now": "current Make runtime tests"
+    },
+    {
+      "public_name": "ios15-simulator-gate",
+      "later_bazel": "iOS 15.5 launch proof",
+      "now": "Make xcodebuild UI tests on a CI-created iOS 15.5 simulator; Actions quota currently blocks execution"
+    },
+    {
+      "public_name": "beta-archive",
+      "later_bazel": "signed product archive from promoted buildset",
+      "now": "Xcode archive of the Orlix app"
+    },
+    {
+      "public_name": "xcodeproj",
+      "later_bazel": "local rules_xcodeproj generate",
+      "now": "XcodeGen generate"
+    },
+    {
+      "public_name": "orlix-tcti-kernel-tests",
+      "later_bazel": "KUnit and kselftest inside the app-hosted kernel",
+      "now": "current Make TCTI kernel tests"
+    },
+    {
+      "public_name": "headers_install",
+      "later_bazel": "//... Kernel UAPI headers_install",
+      "now": "Kbuild headers_install; feasibility target __bazel-kernel-uapi"
+    }
+  ],
+  "direct_bazel_labels": "maintainer diagnostics only"
+}
