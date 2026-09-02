@@ -377,22 +377,45 @@ ios15-simulator-gate:
 	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
 	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
 	xcodegen generate --spec project.yml; \
+	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
+	PYTHONPATH="$(CURDIR)/make" python3 -c 'from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_generated_project(Path("Orlix.xcodeproj/project.pbxproj")); print("pass: AppIntents.framework is weakly linked")'; \
 	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
 	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
 	result_log="$$result_dir/Orlix-iOS15.log"; \
+	derived_data="$$result_dir/DerivedData"; \
 	mkdir -p "$$result_dir"; \
 	rm -rf "$$result_bundle"; \
+	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "Orlix UI Tests" \
 		-configuration Debug \
-		-destination 'platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)' \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
 		-resultBundlePath "$$result_bundle" \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
 		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
 		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
 		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
-		test 2>&1 | tee "$$result_log"
+		build-for-testing 2>&1 | tee "$$result_log"; \
+	app="$$derived_data/Build/Products/Debug-iphonesimulator/Orlix.app"; \
+	test -d "$$app" || { echo "missing iOS 15 simulator app: $$app" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
+	xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "Orlix UI Tests" \
+		-configuration Debug \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
+		-resultBundlePath "$$result_bundle" \
+		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
+		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
+		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
+		-test-timeouts-enabled YES \
+		-default-test-execution-time-allowance 120 \
+		-maximum-test-execution-time-allowance 180 \
+		test-without-building 2>&1 | tee -a "$$result_log"
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \
