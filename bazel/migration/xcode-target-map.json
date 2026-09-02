@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
   "source_file": "project.yml",
-  "source_sha256": "296a1916f6e5f1f1f0ac4c52b837222a478a00491caf911558e0620e660f0617",
+  "source_sha256": "0323844174803eaf0bee09ebfe307ab9566564b76b8f2aa13534e94a8952513d",
   "project": {
     "name": "Orlix",
     "options": {
@@ -549,7 +549,8 @@
             ]
           },
           {
-            "sdk": "AppIntents.framework"
+            "sdk": "AppIntents.framework",
+            "weak": true
           }
         ],
         "settings": {
@@ -755,7 +756,8 @@
             ]
           },
           {
-            "sdk": "AppIntents.framework"
+            "sdk": "AppIntents.framework",
+            "weak": true
           }
         ],
         "settings": {
