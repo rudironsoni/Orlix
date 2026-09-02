@@ -644,7 +644,7 @@ static void bcs_production_resume(struct kunit *test)
 				    taken);
 			KUNIT_EXPECT_EQ(test, expected_svc, result.instruction);
 			KUNIT_EXPECT_EQ(test, address +
-					(taken ? 3 : 2) * sizeof(u32), regs.pc);
+					(taken ? 2 : 1) * sizeof(u32), regs.pc);
 			KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
 			if (leaf->kind == BCS_BL || leaf->kind == BCS_BLR)
 				KUNIT_EXPECT_EQ(test, address + sizeof(u32),
@@ -661,14 +661,15 @@ static void bcs_unsupported_resume_cannot_credit(struct kunit *test)
 {
 	struct orlix_tcti_native_capture_session *capture = NULL;
 	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
 	struct pt_regs regs = {};
 	struct orlix_tcti_result result;
 	const struct bcs_leaf *leaf = &bcs_leaves[0];
 	unsigned long address;
 	int ret;
 
-	/* A normal-resume claim alone is insufficient: the instruction must reach
-	 * the successful gadget path before its pending capture becomes creditable. */
+	/* A reserved encoding may still seal a fail-closed observation. Credit
+	 * requires the session target to reach the successful gadget path. */
 	address = bcs_map_program(test, 0x74004000U);
 	bcs_seed_regs(&regs, address, leaf, false);
 	ret = orlix_tcti_native_capture_begin(
@@ -680,9 +681,15 @@ static void bcs_unsupported_resume_cannot_credit(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 		result.reason);
 	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
-	KUNIT_EXPECT_LT(test,
-		orlix_tcti_native_capture_take_wire(capture, &wire), 0);
-	KUNIT_EXPECT_FALSE(test, wire.sealed);
+	KUNIT_EXPECT_EQ(test, 0,
+		orlix_tcti_native_capture_take_wire(capture, &wire));
+	KUNIT_EXPECT_TRUE(test, wire.sealed);
+	KUNIT_EXPECT_EQ(test, 0U, wire.production_origin);
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+		&wire, NULL), 0);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
 	orlix_tcti_native_wire_record_destroy(&wire);
 	orlix_tcti_native_capture_destroy(capture);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
@@ -717,7 +724,7 @@ static void bcs_x31_semantics_production(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, cases[index].taken ? BCS_SVC_TAKEN :
 				BCS_SVC_NOT_TAKEN, result.instruction);
 		KUNIT_EXPECT_EQ(test, address +
-				(cases[index].taken ? 3 : 2) * sizeof(u32), regs.pc);
+				(cases[index].taken ? 2 : 1) * sizeof(u32), regs.pc);
 		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
 		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
@@ -871,7 +878,7 @@ static void bcs_al_nv_condition_production(struct kunit *test)
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
 		KUNIT_EXPECT_EQ(test, BCS_SVC_TAKEN, result.instruction);
-		KUNIT_EXPECT_EQ(test, address + 3 * sizeof(u32), regs.pc);
+		KUNIT_EXPECT_EQ(test, address + 2 * sizeof(u32), regs.pc);
 		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
 		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));

@@ -459,6 +459,8 @@ static unsigned long orlix_tcti_logical_shifted_register_map_instructions(
 	ret = orlix_tcti_write_user_data(current->mm, mapped, instructions,
 				   count * sizeof(*instructions));
 	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
 	return mapped;
 }
 

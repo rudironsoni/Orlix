@@ -83,6 +83,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_base_add_sub_source_bound_test.o \
 	orlix_tcti_base_control_flow_source_bound_test.o \
 	orlix_tcti_base_exceptions_source_bound_test.o \
+	orlix_tcti_base_system_source_bound_test.o \
 	orlix_tcti_base_conditional_source_bound_test.o \
 	orlix_tcti_base_bitfield_unary_source_bound_test.o \
 	orlix_tcti_base_multiply_divide_source_bound_test.o \

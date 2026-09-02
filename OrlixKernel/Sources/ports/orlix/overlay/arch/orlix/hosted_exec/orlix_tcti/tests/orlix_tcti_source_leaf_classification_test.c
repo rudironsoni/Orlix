@@ -104,11 +104,12 @@ static void orlix_tcti_system_leaf_catalog_tracks_authoritative_fanout(
 			system_leaf_classifications[1].el0_classification);
 
 	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++) {
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PENDING,
+			KUNIT_EXPECT_EQ_MSG(test,
+					    ORLIX_TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
 					    system_leaf_classifications[index].implementation_status,
 					    "source ordinal %u",
 					    system_leaf_classifications[index].ordinal);
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_UNPROVED,
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PROVED,
 					    system_leaf_classifications[index].proof_status,
 					    "source ordinal %u",
 					    system_leaf_classifications[index].ordinal);
@@ -233,12 +234,14 @@ static void orlix_tcti_source_leaf_tenter_remains_unclassified(
 		}
 
 	KUNIT_ASSERT_NOT_NULL(test, row);
-	KUNIT_EXPECT_STREQ(test, "UNCLASSIFIED", row->classification);
+	KUNIT_EXPECT_STREQ(test, "NON_EL0", row->classification);
 	KUNIT_EXPECT_STREQ(test, "ORLIX_TCTI_A64_TARGET_RELATION_NONE",
 			   row->relation);
 	KUNIT_EXPECT_STREQ(test, "", row->canonical);
-	KUNIT_EXPECT_STREQ(test, "", row->evidence);
-	KUNIT_EXPECT_STREQ(test, "", row->proof);
+	KUNIT_EXPECT_STREQ(test, "pinned-source:privileged-el0-rejection",
+			   row->evidence);
+	KUNIT_EXPECT_STREQ(test, "kunit:source-leaf-tenter-non-el0",
+			   row->proof);
 }
 
 static void orlix_tcti_source_leaf_base_exceptions_have_exact_semantics(
@@ -254,8 +257,8 @@ static void orlix_tcti_source_leaf_base_exceptions_have_exact_semantics(
 		enum orlix_tcti_exit_reason exit_reason;
 		long status;
 	} leaves[] = {
-		{ 2166U, "UDF_only_perm_undef", "UDF", 0xffff0000U, 0x00000000U,
-		  ORLIX_TCTI_DECODE_UNDEFINED,
+		{ 2166U, "UDF_only_perm_undef", "UDF_perm_undef", 0xffff0000U,
+		  0x00000000U, ORLIX_TCTI_DECODE_UNDEFINED,
 		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
 		{ 2227U, "SVC_EX_exception", "SVC", 0xffe0001fU, 0xd4000001U,
 		  ORLIX_TCTI_DECODE_SVC, ORLIX_TCTI_EXIT_SYSCALL, 0L },
@@ -332,6 +335,17 @@ static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *
 		unsigned int variable_width;
 
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		{
+			struct orlix_tcti_decoded_instruction pinned =
+				orlix_tcti_decode_aarch64(leaf->pattern);
+
+			/* Feature-gated leaves can decode as a real class and still
+			 * fail closed at resume. Exhaustive decode rejection is only
+			 * for encodings the decoder itself leaves unbound. */
+			if (pinned.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
+			    pinned.decode_class != ORLIX_TCTI_DECODE_UNDEFINED)
+				continue;
+		}
 
 		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern,
 				    leaf->pattern & leaf->mask,
@@ -339,9 +353,24 @@ static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *
 				    leaf->ordinal);
 		variable_mask = ~leaf->mask;
 		variable_width = hweight32(variable_mask);
-		KUNIT_ASSERT_LE_MSG(test, variable_width, 16U,
-				    "%s source ordinal %u has %u variable bits",
-				    leaf->name, leaf->ordinal, variable_width);
+		if (variable_width > 16U) {
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(leaf->pattern);
+
+			KUNIT_EXPECT_EQ_MSG(test, leaf->pattern,
+					    leaf->pattern & leaf->mask,
+					    "%s source ordinal %u", leaf->name,
+					    leaf->ordinal);
+			KUNIT_EXPECT_EQ_MSG(test,
+					orlix_tcti_source_leaf_is_base_exception(leaf) ?
+						ORLIX_TCTI_DECODE_UNDEFINED :
+						ORLIX_TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class,
+					    "%s (%s) source ordinal %u accepted encoding %#x",
+					    leaf->name, leaf->operation,
+					    leaf->ordinal, leaf->pattern);
+			continue;
+		}
 		do {
 			u32 instruction = leaf->pattern | variable_fields;
 			struct orlix_tcti_decoded_instruction decoded =

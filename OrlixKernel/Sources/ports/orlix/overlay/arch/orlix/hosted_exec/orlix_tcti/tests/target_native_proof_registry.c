@@ -996,7 +996,7 @@ static bool native_system_accessor_capture_row_build(
 			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_source_leaf_classification_test.c") ||
 	    !native_registry_copy(native->kunit_source_sha256,
 			sizeof(native->kunit_source_sha256),
-			"02957dd1bc834975fba91fdf41170b319d373d17084255b6629d9659da27d18c") ||
+			"73a7a2e7096b1ce8744aa8cabdece38a349ff83c6876338d3c6c8a1b219053fc") ||
 	    !native_registry_copy(native->kunit_build_source,
 			sizeof(native->kunit_build_source),
 			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile") ||

@@ -846,8 +846,8 @@ static void bitfield_extract_production_path_aliases(struct kunit *test)
 	} cases[] = {
 		{ 2205U, 5, 31, 4, 7 }, /* ASR */
 		{ 2205U, 0, 7, 4, 7 },  /* SXTB */
-		{ 2206U, 56, 7, 31, 7 }, /* BFC */
-		{ 2206U, 56, 7, 7, 7 },  /* BFI overlap */
+		{ 2209U, 56, 7, 31, 7 }, /* 64-bit BFC: immr=64-8 */
+		{ 2209U, 56, 7, 7, 7 },  /* 64-bit BFI overlap */
 		{ 2207U, 24, 23, 4, 7 }, /* LSL */
 		{ 2207U, 0, 7, 31, 7 },  /* UXTB XZR */
 		{ 2208U, 8, 15, 4, 7 }, /* SBFX */

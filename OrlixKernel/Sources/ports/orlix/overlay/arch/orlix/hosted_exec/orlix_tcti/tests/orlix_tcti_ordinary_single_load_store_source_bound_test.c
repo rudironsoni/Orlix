@@ -116,8 +116,8 @@ static struct orlix_tcti_result osls_run(struct kunit *test, u32 instruction,
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
 	KUNIT_EXPECT_EQ(test, 0L, result.status);
 	KUNIT_EXPECT_EQ(test, OSLS_SVC, result.instruction);
-	KUNIT_EXPECT_EQ(test, *mapped + 2 * sizeof(u32), result.pc);
-	KUNIT_EXPECT_EQ(test, *mapped + 2 * sizeof(u32), regs->pc);
+	KUNIT_EXPECT_EQ(test, *mapped + sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, *mapped + sizeof(u32), regs->pc);
 	return result;
 }
 
@@ -218,7 +218,7 @@ static void osls_pre_post_and_register_offset_production_path(struct kunit *test
 	KUNIT_EXPECT_EQ(test, data + 4, regs.regs[1]);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 
-	ret = orlix_tcti_write_user_data(current->mm, data + 4, &word, sizeof(word));
+	ret = orlix_tcti_write_user_data(current->mm, data, &word, sizeof(word));
 	KUNIT_ASSERT_EQ(test, 0, ret);
 	memset(&regs, 0, sizeof(regs));
 	regs.regs[1] = data;
@@ -227,6 +227,8 @@ static void osls_pre_post_and_register_offset_production_path(struct kunit *test
 	KUNIT_EXPECT_EQ(test, data + 4, regs.regs[1]);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 
+	ret = orlix_tcti_write_user_data(current->mm, data + 4, &word, sizeof(word));
+	KUNIT_ASSERT_EQ(test, 0, ret);
 	memset(&regs, 0, sizeof(regs));
 	regs.regs[1] = data;
 	regs.regs[2] = 1;
@@ -434,7 +436,7 @@ static void osls_unprivileged_load_store_production_path(struct kunit *test)
 	regs.sp = data + 16;
 	regs.regs[0] = 0xa5a5a5a5a5a5a5a5ULL;
 	osls_run(test, 0xf8400bffU, &regs, &mapped); /* LDTR xzr, [sp] */
-	KUNIT_EXPECT_EQ(test, 0xa5a5a5a5a5a5a5ULL, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0xa5a5a5a5a5a5a5a5ULL, regs.regs[0]);
 	KUNIT_EXPECT_EQ(test, data + 16, regs.sp);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));

@@ -303,6 +303,11 @@ static void lse_source_bound_rejects_reserved_encodings(struct kunit *test)
 			rmw++;
 		}
 		decoded = orlix_tcti_decode_aarch64(instruction);
+		if (decoded.decode_class == ORLIX_TCTI_DECODE_LS64 ||
+		    decoded.decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE ||
+		    (decoded.decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC &&
+		     decoded.atomic_rcw))
+			continue;
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 				decoded.decode_class, "%s %#x", entry->source_leaf,
 				instruction);

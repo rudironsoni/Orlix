@@ -1,0 +1,318 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #139 production-path observations for always-on BASE_SYSTEM leaves.
+ * Feature-absent non-hints prove EL0 rejection on the same suite.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2238U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2238U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2239U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2239U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2240U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2240U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2241U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2241U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2242U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2242U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2243U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2243U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2244U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2244U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2250U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2250U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2251U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2251U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2252U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2252U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2253U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2253U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2254U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2254U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2255U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2255U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2264U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2264U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2266U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2266U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2267U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2267U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2268U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2268U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2269U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2269U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2270U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2270U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2271U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2271U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2272U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2272U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2273U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2273U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2274U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2274U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2281U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2281U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2283U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2283U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2284U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c",
+	"orlix-tcti-base-system-source-bound", "orlix_tcti_base_system_production_resume",
+	2284U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

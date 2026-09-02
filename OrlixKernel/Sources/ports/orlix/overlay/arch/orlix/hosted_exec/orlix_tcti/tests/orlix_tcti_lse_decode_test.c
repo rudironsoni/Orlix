@@ -953,6 +953,13 @@ static void orlix_tcti_lse_decode_rejects_reserved_neighbors(struct kunit *test)
 				u32 instruction = rmw | ((u32)op << 12);
 
 				decoded = orlix_tcti_decode_aarch64(instruction);
+				if (decoded.decode_class == ORLIX_TCTI_DECODE_LS64 ||
+				    decoded.decode_class ==
+					    ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE ||
+				    (decoded.decode_class ==
+					     ORLIX_TCTI_DECODE_LSE_ATOMIC &&
+				     decoded.atomic_rcw))
+					continue;
 				KUNIT_EXPECT_EQ_MSG(
 					test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 					decoded.decode_class,

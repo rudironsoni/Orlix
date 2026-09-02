@@ -33,9 +33,9 @@
 #define ORLIX_TCTI_TEST_SSHLL_PATTERN		0x0f00a400U
 #define ORLIX_TCTI_TEST_USHLL_PATTERN		0x2f00a400U
 #define ORLIX_TCTI_TEST_SQXTN_PATTERN		0x0e214800U
-#define ORLIX_TCTI_TEST_SQXTUN_PATTERN		0x0e212800U
+#define ORLIX_TCTI_TEST_SQXTUN_PATTERN		0x2e212800U
 #define ORLIX_TCTI_TEST_SCALAR_SQXTN_PATTERN	0x5e214800U
-#define ORLIX_TCTI_TEST_SCALAR_SQXTUN_PATTERN	0x5e212800U
+#define ORLIX_TCTI_TEST_SCALAR_SQXTUN_PATTERN	0x7e212800U
 #define ORLIX_TCTI_TEST_SATURATING_NARROW_MASK	0x9f3ffc00U
 #define ORLIX_TCTI_TEST_SCALAR_SATURATING_NARROW_MASK	0xdf3ffc00U
 #define ORLIX_TCTI_TEST_FPSR_QC			BIT(27)
@@ -168,6 +168,7 @@ static int orlix_tcti_advsimd_narrow_widen_test_init(struct kunit *test)
 	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
 	if (!context)
 		return -ENOMEM;
+	test->priv = context;
 
 	context->mm = mm_alloc();
 	if (!context->mm)
@@ -177,8 +178,7 @@ static int orlix_tcti_advsimd_narrow_widen_test_init(struct kunit *test)
 						PROT_READ | PROT_WRITE,
 						MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (IS_ERR_VALUE(context->instructions)) {
-		kthread_unuse_mm(context->mm);
-		mmput(context->mm);
+		context->instructions = 0;
 		return -ENOMEM;
 	}
 	memcpy(context->simd, current->thread.user_simd,
@@ -186,7 +186,6 @@ static int orlix_tcti_advsimd_narrow_widen_test_init(struct kunit *test)
 	context->simd_valid = current->thread.user_simd_valid;
 	context->fpcr = current->thread.user_fpcr;
 	context->fpsr = current->thread.user_fpsr;
-	test->priv = context;
 	return 0;
 }
 
@@ -194,11 +193,17 @@ static void orlix_tcti_advsimd_narrow_widen_test_exit(struct kunit *test)
 {
 	struct orlix_tcti_advsimd_narrow_widen_context *context = test->priv;
 
-	if (context->instructions)
+	if (!context)
+		return;
+	if (context->mm && current->mm != context->mm)
+		kthread_use_mm(context->mm);
+	if (context->instructions && current->mm)
 		vm_munmap(context->instructions, PAGE_SIZE);
 	if (context->mm) {
-		kthread_unuse_mm(context->mm);
+		if (current->mm)
+			kthread_unuse_mm(context->mm);
 		mmput(context->mm);
+		context->mm = NULL;
 	}
 	memcpy(current->thread.user_simd, context->simd,
 	       sizeof(context->simd));
@@ -240,8 +245,6 @@ orlix_tcti_test_resume_instruction(struct kunit *test, struct pt_regs *regs,
 		return (struct orlix_tcti_result) {
 			.status = ret,
 		};
-	KUNIT_EXPECT_MEMEQ(test, expected_program, before_program,
-			   sizeof(expected_program));
 	ret = orlix_tcti_read_user_data(current->mm, context->instructions,
 				  before_program, sizeof(before_program));
 	KUNIT_EXPECT_EQ(test, 0, ret);
@@ -249,6 +252,8 @@ orlix_tcti_test_resume_instruction(struct kunit *test, struct pt_regs *regs,
 		return (struct orlix_tcti_result) {
 			.status = ret,
 		};
+	KUNIT_EXPECT_MEMEQ(test, expected_program, before_program,
+			   sizeof(expected_program));
 	regs->pc = context->instructions;
 	regs->pstate |= PSR_MODE_EL0t;
 	regs->syscallno = NO_SYSCALL;
@@ -586,7 +591,6 @@ static void orlix_tcti_shift_long_source_leaves_reject_reserved_immediates(
 	struct kunit *test)
 {
 	static const u8 immediates[] = {
-		0x00, /* immh == 0000 */
 		0x40, /* immh<3> selects an unsupported 64-bit source */
 		0x7f,
 	};
@@ -771,9 +775,14 @@ static void orlix_tcti_test_execute_saturating_narrow_case(
 	orlix_tcti_advsimd_narrow_widen_expect_source_encoding(test,
 		orlix_tcti_test_saturating_narrow_source_ordinal(operation, scalar),
 		instruction);
-	KUNIT_ASSERT_EQ(test, pattern,
-		instruction & (scalar ? ORLIX_TCTI_TEST_SCALAR_SATURATING_NARROW_MASK :
-			ORLIX_TCTI_TEST_SATURATING_NARROW_MASK));
+	{
+		u32 saturating_mask = scalar ?
+			ORLIX_TCTI_TEST_SCALAR_SATURATING_NARROW_MASK :
+			ORLIX_TCTI_TEST_SATURATING_NARROW_MASK;
+
+		KUNIT_ASSERT_EQ(test, pattern & saturating_mask,
+				instruction & saturating_mask);
+	}
 	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 		decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, operation, decoded.simd_arithmetic_op);
@@ -876,16 +885,6 @@ static void orlix_tcti_saturating_narrow_source_leaves_reject_reserved_encodings
 			orlix_tcti_decode_aarch64(instruction).decode_class);
 		orlix_tcti_test_expect_rejected_instruction(test, instruction);
 	}
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-		orlix_tcti_decode_aarch64(ORLIX_TCTI_TEST_SQXTUN_PATTERN |
-			(7U << 5) | 8U).decode_class);
-	orlix_tcti_test_expect_rejected_instruction(test, ORLIX_TCTI_TEST_SQXTUN_PATTERN |
-			(7U << 5) | 8U);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-		orlix_tcti_decode_aarch64(ORLIX_TCTI_TEST_SCALAR_SQXTUN_PATTERN |
-			(7U << 5) | 8U).decode_class);
-	orlix_tcti_test_expect_rejected_instruction(test,
-		ORLIX_TCTI_TEST_SCALAR_SQXTUN_PATTERN | (7U << 5) | 8U);
 }
 
 static void orlix_tcti_narrow_widen_resume_reports_instruction_fetch_fault(

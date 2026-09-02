@@ -63,8 +63,10 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * 16-bit data are ordinary FEAT_FP loads and stores, not FEAT_FP16
  * arithmetic, so they execute without HWCAP_FPHP. Integer AdvSIMD 16-bit
  * lanes (XTN, SQXTN, SHRN, ADDHN, SADDLV, SQSHL, and by-element multiply)
- * are FEAT_AdvSIMD, not FEAT_FP16. AdvSIMD FP16, FHM, BF16, FCMA, FRINTTS,
- * FP8, FAMINMAX, and FSCALE stay unadvertised and reject at EL0.
+ * are FEAT_AdvSIMD, not FEAT_FP16. Implemented AdvSIMD FP16 three-same
+ * arithmetic still follows HWCAP_ASIMDHP. Remaining AdvSIMD FP16
+ * misc/pair/indexed forms, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and
+ * FSCALE stay unadvertised and reject at EL0.
  */
 static bool orlix_tcti_decoded_requires_lut(
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -184,18 +186,11 @@ static bool orlix_tcti_decoded_runtime_available(
 	if (decoded && orlix_tcti_scalar_fp_optional_ordinal(decoded->source_ordinal))
 		return false;
 	/* FEAT_RDM, FEAT_DotProd, FEAT_I8MM, and unadvertised AdvSIMD FP
-	 * extensions remain unavailable.
+	 * extensions remain unavailable. Implemented FEAT_FP16 three-same
+	 * leaves (asisdsamefp16 / asimdsamefp16 except FAMINMAX and FP8)
+	 * stay off this list and follow the HWCAP_ASIMDHP / HWCAP_FPHP gate.
 	 */
 	switch (decoded ? decoded->source_ordinal : 0U) {
-	case 3522U:
-	case 3523U:
-	case 3524U:
-	case 3525U:
-	case 3526U:
-	case 3527U:
-	case 3528U:
-	case 3529U:
-	case 3530U:
 	case 3531U:
 	case 3532U:
 	case 3533U:
@@ -225,32 +220,8 @@ static bool orlix_tcti_decoded_runtime_available(
 	case 3663U:
 	case 3664U:
 	case 3670U:
-	case 3699U:
-	case 3700U:
-	case 3701U:
-	case 3702U:
-	case 3703U:
-	case 3704U:
-	case 3705U:
-	case 3706U:
-	case 3707U:
-	case 3708U:
 	case 3709U:
-	case 3710U:
-	case 3711U:
-	case 3712U:
-	case 3713U:
-	case 3714U:
-	case 3715U:
-	case 3716U:
-	case 3717U:
-	case 3718U:
-	case 3719U:
-	case 3720U:
 	case 3721U:
-	case 3722U:
-	case 3723U:
-	case 3724U:
 	case 3725U:
 	case 3726U:
 	case 3727U:
@@ -369,7 +340,8 @@ static bool orlix_tcti_decoded_runtime_available(
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return false;
 	if (orlix_tcti_decoded_requires_fp16(decoded))
-		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
+		return decoded->decode_class ==
+			       ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :
 			(ELF_HWCAP & HWCAP_FPHP);
 	return !orlix_tcti_decoded_requires_cssc(decoded) ||
@@ -803,6 +775,7 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 		return ORLIX_TCTI_ACCESS_FETCH;
 
 	switch (decoded->decode_class) {
+	case ORLIX_TCTI_DECODE_LOAD_LITERAL:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_PAIR:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:

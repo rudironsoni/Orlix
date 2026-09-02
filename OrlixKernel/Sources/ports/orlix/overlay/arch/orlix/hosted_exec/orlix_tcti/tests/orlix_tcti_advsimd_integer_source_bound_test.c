@@ -145,7 +145,7 @@ static bool orlix_tcti_advsimd_integer_size00_reserved(
 	const char *name = source->name;
 	const char *op = source->operation;
 
-	if (strstr(name, "asimdelem"))
+	if (strstr(name, "asimdelem") || strstr(name, "asisdelem"))
 		return true;
 	return strstr(op, "SQDMULH") || strstr(op, "SQRDMULH") ||
 		strstr(op, "SQDMLAL") || strstr(op, "SQDMLSL") ||
@@ -164,6 +164,11 @@ static u32 orlix_tcti_advsimd_integer_legal_instruction(
 	    ((source->mask >> 22) & 0x3U) == 0 &&
 	    ((instruction >> 22) & 0x3U) == 0)
 		instruction |= 1U << 22;
+	if (!strncmp(source->operation, "SDOT_", 5) ||
+	    !strncmp(source->operation, "UDOT_", 5)) {
+		instruction &= ~(3U << 22);
+		instruction |= 2U << 22;
+	}
 	if ((strstr(source->name, "asimdshf") ||
 	     strstr(source->name, "asisdshf")) &&
 	    ((instruction >> 19) & 0xfU) == 0) {

@@ -664,8 +664,13 @@ __bootstrap-mlibc:
 	else \
 		git -C "$(MLIBC_UPSTREAM_DIR)" remote set-url origin "$(MLIBC_REMOTE)"; \
 	fi; \
-	git -C "$(MLIBC_UPSTREAM_DIR)" fetch --force --depth 1 origin "$(MLIBC_COMMIT):refs/orlix/mlibc-$(MLIBC_VERSION)"; \
-	git -C "$(MLIBC_UPSTREAM_DIR)" symbolic-ref HEAD refs/orlix/mlibc-$(MLIBC_VERSION); \
+	if git -C "$(MLIBC_UPSTREAM_DIR)" cat-file -e "$(MLIBC_COMMIT)^{commit}" 2>/dev/null; then \
+		echo "reusing local mlibc commit $(MLIBC_COMMIT)"; \
+	else \
+		git -C "$(MLIBC_UPSTREAM_DIR)" fetch --force --depth 1 origin "$(MLIBC_COMMIT):refs/orlix/mlibc-$(MLIBC_VERSION)"; \
+	fi; \
+	git -C "$(MLIBC_UPSTREAM_DIR)" update-ref "refs/orlix/mlibc-$(MLIBC_VERSION)" "$(MLIBC_COMMIT)"; \
+	git -C "$(MLIBC_UPSTREAM_DIR)" symbolic-ref HEAD "refs/orlix/mlibc-$(MLIBC_VERSION)" >/dev/null; \
 	rm -rf "$(MLIBC_SRC_DIR)"; \
 	mkdir -p "$(dir $(MLIBC_SRC_DIR))"; \
 	git clone --shared --no-checkout "$(MLIBC_UPSTREAM_DIR)" "$(MLIBC_SRC_DIR)"; \
@@ -702,16 +707,22 @@ __bootstrap-compiler-rt:
 	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/upstream" "$(LLVM_PROJECT_UPSTREAM_DIR)"; do \
 		if [ -L "$$path" ]; then echo "refusing to use symlinked compiler-rt path: $$path" >&2; exit 1; fi; \
 	done; \
-	rm -rf "$(LLVM_PROJECT_UPSTREAM_DIR)"; \
 	mkdir -p "$(dir $(LLVM_PROJECT_UPSTREAM_DIR))"; \
-	git clone --depth 1 --branch "$(LLVM_PROJECT_REF)" --filter=blob:none --sparse "$(LLVM_PROJECT_REMOTE)" "$(LLVM_PROJECT_UPSTREAM_DIR)"; \
-	git -C "$(LLVM_PROJECT_UPSTREAM_DIR)" sparse-checkout set compiler-rt/lib/builtins; \
-	checked_commit="$$(git -C "$(LLVM_PROJECT_UPSTREAM_DIR)" rev-parse HEAD)"; \
-	if [ "$$checked_commit" != "$(LLVM_PROJECT_COMMIT)" ]; then \
-		echo "expected llvm-project commit $(LLVM_PROJECT_COMMIT), checked out $$checked_commit" >&2; \
-		exit 1; \
-	fi; \
-	echo "upstream compiler-rt ready: $(LLVM_PROJECT_UPSTREAM_DIR) ($$checked_commit)"
+	if [ -d "$(LLVM_PROJECT_UPSTREAM_DIR)/.git" ] && \
+	   [ "$$(git -C "$(LLVM_PROJECT_UPSTREAM_DIR)" rev-parse HEAD)" = "$(LLVM_PROJECT_COMMIT)" ] && \
+	   [ -d "$(LLVM_PROJECT_UPSTREAM_DIR)/compiler-rt/lib/builtins" ]; then \
+		echo "reusing local compiler-rt $(LLVM_PROJECT_UPSTREAM_DIR) ($(LLVM_PROJECT_COMMIT))"; \
+	else \
+		rm -rf "$(LLVM_PROJECT_UPSTREAM_DIR)"; \
+		git clone --depth 1 --branch "$(LLVM_PROJECT_REF)" --filter=blob:none --sparse "$(LLVM_PROJECT_REMOTE)" "$(LLVM_PROJECT_UPSTREAM_DIR)"; \
+		git -C "$(LLVM_PROJECT_UPSTREAM_DIR)" sparse-checkout set compiler-rt/lib/builtins; \
+		checked_commit="$$(git -C "$(LLVM_PROJECT_UPSTREAM_DIR)" rev-parse HEAD)"; \
+		if [ "$$checked_commit" != "$(LLVM_PROJECT_COMMIT)" ]; then \
+			echo "expected llvm-project commit $(LLVM_PROJECT_COMMIT), checked out $$checked_commit" >&2; \
+			exit 1; \
+		fi; \
+		echo "upstream compiler-rt ready: $(LLVM_PROJECT_UPSTREAM_DIR) ($$checked_commit)"; \
+	fi
 
 __build-compiler-rt: __bootstrap-compiler-rt
 	@set -euo pipefail; \

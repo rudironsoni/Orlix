@@ -174,9 +174,14 @@ targets:
         script: |
           set -eu
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.git@github.com:.insteadof"
+          export GIT_CONFIG_VALUE_0="https://github.com/"
           profile="${ORLIX_PROFILE:-release}"
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
-          "${MAKE:-make}" -f "$SRCROOT/OrlixMLibC/Makefile" build PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixMLibC/Makefile" build PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root" \
+            ${MLIBC_REMOTE:+MLIBC_REMOTE="$MLIBC_REMOTE"} \
+            ${LLVM_PROJECT_REMOTE:+LLVM_PROJECT_REMOTE="$LLVM_PROJECT_REMOTE"}
     settings:
       base:
         DEFINES_MODULE: NO

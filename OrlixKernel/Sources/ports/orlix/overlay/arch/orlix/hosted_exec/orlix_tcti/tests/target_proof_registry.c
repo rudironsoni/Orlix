@@ -549,6 +549,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_base_exceptions_source_bound_cases"
 #define BASE_EXCEPTIONS_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_base_exceptions_production_capture.h\""
+#define BASE_SYSTEM_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_source_bound_test.c"
+#define BASE_SYSTEM_SUITE "orlix-tcti-base-system-source-bound"
+#define BASE_SYSTEM_SUITE_SYMBOL \
+	"orlix_tcti_base_system_source_bound_suite"
+#define BASE_SYSTEM_CASE_ARRAY \
+	"orlix_tcti_base_system_source_bound_cases"
+#define BASE_SYSTEM_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_system_production_capture.h\""
 #define BASE_CONDITIONAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_conditional_source_bound_test.c"
 #define BASE_CONDITIONAL_SUITE "orlix-tcti-base-conditional-source-bound"
@@ -939,6 +948,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ BASE_SYSTEM_SOURCE,
+	  "1dd312479a226d0aee632e8402eee515180fda35a49fe9f3b8f9ecfba610b594",
+	  "orlix_tcti_base_system_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ BASE_CONDITIONAL_SOURCE,
 	  "9ff7322513d81a382be0c16219d3bf4e4a197114eb3c73ba67fa1769ec4c0be7",
 	  "orlix_tcti_base_conditional_source_bound_test.o",
@@ -988,7 +1003,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "02957dd1bc834975fba91fdf41170b319d373d17084255b6629d9659da27d18c",
+	  "73a7a2e7096b1ce8744aa8cabdece38a349ff83c6876338d3c6c8a1b219053fc",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
@@ -1560,6 +1575,39 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
 	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
 	  "orlix_tcti_base_exceptions_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE,
+	  BASE_SYSTEM_SUITE_SYMBOL, BASE_SYSTEM_CASE_ARRAY,
+	  "orlix_tcti_base_system_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ BASE_CONDITIONAL_SOURCE, BASE_CONDITIONAL_SUITE,
@@ -2289,6 +2337,44 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "CBNZ", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "TBZ", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "TBNZ", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "WFET", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "WFIT", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "NOP", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "YIELD", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "WFE", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "WFI", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SEV", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SEVL", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "DGH", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "ESB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "PSB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "TSB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "GCSB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "CSDB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "CLRBHB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "BTI", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "CHKFEAT", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "STSHH", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SHUH", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "STCPH", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "HINT", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "CLREX", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "DSB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "DMB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "ISB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SB", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "MSR_imm", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "CFINV", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "XAFLAG", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "AXFLAG", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SYS", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SYSL", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "MSR_reg", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "MRS", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SYSP", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "MSRR", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "MRRS", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "HINTE", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -3368,6 +3454,31 @@ base_exceptions_production_cases[] = {
 };
 
 static const struct orlix_tcti_target_proof_case
+base_system_production_cases[] = {
+	{ "orlix_tcti_base_system_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_system_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_system_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_system_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_system_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_system_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
 base_conditional_production_cases[] = {
 	{ "orlix_tcti_base_conditional_decodes_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -4130,8 +4241,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 378U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 624U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 416U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 663U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 39U
@@ -4722,6 +4833,10 @@ static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[]
 			 minimum, maximum, expected) \
 	{ operation, proof, source_file, source_suite, SCALAR_CONDITION, case_set, \
 	  ARRAY_COUNT(case_set), minimum, maximum, expected, 0, 0 }
+#define BASE_SYSTEM_OPERATION(operation, proof, minimum, maximum, expected) \
+	{ operation, proof, BASE_SYSTEM_SOURCE, BASE_SYSTEM_SUITE, \
+	  "", base_system_production_cases, \
+	  ARRAY_COUNT(base_system_production_cases), minimum, maximum, expected, 0, 0 }
 #define SCALAR_FP_OPERATION(operation, proof, minimum, maximum, expected) \
 	{ operation, proof, SCALAR_FP_FAMILY_SOURCE, SCALAR_FP_FAMILY_SUITE, \
 	  SCALAR_FP_CONDITION, scalar_fp_family_cases, \
@@ -4886,6 +5001,44 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("HLT", "kunit:branch-control-hlt",
 		BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
 		base_exceptions_production_cases, 2231U, 2231U, 1),
+	BASE_SYSTEM_OPERATION("WFET", "kunit:base-system-wfet", 2236U, 2236U, 1),
+	BASE_SYSTEM_OPERATION("WFIT", "kunit:base-system-wfit", 2237U, 2237U, 1),
+	BASE_SYSTEM_OPERATION("NOP", "kunit:base-system-nop", 2238U, 2238U, 1),
+	BASE_SYSTEM_OPERATION("YIELD", "kunit:base-system-yield", 2239U, 2239U, 1),
+	BASE_SYSTEM_OPERATION("WFE", "kunit:base-system-wfe", 2240U, 2240U, 1),
+	BASE_SYSTEM_OPERATION("WFI", "kunit:base-system-wfi", 2241U, 2241U, 1),
+	BASE_SYSTEM_OPERATION("SEV", "kunit:base-system-sev", 2242U, 2242U, 1),
+	BASE_SYSTEM_OPERATION("SEVL", "kunit:base-system-sevl", 2243U, 2243U, 1),
+	BASE_SYSTEM_OPERATION("DGH", "kunit:base-system-dgh", 2244U, 2244U, 1),
+	BASE_SYSTEM_OPERATION("ESB", "kunit:base-system-esb", 2250U, 2250U, 1),
+	BASE_SYSTEM_OPERATION("PSB", "kunit:base-system-psb", 2251U, 2251U, 1),
+	BASE_SYSTEM_OPERATION("TSB", "kunit:base-system-tsb", 2252U, 2252U, 1),
+	BASE_SYSTEM_OPERATION("GCSB", "kunit:base-system-gcsb", 2253U, 2253U, 1),
+	BASE_SYSTEM_OPERATION("CSDB", "kunit:base-system-csdb", 2254U, 2254U, 1),
+	BASE_SYSTEM_OPERATION("CLRBHB", "kunit:base-system-clrbhb", 2255U, 2255U, 1),
+	BASE_SYSTEM_OPERATION("BTI", "kunit:base-system-bti", 2264U, 2264U, 1),
+	BASE_SYSTEM_OPERATION("CHKFEAT", "kunit:base-system-chkfeat", 2266U, 2266U, 1),
+	BASE_SYSTEM_OPERATION("STSHH", "kunit:base-system-stshh", 2267U, 2267U, 1),
+	BASE_SYSTEM_OPERATION("SHUH", "kunit:base-system-shuh", 2268U, 2268U, 1),
+	BASE_SYSTEM_OPERATION("STCPH", "kunit:base-system-stcph", 2269U, 2269U, 1),
+	BASE_SYSTEM_OPERATION("HINT", "kunit:base-system-hint", 2270U, 2270U, 1),
+	BASE_SYSTEM_OPERATION("CLREX", "kunit:base-system-clrex", 2271U, 2271U, 1),
+	BASE_SYSTEM_OPERATION("DSB", "kunit:base-system-dsb", 2272U, 2276U, 2),
+	BASE_SYSTEM_OPERATION("DMB", "kunit:base-system-dmb", 2273U, 2273U, 1),
+	BASE_SYSTEM_OPERATION("ISB", "kunit:base-system-isb", 2274U, 2274U, 1),
+	BASE_SYSTEM_OPERATION("SB", "kunit:base-system-sb", 2275U, 2275U, 1),
+	BASE_SYSTEM_OPERATION("MSR_imm", "kunit:base-system-msr-imm", 2277U, 2277U, 1),
+	BASE_SYSTEM_OPERATION("CFINV", "kunit:base-system-cfinv", 2278U, 2278U, 1),
+	BASE_SYSTEM_OPERATION("XAFLAG", "kunit:base-system-xaflag", 2279U, 2279U, 1),
+	BASE_SYSTEM_OPERATION("AXFLAG", "kunit:base-system-axflag", 2280U, 2280U, 1),
+	BASE_SYSTEM_OPERATION("SYS", "kunit:base-system-sys", 2281U, 2281U, 1),
+	BASE_SYSTEM_OPERATION("SYSL", "kunit:base-system-sysl", 2282U, 2282U, 1),
+	BASE_SYSTEM_OPERATION("MSR_reg", "kunit:base-system-msr", 2283U, 2283U, 1),
+	BASE_SYSTEM_OPERATION("MRS", "kunit:base-system-mrs", 2284U, 2284U, 1),
+	BASE_SYSTEM_OPERATION("SYSP", "kunit:base-system-sysp", 2285U, 2285U, 1),
+	BASE_SYSTEM_OPERATION("MSRR", "kunit:base-system-msrr", 2286U, 2286U, 1),
+	BASE_SYSTEM_OPERATION("MRRS", "kunit:base-system-mrrs", 2287U, 2287U, 1),
+	BASE_SYSTEM_OPERATION("HINTE", "kunit:base-system-hinte", 2344U, 2344U, 1),
 	SCALAR_OPERATION("B_cond", "kunit:branch-control-b-cond",
 		BASE_CONDITIONAL_SOURCE, BASE_CONDITIONAL_SUITE,
 		base_conditional_production_cases, 2211U, 2211U, 1),
@@ -5565,6 +5718,7 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 #undef INTEGER_SIMD_OPERATION
 #undef SCALAR_FP_OPERATION
 #undef SCALAR_OPERATION
+#undef BASE_SYSTEM_OPERATION
 
 static struct orlix_tcti_target_proof_binding scalar_registry_bindings[
 	SCALAR_PROOF_REGISTRY_BINDING_COUNT];

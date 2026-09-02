@@ -67,7 +67,7 @@ static const struct orlix_tcti_lse128_leaf orlix_tcti_lse128_leaves[] = {
 };
 
 static const u8 orlix_tcti_lse128_reserved_operations[] = {
-	0, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15,
+	0, 2, 4, 5, 6, 7, 12, 13, 14, 15,
 };
 
 static const u32 orlix_tcti_lse128_fixed_bit_near_misses[] = {
@@ -774,7 +774,18 @@ static void orlix_tcti_lse128_resume_rejects_fixed_bit_near_misses(
 			u32 mutation = orlix_tcti_lse128_fixed_bit_near_misses[mutation_index];
 			u32 instruction =
 			orlix_tcti_lse128_instruction(leaf, 6, 10, 8) ^ mutation;
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
 
+			/*
+			 * BIT(21) of the AL LSE128 encoding is LDAPURSB/STLURB.
+			 * BIT(10) is the unprivileged memop form. Those are
+			 * different instructions, not reserved LSE128.
+			 */
+			KUNIT_EXPECT_FALSE_MSG(test, decoded.lse128,
+				"leaf=%zu mutation=%#x", leaf_index, mutation);
+			if (decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED)
+				continue;
 			orlix_tcti_lse128_resume_rejects_instruction(
 				test, instructions, data, instruction, leaf_index,
 				"fixed-bit-near-miss", mutation);

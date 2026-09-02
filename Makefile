@@ -50,10 +50,12 @@ ORLIX_XCODEBUILD_ARCHIVE ?= xcodebuild
 ORLIX_XCODEBUILD_EXPORT ?= xcodebuild
 ORLIX_BETA_SIMULATOR_ID ?= ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
-ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
+ORLIX_TCTI_TEST_DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
 ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
 ORLIX_TCTI_DERIVED_DATA_PATH ?= $(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/DerivedData
+ORLIX_TCTI_PACKAGE_CACHE_PATH ?= $(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/PackageCache
+ORLIX_TCTI_CLONED_SOURCE_PACKAGES_PATH ?= $(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/SourcePackages
 ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS ?= 330
 ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS ?= 1800
 ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
@@ -71,9 +73,12 @@ run_xcodebuild() { \
 	if ! mkdir -p "$$marker_parent" || ! rm -f "$$timeout_marker"; then marker_ready=0; echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_MARKER_UNAVAILABLE path=$$timeout_marker" >&2; fi; \
 	set -m; \
 	"$$@" & child=$$!; \
-	process_group=$$(/bin/ps -o pgid= -p "$$child"); process_group=$${process_group//[[:space:]]/}; \
-	controller_group=$$(/bin/ps -o pgid= -p "$$$$"); controller_group=$${controller_group//[[:space:]]/}; \
-	if [[ ! "$$process_group" =~ ^[0-9]+$$ ]]; then echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_INVALID_GROUP pid=$$child pgid=$$process_group" >&2; kill -TERM "$$child" 2>/dev/null || true; wait "$$child" 2>/dev/null || true; rm -f "$$timeout_state"; return 1; fi; \
+	pgid_helper=$$(mktemp "$${TMPDIR:-/tmp}/orlix-tcti-pgid.XXXXXX") || return 1; \
+	printf "%s\n" "import os,sys" "try:" " print(os.getpgid(int(sys.argv[1])))" "except ProcessLookupError:" " pass" > "$$pgid_helper"; \
+	process_group=$$(python3 "$$pgid_helper" "$$child"); process_group=$${process_group//[[:space:]]/}; \
+	controller_group=$$(python3 "$$pgid_helper" "$$$$"); controller_group=$${controller_group//[[:space:]]/}; \
+	rm -f "$$pgid_helper"; \
+	if [[ ! "$$process_group" =~ ^[0-9]+$$ ]]; then if wait "$$child"; then status=0; else status=$$?; fi; rm -f "$$timeout_state"; return "$$status"; fi; \
 	if [ "$$process_group" = "$$controller_group" ]; then echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_CONTROLLER_GROUP pid=$$child pgid=$$process_group" >&2; kill -TERM "$$child" 2>/dev/null || true; wait "$$child" 2>/dev/null || true; rm -f "$$timeout_state"; return 1; fi; \
 	( sleep "$$wall_timeout"; \
 		if kill -0 -- "-$$process_group" 2>/dev/null; then \
@@ -659,17 +664,29 @@ orlix-tcti-kernel-tests: xcodeproj
 		$(ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS) \
 		provisioning=(); \
 		if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then provisioning=(-allowProvisioningUpdates); fi; \
+		mkdir -p "$(ORLIX_TCTI_PACKAGE_CACHE_PATH)" "$(ORLIX_TCTI_CLONED_SOURCE_PACKAGES_PATH)" \
+			"$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/FakeHome/Library/Caches" \
+			"$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/FakeHome/Library/Developer"; \
+		export CCACHE_DISABLE=1 \
+			CFFIXED_USER_HOME="$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/FakeHome" \
+			SWIFTPM_MODULECACHE_OVERRIDE="$(ORLIX_TCTI_PACKAGE_CACHE_PATH)/ModuleCache"; \
 		ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS="$(ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS)" run_xcodebuild "$$timeout_marker" "$(ORLIX_TCTI_XCODEBUILD)" \
 			-project Orlix.xcodeproj \
 			-scheme "OrlixKernel Conformance" \
 			-configuration Debug \
 			-destination "$(ORLIX_TCTI_TEST_DESTINATION)" \
 			-derivedDataPath "$(ORLIX_TCTI_DERIVED_DATA_PATH)" \
+			-packageCachePath "$(ORLIX_TCTI_PACKAGE_CACHE_PATH)" \
+			-clonedSourcePackagesDirPath "$(ORLIX_TCTI_CLONED_SOURCE_PACKAGES_PATH)" \
+			-IDEPackageSupportDisableManifestSandbox=1 \
+			-IDEPackageSupportDisablePluginExecutionSandbox=1 \
 			"$${provisioning[@]}" \
 			ORLIX_PROFILE=development \
 			ORLIX_KERNEL_KUNIT=1 \
 			ORLIX_BUILD_ROOT="$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)" \
 			ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+			MLIBC_REMOTE=git@github.com:managarm/mlibc.git \
+			LLVM_PROJECT_REMOTE=git@github.com:llvm/llvm-project.git \
 			DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" \
 			build-for-testing; \
 		ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS="$(ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS)" run_xcodebuild "$$timeout_marker" "$(ORLIX_TCTI_XCODEBUILD)" \
@@ -678,6 +695,10 @@ orlix-tcti-kernel-tests: xcodeproj
 			-configuration Debug \
 			-destination "$(ORLIX_TCTI_TEST_DESTINATION)" \
 			-derivedDataPath "$(ORLIX_TCTI_DERIVED_DATA_PATH)" \
+			-packageCachePath "$(ORLIX_TCTI_PACKAGE_CACHE_PATH)" \
+			-clonedSourcePackagesDirPath "$(ORLIX_TCTI_CLONED_SOURCE_PACKAGES_PATH)" \
+			-IDEPackageSupportDisableManifestSandbox=1 \
+			-IDEPackageSupportDisablePluginExecutionSandbox=1 \
 			"$${provisioning[@]}" \
 			-test-timeouts-enabled YES \
 			-default-test-execution-time-allowance $(ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS) \
@@ -713,6 +734,10 @@ orlix-tcti-xcodebuild-watchdog-tests:
 		assert_count "ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=\"202\"" 1; \
 		assert_count "-destination \"platform=iOS Simulator,name=iPhone 17 Pro\"" 2; \
 		assert_count "-derivedDataPath \"$$scratch/DerivedData\"" 2; \
+		assert_count "-packageCachePath" 2; \
+		assert_count "-clonedSourcePackagesDirPath" 2; \
+		assert_count "-IDEPackageSupportDisableManifestSandbox=1" 2; \
+		assert_count "-IDEPackageSupportDisablePluginExecutionSandbox=1" 2; \
 		assert_count "-test-timeouts-enabled YES" 1; \
 		assert_count "-default-test-execution-time-allowance 303" 1; \
 		assert_count "-maximum-test-execution-time-allowance 303" 1; \

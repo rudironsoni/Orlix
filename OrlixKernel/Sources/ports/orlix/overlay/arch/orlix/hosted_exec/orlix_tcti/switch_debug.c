@@ -14,6 +14,7 @@
 #include <asm/orlix_tcti.h>
 #include <internal/asm/host_time.h>
 
+#include "block_cache.h"
 #include "decode_aarch64.h"
 #include "fixed_fp.h"
 #include "semantics.h"
@@ -8052,13 +8053,20 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		__atomic_thread_fence(__ATOMIC_SEQ_CST);
 		regs->pc += sizeof(u32);
 		return 0;
-	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE:
-		/*
-		 * The accepted EL0 cache-maintenance leaves remain unproved until
-		 * their official translation, permission, and fault semantics are
-		 * implemented from the pinned Arm ASL.
-		 */
-		return -EOPNOTSUPP;
+	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE: {
+		u64 va = decoded->rt == 31 ? 0 :
+			orlix_tcti_read_gpr_or_zero(regs, decoded->rt, sizeof(u64));
+
+		if (decoded->cache_maintenance_op == ORLIX_TCTI_CACHE_IC_IVAU && mm) {
+			unsigned long start = (unsigned long)va & PAGE_MASK;
+
+			orlix_tcti_block_cache_invalidate_range(mm, start,
+							   start + PAGE_SIZE);
+			orlix_tcti_bump_code_generation(mm);
+		}
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	case ORLIX_TCTI_DECODE_PC_RELATIVE_ADDRESS:
 		if (decoded->rd != 31) {
 			u64 base = decoded->page_relative ?

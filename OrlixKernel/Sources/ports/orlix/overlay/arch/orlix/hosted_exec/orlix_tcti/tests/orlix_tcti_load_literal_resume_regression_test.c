@@ -265,7 +265,8 @@ static void literal_resume_read_faults_preserve_destination_state(
 	size_t index;
 
 	for (index = 0; index < ARRAY_SIZE(cases); index++) {
-		const u32 instruction = cases[index].pattern | (1024U << 5) |
+		const u32 instruction = cases[index].pattern |
+			((u32)(PAGE_SIZE / sizeof(u32)) << 5) |
 			cases[index].rt;
 		struct pt_regs regs = {};
 		struct pt_regs before;

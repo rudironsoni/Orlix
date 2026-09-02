@@ -23,3 +23,4 @@
 #include "orlix_tcti_advsimd_integer_production_capture.def"
 #include "orlix_tcti_advsimd_fp_production_capture.def"
 #include "orlix_tcti_scalar_fp_production_capture.def"
+#include "orlix_tcti_base_system_production_capture.def"

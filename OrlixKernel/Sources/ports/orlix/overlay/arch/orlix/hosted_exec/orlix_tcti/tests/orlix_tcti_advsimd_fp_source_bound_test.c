@@ -1322,6 +1322,17 @@ static void orlix_tcti_advsimd_fp_non_el0_rejected(struct kunit *test)
 		    !orlix_tcti_test_is_optional_fp_feature(source))
 			continue;
 		seen++;
+		/*
+		 * Implemented FP16 three-same leaves execute at EL0 without
+		 * HWCAP_ASIMDHP. FAMINMAX / FP8 stay rejected.
+		 */
+		if ((strstr(source->name, "asimdsamefp16") ||
+		     strstr(source->name, "asisdsamefp16")) &&
+		    strncmp(source->operation, "FAMAX", 5) &&
+		    strncmp(source->operation, "FAMIN", 5) &&
+		    strncmp(source->operation, "FSCALE", 6) &&
+		    strncmp(source->operation, "FDOT", 4))
+			continue;
 		instruction = orlix_tcti_advsimd_fp_legal_instruction(source);
 		decoded = orlix_tcti_decode_aarch64(instruction);
 		KUNIT_EXPECT_TRUE_MSG(test,

@@ -266,7 +266,7 @@ static void orlix_tcti_system_accessor_partition_binds_source_metadata(
 	KUNIT_EXPECT_EQ(test, 1836U, metadata->concrete_selector_count);
 	KUNIT_EXPECT_EQ(test, 178U, metadata->symbolic_selector_count);
 	KUNIT_EXPECT_EQ(test, 2014U, metadata->proof_not_observed_count);
-	KUNIT_EXPECT_EQ(test, 0x84ab1ba211a57499ULL,
+	KUNIT_EXPECT_EQ(test, 0xe93c8ebb13d23ca4ULL,
 			metadata->reconciliation_identity);
 	identity = orlix_tcti_system_accessor_identity_u64(identity,
 		ARRAY_SIZE(orlix_tcti_a64_generated_system_accessors));
@@ -399,6 +399,10 @@ static void orlix_tcti_system_accessor_partition_binds_source_metadata(
 			generated->semantics);
 		identity = orlix_tcti_system_accessor_identity_u64(identity,
 			generated->implementation);
+		identity = orlix_tcti_system_accessor_identity_u64(identity,
+			row->execution_operation);
+		identity = orlix_tcti_system_accessor_identity_u64(identity,
+			row->decode_key);
 		identity = orlix_tcti_system_accessor_identity_u64(identity,
 			generated->proof_state);
 		identity = orlix_tcti_system_accessor_identity_text(identity, decoder);
@@ -668,6 +672,17 @@ static void orlix_tcti_system_accessor_partition_rejections_are_structured_el0_e
 			non_mrs_msr++;
 		concrete++;
 		instruction = orlix_tcti_system_accessor_partition_encode_route(row, 31U);
+		{
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
+
+			/* Dedicated production classes (cache maintenance, barriers,
+			 * hints) execute outside the unimplemented MRS/MSR reject set. */
+			if (decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
+			    decoded.decode_class != ORLIX_TCTI_DECODE_SYSTEM_REGISTER &&
+			    decoded.decode_class != ORLIX_TCTI_DECODE_UNDEFINED)
+				continue;
+		}
 		mapped = source_leaf_map(test, instruction);
 
 		regs.pc = mapped;

@@ -78,6 +78,18 @@ static void pauth_bti_gcs_unimplemented_leaves_fail_closed(struct kunit *test)
 				    decoded.instruction & row->mask,
 				    "%u %s lost its source encoding", row->source_ordinal,
 				    row->source_id);
+		if (row->source_ordinal == 2253U ||
+		    row->source_ordinal == 2264U) {
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_HINT,
+					    decoded.decode_class,
+					    "%u %s is a BASE_SYSTEM hint NOP",
+					    row->source_ordinal, row->source_id);
+			KUNIT_EXPECT_EQ_MSG(test, row->source_ordinal,
+					    decoded.source_ordinal,
+					    "%u %s ordinal", row->source_ordinal,
+					    row->source_id);
+			continue;
+		}
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 				    decoded.decode_class,
 				    "%u %s must not use a baseline semantic path",

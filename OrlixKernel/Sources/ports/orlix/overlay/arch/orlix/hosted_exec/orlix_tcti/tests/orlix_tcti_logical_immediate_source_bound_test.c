@@ -339,6 +339,26 @@ static void orlix_tcti_logical_immediate_fixed_bit_neighbours(struct kunit *test
 			    orlix_tcti_logical_immediate_source_leaf(instruction);
 			decoded = orlix_tcti_decode_aarch64(instruction);
 			if (neighbour) {
+				u64 immediate;
+				bool n = instruction & BIT(22);
+				u8 immr = (instruction >> 16) & 0x3fU;
+				u8 imms = (instruction >> 10) & 0x3fU;
+
+				/*
+				 * Source-mask neighbours can still be reserved:
+				 * 32-bit AND/ORR/EOR/ANDS require N=0.
+				 */
+				if (!orlix_tcti_logical_immediate_mask(
+					    neighbour->is_64bit, n, immr, imms,
+					    &immediate)) {
+					KUNIT_EXPECT_NE_MSG(
+					    test,
+					    ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE,
+					    decoded.decode_class,
+					    "%s reserved neighbour %#x",
+					    leaf->source_name, instruction);
+					continue;
+				}
 				KUNIT_EXPECT_EQ_MSG(
 				    test, ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE,
 				    decoded.decode_class, "%s neighbour %#x",

@@ -132,7 +132,7 @@ static void orlix_tcti_lse128_decode_all_leaves(struct kunit *test)
 static void orlix_tcti_lse128_rejects_reserved_operations(
 	struct kunit *test)
 {
-	const u32 invalid_ops[] = { 0, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15 };
+	const u32 invalid_ops[] = { 0, 2, 4, 5, 6, 7, 12, 13, 14, 15 };
 	size_t i;
 
 	for (i = 0; i < ARRAY_SIZE(invalid_ops); i++)
@@ -222,11 +222,14 @@ static void orlix_tcti_lse128_fixed_bit_near_misses_are_not_decoded(struct kunit
 {
 	u32 instruction = orlix_tcti_lse128_instruction(ORLIX_TCTI_LSE_ATOMIC_SWP,
 						   0, 6, 10, 8);
+	struct orlix_tcti_decoded_instruction unpriv;
 
 	KUNIT_EXPECT_NE(test, ORLIX_TCTI_DECODE_LSE_ATOMIC,
 		orlix_tcti_decode_aarch64(instruction ^ BIT(21)).decode_class);
-	KUNIT_EXPECT_NE(test, ORLIX_TCTI_DECODE_LSE_ATOMIC,
-		orlix_tcti_decode_aarch64(instruction ^ BIT(10)).decode_class);
+	unpriv = orlix_tcti_decode_aarch64(instruction ^ BIT(10));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_LSE_ATOMIC, unpriv.decode_class);
+	KUNIT_EXPECT_TRUE(test, unpriv.unprivileged);
+	KUNIT_EXPECT_FALSE(test, unpriv.lse128);
 }
 
 static void orlix_tcti_lse128_unaligned_fault_preserves_state(struct kunit *test)

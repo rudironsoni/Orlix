@@ -3644,8 +3644,9 @@ static void orlix_tcti_decode_recognizes_load_store_exclusive_class(struct kunit
 static bool orlix_tcti_test_load_store_exclusive_shape_is_legal(
 	u8 size, bool o2, bool load, bool o1, u8 rs, bool o0, u8 rt2)
 {
+	(void)o0;
 	if (o2)
-		return !o1 && o0 && rs == 31 && rt2 == 31;
+		return !o1 && rs == 31 && rt2 == 31;
 	if (o1)
 		return size >= 2 && (!load || rs == 31);
 	return rt2 == 31 && (!load || rs == 31);
@@ -3700,10 +3701,19 @@ static void orlix_tcti_expect_load_store_exclusive_control_shape(
 					"instruction %#x", instruction);
 				KUNIT_EXPECT_EQ(test, o1 && !o2, decoded.pair);
 				KUNIT_EXPECT_EQ(test, !o2, decoded.exclusive);
-				KUNIT_EXPECT_EQ(test, load && o0,
-						decoded.acquire);
-				KUNIT_EXPECT_EQ(test, !load && o0,
-						decoded.release);
+				if (o2) {
+					KUNIT_EXPECT_EQ(test, load,
+							decoded.acquire);
+					KUNIT_EXPECT_EQ(test, !load,
+							decoded.release);
+					KUNIT_EXPECT_EQ(test, !o0,
+							decoded.limited_ordering);
+				} else {
+					KUNIT_EXPECT_EQ(test, load && o0,
+							decoded.acquire);
+					KUNIT_EXPECT_EQ(test, !load && o0,
+							decoded.release);
+				}
 				KUNIT_EXPECT_EQ(test, rt2, decoded.rt2);
 			}
 		}
@@ -14542,8 +14552,8 @@ static void orlix_tcti_switch_executes_complete_hint_barrier_cache_family(
 		int ret = orlix_tcti_switch_debug_execute_decoded(
 			current->mm, &regs, &decoded, NULL);
 
-		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, ret);
-		KUNIT_EXPECT_EQ(test, 0x7300ULL, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, 0x7304ULL, regs.pc);
 		KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT, regs.pstate);
 	}
 
@@ -19228,6 +19238,13 @@ static u64 orlix_tcti_test_scalar_sqdm_long_result(u64 left, u64 right,
 
 	result = (__int128)sign_extend64(left & source_mask, source_bits - 1) *
 		 sign_extend64(right & source_mask, source_bits - 1) * 2;
+	if (result < minimum) {
+		result = minimum;
+		*saturated = true;
+	} else if (result > maximum) {
+		result = maximum;
+		*saturated = true;
+	}
 	if (accumulate) {
 		__int128 signed_accumulator =
 			sign_extend64(accumulator & result_mask,
@@ -19235,13 +19252,13 @@ static u64 orlix_tcti_test_scalar_sqdm_long_result(u64 left, u64 right,
 
 		result = subtract ? signed_accumulator - result :
 				    signed_accumulator + result;
-	}
-	if (result < minimum) {
-		result = minimum;
-		*saturated = true;
-	} else if (result > maximum) {
-		result = maximum;
-		*saturated = true;
+		if (result < minimum) {
+			result = minimum;
+			*saturated = true;
+		} else if (result > maximum) {
+			result = maximum;
+			*saturated = true;
+		}
 	}
 	return (u64)result & result_mask;
 }
@@ -26300,7 +26317,10 @@ static void orlix_tcti_gadget_executes_complete_fp_conditional_select_family(
 	decoded = orlix_tcti_decode_aarch64(0x1ea20c21U);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	decoded = orlix_tcti_decode_aarch64(0x1ee20c21U);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, sizeof(u16), decoded.access_size);
+	KUNIT_EXPECT_EQ(test, sizeof(u16), decoded.result_size);
 }
 
 static unsigned long orlix_tcti_test_nzcv_bits(u8 nzcv)
@@ -32184,7 +32204,7 @@ static const struct {
 	{ 2250, "ESB_HI_hints", "FEAT_RAS" },
 	{ 2253, "GCSB_HD_hints", "FEAT_GCS" },
 	{ 2255, "CLRBHB_HI_hints", "FEAT_CLRBHB" },
-	{ 2264, "BTI_HB_hints", "FEAT_BTI" },
+
 	{ 2289, "BRAAZ_64_branch_reg", "FEAT_PAuth" },
 	{ 2290, "BRABZ_64_branch_reg", "FEAT_PAuth" },
 	{ 2292, "BLRAAZ_64_branch_reg", "FEAT_PAuth" },
@@ -32220,7 +32240,6 @@ orlix_tcti_pauth_bti_blocking_leaves[] = {
 	{ 2261, "AUTIASP_HI_hints", "AUTIA", 0xffffffffU, 0xd50323bfU },
 	{ 2262, "AUTIBZ_HI_hints", "AUTIB", 0xffffffffU, 0xd50323dfU },
 	{ 2263, "AUTIBSP_HI_hints", "AUTIB", 0xffffffffU, 0xd50323ffU },
-	{ 2264, "BTI_HB_hints", "BTI", 0xffffff3fU, 0xd503241fU },
 	{ 2265, "PACM_HI_hints", "PACM", 0xffffffffU, 0xd50324ffU },
 	{ 2289, "BRAAZ_64_branch_reg", "BRA", 0xfffffc1fU, 0xd61f081fU },
 	{ 2290, "BRABZ_64_branch_reg", "BRA", 0xfffffc1fU, 0xd61f0c1fU },
@@ -32285,9 +32304,6 @@ static void orlix_tcti_branch_control_feature_conditions_remain_gaps(
 
 static void orlix_tcti_pauth_bti_control_flow_leaves_fail_closed(struct kunit *test)
 {
-	static const u32 bti_encodings[] = {
-		0xd503241fU, 0xd503245fU, 0xd503249fU, 0xd50324dfU,
-	};
 	size_t index;
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_pauth_bti_blocking_leaves);
@@ -32305,13 +32321,6 @@ static void orlix_tcti_pauth_bti_control_flow_leaves_fail_closed(struct kunit *t
 				    decoded.decode_class, "%u %s %s must block",
 				    leaf->ordinal, leaf->name, leaf->operation);
 	}
-
-	for (index = 0; index < ARRAY_SIZE(bti_encodings); index++)
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-				    orlix_tcti_decode_aarch64(bti_encodings[index]).decode_class,
-				    "BTI BType encoding %#x must block",
-				    bti_encodings[index]);
-
 }
 
 static void orlix_tcti_branch_control_production_path_semantics(struct kunit *test)
