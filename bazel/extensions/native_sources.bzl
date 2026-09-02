@@ -84,8 +84,16 @@ def _ghostty_repository_impl(ctx):
     if xcode_ver.return_code:
         fail("Ghostty fetch xcodebuild -version failed:\n%s\n%s" % (xcode_ver.stdout, xcode_ver.stderr))
     xcode_lines = [line for line in xcode_ver.stdout.strip().split("\n") if line]
-    if len(xcode_lines) < 2 or xcode_lines[0] != "Xcode 26.6" or xcode_lines[1] != "Build version 17F113":
-        fail("Ghostty fetch requires Xcode 26.6 Build version 17F113, got:\n%s" % xcode_ver.stdout)
+    allowed_xcode = {
+        "Xcode 26.6": "Build version 17F113",
+        "Xcode 27.0": "Build version 27A5252f",
+    }
+    if (
+        len(xcode_lines) < 2
+        or xcode_lines[0] not in allowed_xcode
+        or xcode_lines[1] != allowed_xcode[xcode_lines[0]]
+    ):
+        fail("Ghostty fetch requires Xcode 26.6/17F113 or 27.0/27A5252f, got:\n%s" % xcode_ver.stdout)
     result = ctx.execute(
         [
             ctx.path("zig/zig"),

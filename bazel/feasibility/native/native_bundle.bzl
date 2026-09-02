@@ -69,8 +69,12 @@ macos_out="$exec_root/$6"; manifest_out="$exec_root/$7"
 device_res="$exec_root/$8"; simulator_res="$exec_root/$9"; macos_res="$exec_root/${10}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
-test "$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')" = "Xcode 26.6"
-test "$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')" = "Build version 17F113"
+xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
+xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
+case "$xcode_name|$xcode_build" in
+  "Xcode 26.6|Build version 17F113"|"Xcode 27.0|Build version 27A5252f") ;;
+  *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
+esac
 test "$("$zig" version)" = "0.16.0"
 packages_root="$(/usr/bin/dirname "$packages_marker")"
 test -d "$packages_root/p"
@@ -169,8 +173,12 @@ device_out="$exec_root/$4"; simulator_out="$exec_root/$5"
 macos_out="$exec_root/$6"; manifest_out="$exec_root/$7"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
-test "$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')" = "Xcode 26.6"
-test "$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')" = "Build version 17F113"
+xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
+xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
+case "$xcode_name|$xcode_build" in
+  "Xcode 26.6|Build version 17F113"|"Xcode 27.0|Build version 27A5252f") ;;
+  *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
+esac
 test "$("$cmake" --version | /usr/bin/head -n 1)" = "cmake version 4.0.3"
 test "$(/usr/bin/make --version | /usr/bin/head -n 1)" = "GNU Make 3.81"
 test "$(/usr/bin/perl -e 'printf "%vd", $^V')" = "5.34.1"
