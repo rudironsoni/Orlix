@@ -147,7 +147,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "145db925b47b2e49e4170249f582ed3466d341721cb6683e6c7bf5cd75fe7637",
+      "source_sha256": "fadbd7c112395ab58acf1653cbc8d04deb01b2a46b7089dfa337d2570b44d4dd",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -167,8 +167,7 @@
           },
           "push": {
             "branches": [
-              "main",
-              "fix/build-optimizations"
+              "main"
             ]
           }
         },
