@@ -10,6 +10,11 @@ nonisolated struct KnownHostSettingsItem: Identifiable, Equatable, Sendable {
     var id: String { endpoint }
 }
 
+nonisolated enum KnownHostTrustReset: Equatable, Sendable {
+    case host(String, Int)
+    case all
+}
+
 @MainActor
 protocol KnownHostSettingsRepository: AnyObject {
     func loadKnownHosts() -> [KnownHostSettingsItem]
@@ -22,9 +27,14 @@ final class KnownHostSettingsCoordinator: ObservableObject {
     @Published private(set) var knownHosts: [KnownHostSettingsItem] = []
 
     private let repository: any KnownHostSettingsRepository
+    private let invalidateLiveTSSHTrust: (KnownHostTrustReset) -> Void
 
-    init(repository: any KnownHostSettingsRepository) {
+    init(
+        repository: any KnownHostSettingsRepository,
+        invalidateLiveTSSHTrust: @escaping (KnownHostTrustReset) -> Void = { _ in }
+    ) {
         self.repository = repository
+        self.invalidateLiveTSSHTrust = invalidateLiveTSSHTrust
     }
 
     func loadHosts() {
@@ -33,11 +43,13 @@ final class KnownHostSettingsCoordinator: ObservableObject {
 
     func removeKnownHost(_ knownHost: KnownHostSettingsItem) {
         repository.removeKnownHost(host: knownHost.host, port: knownHost.port)
+        invalidateLiveTSSHTrust(.host(knownHost.host, knownHost.port))
         loadHosts()
     }
 
     func removeAllKnownHosts() {
         repository.removeAllKnownHosts()
+        invalidateLiveTSSHTrust(.all)
         loadHosts()
     }
 }

@@ -478,6 +478,10 @@ targets:
         embed: true
       - target: OrlixLiveActivity
         embed: true
+      - target: OrlixPacketTunnel
+        embed: true
+      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
+        embed: false
       - package: MLXSwift
         products:
           - MLX
@@ -573,7 +577,7 @@ targets:
         Release:
           APS_ENVIRONMENT: production
           ORLIX_TELEMETRY_ENVIRONMENT: testflight
-  OrlixTestApp:
+  OrlixTerminalTestApp:
     type: application
     platform: iOS
     sources:
@@ -589,7 +593,7 @@ targets:
         createIntermediateGroups: true
       - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
         createIntermediateGroups: true
-      - path: OrlixTestApp/Sources
+      - path: OrlixTerminalTestApp/Sources
         createIntermediateGroups: true
       - path: Orlix/Orlix/Assets.xcassets
         createIntermediateGroups: true
@@ -615,12 +619,17 @@ targets:
       - path: Orlix/Orlix/PrivacyInfo.xcprivacy
         createIntermediateGroups: true
         buildPhase: resources
+      - path: Orlix/OrlixStoreKit.storekit
+        createIntermediateGroups: true
+        buildPhase: resources
       - path: docs/sources/release/orlix-app-release-inputs.json
         createIntermediateGroups: true
         buildPhase: resources
     dependencies:
       - target: OrlixOS
         embed: true
+      - framework: Orlix/Vendor/trzsz-ssh/TrzszSSH.xcframework
+        embed: false
       - package: MLXSwift
         products:
           - MLX
@@ -648,9 +657,12 @@ targets:
     settings:
       base:
         <<: *orlix_application_settings
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.test-app
+        INFOPLIST_FILE: OrlixTerminalTestApp/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Orlix Terminal Tests
+        INFOPLIST_KEY_CFBundleName: OrlixTerminalTestApp
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.terminal.test-app
         PRODUCT_MODULE_NAME: Orlix
-        PRODUCT_NAME: OrlixTestApp
+        PRODUCT_NAME: OrlixTerminalTestApp
       configs:
         <<: *orlix_application_config_settings
   OrlixLiveActivity:
@@ -680,6 +692,34 @@ targets:
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
+  OrlixPacketTunnel:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.1"
+    sources:
+      - path: Orlix/OrlixPacketTunnel
+        createIntermediateGroups: true
+        excludes:
+          - Info.plist
+          - OrlixPacketTunnel.entitlements
+      - path: Orlix/Orlix/Features/TerminalSessions/Infrastructure/TSSH/TSSHVPNSecretStore.swift
+      - path: Orlix/OrlixShared/TSSHVPNNetworkPolicy.swift
+    dependencies:
+      - framework: Orlix/Vendor/trzsz-ssh/VPNTunnel.xcframework
+        embed: false
+      - sdk: NetworkExtension.framework
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Orlix/OrlixPacketTunnel/OrlixPacketTunnel.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Orlix/OrlixPacketTunnel/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "16.1"
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.packet-tunnel
+        PRODUCT_NAME: OrlixPacketTunnel
+        SKIP_INSTALL: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
   OrlixTests:
     type: bundle.unit-test
     platform: iOS
@@ -687,7 +727,7 @@ targets:
       - path: Orlix/OrlixTests
         createIntermediateGroups: true
     dependencies:
-      - target: OrlixTestApp
+      - target: OrlixTerminalTestApp
       - package: SwiftMosh
         product: MoshBootstrap
       - package: SwiftET
@@ -705,7 +745,7 @@ targets:
           - $(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include
           - $(SRCROOT)/Orlix/Vendor/libssh2/include
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.tests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTerminalTestApp.app/OrlixTerminalTestApp
         BUNDLE_LOADER: $(TEST_HOST)
         STRING_CATALOG_GENERATE_SYMBOLS: NO
         SWIFT_APPROACHABLE_CONCURRENCY: YES
@@ -818,7 +858,7 @@ targets:
       - path: OrlixKernel/Tests/XCTest/OrlixKernelHostedTests
         createIntermediateGroups: true
     dependencies:
-      - target: OrlixTestApp
+      - target: OrlixOSTestApp
       - target: OrlixKernel
         embed: false
     settings:
@@ -830,7 +870,7 @@ targets:
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_APP_HOSTED_BOOT=1
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixHostAdapterTests:
     type: bundle.unit-test
@@ -871,6 +911,8 @@ targets:
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests
         createIntermediateGroups: true
+        excludes:
+          - ArchitectureInvariantTests.swift
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -879,6 +921,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.test-app.tests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
+  OrlixArchitectureTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests/ArchitectureInvariantTests.swift
+        createIntermediateGroups: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.architecture-tests
   OrlixKernelConformanceTests:
     type: bundle.unit-test
     platform: iOS
@@ -983,7 +1036,7 @@ schemes:
   "OrlixKernel Hosted Tests":
     build:
       targets:
-        OrlixTestApp: all
+        OrlixOSTestApp: all
         OrlixKernelHostedTests: test
     test:
       config: Debug
@@ -993,7 +1046,7 @@ schemes:
   "Orlix Tests":
     build:
       targets:
-        OrlixTestApp: all
+        OrlixTerminalTestApp: all
         OrlixTests: test
     test:
       config: Debug
@@ -1039,6 +1092,15 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixOSTestAppTests
+  "Orlix Architecture Tests":
+    build:
+      targets:
+        OrlixArchitectureTests: test
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - name: OrlixArchitectureTests
   "OrlixOS Runtime Tests":
     build:
       targets:

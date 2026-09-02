@@ -442,7 +442,9 @@ struct ServerManagerLoadLifecycleTests {
     @Test
     func emptyFullFetchWithCompleteDeletionEvidenceCanReplaceLocalData() async {
         let workspace = makeWorkspace(name: "Deleted remotely")
-        let server = makeServer(workspaceID: workspace.id)
+        var server = makeServer(workspaceID: workspace.id)
+        server.connectionMode = .tssh
+        server.tsshProfile.vpnEnabled = true
         let local = ServerLocalRepositoryFake(servers: [server], workspaces: [workspace])
         let checkpoint = ServerRemoteChangeCheckpoint(id: UUID())
         let remote = ServerRemoteRepositoryFake(isAvailable: true)
@@ -457,12 +459,14 @@ struct ServerManagerLoadLifecycleTests {
             )
         }
         var deletedLocalDataIDs: [UUID] = []
+        var revokedServerIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             remote: remote,
             sync: ServerSyncRepositoryFake(),
             isSyncEnabled: { true },
-            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) }
+            didDeleteServerLocalData: { deletedLocalDataIDs.append($0) },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
         )
 
         await manager.loadData()
@@ -473,6 +477,140 @@ struct ServerManagerLoadLifecycleTests {
         #expect(manager.stateStore.ambiguousCloudRecovery == nil)
         #expect(remote.acceptedCheckpoints == [checkpoint])
         #expect(deletedLocalDataIDs == [server.id])
+        #expect(revokedServerIDs == [server.id])
+    }
+
+    @Test
+    func remoteVPNPolicyChangeRevokesThePersistedTunnel() async {
+        let workspace = makeWorkspace(name: "Remote VPN update")
+        var localServer = makeServer(workspaceID: workspace.id)
+        localServer.connectionMode = .tssh
+        localServer.tsshProfile.vpnEnabled = true
+        var remoteServer = localServer
+        remoteServer.tsshProfile.vpnEnabled = false
+        remoteServer.updatedAt = localServer.updatedAt.addingTimeInterval(1)
+
+        let local = ServerLocalRepositoryFake(
+            servers: [localServer],
+            workspaces: [workspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [remoteServer],
+                workspaces: [],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: false,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        var revokedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
+        )
+
+        await manager.loadData()
+
+        #expect(manager.servers.first?.tsshProfile.vpnEnabled == false)
+        #expect(revokedServerIDs == [localServer.id])
+    }
+
+    @Test
+    func remoteVPNAccountBindingChangeRevokesThePersistedTunnel() async {
+        let workspace = makeWorkspace(name: "Remote VPN account update")
+        var localServer = makeServer(workspaceID: workspace.id)
+        localServer.connectionMode = .tssh
+        localServer.tsshProfile.vpnEnabled = true
+        var remoteServer = localServer
+        remoteServer.username = "admin"
+        remoteServer.authMethod = .sshKey
+        remoteServer.updatedAt = localServer.updatedAt.addingTimeInterval(1)
+
+        let local = ServerLocalRepositoryFake(
+            servers: [localServer],
+            workspaces: [workspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [remoteServer],
+                workspaces: [],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: false,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        var revokedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            isSyncEnabled: { true },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
+        )
+
+        await manager.loadData()
+
+        #expect(revokedServerIDs == [localServer.id])
+    }
+
+    @Test
+    func remoteSecurityBindingChangeInvalidatesRuntimeBeforeVPNRevocation() async {
+        let workspace = makeWorkspace(name: "Remote security update")
+        var localServer = makeServer(workspaceID: workspace.id)
+        localServer.connectionMode = .tssh
+        localServer.tsshProfile.vpnEnabled = true
+        var remoteServer = localServer
+        remoteServer.username = "admin"
+        remoteServer.tsshProfile.sshAgentForwarding = true
+        remoteServer.updatedAt = localServer.updatedAt.addingTimeInterval(1)
+        let credentials = ServerCredentials(
+            serverId: remoteServer.id,
+            credentialBinding: ServerCredentialBinding(server: remoteServer),
+            password: "secret"
+        )
+        let credentialRepository = ServerManagerCredentialRepositoryFake()
+        credentialRepository.values[remoteServer.id] = credentials
+        let local = ServerLocalRepositoryFake(
+            servers: [localServer],
+            workspaces: [workspace]
+        )
+        let remote = ServerRemoteRepositoryFake(isAvailable: true)
+        remote.fetchHandler = { _, _ in
+            ServerRemoteChanges(
+                servers: [remoteServer],
+                workspaces: [],
+                deletedServerIDs: [],
+                deletedWorkspaceIDs: [],
+                isFullFetch: false,
+                checkpoint: ServerRemoteChangeCheckpoint(id: UUID())
+            )
+        }
+        var invalidatedBindings: [(Server, ServerCredentials)] = []
+        var invalidationObservedBeforeRevocation = false
+        let manager = makeManager(
+            local: local,
+            remote: remote,
+            sync: ServerSyncRepositoryFake(),
+            credentialRepository: credentialRepository,
+            isSyncEnabled: { true },
+            didUpdateServerSecurityBinding: { invalidatedBindings.append(($0, $1)) },
+            revokeUnclaimedTSSHVPN: { _ in
+                invalidationObservedBeforeRevocation = !invalidatedBindings.isEmpty
+            }
+        )
+
+        await manager.loadData()
+
+        #expect(invalidatedBindings.map(\.0) == [remoteServer])
+        #expect(invalidatedBindings.map(\.1) == [credentials])
+        #expect(invalidationObservedBeforeRevocation)
     }
 
     @Test
@@ -938,21 +1076,27 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake? = nil,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
+        credentialRepository: ServerManagerCredentialRepositoryFake? = nil,
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool = { _ in false },
         startsAutomatically: Bool = false,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        didUpdateServerSecurityBinding: @escaping (Server, ServerCredentials) -> Void = { _, _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManager {
         ServerManager(
             dependencies: makeDependencies(
                 local: local,
                 remote: remote,
                 sync: sync,
+                credentialRepository: credentialRepository,
                 preferences: preferences,
                 isSyncEnabled: isSyncEnabled,
                 isRemoteSchemaError: isRemoteSchemaError,
-                didDeleteServerLocalData: didDeleteServerLocalData
+                didDeleteServerLocalData: didDeleteServerLocalData,
+                didUpdateServerSecurityBinding: didUpdateServerSecurityBinding,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN
             ),
             startsAutomatically: startsAutomatically
         )
@@ -1015,10 +1159,13 @@ struct ServerManagerLoadLifecycleTests {
         local: ServerLocalRepositoryFake?,
         remote: ServerRemoteRepositoryFake,
         sync: ServerSyncRepositoryFake,
+        credentialRepository: ServerManagerCredentialRepositoryFake? = nil,
         preferences: ServerManagerPreferencesFake? = nil,
         isSyncEnabled: @escaping () -> Bool,
         isRemoteSchemaError: @escaping (Error) -> Bool,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        didUpdateServerSecurityBinding: @escaping (Server, ServerCredentials) -> Void = { _, _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManagerDependencies {
         let now = { Date(timeIntervalSinceReferenceDate: 20_000) }
         let makeID = { UUID(uuidString: "90000000-0000-0000-0000-000000000002")! }
@@ -1038,10 +1185,12 @@ struct ServerManagerLoadLifecycleTests {
             stateStore: stateStore,
             remoteRepository: remote,
             syncRepository: sync,
-            credentialRepository: ServerManagerCredentialRepositoryFake(),
+            credentialRepository: credentialRepository ?? ServerManagerCredentialRepositoryFake(),
             actionAuthorizer: ProtectedServerActionAuthorizerFake(),
             knownHosts: ServerKnownHostRepositoryFake(),
             didDeleteServerLocalData: didDeleteServerLocalData,
+            didUpdateServerSecurityBinding: didUpdateServerSecurityBinding,
+            revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
             isRemoteSchemaError: isRemoteSchemaError,
             now: now,
             makeID: makeID

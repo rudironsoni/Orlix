@@ -244,12 +244,12 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(.bottom, preservesTerminalSize ? model.layout.bottomInset : 0)
+            .padding(.bottom, model.layout.bottomInset)
             .offset(y: preservesTerminalSize ? model.layout.verticalOffset : 0)
             .clipped()
             .modifier(
                 TerminalKeyboardSafeAreaModifier(
-                    isEnabled: preservesTerminalSize
+                    isEnabled: true
                 )
             )
             .onAppear {
@@ -548,6 +548,10 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.updateSecurityBinding(
+            server: server,
+            credentials: credentials
+        )
         guard let terminalView = uiView as? GhosttyTerminalView else {
             return
         }

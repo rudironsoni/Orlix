@@ -1,0 +1,440 @@
+import Foundation
+import Testing
+@testable import Orlix
+
+struct TSSHServerInfoTests {
+    @Test
+    func parsesKCPServerInfoFromMixedBootstrapOutput() throws {
+        let output = """
+        tsshd starting
+        {"ServerVer":"0.2.2","ProtoVer":2,"Port":61001,"Mode":"KCP","Pass":"aabb","Salt":"ccdd","ProxyKey":"eeff","ProxyMode":"TCP","MTU":1280,"ClientID":7,"ServerID":9}
+        """
+
+        let info = try TSSHServerInfo.parse(output: output)
+
+        #expect(info.serverVersion == "0.2.2")
+        #expect(info.protocolVersion == 2)
+        #expect(info.port == 61_001)
+        #expect(info.mode == .kcp)
+        #expect(info.clientID == 7)
+        #expect(info.serverID == 9)
+        #expect(info.proxyMode == "TCP")
+        #expect(info.mtu == 1_280)
+        #expect(info.hasRequiredCredentials)
+    }
+
+    @Test
+    func parsesQUICServerInfo() throws {
+        let output = """
+        {"ServerVer":"0.2.2","Port":61999,"Mode":"QUIC","ServerCert":"aa","ClientCert":"bb","ClientKey":"cc","ProxyKey":"dd"}
+        """
+
+        let info = try TSSHServerInfo.parse(output: output)
+
+        #expect(info.mode == .quic)
+        #expect(info.hasRequiredCredentials)
+        #expect(info.assigningClientIDIfNeeded().clientID > 0)
+    }
+
+    @Test
+    func rejectsIncompleteOrOutOfRangeServerInfo() {
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":0,"Mode":"KCP"}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ProxyMode":"UDP"}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","MTU":575}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"QUIC","ProxyKey":"dd"}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"not-hex","Salt":"bb","ProxyKey":"cc"}"#
+            )
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHServerInfo.parse(
+                output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":-1}"#
+            )
+        }
+    }
+
+    @Test
+    func reattachAdvancesClientIdentityWithoutOverflow() throws {
+        let output = #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":18446744073709551615,"ServerID":16138835072071328626}"#
+        let info = try TSSHServerInfo.parse(output: output)
+
+        #expect(info.serverID == 16_138_835_072_071_328_626)
+        #expect(info.advancingClientID().clientID == 1)
+    }
+
+    @Test
+    func resumeReservesTheSurvivingVPNClientIdentity() throws {
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":7,"ServerID":2}"#
+        )
+
+        #expect(info.advancingClientIDForResume(vpnEnabled: false).clientID == 8)
+        #expect(info.advancingClientIDForResume(vpnEnabled: true).clientID == 9)
+
+        var maximumClient = info
+        maximumClient.clientID = UInt64.max
+        #expect(maximumClient.advancingClientIDForResume(vpnEnabled: true).clientID == 2)
+    }
+
+    @Test
+    func bootstrapCommandUsesAttachableModeAndConfiguredBounds() {
+        let profile = TSSHProfile(
+            transportMode: .quic,
+            udpPortMinimum: 62_000,
+            udpPortMaximum: 62_100,
+            serverPath: "/opt/tssh/tsshd",
+            mtu: 1_280
+        )
+
+        let command = TSSHBootstrap.startCommand(
+            profile: profile,
+            nonce: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        )
+
+        #expect(command.contains("--attachable"))
+        #expect(command.contains("62000-62100"))
+        #expect(command.contains("--quic"))
+        #expect(command.contains("--mtu"))
+        #expect(command.contains("1280"))
+        #expect(command.contains("nohup"))
+        #expect(command.contains("ORLIX_TSSHD_PID"))
+        #expect(command.contains("ORLIX_TSSHD_SUPERVISOR"))
+        #expect(command.contains("umask 077"))
+        #expect(command.contains("mktemp -d"))
+        #expect(command.contains("chmod 700"))
+        #expect(command.contains("[ ! -L"))
+        #expect(command.contains("trap cleanup EXIT"))
+        #expect(command.contains("kill -TERM \\\"\\$pid\\\""))
+    }
+
+    @Test
+    func bootstrapRequiresAValidServerPID() throws {
+        #expect(try TSSHBootstrap.parseServerPID(
+            output: "ORLIX_TSSHD_PID=321\n{\"Mode\":\"KCP\"}"
+        ) == 321)
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseServerPID(output: "{\"Mode\":\"KCP\"}")
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseServerPID(output: "ORLIX_TSSHD_PID=1")
+        }
+    }
+
+    @Test
+    func bootstrapRecoversCleanupIdentityFromPartialExecOutput() throws {
+        let partialOutput = """
+        ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor
+        ORLIX_TSSHD_PID=321
+        """
+        let executionError = SSHCommandExecutionError(
+            underlyingDescription: "The exec channel closed before completion.",
+            partialOutput: partialOutput
+        )
+
+        #expect(try TSSHBootstrap.serverProcessIdentity(
+            output: executionError.partialOutput
+        ) == TSSHServerProcessIdentity(
+            pid: 321,
+            supervisorPath: "/tmp/orlix-tsshd.private/supervisor"
+        ))
+        #expect(executionError.localizedDescription == "The exec channel closed before completion.")
+    }
+
+    @Test
+    func bootstrapRetainsCleanupIdentityAcrossTheHardDeadline() async throws {
+        let partialOutputCapture = SSHCommandPartialOutputCapture()
+
+        do {
+            _ = try await SSHClient.runCommandWithDeadline(
+                .milliseconds(10),
+                partialOutputCapture: partialOutputCapture
+            ) {
+                partialOutputCapture.append(Data("""
+                ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor
+                ORLIX_TSSHD_PID=654
+                """.utf8))
+                try await Task.sleep(for: .seconds(10))
+                return ""
+            }
+            Issue.record("Expected the hard deadline to fail")
+        } catch let error as SSHCommandExecutionError {
+            #expect(try TSSHBootstrap.serverProcessIdentity(
+                output: error.partialOutput
+            ) == TSSHServerProcessIdentity(
+                pid: 654,
+                supervisorPath: "/tmp/orlix-tsshd.private/supervisor"
+            ))
+            #expect(error.localizedDescription == SSHError.timeout.localizedDescription)
+        }
+    }
+
+    @Test
+    func bootstrapRequiresAnAbsolutePrivateSupervisorPath() throws {
+        #expect(try TSSHBootstrap.parseSupervisorPath(
+            output: "ORLIX_TSSHD_SUPERVISOR=/tmp/orlix-tsshd.private/supervisor\n"
+        ) == "/tmp/orlix-tsshd.private/supervisor")
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseSupervisorPath(output: "ORLIX_TSSHD_PID=321")
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.parseSupervisorPath(
+                output: "ORLIX_TSSHD_SUPERVISOR=relative/supervisor"
+            )
+        }
+    }
+
+    @Test
+    func bootstrapCleanupVerifiesTheUniqueSupervisorBeforeKilling() {
+        let identity = TSSHServerProcessIdentity(
+            pid: 321,
+            supervisorPath: "/tmp/orlix-tsshd-1234.sh"
+        )
+        let command = TSSHBootstrap.terminationCommand(for: identity)
+
+        #expect(command.contains("ps -p"))
+        #expect(command.contains("orlix-tsshd-1234.sh"))
+        #expect(command.contains("kill -TERM"))
+        #expect(command.contains("while kill -0"))
+        #expect(command.contains("[ \"$attempts\" -lt 20 ] || exit 1"))
+        #expect(command.contains("ORLIX_TSSHD_TERMINATED=1"))
+        #expect(command.contains("ORLIX_TSSHD_ABSENT=1"))
+    }
+
+    @Test
+    func bootstrapRejectsModeAndPortOutsideRequestedProfile() throws {
+        let profile = TSSHProfile(
+            transportMode: .kcp,
+            udpPortMinimum: 61_000,
+            udpPortMaximum: 61_100
+        )
+        let accepted = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61050,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc"}"#
+        )
+        let wrongMode = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61050,"Mode":"QUIC","ServerCert":"aa","ClientCert":"bb","ClientKey":"cc","ProxyKey":"dd"}"#
+        )
+        let wrongPort = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":62000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc"}"#
+        )
+
+        #expect(try TSSHBootstrap.validatedServerInfo(accepted, for: profile) == accepted)
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.validatedServerInfo(wrongMode, for: profile)
+        }
+        #expect(throws: TSSHRuntimeError.self) {
+            try TSSHBootstrap.validatedServerInfo(wrongPort, for: profile)
+        }
+    }
+
+    @Test
+    func bootstrapRequiresNonWindowsPOSIXEnvironment() {
+        #expect(TSSHBootstrap.supports(environment: .fallbackPOSIX))
+        #expect(!TSSHBootstrap.supports(environment: RemoteEnvironment(
+            platform: .windows,
+            shellProfile: .powershell(executableName: "powershell.exe"),
+            activeShellName: "powershell.exe",
+            powerShellExecutable: "powershell.exe"
+        )))
+        #expect(!TSSHBootstrap.supports(environment: RemoteEnvironment(
+            platform: .linux,
+            shellProfile: .unknown(),
+            activeShellName: nil,
+            powerShellExecutable: nil
+        )))
+    }
+
+    @Test
+    func resumeFailurePolicyDiscardsPermanentAndRepeatedFailures() {
+        #expect(TSSHResumeFailurePolicy.shouldDiscard(
+            after: 1,
+            errorDescription: "attach to session [42] failed: session [42] not found"
+        ))
+        #expect(!TSSHResumeFailurePolicy.shouldDiscard(
+            after: 2,
+            errorDescription: "network is unreachable"
+        ))
+        #expect(TSSHResumeFailurePolicy.shouldDiscard(
+            after: 3,
+            errorDescription: "network is unreachable"
+        ))
+    }
+
+    @Test
+    func resumeRestoresPendingStandaloneStartupAction() {
+        #expect(TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: false,
+            replayPending: true
+        ))
+        #expect(!TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: true,
+            replayPending: true
+        ))
+        #expect(!TSSHResumeLifecyclePolicy.shouldAwaitStandaloneStartupAction(
+            hasRemoteSessionLifecycle: false,
+            replayPending: false
+        ))
+    }
+
+    @Test
+    func resumeCompatibilityRejectsChangedEndpointAndPolicy() throws {
+        let serverID = UUID()
+        let server = Server(
+            id: serverID,
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":1,"ServerID":2}"#
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
+            host: server.host,
+            info: info,
+            sessionID: 42,
+            profile: server.tsshProfile,
+            savedAt: Date()
+        )
+
+        #expect(TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        var changedHost = server
+        changedHost.host = "other.example.com"
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: changedHost,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        var changedPolicy = server
+        changedPolicy.tsshProfile.sshAgentForwarding = true
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: changedPolicy,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        var updatedServer = server
+        updatedServer.updatedAt = server.updatedAt.addingTimeInterval(1)
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: updatedServer,
+            trustedHostFingerprint: "SHA256:trusted"
+        ))
+
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: nil
+        ))
+        #expect(!TSSHResumeCompatibilityPolicy.canResume(
+            state,
+            with: server,
+            trustedHostFingerprint: "SHA256:replacement"
+        ))
+    }
+
+    @Test
+    func resumeIdentityCanonicalizesATrailingDNSRootLabel() {
+        let serverID = UUID()
+        let workspaceID = UUID()
+        let dotted = Server(
+            id: serverID,
+            workspaceId: workspaceID,
+            name: "TSSH",
+            host: " EXAMPLE.COM. ",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        var plain = dotted
+        plain.host = "example.com"
+
+        #expect(TSSHResumeServerIdentity(server: dotted).host == "example.com")
+        #expect(TSSHResumeServerIdentity(server: dotted).matchesEndpoint(of: plain))
+    }
+
+    @Test
+    func refreshingALiveResumeStateOnlyUpdatesItsTimestamp() throws {
+        let server = Server(
+            workspaceId: UUID(),
+            name: "TSSH",
+            host: "example.com",
+            port: 22,
+            username: "root",
+            connectionMode: .tssh
+        )
+        let info = try TSSHServerInfo.parse(
+            output: #"{"ServerVer":"0.2.2","Port":61000,"Mode":"KCP","Pass":"aa","Salt":"bb","ProxyKey":"cc","ClientID":7,"ServerID":2}"#
+        )
+        let state = TSSHResumeState(
+            serverIdentity: TSSHResumeServerIdentity(server: server),
+            sshHostKeyFingerprint: "SHA256:trusted",
+            serverProcess: TSSHServerProcessIdentity(
+                pid: 123,
+                supervisorPath: "/tmp/orlix-tsshd-test.sh"
+            ),
+            host: server.host,
+            info: info,
+            sessionID: 42,
+            profile: server.tsshProfile,
+            savedAt: Date(timeIntervalSince1970: 1)
+        )
+        let refreshedAt = Date(timeIntervalSince1970: 2)
+
+        let refreshed = state.refreshed(at: refreshedAt)
+
+        #expect(refreshed.savedAt == refreshedAt)
+        #expect(refreshed.serverIdentity == state.serverIdentity)
+        #expect(refreshed.sshHostKeyFingerprint == state.sshHostKeyFingerprint)
+        #expect(refreshed.serverProcess == state.serverProcess)
+        #expect(refreshed.host == state.host)
+        #expect(refreshed.info == state.info)
+        #expect(refreshed.sessionID == state.sessionID)
+        #expect(refreshed.profile == state.profile)
+    }
+
+    @Test
+    func resumeRetryExpiresBeforeTheNextAttempt() {
+        let now = Date(timeIntervalSince1970: 100)
+        #expect(TSSHResumeFailurePolicy.retryWouldExpire(
+            now: now,
+            retryDelaySeconds: 2,
+            expiresAt: now.addingTimeInterval(2)
+        ))
+        #expect(!TSSHResumeFailurePolicy.retryWouldExpire(
+            now: now,
+            retryDelaySeconds: 1,
+            expiresAt: now.addingTimeInterval(2)
+        ))
+    }
+}

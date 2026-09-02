@@ -11,7 +11,8 @@ struct TerminalFontRepositoryTests {
         let root = try testDirectory()
         let repository = LocalTerminalFontRepository(
             rootDirectoryURL: root,
-            defaults: defaults
+            defaults: defaults,
+            registerFontAtURL: { _ in }
         )
         defer {
             defaults.removePersistentDomain(forName: suiteName)

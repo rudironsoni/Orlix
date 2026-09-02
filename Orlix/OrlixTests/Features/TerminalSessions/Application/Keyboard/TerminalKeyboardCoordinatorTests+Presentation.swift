@@ -34,8 +34,16 @@ extension TerminalKeyboardCoordinatorTests {
         @Test
         @MainActor
         func losingViewOwnershipClearsObservedKeyboardGeometry() {
+            let paneId = UUID()
+            let session = TerminalKeyboardInputSessionSpy()
             let coordinator = TerminalKeyboardCoordinator()
+            coordinator.terminalProvider = { requestedPaneId in
+                requestedPaneId == paneId ? session : nil
+            }
+            coordinator.setActivePane(paneId)
             coordinator.setViewActive(true)
+            coordinator.setPaneInputEligible(true, for: paneId)
+            coordinator.setWindowAttached(true, for: paneId)
             coordinator.keyboardUITestSetSoftwareKeyboardEndFrame(
                 CGRect(x: 0, y: 700, width: 1_024, height: 300)
             )

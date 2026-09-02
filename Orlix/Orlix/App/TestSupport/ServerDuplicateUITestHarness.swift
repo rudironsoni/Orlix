@@ -31,6 +31,12 @@ struct ServerDuplicateUITestHarness: View {
         )
     }
 
+    private var tsshSourceServer: Server {
+        var server = sourceServer
+        server.connectionMode = .tssh
+        return server
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -41,7 +47,7 @@ struct ServerDuplicateUITestHarness: View {
                     onTap: {},
                     onEdit: { formIntent = .edit(sourceServer) },
                     onMove: {},
-                    onDuplicate: { formIntent = .duplicate(sourceServer) },
+                    onDuplicate: { formIntent = .duplicate(tsshSourceServer) },
                     onWake: { wakeActionCount += 1 }
                 )
                 .accessibilityIdentifier("orlix.serverDuplicateTest.row")
@@ -61,6 +67,15 @@ struct ServerDuplicateUITestHarness: View {
         }
         .sheet(item: $formIntent) { intent in
             formSheet(for: intent)
+        }
+        .task {
+            guard !serverManager.servers.contains(where: { $0.id == sourceServer.id }) else {
+                return
+            }
+            serverManager.stateStore.replaceCollections(
+                servers: [sourceServer],
+                workspaces: serverManager.workspaces
+            )
         }
         .accessibilityIdentifier("orlix.serverDuplicateTest.root")
     }

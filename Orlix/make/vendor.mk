@@ -1,7 +1,7 @@
 # Native vendor build implementation. Public entry point: make build type=vendor vendor=<selector>.
 .ONESHELL:
 
-.PHONY: __vendor-all __vendor-ghostty __vendor-ssh __vendor-build
+.PHONY: __vendor-all __vendor-ghostty __vendor-ssh __vendor-tssh __vendor-build
 
 __vendor-all: VENDOR_COMMAND := all
 __vendor-all: __vendor-build
@@ -12,9 +12,12 @@ __vendor-ghostty: __vendor-build
 __vendor-ssh: VENDOR_COMMAND := ssh
 __vendor-ssh: __vendor-build
 
+__vendor-tssh: VENDOR_COMMAND := tssh
+__vendor-tssh: __vendor-build
+
 __vendor-build:
 	set -- "$(VENDOR_COMMAND)"
-	# Orlix vendor build (GhosttyKit + libssh2/OpenSSL)
+	# Orlix vendor build (GhosttyKit + libssh2/OpenSSL + native TSSH)
 
 	set -euo pipefail
 
@@ -22,12 +25,20 @@ __vendor-build:
 
 	VENDOR_GHOSTTY="$$PROJECT_ROOT/Vendor/libghostty"
 	VENDOR_SSH="$$PROJECT_ROOT/Vendor/libssh2"
+	VENDOR_TSSH="$$PROJECT_ROOT/Vendor/trzsz-ssh"
 	BUILD_DIR_SSH="$$PROJECT_ROOT/.build/ssh"
+	BUILD_DIR_TSSH="$$PROJECT_ROOT/.build/tssh"
 
 	OPENSSL_VERSION="3.2.0"
 	OPENSSL_SHA256="14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e"
 	LIBSSH2_VERSION="1.11.1"
 	LIBSSH2_SHA256="d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
+	TSSH_VERSION="0.2.2"
+	TSSH_SOURCE_REVISION="bd9e777620a2ec40e7be59ec31e8a008ff5f7fa5"
+	TSSH_XCFRAMEWORK_SHA256="8290485b258da18bf5895e2ecc1c6c30d8050e6385a187a058af21402c21172c"
+	TSSH_XCFRAMEWORK_URL="https://github.com/kitknox/trzsz-ssh-rootshell/releases/download/v$${TSSH_VERSION}/TrzszSSH.xcframework.zip"
+	TSSH_VPN_XCFRAMEWORK_SHA256="b998d313f5341db98c2b67217ce51ab46049fcb4c99c53cd6ac8f00fdd18fb0f"
+	TSSH_VPN_XCFRAMEWORK_URL="https://github.com/kitknox/trzsz-ssh-rootshell/releases/download/v$${TSSH_VERSION}/VPNTunnel.xcframework.zip"
 	MACOS_DEPLOYMENT_TARGET="13.3"
 	IOS_DEPLOYMENT_TARGET="16.0"
 
@@ -72,6 +83,133 @@ __vendor-build:
 	    require_cmd cmake
 	    require_cmd make
 	    require_cmd xcrun
+	}
+
+	check_deps_tssh() {
+	    require_cmd curl
+	    require_cmd shasum
+	    require_cmd ditto
+	    require_cmd plutil
+	    require_cmd otool
+	}
+
+	audit_tssh() {
+	    local framework="$$VENDOR_TSSH/TrzszSSH.xcframework"
+	    local vpn_framework="$$VENDOR_TSSH/VPNTunnel.xcframework"
+	    local artifact_manifest="$$PROJECT_ROOT/Vendor/native-artifacts.sha256"
+	    [ -f "$$artifact_manifest" ] || {
+	        log_error "Missing tracked native artifact manifest: $$artifact_manifest"
+	        exit 1
+	    }
+	    local expected_tssh_artifacts actual_tssh_artifacts
+	    expected_tssh_artifacts="$$(awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print $$2 }' "$$artifact_manifest" | sort)"
+	    actual_tssh_artifacts="$$(
+	        cd "$$PROJECT_ROOT"
+	        find \
+	            Vendor/trzsz-ssh/TrzszSSH.xcframework \
+	            Vendor/trzsz-ssh/VPNTunnel.xcframework \
+	            -type f -print | sort
+	    )"
+	    [ -n "$$expected_tssh_artifacts" ] &&
+	    [ "$$actual_tssh_artifacts" = "$$expected_tssh_artifacts" ] || {
+	        log_error "Installed TSSH files do not match the tracked artifact inventory"
+	        exit 1
+	    }
+	    (
+	        cd "$$PROJECT_ROOT"
+	        awk '$$2 ~ /^Vendor\/trzsz-ssh\// { print }' "$$artifact_manifest" |
+	            shasum -a 256 -c - >/dev/null
+	    ) || {
+	        log_error "Installed TSSH file hash does not match the tracked artifact manifest"
+	        exit 1
+	    }
+	    local info="$$framework/Info.plist"
+	    [ -f "$$info" ] || { log_error "Missing TSSH XCFramework metadata: $$info"; exit 1; }
+	    plutil -lint "$$info" >/dev/null
+	    local device_lib="$$framework/ios-arm64/libTrzszSSH.a"
+	    local simulator_lib="$$framework/ios-arm64_x86_64-simulator/libTrzszSSH.a"
+	    [ -s "$$device_lib" ] || { log_error "Missing TSSH iOS archive: $$device_lib"; exit 1; }
+	    [ -s "$$simulator_lib" ] || { log_error "Missing TSSH simulator archive: $$simulator_lib"; exit 1; }
+	    local device_minimum_versions simulator_minimum_versions
+	    device_minimum_versions="$$(otool -l "$$device_lib" | awk '$$1 == "minos" { print $$2 }' | sort -u)"
+	    simulator_minimum_versions="$$(otool -l "$$simulator_lib" | awk '$$1 == "minos" { print $$2 }' | sort -u)"
+	    [ "$$device_minimum_versions" = "13.0" ] || {
+	        log_error "Unexpected TSSH iOS minimum versions: $$device_minimum_versions"
+	        exit 1
+	    }
+	    [ "$$simulator_minimum_versions" = "$$(printf '13.0\n14.0')" ] || {
+	        log_error "Unexpected TSSH simulator minimum versions: $$simulator_minimum_versions"
+	        exit 1
+	    }
+	    local vpn_info="$$vpn_framework/Info.plist"
+	    [ -f "$$vpn_info" ] || { log_error "Missing VPN XCFramework metadata: $$vpn_info"; exit 1; }
+	    plutil -lint "$$vpn_info" >/dev/null
+	    local vpn_device_lib="$$vpn_framework/ios-arm64/libVPNTunnel.a"
+	    local vpn_simulator_lib="$$vpn_framework/ios-arm64_x86_64-simulator/libVPNTunnel.a"
+	    [ -s "$$vpn_device_lib" ] || { log_error "Missing VPN iOS archive: $$vpn_device_lib"; exit 1; }
+	    [ -s "$$vpn_simulator_lib" ] || { log_error "Missing VPN simulator archive: $$vpn_simulator_lib"; exit 1; }
+	    local vpn_device_minimum_versions vpn_simulator_minimum_versions
+	    vpn_device_minimum_versions="$$(otool -l "$$vpn_device_lib" | awk '$$1 == "minos" { print $$2 }' | sort -u)"
+	    vpn_simulator_minimum_versions="$$(otool -l "$$vpn_simulator_lib" | awk '$$1 == "minos" { print $$2 }' | sort -u)"
+	    [ "$$vpn_device_minimum_versions" = "13.0" ] || {
+	        log_error "Unexpected VPN iOS minimum versions: $$vpn_device_minimum_versions"
+	        exit 1
+	    }
+	    [ "$$vpn_simulator_minimum_versions" = "$$(printf '13.0\n14.0')" ] || {
+	        log_error "Unexpected VPN simulator minimum versions: $$vpn_simulator_minimum_versions"
+	        exit 1
+	    }
+	    local source_revision
+	    source_revision="$$(sed -n 's/^source_revision=//p' "$$VENDOR_TSSH/VERSION" 2>/dev/null)"
+	    [ "$$source_revision" = "$$TSSH_SOURCE_REVISION" ] || {
+	        log_error "Unexpected TSSH source revision: $$source_revision"
+	        exit 1
+	    }
+	}
+
+	build_tssh() {
+	    log_section "TrzszSSH"
+	    if [ -f "$$VENDOR_TSSH/VERSION" ] &&
+	       grep -qx "version=$$TSSH_VERSION" "$$VENDOR_TSSH/VERSION" &&
+	       grep -qx "source_revision=$$TSSH_SOURCE_REVISION" "$$VENDOR_TSSH/VERSION" &&
+	       grep -qx "archive_sha256=$$TSSH_XCFRAMEWORK_SHA256" "$$VENDOR_TSSH/VERSION" &&
+	       grep -qx "vpn_archive_sha256=$$TSSH_VPN_XCFRAMEWORK_SHA256" "$$VENDOR_TSSH/VERSION" &&
+	       [ -d "$$VENDOR_TSSH/VPNTunnel.xcframework" ]; then
+	        audit_tssh
+	        log_info "TrzszSSH v$$TSSH_VERSION is ready"
+	        return
+	    fi
+
+	    mkdir -p "$$BUILD_DIR_TSSH"
+	    local archive="$$BUILD_DIR_TSSH/TrzszSSH-v$${TSSH_VERSION}.xcframework.zip"
+	    local vpn_archive="$$BUILD_DIR_TSSH/VPNTunnel-v$${TSSH_VERSION}.xcframework.zip"
+	    download_verified_archive "$$TSSH_XCFRAMEWORK_URL" "$$archive" "$$TSSH_XCFRAMEWORK_SHA256"
+	    download_verified_archive "$$TSSH_VPN_XCFRAMEWORK_URL" "$$vpn_archive" "$$TSSH_VPN_XCFRAMEWORK_SHA256"
+
+	    local stage
+	    stage="$$(mktemp -d "/tmp/orlix-tssh.XXXXXX")"
+	    ditto -x -k "$$archive" "$$stage"
+	    ditto -x -k "$$vpn_archive" "$$stage"
+	    [ -d "$$stage/TrzszSSH.xcframework" ] || {
+	        rm -rf "$$stage"
+	        log_error "Downloaded TSSH archive did not contain TrzszSSH.xcframework"
+	        exit 1
+	    }
+	    [ -d "$$stage/VPNTunnel.xcframework" ] || {
+	        rm -rf "$$stage"
+	        log_error "Downloaded VPN archive did not contain VPNTunnel.xcframework"
+	        exit 1
+	    }
+	    mkdir -p "$$VENDOR_TSSH"
+	    rm -rf "$$VENDOR_TSSH/TrzszSSH.xcframework" "$$VENDOR_TSSH/VPNTunnel.xcframework"
+	    mv "$$stage/TrzszSSH.xcframework" "$$VENDOR_TSSH/"
+	    mv "$$stage/VPNTunnel.xcframework" "$$VENDOR_TSSH/"
+	    rm -rf "$$stage"
+	    printf 'version=%s\nsource_revision=%s\narchive_sha256=%s\nvpn_archive_sha256=%s\n' \
+	        "$$TSSH_VERSION" "$$TSSH_SOURCE_REVISION" "$$TSSH_XCFRAMEWORK_SHA256" "$$TSSH_VPN_XCFRAMEWORK_SHA256" \
+	        > "$$VENDOR_TSSH/VERSION"
+	    audit_tssh
+	    log_info "TrzszSSH v$$TSSH_VERSION ready"
 	}
 
 	strip_lib() {
@@ -461,8 +599,10 @@ __vendor-build:
 	    all)
 	        check_deps_ghostty
 	        check_deps_ssh
+	        check_deps_tssh
 	        build_ghosttykit
 	        build_ssh
+	        build_tssh
 	        ;;
 	    ghostty)
 	        check_deps_ghostty
@@ -471,6 +611,10 @@ __vendor-build:
 	    ssh)
 	        check_deps_ssh
 	        build_ssh
+	        ;;
+	    tssh)
+	        check_deps_tssh
+	        build_tssh
 	        ;;
 	    *)
 	        log_error "Unknown command: $${COMMAND}"

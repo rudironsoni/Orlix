@@ -9,11 +9,13 @@ struct ServerMutationCommandRepositoryTests {
     @Test
     func insertServerNormalizesLocalMetadata() throws {
         let workspace = makeWorkspace()
+        let tsshProfile = nonDefaultTSSHProfile()
         let input = Server(
             id: fixedID(2),
             workspaceId: workspace.id,
             name: "New",
             host: "new.example.test",
+            tsshProfile: tsshProfile,
             username: "root",
             wakeOnLANConfiguration: WakeOnLANConfiguration(
                 macAddress: try WakeOnLANMACAddress("00:11:22:33:44:55")
@@ -40,12 +42,14 @@ struct ServerMutationCommandRepositoryTests {
         #expect(!inserted.isFavorite)
         #expect(inserted.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
         #expect(inserted.autoWakeOnLANEnabled)
+        #expect(inserted.tsshProfile == tsshProfile)
         #expect(result.effect == .serverUpsert(inserted))
     }
 
     @Test
     func updateServerPreservesIdentityAndUserState() throws {
         let workspace = makeWorkspace()
+        let tsshProfile = nonDefaultTSSHProfile()
         let createdAt = Date(timeIntervalSinceReferenceDate: 100)
         let lastConnected = Date(timeIntervalSinceReferenceDate: 200)
         let input = Server(
@@ -53,6 +57,7 @@ struct ServerMutationCommandRepositoryTests {
             workspaceId: workspace.id,
             name: "Edited",
             host: "edited.example.test",
+            tsshProfile: tsshProfile,
             username: "root",
             wakeOnLANConfiguration: WakeOnLANConfiguration(
                 macAddress: try WakeOnLANMACAddress("AA:BB:CC:DD:EE:FF")
@@ -79,6 +84,7 @@ struct ServerMutationCommandRepositoryTests {
         #expect(updated.isFavorite)
         #expect(updated.wakeOnLANConfiguration == input.wakeOnLANConfiguration)
         #expect(updated.autoWakeOnLANEnabled)
+        #expect(updated.tsshProfile == tsshProfile)
     }
 
     @Test
@@ -164,6 +170,20 @@ struct ServerMutationCommandRepositoryTests {
             username: "root",
             createdAt: .distantPast,
             updatedAt: .distantPast
+        )
+    }
+
+    private func nonDefaultTSSHProfile() -> TSSHProfile {
+        TSSHProfile(
+            transportMode: .quic,
+            udpPortMinimum: 62_100,
+            udpPortMaximum: 62_200,
+            mtu: 1_300,
+            keepPendingInput: true,
+            keepPendingOutput: true,
+            connectTimeoutSeconds: 45,
+            aliveTimeoutSeconds: 20,
+            heartbeatTimeoutSeconds: 30
         )
     }
 

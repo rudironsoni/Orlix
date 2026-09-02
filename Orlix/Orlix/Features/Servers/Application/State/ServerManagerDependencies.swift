@@ -69,6 +69,8 @@ struct ServerManagerDependencies {
     let credentialRepository: any ServerManagerCredentialRepository
     let actionAuthorizer: any ProtectedServerActionAuthorizing
     let didDeleteServerLocalData: (UUID) -> Void
+    let didUpdateServerSecurityBinding: (Server, ServerCredentials) -> Void
+    let revokeUnclaimedTSSHVPN: (UUID) async throws -> Void
     let now: () -> Date
     let makeID: () -> UUID
 
@@ -80,6 +82,8 @@ struct ServerManagerDependencies {
         actionAuthorizer: any ProtectedServerActionAuthorizing,
         knownHosts: any ServerKnownHostRepository,
         didDeleteServerLocalData: @escaping (UUID) -> Void,
+        didUpdateServerSecurityBinding: @escaping (Server, ServerCredentials) -> Void = { _, _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in },
         isRemoteSchemaError: @escaping (Error) -> Bool,
         now: @escaping () -> Date,
         makeID: @escaping () -> UUID
@@ -89,6 +93,8 @@ struct ServerManagerDependencies {
         self.credentialRepository = credentialRepository
         self.actionAuthorizer = actionAuthorizer
         self.didDeleteServerLocalData = didDeleteServerLocalData
+        self.didUpdateServerSecurityBinding = didUpdateServerSecurityBinding
+        self.revokeUnclaimedTSSHVPN = revokeUnclaimedTSSHVPN
         self.now = now
         self.makeID = makeID
         remoteSyncCoordinator = ServerRemoteSyncCoordinator(
@@ -99,6 +105,8 @@ struct ServerManagerDependencies {
                 credentialRepository: credentialRepository,
                 knownHosts: knownHosts,
                 didDeleteServerLocalData: didDeleteServerLocalData,
+                didUpdateServerSecurityBinding: didUpdateServerSecurityBinding,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
                 isRemoteSchemaError: isRemoteSchemaError,
                 now: now,
                 makeID: makeID

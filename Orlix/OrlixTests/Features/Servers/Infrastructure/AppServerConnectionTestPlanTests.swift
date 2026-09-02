@@ -52,6 +52,29 @@ private actor ServerMoshConnectionTesterFake: ServerMoshConnectionTesting {
     }
 }
 
+private actor ServerTSSHConnectionTesterFake: ServerTSSHConnectionTesting {
+    private var testedPortRanges: [ClosedRange<Int>] = []
+    private var testedModes: [TSSHTransportMode] = []
+
+    func testServerConnection(
+        server: Server,
+        credentials: ServerCredentials,
+        using client: SSHClient,
+        portRange: ClosedRange<Int>
+    ) async throws {
+        testedPortRanges.append(portRange)
+        testedModes.append(server.tsshProfile.transportMode)
+    }
+
+    func portRanges() -> [ClosedRange<Int>] {
+        testedPortRanges
+    }
+
+    func modes() -> [TSSHTransportMode] {
+        testedModes
+    }
+}
+
 private nonisolated struct ConnectionTestHostKeyRepositoryFake: ServerHostKeyRepository {
     private let challenge: KnownHostsManager.Challenge?
 
@@ -108,6 +131,21 @@ struct AppServerConnectionTestPlanTests {
     }
 
     @Test
+    func tsshUsesItsConfiguredBootstrapRange() {
+        var server = makeServer(mode: .tssh)
+        server.tsshProfile = TSSHProfile(
+            transportMode: .quic,
+            udpPortMinimum: 62_000,
+            udpPortMaximum: 62_100
+        )
+
+        #expect(
+            ServerConnectionTestPlan(server: server)
+                == .tssh(portRange: 62_000...62_100)
+        )
+    }
+
+    @Test
     func hostKeyFailureRequiresApprovalForTheCurrentEndpoint() {
         let server = makeServer(mode: .standard)
 
@@ -138,6 +176,7 @@ struct AppServerConnectionTestPlanTests {
         let tester = AppServerConnectionTester(
             connectionOperations: usedConnectionOperations,
             remoteMosh: usedMosh,
+            nativeTSSH: ServerTSSHConnectionTesterFake(),
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )
@@ -156,11 +195,39 @@ struct AppServerConnectionTestPlanTests {
     }
 
     @Test
+    func testerPassesTheConfiguredRangeToTheNativeTSSHProbe() async {
+        let nativeTSSH = ServerTSSHConnectionTesterFake()
+        var server = makeServer(mode: .tssh)
+        server.tsshProfile = TSSHProfile(
+            transportMode: .quic,
+            udpPortMinimum: 62_000,
+            udpPortMaximum: 62_100
+        )
+        let tester = AppServerConnectionTester(
+            connectionOperations: ServerConnectionOperationRunnerFake(),
+            remoteMosh: ServerMoshConnectionTesterFake(),
+            nativeTSSH: nativeTSSH,
+            hostKeys: ConnectionTestHostKeyRepositoryFake(),
+            now: { .distantPast }
+        )
+
+        let result = await tester.test(
+            server: server,
+            credentials: ServerCredentials(serverId: server.id)
+        )
+
+        #expect(result == .success)
+        #expect(await nativeTSSH.portRanges() == [62_000...62_100])
+        #expect(await nativeTSSH.modes() == [.quic])
+    }
+
+    @Test
     func testerMapsInjectedOperationCancellationToCancelled() async {
         let server = makeServer(mode: .standard)
         let tester = AppServerConnectionTester(
             connectionOperations: ServerConnectionOperationRunnerFake(behavior: .cancel),
             remoteMosh: ServerMoshConnectionTesterFake(),
+            nativeTSSH: ServerTSSHConnectionTesterFake(),
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )
@@ -181,6 +248,7 @@ struct AppServerConnectionTestPlanTests {
                 behavior: .hostKeyApprovalRequired
             ),
             remoteMosh: ServerMoshConnectionTesterFake(),
+            nativeTSSH: ServerTSSHConnectionTesterFake(),
             hostKeys: ConnectionTestHostKeyRepositoryFake(),
             now: { .distantPast }
         )

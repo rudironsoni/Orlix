@@ -4,6 +4,7 @@ nonisolated enum ShellTransport: String, Codable, Hashable, Sendable {
     case ssh
     case mosh
     case eternalTerminal
+    case tssh
     case sshFallback
 }
 
@@ -48,6 +49,7 @@ nonisolated enum ShellTransportState: Equatable, Sendable {
     case ssh
     case mosh
     case eternalTerminal
+    case tssh
     case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
 
     var transport: ShellTransport {
@@ -58,6 +60,8 @@ nonisolated enum ShellTransportState: Equatable, Sendable {
             return .mosh
         case .eternalTerminal:
             return .eternalTerminal
+        case .tssh:
+            return .tssh
         case .sshFallback:
             return .sshFallback
         }

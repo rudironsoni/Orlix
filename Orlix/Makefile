@@ -25,7 +25,7 @@ help:
 	@printf '%s\n' 'Targets:'
 	@printf '%s\n' '  build                         validate Orlix source ownership'
 	@printf '%s\n' '  build type=vendor vendor=all  build all native vendor libraries'
-	@printf '%s\n' '  build type=vendor vendor=ghostty|ssh'
+	@printf '%s\n' '  build type=vendor vendor=ghostty|ssh|tssh'
 	@printf '%s\n' '  run                           build and run the Orlix iOS host app'
 	@printf '%s\n' '  clean                         remove project-local build intermediates only'
 	@printf '%s\n' '  vvterm-sync                  merge one exact upstream snapshot into tracked Orlix source'
@@ -40,8 +40,8 @@ help:
 
 ifneq ($(filter build,$(MAKECMDGOALS)),)
 ifeq ($(type),vendor)
-ifneq ($(filter $(vendor),all ghostty ssh),$(vendor))
-$(error invalid vendor selector '$(vendor)'; expected all, ghostty, or ssh)
+ifneq ($(filter $(vendor),all ghostty ssh tssh),$(vendor))
+$(error invalid vendor selector '$(vendor)'; expected all, ghostty, ssh, or tssh)
 endif
 ifeq ($(MAKE_VERSION),3.81)
 build: __vendor-reexec

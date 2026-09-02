@@ -49,7 +49,11 @@ struct KnownHostSettingsCoordinatorTests {
         let first = knownHost(host: "first.example.com", port: 22)
         let second = knownHost(host: "second.example.com", port: 2222)
         repository.storedHosts = [first, second]
-        let coordinator = KnownHostSettingsCoordinator(repository: repository)
+        var reset: KnownHostTrustReset?
+        let coordinator = KnownHostSettingsCoordinator(
+            repository: repository,
+            invalidateLiveTSSHTrust: { reset = $0 }
+        )
         coordinator.loadHosts()
 
         coordinator.removeKnownHost(first)
@@ -58,13 +62,18 @@ struct KnownHostSettingsCoordinatorTests {
         #expect(repository.removedHost?.port == first.port)
         #expect(coordinator.knownHosts == [second])
         #expect(repository.loadCount == 2)
+        #expect(reset == .host(first.host, first.port))
     }
 
     @Test
     func successfulAllRemovalReloadsHosts() {
         let repository = KnownHostSettingsRepositorySpy()
         repository.storedHosts = [knownHost(host: "example.com", port: 22)]
-        let coordinator = KnownHostSettingsCoordinator(repository: repository)
+        var reset: KnownHostTrustReset?
+        let coordinator = KnownHostSettingsCoordinator(
+            repository: repository,
+            invalidateLiveTSSHTrust: { reset = $0 }
+        )
         coordinator.loadHosts()
 
         coordinator.removeAllKnownHosts()
@@ -72,6 +81,7 @@ struct KnownHostSettingsCoordinatorTests {
         #expect(coordinator.knownHosts.isEmpty)
         #expect(repository.removeAllCount == 1)
         #expect(repository.loadCount == 2)
+        #expect(reset == .all)
     }
 
     private func knownHost(host: String, port: Int) -> KnownHostSettingsItem {

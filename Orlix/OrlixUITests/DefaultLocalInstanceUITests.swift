@@ -11,7 +11,9 @@ final class DefaultLocalInstanceUITests: XCTestCase {
         openButton.tap()
 
         XCTAssertTrue(app.navigationBars["Orlix"].waitForExistence(timeout: 5))
-        let terminal = app.textViews["orlix.local-instance.terminal"]
+        let terminal = app.descendants(matching: .any)
+            .matching(identifier: "orlix.local-instance.terminal")
+            .firstMatch
         XCTAssertTrue(terminal.waitForExistence(timeout: 5))
 
         expectation(

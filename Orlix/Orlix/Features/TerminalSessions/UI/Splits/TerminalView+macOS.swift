@@ -160,6 +160,10 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.updateSecurityBinding(
+            server: server,
+            credentials: credentials
+        )
         if let scrollView = nsView as? TerminalScrollView {
             scrollView.shouldOwnFirstResponder = isActive
             let terminalView = scrollView.surfaceView

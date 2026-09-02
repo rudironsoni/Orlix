@@ -51,6 +51,57 @@ struct RemoteTmuxUnixCommandBuilderTests {
         #expect(!command.contains("exec tmux"))
     }
 
+    @Test
+    func tsshManagedLifecycleUsesDirectTmuxSessionCreation() {
+        let command = RemoteTmuxCommandBuilder.attachCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle,
+            sessionName: "orlix_managed",
+            workingDirectory: "/work",
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .tssh
+        )
+
+        #expect(command.contains("new-session -d -s 'orlix_managed' -c '/work'"))
+        #expect(command.contains("set-option -q -t '=orlix_managed:' @orlix-managed 1"))
+        #expect(command.contains("show-options -v -q -t '=orlix_managed:' @orlix-managed"))
+        #expect(command.contains("set-option -q -t '=orlix_managed:' status off"))
+        #expect(command.contains("set-environment -t '=orlix_managed' TERM 'xterm-kitty'"))
+        #expect(command.contains("set-hook -t '=orlix_managed:' 'after-new-window[1000]'"))
+        #expect(command.contains("attach-session -t '=orlix_managed'"))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .attached
+        )))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .creationFailed
+        )))
+        #expect(!command.contains("__orlix_bootstrap__"))
+        #expect(!command.contains("new-window"))
+    }
+
+    @Test
+    func tsshManagedReattachDoesNotCreateMissingSession() {
+        let command = RemoteTmuxCommandBuilder.attachExistingCommand(
+            themeStyle: deterministicRemoteSessionThemeStyle,
+            sessionName: "orlix_managed",
+            ownership: .managed,
+            lifecycleEnvelope: deterministicRemoteSessionLifecycleEnvelope,
+            transport: .tssh
+        )
+
+        #expect(command.contains("has-session -t '=orlix_managed'"))
+        #expect(command.contains("show-options -v -q -t '=orlix_managed:' @orlix-managed"))
+        #expect(command.contains("set-option -q -t '=orlix_managed:' status off"))
+        #expect(command.contains("set-hook -t '=orlix_managed:' 'after-new-window[1000]'"))
+        #expect(command.contains("attach-session -t '=orlix_managed'"))
+        #expect(command.contains(RemoteSessionLifecycleMarker.sequence(
+            envelope: deterministicRemoteSessionLifecycleEnvelope,
+            event: .terminated
+        )))
+        #expect(!command.contains("new-session"))
+    }
+
     @Test(arguments: [
         "/tmp/$(touch /tmp/orlix-injected)",
         "/tmp/`touch /tmp/orlix-injected`",

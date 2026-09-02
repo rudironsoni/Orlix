@@ -1,6 +1,26 @@
 import Foundation
 import os.log
 
+nonisolated func planRestoringWorkingDirectory(
+    _ plan: TerminalShellStartupPlan,
+    workingDirectory: String,
+    environment: RemoteEnvironment
+) -> TerminalShellStartupPlan {
+    guard plan.command == nil,
+          !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          case .command(let command) = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
+              for: workingDirectory,
+              environment: environment
+          ) else {
+        return plan
+    }
+    return TerminalShellStartupPlan(
+        command: command,
+        remoteSessionLifecycle: nil,
+        mayExecuteUserStartupAction: false
+    )
+}
+
 @MainActor
 extension TerminalRemoteSessionCoordinator {
     func startupPlan(
@@ -82,23 +102,49 @@ extension TerminalRemoteSessionCoordinator {
             )
         }
 
-        guard plan.command == nil,
-              let workingDirectory = sessionState.paneState(for: paneID)?.workingDirectory,
-              !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let workingDirectory = sessionState.paneState(for: paneID)?.workingDirectory else {
             return plan
         }
         let environment = await client.remoteEnvironment()
-        let restorePlan = RemoteTerminalBootstrap.workingDirectoryRestorePlan(
-            for: workingDirectory,
+        return planRestoringWorkingDirectory(
+            plan,
+            workingDirectory: workingDirectory,
             environment: environment
         )
-        guard case .command(let command) = restorePlan else {
+    }
+
+    func tsshStartupPlan(
+        for paneID: UUID,
+        serverID: UUID,
+        client: SSHClient,
+        runtimeToken: UUID,
+        validateOwner: () throws -> Void
+    ) async throws -> TerminalShellStartupPlan {
+        let backendIdentifier = backendIdentifier(for: serverID)
+        let plan = try await startupPlan(
+            for: paneID,
+            serverID: serverID,
+            client: client,
+            backendIdentifier: backendIdentifier,
+            availabilityResolver: {
+                await self.remoteSessions.availability(
+                    for: backendIdentifier,
+                    using: client
+                )
+            },
+            transport: .tssh,
+            requestID: runtimeToken,
+            validateOwner: validateOwner
+        )
+
+        guard let workingDirectory = sessionState.paneState(for: paneID)?.workingDirectory else {
             return plan
         }
-        return TerminalShellStartupPlan(
-            command: command,
-            remoteSessionLifecycle: nil,
-            mayExecuteUserStartupAction: false
+        let environment = await client.remoteEnvironment()
+        return planRestoringWorkingDirectory(
+            plan,
+            workingDirectory: workingDirectory,
+            environment: environment
         )
     }
 

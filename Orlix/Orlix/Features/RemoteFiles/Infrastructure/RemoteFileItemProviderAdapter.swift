@@ -118,19 +118,49 @@ enum RemoteFileItemProviderAdapter {
     }
 
     private static func loadURL(from provider: NSItemProvider) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+        if let url = try? await loadURLDataRepresentation(from: provider) {
+            return url
+        }
+        if let url = try? await loadURLItem(from: provider) {
+            return url
+        }
+        return try await loadInPlaceURL(from: provider)
+    }
+
+    private static func loadURLDataRepresentation(from provider: NSItemProvider) async throws -> URL {
+        let data: Data = try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(
+                forTypeIdentifier: UTType.fileURL.identifier
+            ) { data, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if let url = item as? URL {
-                    continuation.resume(returning: url)
-                } else if let url = item as? NSURL {
-                    continuation.resume(returning: url as URL)
-                } else if let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    continuation.resume(returning: url)
-                } else if let text = item as? String,
-                          let url = URL(string: text) {
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(
+                        throwing: RemoteFileBrowserError.failed(
+                            String(localized: "The dropped item could not be resolved to a local file or folder.")
+                        )
+                    )
+                }
+            }
+        }
+        guard let url = localFileURL(from: data) else {
+            throw RemoteFileBrowserError.failed(
+                String(localized: "The dropped item could not be resolved to a local file or folder.")
+            )
+        }
+        return url
+    }
+
+    private static func loadInPlaceURL(from provider: NSItemProvider) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadInPlaceFileRepresentation(
+                forTypeIdentifier: UTType.fileURL.identifier
+            ) { url, _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let url, url.isFileURL {
                     continuation.resume(returning: url)
                 } else {
                     continuation.resume(
@@ -141,6 +171,78 @@ enum RemoteFileItemProviderAdapter {
                 }
             }
         }
+    }
+
+    private static func loadURLItem(from provider: NSItemProvider) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let url = item as? URL {
+                    continuation.resume(returning: url)
+                } else if let url = item as? NSURL {
+                    continuation.resume(returning: url as URL)
+                } else if let data = item as? Data,
+                          let url = localFileURL(from: data) {
+                    continuation.resume(returning: url)
+                } else if let text = item as? String,
+                          let url = localFileURL(from: text) {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(
+                        throwing: RemoteFileBrowserError.failed(
+                            String(localized: "The dropped item could not be resolved to a local file or folder.")
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private static func localFileURL(from data: Data) -> URL? {
+        if let archivedURL = try? NSKeyedUnarchiver.unarchivedObject(
+            ofClass: NSURL.self,
+            from: data
+        ), archivedURL.isFileURL {
+            return archivedURL as URL
+        }
+
+        if let propertyList = try? PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) {
+            if let url = propertyList as? URL, url.isFileURL {
+                return url
+            }
+            if let url = propertyList as? NSURL, url.isFileURL {
+                return url as URL
+            }
+            if let text = propertyList as? String,
+               let url = localFileURL(from: text) {
+                return url
+            }
+        }
+
+        if let text = String(data: data, encoding: .utf8),
+           let url = localFileURL(from: text) {
+            return url
+        }
+
+        guard let url = URL(dataRepresentation: data, relativeTo: nil),
+              url.isFileURL else {
+            return nil
+        }
+        return url
+    }
+
+    private static func localFileURL(from text: String) -> URL? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: value), url.isFileURL {
+            return url
+        }
+        guard value.hasPrefix("/") else { return nil }
+        return URL(fileURLWithPath: value)
     }
 
     private static func loadRemotePayload(from provider: NSItemProvider) async throws -> RemoteFileDragPayload {

@@ -20,17 +20,23 @@ actor SSHSession {
         var output = Data()
         var stderr = Data()
         var outputBudget: SSHExecOutputBudget
+        let retainsPartialOutputOnFailure: Bool
+        let partialOutputCapture: SSHCommandPartialOutputCapture?
         var isStarted = false
 
         init(
             id: UUID,
             command: String,
             maximumOutputBytes: Int,
+            retainsPartialOutputOnFailure: Bool,
+            partialOutputCapture: SSHCommandPartialOutputCapture?,
             continuation: CheckedContinuation<String, Error>
         ) {
             self.id = id
             self.command = command
             self.outputBudget = SSHExecOutputBudget(maximumBytes: maximumOutputBytes)
+            self.retainsPartialOutputOnFailure = retainsPartialOutputOnFailure
+            self.partialOutputCapture = partialOutputCapture
             self.continuation = continuation
         }
     }
@@ -307,7 +313,9 @@ actor SSHSession {
                             await finishExecRequest(requestId, error: SSHError.outputLimitExceeded)
                             continue
                         }
-                        request.output.append(Data(bytes: buffer, count: readCount))
+                        let chunk = Data(bytes: buffer, count: readCount)
+                        request.output.append(chunk)
+                        request.partialOutputCapture?.append(chunk)
                         didWork = true
                     } else if bytesRead == Int(LIBSSH2_ERROR_EAGAIN) {
                         // No data yet

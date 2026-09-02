@@ -89,6 +89,32 @@ final class StoreStateTests: XCTestCase {
         XCTAssertEqual(presentation.purchaseButtonTitle, "Subscribe for $6.49")
     }
 
+    func testStoreKitConfigurationDefinesSevenDayYearlyTrial() throws {
+        let configurationURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("OrlixStoreKit.storekit")
+        let data = try Data(contentsOf: configurationURL)
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let groups = try XCTUnwrap(root["subscriptionGroups"] as? [[String: Any]])
+        let subscriptions = groups.flatMap { group in
+            group["subscriptions"] as? [[String: Any]] ?? []
+        }
+        let yearly = try XCTUnwrap(subscriptions.first { subscription in
+            subscription["productID"] as? String == OrlixProducts.proYearly
+        })
+        let offers = try XCTUnwrap(yearly["introductoryOffers"] as? [[String: Any]])
+        let offer = try XCTUnwrap(offers.first)
+
+        XCTAssertEqual(yearly["recurringSubscriptionPeriod"] as? String, "P1Y")
+        XCTAssertEqual(offer["paymentMode"] as? String, "free")
+        XCTAssertEqual(offer["subscriptionPeriod"] as? String, "P1W")
+    }
+
     func testStoreKitConfigurationProvidesEligibleSevenDayYearlyTrial() async throws {
         let session = try SKTestSession(configurationFileNamed: "OrlixStoreKit")
         session.disableDialogs = true

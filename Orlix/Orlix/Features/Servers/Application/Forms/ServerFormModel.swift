@@ -5,6 +5,7 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
     case tailscale
     case mosh
     case eternalTerminal
+    case tssh
     case cloudflare
 
     var id: String { rawValue }
@@ -19,6 +20,8 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
             return .mosh
         case .eternalTerminal:
             return .eternalTerminal
+        case .tssh:
+            return .tssh
         case .cloudflare:
             return .cloudflare
         }
@@ -34,6 +37,8 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
             self = .mosh
         case .eternalTerminal:
             self = .eternalTerminal
+        case .tssh:
+            self = .tssh
         case .cloudflare:
             self = .cloudflare
         }
@@ -51,6 +56,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         let host: String
         let port: String
         let eternalTerminalPort: String
+        let tsshProfile: TSSHProfile
         let username: String
         let transportSelection: ServerTransportSelection
         let authMethod: AuthMethod
@@ -68,6 +74,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
     var host: String
     var port: String
     var eternalTerminalPort: String
+    var tsshProfile: TSSHProfile
     var username: String
     var transportSelection: ServerTransportSelection
     var authMethod: AuthMethod
@@ -100,6 +107,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         host = server?.host ?? ""
         port = String(server?.port ?? 22)
         eternalTerminalPort = String(server?.eternalTerminalPort ?? 2022)
+        tsshProfile = server?.tsshProfile ?? TSSHProfile()
         username = server?.username ?? ""
         transportSelection = server.map(ServerTransportSelection.init) ?? .standard
         authMethod = server?.authMethod ?? .password
@@ -132,8 +140,19 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && !host.isEmpty
             && validPort(port)
             && (transportSelection != .eternalTerminal || validPort(eternalTerminalPort))
+            && (transportSelection != .tssh || tsshProfile.isValid)
+            && (transportSelection != .tssh || hasValidTSSHAgentCredentials)
             && hasValidCredentials
             && remoteShellStartupAction.isValid
+    }
+
+    var hasValidTSSHAgentCredentials: Bool {
+        guard tsshProfile.sshAgentForwarding else { return true }
+        return authMethod == .sshKey
+            && TSSHAgentCredentialValidator.isSupported(
+                privateKey: sshKey,
+                publicKey: sshPublicKey
+            )
     }
 
     var effectiveUsername: String {
@@ -146,6 +165,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             host: host,
             port: port,
             eternalTerminalPort: eternalTerminalPort,
+            tsshProfile: tsshProfile,
             username: effectiveUsername,
             transportSelection: transportSelection,
             authMethod: authMethod,
@@ -217,6 +237,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             host: host,
             port: Int(port) ?? 22,
             eternalTerminalPort: Int(eternalTerminalPort) ?? 2022,
+            tsshProfile: tsshProfile,
             username: effectiveUsername,
             connectionMode: transportSelection.connectionMode,
             authMethod: transportSelection == .tailscale ? .password : authMethod,

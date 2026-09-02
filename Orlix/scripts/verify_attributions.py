@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -17,7 +17,7 @@ PACKAGE_RESOLVED_PATH = (
     REPOSITORY_ROOT
     / "Orlix.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 )
-BUILD_SCRIPT_PATH = REPOSITORY_ROOT / "scripts/build.sh"
+BUILD_SCRIPT_PATH = REPOSITORY_ROOT / "make/vendor.mk"
 MODEL_CATALOG_PATH = (
     REPOSITORY_ROOT
     / "Orlix/Features/VoiceInput/Infrastructure/Models/MLXModelCatalog.swift"
@@ -159,7 +159,11 @@ def verify_swift_packages(
 
 
 def shell_value(source: str, name: str) -> str | None:
-    match = re.search(rf'^{re.escape(name)}="([^"]+)"$', source, re.MULTILINE)
+    match = re.search(
+        rf'^\s*{re.escape(name)}="([^"]+)"$',
+        source,
+        re.MULTILINE,
+    )
     return match.group(1) if match else None
 
 
@@ -170,7 +174,7 @@ def verify_native_dependencies(
 ) -> None:
     source = BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
     ghostty_commit_match = re.search(
-        r'^GHOSTTY_COMMIT="\$\{GHOSTTY_COMMIT:-([0-9a-f]{40})\}"$',
+        r'^\s*GHOSTTY_REF="\$\$\{GHOSTTY_REF:-([0-9a-f]{40})\}"$',
         source,
         re.MULTILINE,
     )
@@ -192,6 +196,12 @@ def verify_native_dependencies(
             "sourceURL": "https://www.openssl.org/source/",
             "version": shell_value(source, "OPENSSL_VERSION"),
             "sourceSHA256": shell_value(source, "OPENSSL_SHA256"),
+        },
+        {
+            "id": "trzsz-ssh-rootshell",
+            "sourceURL": "https://github.com/kitknox/trzsz-ssh-rootshell",
+            "version": shell_value(source, "TSSH_SOURCE_REVISION"),
+            "sourceSHA256": None,
         },
     ]
     expected_records = inventory.get("nativeDependencies", [])
@@ -223,7 +233,7 @@ def verify_native_dependencies(
     if not ghostty_version_path.is_file():
         errors.append("Vendor/libghostty/VERSION is missing.")
     elif ghostty_version_path.read_text(encoding="utf-8").strip() != actual[0]["version"]:
-        errors.append("The vendored Ghostty version does not match scripts/build.sh.")
+        errors.append("The vendored Ghostty version does not match make/vendor.mk.")
 
     verify_native_artifacts(errors)
 
@@ -235,11 +245,20 @@ def verify_native_artifacts(errors: list[str]) -> None:
         return
 
     for line in NATIVE_ARTIFACT_MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
-        match = re.fullmatch(r"([0-9a-f]{64})  (Vendor/.+\.a)", line)
+        match = re.fullmatch(r"([0-9a-f]{64})  (Vendor/[^\r\n]+)", line)
         if not match:
             errors.append(f"Invalid native artifact manifest line: {line}")
             continue
         expected_hash, relative_path = match.groups()
+        manifest_path = PurePosixPath(relative_path)
+        if (
+            manifest_path.is_absolute()
+            or manifest_path.parts[0] != "Vendor"
+            or any(part in {"", ".", ".."} for part in manifest_path.parts)
+            or manifest_path.as_posix() != relative_path
+        ):
+            errors.append(f"Invalid native artifact manifest path: {relative_path}")
+            continue
         declared.add(relative_path)
         artifact_path = REPOSITORY_ROOT / relative_path
         if not artifact_path.is_file():
@@ -251,7 +270,8 @@ def verify_native_artifacts(errors: list[str]) -> None:
         path.relative_to(REPOSITORY_ROOT).as_posix()
         for path in (REPOSITORY_ROOT / "Vendor").rglob("*.a")
     }
-    compare("Native artifact file set", sorted(declared), sorted(actual), errors)
+    declared_archives = {path for path in declared if path.endswith(".a")}
+    compare("Native artifact file set", sorted(declared_archives), sorted(actual), errors)
 
 
 def verify_model_assets(

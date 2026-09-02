@@ -34,6 +34,23 @@ extension TerminalTabManagerLifecycleTests {
                 #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.moshFallbackReason == nil)
             }
         }
+
+        @Test
+        func nativeReconnectPreservesTSSHTransportIdentity() async {
+            await withCleanManager { manager in
+                let tab = TerminalTab(serverId: UUID(), title: "TSSH recovery")
+                installTab(tab, in: manager, connectionState: .connected)
+                manager.sessionState.updatePane(tab.rootPaneId) {
+                    $0.transportState = .tssh
+                }
+
+                manager.updatePaneState(tab.rootPaneId, connectionState: .reconnecting(attempt: 1))
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.activeTransport == .tssh)
+
+                manager.updatePaneState(tab.rootPaneId, connectionState: .connected)
+                #expect(manager.sessionState.paneState(for: tab.rootPaneId)?.activeTransport == .tssh)
+            }
+        }
     
         @Test
         func reconnectGenerationCreatesExactlyOneManagerOwnedReplacement() async {

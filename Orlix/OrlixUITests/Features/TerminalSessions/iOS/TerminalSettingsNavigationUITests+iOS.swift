@@ -83,7 +83,7 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
                 .waitForExistence(timeout: 8),
             "The Sessions & SSH page did not open."
         )
-        XCTAssertTrue(app.switches["Enable tmux by default"].exists)
+        XCTAssertTrue(app.switches["Use persistent sessions by default"].exists)
         XCTAssertTrue(app.switches["Keep screen awake"].exists)
     }
 
@@ -343,6 +343,7 @@ final class TerminalSettingsNavigationUITests: TerminalReconnectUITestCase {
 
         let diagnostics = app.staticTexts["orlix.reconnectTest.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
+        try requireConfiguredLoopbackSSHFixture(diagnostics: diagnostics, app: app)
         wait(
             for: diagnostics,
             containing: "setup=ready state=connected",

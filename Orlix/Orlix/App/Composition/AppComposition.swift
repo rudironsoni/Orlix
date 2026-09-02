@@ -141,6 +141,17 @@ struct AppComposition {
                 didDeleteServerLocalData: { serverID in
                     serverDeletionTerminalCleanup.handleServerDeletion(serverID)
                 },
+                didUpdateServerSecurityBinding: { server, credentials in
+                    serverDeletionTerminalCleanup.handleServerSecurityUpdate(
+                        server,
+                        credentials: credentials
+                    )
+                },
+                revokeUnclaimedTSSHVPN: { serverID in
+                    try await TSSHVPNManager.shared.stopUnclaimedPersistedTunnel(
+                        forServerID: serverID
+                    )
+                },
                 defaultWorkspaceName: defaultWorkspaceName,
                 canonicalDefaultWorkspaceNames: canonicalDefaultWorkspaceNames,
                 now: now,
@@ -246,6 +257,14 @@ struct AppComposition {
             applicationIsActive: applicationIsActive
         )
         serverDeletionTerminalCleanup.bind(to: tabManager)
+        knownHostsManager.setFingerprintMutationHandler { [weak tabManager] host, port in
+            Task { @MainActor [weak tabManager] in
+                tabManager?.transportCoordinator.invalidateTSSHRuntimesForTrustReset(
+                    host: host,
+                    port: port
+                )
+            }
+        }
         let storeManager = StoreManager(
             client: AppStoreKitClient(),
             effects: .live(
@@ -344,7 +363,18 @@ struct AppComposition {
             keychain: keychainManager
         )
         let knownHostSettingsCoordinator = KnownHostSettingsLiveComposition.makeCoordinator(
-            knownHosts: knownHostsManager
+            knownHosts: knownHostsManager,
+            invalidateLiveTSSHTrust: { reset in
+                switch reset {
+                case .host(let host, let port):
+                    tabManager.transportCoordinator.invalidateTSSHRuntimesForTrustReset(
+                        host: host,
+                        port: port
+                    )
+                case .all:
+                    tabManager.transportCoordinator.invalidateTSSHRuntimesForTrustReset()
+                }
+            }
         )
         let appLifecycleDependencies = platform.lifecycleDependencies
         let ghosttyRuntimeConfiguration = Ghostty.RuntimeConfiguration(

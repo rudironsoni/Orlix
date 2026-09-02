@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct OrlixTestApp: App {
+struct OrlixTerminalTestApp: App {
     var body: some Scene {
         WindowGroup {
             EmptyView()

@@ -33,15 +33,27 @@ nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
         self.operationID = operationID
     }
 
+    private init(validToken token: String, operationID: UUID) {
+        self.token = token
+        self.operationID = operationID
+    }
+
     static func isValidToken(_ token: String) -> Bool {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let allowed: (UInt8) -> Bool = { byte in
+            (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
+                || (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(byte)
+                || (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(byte)
+                || byte == UInt8(ascii: "-")
+                || byte == UInt8(ascii: "_")
+        }
         return !token.isEmpty
             && token.utf8.count <= Self.maximumTokenLength
-            && token.unicodeScalars.allSatisfy(allowed.contains)
+            && token.utf8.allSatisfy(allowed)
     }
 
     static func make() -> Self {
-        try! Self(token: UUID().uuidString, operationID: UUID())
+        let token = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        return Self(validToken: token, operationID: UUID())
     }
 
     init(from decoder: Decoder) throws {

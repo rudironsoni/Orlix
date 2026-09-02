@@ -26,15 +26,18 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
     private let rootDirectoryURL: URL
     private let fileManager: FileManager
     private let defaults: UserDefaults
+    private let registerFontAtURL: (URL) throws -> Void
 
     init(
         rootDirectoryURL: URL,
         fileManager: FileManager = .default,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        registerFontAtURL: ((URL) throws -> Void)? = nil
     ) {
         self.rootDirectoryURL = rootDirectoryURL
         self.fileManager = fileManager
         self.defaults = defaults
+        self.registerFontAtURL = registerFontAtURL ?? Self.registerFont
     }
 
     static func applicationSupport(
@@ -109,7 +112,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         )
         do {
             try installVerifiedFile(from: sourceURL, to: destination, matching: font)
-            try registerFont(at: destination)
+            try registerFontAtURL(destination)
             return font
         } catch {
             removeFile(for: font)
@@ -154,7 +157,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
             }
 
             do {
-                try registerFont(at: url)
+                try registerFontAtURL(url)
                 available[font.id] = families
             } catch {
                 continue
@@ -305,7 +308,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         }
     }
 
-    private func registerFont(at url: URL) throws {
+    private static func registerFont(at url: URL) throws {
         var unmanagedError: Unmanaged<CFError>?
         if CTFontManagerRegisterFontsForURL(url as CFURL, .process, &unmanagedError) {
             return

@@ -57,11 +57,11 @@ final class TerminalKeyboardShortcutUITests: TerminalKeyboardUITestCase {
         wait(for: diagnostics, labelContaining: "lastZoomAction=reset", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "inputHex=none", timeout: 5, diagnostics: diagnosticsText(in: app))
 
-        app.typeKey("=", modifierFlags: [])
+        terminal.typeText("=")
         wait(for: diagnostics, labelContaining: "inputHex=3d", timeout: 5, diagnostics: diagnosticsText(in: app))
-        app.typeKey("-", modifierFlags: [])
+        terminal.typeText("-")
         wait(for: diagnostics, labelContaining: "inputHex=2d", timeout: 5, diagnostics: diagnosticsText(in: app))
-        app.typeKey("0", modifierFlags: [])
+        terminal.typeText("0")
         wait(for: diagnostics, labelContaining: "inputHex=30", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "zoomActions=4", timeout: 5, diagnostics: diagnosticsText(in: app))
     }
@@ -331,4 +331,3 @@ final class TerminalKeyboardShortcutUITests: TerminalKeyboardUITestCase {
 
 }
 #endif
-

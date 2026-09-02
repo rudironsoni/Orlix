@@ -43,6 +43,7 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         snapshot.isFirstResponder = observed
         snapshot.isSoftwareInputActive = observed
         if observed {
+            snapshot.isSoftwareKeyboardSuppressed = false
             snapshot.isKeyboardInBrowseMode = false
         }
         return result
@@ -59,6 +60,7 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
         snapshot.isFirstResponder = observed
         snapshot.isSoftwareInputActive = observed
         if observed {
+            snapshot.isSoftwareKeyboardSuppressed = false
             snapshot.isKeyboardInBrowseMode = false
         }
         return result

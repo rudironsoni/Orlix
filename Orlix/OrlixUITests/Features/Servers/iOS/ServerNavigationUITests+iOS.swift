@@ -8,7 +8,7 @@ final class ServerNavigationUITests: XCTestCase {
 
     @MainActor
     func testActiveTerminalPushPopPreservesListPositionAndSession() throws {
-        let app = launchNavigationHarness()
+        let app = try launchNavigationHarness()
         let diagnostics = app.staticTexts["orlix.reconnectTest.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
         wait(for: diagnostics, containing: "setup=ready", app: app)
@@ -120,7 +120,7 @@ final class ServerNavigationUITests: XCTestCase {
 
     @MainActor
     func testBackgroundReturnPreservesSessionKeyboardAndBackResponsiveness() throws {
-        let app = launchNavigationHarness()
+        let app = try launchNavigationHarness()
         let diagnostics = app.staticTexts["orlix.reconnectTest.diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
         wait(for: diagnostics, containing: "setup=ready", app: app)
@@ -174,7 +174,7 @@ final class ServerNavigationUITests: XCTestCase {
     }
 
     @MainActor
-    private func launchNavigationHarness() -> XCUIApplication {
+    private func launchNavigationHarness() throws -> XCUIApplication {
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments = [
@@ -199,6 +199,8 @@ final class ServerNavigationUITests: XCTestCase {
             app.terminate()
             app.launch()
         }
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 45))
+        try requireConfiguredLoopbackSSHFixture(diagnostics: diagnostics, app: app)
         return app
     }
 

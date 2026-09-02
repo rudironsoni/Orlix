@@ -36,6 +36,7 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
             app.launch()
         }
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 45), "Production reconnect harness did not mount")
+        try requireConfiguredLoopbackSSHFixture(diagnostics: diagnostics, app: app)
         wait(
             for: diagnostics,
             containing: "setup=ready state=connected",
@@ -129,7 +130,7 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
 
     @MainActor
     func testProductionSSHBackgroundPreservesDarkAccessoryAppearance() throws {
-        let (app, diagnostics) = launchProductionSSHTestHarness(themeName: "Orlix Dark")
+        let (app, diagnostics) = try launchProductionSSHTestHarness(themeName: "Orlix Dark")
         defer { app.terminate() }
 
         let terminal = productionTerminal(in: app)
@@ -163,7 +164,7 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
 
     @MainActor
     func testProductionCodexModesKeepKeyboardAndPTYTyping() throws {
-        let (app, diagnostics) = launchProductionSSHTestHarness()
+        let (app, diagnostics) = try launchProductionSSHTestHarness()
         defer { app.terminate() }
         wait(for: diagnostics, containing: "title=DEV199_READY_1", timeout: 10, app: app)
 
@@ -188,7 +189,7 @@ final class TerminalProductionSSHUITests: TerminalReconnectUITestCase {
 
     @MainActor
     func testProductionCodexFindKeyboardMenuRestoresPTYTyping() throws {
-        let (app, diagnostics) = launchProductionSSHTestHarness(
+        let (app, diagnostics) = try launchProductionSSHTestHarness(
             exposesKeyboardLossControl: true
         )
         defer { app.terminate() }

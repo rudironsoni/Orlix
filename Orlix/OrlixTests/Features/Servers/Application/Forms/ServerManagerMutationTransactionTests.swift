@@ -60,7 +60,7 @@ struct ServerManagerMutationTransactionTests {
         var duplicateCredentials = ServerCredentials(serverId: duplicate.id)
         duplicateCredentials.password = "source-password"
 
-        await #expect(throws: OrlixError.self) {
+        await #expect(throws: TestTransactionError.persistence) {
             try await useCase.execute(
                 .create(duplicate),
                 credentials: duplicateCredentials,
@@ -159,6 +159,69 @@ struct ServerManagerMutationTransactionTests {
     }
 
     @Test
+    func editingVPNServerRevokesItsPersistedTunnel() async throws {
+        let workspace = makeWorkspace()
+        var storedServer = makeServer(workspaceID: workspace.id)
+        storedServer.connectionMode = .tssh
+        storedServer.tsshProfile.vpnEnabled = true
+        var editedServer = storedServer
+        editedServer.tsshProfile.blockQUICInVPN = true
+        let local = ServerLocalRepositoryFake(
+            servers: [storedServer],
+            workspaces: [workspace]
+        )
+        var revokedServerIDs: [UUID] = []
+        let manager = makeManager(
+            local: local,
+            credentials: ServerManagerCredentialRepositoryFake(),
+            sync: ServerSyncRepositoryFake(),
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
+        )
+
+        _ = try await manager.apply(
+            .update(editedServer),
+            credentials: ServerCredentials(serverId: editedServer.id)
+        )
+
+        #expect(revokedServerIDs == [storedServer.id])
+    }
+
+    @Test
+    func editingServerInvalidatesOffscreenTSSHSecurityBindings() async throws {
+        let workspace = makeWorkspace()
+        var storedServer = makeServer(workspaceID: workspace.id)
+        storedServer.connectionMode = .tssh
+        var editedServer = storedServer
+        editedServer.host = "new.example.test"
+        let credentials = ServerCredentials(
+            serverId: editedServer.id,
+            credentialBinding: ServerCredentialBinding(server: editedServer),
+            password: "new-password"
+        )
+        let local = ServerLocalRepositoryFake(
+            servers: [storedServer],
+            workspaces: [workspace]
+        )
+        var invalidatedBindings: [(Server, ServerCredentials)] = []
+        let manager = makeManager(
+            local: local,
+            credentials: ServerManagerCredentialRepositoryFake(),
+            sync: ServerSyncRepositoryFake(),
+            didUpdateServerSecurityBinding: {
+                invalidatedBindings.append(($0, $1))
+            }
+        )
+
+        _ = try await manager.apply(.update(editedServer), credentials: credentials)
+
+        #expect(invalidatedBindings.count == 1)
+        #expect(invalidatedBindings.first?.0.id == editedServer.id)
+        #expect(invalidatedBindings.first?.0.host == editedServer.host)
+        #expect(invalidatedBindings.first?.0.connectionMode == .tssh)
+        #expect(invalidatedBindings.first?.1 == credentials)
+    }
+
+    @Test
     func deleteQueueFailureKeepsCompletedLocalDeletionForRecovery() async throws {
         let workspace = makeWorkspace()
         let server = makeServer(workspaceID: workspace.id)
@@ -246,12 +309,16 @@ struct ServerManagerMutationTransactionTests {
     @Test
     func workspaceDeletionRemovesLocalDataForEachDeletedServer() async throws {
         let workspace = makeWorkspace()
-        let first = makeServer(workspaceID: workspace.id)
-        let second = makeServer(
+        var first = makeServer(workspaceID: workspace.id)
+        first.connectionMode = .tssh
+        first.tsshProfile.vpnEnabled = true
+        var second = makeServer(
             workspaceID: workspace.id,
             id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
             name: "Second"
         )
+        second.connectionMode = .tssh
+        second.tsshProfile.vpnEnabled = true
         let local = ServerLocalRepositoryFake(
             servers: [first, second],
             workspaces: [workspace]
@@ -260,17 +327,20 @@ struct ServerManagerMutationTransactionTests {
         credentials.values[first.id] = ServerCredentials(serverId: first.id)
         credentials.values[second.id] = ServerCredentials(serverId: second.id)
         var deletedServerIDs: [UUID] = []
+        var revokedServerIDs: [UUID] = []
         let manager = makeManager(
             local: local,
             credentials: credentials,
             sync: ServerSyncRepositoryFake(),
-            didDeleteServerLocalData: { deletedServerIDs.append($0) }
+            didDeleteServerLocalData: { deletedServerIDs.append($0) },
+            revokeUnclaimedTSSHVPN: { revokedServerIDs.append($0) }
         )
 
         try await manager.deleteWorkspace(workspace)
 
         #expect(deletedServerIDs.count == 2)
         #expect(Set(deletedServerIDs) == Set([first.id, second.id]))
+        #expect(revokedServerIDs == [first.id, second.id])
     }
 
     @Test
@@ -465,7 +535,9 @@ struct ServerManagerMutationTransactionTests {
         local: ServerLocalRepositoryFake,
         credentials: ServerManagerCredentialRepositoryFake,
         sync: ServerSyncRepositoryFake,
-        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in }
+        didDeleteServerLocalData: @escaping (UUID) -> Void = { _ in },
+        didUpdateServerSecurityBinding: @escaping (Server, ServerCredentials) -> Void = { _, _ in },
+        revokeUnclaimedTSSHVPN: @escaping (UUID) async throws -> Void = { _ in }
     ) -> ServerManager {
         let now = { Date(timeIntervalSinceReferenceDate: 10_000) }
         var ids = (1...20).map {
@@ -493,6 +565,8 @@ struct ServerManagerMutationTransactionTests {
                 actionAuthorizer: ProtectedServerActionAuthorizerFake(),
                 knownHosts: ServerKnownHostRepositoryFake(),
                 didDeleteServerLocalData: didDeleteServerLocalData,
+                didUpdateServerSecurityBinding: didUpdateServerSecurityBinding,
+                revokeUnclaimedTSSHVPN: revokeUnclaimedTSSHVPN,
                 isRemoteSchemaError: { _ in false },
                 now: now,
                 makeID: makeID

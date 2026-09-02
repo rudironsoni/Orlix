@@ -55,6 +55,12 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     private lazy var terminalNavigationCommands: [UIKeyCommand] = Self.makeTerminalNavigationCommands(
         action: #selector(handleTerminalNavigationCommand(_:))
     )
+    private lazy var terminalZoomCommands = makeTerminalZoomKeyCommands(
+        action: #selector(handleTerminalZoomCommand(_:))
+    )
+    private lazy var terminalSplitCommands = makeTerminalSplitKeyCommands(
+        action: #selector(handleTerminalSplitCommand(_:))
+    )
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -131,7 +137,20 @@ final class TerminalIMEProxyTextView: UIView, UITextInput {
     }
 
     override var keyCommands: [UIKeyCommand]? {
-        terminalNavigationCommands + (super.keyCommands ?? [])
+        terminalSplitCommands
+            + terminalZoomCommands
+            + terminalNavigationCommands
+            + (super.keyCommands ?? [])
+    }
+
+    @objc
+    private func handleTerminalZoomCommand(_ command: UIKeyCommand) {
+        terminalOwner?.handleTerminalZoomCommand(command)
+    }
+
+    @objc
+    private func handleTerminalSplitCommand(_ command: UIKeyCommand) {
+        terminalOwner?.handleTerminalSplitCommand(command)
     }
 
     var keyboardType: UIKeyboardType {

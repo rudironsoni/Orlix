@@ -9,6 +9,8 @@ struct ServerRemoteSyncCoordinatorDependencies {
     let credentialRepository: any ServerManagerCredentialRepository
     let knownHosts: any ServerKnownHostRepository
     let didDeleteServerLocalData: (UUID) -> Void
+    let didUpdateServerSecurityBinding: (Server, ServerCredentials) -> Void
+    let revokeUnclaimedTSSHVPN: (UUID) async throws -> Void
     let isRemoteSchemaError: (Error) -> Bool
     let now: () -> Date
     let makeID: () -> UUID
@@ -54,7 +56,7 @@ final class ServerRemoteSyncCoordinator {
         let stateStore = dependencies.stateStore
         let syncRepository = dependencies.syncRepository
         startupTask = Task { [weak self, stateStore, syncRepository] in
-            let mutationRecovery = self?.recoverPendingServerDataMutation()
+            let mutationRecovery = await self?.recoverPendingServerDataMutation()
             if case .pending? = mutationRecovery {
                 return
             }
@@ -105,7 +107,13 @@ final class ServerRemoteSyncCoordinator {
         }
 
         stateStore.applyRemoteChanges(changes)
+        invalidateRuntimesForRemoteSecurityChanges(from: previousServers)
+        let deletedServers = serversRemovedFrom(previousServers)
+        let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+            previousServers
+        )
         do {
+            try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
             try stateStore.persistCurrentCollectionsForRemoteAcceptance()
             try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
         } catch {
@@ -118,7 +126,7 @@ final class ServerRemoteSyncCoordinator {
             throw error
         }
 
-        cleanLocalData(for: serversRemovedFrom(previousServers))
+        cleanLocalData(for: deletedServers)
         stateStore.restorePendingBootstrapWorkspaceID(nil)
         try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
         try clearAmbiguousCloudRecoveryIfNeeded()
@@ -171,7 +179,13 @@ final class ServerRemoteSyncCoordinator {
             let previousWorkspaces = stateStore.workspaces
             let previousBootstrapWorkspaceID = stateStore.transientBootstrapWorkspaceID
             stateStore.applyRemoteChanges(changes)
+            invalidateRuntimesForRemoteSecurityChanges(from: previousServers)
+            let deletedServers = serversRemovedFrom(previousServers)
+            let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+                previousServers
+            )
             do {
+                try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
                 try stateStore.persistCurrentCollectionsForRemoteAcceptance()
                 try dependencies.syncRepository.clearPendingServerAndWorkspaceMutations()
             } catch {
@@ -183,7 +197,7 @@ final class ServerRemoteSyncCoordinator {
                 try? stateStore.persistCurrentCollectionsForRemoteAcceptance()
                 throw error
             }
-            cleanLocalData(for: serversRemovedFrom(previousServers))
+            cleanLocalData(for: deletedServers)
             stateStore.restorePendingBootstrapWorkspaceID(nil)
             try dependencies.remoteRepository.acceptServerChanges(changes.checkpoint)
         }
@@ -335,9 +349,15 @@ final class ServerRemoteSyncCoordinator {
         try applyPendingSyncOverlay()
         _ = stateStore.reconcilePendingBootstrapWorkspaceState()
         try repairOrphanedServers()
+        invalidateRuntimesForRemoteSecurityChanges(from: previousServers)
         let deletedServers = serversRemovedFrom(previousServers)
+        let serversRequiringVPNRevocation = serversRequiringVPNRevocationFrom(
+            previousServers
+        )
 
         guard !Task.isCancelled, acceptsLoad(generation) else { return }
+
+        try await revokePersistedVPNs(for: serversRequiringVPNRevocation)
 
         do {
             try stateStore.persistCurrentCollectionsForRemoteAcceptance()
@@ -378,9 +398,51 @@ final class ServerRemoteSyncCoordinator {
         return previousServers.filter { !retainedServerIDs.contains($0.id) }
     }
 
+    private func invalidateRuntimesForRemoteSecurityChanges(
+        from previousServers: [Server]
+    ) {
+        let previousServersByID = Dictionary(uniqueKeysWithValues: previousServers.map {
+            ($0.id, $0)
+        })
+        for current in stateStore.servers {
+            guard let previous = previousServersByID[current.id],
+                  current.connectionMode != previous.connectionMode
+                    || ServerCredentialBinding(server: current)
+                        != ServerCredentialBinding(server: previous)
+                    || current.tsshProfile != previous.tsshProfile else { continue }
+            let credentials = (try? dependencies.credentialRepository.getCredentials(for: current))
+                ?? ServerCredentials(serverId: current.id)
+            dependencies.didUpdateServerSecurityBinding(current, credentials)
+        }
+    }
+
+    private func serversRequiringVPNRevocationFrom(
+        _ previousServers: [Server]
+    ) -> [Server] {
+        let currentServers = Dictionary(uniqueKeysWithValues: stateStore.servers.map {
+            ($0.id, $0)
+        })
+        return previousServers.filter { previous in
+            guard previous.connectionMode == .tssh,
+                  previous.tsshProfile.vpnEnabled else { return false }
+            guard let current = currentServers[previous.id] else { return true }
+            return current.connectionMode != .tssh
+                || ServerCredentialBinding(server: current)
+                    != ServerCredentialBinding(server: previous)
+                || current.tsshProfile != previous.tsshProfile
+        }
+    }
+
     private func cleanLocalData(for removedServers: [Server]) {
         removeKnownHosts(for: removedServers)
         removedServers.forEach { dependencies.didDeleteServerLocalData($0.id) }
+    }
+
+    private func revokePersistedVPNs(for servers: [Server]) async throws {
+        for server in servers where server.connectionMode == .tssh
+                && server.tsshProfile.vpnEnabled {
+            try await dependencies.revokeUnclaimedTSSHVPN(server.id)
+        }
     }
 
     private func clearAmbiguousCloudRecoveryIfNeeded() throws {
@@ -626,13 +688,14 @@ final class ServerRemoteSyncCoordinator {
         case pending
     }
 
-    private func recoverPendingServerDataMutation() -> ServerDataMutationRecoveryResult {
+    private func recoverPendingServerDataMutation() async -> ServerDataMutationRecoveryResult {
         do {
             guard let journal = try serverDataMutationTransaction.resumePending() else {
                 stateStore.restorePersistedCollections()
                 return .none
             }
             if journal.presentsResultingState {
+                try await revokePersistedVPNs(for: journal.plan.deletedServers)
                 applyCommittedServerDataMutation(journal.plan)
             }
             guard journal.phase == .complete else {

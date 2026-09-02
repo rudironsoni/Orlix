@@ -137,12 +137,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
         #expect(terminal.becomeFirstResponder())
         #expect(terminal.imeProxyTextView.isFirstResponder)
 
-        let proxySplitCommand = terminal.imeProxyTextView.keyCommands?.first {
-            $0.input == "d" && $0.modifierFlags == .command
-        }
-        #expect(proxySplitCommand == nil)
-
-        let command = try #require(terminal.keyCommands?.first {
+        let command = try #require(terminal.imeProxyTextView.keyCommands?.first {
             $0.input == "d" && $0.modifierFlags == .command
         })
         let action = try #require(command.action)
@@ -150,7 +145,7 @@ struct GhosttyTerminalInteractionOwnershipTests {
             forAction: action,
             withSender: command
         )
-        #expect((target as AnyObject?) === terminal)
+        #expect((target as AnyObject?) === terminal.imeProxyTextView)
 
         var routedCommand: TerminalSplitCommand?
         terminal.onPaneKeyboardShortcut = { routedCommand = $0 }

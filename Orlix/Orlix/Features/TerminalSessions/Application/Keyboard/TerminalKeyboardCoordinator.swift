@@ -532,6 +532,11 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         if let terminal = activeTerminal {
             let snapshot = terminal.keyboardCoordinatorDiagnosticSnapshot()
             terminal.refreshTerminalInputAccessoryAppearance()
+            if isUserHidden {
+                clearSoftwareKeyboardObservation()
+                markDirty(reason: "sceneActivatedWithKeyboardHidden")
+                return
+            }
             guard snapshot.windowAttached, snapshot.windowIsKey else {
                 markDirty(reason: "sceneActivatedWithoutInputOwnership")
                 return
@@ -605,6 +610,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
         explicitPresentationRecovery = nil
         clearSoftwareKeyboardObservation()
+        syncScheduler.cancel(reason: "sceneDeactivated")
     }
 
     func activeTerminalWindowDidBecomeKey(for paneId: UUID) {
@@ -910,6 +916,7 @@ final class TerminalKeyboardCoordinator: ObservableObject {
         }
         guard softwareKeyboardPresentation != presentation else { return }
         softwareKeyboardPresentation = presentation
+        guard activeTerminalSceneIsForeground || presentation.isVisible else { return }
         markDirty(reason: presentation.isVisible ? "keyboardShown" : "keyboardHidden")
     }
 

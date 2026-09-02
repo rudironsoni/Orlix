@@ -107,11 +107,17 @@ final class TerminalTabManager {
                     runtimeEvents.send(event)
                 }
             ),
-            remoteSessionCoordinator: remoteSessionCoordinator
+            remoteSessionCoordinator: remoteSessionCoordinator,
+            initialTSSHAgentForwardingAllowed: !dependencies.appLock.initialIsLocked
         )
         runtimeEvents
             .sink { [weak self] event in
                 self?.handleTransportSessionEvent(event)
+            }
+            .store(in: &stateCancellables)
+        dependencies.appLock.updates
+            .sink { [weak self] isLocked in
+                self?.transportCoordinator.setTSSHAgentForwardingAllowed(!isLocked)
             }
             .store(in: &stateCancellables)
         #if os(iOS)
@@ -1010,7 +1016,8 @@ final class TerminalTabManager {
         #endif
         switch connectionState {
         case .connecting, .reconnecting:
-            if sessionState.paneState(for: paneId)?.activeTransport != .eternalTerminal {
+            let activeTransport = sessionState.paneState(for: paneId)?.activeTransport
+            if activeTransport != .eternalTerminal, activeTransport != .tssh {
                 setPaneTransport(.ssh, for: paneId)
             }
         case .disconnected, .failed:
@@ -1104,6 +1111,11 @@ final class TerminalTabManager {
                 )
             case .eternalTerminal(let token):
                 await transportCoordinator?.unregisterEternalTerminalRuntime(
+                    for: paneId,
+                    ifOwnedByToken: token
+                )
+            case .tssh(let token):
+                await transportCoordinator?.unregisterTSSHRuntime(
                     for: paneId,
                     ifOwnedByToken: token
                 )

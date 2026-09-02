@@ -46,6 +46,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
     )
     private let lock = NSLock()
     private var pendingChallenges: [String: Challenge] = [:]
+    private var fingerprintMutationHandler: ((String, Int) -> Void)?
 
     init(
         defaults: UserDefaults = .standard,
@@ -53,6 +54,12 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
     ) {
         self.defaults = defaults
         self.storageKey = storageKey
+    }
+
+    func setFingerprintMutationHandler(_ handler: @escaping (String, Int) -> Void) {
+        lock.lock()
+        fingerprintMutationHandler = handler
+        lock.unlock()
     }
 
     func entry(for host: String, port: Int) -> Entry? {
@@ -123,11 +130,13 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
     @discardableResult
     func approve(_ challenge: Challenge, now: Date = Date()) -> Bool {
         lock.lock()
-        defer { lock.unlock() }
 
         purgeExpiredChallenges(now: now)
         let key = hostKey(host: challenge.host, port: challenge.port)
-        guard pendingChallenges[key] == challenge else { return false }
+        guard pendingChallenges[key] == challenge else {
+            lock.unlock()
+            return false
+        }
 
         var entries = loadAll()
         let current = entries[key]
@@ -135,12 +144,14 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         case .firstUse:
             guard current == nil || current?.fingerprint == challenge.fingerprint else {
                 pendingChallenges.removeValue(forKey: key)
+                lock.unlock()
                 return false
             }
         case .changed(let previousFingerprint):
             guard current?.fingerprint == previousFingerprint
                     || current?.fingerprint == challenge.fingerprint else {
                 pendingChallenges.removeValue(forKey: key)
+                lock.unlock()
                 return false
             }
         }
@@ -157,7 +168,15 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         )
         saveAll(entries)
         pendingChallenges.removeValue(forKey: key)
+        let didReplaceFingerprint = current.map {
+            $0.fingerprint != challenge.fingerprint
+        } ?? false
+        let mutationHandler = fingerprintMutationHandler
+        lock.unlock()
         logger.info("Approved SSH host key for port \(challenge.port)")
+        if didReplaceFingerprint {
+            mutationHandler?(challenge.host, challenge.port)
+        }
         return true
     }
 
@@ -171,7 +190,6 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
 
     func save(entry: Entry) {
         lock.lock()
-        defer { lock.unlock() }
         var entries = loadAll()
         let canonicalEntry = Entry(
             host: Self.canonicalHost(entry.host),
@@ -181,8 +199,16 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
             addedAt: entry.addedAt,
             lastSeenAt: entry.lastSeenAt
         )
+        let didReplaceFingerprint = entries[canonicalEntry.id].map {
+            $0.fingerprint != canonicalEntry.fingerprint
+        } ?? false
         entries[canonicalEntry.id] = canonicalEntry
         saveAll(entries)
+        let mutationHandler = fingerprintMutationHandler
+        lock.unlock()
+        if didReplaceFingerprint {
+            mutationHandler?(canonicalEntry.host, canonicalEntry.port)
+        }
     }
 
     func remove(host: String, port: Int) {
@@ -224,7 +250,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         "\(Self.canonicalHost(host)):\(port)"
     }
 
-    private static func canonicalHost(_ host: String) -> String {
+    static func canonicalHost(_ host: String) -> String {
         var value = host
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "en_US_POSIX"))

@@ -18,7 +18,7 @@ nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
 
     nonisolated init(transport: ShellTransport) {
         switch transport {
-        case .ssh, .sshFallback:
+        case .ssh, .sshFallback, .tssh:
             self = .genuineSSH
         case .eternalTerminal:
             self = .eternalTerminal

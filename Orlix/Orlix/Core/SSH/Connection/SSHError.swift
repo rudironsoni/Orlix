@@ -1,5 +1,29 @@
 import Foundation
 
+nonisolated final class SSHCommandPartialOutputCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        lock.withLock {
+            data.append(chunk)
+        }
+    }
+
+    func output() -> String {
+        lock.withLock {
+            String(data: data, encoding: .utf8) ?? ""
+        }
+    }
+}
+
+nonisolated struct SSHCommandExecutionError: LocalizedError, Sendable {
+    let underlyingDescription: String
+    let partialOutput: String
+
+    var errorDescription: String? { underlyingDescription }
+}
+
 enum SSHError: LocalizedError, Sendable {
     case notConnected
     case connectionFailed(String)

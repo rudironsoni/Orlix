@@ -28,10 +28,12 @@ private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository 
 @MainActor
 enum KnownHostSettingsLiveComposition {
     static func makeCoordinator(
-        knownHosts: KnownHostsManager
+        knownHosts: KnownHostsManager,
+        invalidateLiveTSSHTrust: @escaping (KnownHostTrustReset) -> Void = { _ in }
     ) -> KnownHostSettingsCoordinator {
         KnownHostSettingsCoordinator(
-            repository: AppKnownHostSettingsRepository(knownHosts: knownHosts)
+            repository: AppKnownHostSettingsRepository(knownHosts: knownHosts),
+            invalidateLiveTSSHTrust: invalidateLiveTSSHTrust
         )
     }
 }
