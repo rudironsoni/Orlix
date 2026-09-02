@@ -6,6 +6,8 @@ def _archive_repository_impl(ctx):
         sha256 = ctx.attr.sha256,
         strip_prefix = ctx.attr.strip_prefix,
     )
+    export_patterns = [ctx.attr.marker] + list(ctx.attr.extra_exports)
+    quoted = ", ".join(['"%s"' % pattern for pattern in export_patterns])
     ctx.file("BUILD.bazel", """
 package(default_visibility = ["//visibility:public"])
 
@@ -14,8 +16,8 @@ filegroup(
     srcs = glob(["**"], exclude = ["BUILD.bazel"]),
 )
 
-exports_files(["%s"])
-""" % ctx.attr.marker)
+exports_files(glob([%s]))
+""" % quoted)
 
 _archive_repository = repository_rule(
     implementation = _archive_repository_impl,
@@ -24,6 +26,7 @@ _archive_repository = repository_rule(
         "sha256": attr.string(mandatory = True),
         "strip_prefix": attr.string(mandatory = True),
         "marker": attr.string(mandatory = True),
+        "extra_exports": attr.string_list(),
     },
 )
 
@@ -278,6 +281,7 @@ def _native_sources_impl(_ctx):
         sha256 = "eb36801e119529b13513c3459dc20e2a32f7053629f3aabb63ea501a4d88f63d",
         strip_prefix = "linux-6.12.105",
         marker = "Makefile",
+        extra_exports = ["usr/gen_init_cpio.c"],
     )
     _archive_repository(
         name = "orlix_mlibc_source",

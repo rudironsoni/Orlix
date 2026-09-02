@@ -1,0 +1,12 @@
+load(":rootfs.bzl", "orlix_rootfs")
+
+package(default_visibility = ["//visibility:private"])
+
+orlix_rootfs(
+    name = "rootfs",
+    gen_init_cpio = "@orlix_linux_source//:usr/gen_init_cpio.c",
+    package = "//bazel/feasibility/packages:true",
+    sysroot = "//bazel/feasibility/mlibc:sysroot",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)

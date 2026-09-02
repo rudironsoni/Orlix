@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "fT1S+I+v9MDk55/NxKx7QzkVpRxvruU7g7u85qPc48o=",
+        "bzlTransitiveDigest": "gwCpBe2hRPBjxAXjtwSiRO6C2xDjZN6Fi+VSq3G4JzI=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -337,7 +337,10 @@
               "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.105.tar.xz",
               "sha256": "eb36801e119529b13513c3459dc20e2a32f7053629f3aabb63ea501a4d88f63d",
               "strip_prefix": "linux-6.12.105",
-              "marker": "Makefile"
+              "marker": "Makefile",
+              "extra_exports": [
+                "usr/gen_init_cpio.c"
+              ]
             }
           },
           "orlix_mlibc_source": {
