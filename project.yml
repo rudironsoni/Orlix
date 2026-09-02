@@ -526,6 +526,7 @@ targets:
           - OpenTelemetryApi
           - OpenTelemetrySdk
       - sdk: AppIntents.framework
+        weak: true
     settings:
       base: &orlix_application_settings
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
@@ -669,6 +670,7 @@ targets:
           - OpenTelemetryApi
           - OpenTelemetrySdk
       - sdk: AppIntents.framework
+        weak: true
     settings:
       base:
         <<: *orlix_application_settings
