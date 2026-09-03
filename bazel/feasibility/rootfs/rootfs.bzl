@@ -57,6 +57,7 @@ case "$package_tree" in
     ;;
 esac
 test -x "$package_tree/usr/bin/true"
+test -x "$package_tree/usr/bin/ls"
 hostcc="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 mke2fs="$(/usr/bin/command -v mke2fs)"
@@ -66,19 +67,21 @@ test -n "$mke2fs"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-rootfs.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 "$hostcc" -isysroot "$sdkroot" -O2 -o "$work/gen_init_cpio" "$gen_init_cpio_src"
-/bin/mkdir -p "$base_tree/bin" "$base_tree/dev" "$base_tree/proc" "$base_tree/sys" "$base_tree/tmp" "$state_tree/upper" "$state_tree/work"
+/bin/mkdir -p "$base_tree/bin" "$base_tree/usr/bin" "$base_tree/dev" "$base_tree/proc" "$base_tree/sys" "$base_tree/tmp" "$state_tree/upper" "$state_tree/work"
+/bin/cp -R "$package_tree/usr/bin/." "$base_tree/usr/bin/"
 /bin/cp "$package_tree/usr/bin/true" "$base_tree/bin/true"
-/bin/chmod 0755 "$base_tree/bin/true"
+/bin/cp "$package_tree/usr/bin/ls" "$base_tree/bin/ls"
+/bin/chmod 0755 "$base_tree/bin/true" "$base_tree/bin/ls"
 /bin/ln -s true "$base_tree/bin/sh"
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$base_tree/bin/true"' 0755 0 0' > "$work/initramfs.list"
 "$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
 test -s "$initramfs_out"
-/bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=1 status=none
-/bin/dd if=/dev/zero of="$state_ext4" bs=1048576 count=1 status=none
+/bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=256 status=none
+/bin/dd if=/dev/zero of="$state_ext4" bs=1048576 count=8 status=none
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$base_tree" "$base_ext4"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
 /usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
-/usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=true\n' > "$payload_metadata"
+/usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils\n' > "$payload_metadata"
 digest="$(/usr/bin/shasum -a 256 "$initramfs_out" "$base_ext4" "$state_ext4" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,

@@ -1,3 +1,4 @@
+load(":coreutils.bzl", "COREUTILS_PROGRAMS", "orlix_coreutils_package")
 load(":package.bzl", "orlix_guest_package")
 
 package(default_visibility = ["//visibility:private"])
@@ -14,6 +15,20 @@ orlix_guest_package(
     package_version = "0.1",
     source = "true/true.c",
     sysroot = "//bazel/feasibility/mlibc:sysroot",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
+orlix_coreutils_package(
+    name = "coreutils",
+    configure = "@orlix_coreutils_source//:configure",
+    git_commit = "c01fd163a47468a8296fb369f5233853bb551bb6",
+    package_name = "coreutils",
+    package_version = "9.11",
+    programs = COREUTILS_PROGRAMS,
+    sources = "@orlix_coreutils_source//:source",
+    sysroot = "//bazel/feasibility/mlibc:sysroot",
+    uapi = "//bazel/feasibility/kernel:uapi",
     tags = ["manual"],
     visibility = ["//bazel/feasibility:__subpackages__"],
 )

@@ -2,6 +2,7 @@ load(
     ":providers.bzl",
     "config_flags_test",
     "no_wrapper_makefile_test",
+    "coreutils_package_tree_test",
     "package_tree_test",
     "rootfs_info_test",
     "sysroot_uapi_only_test",
@@ -77,6 +78,11 @@ variant_stamp_test(
 package_tree_test(
     name = "true_package_tree_test",
     target_under_test = "//bazel/feasibility/packages:true",
+)
+
+coreutils_package_tree_test(
+    name = "coreutils_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:coreutils",
 )
 
 rootfs_info_test(

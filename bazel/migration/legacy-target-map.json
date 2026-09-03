@@ -9,7 +9,7 @@
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "6d9c961f1990bce7eed9bccef10e31a897190f1ecd85665e932678036b3654fb",
     "OrlixOS/Makefile": "d0db3733795f4302e5f369d931c03daf56384dcb746fdbee3207c97e88f81164",
-    "make/bazel-migration.mk": "cd557fe3b0d15f08e556a76d1569a34e4449232a1e2d3d655af3d4deb2163c6f",
+    "make/bazel-migration.mk": "4a057ebbfd65d2fe5cbe046664a3d77438d7f7ba3208d57b5f3ca0c3b0bc5c67",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
     "make/runtime.mk": "2dc60f9ccd78be2e565843c96873453a123b447603d4484afdfc8517ab4e2cc8",
@@ -5111,19 +5111,29 @@
       ]
     },
     {
-      "name": "__bazel-rootfs",
+      "name": "__bazel-coreutils",
       "source": "make/bazel-migration.mk",
       "line": 131,
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "__bazel-guest-package"
+        "__bazel-mlibc-from-uapi"
+      ]
+    },
+    {
+      "name": "__bazel-rootfs",
+      "source": "make/bazel-migration.mk",
+      "line": 150,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-coreutils"
       ]
     },
     {
       "name": "__bazel-live-activity-smoke",
       "source": "make/bazel-migration.mk",
-      "line": 146,
+      "line": 169,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5133,7 +5143,7 @@
     {
       "name": "__bazel-feasibility-xcodeproj",
       "source": "make/bazel-migration.mk",
-      "line": 149,
+      "line": 172,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5143,7 +5153,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 153,
+      "line": 176,
       "classification": "private",
       "phony": true,
       "prerequisites": []
@@ -5151,7 +5161,7 @@
     {
       "name": "__bazel-migration-inventory",
       "source": "make/bazel-migration.mk",
-      "line": 163,
+      "line": 186,
       "classification": "private",
       "phony": true,
       "prerequisites": []
@@ -5159,7 +5169,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 166,
+      "line": 189,
       "classification": "private",
       "phony": true,
       "prerequisites": []
@@ -5167,7 +5177,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 169,
+      "line": 192,
       "classification": "private",
       "phony": true,
       "prerequisites": [
