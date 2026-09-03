@@ -349,5 +349,13 @@ def _native_sources_impl(_ctx):
         strip_prefix = "coreutils-9.11",
         marker = "configure",
     )
+    # GNU Bash 5.3 Autotools tarball. Pins match OrlixOS BASH_URL / BASH_SHA256.
+    _archive_repository(
+        name = "orlix_bash_source",
+        url = "https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz",
+        sha256 = "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba",
+        strip_prefix = "bash-5.3",
+        marker = "configure",
+    )
 
 native_sources = module_extension(implementation = _native_sources_impl)

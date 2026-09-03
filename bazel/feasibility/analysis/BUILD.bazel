@@ -2,6 +2,7 @@ load(
     ":providers.bzl",
     "config_flags_test",
     "no_wrapper_makefile_test",
+    "bash_package_tree_test",
     "coreutils_package_tree_test",
     "package_tree_test",
     "rootfs_info_test",
@@ -83,6 +84,11 @@ package_tree_test(
 coreutils_package_tree_test(
     name = "coreutils_package_tree_test",
     target_under_test = "//bazel/feasibility/packages:coreutils",
+)
+
+bash_package_tree_test(
+    name = "bash_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:bash",
 )
 
 rootfs_info_test(

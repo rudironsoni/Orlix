@@ -1,3 +1,4 @@
+load(":bash.bzl", "orlix_bash_package")
 load(":coreutils.bzl", "COREUTILS_PROGRAMS", "orlix_coreutils_package")
 load(":package.bzl", "orlix_guest_package")
 
@@ -27,6 +28,18 @@ orlix_coreutils_package(
     package_version = "9.11",
     programs = COREUTILS_PROGRAMS,
     sources = "@orlix_coreutils_source//:source",
+    sysroot = "//bazel/feasibility/mlibc:sysroot",
+    uapi = "//bazel/feasibility/kernel:uapi",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
+orlix_bash_package(
+    name = "bash",
+    configure = "@orlix_bash_source//:configure",
+    package_name = "bash",
+    package_version = "5.3",
+    sources = "@orlix_bash_source//:source",
     sysroot = "//bazel/feasibility/mlibc:sysroot",
     uapi = "//bazel/feasibility/kernel:uapi",
     tags = ["manual"],

@@ -42,3 +42,15 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn("c01fd163a47468a8296fb369f5233853bb551bb6", text)
         self.assertIn("https://github.com/coreutils/gnulib.git", text)
         self.assertIn("https://ftp.gnu.org/gnu/coreutils/coreutils-9.11.tar.xz", text)
+
+    def test_bash_archive_has_sha256(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        bash = re.search(
+            r'name = "orlix_bash_source",.*?sha256 = "([0-9a-f]{64})"',
+            text,
+            re.S,
+        )
+        self.assertIsNotNone(bash)
+        self.assertEqual(bash.group(1), "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba")
+        self.assertIn("bash-5.3", text)
+        self.assertIn("https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz", text)
