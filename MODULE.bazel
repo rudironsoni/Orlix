@@ -37,6 +37,7 @@ use_repo(
     "orlix_bragi_source",
     "orlix_cmake_tool",
     "orlix_compiler_rt_source",
+    "orlix_coreutils_source",
     "orlix_freestnd_c_source",
     "orlix_freestnd_cxx_source",
     "orlix_frigg_source",

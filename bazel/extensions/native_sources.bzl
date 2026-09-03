@@ -337,5 +337,17 @@ def _native_sources_impl(_ctx):
         sha256 = "4e85de4daf1c3e82d7dc6b8ba5683972944b466343aeb9c327a742437bb3ce9a",
         strip_prefix = "cmake-4.0.3-macos-universal",
     )
+    # GNU Coreutils 9.11 Autotools tarball (configure + bundled gnulib).
+    # Git identity matches OrlixCoreUtils COREUTILS_GIT_COMMIT / v9.11:
+    # c01fd163a47468a8296fb369f5233853bb551bb6
+    # Product git bootstrap uses https://github.com/coreutils/gnulib.git;
+    # gnulib is already applied in this release tarball.
+    _archive_repository(
+        name = "orlix_coreutils_source",
+        url = "https://ftp.gnu.org/gnu/coreutils/coreutils-9.11.tar.xz",
+        sha256 = "394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3",
+        strip_prefix = "coreutils-9.11",
+        marker = "configure",
+    )
 
 native_sources = module_extension(implementation = _native_sources_impl)

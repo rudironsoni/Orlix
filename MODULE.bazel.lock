@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "gwCpBe2hRPBjxAXjtwSiRO6C2xDjZN6Fi+VSq3G4JzI=",
+        "bzlTransitiveDigest": "J4aTPQtbirZvR4hyKmBdR0kvtf7pRqJkK22BFxe6M5Q=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -411,6 +411,15 @@
               "url": "https://github.com/Kitware/CMake/releases/download/v4.0.3/cmake-4.0.3-macos-universal.tar.gz",
               "sha256": "4e85de4daf1c3e82d7dc6b8ba5683972944b466343aeb9c327a742437bb3ce9a",
               "strip_prefix": "cmake-4.0.3-macos-universal"
+            }
+          },
+          "orlix_coreutils_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://ftp.gnu.org/gnu/coreutils/coreutils-9.11.tar.xz",
+              "sha256": "394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3",
+              "strip_prefix": "coreutils-9.11",
+              "marker": "configure"
             }
           }
         }
