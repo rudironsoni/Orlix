@@ -21,6 +21,7 @@ def _pinned_env(ctx):
 
 def _rootfs_impl(ctx):
     pkg = ctx.attr.package[OrlixPackageTreeInfo]
+    shell = ctx.attr.shell[OrlixPackageTreeInfo]
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
     base_tree = ctx.actions.declare_directory(ctx.label.name + "/base-tree")
     state_tree = ctx.actions.declare_directory(ctx.label.name + "/state-tree")
@@ -37,15 +38,16 @@ def _rootfs_impl(ctx):
 set -euo pipefail
 exec_root="$PWD"
 package_tree="$exec_root/$1"
-gen_init_cpio_src="$exec_root/$2"
-base_tree="$exec_root/$3"
-state_tree="$exec_root/$4"
-initramfs_out="$exec_root/$5"
-base_ext4="$exec_root/$6"
-state_ext4="$exec_root/$7"
-file_manifest="$exec_root/$8"
-payload_metadata="$exec_root/$9"
-digest_out="$exec_root/${10}"
+shell_tree="$exec_root/$2"
+gen_init_cpio_src="$exec_root/$3"
+base_tree="$exec_root/$4"
+state_tree="$exec_root/$5"
+initramfs_out="$exec_root/$6"
+base_ext4="$exec_root/$7"
+state_ext4="$exec_root/$8"
+file_manifest="$exec_root/$9"
+payload_metadata="$exec_root/${10}"
+digest_out="$exec_root/${11}"
 case "$gen_init_cpio_src" in
   *usr/gen_init_cpio.c) ;;
   *) echo "rootfs must compile upstream Linux gen_init_cpio.c, got $gen_init_cpio_src" >&2; exit 1 ;;
@@ -58,6 +60,7 @@ case "$package_tree" in
 esac
 test -x "$package_tree/usr/bin/true"
 test -x "$package_tree/usr/bin/ls"
+test -x "$shell_tree/usr/bin/bash"
 hostcc="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 mke2fs="$(/usr/bin/command -v mke2fs)"
@@ -69,10 +72,12 @@ trap '/bin/rm -rf "$work"' EXIT
 "$hostcc" -isysroot "$sdkroot" -O2 -o "$work/gen_init_cpio" "$gen_init_cpio_src"
 /bin/mkdir -p "$base_tree/bin" "$base_tree/usr/bin" "$base_tree/dev" "$base_tree/proc" "$base_tree/sys" "$base_tree/tmp" "$state_tree/upper" "$state_tree/work"
 /bin/cp -R "$package_tree/usr/bin/." "$base_tree/usr/bin/"
+/bin/cp -R "$shell_tree/usr/bin/." "$base_tree/usr/bin/"
 /bin/cp "$package_tree/usr/bin/true" "$base_tree/bin/true"
 /bin/cp "$package_tree/usr/bin/ls" "$base_tree/bin/ls"
-/bin/chmod 0755 "$base_tree/bin/true" "$base_tree/bin/ls"
-/bin/ln -s true "$base_tree/bin/sh"
+/bin/cp "$shell_tree/usr/bin/bash" "$base_tree/bin/bash"
+/bin/chmod 0755 "$base_tree/bin/true" "$base_tree/bin/ls" "$base_tree/bin/bash" "$base_tree/usr/bin/bash"
+/bin/ln -sf bash "$base_tree/bin/sh"
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$base_tree/bin/true"' 0755 0 0' > "$work/initramfs.list"
 "$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
 test -s "$initramfs_out"
@@ -81,12 +86,13 @@ test -s "$initramfs_out"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$base_tree" "$base_ext4"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
 /usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
-/usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils\n' > "$payload_metadata"
+/usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash\nshell=/bin/sh\n' > "$payload_metadata"
 digest="$(/usr/bin/shasum -a 256 "$initramfs_out" "$base_ext4" "$state_ext4" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [
             pkg.install_tree.path,
+            shell.install_tree.path,
             ctx.file.gen_init_cpio.path,
             base_tree.path,
             state_tree.path,
@@ -102,6 +108,9 @@ digest="$(/usr/bin/shasum -a 256 "$initramfs_out" "$base_ext4" "$state_ext4" | /
                 pkg.install_tree,
                 pkg.file_manifest,
                 pkg.source_input_digest,
+                shell.install_tree,
+                shell.file_manifest,
+                shell.source_input_digest,
                 ctx.file.gen_init_cpio,
                 sysroot.consumed_uapi_digest,
             ],
@@ -130,6 +139,7 @@ orlix_rootfs = rule(
     implementation = _rootfs_impl,
     attrs = {
         "package": attr.label(mandatory = True, providers = [OrlixPackageTreeInfo]),
+        "shell": attr.label(mandatory = True, providers = [OrlixPackageTreeInfo]),
         "sysroot": attr.label(mandatory = True, providers = [OrlixLibcSysrootInfo]),
         "gen_init_cpio": attr.label(allow_single_file = True, mandatory = True),
     },

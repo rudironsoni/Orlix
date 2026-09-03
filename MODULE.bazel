@@ -34,6 +34,7 @@ native_sources = use_extension(
 )
 use_repo(
     native_sources,
+    "orlix_bash_source",
     "orlix_bragi_source",
     "orlix_cmake_tool",
     "orlix_compiler_rt_source",

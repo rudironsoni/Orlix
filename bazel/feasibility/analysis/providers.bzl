@@ -112,6 +112,28 @@ def _coreutils_package_tree_test_impl(ctx):
 
 coreutils_package_tree_test = analysistest.make(_coreutils_package_tree_test_impl)
 
+def _bash_package_tree_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixPackageTreeInfo in target)
+    asserts.false(env, OrlixLinuxArchiveInfo in target)
+    asserts.false(env, OrlixKernelAppleProductInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixGuestPackage":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.false(env, "kbuild-archive.tar" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixOS/Sources/make" in joined)
+            asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
+            asserts.true(env, "configure" in joined)
+            asserts.true(env, "bash" in joined)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+bash_package_tree_test = analysistest.make(_bash_package_tree_test_impl)
+
 def _rootfs_info_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
@@ -126,6 +148,8 @@ def _rootfs_info_test_impl(ctx):
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
             asserts.true(env, "gen_init_cpio.c" in joined)
+            asserts.true(env, "bash" in joined)
+            asserts.true(env, "coreutils" in joined)
     asserts.true(env, found)
     return analysistest.end(env)
 

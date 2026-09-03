@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "J4aTPQtbirZvR4hyKmBdR0kvtf7pRqJkK22BFxe6M5Q=",
+        "bzlTransitiveDigest": "ZGMsQl81SMBc/DRj+aguyEE3hbyrR76Vm7/G/J3MPaI=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -419,6 +419,15 @@
               "url": "https://ftp.gnu.org/gnu/coreutils/coreutils-9.11.tar.xz",
               "sha256": "394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3",
               "strip_prefix": "coreutils-9.11",
+              "marker": "configure"
+            }
+          },
+          "orlix_bash_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz",
+              "sha256": "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba",
+              "strip_prefix": "bash-5.3",
               "marker": "configure"
             }
           }
