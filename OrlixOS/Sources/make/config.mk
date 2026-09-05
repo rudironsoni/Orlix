@@ -86,7 +86,7 @@ NCURSES_URL ?= https://ftp.gnu.org/gnu/ncurses/ncurses-$(NCURSES_VERSION).tar.gz
 NCURSES_SHA256 ?= 355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11
 
 ZSH_VERSION ?= 5.9
-ZSH_URL ?= https://www.zsh.org/pub/zsh-$(ZSH_VERSION).tar.xz
+ZSH_URL ?= https://www.zsh.org/pub/old/zsh-$(ZSH_VERSION).tar.xz
 ZSH_SHA256 ?= 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
 
 ORLIX_BUILD_ROOT ?= $(REPO_ROOT)/Build

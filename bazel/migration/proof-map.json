@@ -761,7 +761,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 42,
+      "line": 45,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -773,7 +773,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 194,
+      "line": 286,
       "classification": "private",
       "phony": true,
       "prerequisites": [],
@@ -783,7 +783,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 207,
+      "line": 299,
       "classification": "private",
       "phony": true,
       "prerequisites": [],
@@ -793,7 +793,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 210,
+      "line": 302,
       "classification": "private",
       "phony": true,
       "prerequisites": [

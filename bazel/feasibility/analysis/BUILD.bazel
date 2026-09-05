@@ -4,6 +4,7 @@ load(
     "no_wrapper_makefile_test",
     "bash_package_tree_test",
     "coreutils_package_tree_test",
+    "guest_package_tree_test",
     "package_tree_test",
     "rootfs_info_test",
     "sysroot_uapi_only_test",
@@ -89,6 +90,44 @@ coreutils_package_tree_test(
 bash_package_tree_test(
     name = "bash_package_tree_test",
     target_under_test = "//bazel/feasibility/packages:bash",
+)
+
+[
+    guest_package_tree_test(
+        name = "%s_package_tree_test" % pkg,
+        expected_token = pkg,
+        target_under_test = "//bazel/feasibility/packages:%s" % pkg,
+    )
+    for pkg in [
+        "grep",
+        "findutils",
+        "e2fsprogs",
+        "jq",
+        "curl",
+        "ncurses",
+        "zsh",
+    ]
+]
+
+guest_package_tree_test(
+    name = "getconf_package_tree_test",
+    expected_token = "getconf.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:getconf",
+)
+
+guest_package_tree_test(
+    name = "getent_package_tree_test",
+    expected_token = "getent.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:getent",
+)
+
+guest_package_tree_test(
+    name = "init_package_tree_test",
+    expected_token = "init.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:init",
 )
 
 rootfs_info_test(

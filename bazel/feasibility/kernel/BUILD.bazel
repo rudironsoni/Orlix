@@ -2,6 +2,8 @@ load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
 
 package(default_visibility = ["//visibility:private"])
 
+exports_files(["kbuild_persist.py"])
+
 orlix_kernel_uapi(
     name = "uapi",
     linux_makefile = "@orlix_linux_source//:Makefile",

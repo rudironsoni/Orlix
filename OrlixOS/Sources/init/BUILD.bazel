@@ -1,0 +1,10 @@
+package(default_visibility = ["//bazel/feasibility:__subpackages__"])
+
+exports_files([
+    "console_policy.c",
+    "console_policy.h",
+    "init.c",
+    "rootinit.c",
+    "terminal_mux.c",
+    "terminal_mux.h",
+])
