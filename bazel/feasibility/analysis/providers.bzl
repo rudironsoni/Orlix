@@ -134,6 +134,35 @@ def _bash_package_tree_test_impl(ctx):
 
 bash_package_tree_test = analysistest.make(_bash_package_tree_test_impl)
 
+def _guest_package_tree_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixPackageTreeInfo in target)
+    asserts.false(env, OrlixLinuxArchiveInfo in target)
+    asserts.false(env, OrlixKernelAppleProductInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixGuestPackage":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.false(env, "kbuild-archive.tar" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixOS/Sources/make" in joined)
+            asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
+            asserts.true(env, ctx.attr.expected_token in joined)
+            if ctx.attr.require_configure:
+                asserts.true(env, "configure" in joined)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+guest_package_tree_test = analysistest.make(
+    _guest_package_tree_test_impl,
+    attrs = {
+        "expected_token": attr.string(mandatory = True),
+        "require_configure": attr.bool(default = True),
+    },
+)
+
 def _rootfs_info_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
@@ -150,6 +179,15 @@ def _rootfs_info_test_impl(ctx):
             asserts.true(env, "gen_init_cpio.c" in joined)
             asserts.true(env, "bash" in joined)
             asserts.true(env, "coreutils" in joined)
+            asserts.true(env, "grep" in joined)
+            asserts.true(env, "findutils" in joined)
+            asserts.true(env, "e2fsprogs" in joined)
+            asserts.true(env, "jq" in joined)
+            asserts.true(env, "curl" in joined)
+            asserts.true(env, "zsh" in joined)
+            asserts.true(env, "getconf" in joined)
+            asserts.true(env, "getent" in joined)
+            asserts.true(env, "init" in joined)
     asserts.true(env, found)
     return analysistest.end(env)
 

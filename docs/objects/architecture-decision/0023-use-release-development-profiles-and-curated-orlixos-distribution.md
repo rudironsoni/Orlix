@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-03
 status: accepted
 external_id: "ADR-0023"
 summary: "Durable Orlix architecture decision ADR 0023."
@@ -47,7 +47,9 @@ The profiles must remain userspace ABI invariant. Development may add diagnostic
 
 `OrlixOS` resolves curated distribution resources from its own framework. It registers the private resolved resource root with `OrlixHostAdapter` before boot. There is no separate payload bundle, payload target, or target-metadata-selected payload identity.
 
-The package proof ladder remains ordered, but its meaning is distribution compatibility:
+The delivered OrlixOS base rootfs includes these curated packages: bash, coreutils, grep, findutils, e2fsprogs, jq, curl, zsh, plus Orlix-local getconf, getent, and first-stage init. jq, curl, and zsh are delivered base content, not optional extras.
+
+The package proof ladder remains ordered, but its meaning is distribution compatibility. ADR 0017 proof order is unchanged:
 
 1. Bash proves the first interactive POSIX shell environment.
 2. `jq` proves a small unpatched third-party package.

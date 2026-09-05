@@ -54,3 +54,60 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertEqual(bash.group(1), "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba")
         self.assertIn("bash-5.3", text)
         self.assertIn("https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz", text)
+
+    def test_rootfs_package_archives_have_sha256(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        pins = (
+            (
+                "orlix_grep_source",
+                "https://ftp.gnu.org/gnu/grep/grep-3.12.tar.xz",
+                "2649b27c0e90e632eadcd757be06c6e9a4f48d941de51e7c0f83ff76408a07b9",
+                "grep-3.12",
+            ),
+            (
+                "orlix_findutils_source",
+                "https://ftp.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz",
+                "1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5",
+                "findutils-4.10.0",
+            ),
+            (
+                "orlix_e2fsprogs_source",
+                "https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.1/e2fsprogs-1.47.1.tar.xz",
+                "5a33dc047fd47284bca4bb10c13cfe7896377ae3d01cb81a05d406025d99e0d1",
+                "e2fsprogs-1.47.1",
+            ),
+            (
+                "orlix_jq_source",
+                "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz",
+                "478c9ca129fd2e3443fe27314b455e211e0d8c60bc8ff7df703873deeee580c2",
+                "jq-1.7.1",
+            ),
+            (
+                "orlix_curl_source",
+                "https://curl.se/download/curl-8.20.0.tar.xz",
+                "63fe2dc148ba0ceae89922ef838f7e5c946272c2e78b7c59fab4b79d3ce2b896",
+                "curl-8.20.0",
+            ),
+            (
+                "orlix_ncurses_source",
+                "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
+                "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11",
+                "ncurses-6.6",
+            ),
+            (
+                "orlix_zsh_source",
+                "https://www.zsh.org/pub/old/zsh-5.9.tar.xz",
+                "9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5",
+                "zsh-5.9",
+            ),
+        )
+        for name, url, sha256, prefix in pins:
+            match = re.search(
+                r'name = "%s",.*?sha256 = "([0-9a-f]{64})"' % name,
+                text,
+                re.S,
+            )
+            self.assertIsNotNone(match, name)
+            self.assertEqual(match.group(1), sha256, name)
+            self.assertIn(url, text)
+            self.assertIn(prefix, text)

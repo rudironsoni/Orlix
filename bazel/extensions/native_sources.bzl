@@ -357,5 +357,55 @@ def _native_sources_impl(_ctx):
         strip_prefix = "bash-5.3",
         marker = "configure",
     )
+    _archive_repository(
+        name = "orlix_grep_source",
+        url = "https://ftp.gnu.org/gnu/grep/grep-3.12.tar.xz",
+        sha256 = "2649b27c0e90e632eadcd757be06c6e9a4f48d941de51e7c0f83ff76408a07b9",
+        strip_prefix = "grep-3.12",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_findutils_source",
+        url = "https://ftp.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz",
+        sha256 = "1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5",
+        strip_prefix = "findutils-4.10.0",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_e2fsprogs_source",
+        url = "https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.1/e2fsprogs-1.47.1.tar.xz",
+        sha256 = "5a33dc047fd47284bca4bb10c13cfe7896377ae3d01cb81a05d406025d99e0d1",
+        strip_prefix = "e2fsprogs-1.47.1",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_jq_source",
+        url = "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz",
+        sha256 = "478c9ca129fd2e3443fe27314b455e211e0d8c60bc8ff7df703873deeee580c2",
+        strip_prefix = "jq-1.7.1",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_curl_source",
+        url = "https://curl.se/download/curl-8.20.0.tar.xz",
+        sha256 = "63fe2dc148ba0ceae89922ef838f7e5c946272c2e78b7c59fab4b79d3ce2b896",
+        strip_prefix = "curl-8.20.0",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_ncurses_source",
+        url = "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
+        sha256 = "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11",
+        strip_prefix = "ncurses-6.6",
+        marker = "configure",
+    )
+    # Official zsh 5.9 tarball now lives under pub/old (pub/ returns 404).
+    _archive_repository(
+        name = "orlix_zsh_source",
+        url = "https://www.zsh.org/pub/old/zsh-5.9.tar.xz",
+        sha256 = "9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5",
+        strip_prefix = "zsh-5.9",
+        marker = "configure",
+    )
 
 native_sources = module_extension(implementation = _native_sources_impl)

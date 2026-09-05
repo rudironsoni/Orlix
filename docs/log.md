@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 # Orlix Knowledge Log
+
+## [2026-09-03] record | Deliver jq, curl, and zsh in the OrlixOS base rootfs
+
+ADR 0023 now names bash, coreutils, grep, findutils, e2fsprogs, jq, curl, and zsh as curated delivered base content. Product `OrlixOS/Sources/make/rootfs.mk` installs jq, curl, and zsh into the base tree. ADR 0017 proof order is unchanged.
 
 ## [2026-08-29] record | Strengthen SCALAR_FP exception proof
 
