@@ -411,6 +411,8 @@ __bazel-apple-routing-check:
 	@rg -F -q '__bazel-orlix-app' Makefile
 	@rg -A2 '^__bazel-orlix-app:' make/bazel-migration.mk | rg -F -q -- '--config=promoted'
 	@rg -F -q '//bazel/promotion:locked_buildset' Orlix/BUILD.bazel
+	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
+	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
 	@rg -F -q '__bazel-kernel-uapi' Makefile
 	@rg -A2 '^test:' Makefile | rg -F -q '__bazel-matrix-check'
@@ -471,6 +473,7 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap
 	rg -F -q "$$lock_buildset" "$$stamp" || { echo "IPA lock stamp does not match artifacts.lock.json" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	if rg -q ':latest' "$$stamp"; then echo "locked-buildset.json must not use mutable latest" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
 	rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json || { echo "promoted kernel composition must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$ipa_work/Payload/Orlix.app'))"; \
 	rm -rf "$$ipa_work"
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
