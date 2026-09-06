@@ -2,6 +2,7 @@ try-import %workspace%/.bazelrc.local
 
 common --announce_rc
 common --show_timestamps
+common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache
 
 build --show_result=20
 build --verbose_failures

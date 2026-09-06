@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
 
 SOURCE = Path(__file__).with_name("native_sources.bzl")
+PACKAGES = Path(__file__).with_name("ghostty_zig_packages.json")
 
 
 class NativeSourceHashTests(unittest.TestCase):
@@ -111,3 +113,21 @@ class NativeSourceHashTests(unittest.TestCase):
             self.assertEqual(match.group(1), sha256, name)
             self.assertIn(url, text)
             self.assertIn(prefix, text)
+
+    def test_ghostty_packages_are_digest_pinned_without_zig_fetch(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("--fetch=all", text)
+        self.assertNotIn("fetch-source", text)
+        self.assertNotIn("xcodebuild", text)
+        self.assertIn('packages = "//bazel/extensions:ghostty_zig_packages.json"', text)
+        self.assertIn("ctx.download", text)
+        payload = json.loads(PACKAGES.read_text(encoding="utf-8"))
+        packages = payload["packages"]
+        self.assertGreaterEqual(len(packages), 30)
+        names = set()
+        for pkg in packages:
+            self.assertEqual(len(pkg["sha256"]), 64)
+            self.assertTrue(pkg["url"].startswith("https://"))
+            self.assertNotIn("latest", pkg["url"])
+            self.assertNotIn(pkg["name"], names)
+            names.add(pkg["name"])

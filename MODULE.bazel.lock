@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "go/4PnXomFSrxM3MirfLl6jlzjFxGpLQroLIhSJoOp4=",
+        "bzlTransitiveDigest": "22TFLbFleISzWuBOqKSQpSqi7SYkAHGzrNU2cWZpFnY=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -310,7 +310,8 @@
               "patch_sha256": "3c1225ea01bde23f1ec8585fd85ca3b2e15bae51501cf71fd3d5c4ca4b56a1b5",
               "zig_url": "https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz",
               "zig_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
-              "zig_strip_prefix": "zig-aarch64-macos-0.16.0"
+              "zig_strip_prefix": "zig-aarch64-macos-0.16.0",
+              "packages": "@@//bazel/extensions:ghostty_zig_packages.json"
             }
           },
           "orlix_openssl_source": {

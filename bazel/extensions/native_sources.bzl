@@ -57,87 +57,29 @@ def _ghostty_repository_impl(ctx):
     ])
     if patch_result.return_code:
         fail("Ghostty patch failed:\n%s\n%s" % (patch_result.stdout, patch_result.stderr))
-    copy_result = ctx.execute([
-        "/bin/cp",
-        "-R",
-        ctx.path("source"),
-        ctx.path("fetch-source"),
-    ])
-    if copy_result.return_code:
-        fail("Ghostty fetch copy failed:\n%s\n%s" % (copy_result.stdout, copy_result.stderr))
     ctx.download_and_extract(
         url = ctx.attr.zig_url,
         sha256 = ctx.attr.zig_sha256,
         strip_prefix = ctx.attr.zig_strip_prefix,
         output = "zig",
     )
-
-    packages = ctx.path("zig-pkg")
-    fetch_local = ctx.path("zig-fetch-local")
-    developer_dir = ctx.os.environ.get("DEVELOPER_DIR")
-    if not developer_dir:
-        fail("Ghostty fetch requires repo_env DEVELOPER_DIR")
-    xcode_ver = ctx.execute(
-        ["/usr/bin/xcodebuild", "-version"],
-        environment = {
-            "DEVELOPER_DIR": developer_dir,
-            "PATH": "/usr/bin:/bin",
-        },
-    )
-    if xcode_ver.return_code:
-        fail("Ghostty fetch xcodebuild -version failed:\n%s\n%s" % (xcode_ver.stdout, xcode_ver.stderr))
-    xcode_lines = [line for line in xcode_ver.stdout.strip().split("\n") if line]
-    allowed_xcode = {
-        "Xcode 26.6": "Build version 17F113",
-        "Xcode 27.0": "Build version 27A5252f",
-    }
-    if (
-        len(xcode_lines) < 2
-        or xcode_lines[0] not in allowed_xcode
-        or xcode_lines[1] != allowed_xcode[xcode_lines[0]]
-    ):
-        fail("Ghostty fetch requires Xcode 26.6/17F113 or 27.0/27A5252f, got:\n%s" % xcode_ver.stdout)
-    result = ctx.execute(
-        [
-            ctx.path("zig/zig"),
-            "build",
-            "--fetch=all",
-            "--global-cache-dir",
-            str(packages),
-            "--cache-dir",
-            str(fetch_local),
-            "-Dapp-runtime=none",
-            "-Demit-xcframework=true",
-            "-Demit-macos-app=false",
-            "-Demit-exe=false",
-            "-Demit-docs=false",
-            "-Demit-webdata=false",
-            "-Demit-helpgen=false",
-            "-Demit-terminfo=false",
-            "-Demit-termcap=false",
-            "-Demit-themes=false",
-            "-Di18n=false",
-            "-Doptimize=ReleaseFast",
-            "-Dstrip",
-            "-Dxcframework-target=universal",
-        ],
-        working_directory = str(ctx.path("fetch-source")),
-        environment = {
-            "DEVELOPER_DIR": developer_dir,
-            "HOME": str(ctx.path("repository-home")),
-            "PATH": "/usr/bin:/bin",
-            "ZIG_GLOBAL_CACHE_DIR": str(packages),
-            "ZIG_LOCAL_CACHE_DIR": str(fetch_local),
-        },
-        timeout = 900,
-    )
-    if result.return_code:
-        fail("Ghostty dependency fetch failed:\n%s\n%s" % (result.stdout, result.stderr))
-    if not ctx.path("zig-pkg/p").exists:
-        fail("Ghostty dependency fetch produced no packages")
-    ctx.delete("fetch-source")
-    ctx.delete("zig-fetch-local")
-    ctx.delete("repository-home")
+    lock = json.decode(ctx.read(ctx.attr.packages))
+    pkgs = lock.get("packages") or []
+    if not pkgs:
+        fail("Ghostty zig package lock is empty")
+    for pkg in pkgs:
+        name = pkg.get("name")
+        url = pkg.get("url")
+        digest = pkg.get("sha256")
+        if not name or not url or not digest:
+            fail("Ghostty zig package lock entry missing name, url, or sha256")
+        if len(digest) != 64:
+            fail("Ghostty zig package %s sha256 is not 64 hex" % name)
+        ctx.download(
+            url = url,
+            output = "zig-pkg/p/" + name,
+            sha256 = digest,
+        )
     ctx.file("zig-pkg/orlix-ready", "Ghostty packages fetched by digest\n")
 
     ctx.file("BUILD.bazel", """
@@ -176,6 +118,7 @@ _ghostty_repository = repository_rule(
         "zig_url": attr.string(mandatory = True),
         "zig_sha256": attr.string(mandatory = True),
         "zig_strip_prefix": attr.string(mandatory = True),
+        "packages": attr.label(allow_single_file = True, mandatory = True),
     },
 )
 
@@ -260,6 +203,7 @@ def _native_sources_impl(_ctx):
         zig_url = "https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz",
         zig_sha256 = "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
         zig_strip_prefix = "zig-aarch64-macos-0.16.0",
+        packages = "//bazel/extensions:ghostty_zig_packages.json",
     )
     _archive_repository(
         name = "orlix_openssl_source",

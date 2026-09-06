@@ -90,6 +90,8 @@ class AppleBuildMatrixTests(unittest.TestCase):
         mk = (Path(__file__).resolve().parents[2] / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("ios15_simulator_gate", mk)
         self.assertIn("validate_simulator_app", mk)
+        bazelrc = (Path(__file__).resolve().parents[2] / ".bazelrc").read_text(encoding="utf-8")
+        self.assertIn("common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache", bazelrc)
 
     def test_promoted_app_selects_locked_buildset(self) -> None:
         root = Path(__file__).resolve().parents[2]

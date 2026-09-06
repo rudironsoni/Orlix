@@ -1,1 +1,4 @@
-exports_files(["native_sources.bzl"])
+exports_files([
+    "native_sources.bzl",
+    "ghostty_zig_packages.json",
+])

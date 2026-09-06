@@ -428,6 +428,7 @@ __bazel-apple-routing-check:
 	@rg -A3 '^rebuild:' Makefile | rg -F -q '__bazel-orlix-app'
 	@rg -q '^runtime-tests: xcodeproj$$' Makefile
 	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
+	@rg -q '^common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache$$' .bazelrc
 	@if rg -n '^ORLIX_BAZEL_AUTHORITY \?= 0$$' Makefile; then echo "Makefile must default Bazel authority on after cutover" >&2; exit 1; fi
 
 __bazel-gc: __bazel-version-check
