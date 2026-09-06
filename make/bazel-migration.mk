@@ -8,7 +8,9 @@ ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_KBUILD_PERSIST ?= $(ORLIX_BUILD_ROOT)/Bazel/kbuild-persist
 ORLIX_BAZEL_TOOL_ROOT ?= $(HOME)/Library/Caches/Orlix/Tools/bazel
 ORLIX_BAZEL ?= $(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION)/bazel
+ORLIX_RUBY ?= /usr/bin/ruby
 ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-26.6.0.app/Contents/Developer
+ORLIX_TCTI_ISA_PREPARED ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-isa
 CCACHE_BASEDIR ?= $(CURDIR)
 CCACHE_DIR ?= $(HOME)/Library/Caches/Orlix/ccache
 CCACHE_MAXSIZE ?= 20G
@@ -23,6 +25,7 @@ export ORLIX_BAZEL_REPOSITORY_CACHE
 export ORLIX_BAZEL_OUTPUT_BASE
 export ORLIX_KBUILD_PERSIST
 export ORLIX_BAZEL_TOOL_ROOT
+export ORLIX_TCTI_ISA_PREPARED
 export CCACHE_BASEDIR
 export CCACHE_DIR
 export CCACHE_MAXSIZE
@@ -32,7 +35,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
@@ -40,7 +43,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-matrix-check
 
 __bazel-bootstrap:
-	@ruby bazel/bootstrap.rb >/dev/null
+	@$(ORLIX_RUBY) bazel/bootstrap.rb >/dev/null
 
 __bazel-version-check: __bazel-bootstrap
 	@test "$$($(ORLIX_BAZEL) --version)" = "bazel 9.2.0" || { echo "Bazel 9.2.0 is required" >&2; exit 1; }
@@ -101,37 +104,92 @@ __bazel-kernel-uapi-variants: __bazel-kernel-uapi
 	@test -s bazel-bin/bazel/feasibility/kernel/uapi_iphoneos_release/manifest.json
 	@test -s bazel-bin/bazel/feasibility/kernel/uapi_iphoneos_development/manifest.json
 
-__bazel-promote-uapi: __bazel-version-check
+define ORLIX_BAZEL_PROMOTE
+__bazel-promote-$(1): __bazel-version-check
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
-	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
+	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
 	for side in a b; do \
-		if [ -d "$$promote/$$side/output-base" ]; then \
-			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
+		if [ -d "$$$$promote/$$$$side/output-base" ]; then \
+			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$$$promote/$$$$side/output-base" shutdown >/dev/null 2>&1 || true; \
 		fi; \
 	done; \
-	/bin/chmod -R u+w "$$promote" 2>/dev/null || true; \
-	rm -rf "$$promote/a" "$$promote/b" "$$promote/uapi-proposal.json" "$$promote/uapi-sbom.json" "$$promote/uapi-in-toto.json" "$$promote/uapi-lock-proposal.json"; \
-	mkdir -p "$$promote/a/disk" "$$promote/b/disk" "$$promote/a/output-base" "$$promote/b/output-base"; \
+	/bin/chmod -R u+w "$$$$promote" 2>/dev/null || true; \
+	rm -rf "$$$$promote"; \
+	mkdir -p "$$$$promote/a/disk" "$$$$promote/b/disk" "$$$$promote/a/output-base" "$$$$promote/b/output-base"; \
 	for side in a b; do \
-		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/$$side/output-base" build //bazel/feasibility/kernel:uapi --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --disk_cache="$$promote/$$side/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
-		digest_file="$$(/usr/bin/find "$$promote/$$side/output-base" -path '*/feasibility/kernel/uapi/uapi.sha256' -print | /usr/bin/head -n 1)"; \
-		test -n "$$digest_file" || { echo "missing uapi.sha256 for promote $$side" >&2; exit 1; }; \
-		/bin/cp "$$digest_file" "$$promote/$$side/uapi.sha256"; \
+		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$$$promote/$$$$side/output-base" build $(2) --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --disk_cache="$$$$promote/$$$$side/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
+		digest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path '*/$(3)' -print | /usr/bin/head -n 1)"; \
+		test -n "$$$$digest_file" || { echo "missing $(3) for promote $(1) $$$$side" >&2; exit 1; }; \
+		/bin/cp "$$$$digest_file" "$$$$promote/$$$$side/digest.sha256"; \
 	done; \
-	digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$promote/a/uapi.sha256" "$$promote/b/uapi.sha256" --component uapi --proposal "$$promote/uapi-proposal.json" --sbom "$$promote/uapi-sbom.json" --in-toto "$$promote/uapi-in-toto.json" --lock-proposal "$$promote/uapi-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
-	test "$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
-	rg -q '"signed": false' "$$promote/uapi-proposal.json"; \
-	rg -q '"oci_digest": null' "$$promote/uapi-proposal.json"; \
-	if rg -q '"signed": true' "$$promote/uapi-proposal.json"; then echo "promotion must not invent a Cosign signature" >&2; exit 1; fi; \
-	rg -F "$$digest" "$$promote/uapi-sbom.json"; \
-	rg -q '"component": "uapi"' "$$promote/uapi-sbom.json"; \
-	rg -F "$$digest" "$$promote/uapi-in-toto.json"; \
-	rg -q '"signed": false' "$$promote/uapi-in-toto.json"; \
-	rg -q '"oci_digest": null' "$$promote/uapi-in-toto.json"; \
-	rg -q '"signed": false' "$$promote/uapi-lock-proposal.json"; \
-	rg -q '"buildset": null' "$$promote/uapi-lock-proposal.json"; \
-	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("buildset") is None and lock.get("components")=={}, lock' "$(CURDIR)/artifacts.lock.json"
+	lock_before="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --component $(1) --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
+	test "$$$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
+	rg -q '"signed": false' "$$$$promote/$(1)-proposal.json"; \
+	rg -q '"oci_digest": null' "$$$$promote/$(1)-proposal.json"; \
+	if rg -q '"signed": true' "$$$$promote/$(1)-proposal.json"; then echo "promotion must not invent a Cosign signature" >&2; exit 1; fi; \
+	rg -F "$$$$digest" "$$$$promote/$(1)-sbom.json"; \
+	rg -q '"component": "$(1)"' "$$$$promote/$(1)-sbom.json"; \
+	rg -F "$$$$digest" "$$$$promote/$(1)-in-toto.json"; \
+	rg -q '"signed": false' "$$$$promote/$(1)-in-toto.json"; \
+	rg -q '"oci_digest": null' "$$$$promote/$(1)-in-toto.json"; \
+	rg -q '"signed": false' "$$$$promote/$(1)-lock-proposal.json"; \
+	rg -q '"buildset": null' "$$$$promote/$(1)-lock-proposal.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is False and p.get("oci_digest") is None, p' "$$$$promote/$(1)-proposal.json"; \
+	lock_after="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	test "$$$$lock_before" = "$$$$lock_after" || { echo "unsigned promote mutated artifacts.lock.json" >&2; exit 1; }; \
+	if PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --proposal "$$$$promote/$(1)-signed.json"; then echo "unsigned promote must not Cosign-sign" >&2; exit 1; fi; \
+	test ! -e "$$$$promote/$(1)-signed.json"
+endef
+$(eval $(call ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.sha256))
+$(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.sha256))
+$(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/source-input.sha256))
+
+define ORLIX_BAZEL_PUBLISH
+__bazel-publish-$(1): __bazel-version-check
+	@set -euo pipefail; \
+	test -n "$$$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to publish $(1)" >&2; exit 1; }; \
+	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
+	digest_file="$$$$promote/a/digest.sha256"; \
+	test -s "$$$$digest_file" || { echo "missing unsigned digest $$$$digest_file; run make __bazel-promote-$(1) first" >&2; exit 1; }; \
+	digest="$$$$(tr -d '[:space:]' < "$$$$digest_file")"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$digest_file" --proposal "$$$$promote/$(1)-signed.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("oci_digest","").startswith("sha256:"), p' "$$$$promote/$(1)-signed.json"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/publish.py" --proposal "$$$$promote/$(1)-signed.json"
+endef
+$(eval $(call ORLIX_BAZEL_PUBLISH,uapi))
+$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc))
+$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs))
+
+__bazel-lock-from-signed: __bazel-version-check
+	@set -euo pipefail; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json" \
+		--apply-lock "$(CURDIR)/artifacts.lock.json"; \
+	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("signed") is not False; assert lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs"}, lock' "$(CURDIR)/artifacts.lock.json"
+
+__bazel-reconstruct: __bazel-version-check
+	@set -euo pipefail; \
+	test -n "$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json"
+
+__bazel-reconstruct-source: __bazel-version-check
+	@set -euo pipefail; \
+	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("buildset") and lock.get("components",{}).get("uapi",{}).get("unsigned_digest"), lock' "$(CURDIR)/artifacts.lock.json"; \
+	cold="$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/cold"; \
+	rm -rf "$$cold"; \
+	mkdir -p "$$cold/disk"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build //bazel/feasibility/kernel:uapi --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --disk_cache="$$cold/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
+	digest_file="$$(/usr/bin/find "$$cold/output-base" -path '*/feasibility/kernel/uapi/uapi.sha256' -print | /usr/bin/head -n 1)"; \
+	test -n "$$digest_file" || { echo "missing cache-cold uapi.sha256" >&2; exit 1; }; \
+	digest="$$(/usr/bin/tr -d '[:space:]' < "$$digest_file")"; \
+	test "$${#digest}" -eq 64 || { echo "cache-cold uapi digest is not 64 hex" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); expected=lock["components"]["uapi"]["unsigned_digest"]; got=sys.argv[2]; assert expected==got, (expected, got)' "$(CURDIR)/artifacts.lock.json" "$$digest"; \
+	echo "$$digest"
 
 __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/mlibc:sysroot --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -149,6 +207,9 @@ __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	@digest="$$(/usr/bin/sed -n 's/.*"consumed_uapi_digest": "\([^"]*\)".*/\1/p' bazel-bin/bazel/feasibility/mlibc/sysroot/manifest.json | /usr/bin/head -n 1)"; \
 	test "$${#digest}" -eq 64 || { echo "mlibc sysroot missing consumed UAPI digest" >&2; exit 1; }; \
 	test "$$digest" = "$$(/usr/bin/tr -d '[:space:]' < bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256)"
+	@sysroot_digest="$$(/usr/bin/tr -d '[:space:]' < bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256)"; \
+	test "$${#sysroot_digest}" -eq 64 || { echo "mlibc sysroot missing 64-hex sysroot.sha256" >&2; exit 1; }; \
+	rg -q '"sysroot_digest": "'"$$sysroot_digest"'"' bazel-bin/bazel/feasibility/mlibc/sysroot/manifest.json
 
 __bazel-guest-package: __bazel-mlibc-from-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/packages:true --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -294,19 +355,124 @@ __bazel-xcode-cloud-project-check:
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild -list -project OrlixCloud.xcodeproj | rg -q 'OrlixCloud'
 
 __bazel-migration-inventory:
-	@ruby bazel/migration/inventory.rb --write
+	@$(ORLIX_RUBY) bazel/migration/inventory.rb --write
 
 __bazel-migration-inventory-check:
-	@ruby bazel/migration/inventory.rb --check
+	@$(ORLIX_RUBY) bazel/migration/inventory.rb --check
 
-__bazel-matrix-check: __bazel-version-check
+__bazel-kernel-boot: __bazel-feasibility-bootstrap
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixKernel/Sources:OrlixKernelBoot --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@boot_lo="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/OrlixKernel/Sources/libOrlixKernelBoot.lo' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$boot_lo" && test -s "$$boot_lo" || { echo "missing OrlixKernelBoot .lo" >&2; exit 1; }; \
+	/usr/bin/nm -gU "$$boot_lo" | /usr/bin/grep -E -q '[[:space:]]T[[:space:]]_OrlixBoot$$' || { echo "OrlixKernelBoot archive missing defined _OrlixBoot" >&2; exit 1; }
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/kernel:macho --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@macho="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/bazel/feasibility/kernel/macho/OrlixKernel.a' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$macho" && test -s "$$macho" || { echo "missing Mach-O OrlixKernel.a" >&2; exit 1; }; \
+	/usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' "$${macho%/*}/symbols.txt" >/dev/null || /usr/bin/nm -gU "$$macho" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "OrlixKernel.a missing defined _arch_boot_entry" >&2; exit 1; }
+
+__bazel-proof-graph: __bazel-kernel-uapi
+	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256
+	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
+	@toolchain_digest="$$(/usr/bin/shasum -a 256 bazel/config/toolchain-pin.json | /usr/bin/awk '{print $$1}')"; \
+	extra=""; \
+	if [ -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 ]; then extra="$$extra --mlibc-digest bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256"; fi; \
+	if [ -s bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 ]; then extra="$$extra --rootfs-digest bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256"; fi; \
+	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
+		--uapi-digest bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256 \
+		--toolchain-digest "$$toolchain_digest" \
+		--profile "$(PROFILE)" \
+		--destination iphonesimulator \
+		$$extra
+	@test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
+	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
+	@rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
+	@if rg -q ':pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a pass" >&2; exit 1; fi
+
+__bazel-prove-matrix: __bazel-orlix-app
+	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
+	@ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/migration/prove_matrix.py" \
+		--matrix "$(CURDIR)/bazel/migration/apple-build-matrix.json" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json" \
+		--evidence ios-15.0-app-sdk-compile="$$ipa" \
+		--evidence ios-15.5-ci-runtime="$(ORLIX_BUILD_ROOT)/iOS15/Orlix-iOS15.log"
+	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
+	@rg -q 'ios-15.5-ci-runtime' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
+
+__bazel-apple-routing-check:
+	@rg -q '^ORLIX_BAZEL_AUTHORITY \?= 1$$' Makefile
+	@rg -F -q '__bazel-orlix-app' Makefile
+	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
+	@rg -F -q '__bazel-kernel-uapi' Makefile
+	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
+	@if rg -n '^ORLIX_BAZEL_AUTHORITY \?= 0$$' Makefile; then echo "Makefile must default Bazel authority on after cutover" >&2; exit 1; fi
+
+__bazel-gc: __bazel-version-check
+	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
+	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"])'
+	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/cache_gc.py" --root "$(ORLIX_BAZEL_DISK_CACHE)" --namespace "bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" shutdown >/dev/null 2>&1 || true
+
+__bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_toolchain_pin
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_cache_gc
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_apple_build_matrix
+	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_prove_matrix
+	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_in_toto
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_lock_proposal
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_reconstruct
+	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_bind
+	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_graph
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"]); print("pass: disk-cache namespace", pin.namespace_for(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"]))'
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" test //bazel/feasibility/analysis:all --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --test_output=errors
+
+__bazel-orlixos: __bazel-feasibility-bootstrap
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
+
+__bazel-orlix-app: __bazel-feasibility-bootstrap
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	/usr/bin/unzip -l "$$ipa" | /usr/bin/grep -F 'Payload/Orlix.app/Info.plist'; \
+	/usr/bin/unzip -p "$$ipa" Payload/Orlix.app/Info.plist | /usr/bin/grep -F -q '15.0'; \
+	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
+	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
+	test -x "$$ipa_work/Payload/Orlix.app/Orlix"; \
+	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot' >/dev/null || { echo "missing defined _OrlixBoot in //Orlix:Orlix" >&2; /usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep OrlixBoot >&2 || true; rm -rf "$$ipa_work"; exit 1; }; \
+	if /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]U[[:space:]]+_OrlixBoot' >/dev/null; then echo "_OrlixBoot must not remain undefined" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
+	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "missing defined _arch_boot_entry in //Orlix:Orlix" >&2; /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep arch_boot_entry >&2 || true; rm -rf "$$ipa_work"; exit 1; }; \
+	if /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]U[[:space:]]+_arch_boot_entry' >/dev/null; then echo "_arch_boot_entry must not remain undefined" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
+	rm -rf "$$ipa_work"
+
+__bazel-hostadapter: __bazel-feasibility-bootstrap
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixHostAdapter/Sources:OrlixHostAdapter --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+
+__bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/product:kernel_composition --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@test -s bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -q '"linux_archive"' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -q '"hostadapter"' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -q '"boot"' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -q '"linked_symbol": "_arch_boot_entry"' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -F -q '"undefined_kernel_symbols": []' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -q '"xcframework": null' bazel-bin/bazel/product/kernel_composition/composition.json
+	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
+
+__bazel-cache-equivalence: __bazel-kernel-uapi
+	@set -euo pipefail; \
+	left="$$(/usr/bin/tr -d '[:space:]' < bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256)"; \
+	test "$${#left}" -eq 64; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/kernel:uapi --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
+	right="$$(/usr/bin/tr -d '[:space:]' < bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256)"; \
+	test "$$left" = "$$right" || { echo "cache-on vs cache-off UAPI digest mismatch: $$left != $$right" >&2; exit 1; }

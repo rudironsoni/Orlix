@@ -40,5 +40,12 @@ xcodeproj(
             target_environments = ["simulator"],
         ),
         "//bazel/feasibility/apple:NativeDependencyMacSmokeApp",
+        top_level_target(
+            "//Orlix:Orlix",
+            target_environments = [
+                "device",
+                "simulator",
+            ],
+        ),
     ],
 )

@@ -15,6 +15,7 @@ settings:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
     CURRENT_PROJECT_VERSION: 42
+    ENABLE_DEBUG_DYLIB: NO
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -111,7 +112,7 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
-          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export PATH="$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
           platform="${PLATFORM_NAME:?}"
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
@@ -178,7 +179,8 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
-          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export PATH="$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET
           profile="${ORLIX_PROFILE:-release}"
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           if [ "${ORLIX_XCODE_SKIP_COMPONENT_PREBUILDS:-NO}" != YES ]; then
@@ -220,7 +222,8 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
-          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export PATH="$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET
           profile="${ORLIX_PROFILE:-release}"
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           if [ "${ORLIX_XCODE_SKIP_COMPONENT_PREBUILDS:-NO}" != YES ]; then
@@ -310,7 +313,8 @@ targets:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts/release.dtb
         script: |
           set -eu
-          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export PATH="$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           ORLIX_BUILD_ROOT="$build_root"
           if [ "${ORLIX_OS_SKIP_PAYLOAD_EMBED:-NO}" = YES ]; then
@@ -497,6 +501,8 @@ targets:
       - path: docs/sources/release/orlix-app-release-inputs.json
         createIntermediateGroups: true
         buildPhase: resources
+      - path: OrlixHostAdapter/Sources/OrlixHostAdapter/execution/macho_arch_name.c
+        createIntermediateGroups: true
     dependencies:
       - target: OrlixOS
         embed: true
@@ -535,6 +541,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Orlix/Orlix-iOS/Orlix.entitlements
         PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
         DEAD_CODE_STRIPPING: YES
+        ENABLE_DEBUG_DYLIB: NO
         ENABLE_PREVIEWS: YES
         GENERATE_INFOPLIST_FILE: NO
         CLANG_CXX_LANGUAGE_STANDARD: gnu++20
@@ -643,6 +650,8 @@ targets:
       - path: docs/sources/release/orlix-app-release-inputs.json
         createIntermediateGroups: true
         buildPhase: resources
+      - path: OrlixHostAdapter/Sources/OrlixHostAdapter/execution/macho_arch_name.c
+        createIntermediateGroups: true
     dependencies:
       - target: OrlixOS
         embed: true
@@ -773,7 +782,7 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
-          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          export PATH="$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
           build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           ORLIX_BUILD_ROOT="$build_root"

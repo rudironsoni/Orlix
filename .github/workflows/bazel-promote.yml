@@ -1,0 +1,40 @@
+name: Bazel promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Private component to dual-build and compare
+        required: true
+        type: choice
+        options:
+          - uapi
+          - mlibc
+          - rootfs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bazel-promote-${{ inputs.component }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Dual-build promote
+    runs-on: macos-26
+    environment: bazel-promotion
+    timeout-minutes: 360
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+      - name: Dual-build without action cache
+        env:
+          ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
+        run: make __bazel-promote-${{ inputs.component }}

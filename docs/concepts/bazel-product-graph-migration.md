@@ -9,7 +9,7 @@ tags:
 updated: 2026-09-01
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
-  - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
+  - "[Adopt the Bazel product graph](../objects/epic/done/adopt-bazel-product-graph.md)"
   - "[ADR 0033](../objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md)"
   - "[ADR 0034](../objects/architecture-decision/0034-consume-signed-promoted-buildsets.md)"
   - "[ADR 0035](../objects/architecture-decision/0035-isolate-worktree-build-state-and-share-content-caches.md)"

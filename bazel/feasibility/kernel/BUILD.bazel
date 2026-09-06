@@ -1,4 +1,5 @@
 load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
+load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -9,7 +10,10 @@ orlix_kernel_uapi(
     linux_makefile = "@orlix_linux_source//:Makefile",
     linux_source = "@orlix_linux_source//:source",
     tags = ["manual"],
-    visibility = ["//bazel/feasibility:__subpackages__"],
+    visibility = [
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
 )
 
 [
@@ -30,3 +34,46 @@ orlix_kernel_uapi(
         "release",
     ]
 ]
+
+orlix_kernel_macho_archive(
+    name = "macho",
+    configs = "//OrlixKernel/Sources:linux_configs",
+    extra_inputs = [
+        "//:make/tcti-proof-registry-provenance.mk",
+        "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
+    ],
+    kbuild_engine = "//OrlixKernel/Sources:kbuild_engine",
+    linux_makefile = "@orlix_linux_source//:Makefile",
+    linux_source = "@orlix_linux_source//:source",
+    overlay = "//OrlixKernel/Sources:linux_overlay",
+    patches = "//OrlixKernel/Sources:linux_patches",
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
+)
+
+filegroup(
+    name = "macho_archive",
+    srcs = [":macho"],
+    output_group = "archive",
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
+)
+
+orlix_kernel_macho_library(
+    name = "macho_link",
+    archive = ":macho_archive",
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
+)

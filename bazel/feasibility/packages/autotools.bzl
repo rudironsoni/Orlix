@@ -146,41 +146,40 @@ else
   code_model="-fno-pie"
   ld_mode="-static -Wl,--image-base=0x0000000100000000"
 fi
-cc_common="$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model"
+cc_common="$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map=$work=."
 crt_group="$libraries/crt1.o $libraries/crti.o -Wl,--start-group"
 lib_group="$libraries/libc.a $libm $libpthread $libssp_ns $libssp $extra_archives $LIBS_EXTRA $runtime -Wl,--end-group $libraries/crtn.o"
-if [ "$LINK_MODE" = static_wrapper ]; then
-  /usr/bin/printf '%s\n' '#!/bin/bash' 'set -euo pipefail' \
-    "cc='$clang'" \
-    "headers='$headers'" \
-    "uapi_headers='$uapi_headers/include'" \
-    "libraries='$libraries'" \
-    "runtime='$runtime'" \
-    "libm='$libm'" \
-    "libpthread='$libpthread'" \
-    "libssp='$libssp'" \
-    "libssp_ns='$libssp_ns'" \
-    'link=1' \
-    'for arg in "$@"; do case "$arg" in -c|-E|-S) link=0 ;; esac; done' \
-    'common=(--target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)' \
-    'if [ "$link" -eq 1 ]; then' \
-    '  exec "$cc" "${common[@]}" "$@" -static -no-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=0x0000000100000000 -L"$libraries" "$libraries/crt1.o" "$libraries/crti.o" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o"' \
-    'fi' \
-    'exec "$cc" "${common[@]}" "$@"' > "$work/toolchain/aarch64-linux-gnu-gcc"
-  /bin/chmod +x "$work/toolchain/aarch64-linux-gnu-gcc"
-  export CC="$work/toolchain/aarch64-linux-gnu-gcc"
-  export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h"
-  export CPPFLAGS="$CPPFLAGS_EXTRA $extra_inc"
-  export LDFLAGS=""
-  export LIBS=""
-else
-  CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/$work/src}"
-  export CC="$cc_common"
-  export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h"
-  export CPPFLAGS="$CPPFLAGS_EXTRA $extra_inc"
-  export LDFLAGS="$ld_common $ld_mode $extra_libdir $crt_group"
-  export LIBS="$lib_group"
-fi
+CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
+/usr/bin/printf '%s\n' '#!/bin/bash' 'set -euo pipefail' \
+  "cc='$clang'" \
+  "headers='$headers'" \
+  "uapi_headers='$uapi_headers/include'" \
+  "libraries='$libraries'" \
+  "runtime='$runtime'" \
+  "libm='$libm'" \
+  "libpthread='$libpthread'" \
+  "libssp='$libssp'" \
+  "libssp_ns='$libssp_ns'" \
+  "extra_inc='$extra_inc'" \
+  "extra_libdir='$extra_libdir'" \
+  "extra_archives='$extra_archives'" \
+  "code_model='$code_model'" \
+  "ld_mode='$ld_mode'" \
+  "work='$work'" \
+  'link=1' \
+  'for arg in "$@"; do case "$arg" in -c|-E|-S) link=0 ;; esac; done' \
+  'common=(--target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers" $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map="$work"=.)' \
+  'if [ "$link" -eq 1 ]; then' \
+  '  exec "$cc" "${common[@]}" "$@" -fuse-ld=lld -nostdlib -Wl,--gc-sections $ld_mode $extra_libdir -L"$libraries" "$libraries/crt1.o" "$libraries/crti.o" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" $extra_archives "$runtime" -Wl,--end-group "$libraries/crtn.o"' \
+  'fi' \
+  'exec "$cc" "${common[@]}" "$@"' > "$work/toolchain/aarch64-linux-gnu-gcc"
+/bin/chmod +x "$work/toolchain/aarch64-linux-gnu-gcc"
+export PATH="$work/toolchain:$PATH"
+export CC=aarch64-linux-gnu-gcc
+export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h"
+export CPPFLAGS="$CPPFLAGS_EXTRA"
+export LDFLAGS=""
+export LIBS=""
 export AR="$ar_bin"
 export RANLIB="$ranlib_bin"
 export STRIP="$strip_bin"
@@ -271,7 +270,7 @@ done
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-compatible' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$PACKAGE_NAME" "$PACKAGE_VERSION" > "$metadata"
-digest="$(/usr/bin/find "$install_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [

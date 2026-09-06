@@ -1,0 +1,9 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+objc_library(
+    name = "OrlixCoreUtilsProvider",
+    srcs = ["OrlixCoreUtilsProvider.c"],
+    tags = ["manual"],
+)

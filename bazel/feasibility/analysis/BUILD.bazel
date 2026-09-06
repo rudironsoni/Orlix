@@ -2,6 +2,7 @@ load(
     ":providers.bzl",
     "config_flags_test",
     "no_wrapper_makefile_test",
+    "macho_no_wrapper_makefile_test",
     "bash_package_tree_test",
     "coreutils_package_tree_test",
     "guest_package_tree_test",
@@ -47,6 +48,11 @@ config_flags_test(
 no_wrapper_makefile_test(
     name = "no_wrapper_makefile_test",
     target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+macho_no_wrapper_makefile_test(
+    name = "macho_no_wrapper_makefile_test",
+    target_under_test = "//bazel/feasibility/kernel:macho",
 )
 
 variant_stamp_test(

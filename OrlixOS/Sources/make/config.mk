@@ -34,10 +34,12 @@ E2FSPROGS_SHA256 ?= 5a33dc047fd47284bca4bb10c13cfe7896377ae3d01cb81a05d406025d99
 
 ATTR_VERSION ?= 2.5.2
 ATTR_URL ?= https://download.savannah.nongnu.org/releases/attr/attr-$(ATTR_VERSION).tar.xz
+ATTR_MIRROR_URL ?= https://download-mirror.savannah.gnu.org/releases/attr/attr-$(ATTR_VERSION).tar.xz
 ATTR_SHA256 ?= f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b
 
 ACL_VERSION ?= 2.3.2
 ACL_URL ?= https://download.savannah.nongnu.org/releases/acl/acl-$(ACL_VERSION).tar.xz
+ACL_MIRROR_URL ?= https://download-mirror.savannah.gnu.org/releases/acl/acl-$(ACL_VERSION).tar.xz
 ACL_SHA256 ?= 97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd
 
 LIBCAP_VERSION ?= 2.78

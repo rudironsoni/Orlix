@@ -227,7 +227,12 @@ $(ORLIXOS_ATTR_ARCHIVE):
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch attr source" >&2; exit 1; }; \
 	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify attr source" >&2; exit 1; }; \
 	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
-	if [ ! -s "$(ORLIXOS_ATTR_ARCHIVE)" ]; then curl -fL "$(ATTR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)"; fi; \
+	if [ ! -s "$(ORLIXOS_ATTR_ARCHIVE)" ]; then \
+		curl -fL "$(ATTR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)" || { \
+			rm -f "$(ORLIXOS_ATTR_ARCHIVE)"; \
+			curl -fL "$(ATTR_MIRROR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)"; \
+		}; \
+	fi; \
 	echo "upstream attr archive ready: $(ORLIXOS_ATTR_ARCHIVE)"
 
 $(ORLIXOS_ATTR_ARCHIVE_STAMP): $(ORLIXOS_ATTR_ARCHIVE)
@@ -254,7 +259,12 @@ $(ORLIXOS_ACL_ARCHIVE):
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch acl source" >&2; exit 1; }; \
 	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify acl source" >&2; exit 1; }; \
 	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
-	if [ ! -s "$(ORLIXOS_ACL_ARCHIVE)" ]; then curl -fL "$(ACL_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)"; fi; \
+	if [ ! -s "$(ORLIXOS_ACL_ARCHIVE)" ]; then \
+		curl -fL "$(ACL_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)" || { \
+			rm -f "$(ORLIXOS_ACL_ARCHIVE)"; \
+			curl -fL "$(ACL_MIRROR_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)"; \
+		}; \
+	fi; \
 	echo "upstream acl archive ready: $(ORLIXOS_ACL_ARCHIVE)"
 
 $(ORLIXOS_ACL_ARCHIVE_STAMP): $(ORLIXOS_ACL_ARCHIVE)

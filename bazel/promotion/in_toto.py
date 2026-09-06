@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from compare import require_sha256
@@ -14,8 +13,6 @@ def write_provenance(path: str, component: str, subject_digest: str) -> dict:
     digest = require_sha256(subject_digest)
     if not component:
         raise ValueError("in-toto component name is required")
-    if os.environ.get("ORLIX_COSIGN_KEY"):
-        raise ValueError("ORLIX_COSIGN_KEY is set; this slice writes unsigned provenance only")
     payload = {
         "schema": 1,
         "kind": "in-toto",

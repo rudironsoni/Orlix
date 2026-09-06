@@ -3,9 +3,29 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-03
+updated: 2026-09-06
 ---
 # Orlix Knowledge Log
+
+## [2026-09-06] record | Signed lock 259dc911 and local Cosign reconstruct close the Bazel epic
+
+`make __bazel-lock-from-signed` wrote `artifacts.lock.json` buildset `259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672` from Cosign-signed localhost:5001 UAPI, mlibc, and rootfs. `make __bazel-reconstruct` pulled and verified those references. `make __bazel-reconstruct-source` rebuilt `//bazel/feasibility/kernel:uapi` cache-cold and matched unsigned digest `666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07`. [CORRECTION] iOS 15.5 runtime proof is local `make ios15-simulator-gate` (`GATE=0`), not GitHub Actions. GHCR write is denied on this token, so signed publish stayed on `localhost:5001`. `--config=promoted` still does not substitute OCI components.
+
+## [2026-09-06] record | //Orlix:Orlix links defined _arch_boot_entry from Mach-O OrlixKernel.a
+
+`kernel/async.c` and `lib/string.c` compile with `-fvisibility=hidden` so Linux `_memset` and `_async_init` do not collide with Ghostty and OpenSSL. `//Orlix:Orlix` no longer uses `-U _arch_boot_entry`. IPA `nm` shows `T _OrlixBoot` and `T _arch_boot_entry`. `make __bazel-kernel-boot`, `make __bazel-orlix-app`, `make __bazel-product-composition`, and `make __bazel-matrix-check` pass.
+
+## [2026-09-06] record | Bazel produces Mach-O OrlixKernel.a; Apple ld cannot consume the LLVM relocatable
+
+`//bazel/feasibility/kernel:macho` builds `OrlixKernel.a` from Kbuild product compile without `OrlixKernel/Makefile`. The archive defines `_arch_boot_entry` (`T`). Post-link `llvm-objcopy` localization of libc symbols corrupted relocs. Compile-time hidden visibility replaces that.
+
+## [2026-09-06] record | Unsigned rootfs dual-build promote matches; iOS 15.5 CI stays gated
+
+Unsigned dual-build promotion of `//bazel/feasibility/rootfs:rootfs` matched digest `1a789b43efb1b89bd5d9543dbc71192d82b7b2a6af7cdeae6d92c088ea2aa0df`. Cosign stayed fail-closed (`ORLIX_COSIGN_KEY` unset). `artifacts.lock.json` stayed `{ "schema": 1, "buildset": null, "components": {} }`. GitHub Actions run `33999322760` for `.github/workflows/ios15-runtime.yml` failed before steps with billing/spending-limit; the iOS 15.5 runtime row stays `gated`.
+
+## [2026-09-03] record | Record the Apple Bazel matrix and unsigned promotion helpers
+
+The canonical Apple matrix is `bazel/migration/apple-build-matrix.json`. iOS 15.5 CI runtime and promoted-buildset rows stay gated. Unsigned dual-build promotion remains fail-closed: Cosign and GHCR are not invented, and `artifacts.lock.json` is not mutated from unsigned JSON.
 
 ## [2026-09-03] record | Deliver jq, curl, and zsh in the OrlixOS base rootfs
 

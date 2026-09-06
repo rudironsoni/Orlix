@@ -25,6 +25,9 @@ def _sysroot_uapi_only_test_impl(ctx):
     asserts.true(env, OrlixLibcSysrootInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    sysroot = target[OrlixLibcSysrootInfo]
+    asserts.true(env, sysroot.sysroot_digest != None)
+    asserts.true(env, sysroot.consumed_uapi_digest != None)
     return analysistest.end(env)
 
 sysroot_uapi_only_test = analysistest.make(_sysroot_uapi_only_test_impl)
@@ -69,6 +72,23 @@ def _no_wrapper_makefile_test_impl(ctx):
     return analysistest.end(env)
 
 no_wrapper_makefile_test = analysistest.make(_no_wrapper_makefile_test_impl)
+
+def _macho_no_wrapper_makefile_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixLinuxArchiveInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixKernelMachOArchive":
+            found = True
+            argv = " ".join(action.argv)
+            asserts.false(env, "OrlixKernel/Makefile" in argv)
+            asserts.true(env, "__kernel-archive" in argv)
+            asserts.true(env, "kernel-rules.mk" in argv)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+macho_no_wrapper_makefile_test = analysistest.make(_macho_no_wrapper_makefile_test_impl)
 
 def _package_tree_test_impl(ctx):
     env = analysistest.begin(ctx)

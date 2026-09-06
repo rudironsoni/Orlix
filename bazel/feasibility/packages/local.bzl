@@ -75,7 +75,7 @@ trap '/bin/rm -rf "$work"' EXIT
 out="$work/dest/$output_rel"
 /bin/mkdir -p "$(/usr/bin/dirname "$out")"
 # shellcheck disable=SC2086
-"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" $c_srcs -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
+"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" $c_srcs -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
 "$strip_bin" "$out"
 /usr/bin/file "$out" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file "$out" >&2; exit 1; }
 "$objdump_bin" -p "$out" | /usr/bin/awk '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'
@@ -84,7 +84,7 @@ out="$work/dest/$output_rel"
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-2.0-or-later' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=local-c\n' "$package_name" "$package_version" > "$metadata"
-digest="$(/usr/bin/find "$install_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [

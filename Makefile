@@ -393,14 +393,13 @@ ios15-simulator-gate:
 		-destination "$$destination" \
 		-derivedDataPath "$$derived_data" \
 		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
-		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
-		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
-		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
 		build-for-testing 2>&1 | tee "$$result_log"; \
 	app="$$derived_data/Build/Products/Debug-iphonesimulator/Orlix.app"; \
 	test -d "$$app" || { echo "missing iOS 15 simulator app: $$app" >&2; exit 1; }; \
 	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
+	rm -rf "$$result_bundle"; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "Orlix UI Tests" \
@@ -408,10 +407,8 @@ ios15-simulator-gate:
 		-destination "$$destination" \
 		-derivedDataPath "$$derived_data" \
 		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
-		-only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
-		-only-testing:OrlixUITests/TerminalSettingsNavigationUITests/testGroupedSettingsOpenGeneralAndTerminalPages \
-		-only-testing:OrlixUITests/NoticePresentationUITests/testFilesEntryCanReopenPreviewAfterBackNavigation \
 		-test-timeouts-enabled YES \
 		-default-test-execution-time-allowance 120 \
 		-maximum-test-execution-time-allowance 180 \
@@ -1041,18 +1038,29 @@ app-store-promote: app-store-release-report-check
 
 release-workflow-check: __release-workflow-tests
 
+# ADR 0037 cutover. Make stays the public interface. Bazel owns product compile.
+ORLIX_BAZEL_AUTHORITY ?= 1
+
 xcodeproj:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-feasibility-xcodeproj
+else
 	@$(KERNEL_MAKE) xcodeproj
+endif
 
 build: __build-$(type)
 
 __build-product: product-build-version-check
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-app
+else
 	@$(MLIBC_MAKE) build
 	@$(COREUTILS_MAKE) build PROFILE="$(PROFILE)"
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
 	@$(KERNEL_MAKE) build PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
 	@$(HOSTADAPTER_MAKE) build
 	@$(APP_MAKE) build
+endif
 
 __build-vendor:
 	@$(APP_MAKE) build type=vendor vendor="$(vendor)"
@@ -1071,7 +1079,11 @@ scripts dtbs kunit kselftest kselftest-install test:
 	@$(KERNEL_MAKE) $@
 
 headers_install:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-kernel-uapi
+else
 	@$(MLIBC_MAKE) headers_install
+endif
 
 run:
 	@$(APP_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"

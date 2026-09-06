@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "trust_model": "protected-cosign-key",
+  "accepted_key_ids": [],
+  "validity": {
+    "overlap_days": 14,
+    "retirement": "explicit",
+    "revocation": "explicit"
+  },
+  "allowed_workflows": [
+    ".github/workflows/bazel-promote.yml"
+  ],
+  "allowed_refs": [
+    "refs/heads/main"
+  ],
+  "allowed_media_types": [
+    "application/vnd.oci.image.manifest.v1+json"
+  ],
+  "unsigned_lock_writes_to_main": false,
+  "mutable_latest_tag": false
+}

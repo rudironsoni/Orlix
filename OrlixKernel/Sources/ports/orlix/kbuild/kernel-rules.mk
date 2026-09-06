@@ -1815,9 +1815,32 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 	mv "$$port_tmp_dir" "$$port_dir"; \
 	echo "prepared Orlix kernel port tree: $$port_dir (profile $(PROFILE))"
 
+ORLIX_KERNEL_PORT_PREPARED ?= 0
+ifeq ($(ORLIX_KERNEL_PORT_PREPARED),1)
+__prepare-kbuild: __validate-profile __orlix-tcti-isa-prepare
+else
 __prepare-kbuild: __prepare-port __orlix-tcti-isa-prepare
+endif
+__prepare-kbuild:
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
+	isa_src="$(ORLIX_TCTI_ISA_BUILD)"; \
+	port_isa="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa"; \
+	mkdir -p "$$port_isa"; \
+	for isa_name in \
+		manifest \
+		source_manifest.def \
+		target_asl_availability.def \
+		target_feature_applicability.def \
+		target_feature_artifact.def \
+		target_feature_field_domain_binding.def \
+		target_instruction_artifact_generated.h \
+		target_register_artifact.def \
+		target_runtime_capability_cohort_artifact.def \
+		target_system_accessor_reconciliation.def; do \
+		[ -s "$$isa_src/$$isa_name" ] || { echo "missing prepared ISA artifact: $$isa_src/$$isa_name" >&2; exit 1; }; \
+		cp "$$isa_src/$$isa_name" "$$port_isa/$$isa_name"; \
+	done; \
 	linux_make="$(LINUX_MAKE)"; \
 	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
 	if [ -z "$$linux_make" ]; then \
@@ -2317,6 +2340,7 @@ __kernel-archive: __prepare-kbuild
 			case "$$src_rel" in \
 				arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c) extra_cflags="$$extra_cflags $$proof_cflags" ;; \
 				init/version.c) extra_cflags="-include $(ORLIX_KERNEL_BUILD_DIR)/init/utsversion-tmp.h" ;; \
+				kernel/async.c|lib/string.c) extra_cflags="-fvisibility=hidden" ;; \
 				drivers/of/of_reserved_mem.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/drivers/of" ;; \
 				drivers/char/virtio_console.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty/hvc -I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty" ;; \
 				drivers/tty/hvc/*.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty/hvc -I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty" ;; \
@@ -2827,20 +2851,15 @@ __ios-simulator-framework: xcodeproj
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
 	ORLIX_KERNEL_PROFILE_LOCK_HELD=1 $(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE="$(PROFILE)" type="$(type)" libc="$(libc)" ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphonesimulator; \
-	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
-	selector=(); \
-	if [ -n "$(ORLIX_IOS_SIMULATOR_ID)" ]; then \
-		selector=(--simulator-id "$(ORLIX_IOS_SIMULATOR_ID)"); \
-	else \
-		selector=(--simulator-name "$(ORLIX_IOS_SIMULATOR_NAME)" --use-latest-os); \
-	fi; \
-	ORLIX_PROFILE="$(PROFILE)" "$(XCODEBUILD_MCP)" simulator build \
-		--project-path "$(CURDIR)/$(ORLIX_XCODE_PROJECT)" \
-		--scheme "OrlixKernel" \
-		--configuration "Debug" \
-		--derived-data-path "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" \
-		"$${selector[@]}" \
-		--output json; \
+	/usr/bin/xcodebuild \
+		-project "$(CURDIR)/$(ORLIX_XCODE_PROJECT)" \
+		-scheme "OrlixKernel" \
+		-configuration Debug \
+		-sdk iphonesimulator \
+		-arch arm64 \
+		-derivedDataPath "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" \
+		CODE_SIGNING_ALLOWED=NO \
+		build; \
 	[ -d "$(ORLIX_IOS_SIMULATOR_FRAMEWORK)" ] || { echo "missing simulator framework: $(ORLIX_IOS_SIMULATOR_FRAMEWORK)" >&2; exit 1; }; \
 	$(MAKE) -f OrlixKernel/Makefile __verify-framework-symbols PROFILE="$(PROFILE)"
 

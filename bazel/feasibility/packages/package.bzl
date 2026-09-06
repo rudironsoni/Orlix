@@ -64,7 +64,7 @@ src="$(/usr/bin/dirname "$configure")"
 /bin/chmod +x "$work/src/configure"
 cd "$work/src"
 CC="$clang" \
-CFLAGS="--target=aarch64-linux-gnu -isystem $headers -fno-builtin -ffixed-x18 -fPIE" \
+CFLAGS="--target=aarch64-linux-gnu -isystem $headers -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=." \
 LDFLAGS="--target=aarch64-linux-gnu -fuse-ld=lld -nostdlib -static-pie -Wl,-z,max-page-size=0x4000 $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $runtime -Wl,--end-group $libraries/crtn.o" \
     ./configure --host=aarch64-linux-gnu --prefix=/usr
 /usr/bin/make -j1
@@ -75,7 +75,7 @@ test -x "$work/dest/usr/bin/true"
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=unlicense-feasibility-true' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$package_name" "$package_version" > "$metadata"
-digest="$(/usr/bin/find "$install_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [

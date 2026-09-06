@@ -27,6 +27,7 @@ def _mlibc_sysroot_impl(ctx):
     abi = ctx.actions.declare_file(ctx.label.name + "/abi.txt")
     loader = ctx.actions.declare_file(ctx.label.name + "/ld.so")
     runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
+    digest = ctx.actions.declare_file(ctx.label.name + "/sysroot.sha256")
     ctx.actions.run_shell(
         mnemonic = "OrlixMLibCSysroot",
         progress_message = "Building OrlixMLibC sysroot from installed UAPI",
@@ -49,6 +50,7 @@ smarter="$exec_root/${13}"
 bragi="$exec_root/${14}"
 compiler_rt_marker="$exec_root/${15}"
 digest_in="$exec_root/${16}"
+digest_out="$exec_root/${17}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -78,7 +80,7 @@ mlibc_src="$(/usr/bin/dirname "$mlibc_meson")"
 /bin/mkdir -p "$work/mlibc" "$work/build" "$work/dest"
 /bin/cp -R "$mlibc_src/." "$work/mlibc"
 /usr/bin/find "$work/mlibc" -type d -exec /bin/chmod u+w {} +
-shift 16
+shift 17
 while [ "$#" -gt 0 ]; do
     patch="$exec_root/$1"
     /usr/bin/patch --batch --forward -p1 -d "$work/mlibc" -i "$patch"
@@ -141,6 +143,7 @@ test -s "$work/dest/usr/lib/libc.a"
 /bin/cp -R "$work/dest/." "$sysroot_out/"
 /bin/cp -R "$work/dest/usr/include/." "$headers_out/"
 /bin/cp -R "$work/dest/usr/lib/." "$libraries_out/"
+/usr/bin/find "$libraries_out" "$sysroot_out/usr/lib" -type f \( -name '*.a' -o -name '*.so' -o -name '*.o' -o -name 'ld.so' \) -print0 | /usr/bin/xargs -0 -n 1 "$strip" -g
 if [ -s "$work/dest/usr/lib/ld.so" ]; then
     /bin/cp "$work/dest/usr/lib/ld.so" "$loader_out"
 else
@@ -151,9 +154,13 @@ fi
 test -s "$digest_in"
 uapi_digest="$(/usr/bin/tr -d '[:space:]' < "$digest_in")"
 test "${#uapi_digest}" -eq 64
+sysroot_digest="$(/usr/bin/find "$headers_out" "$libraries_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' | /usr/bin/sort | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+test "${#sysroot_digest}" -eq 64
+/usr/bin/printf '%s\n' "$sysroot_digest" > "$digest_out"
 /usr/bin/printf '%s\n' '{' \
     '  "component": "OrlixMLibC",' \
     '  "consumed_uapi_digest": "'"$uapi_digest"'",' \
+    '  "sysroot_digest": "'"$sysroot_digest"'",' \
     '  "linux_input": "OrlixInstalledUapiInfo",' \
     '  "target_triple": "aarch64-linux-gnu"' \
     '}' > "$manifest_out"
@@ -175,6 +182,7 @@ test "${#uapi_digest}" -eq 64
             ctx.file.bragi.path,
             ctx.file.compiler_rt.path,
             uapi.uapi_digest.path,
+            digest.path,
         ] + [f.path for f in ctx.files.patches],
         inputs = depset(
             direct = [
@@ -198,13 +206,13 @@ test "${#uapi_digest}" -eq 64
                 ctx.attr.compiler_rt_source[DefaultInfo].files,
             ],
         ),
-        outputs = [sysroot, headers, libraries, manifest, abi, loader, runtime],
+        outputs = [sysroot, headers, libraries, manifest, abi, loader, runtime, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     return [
-        DefaultInfo(files = depset([sysroot, headers, libraries, manifest, abi, loader, runtime])),
+        DefaultInfo(files = depset([sysroot, headers, libraries, manifest, abi, loader, runtime, digest])),
         OrlixLibcSysrootInfo(
             abi_manifest = abi,
             compiler_runtime = runtime,
@@ -212,6 +220,7 @@ test "${#uapi_digest}" -eq 64
             dynamic_loader = loader,
             headers = headers,
             libraries = libraries,
+            sysroot_digest = digest,
             target_triple = "aarch64-linux-gnu",
         ),
     ]
