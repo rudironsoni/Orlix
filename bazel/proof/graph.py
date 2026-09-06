@@ -26,6 +26,7 @@ def write_graph(
     buildset_digest: str | None = None,
 ) -> dict:
     evidence = evidence or {}
+    locked = require_sha256(buildset_digest) if buildset_digest else None
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     reports = []
@@ -74,7 +75,7 @@ def write_graph(
             toolchain_digest=toolchain_digest,
             result=result,
             prerequisite_digests=list(prerequisite),
-            buildset_digest=buildset_digest,
+            buildset_digest=locked,
         )
         reports.append(payload)
         if result == "pass":
@@ -86,7 +87,7 @@ def write_graph(
         "kind": "proof-graph",
         "profile": profile,
         "destination": destination,
-        "buildset_digest": buildset_digest,
+        "buildset_digest": locked,
         "reports": [item["proof_tier"] + ":" + item["result"] for item in reports],
         "complete": all(item["result"] == "pass" for item in reports) and len(reports) == len(TIERS),
     }

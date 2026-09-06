@@ -377,6 +377,8 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	extra=""; \
 	if [ -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 ]; then extra="$$extra --mlibc-digest bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256"; fi; \
 	if [ -s bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 ]; then extra="$$extra --rootfs-digest bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256"; fi; \
+	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
+	if [ -n "$$buildset" ]; then extra="$$extra --buildset-digest $$buildset"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--uapi-digest bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256 \
@@ -388,6 +390,7 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 	@rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 	@if rg -q ':pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a pass" >&2; exit 1; fi
+	@python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); idx=json.load(open(sys.argv[2])); buildset=lock.get("buildset"); assert (not buildset) or idx.get("buildset_digest")==buildset, (buildset, idx.get("buildset_digest"))' "$(CURDIR)/artifacts.lock.json" "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 
 __bazel-prove-matrix: __bazel-orlix-app
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"

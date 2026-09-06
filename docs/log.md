@@ -7,6 +7,10 @@ updated: 2026-09-06
 ---
 # Orlix Knowledge Log
 
+## [2026-09-06] record | GitHub Actions iOS 15.5 job did not start
+
+[CORRECTION] Run `34035260568` failed in 6s with empty steps because GitHub did not start the job: recent account payments failed or the spending limit must increase. That is not an `ios15-runtime.yml` YAML defect. Local `make ios15-simulator-gate` remains the runtime proof.
+
 ## [2026-09-06] record | Signed lock 259dc911 and local Cosign reconstruct close the Bazel epic
 
 `make __bazel-lock-from-signed` wrote `artifacts.lock.json` buildset `259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672` from Cosign-signed localhost:5001 UAPI, mlibc, and rootfs. `make __bazel-reconstruct` pulled and verified those references. `make __bazel-reconstruct-source` rebuilt `//bazel/feasibility/kernel:uapi` cache-cold and matched unsigned digest `666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07`. [CORRECTION] iOS 15.5 runtime proof is local `make ios15-simulator-gate` (`GATE=0`), not GitHub Actions. GHCR write is denied on this token, so signed publish stayed on `localhost:5001`. `--config=promoted` still does not substitute OCI components.

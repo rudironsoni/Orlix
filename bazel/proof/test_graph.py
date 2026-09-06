@@ -32,6 +32,22 @@ class GraphTests(unittest.TestCase):
             self.assertEqual(payload["result"], "blocked")
             self.assertEqual(payload["subject_digest"], digest)
 
+    def test_records_locked_buildset_digest(self) -> None:
+        digest = "aa" * 32
+        buildset = "cc" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            index = graph.write_graph(
+                tmp,
+                subjects={"uapi": digest},
+                toolchain_digest="bb" * 32,
+                profile="release",
+                destination="iphonesimulator",
+                buildset_digest=buildset,
+            )
+            self.assertEqual(index["buildset_digest"], buildset)
+            payload = json.loads((Path(tmp) / "kernel-dependency.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["buildset_digest"], buildset)
+
     def test_pass_without_evidence_file_fails(self) -> None:
         digest = "aa" * 32
         with tempfile.TemporaryDirectory() as tmp:
