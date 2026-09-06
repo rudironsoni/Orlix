@@ -588,9 +588,15 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
                 for: .kernel
             )
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             parser.containsTerminalCondition(
                 "not ok 7 upstream behavior",
+                for: .mlibc
+            )
+        )
+        XCTAssertTrue(
+            parser.containsTerminalCondition(
+                "ORLIX-MLIBC-TEST-END",
                 for: .mlibc
             )
         )

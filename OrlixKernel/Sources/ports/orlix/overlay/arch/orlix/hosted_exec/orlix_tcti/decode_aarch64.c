@@ -2798,13 +2798,17 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 		/*
 		 * The pinned source omits the pair overlap ASL. Reject shared
-		 * destinations and writeback overlaps instead of inventing an
-		 * execution order. This is fail-closed containment and remains
-		 * unproved until the official pinned ASL is available.
+		 * destinations and integer writeback overlaps instead of
+		 * inventing an execution order. SIMD Rt/Rt2 are not GPRs, so a
+		 * matching Xn number is not a writeback overlap.
 		 */
-		if ((decoded.load && decoded.rt == decoded.rt2) ||
-		    ((mode == 1 || mode == 3) &&
-		     (decoded.rn == decoded.rt || decoded.rn == decoded.rt2)))
+		if (decoded.load && decoded.rt == decoded.rt2)
+			return (struct orlix_tcti_decoded_instruction) {
+				.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+				.instruction = instruction,
+			};
+		if (!simd_fp && (mode == 1 || mode == 3) && decoded.rn != 31 &&
+		    (decoded.rn == decoded.rt || decoded.rn == decoded.rt2))
 			return (struct orlix_tcti_decoded_instruction) {
 				.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
 				.instruction = instruction,

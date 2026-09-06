@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <net/if.h>
+#include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
@@ -134,8 +135,28 @@ static int run_test(const char *label, const char *path)
 	}
 	if (child < 0)
 		return -1;
-	if (waitpid(child, &status, 0) != child)
-		return -1;
+	{
+		int waited;
+
+		for (waited = 0; waited < 20; waited++) {
+			pid_t reaped = waitpid(child, &status, WNOHANG);
+
+			if (reaped == child)
+				break;
+			if (reaped < 0)
+				return -1;
+			(void)sleep(1);
+		}
+		if (waited == 20) {
+			printf("# %s exceeded 20s wait, killing pid %d\n",
+			       label, (int)child);
+			fflush(stdout);
+			(void)kill(child, SIGKILL);
+			if (waitpid(child, &status, 0) != child)
+				return -1;
+			return -1;
+		}
+	}
 	if (WIFEXITED(status)) {
 		int code = WEXITSTATUS(status);
 

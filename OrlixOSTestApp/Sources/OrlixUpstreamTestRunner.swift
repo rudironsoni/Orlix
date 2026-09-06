@@ -651,6 +651,11 @@ final class OrlixUpstreamTestOutputParser {
     ) -> Bool {
         let output = Self.normalized(rawOutput)
 
+        if spec.suite == .mlibc {
+            return output.contains(spec.completionMarker) ||
+                Self.firstFatalMarker(in: output) != nil
+        }
+
         return output.contains(spec.completionMarker) ||
             Self.firstFatalMarker(in: output) != nil ||
             Self.firstUpstreamFailureLine(in: output) != nil ||
