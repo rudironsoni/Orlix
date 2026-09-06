@@ -79,6 +79,10 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("//bazel/feasibility/kernel:macho_link", build)
         self.assertIn('name = "Orlix"', build)
         self.assertIn('name = "OrlixOSFramework"', build)
+        self.assertIn(
+            'provisioning_profile = "//bazel/feasibility/apple:orlix_ios_provisioning_profile"',
+            build,
+        )
 
     def test_promoted_app_selects_locked_buildset(self) -> None:
         root = Path(__file__).resolve().parents[2]

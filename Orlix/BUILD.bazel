@@ -127,6 +127,7 @@ ios_application(
     bundle_id = "com.rudironsoni.orlix",
     entitlements = "Orlix-iOS/Bazel.entitlements",
     extensions = [":OrlixLiveActivity"],
+    provisioning_profile = "//bazel/feasibility/apple:orlix_ios_provisioning_profile",
     families = [
         "iphone",
         "ipad",
