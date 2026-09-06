@@ -212,6 +212,36 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.validate(output, for: .kernel))
     }
 
+    func testKselftestIgnoresBootTimeKUnitFailuresUntilTAP() throws {
+        let output = """
+        KTAP version 1
+        1..1
+            KTAP version 1
+            # Subtest: orlix-tcti-decode
+            1..1
+            not ok 10 orlix_tcti_configured_profile_leaf_conditions_are_exact
+        not ok 1 orlix-tcti-decode
+        ORLIX-KSELFTEST-INIT
+        TAP version 13
+        1..2
+        ok 1 procfs mounted for kselftest
+        ok 2 installed Orlix kselftest list is readable
+        ORLIX-KSELFTEST-END
+        """
+
+        XCTAssertFalse(
+            parser.containsTerminalCondition(
+                """
+                KTAP version 1
+                    not ok 10 orlix_tcti_configured_profile_leaf_conditions_are_exact
+                not ok 1 orlix-tcti-decode
+                """,
+                for: .kernel
+            )
+        )
+        XCTAssertNoThrow(try parser.validate(output, for: .kernel))
+    }
+
     func testAcceptsSelectedKernelTestOnlyWhenItsPassingTAPResultIsPresent() throws {
         let output = """
         ORLIX-KSELFTEST-INIT
@@ -258,6 +288,29 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         ORLIX-KSELFTEST-END
         """
 
+        XCTAssertNoThrow(
+            try parser.validate(output, for: .kernelTCTIAtomicMemoryDiagnostic)
+        )
+    }
+
+    func testFocusedKUnitSuiteCompletesWithoutKselftestEnd() throws {
+        let output = """
+        KTAP version 1
+        1..1
+            KTAP version 1
+            # Subtest: orlix-tcti-atomic-memory
+            1..1
+            ok 1 orlix_tcti_atomic_memory_casp_no_tear_under_coordinated_threads
+        ok 1 orlix-tcti-atomic-memory
+        """
+
+        XCTAssertTrue(
+            parser.containsTerminalCondition(
+                output,
+                for: .kernelTCTIAtomicMemoryDiagnostic
+            )
+        )
+        XCTAssertFalse(parser.containsTerminalCondition(output, for: .kernel))
         XCTAssertNoThrow(
             try parser.validate(output, for: .kernelTCTIAtomicMemoryDiagnostic)
         )

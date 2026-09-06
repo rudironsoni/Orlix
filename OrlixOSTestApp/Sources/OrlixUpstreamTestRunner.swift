@@ -88,7 +88,7 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
-        kernelCommandLineSuffix: nil,
+        kernelCommandLineSuffix: "kunit.filter_glob=__none__",
         hostDirectoryFixture: true
     )
 
@@ -453,7 +453,8 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
-        kernelCommandLineSuffix: "orlix.kselftest=clone_thread_probe"
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=clone_thread_probe"
     )
 
     static let kernelBootProfile = OrlixUpstreamTestRunSpec(
@@ -652,7 +653,8 @@ final class OrlixUpstreamTestOutputParser {
 
         return output.contains(spec.completionMarker) ||
             Self.firstFatalMarker(in: output) != nil ||
-            Self.firstUpstreamFailureLine(in: output) != nil
+            Self.firstUpstreamFailureLine(in: output) != nil ||
+            Self.focusedKUnitSuitePassed(in: output, spec: spec)
     }
 
     func validate(
@@ -686,14 +688,20 @@ final class OrlixUpstreamTestOutputParser {
                 outputTail: Self.outputTail(output)
             )
         }
-        guard output.contains(spec.completionMarker) else {
-            throw OrlixUpstreamTestRunError.missingCompletionMarker(
-                spec.completionMarker
-            )
+        let focusedKUnitPassed = Self.focusedKUnitSuitePassed(in: output, spec: spec)
+        if !focusedKUnitPassed {
+            guard output.contains(spec.completionMarker) else {
+                throw OrlixUpstreamTestRunError.missingCompletionMarker(
+                    spec.completionMarker
+                )
+            }
         }
 
         switch spec.suite {
         case .kernel:
+            if focusedKUnitPassed && spec.selectedKernelTest == nil {
+                break
+            }
             guard output.contains("TAP version 13") else {
                 throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
                     "missing TAP version 13"
@@ -846,13 +854,28 @@ final class OrlixUpstreamTestOutputParser {
     }
 
     private static func firstUpstreamFailureLine(in output: String) -> String? {
-        output
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-            .first { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                return trimmed.hasPrefix("not ok")
+        var skippingKTAP = false
+
+        for raw in output.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(raw)
+            if line == "KTAP version 1" {
+                skippingKTAP = true
+                continue
             }
+            if line.hasPrefix("TAP version 13") ||
+                line.hasPrefix("ORLIX-KSELFTEST-INIT") ||
+                line.hasPrefix("ORLIX-MLIBC-TEST-INIT") {
+                skippingKTAP = false
+                continue
+            }
+            if skippingKTAP {
+                continue
+            }
+            if line.hasPrefix("not ok") {
+                return line
+            }
+        }
+        return nil
     }
 
     private static func containsTAPPlan(in output: String) -> Bool {
@@ -886,6 +909,17 @@ final class OrlixUpstreamTestOutputParser {
         case absent
         case failed
         case passed
+    }
+
+    private static func focusedKUnitSuitePassed(
+        in output: String,
+        spec: OrlixUpstreamTestRunSpec
+    ) -> Bool {
+        guard let expectedKUnitSuite = spec.expectedKUnitSuite else {
+            return false
+        }
+
+        return kunitSuiteResult(named: expectedKUnitSuite, in: output) == .passed
     }
 
     private static func kunitSuiteResult(

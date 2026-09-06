@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #include <errno.h>
+#include <signal.h>
 #include <sys/syscall.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -213,6 +214,28 @@ static void build_test_path(char *path, size_t capacity, const char *name,
 	path[pos] = '\0';
 }
 
+static int wait_for_child(pid_t child, int *status)
+{
+	int waited;
+
+	for (waited = 0; waited < 20; waited++) {
+		pid_t reaped = waitpid(child, status, WNOHANG);
+
+		if (reaped == child)
+			return 0;
+		if (reaped < 0)
+			return -1;
+		(void)sleep(1);
+	}
+
+	orlix_test_comment_uint("child exceeded 20s wait, killing pid ",
+				(unsigned int)child);
+	(void)kill(child, SIGKILL);
+	if (waitpid(child, status, 0) != child)
+		return -1;
+	return -1;
+}
+
 static int run_test(const char *name, size_t name_len)
 {
 	char path[160];
@@ -238,7 +261,7 @@ static int run_test(const char *name, size_t name_len)
 	}
 	if (child < 0)
 		return -1;
-	if (waitpid(child, &status, 0) != child)
+	if (wait_for_child(child, &status) != 0)
 		return -1;
 	if (!WIFEXITED(status)) {
 		if (WIFSIGNALED(status))
