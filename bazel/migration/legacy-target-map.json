@@ -2,14 +2,14 @@
   "schema": 1,
   "purpose": "Exhaustive explicit target inventory for the top-level and component Orlix Makefiles.",
   "source_files": {
-    "Makefile": "7a4bb3a4930d4ad80b8d837a11eb26760a162b5163f55fd257533255582e35fb",
+    "Makefile": "99cf7fb0623158cb14b8a905fd4d0cd665c3ef10a937baaa28faed013a5ed174",
     "Orlix/Makefile": "8857a522bac42d41214d13d23bafcc70eeab1d07bd0c9419c122783599b36d54",
     "OrlixCoreUtils/Makefile": "0a1010402df05d70a6afbb1795c7581883e6f95b7d173ebdedb580d668f25e9a",
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "1e5c9ddc888f3c679939fa316ca2b9ba2d8a935a4f341cf27d16b731ba7b7e1e",
     "OrlixOS/Makefile": "2b1d54ce8dc1f28338c7c7c5661bfbc43941c6eacd49babd86157b9bad8a3eb2",
-    "make/bazel-migration.mk": "fb747983b1db598f2e4e723b4c83218b5a56b8393020b84a11c89fa229ffa022",
+    "make/bazel-migration.mk": "8804031ba74f8729eb38c7aaf7d5ab656be1a3fada80d9f1c62491609bc259ba",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
     "make/runtime.mk": "2dc60f9ccd78be2e565843c96873453a123b447603d4484afdfc8517ab4e2cc8",
@@ -4163,14 +4163,13 @@
       "classification": "command",
       "phony": true,
       "prerequisites": [
-        "clean",
-        "build"
+        "clean"
       ]
     },
     {
       "name": "prepare",
       "source": "Makefile",
-      "line": 1070,
+      "line": 1075,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4180,7 +4179,7 @@
     {
       "name": "__prepare-product",
       "source": "Makefile",
-      "line": 1072,
+      "line": 1077,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4190,7 +4189,7 @@
     {
       "name": "__prepare-tcti-isa",
       "source": "Makefile",
-      "line": 1075,
+      "line": 1080,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4200,7 +4199,7 @@
     {
       "name": "dtbs",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4210,7 +4209,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4220,7 +4219,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4230,7 +4229,7 @@
     {
       "name": "kunit",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4240,7 +4239,7 @@
     {
       "name": "scripts",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4250,7 +4249,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1081,
+      "line": 1086,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4260,7 +4259,7 @@
     {
       "name": "headers_install",
       "source": "Makefile",
-      "line": 1088,
+      "line": 1093,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4270,7 +4269,7 @@
     {
       "name": "run",
       "source": "Makefile",
-      "line": 1095,
+      "line": 1100,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4280,7 +4279,7 @@
     {
       "name": "clean",
       "source": "Makefile",
-      "line": 1098,
+      "line": 1103,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4290,7 +4289,7 @@
     {
       "name": "mrproper",
       "source": "Makefile",
-      "line": 1105,
+      "line": 1110,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4300,7 +4299,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1112,
+      "line": 1117,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4310,7 +4309,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1120,
+      "line": 1125,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -5615,7 +5614,7 @@
     {
       "name": "__bazel-gc",
       "source": "make/bazel-migration.mk",
-      "line": 420,
+      "line": 422,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5625,7 +5624,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 427,
+      "line": 429,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5636,7 +5635,7 @@
     {
       "name": "__bazel-orlixos",
       "source": "make/bazel-migration.mk",
-      "line": 448,
+      "line": 450,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5646,7 +5645,7 @@
     {
       "name": "__bazel-orlix-app",
       "source": "make/bazel-migration.mk",
-      "line": 452,
+      "line": 454,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5656,7 +5655,7 @@
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 474,
+      "line": 476,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5666,7 +5665,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 477,
+      "line": 479,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5677,7 +5676,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 488,
+      "line": 490,
       "classification": "private",
       "phony": true,
       "prerequisites": [

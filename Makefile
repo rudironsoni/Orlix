@@ -1065,7 +1065,12 @@ endif
 __build-vendor:
 	@$(APP_MAKE) build type=vendor vendor="$(vendor)"
 
-rebuild: clean build
+rebuild: clean
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-app
+else
+	@$(MAKE) build
+endif
 
 prepare: __prepare-$(type)
 

@@ -65,9 +65,13 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertEqual(ops["xcodeproj"]["bazel_shadow"], "__bazel-feasibility-xcodeproj")
         self.assertEqual(ops["headers_install"]["bazel_shadow"], "__bazel-kernel-uapi")
         self.assertEqual(ops["test"]["bazel_shadow"], "__bazel-matrix-check")
+        self.assertEqual(ops["rebuild"]["bazel_shadow"], "__bazel-orlix-app")
+        self.assertEqual(ops["runtime-tests"]["bazel_shadow"], "__bazel-feasibility-xcodeproj")
         self.assertIn("ADR 0037 cutover", ops["xcodeproj"]["now"])
         self.assertIn("ADR 0037 cutover", ops["headers_install"]["now"])
         self.assertIn("ADR 0037 cutover", ops["test"]["now"])
+        self.assertIn("ADR 0037 cutover", ops["rebuild"]["now"])
+        self.assertIn("ADR 0037 cutover", ops["runtime-tests"]["now"])
 
     def test_product_app_does_not_declare_a_kernel_framework(self) -> None:
         build = (Path(__file__).resolve().parents[2] / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")

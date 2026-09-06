@@ -162,7 +162,8 @@
     {
       "public_name": "rebuild",
       "later_bazel": "clean then product compile",
-      "now": "XcodeGen plus component Make"
+      "now": "Make rebuild routes to clean then __bazel-orlix-app after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-orlix-app"
     },
     {
       "public_name": "test",
@@ -173,7 +174,8 @@
     {
       "public_name": "runtime-tests",
       "later_bazel": "OrlixOS session proof",
-      "now": "current Make runtime tests"
+      "now": "Make runtime-tests uses the Bazel-generated Xcode project after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-feasibility-xcodeproj"
     },
     {
       "public_name": "ios15-simulator-gate",

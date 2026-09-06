@@ -617,7 +617,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -629,7 +629,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1083,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -641,7 +641,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1081,
+      "line": 1086,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -653,7 +653,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1112,
+      "line": 1117,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -665,7 +665,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1120,
+      "line": 1125,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -895,7 +895,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 427,
+      "line": 429,
       "classification": "private",
       "phony": true,
       "prerequisites": [
