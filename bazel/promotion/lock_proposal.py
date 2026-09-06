@@ -41,6 +41,34 @@ def write_lock_proposal(path: str, component: str, unsigned_digest: str) -> dict
     return payload
 
 
+def assert_unsigned_lock_proposals(paths: list[str], lock_path: str) -> None:
+    lock = read_lock(lock_path)
+    components = lock.get("components") or {}
+    before = Path(lock_path).read_text(encoding="utf-8")
+    for path in paths:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        if payload.get("signed") is not False:
+            raise ValueError(f"unsigned lock proposal must set signed false: {path}")
+        if payload.get("buildset") is not None or payload.get("oci_digest") is not None:
+            raise ValueError(f"unsigned lock proposal must not carry a buildset or oci digest: {path}")
+        names = list((payload.get("components") or {}).keys())
+        if len(names) != 1:
+            raise ValueError(f"unsigned lock proposal must name one component: {path}")
+        name = names[0]
+        unsigned = require_sha256(payload["components"][name]["unsigned_digest"])
+        want = (components.get(name) or {}).get("unsigned_digest")
+        if want != unsigned:
+            raise ValueError(f"{name} unsigned digest {unsigned} does not match lock {want}")
+        try:
+            apply_lock_proposal(path, lock_path)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"unsigned lock proposal mutated {lock_path}")
+        if Path(lock_path).read_text(encoding="utf-8") != before:
+            raise ValueError(f"unsigned lock proposal mutated {lock_path}")
+
+
 def apply_lock_proposal(proposal_path: str, lock_path: str) -> None:
     proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
     if proposal.get("signed") is not True or not proposal.get("buildset"):

@@ -32,12 +32,14 @@ def prove_rows(matrix: dict, evidence: dict[str, str]) -> dict:
             }
         )
     gated = [row["id"] for row in matrix["rows"] if row["result"] == "gated"]
+    supported = [row["id"] for row in matrix["rows"] if row["result"] == "supported"]
+    proved_ids = {item["id"] for item in report}
     return {
         "schema": 1,
         "kind": "matrix-prove",
         "proved": report,
         "gated": gated,
-        "complete": False,
+        "complete": all(row_id in proved_ids for row_id in supported),
     }
 
 

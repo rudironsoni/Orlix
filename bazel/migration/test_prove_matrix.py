@@ -37,6 +37,21 @@ class ProveMatrixTests(unittest.TestCase):
             path.write_text("TEST EXECUTE SUCCEEDED\n", encoding="utf-8")
             payload = prove_matrix.prove_rows(self.matrix, {"ios-15.5-ci-runtime": str(path)})
             self.assertEqual(payload["proved"][0]["id"], "ios-15.5-ci-runtime")
+            self.assertFalse(payload["complete"])
+
+    def test_complete_when_every_supported_row_has_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence = {}
+            for row in self.matrix["rows"]:
+                if row["result"] != "supported":
+                    continue
+                path = Path(tmp) / row["id"]
+                path.write_text(row["id"] + "\n", encoding="utf-8")
+                evidence[row["id"]] = str(path)
+            payload = prove_matrix.prove_rows(self.matrix, evidence)
+            self.assertTrue(payload["complete"])
+            self.assertEqual(len(payload["proved"]), len(evidence))
+            self.assertIn("signing-distribution", payload["gated"])
 
 
 if __name__ == "__main__":

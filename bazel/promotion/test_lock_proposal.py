@@ -28,6 +28,27 @@ class LockProposalTests(unittest.TestCase):
             self.assertIsNone(empty["buildset"])
             self.assertEqual(empty["components"], {})
 
+    def test_unsigned_proposals_match_lock_and_do_not_apply(self) -> None:
+        digest = "12" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            proposal_path = Path(tmp) / "uapi-lock-proposal.json"
+            lock_path = Path(tmp) / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "buildset": "ab" * 32,
+                        "components": {"uapi": {"unsigned_digest": digest}},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            lock_proposal.write_lock_proposal(str(proposal_path), "uapi", digest)
+            before = lock_path.read_text(encoding="utf-8")
+            lock_proposal.assert_unsigned_lock_proposals([str(proposal_path)], str(lock_path))
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), before)
+
     def test_invalid_digest_fails_loud(self) -> None:
         with self.assertRaises(ValueError):
             lock_proposal.write_lock_proposal("/unused.json", "uapi", "short")

@@ -173,6 +173,62 @@ class GraphTests(unittest.TestCase):
             kunit = json.loads((out / "kunit.json").read_text(encoding="utf-8"))
             self.assertEqual(kunit["result"], "blocked")
 
+    def test_kunit_evidence_unblocks_kselftest_as_blocked(self) -> None:
+        digest = "aa" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            kernel = Path(tmp) / "kernel-dependency.evidence"
+            kunit = Path(tmp) / "kunit.evidence"
+            kernel.write_text("T _OrlixBoot\n", encoding="utf-8")
+            kunit.write_text("ok 1 - orlix-tcti-atomic-memory\n", encoding="utf-8")
+            index = graph.write_graph(
+                tmp,
+                subjects={"uapi": digest, "mlibc": digest, "rootfs": digest, "app": digest},
+                toolchain_digest="bb" * 32,
+                profile="release",
+                destination="iphonesimulator",
+                evidence={
+                    "kernel-dependency": str(kernel),
+                    "kunit": str(kunit),
+                },
+            )
+            self.assertFalse(index["complete"])
+            self.assertEqual(
+                index["reports"],
+                ["kernel-dependency:pass", "kunit:pass", "kselftest:blocked"],
+            )
+
+    def test_kselftest_evidence_unblocks_orlixmlibc_as_blocked(self) -> None:
+        digest = "aa" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            kernel = Path(tmp) / "kernel-dependency.evidence"
+            kunit = Path(tmp) / "kunit.evidence"
+            kselftest = Path(tmp) / "kselftest.evidence"
+            kernel.write_text("T _OrlixBoot\n", encoding="utf-8")
+            kunit.write_text("ok 1 - orlix-tcti-atomic-memory\n", encoding="utf-8")
+            kselftest.write_text("TAP version 13\nok 1 installed Orlix kselftest list is readable\n", encoding="utf-8")
+            index = graph.write_graph(
+                tmp,
+                subjects={"uapi": digest, "mlibc": digest, "rootfs": digest, "app": digest},
+                toolchain_digest="bb" * 32,
+                profile="release",
+                destination="iphonesimulator",
+                evidence={
+                    "kernel-dependency": str(kernel),
+                    "kunit": str(kunit),
+                    "kselftest": str(kselftest),
+                },
+            )
+            self.assertFalse(index["complete"])
+            self.assertEqual(
+                index["reports"],
+                [
+                    "kernel-dependency:pass",
+                    "kunit:pass",
+                    "kselftest:pass",
+                    "orlixmlibc:blocked",
+                ],
+            )
+
     def test_pass_without_evidence_file_fails(self) -> None:
         digest = "aa" * 32
         with tempfile.TemporaryDirectory() as tmp:

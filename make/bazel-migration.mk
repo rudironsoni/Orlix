@@ -381,6 +381,8 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
 	if [ -n "$$buildset" ]; then extra="$$extra --buildset-digest $$buildset"; fi; \
 	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then extra="$$extra --evidence kernel-dependency=$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; fi; \
+	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence" ]; then extra="$$extra --evidence kunit=$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence"; fi; \
+	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then extra="$$extra --evidence kselftest=$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
@@ -393,24 +395,43 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 	@if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then \
 		rg -q 'kernel-dependency:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-		rg -q 'kunit:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+		if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence" ]; then \
+			rg -q 'kunit:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+			if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then \
+				rg -q 'kselftest:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+				rg -q 'orlixmlibc:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+			else \
+				rg -q 'kselftest:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+			fi; \
+		else \
+			rg -q 'kunit:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+		fi; \
 	else \
 		rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
 	fi
-	@if rg -q 'kselftest:pass|orlixmlibc:pass|syscall-uapi:pass|posix-shell:pass|jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi
+	@if rg -q 'orlixmlibc:pass|syscall-uapi:pass|posix-shell:pass|jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi
 	@python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); idx=json.load(open(sys.argv[2])); buildset=lock.get("buildset"); assert (not buildset) or idx.get("buildset_digest")==buildset, (buildset, idx.get("buildset_digest"))' "$(CURDIR)/artifacts.lock.json" "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 
-__bazel-prove-matrix: __bazel-orlix-app
+__bazel-prove-matrix: __bazel-orlix-app __bazel-apple-smoke __bazel-live-activity-smoke __bazel-native-dependency-smoke
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
-	@ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
-	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/apple:SmokeApp --compilation_mode=opt --config=release --config=source --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@set -euo pipefail; \
+	map="$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-evidence.json"; \
+	PYTHONPATH="$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/migration/matrix_evidence.py" \
+		--output-base "$(ORLIX_BAZEL_OUTPUT_BASE)" \
+		--build-root "$(ORLIX_BUILD_ROOT)" \
+		--repo "$(CURDIR)" \
+		--out "$$map"; \
+	args=(); \
+	while IFS= read -r line; do args+=(--evidence "$$line"); done < <(python3 -c 'import json,sys; [print("%s=%s" % item) for item in json.load(open(sys.argv[1])).items()]' "$$map"); \
 	PYTHONPATH="$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/migration/prove_matrix.py" \
 		--matrix "$(CURDIR)/bazel/migration/apple-build-matrix.json" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json" \
-		--evidence ios-15.0-app-sdk-compile="$$ipa" \
-		--evidence ios-15.5-ci-runtime="$(ORLIX_BUILD_ROOT)/iOS15/Orlix-iOS15.log"
-	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
+		"$${args[@]}"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import lock_proposal; lock_proposal.assert_unsigned_lock_proposals(["$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-lock-proposal.json","$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-lock-proposal.json","$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-lock-proposal.json"], "$(CURDIR)/artifacts.lock.json")'
+	@rg -q '"complete": true' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
 	@rg -q 'ios-15.5-ci-runtime' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
+	@rg -q 'signing-distribution' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
 
 __bazel-apple-routing-check:
 	@rg -q '^ORLIX_BAZEL_AUTHORITY \?= 1$$' Makefile
