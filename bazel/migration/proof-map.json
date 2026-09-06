@@ -847,7 +847,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 347,
+      "line": 348,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -859,7 +859,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 360,
+      "line": 361,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -871,7 +871,7 @@
     {
       "name": "__bazel-proof-graph",
       "source": "make/bazel-migration.mk",
-      "line": 373,
+      "line": 374,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -883,7 +883,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 407,
+      "line": 409,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -895,7 +895,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 425,
+      "line": 427,
       "classification": "private",
       "phony": true,
       "prerequisites": [

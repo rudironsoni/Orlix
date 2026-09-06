@@ -15,6 +15,29 @@ def load_digest(path: str) -> str:
     return require_sha256(text)
 
 
+def subjects_from_lock(path: str) -> tuple[dict[str, str], str | None]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    subjects: dict[str, str] = {}
+    for name in ("uapi", "mlibc", "rootfs"):
+        entry = (payload.get("components") or {}).get(name) or {}
+        unsigned = entry.get("unsigned_digest")
+        if unsigned:
+            subjects[name] = require_sha256(unsigned)
+    buildset = payload.get("buildset")
+    return subjects, require_sha256(str(buildset)) if buildset else None
+
+
+def merge_subjects(lock_subjects: dict[str, str], live: dict[str, str]) -> dict[str, str]:
+    merged = dict(lock_subjects)
+    for key, digest in live.items():
+        if key in merged and merged[key] != digest:
+            raise BindError(
+                f"{key} digest {digest} does not match artifacts.lock.json {merged[key]}"
+            )
+        merged[key] = digest
+    return merged
+
+
 def write_graph(
     out_dir: str,
     *,
@@ -106,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default="release")
     parser.add_argument("--destination", default="iphonesimulator")
     parser.add_argument("--buildset-digest")
+    parser.add_argument("--lock")
     args = parser.parse_args(argv)
 
     def _digest(value: str | None) -> str | None:
@@ -113,20 +137,25 @@ def main(argv: list[str] | None = None) -> int:
             return None
         return load_digest(value) if Path(value).is_file() else require_sha256(value)
 
-    subjects = {"uapi": _digest(args.uapi_digest)}
+    lock_subjects: dict[str, str] = {}
+    lock_buildset = None
+    if args.lock:
+        lock_subjects, lock_buildset = subjects_from_lock(args.lock)
+    live = {"uapi": _digest(args.uapi_digest)}
     if args.mlibc_digest:
-        subjects["mlibc"] = _digest(args.mlibc_digest)
+        live["mlibc"] = _digest(args.mlibc_digest)
     if args.rootfs_digest:
-        subjects["rootfs"] = _digest(args.rootfs_digest)
+        live["rootfs"] = _digest(args.rootfs_digest)
     if args.app_digest:
-        subjects["app"] = _digest(args.app_digest)
+        live["app"] = _digest(args.app_digest)
+    subjects = merge_subjects(lock_subjects, live)
     write_graph(
         args.out,
         subjects=subjects,
         toolchain_digest=_digest(args.toolchain_digest),
         profile=args.profile,
         destination=args.destination,
-        buildset_digest=args.buildset_digest,
+        buildset_digest=args.buildset_digest or lock_buildset,
     )
     return 0
 

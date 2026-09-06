@@ -48,6 +48,32 @@ class GraphTests(unittest.TestCase):
             payload = json.loads((Path(tmp) / "kernel-dependency.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["buildset_digest"], buildset)
 
+    def test_lock_unsigned_digest_mismatch_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "buildset": "dd" * 32,
+                        "components": {
+                            "uapi": {
+                                "unsigned_digest": "aa" * 32,
+                                "oci_digest": "sha256:" + ("ee" * 32),
+                                "oci_reference": "localhost:5001/orlix/uapi@sha256:" + ("ee" * 32),
+                            }
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            lock_subjects, buildset = graph.subjects_from_lock(str(lock_path))
+            self.assertEqual(buildset, "dd" * 32)
+            self.assertEqual(lock_subjects["uapi"], "aa" * 32)
+            with self.assertRaises(graph.BindError):
+                graph.merge_subjects(lock_subjects, {"uapi": "bb" * 32})
+
     def test_pass_without_evidence_file_fails(self) -> None:
         digest = "aa" * 32
         with tempfile.TemporaryDirectory() as tmp:
