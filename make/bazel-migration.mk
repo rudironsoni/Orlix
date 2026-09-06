@@ -35,7 +35,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
@@ -380,6 +380,7 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	if [ -s bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 ]; then extra="$$extra --rootfs-digest bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256"; fi; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
 	if [ -n "$$buildset" ]; then extra="$$extra --buildset-digest $$buildset"; fi; \
+	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then extra="$$extra --evidence kernel-dependency=$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
@@ -390,8 +391,13 @@ __bazel-proof-graph: __bazel-kernel-uapi
 		$$extra
 	@test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
-	@rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
-	@if rg -q ':pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a pass" >&2; exit 1; fi
+	@if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then \
+		rg -q 'kernel-dependency:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+		rg -q 'kunit:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+	else \
+		rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+	fi
+	@if rg -q 'kselftest:pass|orlixmlibc:pass|syscall-uapi:pass|posix-shell:pass|jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi
 	@python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); idx=json.load(open(sys.argv[2])); buildset=lock.get("buildset"); assert (not buildset) or idx.get("buildset_digest")==buildset, (buildset, idx.get("buildset_digest"))' "$(CURDIR)/artifacts.lock.json" "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 
 __bazel-prove-matrix: __bazel-orlix-app
@@ -413,6 +419,9 @@ __bazel-apple-routing-check:
 	@rg -F -q '//bazel/promotion:locked_buildset' Orlix/BUILD.bazel
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
+	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'
+	@rg -A3 '^beta-archive:' Makefile | rg -F -q '__bazel-orlix-archive'
+	@rg -F -q 'name = "OrlixUITests"' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
 	@rg -F -q '__bazel-kernel-uapi' Makefile
 	@rg -A2 '^test:' Makefile | rg -F -q '__bazel-matrix-check'
@@ -474,7 +483,68 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap
 	if rg -q ':latest' "$$stamp"; then echo "locked-buildset.json must not use mutable latest" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
 	rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json || { echo "promoted kernel composition must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$ipa_work/Payload/Orlix.app'))"; \
+	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
+	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot|[[:space:]]T[[:space:]]+_arch_boot_entry' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; \
+	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" || { echo "missing kernel-dependency evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rm -rf "$$ipa_work"
+
+__bazel-orlix-archive: __bazel-version-check
+	@test -n "$(ORLIX_DEVELOPMENT_TEAM)" || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }
+	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=opt --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$ipa" && test -s "$$ipa" || { echo "missing device //Orlix:Orlix ipa" >&2; exit 1; }; \
+	mkdir -p "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications" "$(ORLIX_BETA_EXPORT_DIR)"; \
+	rm -rf "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app"; \
+	/usr/bin/unzip -q "$$ipa" -d "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
+	mv "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work/Payload/Orlix.app" "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app"; \
+	rm -rf "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
+	/bin/cp "$$ipa" "$(ORLIX_BETA_IPA_PATH)"
+
+__bazel-ios15-simulator-gate: __bazel-feasibility-xcodeproj
+	@set -euo pipefail; \
+	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
+	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
+	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
+	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
+	project="Build/XcodeProjects/OrlixBazelFeasibility.xcodeproj"; \
+	test -d "$$project" || { echo "missing Bazel Xcode project: $$project" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_generated_project(Path('$$project/project.pbxproj')); print('pass: AppIntents.framework is weakly linked')"; \
+	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
+	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
+	result_log="$$result_dir/Orlix-iOS15.log"; \
+	derived_data="$$result_dir/DerivedData"; \
+	mkdir -p "$$result_dir"; \
+	rm -rf "$$result_bundle"; \
+	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
+	xcodebuild \
+		-project "$$project" \
+		-scheme "OrlixUITests" \
+		-configuration Debug \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
+		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
+		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		build-for-testing 2>&1 | tee "$$result_log"; \
+	app="$$(/usr/bin/find "$$derived_data" -path '*/Orlix.app' -print | /usr/bin/head -n 1)"; \
+	test -n "$$app" && test -d "$$app" || { echo "missing iOS 15 simulator app under $$derived_data" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
+	rm -rf "$$result_bundle"; \
+	xcodebuild \
+		-project "$$project" \
+		-scheme "OrlixUITests" \
+		-configuration Debug \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
+		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
+		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		-test-timeouts-enabled YES \
+		-default-test-execution-time-allowance 120 \
+		-maximum-test-execution-time-allowance 180 \
+		test-without-building 2>&1 | tee -a "$$result_log"
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixHostAdapter/Sources:OrlixHostAdapter --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"

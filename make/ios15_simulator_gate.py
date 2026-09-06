@@ -36,7 +36,8 @@ def validate_generated_project(pbxproj: Path) -> None:
         r"/\* AppIntents\.framework in Frameworks \*/ = \{[^}]+\};",
         text,
     )
-    if not entries:
+    weak_ldflag = "-weak_framework" in text and "AppIntents" in text
+    if not entries and not weak_ldflag:
         fail("generated project is missing AppIntents.framework in Frameworks")
     required = [entry for entry in entries if "ATTRIBUTES = (Weak" not in entry]
     if required:

@@ -130,6 +130,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--destination", default="iphonesimulator")
     parser.add_argument("--buildset-digest")
     parser.add_argument("--lock")
+    parser.add_argument(
+        "--evidence",
+        action="append",
+        default=[],
+        metavar="TIER=PATH",
+        help="hosted evidence file for one ADR 0017 tier; missing tiers stay blocked",
+    )
     args = parser.parse_args(argv)
 
     def _digest(value: str | None) -> str | None:
@@ -149,12 +156,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.app_digest:
         live["app"] = _digest(args.app_digest)
     subjects = merge_subjects(lock_subjects, live)
+    evidence: dict[str, str] = {}
+    for item in args.evidence:
+        if "=" not in item:
+            raise BindError(f"evidence must be TIER=PATH, got {item}")
+        tier, path = item.split("=", 1)
+        evidence[tier] = path
     write_graph(
         args.out,
         subjects=subjects,
         toolchain_digest=_digest(args.toolchain_digest),
         profile=args.profile,
         destination=args.destination,
+        evidence=evidence,
         buildset_digest=args.buildset_digest or lock_buildset,
     )
     return 0

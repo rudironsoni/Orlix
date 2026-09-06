@@ -45,6 +45,11 @@ class IOS15SimulatorGateTests(unittest.TestCase):
     def test_weak_appintents_project_passes(self) -> None:
         gate.validate_generated_project(self.write_pbxproj(WEAK_APPINTENTS))
 
+    def test_weak_framework_ldflag_project_passes(self) -> None:
+        gate.validate_generated_project(
+            self.write_pbxproj('OTHER_LDFLAGS = ("-weak_framework", AppIntents);')
+        )
+
     def test_required_appintents_project_fails(self) -> None:
         with self.assertRaises(gate.GateError) as error:
             gate.validate_generated_project(self.write_pbxproj(REQUIRED_APPINTENTS))

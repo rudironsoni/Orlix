@@ -180,12 +180,14 @@
     {
       "public_name": "ios15-simulator-gate",
       "later_bazel": "iOS 15.5 launch proof",
-      "now": "Make ios15-simulator-gate AppLaunchSmoke on a local iOS 15.5 simulator"
+      "now": "Make ios15-simulator-gate AppLaunchSmoke on a local iOS 15.5 simulator after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-ios15-simulator-gate"
     },
     {
       "public_name": "beta-archive",
       "later_bazel": "signed product archive from promoted buildset",
-      "now": "Xcode archive of the Orlix app"
+      "now": "Make beta-archive routes to __bazel-orlix-archive after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-orlix-archive"
     },
     {
       "public_name": "xcodeproj",

@@ -371,6 +371,9 @@ beta-install-simulator: beta-prerequisites
 	xcrun simctl launch "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)"
 
 ios15-simulator-gate:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-ios15-simulator-gate
+else
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
@@ -413,6 +416,7 @@ ios15-simulator-gate:
 		-default-test-execution-time-allowance 120 \
 		-maximum-test-execution-time-allowance 180 \
 		test-without-building 2>&1 | tee -a "$$result_log"
+endif
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \
@@ -901,6 +905,9 @@ agent-task-envelope-check:
 	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
 
 beta-archive: beta-resolve-build-number
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-archive
+else
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	build_number="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")"; \
@@ -942,6 +949,7 @@ beta-archive: beta-resolve-build-number
 		"$${xcodebuild_signing_flags[@]}" \
 		"$${archive_settings[@]}" \
 		archive
+endif
 
 beta-validate-archive:
 	@set -euo pipefail; \

@@ -138,6 +138,41 @@ class GraphTests(unittest.TestCase):
             self.assertEqual(payload["buildset_digest"], buildset)
             self.assertEqual(payload["result"], "blocked")
 
+    def test_main_passes_kernel_dependency_only_with_evidence(self) -> None:
+        uapi = "aa" * 32
+        toolchain = "ee" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            uapi_file = Path(tmp) / "uapi.sha256"
+            toolchain_file = Path(tmp) / "toolchain.sha256"
+            evidence = Path(tmp) / "kernel-dependency.evidence"
+            uapi_file.write_text(uapi + "\n", encoding="utf-8")
+            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
+            evidence.write_text("T _OrlixBoot\nT _arch_boot_entry\n", encoding="utf-8")
+            out = Path(tmp) / "proof"
+            self.assertEqual(
+                graph.main(
+                    [
+                        "--out",
+                        str(out),
+                        "--uapi-digest",
+                        str(uapi_file),
+                        "--toolchain-digest",
+                        str(toolchain_file),
+                        "--evidence",
+                        f"kernel-dependency={evidence}",
+                    ]
+                ),
+                0,
+            )
+            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["complete"])
+            self.assertEqual(index["reports"], ["kernel-dependency:pass", "kunit:blocked"])
+            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["result"], "pass")
+            self.assertEqual(payload["subject_digest"], uapi)
+            kunit = json.loads((out / "kunit.json").read_text(encoding="utf-8"))
+            self.assertEqual(kunit["result"], "blocked")
+
     def test_pass_without_evidence_file_fails(self) -> None:
         digest = "aa" * 32
         with tempfile.TemporaryDirectory() as tmp:

@@ -47,5 +47,9 @@ xcodeproj(
                 "simulator",
             ],
         ),
+        top_level_target(
+            "//Orlix:OrlixUITests",
+            target_environments = ["simulator"],
+        ),
     ],
 )

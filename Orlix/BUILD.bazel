@@ -1,4 +1,4 @@
-load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework")
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework", "ios_ui_test")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
@@ -158,4 +158,25 @@ ios_application(
         "//bazel/feasibility/kernel:macho_link",
         "//bazel/feasibility/native:native_link_smoke",
     ],
+)
+
+swift_library(
+    name = "OrlixUITestsLibrary",
+    testonly = True,
+    srcs = glob(["OrlixUITests/**/*.swift"]),
+    copts = [
+        "-swift-version",
+        "5",
+    ],
+    module_name = "OrlixUITests",
+    tags = ["manual"],
+)
+
+ios_ui_test(
+    name = "OrlixUITests",
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    test_host = ":Orlix",
+    visibility = ["//visibility:public"],
+    deps = [":OrlixUITestsLibrary"],
 )
