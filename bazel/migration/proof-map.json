@@ -641,7 +641,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1078,
+      "line": 1081,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -653,7 +653,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1105,
+      "line": 1112,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -665,7 +665,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1113,
+      "line": 1120,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -895,7 +895,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 421,
+      "line": 422,
       "classification": "private",
       "phony": true,
       "prerequisites": [

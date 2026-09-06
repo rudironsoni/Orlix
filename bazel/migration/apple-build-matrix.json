@@ -167,7 +167,8 @@
     {
       "public_name": "test",
       "later_bazel": "hosted proof selection",
-      "now": "current Make proof graph"
+      "now": "Make test routes to __bazel-matrix-check after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-matrix-check"
     },
     {
       "public_name": "runtime-tests",

@@ -1075,8 +1075,15 @@ __prepare-product:
 __prepare-tcti-isa:
 	@$(KERNEL_MAKE) prepare type=tcti-isa
 
-scripts dtbs kunit kselftest kselftest-install test:
+scripts dtbs kunit kselftest kselftest-install:
 	@$(KERNEL_MAKE) $@
+
+test:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-matrix-check
+else
+	@$(KERNEL_MAKE) test
+endif
 
 headers_install:
 ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
