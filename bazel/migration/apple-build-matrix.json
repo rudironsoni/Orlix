@@ -14,7 +14,7 @@
   "notes": [
     "An installed SDK or simulator does not create a supported row.",
     "iOS 15.5 runtime proof is make ios15-simulator-gate on a local iOS 15.5 simulator. GitHub Actions quota is exhausted.",
-    "Signed lock 259dc911 exists for Cosign-signed localhost:5001 UAPI, mlibc, and rootfs. Promoted Apple consumption stays gated until --config=promoted substitutes those OCI components.",
+    "Signed lock 259dc911 is consumed by --config=promoted. Mutable latest is rejected. make build uses that path.",
     "Later-system features stay behind availability or capability gates. The iOS 15 product is the reduced feature set from ADR 0038."
   ],
   "rows": [
@@ -70,9 +70,8 @@
       "deployment": "15.0",
       "destination": "iphonesimulator",
       "component_mode": "promoted",
-      "result": "gated",
-      "gate": "signed artifacts.lock.json buildset 259dc911 is local Cosign on localhost:5001; --config=promoted does not substitute OCI components",
-      "proof": "make __bazel-lock-from-signed and make __bazel-reconstruct; cache-cold //bazel/feasibility/kernel:uapi digest 666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07"
+      "result": "supported",
+      "proof": "make build PROFILE=release uses --config=promoted; IPA embeds locked-buildset.json for buildset 259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672; kernel composition records that buildset; oci_reference is digest-pinned"
     },
     {
       "id": "signing-distribution",

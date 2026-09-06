@@ -42,12 +42,12 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("disabled", gates["MLX execution"])
         self.assertIn("weak-linked", gates["AppIntents.framework"])
 
-    def test_promoted_mode_is_gated_until_lock(self) -> None:
+    def test_promoted_mode_consumes_signed_lock(self) -> None:
         row = self.rows["ios-15.0-promoted-buildset"]
-        self.assertEqual(row["result"], "gated")
-        self.assertIn("artifacts.lock.json", row["gate"])
-        self.assertIn("259dc911", row["gate"])
-        self.assertIn("does not substitute OCI components", row["gate"])
+        self.assertEqual(row["result"], "supported")
+        self.assertIn("259dc911", row["proof"])
+        self.assertIn("--config=promoted", row["proof"])
+        self.assertNotIn("latest", row["proof"])
 
     def test_public_make_operations_are_named(self) -> None:
         names = {item["public_name"] for item in self.matrix["make_operations"]}
@@ -73,3 +73,13 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("//bazel/feasibility/kernel:macho_link", build)
         self.assertIn('name = "Orlix"', build)
         self.assertIn('name = "OrlixOSFramework"', build)
+
+    def test_promoted_app_selects_locked_buildset(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        build = (root / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/promotion:locked_buildset", build)
+        self.assertIn("//bazel/config:component_promoted", build)
+        mk = (root / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("build //Orlix:Orlix //bazel/product:kernel_composition", mk)
+        self.assertIn("--config=promoted", mk)
+        self.assertNotIn("uapi:latest", mk)

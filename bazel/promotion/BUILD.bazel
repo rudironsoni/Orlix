@@ -1,0 +1,16 @@
+load(":promoted.bzl", "orlix_locked_buildset")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["locked_buildset.py"])
+
+filegroup(
+    name = "no_lock",
+    srcs = [],
+)
+
+orlix_locked_buildset(
+    name = "locked_buildset",
+    lock = "//:artifacts.lock.json",
+    tags = ["manual"],
+)

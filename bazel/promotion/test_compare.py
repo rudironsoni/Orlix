@@ -113,6 +113,7 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("unsigned promote must not Cosign-sign", body)
         self.assertIn("unsigned promote mutated artifacts.lock.json", body)
         self.assertIn("__bazel-reconstruct-source", body)
+        self.assertIn("--config=promoted", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,uapi,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,mlibc,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,rootfs,", body)

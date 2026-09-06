@@ -139,7 +139,10 @@ ios_application(
         "Orlix/PrivacyInfo.xcprivacy",
         "//docs/sources/release:orlix-app-release-inputs.json",
         "//bazel/product:OrlixBazelPlaceholder.metal",
-    ] + glob(["Orlix/Assets.xcassets/**"]),
+    ] + glob(["Orlix/Assets.xcassets/**"]) + select({
+        "//bazel/config:component_promoted": ["//bazel/promotion:locked_buildset"],
+        "//conditions:default": [],
+    }),
     linkopts = [
         "-weak_framework",
         "AppIntents",

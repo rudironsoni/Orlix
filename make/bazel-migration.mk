@@ -404,6 +404,8 @@ __bazel-prove-matrix: __bazel-orlix-app
 __bazel-apple-routing-check:
 	@rg -q '^ORLIX_BAZEL_AUTHORITY \?= 1$$' Makefile
 	@rg -F -q '__bazel-orlix-app' Makefile
+	@rg -A2 '^__bazel-orlix-app:' make/bazel-migration.mk | rg -F -q -- '--config=promoted'
+	@rg -F -q '//bazel/promotion:locked_buildset' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
 	@rg -F -q '__bazel-kernel-uapi' Makefile
 	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
@@ -431,6 +433,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_reconstruct
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_locked_buildset
 	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_bind
 	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_graph
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"]); print("pass: disk-cache namespace", pin.namespace_for(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"]))'
@@ -441,7 +444,7 @@ __bazel-orlixos: __bazel-feasibility-bootstrap
 	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
 
 __bazel-orlix-app: __bazel-feasibility-bootstrap
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix //bazel/product:kernel_composition --compilation_mode=dbg --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
 	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
 	/usr/bin/unzip -l "$$ipa" | /usr/bin/grep -F 'Payload/Orlix.app/Info.plist'; \
@@ -453,6 +456,13 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap
 	if /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]U[[:space:]]+_OrlixBoot' >/dev/null; then echo "_OrlixBoot must not remain undefined" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
 	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "missing defined _arch_boot_entry in //Orlix:Orlix" >&2; /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep arch_boot_entry >&2 || true; rm -rf "$$ipa_work"; exit 1; }; \
 	if /usr/bin/nm "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]U[[:space:]]+_arch_boot_entry' >/dev/null; then echo "_arch_boot_entry must not remain undefined" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
+	lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; \
+	test "$${#lock_buildset}" -eq 64 || { echo "artifacts.lock.json missing buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	stamp="$$(/usr/bin/find "$$ipa_work/Payload/Orlix.app" -name 'locked-buildset.json' -print | /usr/bin/head -n 1)"; \
+	test -s "$$stamp" || { echo "promoted //Orlix:Orlix must embed locked-buildset.json" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	rg -F -q "$$lock_buildset" "$$stamp" || { echo "IPA lock stamp does not match artifacts.lock.json" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	if rg -q ':latest' "$$stamp"; then echo "locked-buildset.json must not use mutable latest" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
+	rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json || { echo "promoted kernel composition must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rm -rf "$$ipa_work"
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
