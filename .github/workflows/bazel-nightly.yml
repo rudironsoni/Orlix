@@ -1,0 +1,32 @@
+name: Bazel nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bazel-nightly
+  cancel-in-progress: true
+
+jobs:
+  reconstruct:
+    name: Source-mode reconstruction smoke
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+      - name: Run Make-owned matrix check
+        run: make __bazel-matrix-check
+      - name: Run Make-owned cache GC
+        run: make __bazel-gc

@@ -95,7 +95,11 @@ cc_library(
         ":ios_simulator": ["-framework UIKit"],
         ":macos": ["-framework AppKit", "-framework Carbon"],
     }),
-    visibility = ["//bazel/feasibility/apple:__pkg__"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility/apple:__pkg__",
+        "//bazel/product:__pkg__",
+    ],
     deps = [":selected"],
 )
 

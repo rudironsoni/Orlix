@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 
@@ -29,8 +28,6 @@ def compare_digests(first: str, second: str) -> str:
 
 
 def write_proposal(path: str, component: str, digest: str) -> None:
-    if os.environ.get("ORLIX_COSIGN_KEY"):
-        raise ValueError("ORLIX_COSIGN_KEY is set; this slice writes unsigned proposals only")
     payload = {
         "schema": 1,
         "component": component,
@@ -65,13 +62,20 @@ def main(argv: list[str] | None = None) -> int:
 
         write_provenance(args.in_toto, args.component, digest)
     if args.lock_proposal:
-        from lock_proposal import assert_lock_unsigned_empty, write_lock_proposal
+        from lock_proposal import apply_lock_proposal, write_lock_proposal
 
-        if Path(args.lock).is_file():
-            assert_lock_unsigned_empty(args.lock)
+        lock_path = Path(args.lock)
+        before = lock_path.read_text(encoding="utf-8") if lock_path.is_file() else None
         write_lock_proposal(args.lock_proposal, args.component, digest)
-        if Path(args.lock).is_file():
-            assert_lock_unsigned_empty(args.lock)
+        try:
+            apply_lock_proposal(args.lock_proposal, args.lock)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("unsigned lock proposal must not mutate artifacts.lock.json")
+        after = lock_path.read_text(encoding="utf-8") if lock_path.is_file() else None
+        if before != after:
+            raise ValueError("unsigned lock proposal mutated artifacts.lock.json")
     return 0
 
 

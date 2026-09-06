@@ -5,4 +5,6 @@ exports_files([
     "MODULE.bazel.lock",
     "upstreams.lock.json",
     "artifacts.lock.json",
+    "make/tcti-proof-registry-provenance.mk",
+    "OrlixOS/Sources/distribution/target-settings.xcconfig",
 ])

@@ -250,9 +250,10 @@ $(ORLIXOS_JQ_BINARY): $(ORLIXOS_JQ_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlix
 	rm -rf "$(ORLIXOS_JQ_BUILD_DIR)" "$(ORLIXOS_JQ_BINARY)"; \
 	mkdir -p "$(dir $(ORLIXOS_JQ_BUILD_DIR))" "$(dir $(ORLIXOS_JQ_BINARY))"; \
 	cp -R "$(ORLIXOS_JQ_SRC_DIR)" "$(ORLIXOS_JQ_BUILD_DIR)"; \
+	/usr/bin/find "$(ORLIXOS_JQ_BUILD_DIR)" -name Makefile.in -exec /usr/bin/touch {} +; \
 	cd "$(ORLIXOS_JQ_BUILD_DIR)"; \
 	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fno-pie"; \
-	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS)"; \
+	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS) -std=gnu17 -Wno-implicit-function-declaration"; \
 	export CPPFLAGS="-Imodules/oniguruma/src"; \
 	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
 	orlixos_package_libs="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
@@ -266,9 +267,9 @@ $(ORLIXOS_JQ_BINARY): $(ORLIXOS_JQ_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlix
 	export ac_cv_func_pthread_key_create=yes; \
 	export ac_cv_func_pthread_once=yes; \
 	./configure --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-shared --enable-static --enable-all-static --disable-docs --with-oniguruma=builtin; \
-	$(MAKE) -C modules/oniguruma -j1 LIBS=; \
-	$(MAKE) -j1 src/builtin.inc libjq.la LIBS=; \
-	$(MAKE) -j1 jq LIBS="$$orlixos_package_libs"; \
+	$(MAKE) -C modules/oniguruma -j1 LIBS= CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS) -std=gnu17 -Wno-implicit-function-declaration"; \
+	$(MAKE) -j1 src/builtin.inc libjq.la LIBS= CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS) -std=gnu17 -Wno-implicit-function-declaration"; \
+	$(MAKE) -j1 jq LIBS="$$orlixos_package_libs" CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS) -std=gnu17 -Wno-implicit-function-declaration"; \
 	cp "$(ORLIXOS_JQ_BUILD_DIR)/jq" "$(ORLIXOS_JQ_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_JQ_BINARY)"; \
 	file "$(ORLIXOS_JQ_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_JQ_BINARY)" >&2; exit 1; }; \

@@ -1,0 +1,22 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"], exclude = ["BUILD.bazel"]),
+)
+
+cc_library(
+    name = "host_trap_headers",
+    hdrs = glob(["internal/**/*.h"]),
+    includes = ["."],
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "kernel_boot_headers",
+    hdrs = ["asm/boot.h"],
+    includes = ["."],
+    tags = ["manual"],
+)

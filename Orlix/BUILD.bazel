@@ -1,0 +1,158 @@
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "ghostty_headers",
+    hdrs = ["Vendor/libghostty/include/ghostty.h"],
+    includes = ["Vendor/libghostty/include"],
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "ssh2_headers",
+    hdrs = glob(["Vendor/libssh2/include/*.h"]),
+    includes = ["Vendor/libssh2/include"],
+    tags = ["manual"],
+)
+
+objc_library(
+    name = "GhosttyAbortShim",
+    srcs = ["Orlix/Core/Terminal/Ghostty/Bridge/GhosttyLibCppVerboseAbortShim+iOS.mm"],
+    alwayslink = True,
+    copts = [
+        "-fno-objc-arc",
+        "-std=c++20",
+    ],
+    tags = ["manual"],
+)
+
+swift_library(
+    name = "OrlixAppLibrary",
+    srcs = glob([
+        "Orlix/App/**/*.swift",
+        "Orlix/Core/**/*.swift",
+        "Orlix/Features/**/*.swift",
+        "OrlixShared/*.swift",
+    ]),
+    copts = [
+        "-swift-version",
+        "6",
+        "-default-isolation=MainActor",
+        "-strict-concurrency=minimal",
+        "-DORLIX_BETA_OBSERVABILITY",
+        "-import-objc-header",
+        "Orlix/Orlix/ghostty-bridging-header.h",
+    ],
+    data = ["Orlix/ghostty-bridging-header.h"],
+    swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
+    defines = [
+        "ORLIX_APP_HOSTED_BOOT=1",
+        "ORLIX_BETA_OBSERVABILITY=1",
+    ],
+    module_name = "Orlix",
+    tags = ["manual"],
+    deps = [
+        ":GhosttyAbortShim",
+        ":ghostty_headers",
+        ":ssh2_headers",
+        "//OrlixOS/Sources/Session:OrlixOS",
+        "@swiftpkg_mlx_swift//:MLX",
+        "@swiftpkg_mlx_swift//:MLXFFT",
+        "@swiftpkg_mlx_swift//:MLXNN",
+        "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
+        "@swiftpkg_swift_cloudflared//:Cloudflared",
+        "@swiftpkg_swift_et//:ETBootstrap",
+        "@swiftpkg_swift_et//:ETSession",
+        "@swiftpkg_swift_mosh//:MoshBootstrap",
+        "@swiftpkg_swift_mosh//:MoshCore",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
+    ],
+)
+
+swift_library(
+    name = "OrlixLiveActivityLibrary",
+    srcs = glob([
+        "OrlixLiveActivity/**/*.swift",
+        "OrlixShared/*.swift",
+    ]),
+    copts = [
+        "-swift-version",
+        "5",
+    ],
+    module_name = "OrlixLiveActivity",
+    tags = ["manual"],
+)
+
+ios_extension(
+    name = "OrlixLiveActivity",
+    bundle_id = "com.rudironsoni.orlix.live-activity",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["OrlixLiveActivity/BazelInfo.plist"],
+    minimum_os_version = "16.1",
+    resources = glob(["OrlixLiveActivity/Assets.xcassets/**"]) + glob(["OrlixLiveActivity/Resources/**"]),
+    tags = ["manual"],
+    deps = [":OrlixLiveActivityLibrary"],
+)
+
+ios_framework(
+    name = "OrlixOSFramework",
+    bundle_id = "com.rudironsoni.orlix.os",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["//OrlixOS/Sources/Session:BazelInfo.plist"],
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [
+        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources:OrlixKernelBoot",
+        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
+        "//OrlixOS/Sources/Session:OrlixOS",
+    ],
+)
+
+ios_application(
+    name = "Orlix",
+    bundle_id = "com.rudironsoni.orlix",
+    entitlements = "Orlix-iOS/Bazel.entitlements",
+    extensions = [":OrlixLiveActivity"],
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Orlix-iOS/BazelInfo.plist"],
+    minimum_os_version = "15.0",
+    resources = [
+        "//Orlix/Orlix/Resources:folder_resources",
+        "//Orlix/Orlix/Resources:bundle_resources",
+        "Orlix/PrivacyInfo.xcprivacy",
+        "//docs/sources/release:orlix-app-release-inputs.json",
+        "//bazel/product:OrlixBazelPlaceholder.metal",
+    ] + glob(["Orlix/Assets.xcassets/**"]),
+    linkopts = [
+        "-weak_framework",
+        "AppIntents",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":OrlixAppLibrary",
+        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources:OrlixKernelBoot",
+        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
+        "//bazel/feasibility/kernel:macho_link",
+        "//bazel/feasibility/native:native_link_smoke",
+    ],
+)

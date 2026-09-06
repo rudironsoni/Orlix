@@ -89,6 +89,281 @@
         }
       }
     },
+    ".github/workflows/bazel-gc.yml": {
+      "source_sha256": "30200ea17a9c128d20dc73abfaa8be119a738fe86b1ebb22ec0e91fbccdac906",
+      "workflow": {
+        "name": "Bazel cache garbage collection",
+        "on": {
+          "workflow_dispatch": null,
+          "schedule": [
+            {
+              "cron": "17 5 * * 1"
+            }
+          ]
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-gc",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "gc": {
+            "name": "Bound local cache growth",
+            "runs-on": "macos-26",
+            "timeout-minutes": 30,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Run Make-owned cache GC",
+                "run": "make __bazel-gc"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/bazel-main.yml": {
+      "source_sha256": "c4591284605d8feef3a1d31ea12d3215407cba818e8142345cd7c9562796079b",
+      "workflow": {
+        "name": "Bazel main",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ],
+            "paths": [
+              "MODULE.bazel",
+              "MODULE.bazel.lock",
+              "bazel/**",
+              "make/bazel-migration.mk",
+              "artifacts.lock.json",
+              ".github/workflows/bazel-pr.yml",
+              ".github/workflows/bazel-promote.yml",
+              ".github/workflows/bazel-gc.yml",
+              ".github/workflows/bazel-main.yml",
+              ".github/workflows/bazel-nightly.yml"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-main-${{ github.sha }}",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "matrix-check": {
+            "name": "Bazel matrix check",
+            "runs-on": "macos-26",
+            "timeout-minutes": 60,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Run Make-owned Bazel matrix check",
+                "run": "make __bazel-matrix-check"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/bazel-nightly.yml": {
+      "source_sha256": "d98a96d71d975394912878a1990eda0350c03942e3233a9d52ebc260aba921af",
+      "workflow": {
+        "name": "Bazel nightly",
+        "on": {
+          "workflow_dispatch": null,
+          "schedule": [
+            {
+              "cron": "17 4 * * *"
+            }
+          ]
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-nightly",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "reconstruct": {
+            "name": "Source-mode reconstruction smoke",
+            "runs-on": "macos-26",
+            "timeout-minutes": 180,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Run Make-owned matrix check",
+                "run": "make __bazel-matrix-check"
+              },
+              {
+                "name": "Run Make-owned cache GC",
+                "run": "make __bazel-gc"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/bazel-pr.yml": {
+      "source_sha256": "121eaee165c2764a1eeeb598c87d83aeb62d1df5c76bbae235cafa5863073c49",
+      "workflow": {
+        "name": "Bazel pull request",
+        "on": {
+          "pull_request": {
+            "paths": [
+              "MODULE.bazel",
+              "MODULE.bazel.lock",
+              "bazel/**",
+              "make/bazel-migration.mk",
+              "artifacts.lock.json",
+              ".github/workflows/bazel-pr.yml",
+              ".github/workflows/bazel-promote.yml",
+              ".github/workflows/bazel-gc.yml",
+              ".github/workflows/bazel-main.yml",
+              ".github/workflows/bazel-nightly.yml"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-pr-${{ github.event.pull_request.number || github.ref }}",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "matrix-check": {
+            "name": "Bazel matrix check",
+            "runs-on": "macos-26",
+            "timeout-minutes": 60,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Run Make-owned Bazel matrix check",
+                "run": "make __bazel-matrix-check"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/bazel-promote.yml": {
+      "source_sha256": "2733b4c3bf218f3f56cbe7aac0c862b7671325561481859c1938339cd3e86ccd",
+      "workflow": {
+        "name": "Bazel promote",
+        "on": {
+          "workflow_dispatch": {
+            "inputs": {
+              "component": {
+                "description": "Private component to dual-build and compare",
+                "required": true,
+                "type": "choice",
+                "options": [
+                  "uapi",
+                  "mlibc",
+                  "rootfs"
+                ]
+              }
+            }
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-promote-${{ inputs.component }}",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "promote": {
+            "name": "Dual-build promote",
+            "runs-on": "macos-26",
+            "environment": "bazel-promotion",
+            "timeout-minutes": 360,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Dual-build without action cache",
+                "env": {
+                  "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}"
+                },
+                "run": "make __bazel-promote-${{ inputs.component }}"
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/grok-pr-review.yml": {
       "source_sha256": "73f77368b853f53a3f441afe358363f1ec6bfbddcaf7b05cc091ab01d917bc27",
       "workflow": {

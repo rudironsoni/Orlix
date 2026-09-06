@@ -70,6 +70,7 @@ local_provisioning_profile(
     profile_name = "com.rudironsoni.orlix",
     tags = ["manual"],
     team_id = "ZQ3L7M567L",
+    visibility = ["//visibility:public"],
 )
 
 ios_application(

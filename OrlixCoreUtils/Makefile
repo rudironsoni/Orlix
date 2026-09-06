@@ -2,6 +2,12 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := all
 .NOTPARALLEL:
 
+# Guest Linux compiles must not see the Xcode iOS SDK.
+unexport SDKROOT
+unexport IPHONEOS_DEPLOYMENT_TARGET
+unexport TVOS_DEPLOYMENT_TARGET
+unexport WATCHOS_DEPLOYMENT_TARGET
+
 PROJECT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO_ROOT := $(abspath $(PROJECT_DIR)/..)
 ORLIXOS_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixOS/Makefile

@@ -1,5 +1,21 @@
 {
   "schema": 1,
-  "buildset": null,
-  "components": {}
+  "buildset": "259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672",
+  "components": {
+    "uapi": {
+      "unsigned_digest": "666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07",
+      "oci_digest": "sha256:feb6e8920a8c0d91c43e7115dd59aa2c4e91350595ce9919fd51d9b4c1d32e32",
+      "oci_reference": "localhost:5001/orlix/uapi@sha256:feb6e8920a8c0d91c43e7115dd59aa2c4e91350595ce9919fd51d9b4c1d32e32"
+    },
+    "mlibc": {
+      "unsigned_digest": "74719db18b5f8afd5a447aac704bce3fe02829cd3208bdcca1ac69952034bbf4",
+      "oci_digest": "sha256:1ca307725eee8886bc3c94bf9592a542a033332c1375f0900e45c7090defba4f",
+      "oci_reference": "localhost:5001/orlix/mlibc@sha256:1ca307725eee8886bc3c94bf9592a542a033332c1375f0900e45c7090defba4f"
+    },
+    "rootfs": {
+      "unsigned_digest": "1a789b43efb1b89bd5d9543dbc71192d82b7b2a6af7cdeae6d92c088ea2aa0df",
+      "oci_digest": "sha256:dd564477c1f1ba90b8754f2606336d07f68dcb5f8cb321e5447d7938c30f18e1",
+      "oci_reference": "localhost:5001/orlix/rootfs@sha256:dd564477c1f1ba90b8754f2606336d07f68dcb5f8cb321e5447d7938c30f18e1"
+    }
+  }
 }

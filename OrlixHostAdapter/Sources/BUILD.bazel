@@ -1,0 +1,29 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "OrlixHostAdapter_srcs",
+    srcs = glob([
+        "OrlixHostAdapter/**/*.c",
+        "OrlixHostAdapter/**/*.h",
+    ]),
+)
+
+objc_library(
+    name = "OrlixHostAdapter",
+    srcs = glob(["OrlixHostAdapter/**/*.c"]),
+    hdrs = glob(["OrlixHostAdapter/**/*.h"]),
+    copts = [
+        "-fno-objc-arc",
+        "-Wno-unused-parameter",
+        "-D_DARWIN_C_SOURCE",
+    ],
+    includes = ["."],
+    sdk_frameworks = [
+        "CoreFoundation",
+        "Foundation",
+    ],
+    tags = ["manual"],
+    deps = ["//OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include:host_trap_headers"],
+)

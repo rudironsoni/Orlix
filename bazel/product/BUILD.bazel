@@ -1,0 +1,13 @@
+load(":composition.bzl", "orlix_kernel_composition")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["OrlixBazelPlaceholder.metal"])
+
+orlix_kernel_composition(
+    name = "kernel_composition",
+    boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
+    hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
+    linux_archive = "//bazel/feasibility/kernel:macho",
+    tags = ["manual"],
+)

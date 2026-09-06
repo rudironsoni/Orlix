@@ -102,7 +102,9 @@ test -x "$base_tree/usr/bin/jq"
 test -x "$base_tree/usr/bin/curl"
 test -x "$base_tree/usr/bin/zsh"
 /bin/ln -sf bash "$base_tree/bin/sh"
-/usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$base_tree/bin/true"' 0755 0 0' > "$work/initramfs.list"
+/bin/cp "$base_tree/bin/true" "$work/init"
+TZ=UTC /usr/bin/touch -t 197001010000 "$work/init"
+/usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$work/init"' 0755 0 0' > "$work/initramfs.list"
 "$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
 test -s "$initramfs_out"
 /bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=256 status=none
@@ -111,7 +113,11 @@ test -s "$initramfs_out"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
 /usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\nshell=/bin/sh\n' > "$payload_metadata"
-digest="$(/usr/bin/shasum -a 256 "$initramfs_out" "$base_ext4" "$state_ext4" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+digest="$( (
+  cd "$base_tree"
+  /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256
+  /usr/bin/shasum -a 256 < "$payload_metadata"
+) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [
