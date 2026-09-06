@@ -29,7 +29,7 @@ class ProveMatrixTests(unittest.TestCase):
             path = Path(tmp) / "log"
             path.write_text("nope\n", encoding="utf-8")
             with self.assertRaises(prove_matrix.ProveError):
-                prove_matrix.prove_rows(self.matrix, {"ios-15.0-promoted-buildset": str(path)})
+                prove_matrix.prove_rows(self.matrix, {"signing-distribution": str(path)})
 
     def test_ios_15_5_local_log_can_be_proved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
