@@ -74,6 +74,70 @@ class GraphTests(unittest.TestCase):
             with self.assertRaises(graph.BindError):
                 graph.merge_subjects(lock_subjects, {"uapi": "bb" * 32})
 
+    def test_main_binds_lock_unsigned_digests(self) -> None:
+        uapi = "aa" * 32
+        mlibc = "bb" * 32
+        rootfs = "cc" * 32
+        buildset = "dd" * 32
+        toolchain = "ee" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "buildset": buildset,
+                        "components": {
+                            "uapi": {"unsigned_digest": uapi},
+                            "mlibc": {"unsigned_digest": mlibc},
+                            "rootfs": {"unsigned_digest": rootfs},
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            uapi_file = Path(tmp) / "uapi.sha256"
+            mlibc_file = Path(tmp) / "mlibc.sha256"
+            rootfs_file = Path(tmp) / "rootfs.sha256"
+            toolchain_file = Path(tmp) / "toolchain.sha256"
+            uapi_file.write_text(uapi + "\n", encoding="utf-8")
+            mlibc_file.write_text(mlibc + "\n", encoding="utf-8")
+            rootfs_file.write_text(rootfs + "\n", encoding="utf-8")
+            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
+            out = Path(tmp) / "proof"
+            self.assertEqual(
+                graph.main(
+                    [
+                        "--out",
+                        str(out),
+                        "--lock",
+                        str(lock_path),
+                        "--uapi-digest",
+                        str(uapi_file),
+                        "--mlibc-digest",
+                        str(mlibc_file),
+                        "--rootfs-digest",
+                        str(rootfs_file),
+                        "--toolchain-digest",
+                        str(toolchain_file),
+                        "--profile",
+                        "release",
+                        "--destination",
+                        "iphonesimulator",
+                    ]
+                ),
+                0,
+            )
+            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["complete"])
+            self.assertEqual(index["buildset_digest"], buildset)
+            self.assertEqual(index["reports"], ["kernel-dependency:blocked"])
+            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["subject_digest"], uapi)
+            self.assertEqual(payload["buildset_digest"], buildset)
+            self.assertEqual(payload["result"], "blocked")
+
     def test_pass_without_evidence_file_fails(self) -> None:
         digest = "aa" * 32
         with tempfile.TemporaryDirectory() as tmp:

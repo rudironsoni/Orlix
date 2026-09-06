@@ -28,6 +28,17 @@ def _sysroot_uapi_only_test_impl(ctx):
     sysroot = target[OrlixLibcSysrootInfo]
     asserts.true(env, sysroot.sysroot_digest != None)
     asserts.true(env, sysroot.consumed_uapi_digest != None)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixMLibCSysroot":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            argv = " ".join(action.argv)
+            asserts.false(env, "kbuild-archive.tar" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in argv)
+            asserts.false(env, "OrlixMLibC/Makefile" in argv)
+    asserts.true(env, found)
     return analysistest.end(env)
 
 sysroot_uapi_only_test = analysistest.make(_sysroot_uapi_only_test_impl)
@@ -103,6 +114,7 @@ def _package_tree_test_impl(ctx):
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "kbuild-archive.tar" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.true(env, "packages/true/configure" in joined)
     asserts.true(env, found)
@@ -123,6 +135,7 @@ def _coreutils_package_tree_test_impl(ctx):
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "kbuild-archive.tar" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, "configure" in joined)
@@ -145,6 +158,7 @@ def _bash_package_tree_test_impl(ctx):
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "kbuild-archive.tar" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, "configure" in joined)
@@ -167,6 +181,7 @@ def _guest_package_tree_test_impl(ctx):
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "kbuild-archive.tar" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, ctx.attr.expected_token in joined)
@@ -196,6 +211,8 @@ def _rootfs_info_test_impl(ctx):
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
+            asserts.false(env, "kbuild-archive.tar" in joined)
             asserts.true(env, "gen_init_cpio.c" in joined)
             asserts.true(env, "bash" in joined)
             asserts.true(env, "coreutils" in joined)

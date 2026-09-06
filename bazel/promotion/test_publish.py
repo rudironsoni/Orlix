@@ -107,6 +107,38 @@ class PublishTests(unittest.TestCase):
         self.assertTrue(any(call[0] == "oras" and "pull" in call and reference in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "verify" in call and reference in call for call in calls))
 
+    def test_ghcr_pull_failure_does_not_count_as_publish(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        observed = "sha256:" + ("cd" * 32)
+        reference = f"ghcr.io/rudironsoni/orlix/uapi@{observed}"
+
+        def fake_run(argv: list[str]):
+            raise publish.PublishError("oras failed: denied: permission_denied")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "proposal.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "component": "uapi",
+                        "unsigned_digest": "ab" * 32,
+                        "signed": True,
+                        "oci_digest": observed,
+                        "oci_reference": reference,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            try:
+                with mock.patch("publish.shutil.which", return_value="/usr/bin/tool"):
+                    with self.assertRaises(publish.PublishError) as raised:
+                        publish.publish(str(path), run=fake_run)
+                self.assertIn("permission_denied", str(raised.exception))
+            finally:
+                os.environ.pop("ORLIX_COSIGN_KEY", None)
+
 
 if __name__ == "__main__":
     unittest.main()

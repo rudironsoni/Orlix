@@ -119,6 +119,8 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("ORLIX_BAZEL_PROMOTE,uapi,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,mlibc,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,rootfs,", body)
+        self.assertIn("feasibility/rootfs/rootfs/source-input.sha256", body)
+        self.assertNotIn("ORLIX_GHCR_REPOSITORY", body.split("ORLIX_BAZEL_PROMOTE")[1].split("endef")[0])
 
     def test_package_digest_hashes_relative_paths(self) -> None:
         root = Path(__file__).resolve().parents[2]
@@ -134,6 +136,8 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn('cd "$base_tree"', rootfs)
         self.assertIn('shasum -a 256 < "$payload_metadata"', rootfs)
         self.assertIn("touch -t 197001010000", rootfs)
+        self.assertIn("pkg.source_input_digest", rootfs)
+        self.assertIn("kbuild-archive.tar", (root / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
