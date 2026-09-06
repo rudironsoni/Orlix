@@ -501,50 +501,25 @@ __bazel-orlix-archive: __bazel-version-check
 	rm -rf "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
 	/bin/cp "$$ipa" "$(ORLIX_BETA_IPA_PATH)"
 
-__bazel-ios15-simulator-gate: __bazel-feasibility-xcodeproj
+__bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
 	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
+	device_name="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id) | .name')"; \
+	test -n "$$device_name" || { echo "missing iOS 15.5 simulator name for $(ORLIX_IOS15_SIMULATOR_ID)" >&2; exit 1; }; \
 	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
 	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
-	project="Build/XcodeProjects/OrlixBazelFeasibility.xcodeproj"; \
-	test -d "$$project" || { echo "missing Bazel Xcode project: $$project" >&2; exit 1; }; \
-	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_generated_project(Path('$$project/project.pbxproj')); print('pass: AppIntents.framework is weakly linked')"; \
 	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
-	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
 	result_log="$$result_dir/Orlix-iOS15.log"; \
-	derived_data="$$result_dir/DerivedData"; \
 	mkdir -p "$$result_dir"; \
-	rm -rf "$$result_bundle"; \
-	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
-	xcodebuild \
-		-project "$$project" \
-		-scheme "OrlixUITests" \
-		-configuration Debug \
-		-destination "$$destination" \
-		-derivedDataPath "$$derived_data" \
-		-resultBundlePath "$$result_bundle" \
-		ENABLE_DEBUG_DYLIB=NO \
-		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
-		build-for-testing 2>&1 | tee "$$result_log"; \
-	app="$$(/usr/bin/find "$$derived_data" -path '*/Orlix.app' -print | /usr/bin/head -n 1)"; \
-	test -n "$$app" && test -d "$$app" || { echo "missing iOS 15 simulator app under $$derived_data" >&2; exit 1; }; \
-	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
-	rm -rf "$$result_bundle"; \
-	xcodebuild \
-		-project "$$project" \
-		-scheme "OrlixUITests" \
-		-configuration Debug \
-		-destination "$$destination" \
-		-derivedDataPath "$$derived_data" \
-		-resultBundlePath "$$result_bundle" \
-		ENABLE_DEBUG_DYLIB=NO \
-		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
-		-test-timeouts-enabled YES \
-		-default-test-execution-time-allowance 120 \
-		-maximum-test-execution-time-allowance 180 \
-		test-without-building 2>&1 | tee -a "$$result_log"
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" test //Orlix:OrlixUITests --compilation_mode=dbg --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --ios_simulator_version=15.5 --ios_simulator_device="$$device_name" --test_filter=AppLaunchSmokeUITests/testLaunchCapturesScreenshot --test_output=errors --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" 2>&1 | tee "$$result_log"; \
+	ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
+	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa after iOS 15 UI tests" >&2; exit 1; }; \
+	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ios15.XXXXXX")"; \
+	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
+	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$ipa_work/Payload/Orlix.app')); print('pass: iOS 15 app does not required-load AppIntents or ActivityKit')"; \
+	rm -rf "$$ipa_work"
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixHostAdapter/Sources:OrlixHostAdapter --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"

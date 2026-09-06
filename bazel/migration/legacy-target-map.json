@@ -9,7 +9,7 @@
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "1e5c9ddc888f3c679939fa316ca2b9ba2d8a935a4f341cf27d16b731ba7b7e1e",
     "OrlixOS/Makefile": "2b1d54ce8dc1f28338c7c7c5661bfbc43941c6eacd49babd86157b9bad8a3eb2",
-    "make/bazel-migration.mk": "aa5065a8af0fdba142db8846168000ddccca236632938e5e139b831c75ea9cb7",
+    "make/bazel-migration.mk": "751f6ba89cb88af53c3720e002fae462de2ec9010cdb960b5a4e5c84b144c276",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
     "make/runtime.mk": "2dc60f9ccd78be2e565843c96873453a123b447603d4484afdfc8517ab4e2cc8",
@@ -5669,13 +5669,13 @@
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "__bazel-feasibility-xcodeproj"
+        "__bazel-feasibility-bootstrap"
       ]
     },
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 549,
+      "line": 524,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5685,7 +5685,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 552,
+      "line": 527,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5696,7 +5696,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 563,
+      "line": 538,
       "classification": "private",
       "phony": true,
       "prerequisites": [

@@ -912,7 +912,7 @@
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "__bazel-feasibility-xcodeproj"
+        "__bazel-feasibility-bootstrap"
       ],
       "owner": "Build and release system",
       "artifact_digest_binding": "not-yet-implemented"
