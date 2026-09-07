@@ -11,7 +11,7 @@
 #define LINES 400
 #define LINE_LEN 37
 
-static int spawn_load(pid_t *pids)
+static int spawn_load(pid_t *pids, int read_fd, int write_fd)
 {
 	unsigned int i;
 
@@ -21,6 +21,8 @@ static int spawn_load(pid_t *pids)
 		if (pid < 0)
 			return -1;
 		if (pid == 0) {
+			close(read_fd);
+			close(write_fd);
 			for (;;)
 				pause();
 		}
@@ -101,7 +103,7 @@ int main(void)
 	memset(load, 0, sizeof(load));
 	if (pipe(fds) < 0)
 		return 1;
-	if (spawn_load(load) < 0) {
+	if (spawn_load(load, fds[0], fds[1]) < 0) {
 		close(fds[0]);
 		close(fds[1]);
 		return 1;

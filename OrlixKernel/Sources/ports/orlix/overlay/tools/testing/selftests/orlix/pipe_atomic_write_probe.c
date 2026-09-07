@@ -41,7 +41,7 @@ static bool write_record(int fd, unsigned int writer, unsigned int line)
 	return true;
 }
 
-static bool spawn_load(pid_t *pids)
+static bool spawn_load(pid_t *pids, int read_fd, int write_fd)
 {
 	unsigned int i;
 
@@ -51,6 +51,8 @@ static bool spawn_load(pid_t *pids)
 		if (pid < 0)
 			return false;
 		if (pid == 0) {
+			close(read_fd);
+			close(write_fd);
 			for (;;)
 				pause();
 		}
@@ -88,7 +90,7 @@ static bool concurrent_line_writes_stay_whole(void)
 	if (pipe(fds) < 0)
 		return false;
 	stage("load");
-	if (!spawn_load(load)) {
+	if (!spawn_load(load, fds[0], fds[1])) {
 		close(fds[0]);
 		close(fds[1]);
 		return false;
