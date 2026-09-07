@@ -75,7 +75,7 @@ nonisolated enum SSHAddressConnector {
         let attemptToken: SSHStartupTrace.Token?
     }
 
-    private final class ResolutionState: Sendable {
+    private final class ResolutionState: @unchecked Sendable {
         private enum Status {
             case waiting
             case suspended(CheckedContinuation<[Candidate], Error>)

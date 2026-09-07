@@ -21,7 +21,7 @@ nonisolated enum SSHStartupStage: String, Sendable {
     case connectionDeadline
 }
 
-nonisolated final class SSHStartupTrace: Sendable {
+nonisolated final class SSHStartupTrace: @unchecked Sendable {
     struct Event: Equatable, Sendable {
         let stage: SSHStartupStage
         let stageMilliseconds: Int
