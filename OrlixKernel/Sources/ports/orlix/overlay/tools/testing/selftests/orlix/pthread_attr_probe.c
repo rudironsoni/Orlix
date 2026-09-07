@@ -61,6 +61,9 @@ static bool pthread_detachstate_round_trip_completes(void)
 	pthread_attr_t attr;
 	int detachstate;
 
+	probe_stage("detachstate attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("detachstate set detached");
 	if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED))
 		return false;
@@ -97,6 +100,9 @@ static bool pthread_scope_round_trip_completes(void)
 	pthread_attr_t attr;
 	int scope;
 
+	probe_stage("scope attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("scope set system");
 	if (pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM))
 		return false;
@@ -116,6 +122,9 @@ static bool pthread_inheritsched_round_trip_completes(void)
 	pthread_attr_t attr;
 	int inheritsched;
 
+	probe_stage("inheritsched attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("inheritsched set inherit");
 	if (pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED))
 		return false;
@@ -136,6 +145,9 @@ static bool pthread_schedparam_round_trip_completes(void)
 	struct sched_param init_param = { 0 };
 	struct sched_param param = { 1 };
 
+	probe_stage("schedparam attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("schedparam set");
 	if (pthread_attr_setschedparam(&attr, &init_param))
 		return false;
@@ -150,6 +162,9 @@ static bool pthread_schedpolicy_round_trip_completes(void)
 	pthread_attr_t attr;
 	int policy;
 
+	probe_stage("schedpolicy attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("schedpolicy set fifo");
 	if (pthread_attr_setschedpolicy(&attr, SCHED_FIFO))
 		return false;
@@ -218,6 +233,9 @@ static bool pthread_stack_round_trip_completes(void)
 	size_t new_size;
 	size_t stacksize = PTHREAD_STACK_MIN;
 
+	probe_stage("stack attr init");
+	if (pthread_attr_init(&attr))
+		return false;
 	probe_stage("stack set");
 	if (pthread_attr_setstack(&attr, stackaddr, stacksize))
 		return false;

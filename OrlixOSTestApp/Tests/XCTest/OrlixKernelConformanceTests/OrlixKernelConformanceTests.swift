@@ -106,6 +106,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelTmpfsTruncWrite)
     }
 
+    func testPthreadAttrProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelPthreadAttr)
+    }
+
     func testBootProfileContractVerifiesVirtioConsoleThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelBootProfile)
     }
