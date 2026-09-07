@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include <unistd.h>
 
 static char test_list[32768];
+static char selected_test[128];
 static unsigned int test_index;
 static unsigned int test_failures;
 static char *const test_envp[] = {
@@ -70,6 +72,59 @@ static bool parse_test_line(char *line, char **label, char **path)
 	return **label != '\0' && **path != '\0';
 }
 
+static void read_selected_test(void)
+{
+	static const char prefix[] = "orlix.mlibc=";
+	char cmdline[1024];
+	size_t size = 0;
+	size_t pos;
+
+	selected_test[0] = '\0';
+	if (!read_file("/proc/cmdline", cmdline, sizeof(cmdline), &size))
+		return;
+
+	for (pos = 0; pos < size; pos++) {
+		size_t i;
+		size_t out = 0;
+
+		if (pos > 0 && cmdline[pos - 1] != ' ')
+			continue;
+		for (i = 0; prefix[i]; i++) {
+			if (pos + i >= size || cmdline[pos + i] != prefix[i])
+				break;
+		}
+		if (prefix[i])
+			continue;
+		pos += i;
+		while (pos < size && cmdline[pos] != ' ' &&
+		       cmdline[pos] != '\n' &&
+		       out + 1 < sizeof(selected_test))
+			selected_test[out++] = cmdline[pos++];
+		selected_test[out] = '\0';
+		return;
+	}
+}
+
+static bool test_is_selected(const char *label)
+{
+	if (selected_test[0] == '\0')
+		return true;
+	return strcmp(selected_test, label) == 0;
+}
+
+static bool mount_tmpfs_at(const char *target, const char *data)
+{
+	if (mkdir(target, 01777) < 0 && errno != EEXIST) {
+		perror("# mkdir tmpfs target");
+		return false;
+	}
+	if (mount("tmpfs", target, "tmpfs", 0, data) < 0 && errno != EBUSY) {
+		perror("# mount tmpfs");
+		return false;
+	}
+	return true;
+}
+
 static void configure_loopback(void)
 {
 	struct ifreq ifr;
@@ -111,7 +166,8 @@ static unsigned int count_tests(char *data, size_t size)
 		if (!newline)
 			newline = data + size;
 		*newline = '\0';
-		if (parse_test_line(line, &label, &path))
+		if (parse_test_line(line, &label, &path) &&
+		    test_is_selected(label))
 			count++;
 		cursor = newline + 1;
 	}
@@ -187,7 +243,8 @@ static void run_tests(char *data, size_t size)
 		if (!newline)
 			newline = data + size;
 		*newline = '\0';
-		if (parse_test_line(line, &label, &path))
+		if (parse_test_line(line, &label, &path) &&
+		    test_is_selected(label))
 			test_result(run_test(label, path) == 0, label);
 		cursor = newline + 1;
 	}
@@ -202,8 +259,7 @@ int main(void)
 	puts("ORLIX-MLIBC-TEST-INIT");
 	(void)mkdir("/proc", 0555);
 	(void)mount("proc", "/proc", "proc", 0, NULL);
-	(void)mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777");
-	(void)chdir("/tmp");
+	read_selected_test();
 	configure_loopback();
 
 	have_list = read_file("/mlibc-test-list.txt", test_list,
@@ -211,9 +267,11 @@ int main(void)
 	if (have_list)
 		test_count = count_tests(test_list, list_size);
 
-	printf("TAP version 13\n1..%u\n", test_count + 1);
+	printf("TAP version 13\n1..%u\n", test_count + 2);
 	test_result(have_list && test_count > 0,
 		    "installed upstream mlibc test list is readable");
+	test_result(mount_tmpfs_at("/tmp", "mode=1777") && chdir("/tmp") == 0,
+		    "tmpfs mounted at /tmp for mlibc tests");
 	if (have_list) {
 		have_list = read_file("/mlibc-test-list.txt", test_list,
 				      sizeof(test_list), &list_size);

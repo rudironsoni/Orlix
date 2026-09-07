@@ -458,6 +458,13 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.validate(output, for: .mlibc))
     }
 
+    func testFocusedMLibCFopenSelectsAnsiFopen() {
+        XCTAssertEqual(
+            OrlixUpstreamTestRunSpec.mlibcFopen.kernelCommandLineSuffix,
+            "orlix.mlibc=ansi/fopen"
+        )
+    }
+
     func testAcceptsCoreutilsSuiteOnlyWhenExecutionMatchesPackagedManifest() throws {
         let output = """
         ORLIX-COREUTILS-TEST-INIT

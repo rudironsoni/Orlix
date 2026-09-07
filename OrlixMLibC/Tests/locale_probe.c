@@ -260,11 +260,19 @@ int main(void) {
 	{
 		mbstate_t state = { 0 };
 		char32_t codepoint = 0;
+		size_t n;
 
 		errno = 0;
-		if (mbrtoc32(&codepoint, "\xe2\x80\x98", 3, &state) !=
-				(size_t)-1 || errno != EILSEQ) {
-			printf("# locale_probe C locale accepted UTF-8 multibyte input\n");
+		n = mbrtoc32(&codepoint, "\xe2\x80\x98", 3, &state);
+		printf("# LP C mbrtoc32 n=%zd errno=%d cp=%u codeset=%s\n",
+		       (ssize_t)n, errno, (unsigned int)codepoint,
+		       nl_langinfo(CODESET));
+		/*
+		 * C locale must not decode a UTF-8 sequence as one character.
+		 * ASCII C locale returns (size_t)-1/EILSEQ or one byte 0xe2.
+		 */
+		if (n == 3) {
+			printf("# locale_probe C locale decoded UTF-8 as one character\n");
 			failures++;
 		}
 	}

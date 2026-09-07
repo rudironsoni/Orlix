@@ -383,6 +383,7 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then extra="$$extra --evidence kernel-dependency=$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; fi; \
 	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence" ]; then extra="$$extra --evidence kunit=$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence"; fi; \
 	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then extra="$$extra --evidence kselftest=$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence"; fi; \
+	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ]; then extra="$$extra --evidence orlixmlibc=$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
@@ -399,7 +400,12 @@ __bazel-proof-graph: __bazel-kernel-uapi
 			rg -q 'kunit:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
 			if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then \
 				rg -q 'kselftest:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-				rg -q 'orlixmlibc:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+				if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ]; then \
+					rg -q 'orlixmlibc:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+					rg -q 'syscall-uapi:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+				else \
+					rg -q 'orlixmlibc:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
+				fi; \
 			else \
 				rg -q 'kselftest:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
 			fi; \
@@ -409,7 +415,8 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	else \
 		rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
 	fi
-	@if rg -q 'orlixmlibc:pass|syscall-uapi:pass|posix-shell:pass|jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi
+	@if rg -q 'syscall-uapi:pass|posix-shell:pass|jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi; \
+	if [ ! -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ] && rg -q 'orlixmlibc:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent orlixmlibc pass" >&2; exit 1; fi
 	@python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); idx=json.load(open(sys.argv[2])); buildset=lock.get("buildset"); assert (not buildset) or idx.get("buildset_digest")==buildset, (buildset, idx.get("buildset_digest"))' "$(CURDIR)/artifacts.lock.json" "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 
 __bazel-prove-matrix: __bazel-orlix-app __bazel-apple-smoke __bazel-live-activity-smoke __bazel-native-dependency-smoke

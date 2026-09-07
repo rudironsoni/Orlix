@@ -116,7 +116,7 @@ static void orlix_tcti_uaccess_partial_cross_page_clear_returns_residual(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
-static void orlix_tcti_uaccess_pagefault_disabled_returns_full_residual(
+static void orlix_tcti_uaccess_pagefault_disabled_copies_present_pages(
 	struct kunit *test)
 {
 	u8 initial[ORLIX_TCTI_UACCESS_CHUNK_SIZE];
@@ -126,8 +126,6 @@ static void orlix_tcti_uaccess_pagefault_disabled_returns_full_residual(
 	unsigned long mapped;
 	unsigned long read_left;
 	unsigned long write_left;
-	unsigned long clear_left;
-	size_t index;
 	int ret;
 
 	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
@@ -146,26 +144,49 @@ static void orlix_tcti_uaccess_pagefault_disabled_returns_full_residual(
 				       sizeof(destination));
 	write_left = raw_copy_to_user((void __user *)mapped, source,
 				      sizeof(source));
-	clear_left = __clear_user((void __user *)mapped, sizeof(initial));
 	pagefault_enable();
 
-	KUNIT_EXPECT_EQ(test, (unsigned long)sizeof(destination), read_left);
-	KUNIT_EXPECT_EQ(test, (unsigned long)sizeof(source), write_left);
-	KUNIT_EXPECT_EQ(test, (unsigned long)sizeof(initial), clear_left);
-	for (index = 0; index < sizeof(destination); index++)
-		KUNIT_EXPECT_EQ(test, (u8)0xa5, destination[index]);
+	KUNIT_EXPECT_EQ(test, 0UL, read_left);
+	KUNIT_EXPECT_EQ(test, 0UL, write_left);
+	KUNIT_EXPECT_MEMEQ(test, initial, destination, sizeof(destination));
 	ret = orlix_tcti_read_user_data(current->mm, mapped, observed,
 				  sizeof(observed));
 	KUNIT_ASSERT_EQ(test, 0, ret);
-	KUNIT_EXPECT_MEMEQ(test, initial, observed, sizeof(observed));
+	KUNIT_EXPECT_MEMEQ(test, source, observed, sizeof(observed));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void orlix_tcti_uaccess_pagefault_disabled_returns_residual_if_unmapped(
+	struct kunit *test)
+{
+	u8 destination[ORLIX_TCTI_UACCESS_CHUNK_SIZE];
+	unsigned long mapped;
+	unsigned long read_left;
+	size_t index;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	KUNIT_ASSERT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	memset(destination, 0xa5, sizeof(destination));
+
+	pagefault_disable();
+	read_left = raw_copy_from_user(destination,
+				       (const void __user *)mapped,
+				       sizeof(destination));
+	pagefault_enable();
+
+	KUNIT_EXPECT_EQ(test, (unsigned long)sizeof(destination), read_left);
+	for (index = 0; index < sizeof(destination); index++)
+		KUNIT_EXPECT_EQ(test, (u8)0xa5, destination[index]);
 }
 
 static struct kunit_case orlix_tcti_uaccess_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_uaccess_partial_cross_page_read_returns_residual),
 	KUNIT_CASE(orlix_tcti_uaccess_partial_cross_page_write_returns_residual),
 	KUNIT_CASE(orlix_tcti_uaccess_partial_cross_page_clear_returns_residual),
-	KUNIT_CASE(orlix_tcti_uaccess_pagefault_disabled_returns_full_residual),
+	KUNIT_CASE(orlix_tcti_uaccess_pagefault_disabled_copies_present_pages),
+	KUNIT_CASE(orlix_tcti_uaccess_pagefault_disabled_returns_residual_if_unmapped),
 	{}
 };
 

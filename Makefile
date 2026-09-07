@@ -771,6 +771,8 @@ orlix-tcti-xcodebuild-watchdog-tests:
 		if [[ "$$build_arguments" == *"-test-timeouts-enabled"* || "$$build_arguments" == *"-only-testing:"* ]]; then echo "build-for-testing received XCTest-only arguments" >&2; exit 1; fi; \
 	echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_TEST normal_status=$$normal_status timeout_status=$$timeout_status blocked_timeout_status=$$blocked_timeout_status child_gone=$$child descendant_gone=$$descendant blocked_child_gone=$$blocked_child blocked_descendant_gone=$$blocked_descendant invocations=2"'
 
+ORLIX_MLIBC_TEST_ONLY_TESTING ?= OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession
+
 mlibc-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -779,6 +781,7 @@ mlibc-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		ORLIX_PROFILE='$(PROFILE)' \
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		-only-testing:$(ORLIX_MLIBC_TEST_ONLY_TESTING) \
 		test
 
 coreutils-tests: xcodeproj

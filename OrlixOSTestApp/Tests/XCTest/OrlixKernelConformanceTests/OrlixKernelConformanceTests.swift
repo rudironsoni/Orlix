@@ -98,6 +98,14 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelCloneThread)
     }
 
+    func testFutexWaitWakeProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelFutexWaitWake)
+    }
+
+    func testTmpfsTruncWriteProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTmpfsTruncWrite)
+    }
+
     func testBootProfileContractVerifiesVirtioConsoleThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelBootProfile)
     }

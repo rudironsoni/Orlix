@@ -457,6 +457,22 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
             "kunit.filter_glob=__none__ orlix.kselftest=clone_thread_probe"
     )
 
+    static let kernelFutexWaitWake = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=futex_wait_wake_probe"
+    )
+
+    static let kernelTmpfsTruncWrite = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=tmpfs_trunc_write_probe"
+    )
+
     static let kernelBootProfile = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
@@ -539,7 +555,8 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
-        kernelCommandLineSuffix: "orlix.kselftest=umask_probe"
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=umask_probe"
     )
 
     static let kernelReadonlyRoot = OrlixUpstreamTestRunSpec(
@@ -584,6 +601,20 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-MLIBC-TEST-END",
         timeout: 1_200,
         kernelCommandLineSuffix: nil
+    )
+
+    static let mlibcFopen = OrlixUpstreamTestRunSpec(
+        suite: .mlibc,
+        completionMarker: "ORLIX-MLIBC-TEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.mlibc=ansi/fopen"
+    )
+
+    static let mlibcPthreadCreate = OrlixUpstreamTestRunSpec(
+        suite: .mlibc,
+        completionMarker: "ORLIX-MLIBC-TEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.mlibc=posix/pthread_create"
     )
 
     static let coreutils = OrlixUpstreamTestRunSpec(
