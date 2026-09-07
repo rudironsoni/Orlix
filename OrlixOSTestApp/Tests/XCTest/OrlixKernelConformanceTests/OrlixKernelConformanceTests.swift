@@ -102,6 +102,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelFutexWaitWake)
     }
 
+    func testPipeAtomicWriteProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelPipeAtomicWrite)
+    }
+
     func testTmpfsTruncWriteProbeCompletesThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTmpfsTruncWrite)
     }

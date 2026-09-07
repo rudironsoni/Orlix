@@ -6,6 +6,10 @@ final class OrlixMLibCConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.mlibc)
     }
 
+    func testStdioPipeLineAtomicCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.mlibcStdioPipeLineAtomic)
+    }
+
     func testFopenCompletesThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.mlibcFopen)
     }

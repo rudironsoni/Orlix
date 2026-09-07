@@ -465,6 +465,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
             "kunit.filter_glob=__none__ orlix.kselftest=futex_wait_wake_probe"
     )
 
+    static let kernelPipeAtomicWrite = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=pipe_atomic_write_probe"
+    )
+
     static let kernelTmpfsTruncWrite = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
@@ -617,6 +625,13 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-MLIBC-TEST-END",
         timeout: 1_200,
         kernelCommandLineSuffix: nil
+    )
+
+    static let mlibcStdioPipeLineAtomic = OrlixUpstreamTestRunSpec(
+        suite: .mlibc,
+        completionMarker: "ORLIX-MLIBC-TEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.mlibc=orlix/stdio_pipe_line_atomic"
     )
 
     static let mlibcFopen = OrlixUpstreamTestRunSpec(

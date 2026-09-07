@@ -27,6 +27,7 @@ TEST_GEN_PROGS += time_namespace_probe
 TEST_GEN_PROGS += time_surface_probe
 TEST_GEN_PROGS += futex_wait_wake_probe
 TEST_GEN_PROGS += tmpfs_trunc_write_probe
+TEST_GEN_PROGS += pipe_atomic_write_probe
 TEST_GEN_PROGS += orlix_tcti_system_probe
 TEST_GEN_PROGS += orlix_tcti_hwcap_probe
 TEST_GEN_PROGS += orlix_tcti_crypto_probe

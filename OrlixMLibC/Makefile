@@ -250,6 +250,7 @@ MLIBC_TEST_ORLIX_CASES := \
 	orlix/qsort_stack \
 	orlix/renameat2 \
 	orlix/stdio_dup2_pipe \
+	orlix/stdio_pipe_line_atomic \
 	orlix/strerror \
 	orlix/time_format \
 	orlix/time_relative
