@@ -448,6 +448,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'
+	@$(MAKE) -n ios15-simulator-gate ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000 | rg -q '__bazel-ios15-simulator-gate'
 	@rg -A3 '^beta-archive:' Makefile | rg -F -q '__bazel-orlix-archive'
 	@rg -F -q 'name = "OrlixUITests"' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
