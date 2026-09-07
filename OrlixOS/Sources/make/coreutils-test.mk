@@ -48,7 +48,7 @@ $(ORLIXOS_COREUTILS_TEST_INITRAMFS): $(ORLIXOS_COREUTILS_TEST_INIT_BINARY) $(ORL
 	done; \
 	[ -s "$(ORLIXOS_COREUTILS_TEST_SELINUX_POLICY_BINARY)" ] || { echo "missing Coreutils SELinux test policy: $(ORLIXOS_COREUTILS_TEST_SELINUX_POLICY_BINARY)" >&2; exit 1; }; \
 	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do \
-		path="$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
+		path="$(ORLIXOS_COREUTILS_INSTALL_DIR)/usr/bin/$$program"; \
 		[ -x "$$path" ] || { echo "missing Coreutils package input: $$path" >&2; exit 1; }; \
 	done; \
 	for program in $(ORLIXOS_FINDUTILS_PROGRAMS) $(ORLIXOS_DIFFUTILS_PROGRAMS); do \
