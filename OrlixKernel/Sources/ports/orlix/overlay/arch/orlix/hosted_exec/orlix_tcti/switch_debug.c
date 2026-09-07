@@ -8054,11 +8054,13 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return 0;
 	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE:
 		/*
-		 * The accepted EL0 cache-maintenance leaves remain unproved until
-		 * their official translation, permission, and fault semantics are
-		 * implemented from the pinned Arm ASL.
+		 * EL0 IC IVAU / DC CVAU / DC CVAC / DC CIVAC by VA. The
+		 * interpreter fetches and stores guest memory through host
+		 * mappings, so these ops have no extra cache effect. Resume at
+		 * the next instruction. Do not trap.
 		 */
-		return -EOPNOTSUPP;
+		regs->pc += sizeof(u32);
+		return 0;
 	case ORLIX_TCTI_DECODE_PC_RELATIVE_ADDRESS:
 		if (decoded->rd != 31) {
 			u64 base = decoded->page_relative ?

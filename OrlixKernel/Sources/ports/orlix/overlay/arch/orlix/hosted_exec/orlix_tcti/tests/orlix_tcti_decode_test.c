@@ -3597,6 +3597,40 @@ static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit 
 		orlix_tcti_decode_aarch64(0xd50b7820U).decode_class);
 }
 
+static void orlix_tcti_switch_executes_el0_cache_maintenance_resume(
+	struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0xd50b7529U,
+		0xd50b7a29U,
+		0xd50b7b29U,
+		0xd50b7e29U,
+	};
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(instructions); index++) {
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(instructions[index]);
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		int ret;
+
+		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_CACHE_MAINTENANCE,
+				decoded.decode_class);
+		regs.regs[9] = 0x1000;
+		regs.sp = 0x2000;
+		regs.pc = 0x4000;
+		before = regs;
+		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs,
+							      &decoded, NULL);
+		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "instruction=%08x",
+				    instructions[index]);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+		KUNIT_EXPECT_EQ(test, before.regs[9], regs.regs[9]);
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+	}
+}
+
 static void orlix_tcti_decode_recognizes_exclusive_monitor_clear(struct kunit *test)
 {
 	struct orlix_tcti_decoded_instruction decoded;
@@ -31759,6 +31793,7 @@ static struct kunit_case orlix_tcti_decode_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_decode_recognizes_multiply_add_sub_class),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_move_wide_immediate_class),
 	KUNIT_CASE(orlix_tcti_decode_exhaustive_hint_barrier_cache_family),
+	KUNIT_CASE(orlix_tcti_switch_executes_el0_cache_maintenance_resume),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_load_store_exclusive_class),
 	KUNIT_CASE(orlix_tcti_decode_exhaustive_load_store_exclusive_family),

@@ -481,6 +481,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
             "kunit.filter_glob=__none__ orlix.kselftest=pthread_attr_probe"
     )
 
+    static let kernelTCTISystem = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=__none__ orlix.kselftest=orlix_tcti_system_probe"
+    )
+
     static let kernelBootProfile = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
