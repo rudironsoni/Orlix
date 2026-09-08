@@ -463,6 +463,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'
 	@$(MAKE) -n ios15-simulator-gate ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000 | rg -q '__bazel-ios15-simulator-gate'
+	@rg -A6 '^__bazel-ios15-simulator-gate:' make/bazel-migration.mk | rg -F -q 'prepare type=tcti-isa'
 	@rg -A3 '^beta-archive:' Makefile | rg -F -q '__bazel-orlix-archive'
 	@rg -F -q 'name = "OrlixUITests"' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
@@ -546,6 +547,7 @@ __bazel-orlix-archive: __bazel-version-check
 	/bin/cp "$$ipa" "$(ORLIX_BETA_IPA_PATH)"
 
 __bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap
+	@$(MAKE) prepare type=tcti-isa
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
