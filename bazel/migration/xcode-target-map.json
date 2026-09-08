@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
   "source_file": "project.yml",
-  "source_sha256": "787c13bb89fa2474f219afccb9a1f35164d234568f541a9bbf7b0028fe15bd9a",
+  "source_sha256": "a91287160dcf13e93e188ea69cabb9263e19e614151a0568ea55a0c65e3e21fc",
   "project": {
     "name": "Orlix",
     "options": {
@@ -24,7 +24,7 @@
       "base": {
         "ARCHS[sdk=iphonesimulator*]": "arm64",
         "CLANG_ENABLE_MODULES": true,
-        "CURRENT_PROJECT_VERSION": 43,
+        "CURRENT_PROJECT_VERSION": 44,
         "ENABLE_DEBUG_DYLIB": false,
         "ENABLE_USER_SCRIPT_SANDBOXING": false,
         "MARKETING_VERSION": "0.1",
