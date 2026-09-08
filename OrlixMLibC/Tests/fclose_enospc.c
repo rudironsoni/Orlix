@@ -2,7 +2,27 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
+
+static int ensure_dev_full(void)
+{
+	struct stat st;
+
+	if (stat("/dev/full", &st) == 0 && S_ISCHR(st.st_mode))
+		return 0;
+	(void)mkdir("/dev", 0755);
+	(void)mount("devtmpfs", "/dev", "devtmpfs", 0, NULL);
+	if (stat("/dev/full", &st) == 0 && S_ISCHR(st.st_mode))
+		return 0;
+	if (mknod("/dev/full", S_IFCHR | 0666, makedev(1, 7)) != 0)
+		return -1;
+	if (stat("/dev/full", &st) != 0 || !S_ISCHR(st.st_mode))
+		return -1;
+	return 0;
+}
 
 int main(void)
 {
@@ -10,7 +30,7 @@ int main(void)
 	char buf[64];
 	int rc;
 
-	if (access("/dev/full", W_OK) != 0)
+	if (ensure_dev_full() != 0)
 		return 2;
 
 	file = fopen("/dev/full", "w");
