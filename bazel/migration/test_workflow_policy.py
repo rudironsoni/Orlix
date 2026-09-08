@@ -17,6 +17,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", text)
         self.assertIn("environment: bazel-promotion", text)
         self.assertIn("make __bazel-promote-${{ inputs.component }}", text)
+        self.assertIn("Cancel if derailed", text)
+        self.assertIn("gh run cancel", text)
 
     def test_trust_policy_forbids_unsigned_main_lock_writes(self) -> None:
         import json

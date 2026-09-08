@@ -305,7 +305,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "2733b4c3bf218f3f56cbe7aac0c862b7671325561481859c1938339cd3e86ccd",
+      "source_sha256": "e58f0abe59706b0851d11b826a19dfa67052935c0cdc739241465aa8e88610aa",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -325,13 +325,31 @@
           }
         },
         "permissions": {
-          "contents": "read"
+          "contents": "read",
+          "actions": "write"
         },
         "concurrency": {
           "group": "bazel-promote-${{ inputs.component }}",
           "cancel-in-progress": false
         },
         "jobs": {
+          "derail-watchdog": {
+            "name": "Cancel if derailed",
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": 12,
+            "permissions": {
+              "actions": "write"
+            },
+            "steps": [
+              {
+                "name": "Cancel when macos-26 stays queued",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nfor _ in $(seq 1 20); do\n  job_status=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs\" --jq '.jobs[] | select(.name == \"Dual-build promote\") | .status' | head -n 1)\"\n  case \"$job_status\" in\n    in_progress|completed)\n      echo \"macos-26 job is $job_status\"\n      exit 0\n      ;;\n  esac\n  sleep 30\ndone\ngh run cancel \"${GITHUB_RUN_ID}\" --repo \"${GITHUB_REPOSITORY}\"\necho \"cancelled: macos-26 job still queued after 10 minutes\"\nexit 1\n"
+              }
+            ]
+          },
           "promote": {
             "name": "Dual-build promote",
             "runs-on": "macos-26",
@@ -340,6 +358,7 @@
             "steps": [
               {
                 "name": "Check out the exact commit",
+                "timeout-minutes": 5,
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "with": {
                   "persist-credentials": false
@@ -347,6 +366,7 @@
               },
               {
                 "name": "Select Xcode 26.6",
+                "timeout-minutes": 5,
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "26.6"
@@ -354,6 +374,7 @@
               },
               {
                 "name": "Dual-build without action cache",
+                "timeout-minutes": 350,
                 "env": {
                   "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}"
                 },
