@@ -246,6 +246,7 @@ MLIBC_TEST_ORLIX_CASES := \
 	orlix/chroot \
 	orlix/float_roundtrip \
 	orlix/getopt_diagnostics \
+	orlix/getopt_required_dash_arg \
 	orlix/locale_probe \
 	orlix/qsort_stack \
 	orlix/renameat2 \
