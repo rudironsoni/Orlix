@@ -17,6 +17,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", text)
         self.assertIn("environment: bazel-promotion", text)
         self.assertIn("make __bazel-promote-${{ inputs.component }}", text)
+        self.assertIn("make __bazel-publish-${{ inputs.component }}", text)
+        self.assertIn("ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished", text)
         self.assertIn("Cancel if derailed", text)
         self.assertIn("gh run cancel", text)
         self.assertIn("packages: write", text)

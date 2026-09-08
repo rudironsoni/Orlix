@@ -73,6 +73,15 @@ jobs:
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
       - name: Dual-build without action cache
         timeout-minutes: 350
+        run: make __bazel-promote-${{ inputs.component }}
+      - name: Sign and publish to GHCR
+        timeout-minutes: 20
         env:
           ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
-        run: make __bazel-promote-${{ inputs.component }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ORLIX_COSIGN_KEY}" ]; then
+            echo "ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished"
+            exit 0
+          fi
+          make __bazel-publish-${{ inputs.component }}

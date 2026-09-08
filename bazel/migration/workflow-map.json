@@ -321,7 +321,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "778e8eb46d3690a083faa65649a29f4e19661426806e30f8a82fcddfe1763bde",
+      "source_sha256": "c3f4906f74696c9e3626ad0096786479d037ccba61f5db97976d47d90aeaf806",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -397,10 +397,15 @@
               {
                 "name": "Dual-build without action cache",
                 "timeout-minutes": 350,
+                "run": "make __bazel-promote-${{ inputs.component }}"
+              },
+              {
+                "name": "Sign and publish to GHCR",
+                "timeout-minutes": 20,
                 "env": {
                   "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}"
                 },
-                "run": "make __bazel-promote-${{ inputs.component }}"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nmake __bazel-publish-${{ inputs.component }}\n"
               }
             ]
           }
