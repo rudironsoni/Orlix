@@ -67,6 +67,8 @@ def _ghostty_repository_impl(ctx):
     pkgs = lock.get("packages") or []
     if not pkgs:
         fail("Ghostty zig package lock is empty")
+    ctx.file("zig-pkg/home/.keep", "")
+    zig = str(ctx.path("zig/zig"))
     for pkg in pkgs:
         name = pkg.get("name")
         url = pkg.get("url")
@@ -75,11 +77,27 @@ def _ghostty_repository_impl(ctx):
             fail("Ghostty zig package lock entry missing name, url, or sha256")
         if len(digest) != 64:
             fail("Ghostty zig package %s sha256 is not 64 hex" % name)
+        download = "zig-pkg/download/" + name
         ctx.download(
             url = url,
-            output = "zig-pkg/p/" + name,
+            output = download,
             sha256 = digest,
         )
+        fetch = ctx.execute(
+            [
+                zig,
+                "fetch",
+                "--global-cache-dir",
+                str(ctx.path("zig-pkg")),
+                str(ctx.path(download)),
+            ],
+            environment = {
+                "HOME": str(ctx.path("zig-pkg/home")),
+                "PATH": "/usr/bin:/bin",
+            },
+        )
+        if fetch.return_code:
+            fail("zig fetch %s failed:\n%s\n%s" % (name, fetch.stdout, fetch.stderr))
     ctx.file("zig-pkg/orlix-ready", "Ghostty packages fetched by digest\n")
 
     ctx.file("BUILD.bazel", """
