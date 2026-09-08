@@ -131,3 +131,6 @@ class NativeSourceHashTests(unittest.TestCase):
             self.assertNotIn("latest", pkg["url"])
             self.assertNotIn(pkg["name"], names)
             names.add(pkg["name"])
+        zlib = next(pkg for pkg in packages if "AAB0eQwD" in pkg["name"])
+        self.assertIn("zlib-1220fed0", zlib["url"])
+        self.assertNotEqual(zlib["url"].rsplit("/", 1)[-1], zlib["name"])
