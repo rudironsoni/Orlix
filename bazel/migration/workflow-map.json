@@ -405,7 +405,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "da0fb7dcdaa3585d2aecd4d00b4de9ecdbdbe093dabec66083d9fe323bc262fb",
+      "source_sha256": "1b829d0a3f542009415ed47ccfeaa50598f7eb7addbf142ec7aa370403051d69",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -487,9 +487,11 @@
                 "name": "Sign and publish to GHCR",
                 "timeout-minutes": 20,
                 "env": {
-                  "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}"
+                  "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}",
+                  "ORLIX_COSIGN_KEY_PASSWORD": "${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}",
+                  "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 },
-                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nmake __bazel-publish-${{ inputs.component }}\n"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io -u \"${GITHUB_ACTOR}\" --password-stdin\nmake __bazel-publish-${{ inputs.component }}\n"
               }
             ]
           }

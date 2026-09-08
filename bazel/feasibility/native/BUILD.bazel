@@ -1,4 +1,4 @@
-load(":native_bundle.bzl", "orlix_ghostty_archives", "orlix_ssh_archives")
+load(":native_bundle.bzl", "orlix_ssh_archives")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -25,16 +25,6 @@ config_setting(
     constraint_values = ["@platforms//os:macos"],
 )
 
-orlix_ghostty_archives(
-    name = "ghostty_archives",
-    ghostty_build = "@orlix_ghostty_source//:source/build.zig",
-    ghostty_source = "@orlix_ghostty_source//:source",
-    tags = ["manual"],
-    zig = "@orlix_ghostty_source//:zig/zig",
-    zig_packages = "@orlix_ghostty_source//:zig_packages",
-    zig_packages_marker = "@orlix_ghostty_source//:zig-pkg/orlix-ready",
-)
-
 orlix_ssh_archives(
     name = "ssh_archives",
     cmake = "@orlix_cmake_tool//:CMake.app/Contents/bin/cmake",
@@ -46,14 +36,19 @@ orlix_ssh_archives(
     tags = ["manual"],
 )
 
-filegroup(name = "apple_archives", srcs = [":ghostty_archives", ":ssh_archives"])
+filegroup(name = "apple_archives", srcs = [
+    ":ghostty_ios_device_archive",
+    ":ghostty_ios_simulator_archive",
+    ":ghostty_macos_archive",
+    ":ssh_archives",
+])
 
-filegroup(name = "ghostty_ios_device_archive", srcs = [":ghostty_archives"], output_group = "ios_device")
-filegroup(name = "ghostty_ios_simulator_archive", srcs = [":ghostty_archives"], output_group = "ios_simulator")
-filegroup(name = "ghostty_macos_archive", srcs = [":ghostty_archives"], output_group = "macos")
-filegroup(name = "ghostty_ios_device_resources", srcs = [":ghostty_archives"], output_group = "ios_device_resources")
-filegroup(name = "ghostty_ios_simulator_resources", srcs = [":ghostty_archives"], output_group = "ios_simulator_resources")
-filegroup(name = "ghostty_macos_resources", srcs = [":ghostty_archives"], output_group = "macos_resources")
+filegroup(name = "ghostty_ios_device_archive", srcs = ["@orlix_ghostty_kit//:ios_device_lib"])
+filegroup(name = "ghostty_ios_simulator_archive", srcs = ["@orlix_ghostty_kit//:ios_simulator_lib"])
+filegroup(name = "ghostty_macos_archive", srcs = ["@orlix_ghostty_kit//:macos_lib"])
+filegroup(name = "ghostty_ios_device_resources", srcs = ["@orlix_ghostty_kit//:ios_device_resources"])
+filegroup(name = "ghostty_ios_simulator_resources", srcs = ["@orlix_ghostty_kit//:ios_simulator_resources"])
+filegroup(name = "ghostty_macos_resources", srcs = ["@orlix_ghostty_kit//:macos_resources"])
 filegroup(name = "ssh_ios_device_archive", srcs = [":ssh_archives"], output_group = "ios_device")
 filegroup(name = "ssh_ios_simulator_archive", srcs = [":ssh_archives"], output_group = "ios_simulator")
 filegroup(name = "ssh_macos_archive", srcs = [":ssh_archives"], output_group = "macos")
@@ -103,7 +98,4 @@ cc_library(
     deps = [":selected"],
 )
 
-exports_files([
-    "native_bundle.bzl",
-    "rewrite_zig_zon.py",
-])
+exports_files(["native_bundle.bzl"])

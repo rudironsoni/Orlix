@@ -296,22 +296,14 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "/L7jR6oB2JecmOlzqNYr3kvft2O2ONKq7LJjL4YLFTY=",
+        "bzlTransitiveDigest": "jB7DHhfKQV7K+5O2YMxEEEdfQqK4JfCiga0Zwoa+uCA=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
-          "orlix_ghostty_source": {
-            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_ghostty_repository",
+          "orlix_ghostty_kit": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_ghostty_kit_repository",
             "attributes": {
-              "url": "https://github.com/wiedymi/ghostty/archive/02af5158c76036291183e746d436eb8f15356662.tar.gz",
-              "sha256": "5f42b2a27d15c4387a40b81a7da60f3b1f0328e238225417db80a1f9aaa4b3aa",
-              "strip_prefix": "ghostty-02af5158c76036291183e746d436eb8f15356662",
-              "patch": "@@//third_party/patches/ghostty:orlix_apple.patch",
-              "patch_sha256": "3c1225ea01bde23f1ec8585fd85ca3b2e15bae51501cf71fd3d5c4ca4b56a1b5",
-              "zig_url": "https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz",
-              "zig_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
-              "zig_strip_prefix": "zig-aarch64-macos-0.16.0",
-              "packages": "@@//bazel/extensions:ghostty_zig_packages.json"
+              "pin": "@@//bazel/extensions:ghostty_kit.json"
             }
           },
           "orlix_openssl_source": {
@@ -811,7 +803,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//third_party/swift/Package.resolved a24eceeb2e030f48cf9c22bc54cba884ff511538e155e8461ea3269cf89f6d8d"
+          "FILE:@@//third_party/swift/Package.resolved bafcd86e4ce83768010fe0cf047b1057fbc6dd310d00e7b5df62895154180195"
         ],
         "generatedRepoSpecs": {
           "swift_package": {
@@ -967,6 +959,22 @@
               "dep_module_aliases": ""
             }
           },
+          "swiftpkg_libghostty_spm": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_libghostty_spm",
+              "commit": "733ae3b29d447b6707cbfc00879027a076dfd0eb",
+              "remote": "https://github.com/Lakr233/libghostty-spm.git",
+              "version": "1.5.20260906",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": ""
+            }
+          },
           "swiftpkg_grpc_swift": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -974,6 +982,22 @@
               "commit": "6a8927df5a91710b414caba4f8a088dead4633db",
               "remote": "https://github.com/grpc/grpc-swift.git",
               "version": "1.27.5",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": ""
+            }
+          },
+          "swiftpkg_msdisplaylink": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_msdisplaylink",
+              "commit": "87eb0af130744c8cbe2e31b6e1a5bcd659f1c220",
+              "remote": "https://github.com/Lakr233/MSDisplayLink.git",
+              "version": "2.2.0",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -1363,6 +1387,7 @@
             "swiftpkg_zipfoundation",
             "swiftpkg_opentelemetry_swift",
             "swiftpkg_opentelemetry_swift_core",
+            "swiftpkg_libghostty_spm",
             "swift_package"
           ],
           "explicitRootModuleDirectDevDeps": [],

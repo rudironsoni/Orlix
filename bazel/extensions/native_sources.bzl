@@ -30,124 +30,57 @@ _archive_repository = repository_rule(
     },
 )
 
-def _ghostty_repository_impl(ctx):
+def _ghostty_kit_impl(ctx):
+    pin = json.decode(ctx.read(ctx.attr.pin))
+    url = pin.get("url")
+    digest = pin.get("sha256")
+    if not url or not digest or len(digest) != 64:
+        fail("ghostty_kit.json must pin url and a 64-hex sha256")
     ctx.download_and_extract(
-        url = ctx.attr.url,
-        sha256 = ctx.attr.sha256,
-        strip_prefix = ctx.attr.strip_prefix,
-        output = "source",
+        url = url,
+        sha256 = digest,
+        type = "zip",
     )
-    patch_digest = ctx.execute([
-        "/usr/bin/shasum",
-        "-a",
-        "256",
-        ctx.path(ctx.attr.patch),
-    ])
-    if patch_digest.return_code:
-        fail("Ghostty patch digest failed:\n%s\n%s" % (patch_digest.stdout, patch_digest.stderr))
-    if patch_digest.stdout.split(" ")[0] != ctx.attr.patch_sha256:
-        fail("Ghostty patch digest does not match patch_sha256")
-    patch_result = ctx.execute([
-        "/usr/bin/patch",
-        "--batch",
-        "--forward",
-        "-p1",
-        "-i",
-        ctx.path(ctx.attr.patch),
-    ])
-    if patch_result.return_code:
-        fail("Ghostty patch failed:\n%s\n%s" % (patch_result.stdout, patch_result.stderr))
-    ctx.download_and_extract(
-        url = ctx.attr.zig_url,
-        sha256 = ctx.attr.zig_sha256,
-        strip_prefix = ctx.attr.zig_strip_prefix,
-        output = "zig",
-    )
-    lock = json.decode(ctx.read(ctx.attr.packages))
-    pkgs = lock.get("packages") or []
-    if not pkgs:
-        fail("Ghostty zig package lock is empty")
-    for pkg in pkgs:
-        name = pkg.get("name")
-        url = pkg.get("url")
-        digest = pkg.get("sha256")
-        if not name or not url or not digest:
-            fail("Ghostty zig package lock entry missing name, url, or sha256")
-        if len(digest) != 64:
-            fail("Ghostty zig package %s sha256 is not 64 hex" % name)
-        download = "zig-pkg/download/" + name
-        ctx.download(
-            url = url,
-            output = download,
-            sha256 = digest,
-        )
-        stem = name
-        for suffix in (".tar.zst", ".tar.xz", ".tar.gz", ".tgz"):
-            if name.endswith(suffix):
-                stem = name[:-len(suffix)]
-                break
-        dest = "zig-pkg/p/" + stem
-        work = dest + ".work"
-        mkdir = ctx.execute(["/bin/mkdir", "-p", dest, work])
-        if mkdir.return_code:
-            fail("mkdir %s failed:\n%s\n%s" % (dest, mkdir.stdout, mkdir.stderr))
-        extract = ctx.execute([
-            "/usr/bin/tar",
-            "-xf",
-            download,
-            "-C",
-            work,
-        ])
-        if extract.return_code:
-            fail("tar extract %s failed:\n%s\n%s" % (name, extract.stdout, extract.stderr))
-        flatten = ctx.execute([
-            "/usr/bin/python3",
-            "-c",
-            "import os, shutil, sys\nwork, dest = sys.argv[1], sys.argv[2]\nnames = [n for n in os.listdir(work) if n not in ('.', '..')]\nsrc = os.path.join(work, names[0]) if len(names) == 1 and os.path.isdir(os.path.join(work, names[0])) else work\nos.makedirs(dest, exist_ok=True)\nfor n in os.listdir(src):\n    shutil.move(os.path.join(src, n), os.path.join(dest, n))\n",
-            work,
-            dest,
-        ])
-        if flatten.return_code:
-            fail("flatten %s failed:\n%s\n%s" % (name, flatten.stdout, flatten.stderr))
-    ctx.file("zig-pkg/orlix-ready", "Ghostty packages fetched by digest\n")
-
     ctx.file("BUILD.bazel", """
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
-    "source/build.zig",
-    "source/include/ghostty.h",
-    "zig/zig",
-    "zig-pkg/orlix-ready",
-])
+exports_files(glob(["GhosttyKit.xcframework/**"]))
 
 filegroup(
-    name = "source",
-    srcs = glob(["source/**"], exclude = [
-        "source/CLAUDE.md",
-        "source/zig-pkg/**",
-        "source/.zig-cache/**",
-    ]),
+    name = "ios_device_lib",
+    srcs = ["GhosttyKit.xcframework/ios-arm64/libghostty.a"],
 )
 
 filegroup(
-    name = "zig_packages",
-    srcs = glob(["zig-pkg/p/**"]),
+    name = "ios_simulator_lib",
+    srcs = ["GhosttyKit.xcframework/ios-arm64_x86_64-simulator/libghostty.a"],
+)
+
+filegroup(
+    name = "macos_lib",
+    srcs = ["GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a"],
+)
+
+filegroup(
+    name = "ios_device_resources",
+    srcs = glob(["GhosttyKit.xcframework/ios-arm64/Headers/**"]),
+)
+
+filegroup(
+    name = "ios_simulator_resources",
+    srcs = glob(["GhosttyKit.xcframework/ios-arm64_x86_64-simulator/Headers/**"]),
+)
+
+filegroup(
+    name = "macos_resources",
+    srcs = glob(["GhosttyKit.xcframework/macos-arm64_x86_64/Headers/**"]),
 )
 """)
 
-_ghostty_repository = repository_rule(
-    implementation = _ghostty_repository_impl,
+_ghostty_kit_repository = repository_rule(
+    implementation = _ghostty_kit_impl,
     attrs = {
-        "url": attr.string(mandatory = True),
-        "sha256": attr.string(mandatory = True),
-        "strip_prefix": attr.string(mandatory = True),
-        "patch": attr.label(mandatory = True),
-        "patch_sha256": attr.string(mandatory = True),
-        "zig_url": attr.string(mandatory = True),
-        "zig_sha256": attr.string(mandatory = True),
-        "zig_strip_prefix": attr.string(mandatory = True),
-        "packages": attr.label(allow_single_file = True, mandatory = True),
+        "pin": attr.label(allow_single_file = True, mandatory = True),
     },
 )
 
@@ -222,17 +155,9 @@ _cmake_repository = repository_rule(
 )
 
 def _native_sources_impl(_ctx):
-    _ghostty_repository(
-        name = "orlix_ghostty_source",
-        url = "https://github.com/wiedymi/ghostty/archive/02af5158c76036291183e746d436eb8f15356662.tar.gz",
-        sha256 = "5f42b2a27d15c4387a40b81a7da60f3b1f0328e238225417db80a1f9aaa4b3aa",
-        strip_prefix = "ghostty-02af5158c76036291183e746d436eb8f15356662",
-        patch = "//third_party/patches/ghostty:orlix_apple.patch",
-        patch_sha256 = "3c1225ea01bde23f1ec8585fd85ca3b2e15bae51501cf71fd3d5c4ca4b56a1b5",
-        zig_url = "https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz",
-        zig_sha256 = "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
-        zig_strip_prefix = "zig-aarch64-macos-0.16.0",
-        packages = "//bazel/extensions:ghostty_zig_packages.json",
+    _ghostty_kit_repository(
+        name = "orlix_ghostty_kit",
+        pin = "//bazel/extensions:ghostty_kit.json",
     )
     _archive_repository(
         name = "orlix_openssl_source",

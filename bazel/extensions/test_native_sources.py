@@ -6,7 +6,6 @@ import unittest
 from pathlib import Path
 
 SOURCE = Path(__file__).with_name("native_sources.bzl")
-PACKAGES = Path(__file__).with_name("ghostty_zig_packages.json")
 
 
 class NativeSourceHashTests(unittest.TestCase):
@@ -114,25 +113,19 @@ class NativeSourceHashTests(unittest.TestCase):
             self.assertIn(url, text)
             self.assertIn(prefix, text)
 
-    def test_ghostty_packages_are_digest_pinned_without_zig_fetch(self) -> None:
+    def test_ghostty_kit_is_libghostty_spm_binary(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")
-        self.assertNotIn("--fetch=all", text)
-        self.assertNotIn("fetch-source", text)
-        self.assertNotIn("xcodebuild", text)
-        self.assertIn('packages = "//bazel/extensions:ghostty_zig_packages.json"', text)
-        self.assertIn("ctx.download", text)
-        self.assertIn("/usr/bin/tar", text)
-        self.assertIn("zig-pkg/p/", text)
-        payload = json.loads(PACKAGES.read_text(encoding="utf-8"))
-        packages = payload["packages"]
-        self.assertGreaterEqual(len(packages), 30)
-        names = set()
-        for pkg in packages:
-            self.assertEqual(len(pkg["sha256"]), 64)
-            self.assertTrue(pkg["url"].startswith("https://"))
-            self.assertNotIn("latest", pkg["url"])
-            self.assertNotIn(pkg["name"], names)
-            names.add(pkg["name"])
-        zlib = next(pkg for pkg in packages if "AAB0eQwD" in pkg["name"])
-        self.assertIn("zlib-1220fed0", zlib["url"])
-        self.assertNotEqual(zlib["url"].rsplit("/", 1)[-1], zlib["name"])
+        self.assertIn('name = "orlix_ghostty_kit"', text)
+        self.assertIn('pin = "//bazel/extensions:ghostty_kit.json"', text)
+        self.assertNotIn("orlix_ghostty_source", text)
+        self.assertNotIn("zig-pkg/p/", text)
+        pin = json.loads(Path(__file__).with_name("ghostty_kit.json").read_text(encoding="utf-8"))
+        self.assertEqual(pin["package"], "https://github.com/Lakr233/libghostty-spm")
+        self.assertEqual(pin["from"], "1.5.2")
+        self.assertTrue(pin["url"].startswith("https://github.com/Lakr233/libghostty-spm/releases/download/"))
+        self.assertTrue(pin["url"].endswith("GhosttyKit.xcframework.zip"))
+        self.assertEqual(len(pin["sha256"]), 64)
+        self.assertNotIn("latest", pin["url"])
+        swift = Path(__file__).resolve().parents[2].joinpath("third_party/swift/Package.swift").read_text(encoding="utf-8")
+        self.assertIn("Lakr233/libghostty-spm.git", swift)
+        self.assertIn('from: "1.5.2"', swift)

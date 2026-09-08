@@ -1,4 +1,5 @@
 exports_files([
     "native_sources.bzl",
+    "ghostty_kit.json",
     "ghostty_zig_packages.json",
 ])

@@ -18,5 +18,6 @@ let package = Package(
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", revision: "edbeaa39b426e54702194b0a601342322f01e400"),
         .package(url: "https://github.com/open-telemetry/opentelemetry-swift.git", revision: "9a6d6a8aed22c415bb1673206e337824635f818b"),
         .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", revision: "06f8a460a66f813758d22f09025d85df45450a63"),
+        .package(url: "https://github.com/Lakr233/libghostty-spm.git", from: "1.5.2"),
     ]
 )

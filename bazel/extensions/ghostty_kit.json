@@ -1,0 +1,7 @@
+{
+  "package": "https://github.com/Lakr233/libghostty-spm",
+  "from": "1.5.2",
+  "url": "https://github.com/Lakr233/libghostty-spm/releases/download/upstream.c4e16970a803/GhosttyKit.xcframework.zip",
+  "sha256": "bd9bba3b95652900e87a6a0f190f33d82a1d8e42d1c0119c330072be361385da",
+  "ghostty_ref": "82938b633ba646db38591d969c3c526332bd7e65"
+}

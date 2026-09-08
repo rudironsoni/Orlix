@@ -87,7 +87,7 @@ __bazel-native-archives: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/native:apple_archives --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
 __bazel-ghostty-archives: __bazel-feasibility-bootstrap
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/native:ghostty_archives --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/native:ghostty_ios_simulator //bazel/feasibility/native:ghostty_ios_device //bazel/feasibility/native:ghostty_macos --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
 __bazel-ssh-archives: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/native:ssh_archives --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -163,6 +163,7 @@ define ORLIX_BAZEL_PUBLISH
 __bazel-publish-$(1): __bazel-version-check
 	@set -euo pipefail; \
 	test -n "$$$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to publish $(1)" >&2; exit 1; }; \
+	if [ -n "$$$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
 	digest_file="$$$$promote/a/digest.sha256"; \
 	test -s "$$$$digest_file" || { echo "missing unsigned digest $$$$digest_file; run make __bazel-promote-$(1) first" >&2; exit 1; }; \
@@ -526,7 +527,6 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_tcti_isa_pin
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
-	@PYTHONPATH="$(CURDIR)/bazel/feasibility/native" python3 -m unittest test_rewrite_zig_zon
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom
