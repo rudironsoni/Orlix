@@ -608,8 +608,10 @@ __bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap __tcti-isa-restore
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
 	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
-	device_name="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id) | .name')"; \
-	test -n "$$device_name" || { echo "missing iOS 15.5 simulator name for $(ORLIX_IOS15_SIMULATOR_ID)" >&2; exit 1; }; \
+	type_id="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id) | .deviceTypeIdentifier')"; \
+	test -n "$$type_id" || { echo "missing iOS 15.5 simulator deviceTypeIdentifier for $(ORLIX_IOS15_SIMULATOR_ID)" >&2; exit 1; }; \
+	device_name="$$(xcrun simctl list devicetypes -j | jq -r --arg id "$$type_id" '.devicetypes[] | select(.identifier == $$id) | .name')"; \
+	test -n "$$device_name" || { echo "missing iOS 15.5 simulator device type name for $$type_id" >&2; exit 1; }; \
 	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
 	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
 	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \

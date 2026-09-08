@@ -58,6 +58,10 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-ios15-simulator-gate", output)
         self.assertIn("prepared-tables.tar.gz", output)
         self.assertIn("source_manifest.def", output)
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("deviceTypeIdentifier", makefile)
+        self.assertIn("devicetypes", makefile)
+        self.assertIn("--ios_simulator_device=", makefile)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
