@@ -526,6 +526,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_tcti_isa_pin
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
+	@PYTHONPATH="$(CURDIR)/bazel/feasibility/native" python3 -m unittest test_rewrite_zig_zon
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom

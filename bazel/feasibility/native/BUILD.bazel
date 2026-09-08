@@ -103,4 +103,7 @@ cc_library(
     deps = [":selected"],
 )
 
-exports_files(["native_bundle.bzl"])
+exports_files([
+    "native_bundle.bzl",
+    "rewrite_zig_zon.py",
+])

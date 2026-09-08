@@ -67,6 +67,7 @@ ghostty_build="$exec_root/$1"; zig="$exec_root/$2"; packages_marker="$exec_root/
 device_out="$exec_root/$4"; simulator_out="$exec_root/$5"
 macos_out="$exec_root/$6"; manifest_out="$exec_root/$7"
 device_res="$exec_root/$8"; simulator_res="$exec_root/$9"; macos_res="$exec_root/${10}"
+rewriter="$exec_root/${11}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -84,6 +85,7 @@ trap '/bin/rm -rf "$work"' EXIT
 /bin/mkdir -p "$work/zig-global" "$work/zig-local" "$work/home"
 /bin/cp -R "$packages_root/p" "$work/zig-global/p"
 /bin/chmod -R u+w "$work/ghostty" "$work/zig-global"
+/usr/bin/python3 "$rewriter" "$work/ghostty" "$packages_root/p"
 cd "$work/ghostty"
 HOME="$work/home" ZIG_GLOBAL_CACHE_DIR="$work/zig-global" ZIG_LOCAL_CACHE_DIR="$work/zig-local" \
 "$zig" build -Dapp-runtime=none -Demit-xcframework=true -Demit-macos-app=false \
@@ -130,8 +132,9 @@ copy_slice "$macos" "$macos_out" "$macos_res"
             o.device_resources.path,
             o.simulator_resources.path,
             o.macos_resources.path,
+            ctx.file._zon_rewriter.path,
         ],
-        inputs = inputs,
+        inputs = depset(direct = [ctx.file._zon_rewriter], transitive = [inputs]),
         tools = [ctx.executable.zig],
         outputs = [o.device, o.simulator, o.macos, o.manifest, o.device_resources, o.simulator_resources, o.macos_resources],
         env = _pinned_apple_env(ctx, {}),
@@ -148,6 +151,10 @@ orlix_ghostty_archives = rule(
         "zig": attr.label(allow_single_file = True, executable = True, cfg = "exec", mandatory = True),
         "zig_packages": attr.label(mandatory = True),
         "zig_packages_marker": attr.label(allow_single_file = True, mandatory = True),
+        "_zon_rewriter": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/native:rewrite_zig_zon.py"),
+        ),
     },
 )
 
