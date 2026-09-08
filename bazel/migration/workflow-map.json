@@ -321,7 +321,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "616dd37179e3574b8f34878f6760f18da2ad8e5f978b135d5aeb5c76214da1c9",
+      "source_sha256": "778e8eb46d3690a083faa65649a29f4e19661426806e30f8a82fcddfe1763bde",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -342,7 +342,8 @@
         },
         "permissions": {
           "contents": "read",
-          "actions": "write"
+          "actions": "write",
+          "packages": "write"
         },
         "concurrency": {
           "group": "bazel-promote-${{ inputs.component }}",
