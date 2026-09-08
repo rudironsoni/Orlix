@@ -46,7 +46,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/ios15-runtime.yml").read_text(encoding="utf-8")
         self.assertIn("Cancel if derailed", text)
         self.assertIn("gh run cancel", text)
-        self.assertIn("timeout-minutes: 75", text)
+        self.assertIn("timeout-minutes: 90", text)
         self.assertNotIn("timeout-minutes: 180", text)
 
 

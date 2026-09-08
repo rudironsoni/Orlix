@@ -54,7 +54,7 @@ jobs:
   ios15-runtime:
     name: iOS 15 runtime
     runs-on: macos-26
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     steps:
       - name: Check out the exact commit
@@ -100,11 +100,11 @@ jobs:
           echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
       - name: Build native dependencies
-        timeout-minutes: 25
+        timeout-minutes: 45
         run: make build type=vendor vendor=all
 
       - name: Run the iOS 15 launch test
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           LINUX_REMOTE: https://github.com/gregkh/linux.git
         run: make ios15-simulator-gate

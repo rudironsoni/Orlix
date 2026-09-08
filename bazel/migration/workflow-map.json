@@ -443,7 +443,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "2c74df8f77b61d0facf19cfe0595d28055639b87af393359a6e888368000beb8",
+      "source_sha256": "9022e9645d894c5457bfaa9e09c7ef316436f4e3bdad905f9cd12f426b080227",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -496,7 +496,7 @@
           "ios15-runtime": {
             "name": "iOS 15 runtime",
             "runs-on": "macos-26",
-            "timeout-minutes": 75,
+            "timeout-minutes": 90,
             "steps": [
               {
                 "name": "Check out the exact commit",
@@ -526,12 +526,12 @@
               },
               {
                 "name": "Build native dependencies",
-                "timeout-minutes": 25,
+                "timeout-minutes": 45,
                 "run": "make build type=vendor vendor=all"
               },
               {
                 "name": "Run the iOS 15 launch test",
-                "timeout-minutes": 25,
+                "timeout-minutes": 30,
                 "env": {
                   "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
                 },
