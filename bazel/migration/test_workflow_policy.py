@@ -40,6 +40,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-gc.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-gc", text)
 
+    def test_ios15_runtime_cancels_if_derailed(self) -> None:
+        text = (ROOT / ".github/workflows/ios15-runtime.yml").read_text(encoding="utf-8")
+        self.assertIn("Cancel if derailed", text)
+        self.assertIn("gh run cancel", text)
+        self.assertIn("timeout-minutes: 75", text)
+        self.assertNotIn("timeout-minutes: 180", text)
+
 
 if __name__ == "__main__":
     unittest.main()

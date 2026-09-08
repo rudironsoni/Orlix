@@ -18,29 +18,59 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: ios15-runtime-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  derail-watchdog:
+    name: Cancel if derailed
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel when macos-26 stays queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 20); do
+            job_status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "iOS 15 runtime") | .status' | head -n 1)"
+            case "$job_status" in
+              in_progress|completed)
+                echo "macos-26 job is $job_status"
+                exit 0
+                ;;
+            esac
+            sleep 30
+          done
+          gh run cancel "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}"
+          echo "cancelled: macos-26 job still queued after 10 minutes"
+          exit 1
+
   ios15-runtime:
     name: iOS 15 runtime
     runs-on: macos-26
-    timeout-minutes: 180
+    timeout-minutes: 75
 
     steps:
       - name: Check out the exact commit
+        timeout-minutes: 5
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Select Xcode 26.6
+        timeout-minutes: 5
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: "26.6"
 
       - name: Install pinned build tools
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           brew trust --formula xcodesorg/made/xcodes
@@ -54,6 +84,7 @@ jobs:
           echo "$llvm_bin" >> "$GITHUB_PATH"
 
       - name: Install the iOS 15.5 runtime with xcodes
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --no-color
@@ -69,15 +100,18 @@ jobs:
           echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
       - name: Build native dependencies
+        timeout-minutes: 25
         run: make build type=vendor vendor=all
 
       - name: Run the iOS 15 launch test
+        timeout-minutes: 25
         env:
           LINUX_REMOTE: https://github.com/gregkh/linux.git
         run: make ios15-simulator-gate
 
       - name: Store iOS 15 test evidence
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios15-runtime-${{ github.sha }}

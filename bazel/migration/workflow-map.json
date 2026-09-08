@@ -422,7 +422,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "fadbd7c112395ab58acf1653cbc8d04deb01b2a46b7089dfa337d2570b44d4dd",
+      "source_sha256": "2c74df8f77b61d0facf19cfe0595d28055639b87af393359a6e888368000beb8",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -447,20 +447,39 @@
           }
         },
         "permissions": {
-          "contents": "read"
+          "contents": "read",
+          "actions": "write"
         },
         "concurrency": {
           "group": "ios15-runtime-${{ github.event.pull_request.number || github.ref }}",
           "cancel-in-progress": true
         },
         "jobs": {
+          "derail-watchdog": {
+            "name": "Cancel if derailed",
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": 12,
+            "permissions": {
+              "actions": "write"
+            },
+            "steps": [
+              {
+                "name": "Cancel when macos-26 stays queued",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nfor _ in $(seq 1 20); do\n  job_status=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs\" --jq '.jobs[] | select(.name == \"iOS 15 runtime\") | .status' | head -n 1)\"\n  case \"$job_status\" in\n    in_progress|completed)\n      echo \"macos-26 job is $job_status\"\n      exit 0\n      ;;\n  esac\n  sleep 30\ndone\ngh run cancel \"${GITHUB_RUN_ID}\" --repo \"${GITHUB_REPOSITORY}\"\necho \"cancelled: macos-26 job still queued after 10 minutes\"\nexit 1\n"
+              }
+            ]
+          },
           "ios15-runtime": {
             "name": "iOS 15 runtime",
             "runs-on": "macos-26",
-            "timeout-minutes": 180,
+            "timeout-minutes": 75,
             "steps": [
               {
                 "name": "Check out the exact commit",
+                "timeout-minutes": 5,
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "with": {
                   "persist-credentials": false
@@ -468,6 +487,7 @@
               },
               {
                 "name": "Select Xcode 26.6",
+                "timeout-minutes": 5,
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "26.6"
@@ -475,18 +495,22 @@
               },
               {
                 "name": "Install pinned build tools",
+                "timeout-minutes": 20,
                 "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\nllvm_bin=\"$(brew --prefix llvm)/bin\"\nlld_bin=\"$(brew --prefix lld)/bin\"\ntest -x \"$lld_bin/ld.lld\" || test -x \"$llvm_bin/ld.lld\"\necho \"$lld_bin\" >> \"$GITHUB_PATH\"\necho \"$llvm_bin\" >> \"$GITHUB_PATH\"\n"
               },
               {
                 "name": "Install the iOS 15.5 runtime with xcodes",
+                "timeout-minutes": 30,
                 "run": "set -euo pipefail\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" \\\n  '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Build native dependencies",
+                "timeout-minutes": 25,
                 "run": "make build type=vendor vendor=all"
               },
               {
                 "name": "Run the iOS 15 launch test",
+                "timeout-minutes": 25,
                 "env": {
                   "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
                 },
@@ -495,6 +519,7 @@
               {
                 "name": "Store iOS 15 test evidence",
                 "if": "always()",
+                "timeout-minutes": 5,
                 "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
                 "with": {
                   "name": "ios15-runtime-${{ github.sha }}",
