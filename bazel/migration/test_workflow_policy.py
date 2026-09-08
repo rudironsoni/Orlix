@@ -51,6 +51,16 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)', text)
         self.assertIn("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830", text)
         self.assertIn("orlix-ios15-runtime-15.5-arm64-v1", text)
+        self.assertIn("orlix-git-clones-", text)
+        self.assertIn("~/Library/Caches/Orlix/git", text)
+        self.assertIn("Build/OrlixKernel/upstream", text)
+        self.assertIn("Build/OrlixMLibC/upstream", text)
+
+    def test_vendor_ghostty_uses_git_cache(self) -> None:
+        text = (ROOT / "Orlix/make/vendor.mk").read_text(encoding="utf-8")
+        self.assertIn("ORLIX_GIT_CACHE", text)
+        self.assertIn("ghostty.git", text)
+        self.assertIn("cat-file -e", text)
 
     def test_promote_workflow_does_not_use_action_cache(self) -> None:
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")

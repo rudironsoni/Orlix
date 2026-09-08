@@ -95,9 +95,21 @@ __vendor-build:
 	    local workdir="$$GHOSTTY_WORKDIR"
 
 	    log_info "Fetching ghostty @ $${GHOSTTY_REF}..."
+	    git_cache="$${ORLIX_GIT_CACHE:-$${HOME}/Library/Caches/Orlix/git}"
+	    ghostty_mirror="$${git_cache}/ghostty.git"
+	    mkdir -p "$${git_cache}"
+	    if [ ! -d "$${ghostty_mirror}/objects" ]; then
+	        git init --bare "$${ghostty_mirror}" >/dev/null
+	        git -C "$${ghostty_mirror}" remote add origin "$${GHOSTTY_REPO}"
+	    else
+	        git -C "$${ghostty_mirror}" remote set-url origin "$${GHOSTTY_REPO}"
+	    fi
+	    if ! git -C "$${ghostty_mirror}" cat-file -e "$${GHOSTTY_REF}^{commit}" 2>/dev/null; then
+	        git -C "$${ghostty_mirror}" fetch --filter=blob:none --depth 1 origin "$${GHOSTTY_REF}"
+	    fi
 	    git init "$${workdir}/ghostty"
-	    git -C "$${workdir}/ghostty" remote add origin "$${GHOSTTY_REPO}"
-	    git -C "$${workdir}/ghostty" fetch --filter=blob:none --depth 1 origin "$${GHOSTTY_REF}"
+	    git -C "$${workdir}/ghostty" remote add origin "$${ghostty_mirror}"
+	    git -C "$${workdir}/ghostty" fetch --depth 1 origin "$${GHOSTTY_REF}"
 	    git -C "$${workdir}/ghostty" checkout --detach FETCH_HEAD
 
 	    local embedded_path="$${workdir}/ghostty/src/apprt/embedded.zig"

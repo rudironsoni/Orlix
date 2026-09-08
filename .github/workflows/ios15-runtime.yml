@@ -102,6 +102,18 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
+      - name: Restore git clones
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/Library/Caches/Orlix/git
+            Build/OrlixKernel/upstream
+            Build/OrlixMLibC/upstream
+          key: orlix-git-clones-${{ runner.os }}-${{ hashFiles('Orlix/make/vendor.mk', 'OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk', 'OrlixMLibC/Makefile') }}
+          restore-keys: |
+            orlix-git-clones-${{ runner.os }}-
+
       - name: Install pinned build tools
         timeout-minutes: 20
         run: |

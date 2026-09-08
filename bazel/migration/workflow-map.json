@@ -464,7 +464,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "fd9ff18b9bd7b4bc5ab5c4240bfcfcb9b9451c7254792e27eab336530b4f9835",
+      "source_sha256": "fac4ef43fb1b6c1363c4f2248e2b6b0776a34502dc2ef2120c18372a8ec4babe",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -567,6 +567,16 @@
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
                   "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
                   "restore-keys": "orlix-bazel-repos-\n"
+                }
+              },
+              {
+                "name": "Restore git clones",
+                "timeout-minutes": 15,
+                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/git\nBuild/OrlixKernel/upstream\nBuild/OrlixMLibC/upstream\n",
+                  "key": "orlix-git-clones-${{ runner.os }}-${{ hashFiles('Orlix/make/vendor.mk', 'OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk', 'OrlixMLibC/Makefile') }}",
+                  "restore-keys": "orlix-git-clones-${{ runner.os }}-\n"
                 }
               },
               {
