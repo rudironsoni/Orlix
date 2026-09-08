@@ -77,6 +77,31 @@ jobs:
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
 
+      - name: Restore Homebrew cache
+        timeout-minutes: 10
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: orlix-brew-${{ runner.os }}-${{ hashFiles('Brewfile') }}
+          restore-keys: |
+            orlix-brew-${{ runner.os }}-
+
+      - name: Restore iOS 15.5 runtime archive
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios15-runtime-15.5-arm64-v1
+
+      - name: Restore Bazel repository cache
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
       - name: Install pinned build tools
         timeout-minutes: 20
         run: |
@@ -95,7 +120,8 @@ jobs:
         timeout-minutes: 30
         run: |
           set -euo pipefail
-          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --no-color
+          mkdir -p "$HOME/Library/Caches/Orlix/ios15-runtime"
+          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --directory "$HOME/Library/Caches/Orlix/ios15-runtime" --keep-archive --no-color
           runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
           test -n "$runtime_id"
           device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"

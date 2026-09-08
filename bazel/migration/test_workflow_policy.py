@@ -49,6 +49,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 90", text)
         self.assertNotIn("timeout-minutes: 180", text)
         self.assertIn('ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)', text)
+        self.assertIn("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830", text)
+        self.assertIn("orlix-ios15-runtime-15.5-arm64-v1", text)
+
+    def test_promote_workflow_does_not_use_action_cache(self) -> None:
+        text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
+        self.assertIn("Dual-build without action cache", text)
+        self.assertNotIn("actions/cache@", text)
 
 
 if __name__ == "__main__":
