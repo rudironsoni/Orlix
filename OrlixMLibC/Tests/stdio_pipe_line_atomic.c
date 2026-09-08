@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -48,10 +49,13 @@ static int writer_stdio(int write_fd, unsigned int id)
 	unsigned int line;
 
 	if (dup2(write_fd, STDOUT_FILENO) < 0)
-		return 1;
+		return 2;
 	close(write_fd);
+	errno = 0;
+	if (lseek(STDOUT_FILENO, 0, SEEK_CUR) != -1 || errno != ESPIPE)
+		return 3;
 	if (setvbuf(stdout, NULL, _IOLBF, 0))
-		return 1;
+		return 4;
 	for (line = 0; line < LINES; line++) {
 		unsigned int nibble;
 		unsigned int i;
@@ -59,15 +63,15 @@ static int writer_stdio(int write_fd, unsigned int id)
 		for (i = 0; i < 32; i++) {
 			nibble = (id + line + i) & 0xf;
 			if (printf("%x", nibble) != 1)
-				return 1;
+				return 5;
 		}
 		if (putchar(' ') == EOF || putchar(' ') == EOF)
-			return 1;
+			return 5;
 		if (printf("%02u\n", id) != 3)
-			return 1;
+			return 5;
 	}
 	if (fflush(stdout))
-		return 1;
+		return 6;
 	return 0;
 }
 
@@ -102,17 +106,17 @@ int main(void)
 
 	memset(load, 0, sizeof(load));
 	if (pipe(fds) < 0)
-		return 1;
+		return 9;
 	if (spawn_load(load, fds[0], fds[1]) < 0) {
 		close(fds[0]);
 		close(fds[1]);
-		return 1;
+		return 10;
 	}
 	for (i = 0; i < WRITERS; i++) {
 		pid_t pid = fork();
 
 		if (pid < 0) {
-			failed = 1;
+			failed = 8;
 			break;
 		}
 		if (pid == 0) {
@@ -129,13 +133,13 @@ int main(void)
 			if (n == 0)
 				break;
 			if (n < 0) {
-				failed = 1;
+				failed = 7;
 				break;
 			}
 			have += (size_t)n;
 			while (have >= LINE_LEN) {
 				if (!line_is_checksum(buf)) {
-					failed = 1;
+					failed = 7;
 					goto done;
 				}
 				seen++;
@@ -145,13 +149,17 @@ int main(void)
 			}
 		}
 		if (have != 0 || seen != WRITERS * LINES)
-			failed = 1;
+			failed = 7;
 		for (i = 0; i < WRITERS; i++) {
 			int status = 0;
 
 			if (waitpid(writers[i], &status, 0) != writers[i] ||
-			    !WIFEXITED(status) || WEXITSTATUS(status) != 0)
-				failed = 1;
+			    !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+				if (WIFEXITED(status) && WEXITSTATUS(status))
+					failed = WEXITSTATUS(status);
+				else if (!failed)
+					failed = 8;
+			}
 		}
 	}
 done:
