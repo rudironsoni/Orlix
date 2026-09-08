@@ -55,6 +55,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("~/Library/Caches/Orlix/git", text)
         self.assertIn("Build/OrlixKernel/upstream", text)
         self.assertIn("Build/OrlixMLibC/upstream", text)
+        self.assertNotIn("vendor=all", text)
+        self.assertIn("orlix-bazel-disk-", text)
+        self.assertIn("orlix-ccache-", text)
 
     def test_vendor_ghostty_uses_git_cache(self) -> None:
         text = (ROOT / "Orlix/make/vendor.mk").read_text(encoding="utf-8")

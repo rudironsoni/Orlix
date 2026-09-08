@@ -102,6 +102,24 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
+      - name: Restore Bazel disk cache
+        timeout-minutes: 20
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/disk-cache
+          key: orlix-bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json', 'OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
+          restore-keys: |
+            orlix-bazel-disk-${{ runner.os }}-
+
+      - name: Restore ccache
+        timeout-minutes: 10
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ccache
+          key: orlix-ccache-${{ runner.os }}-${{ hashFiles('OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
+          restore-keys: |
+            orlix-ccache-${{ runner.os }}-
+
       - name: Restore git clones
         timeout-minutes: 15
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -145,12 +163,8 @@ jobs:
           xcrun simctl bootstatus "$simulator_id" -b
           echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
-      - name: Build native dependencies
-        timeout-minutes: 45
-        run: make build type=vendor vendor=all
-
       - name: Run the iOS 15 launch test
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           LINUX_REMOTE: https://github.com/gregkh/linux.git
         run: make ios15-simulator-gate

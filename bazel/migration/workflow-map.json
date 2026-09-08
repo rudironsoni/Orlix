@@ -464,7 +464,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "fac4ef43fb1b6c1363c4f2248e2b6b0776a34502dc2ef2120c18372a8ec4babe",
+      "source_sha256": "1051007e7823818057c3b78943d8fa274eb79e53dc7f1b72cdf7d2cb858bb49b",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -570,6 +570,26 @@
                 }
               },
               {
+                "name": "Restore Bazel disk cache",
+                "timeout-minutes": 20,
+                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/Bazel/disk-cache",
+                  "key": "orlix-bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json', 'OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}",
+                  "restore-keys": "orlix-bazel-disk-${{ runner.os }}-\n"
+                }
+              },
+              {
+                "name": "Restore ccache",
+                "timeout-minutes": 10,
+                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ccache",
+                  "key": "orlix-ccache-${{ runner.os }}-${{ hashFiles('OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}",
+                  "restore-keys": "orlix-ccache-${{ runner.os }}-\n"
+                }
+              },
+              {
                 "name": "Restore git clones",
                 "timeout-minutes": 15,
                 "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
@@ -590,13 +610,8 @@
                 "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" \\\n  '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
               },
               {
-                "name": "Build native dependencies",
-                "timeout-minutes": 45,
-                "run": "make build type=vendor vendor=all"
-              },
-              {
                 "name": "Run the iOS 15 launch test",
-                "timeout-minutes": 30,
+                "timeout-minutes": 45,
                 "env": {
                   "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
                 },
