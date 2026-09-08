@@ -38,6 +38,8 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.false(env, "OrlixMLibC/Makefile" in argv)
+            asserts.true(env, "OrlixMLibC/Sources/patches" in joined)
+            asserts.true(env, "0022-options-ansi-reset-line-buffer-after-flush.patch" in joined)
     asserts.true(env, found)
     return analysistest.end(env)
 
