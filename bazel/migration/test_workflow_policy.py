@@ -78,6 +78,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("Dual-build without action cache", text)
         self.assertNotIn("actions/cache@", text)
         self.assertIn('export ORLIX_COSIGN_KEY="file://${key_path}"', text)
+        self.assertIn("ORLIX_COSIGN_KEY_PASSWORD", text)
+        self.assertIn("oras login ghcr.io", text)
+        self.assertIn("COSIGN_PASSWORD", text)
 
     def test_lock_proposal_workflow_does_not_write_main(self) -> None:
         text = (ROOT / ".github/workflows/bazel-lock-proposal.yml").read_text(encoding="utf-8")

@@ -78,12 +78,16 @@ jobs:
         timeout-minutes: 20
         env:
           ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
+          ORLIX_COSIGN_KEY_PASSWORD: ${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${ORLIX_COSIGN_KEY}" ]; then
             echo "ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished"
             exit 0
           fi
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
           key_path="${ORLIX_COSIGN_KEY#file://}"
           if [ ! -f "$key_path" ]; then
             key_path="${RUNNER_TEMP}/orlix-cosign.key"
@@ -91,4 +95,6 @@ jobs:
             chmod 600 "$key_path"
           fi
           export ORLIX_COSIGN_KEY="file://${key_path}"
+          export COSIGN_PASSWORD="${ORLIX_COSIGN_KEY_PASSWORD}"
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
           make __bazel-publish-${{ inputs.component }}
