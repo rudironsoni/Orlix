@@ -69,6 +69,14 @@ jobs:
         with:
           xcode-version: "26.6"
 
+      - name: Export the selected Xcode to Make
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+
       - name: Install pinned build tools
         timeout-minutes: 20
         run: |

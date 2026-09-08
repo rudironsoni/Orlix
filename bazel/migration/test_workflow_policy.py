@@ -48,6 +48,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("gh run cancel", text)
         self.assertIn("timeout-minutes: 90", text)
         self.assertNotIn("timeout-minutes: 180", text)
+        self.assertIn('ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)', text)
 
 
 if __name__ == "__main__":

@@ -90,7 +90,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "30200ea17a9c128d20dc73abfaa8be119a738fe86b1ebb22ec0e91fbccdac906",
+      "source_sha256": "449321a3ab6d1dbd467c6fb91caf738ea7f6a22f4203fc818759dfa6b0e18ac2",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -129,6 +129,10 @@
                 }
               },
               {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
                 "name": "Run Make-owned cache GC",
                 "run": "make __bazel-gc"
               }
@@ -138,7 +142,7 @@
       }
     },
     ".github/workflows/bazel-main.yml": {
-      "source_sha256": "c4591284605d8feef3a1d31ea12d3215407cba818e8142345cd7c9562796079b",
+      "source_sha256": "9330440b9683d347255fe733698bbcb4384e455bf6c00de3284e9f33c4382b8c",
       "workflow": {
         "name": "Bazel main",
         "on": {
@@ -188,6 +192,10 @@
                 }
               },
               {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
                 "name": "Run Make-owned Bazel matrix check",
                 "run": "make __bazel-matrix-check"
               }
@@ -197,7 +205,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "d98a96d71d975394912878a1990eda0350c03942e3233a9d52ebc260aba921af",
+      "source_sha256": "553cee6a834a9a1cb0f73f8ece888b61c82853893e7ce523a9e54d871faebc16",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -236,6 +244,10 @@
                 }
               },
               {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
                 "name": "Run Make-owned matrix check",
                 "run": "make __bazel-matrix-check"
               },
@@ -249,7 +261,7 @@
       }
     },
     ".github/workflows/bazel-pr.yml": {
-      "source_sha256": "121eaee165c2764a1eeeb598c87d83aeb62d1df5c76bbae235cafa5863073c49",
+      "source_sha256": "e457bbe67b20b2c3d8cfdded16d44f81bc004c65fd717962f505f397688f4c48",
       "workflow": {
         "name": "Bazel pull request",
         "on": {
@@ -296,6 +308,10 @@
                 }
               },
               {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
                 "name": "Run Make-owned Bazel matrix check",
                 "run": "make __bazel-matrix-check"
               }
@@ -305,7 +321,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "e58f0abe59706b0851d11b826a19dfa67052935c0cdc739241465aa8e88610aa",
+      "source_sha256": "616dd37179e3574b8f34878f6760f18da2ad8e5f978b135d5aeb5c76214da1c9",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -371,6 +387,11 @@
                 "with": {
                   "xcode-version": "26.6"
                 }
+              },
+              {
+                "name": "Export the selected Xcode to Make",
+                "timeout-minutes": 1,
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Dual-build without action cache",
@@ -443,7 +464,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "9022e9645d894c5457bfaa9e09c7ef316436f4e3bdad905f9cd12f426b080227",
+      "source_sha256": "296bff98c6c8d08f7dce509e2f2f0ba921e0b0e73ed7c158b617b563bf4b70fe",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -515,6 +536,11 @@
                 }
               },
               {
+                "name": "Export the selected Xcode to Make",
+                "timeout-minutes": 1,
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
                 "name": "Install pinned build tools",
                 "timeout-minutes": 20,
                 "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\nllvm_bin=\"$(brew --prefix llvm)/bin\"\nlld_bin=\"$(brew --prefix lld)/bin\"\ntest -x \"$lld_bin/ld.lld\" || test -x \"$llvm_bin/ld.lld\"\necho \"$lld_bin\" >> \"$GITHUB_PATH\"\necho \"$llvm_bin\" >> \"$GITHUB_PATH\"\n"
@@ -555,7 +581,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "96d6ed627cb48cc3e07526032111c531e5634079ba5f2cd53462145b178f8a49",
+      "source_sha256": "d8ee954729828522a20bee76414b82a4501bc9a8549c66a36beef0d7c3e0f837",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -611,6 +637,10 @@
                 "with": {
                   "xcode-version": "26.6"
                 }
+              },
+              {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Install the Metal toolchain",
