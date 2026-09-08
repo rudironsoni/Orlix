@@ -33,7 +33,12 @@ def normalize_yaml(value)
 end
 
 def yaml_file(path)
-  normalize_yaml(YAML.load_file(path, aliases: true))
+  data = begin
+    YAML.load_file(path, aliases: true)
+  rescue ArgumentError
+    YAML.load_file(path)
+  end
+  normalize_yaml(data)
 end
 
 def logical_make_lines(path)
