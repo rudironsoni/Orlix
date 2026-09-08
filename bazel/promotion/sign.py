@@ -87,11 +87,11 @@ def sign_digest(
     image = f"{repo}/{component}:{digest}"
     with tempfile.TemporaryDirectory(prefix="orlix-sign-") as tmp:
         blob = Path(tmp) / "component.tar"
-        if source.is_dir():
-            with tarfile.open(blob, "w") as archive:
+        with tarfile.open(blob, "w") as archive:
+            if source.is_dir():
                 archive.add(source, arcname=".")
-        else:
-            blob.write_bytes(source.read_bytes())
+            else:
+                archive.add(source, arcname=source.name)
         oras_push = ["oras", "push"]
         if repo.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
             oras_push.append("--plain-http")

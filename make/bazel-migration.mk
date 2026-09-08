@@ -168,13 +168,17 @@ __bazel-publish-$(1): __bazel-version-check
 	digest_file="$$$$promote/a/digest.sha256"; \
 	test -s "$$$$digest_file" || { echo "missing unsigned digest $$$$digest_file; run make __bazel-promote-$(1) first" >&2; exit 1; }; \
 	digest="$$$$(tr -d '[:space:]' < "$$$$digest_file")"; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$digest_file" --proposal "$$$$promote/$(1)-signed.json"; \
+	tree="$$$$(/usr/bin/find "$$$$promote/a/output-base" -path '*/$(2)' -print | /usr/bin/head -n 1)"; \
+	test -n "$$$$tree" || { echo "missing $(2) tree for publish $(1)" >&2; exit 1; }; \
+	artifact="$$$$(dirname "$$$$tree")"; \
+	test -d "$$$$artifact" || { echo "missing component directory $$$$artifact" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$artifact" --proposal "$$$$promote/$(1)-signed.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("oci_digest","").startswith("sha256:"), p' "$$$$promote/$(1)-signed.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/publish.py" --proposal "$$$$promote/$(1)-signed.json"
 endef
-$(eval $(call ORLIX_BAZEL_PUBLISH,uapi))
-$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc))
-$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs))
+$(eval $(call ORLIX_BAZEL_PUBLISH,uapi,feasibility/kernel/uapi/uapi.sha256))
+$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc,feasibility/mlibc/sysroot/sysroot.sha256))
+$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs,feasibility/rootfs/rootfs/source-input.sha256))
 
 __bazel-lock-proposal: __bazel-version-check
 	@set -euo pipefail; \
@@ -202,7 +206,7 @@ __bazel-lock-from-signed: __bazel-lock-proposal
 __bazel-reconstruct: __bazel-version-check
 	@set -euo pipefail; \
 	test -n "$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json"
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct"
 
 __bazel-reconstruct-source: __bazel-version-check
 	@set -euo pipefail; \
