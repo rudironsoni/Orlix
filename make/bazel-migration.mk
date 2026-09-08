@@ -485,10 +485,20 @@ __bazel-apple-routing-check:
 	@rg -F -q '__bazel-orlix-app' Makefile
 	@rg -A2 '^__bazel-orlix-app:' make/bazel-migration.mk | rg -F -q -- '--config=promoted'
 	@rg -F -q '//bazel/promotion:locked_buildset' Orlix/BUILD.bazel
+	@rg -F -q 'name = "kernel_composition"' bazel/product/BUILD.bazel
+	@rg -F -q 'name = "OrlixOSFramework"' Orlix/BUILD.bazel
+	@rg -F -q '//Orlix:OrlixOSFramework' make/bazel-migration.mk
+	@rg -F -q '__tcti-isa-restore' make/bazel-migration.mk
+	@rg -F -q '__bazel-lock-proposal' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'
 	@$(MAKE) -n ios15-simulator-gate ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000 | rg -q '__bazel-ios15-simulator-gate'
+	@$(MAKE) -n build type=product | rg -q '__bazel-orlix-app'
+	@$(MAKE) -n test | rg -q '__bazel-matrix-check'
+	@$(MAKE) -n headers_install | rg -q '__bazel-kernel-uapi'
+	@$(MAKE) -n xcodeproj | rg -q '__bazel-feasibility-xcodeproj'
+	@$(MAKE) -n rebuild | rg -q '__bazel-orlix-app'
 	@rg -A3 '^beta-archive:' Makefile | rg -F -q '__bazel-orlix-archive'
 	@rg -F -q 'name = "OrlixUITests"' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
@@ -499,6 +509,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
 	@rg -q '^common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache$$' .bazelrc
 	@if rg -n '^ORLIX_BAZEL_AUTHORITY \?= 0$$' Makefile; then echo "Makefile must default Bazel authority on after cutover" >&2; exit 1; fi
+	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_make_routing
 
 __bazel-gc: __bazel-version-check
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
@@ -530,7 +541,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" test //bazel/feasibility/analysis:all --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --test_output=errors
 
 __bazel-orlixos: __bazel-feasibility-bootstrap
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS //Orlix:OrlixOSFramework --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
 
 __bazel-orlix-app: __bazel-feasibility-bootstrap

@@ -49,6 +49,20 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("--config=promoted", row["proof"])
         self.assertNotIn("latest", row["proof"])
 
+    def test_product_graph_names_kernel_and_public_sdk(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        product = (root / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
+        app = (root / "Orlix/BUILD.bazel").read_text(encoding="utf-8")
+        session = (root / "OrlixOS/Sources/Session/BUILD.bazel").read_text(encoding="utf-8")
+        mk = (root / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn('name = "kernel_composition"', product)
+        self.assertIn("linux_archive = \"//bazel/feasibility/kernel:macho\"", product)
+        self.assertIn("hostadapter = \"//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs\"", product)
+        self.assertIn('name = "OrlixOS"', session)
+        self.assertIn('name = "OrlixOSFramework"', app)
+        self.assertIn("//Orlix:OrlixOSFramework", mk)
+        self.assertIn("//bazel/product:kernel_composition", mk)
+
     def test_public_make_operations_are_named(self) -> None:
         names = {item["public_name"] for item in self.matrix["make_operations"]}
         for required in ("build", "test", "runtime-tests", "beta-archive", "xcodeproj", "ios15-simulator-gate"):
