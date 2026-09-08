@@ -77,6 +77,17 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
         self.assertIn("Dual-build without action cache", text)
         self.assertNotIn("actions/cache@", text)
+        self.assertIn('export ORLIX_COSIGN_KEY="file://${key_path}"', text)
+
+    def test_lock_proposal_workflow_does_not_write_main(self) -> None:
+        text = (ROOT / ".github/workflows/bazel-lock-proposal.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch", text)
+        self.assertIn("environment: bazel-promotion", text)
+        self.assertIn("make __bazel-lock-proposal", text)
+        self.assertIn("Cancel if derailed", text)
+        self.assertNotIn("git commit", text)
+        self.assertNotIn("git push", text)
+        self.assertNotIn("--apply-lock", text)
 
 
 if __name__ == "__main__":

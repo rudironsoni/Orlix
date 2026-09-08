@@ -141,8 +141,90 @@
         }
       }
     },
+    ".github/workflows/bazel-lock-proposal.yml": {
+      "source_sha256": "78741c7ee32f4a1077660c693d50378683dac0cd862510352613c85ba5876ee7",
+      "workflow": {
+        "name": "Bazel lock proposal",
+        "on": {
+          "workflow_dispatch": null
+        },
+        "permissions": {
+          "contents": "read",
+          "actions": "write"
+        },
+        "concurrency": {
+          "group": "bazel-lock-proposal",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "derail-watchdog": {
+            "name": "Cancel if derailed",
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": 12,
+            "permissions": {
+              "actions": "write"
+            },
+            "steps": [
+              {
+                "name": "Cancel when macos-26 stays queued",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nfor _ in $(seq 1 20); do\n  job_state=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs\" --jq '.jobs[] | select(.name == \"Write lock proposal\") | .status' | head -n 1)\"\n  case \"$job_state\" in\n    in_progress|completed)\n      echo \"macos-26 job is $job_state\"\n      exit 0\n      ;;\n  esac\n  sleep 30\ndone\ngh run cancel \"${GITHUB_RUN_ID}\" --repo \"${GITHUB_REPOSITORY}\"\necho \"cancelled: macos-26 job still queued after 10 minutes\"\nexit 1\n"
+              }
+            ]
+          },
+          "lock-proposal": {
+            "name": "Write lock proposal",
+            "runs-on": "macos-26",
+            "environment": "bazel-promotion",
+            "timeout-minutes": 20,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "timeout-minutes": 5,
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "timeout-minutes": 5,
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Export the selected Xcode to Make",
+                "timeout-minutes": 1,
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
+                "name": "Write the signed lock proposal without mutating artifacts.lock.json",
+                "timeout-minutes": 10,
+                "run": "make __bazel-lock-proposal"
+              },
+              {
+                "name": "Store the lock proposal",
+                "if": "always()",
+                "timeout-minutes": 5,
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "buildset-lock-proposal-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/buildset-lock-proposal.json",
+                  "if-no-files-found": "error",
+                  "retention-days": 14
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/bazel-main.yml": {
-      "source_sha256": "9330440b9683d347255fe733698bbcb4384e455bf6c00de3284e9f33c4382b8c",
+      "source_sha256": "041a16a7a0b33b9f0015a1f872db6eabde6d0b1f79f6282a15b62f0c7b05e8c3",
       "workflow": {
         "name": "Bazel main",
         "on": {
@@ -160,7 +242,8 @@
               ".github/workflows/bazel-promote.yml",
               ".github/workflows/bazel-gc.yml",
               ".github/workflows/bazel-main.yml",
-              ".github/workflows/bazel-nightly.yml"
+              ".github/workflows/bazel-nightly.yml",
+              ".github/workflows/bazel-lock-proposal.yml"
             ]
           }
         },
@@ -261,7 +344,7 @@
       }
     },
     ".github/workflows/bazel-pr.yml": {
-      "source_sha256": "e457bbe67b20b2c3d8cfdded16d44f81bc004c65fd717962f505f397688f4c48",
+      "source_sha256": "851ae68af4bd5be2186c91cc9e8237da0f813bd5fe7033b7a1299dd15a8cf9ab",
       "workflow": {
         "name": "Bazel pull request",
         "on": {
@@ -276,7 +359,8 @@
               ".github/workflows/bazel-promote.yml",
               ".github/workflows/bazel-gc.yml",
               ".github/workflows/bazel-main.yml",
-              ".github/workflows/bazel-nightly.yml"
+              ".github/workflows/bazel-nightly.yml",
+              ".github/workflows/bazel-lock-proposal.yml"
             ]
           }
         },
@@ -321,7 +405,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "c3f4906f74696c9e3626ad0096786479d037ccba61f5db97976d47d90aeaf806",
+      "source_sha256": "da0fb7dcdaa3585d2aecd4d00b4de9ecdbdbe093dabec66083d9fe323bc262fb",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -405,7 +489,7 @@
                 "env": {
                   "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}"
                 },
-                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nmake __bazel-publish-${{ inputs.component }}\n"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nmake __bazel-publish-${{ inputs.component }}\n"
               }
             ]
           }

@@ -1,24 +1,14 @@
-name: Bazel promote
+name: Bazel lock proposal
 
 on:
   workflow_dispatch:
-    inputs:
-      component:
-        description: Private component to dual-build and compare
-        required: true
-        type: choice
-        options:
-          - uapi
-          - mlibc
-          - rootfs
 
 permissions:
   contents: read
   actions: write
-  packages: write
 
 concurrency:
-  group: bazel-promote-${{ inputs.component }}
+  group: bazel-lock-proposal
   cancel-in-progress: false
 
 jobs:
@@ -35,10 +25,10 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 20); do
-            job_status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "Dual-build promote") | .status' | head -n 1)"
-            case "$job_status" in
+            job_state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "Write lock proposal") | .status' | head -n 1)"
+            case "$job_state" in
               in_progress|completed)
-                echo "macos-26 job is $job_status"
+                echo "macos-26 job is $job_state"
                 exit 0
                 ;;
             esac
@@ -48,11 +38,11 @@ jobs:
           echo "cancelled: macos-26 job still queued after 10 minutes"
           exit 1
 
-  promote:
-    name: Dual-build promote
+  lock-proposal:
+    name: Write lock proposal
     runs-on: macos-26
     environment: bazel-promotion
-    timeout-minutes: 360
+    timeout-minutes: 20
     steps:
       - name: Check out the exact commit
         timeout-minutes: 5
@@ -71,24 +61,15 @@ jobs:
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
-      - name: Dual-build without action cache
-        timeout-minutes: 350
-        run: make __bazel-promote-${{ inputs.component }}
-      - name: Sign and publish to GHCR
-        timeout-minutes: 20
-        env:
-          ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${ORLIX_COSIGN_KEY}" ]; then
-            echo "ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished"
-            exit 0
-          fi
-          key_path="${ORLIX_COSIGN_KEY#file://}"
-          if [ ! -f "$key_path" ]; then
-            key_path="${RUNNER_TEMP}/orlix-cosign.key"
-            printf '%s\n' "$ORLIX_COSIGN_KEY" > "$key_path"
-            chmod 600 "$key_path"
-          fi
-          export ORLIX_COSIGN_KEY="file://${key_path}"
-          make __bazel-publish-${{ inputs.component }}
+      - name: Write the signed lock proposal without mutating artifacts.lock.json
+        timeout-minutes: 10
+        run: make __bazel-lock-proposal
+      - name: Store the lock proposal
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: buildset-lock-proposal-${{ github.sha }}
+          path: Build/Bazel/promote/buildset-lock-proposal.json
+          if-no-files-found: error
+          retention-days: 14

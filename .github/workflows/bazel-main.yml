@@ -14,6 +14,7 @@ on:
       - ".github/workflows/bazel-gc.yml"
       - ".github/workflows/bazel-main.yml"
       - ".github/workflows/bazel-nightly.yml"
+      - ".github/workflows/bazel-lock-proposal.yml"
 
 permissions:
   contents: read

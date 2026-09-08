@@ -8,7 +8,8 @@
     "revocation": "explicit"
   },
   "allowed_workflows": [
-    ".github/workflows/bazel-promote.yml"
+    ".github/workflows/bazel-promote.yml",
+    ".github/workflows/bazel-lock-proposal.yml"
   ],
   "allowed_refs": [
     "refs/heads/main"

@@ -48,7 +48,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
@@ -175,7 +175,20 @@ $(eval $(call ORLIX_BAZEL_PUBLISH,uapi))
 $(eval $(call ORLIX_BAZEL_PUBLISH,mlibc))
 $(eval $(call ORLIX_BAZEL_PUBLISH,rootfs))
 
-__bazel-lock-from-signed: __bazel-version-check
+__bazel-lock-proposal: __bazel-version-check
+	@set -euo pipefail; \
+	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
+		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("buildset") and set(p["components"])=={"uapi","mlibc","rootfs"}, p' "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	test "$$lock_before" = "$$lock_after" || { echo "lock proposal mutated artifacts.lock.json" >&2; exit 1; }
+
+__bazel-lock-from-signed: __bazel-lock-proposal
 	@set -euo pipefail; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
@@ -183,7 +196,7 @@ __bazel-lock-from-signed: __bazel-version-check
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json" \
 		--apply-lock "$(CURDIR)/artifacts.lock.json"; \
-	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("signed") is not False; assert lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs"}, lock' "$(CURDIR)/artifacts.lock.json"
+	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs"}, lock' "$(CURDIR)/artifacts.lock.json"
 
 __bazel-reconstruct: __bazel-version-check
 	@set -euo pipefail; \
