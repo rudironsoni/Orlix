@@ -132,6 +132,13 @@ jobs:
           restore-keys: |
             orlix-git-clones-${{ runner.os }}-
 
+      - name: Restore prepared TCTI ISA tables
+        timeout-minutes: 10
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Build/OrlixKernel/orlix-tcti-isa
+          key: orlix-tcti-isa-${{ hashFiles('OrlixKernel/Sources/ports/orlix/isa/prepared-tables.sha256') }}
+
       - name: Install pinned build tools
         timeout-minutes: 20
         run: |
@@ -162,6 +169,10 @@ jobs:
           xcrun simctl boot "$simulator_id"
           xcrun simctl bootstatus "$simulator_id" -b
           echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Restore prepared TCTI ISA tables from the pin
+        timeout-minutes: 5
+        run: make __tcti-isa-restore
 
       - name: Run the iOS 15 launch test
         timeout-minutes: 45

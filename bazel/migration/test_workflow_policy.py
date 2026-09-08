@@ -61,6 +61,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("vendor=all", text)
         self.assertIn("orlix-bazel-disk-", text)
         self.assertIn("orlix-ccache-", text)
+        self.assertIn("make __tcti-isa-restore", text)
+        self.assertIn("orlix-tcti-isa-", text)
+        self.assertIn("OrlixKernel/Sources/ports/orlix/isa/prepared-tables.sha256", text)
+        self.assertNotIn("AARCHMRS", text)
+        self.assertNotIn("prepare type=tcti-isa", text)
 
     def test_vendor_ghostty_uses_git_cache(self) -> None:
         text = (ROOT / "Orlix/make/vendor.mk").read_text(encoding="utf-8")

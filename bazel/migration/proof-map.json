@@ -835,7 +835,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 48,
+      "line": 61,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -847,7 +847,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 348,
+      "line": 361,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -859,7 +859,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 361,
+      "line": 374,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -871,7 +871,7 @@
     {
       "name": "__bazel-proof-graph",
       "source": "make/bazel-migration.mk",
-      "line": 374,
+      "line": 387,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -883,7 +883,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 457,
+      "line": 470,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -895,7 +895,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 484,
+      "line": 497,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -908,11 +908,12 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 548,
+      "line": 581,
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "__bazel-feasibility-bootstrap"
+        "__bazel-feasibility-bootstrap",
+        "__tcti-isa-restore"
       ],
       "owner": "Build and release system",
       "artifact_digest_binding": "not-yet-implemented"

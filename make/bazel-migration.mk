@@ -11,6 +11,19 @@ ORLIX_BAZEL ?= $(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION)/bazel
 ORLIX_RUBY ?= /usr/bin/ruby
 ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-26.6.0.app/Contents/Developer
 ORLIX_TCTI_ISA_PREPARED ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-isa
+ORLIX_TCTI_ISA_ARCHIVE ?= $(CURDIR)/OrlixKernel/Sources/ports/orlix/isa/prepared-tables.tar.gz
+ORLIX_TCTI_ISA_ARCHIVE_SHA256 ?= $(CURDIR)/OrlixKernel/Sources/ports/orlix/isa/prepared-tables.sha256
+ORLIX_TCTI_ISA_ARTIFACTS := \
+	manifest \
+	source_manifest.def \
+	target_asl_availability.def \
+	target_feature_applicability.def \
+	target_feature_artifact.def \
+	target_feature_field_domain_binding.def \
+	target_instruction_artifact_generated.h \
+	target_register_artifact.def \
+	target_runtime_capability_cohort_artifact.def \
+	target_system_accessor_reconciliation.def
 CCACHE_BASEDIR ?= $(CURDIR)
 CCACHE_DIR ?= $(HOME)/Library/Caches/Orlix/ccache
 CCACHE_MAXSIZE ?= 20G
@@ -40,7 +53,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
-.PHONY: __bazel-matrix-check
+.PHONY: __bazel-matrix-check __tcti-isa-restore
 
 __bazel-bootstrap:
 	@$(ORLIX_RUBY) bazel/bootstrap.rb >/dev/null
@@ -487,6 +500,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_apple_build_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_prove_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
+	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_tcti_isa_pin
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
@@ -545,7 +559,26 @@ __bazel-orlix-archive: __bazel-version-check
 	rm -rf "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
 	/bin/cp "$$ipa" "$(ORLIX_BETA_IPA_PATH)"
 
-__bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap
+__tcti-isa-restore:
+	@set -euo pipefail; \
+	archive="$(ORLIX_TCTI_ISA_ARCHIVE)"; \
+	pin_file="$(ORLIX_TCTI_ISA_ARCHIVE_SHA256)"; \
+	dest="$(ORLIX_TCTI_ISA_PREPARED)"; \
+	test -s "$$archive" || { echo "missing pinned ISA archive: $$archive" >&2; exit 1; }; \
+	test -s "$$pin_file" || { echo "missing ISA archive pin: $$pin_file" >&2; exit 1; }; \
+	expected="$$(/usr/bin/awk '{print $$1; exit}' "$$pin_file")"; \
+	test "$${#expected}" -eq 64 || { echo "invalid ISA archive pin" >&2; exit 1; }; \
+	actual="$$(/usr/bin/shasum -a 256 "$$archive" | /usr/bin/awk '{print $$1}')"; \
+	test "$$actual" = "$$expected" || { echo "ISA archive digest mismatch: $$actual != $$expected" >&2; exit 1; }; \
+	mkdir -p "$$dest"; \
+	if [ ! -s "$$dest/source_manifest.def" ]; then \
+		/usr/bin/tar -C "$$dest" -xzf "$$archive"; \
+	fi; \
+	for isa_name in $(ORLIX_TCTI_ISA_ARTIFACTS); do \
+		test -s "$$dest/$$isa_name" || { echo "missing prepared ISA artifact: $$dest/$$isa_name" >&2; exit 1; }; \
+	done
+
+__bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap __tcti-isa-restore
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
