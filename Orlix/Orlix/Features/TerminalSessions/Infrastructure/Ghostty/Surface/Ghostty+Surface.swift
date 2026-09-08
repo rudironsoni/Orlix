@@ -230,11 +230,7 @@ extension Ghostty {
         func feedData(_ data: Data) {
             guard let surface = unsafeCValue else { return }
             guard !data.isEmpty else { return }
-            data.withUnsafeBytes { buffer in
-                if let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) {
-                    ghostty_surface_feed_data(surface, ptr, buffer.count)
-                }
-            }
+            GhosttyHostIO.feed(surface, data)
         }
 
         /// Feed string data into the terminal for display.
@@ -265,7 +261,7 @@ extension Ghostty {
         @MainActor
         func setWriteCallback(_ callback: WriteCallback?, userdata: UnsafeMutableRawPointer?) {
             guard let surface = unsafeCValue else { return }
-            ghostty_surface_set_write_callback(surface, callback, userdata)
+            GhosttyHostIO.setWriteCallback(surface, callback, userdata: userdata)
         }
     }
 }

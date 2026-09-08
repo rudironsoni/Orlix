@@ -42,9 +42,24 @@ def _ghostty_kit_impl(ctx):
         type = "zip",
     )
     ctx.file("BUILD.bazel", """
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files(glob(["GhosttyKit.xcframework/**"]))
+
+cc_library(
+    name = "capi_ios_simulator",
+    hdrs = ["GhosttyKit.xcframework/ios-arm64_x86_64-simulator/Headers/libghostty/ghostty.h"],
+    includes = ["GhosttyKit.xcframework/ios-arm64_x86_64-simulator/Headers/libghostty"],
+)
+
+cc_library(
+    name = "capi_ios_device",
+    hdrs = ["GhosttyKit.xcframework/ios-arm64/Headers/libghostty/ghostty.h"],
+    includes = ["GhosttyKit.xcframework/ios-arm64/Headers/libghostty"],
+)
+
 
 filegroup(
     name = "ios_device_lib",
@@ -74,6 +89,16 @@ filegroup(
 filegroup(
     name = "macos_resources",
     srcs = glob(["GhosttyKit.xcframework/macos-arm64_x86_64/Headers/**"]),
+)
+
+filegroup(
+    name = "ios_simulator_ghostty_h",
+    srcs = ["GhosttyKit.xcframework/ios-arm64_x86_64-simulator/Headers/libghostty/ghostty.h"],
+)
+
+filegroup(
+    name = "ios_device_ghostty_h",
+    srcs = ["GhosttyKit.xcframework/ios-arm64/Headers/libghostty/ghostty.h"],
 )
 """)
 

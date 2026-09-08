@@ -53,7 +53,7 @@ extension GhosttyTerminalView {
 
         // Stop rendering/input callbacks
         if let cSurface = surface?.unsafeCValue {
-            ghostty_surface_set_write_callback(cSurface, nil, nil)
+            GhosttyHostIO.setWriteCallback(cSurface, nil, userdata: nil)
             ghostty_surface_set_focus(cSurface, false)
         }
         imeHandler.updateSurface(nil)

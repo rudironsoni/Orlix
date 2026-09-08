@@ -58,8 +58,11 @@ extension GhosttyRenderingSetup {
         surfaceConfig.scale_factor = Double(scale)
 
         // Keep font_size at 0 so Ghostty inherits the injected app configuration.
-        // Enable custom I/O backend for SSH clients
-        surfaceConfig.use_custom_io = useCustomIO
+        GhosttyHostIO.applyHostManagedIO(
+            &surfaceConfig,
+            enabled: useCustomIO,
+            userdata: callbackContext.userdata
+        )
 
         // Set working directory
         var workingDirPtr: UnsafeMutablePointer<CChar>?

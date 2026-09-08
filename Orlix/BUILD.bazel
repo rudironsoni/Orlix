@@ -7,9 +7,11 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "ghostty_headers",
-    hdrs = ["Vendor/libghostty/include/ghostty.h"],
-    includes = ["Vendor/libghostty/include"],
     tags = ["manual"],
+    deps = select({
+        "//bazel/feasibility/native:ios_device": ["@orlix_ghostty_kit//:capi_ios_device"],
+        "//conditions:default": ["@orlix_ghostty_kit//:capi_ios_simulator"],
+    }),
 )
 
 cc_library(
@@ -52,6 +54,7 @@ swift_library(
     defines = [
         "ORLIX_APP_HOSTED_BOOT=1",
         "ORLIX_BETA_OBSERVABILITY=1",
+        "ORLIX_GHOSTTY_SPM=1",
     ],
     module_name = "Orlix",
     tags = ["manual"],

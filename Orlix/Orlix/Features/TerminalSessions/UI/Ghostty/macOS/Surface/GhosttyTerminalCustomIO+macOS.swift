@@ -14,10 +14,7 @@ extension GhosttyTerminalView {
         guard let surface = surface?.unsafeCValue else { return }
 
         // Feed data immediately - SSH read loop already batches appropriately
-        data.withUnsafeBytes { buffer in
-            guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-            ghostty_surface_feed_data(surface, ptr, buffer.count)
-        }
+        GhosttyHostIO.feed(surface, data)
 
         // Request render via display link (event-driven, will auto-stop when idle)
         requestRender()
@@ -29,10 +26,10 @@ extension GhosttyTerminalView {
         guard let surface = surface?.unsafeCValue else { return }
         guard let userdata = ghostty_surface_userdata(surface) else { return }
 
-        ghostty_surface_set_write_callback(
+        GhosttyHostIO.setWriteCallback(
             surface,
             ghosttyTerminalWriteCallback,
-            userdata
+            userdata: userdata
         )
     }
 

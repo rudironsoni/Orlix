@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "jB7DHhfKQV7K+5O2YMxEEEdfQqK4JfCiga0Zwoa+uCA=",
+        "bzlTransitiveDigest": "9A/6xZECMAfoVPv/6Ic12SlIOadjBJHq89yaSIhFtWc=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
