@@ -244,6 +244,7 @@ MLIBC_TEST_LINUX_CASES := \
 MLIBC_TEST_ORLIX_CASES := \
 	orlix/auxv \
 	orlix/chroot \
+	orlix/fclose_enospc \
 	orlix/float_roundtrip \
 	orlix/getopt_diagnostics \
 	orlix/getopt_required_dash_arg \

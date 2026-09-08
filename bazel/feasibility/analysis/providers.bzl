@@ -41,6 +41,7 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.true(env, "OrlixMLibC/Sources/patches" in joined)
             asserts.true(env, "0022-options-ansi-reset-line-buffer-after-flush.patch" in joined)
             asserts.true(env, "0023-options-internal-accept-required-shortopt-dash-arg.patch" in joined)
+            asserts.true(env, "0024-options-ansi-fclose-preserve-flush-errno.patch" in joined)
     asserts.true(env, found)
     return analysistest.end(env)
 
