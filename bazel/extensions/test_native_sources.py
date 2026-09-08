@@ -121,8 +121,8 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertNotIn("xcodebuild", text)
         self.assertIn('packages = "//bazel/extensions:ghostty_zig_packages.json"', text)
         self.assertIn("ctx.download", text)
-        self.assertIn('"fetch"', text)
-        self.assertIn("--global-cache-dir", text)
+        self.assertIn("/usr/bin/tar", text)
+        self.assertIn("zig-pkg/p/", text)
         payload = json.loads(PACKAGES.read_text(encoding="utf-8"))
         packages = payload["packages"]
         self.assertGreaterEqual(len(packages), 30)

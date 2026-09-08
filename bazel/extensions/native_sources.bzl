@@ -67,8 +67,6 @@ def _ghostty_repository_impl(ctx):
     pkgs = lock.get("packages") or []
     if not pkgs:
         fail("Ghostty zig package lock is empty")
-    ctx.file("zig-pkg/home/.keep", "")
-    zig = str(ctx.path("zig/zig"))
     for pkg in pkgs:
         name = pkg.get("name")
         url = pkg.get("url")
@@ -83,21 +81,34 @@ def _ghostty_repository_impl(ctx):
             output = download,
             sha256 = digest,
         )
-        fetch = ctx.execute(
-            [
-                zig,
-                "fetch",
-                "--global-cache-dir",
-                str(ctx.path("zig-pkg")),
-                str(ctx.path(download)),
-            ],
-            environment = {
-                "HOME": str(ctx.path("zig-pkg/home")),
-                "PATH": "/usr/bin:/bin",
-            },
-        )
-        if fetch.return_code:
-            fail("zig fetch %s failed:\n%s\n%s" % (name, fetch.stdout, fetch.stderr))
+        stem = name
+        for suffix in (".tar.zst", ".tar.xz", ".tar.gz", ".tgz"):
+            if name.endswith(suffix):
+                stem = name[:-len(suffix)]
+                break
+        dest = "zig-pkg/p/" + stem
+        work = dest + ".work"
+        mkdir = ctx.execute(["/bin/mkdir", "-p", dest, work])
+        if mkdir.return_code:
+            fail("mkdir %s failed:\n%s\n%s" % (dest, mkdir.stdout, mkdir.stderr))
+        extract = ctx.execute([
+            "/usr/bin/tar",
+            "-xf",
+            download,
+            "-C",
+            work,
+        ])
+        if extract.return_code:
+            fail("tar extract %s failed:\n%s\n%s" % (name, extract.stdout, extract.stderr))
+        flatten = ctx.execute([
+            "/usr/bin/python3",
+            "-c",
+            "import os, shutil, sys\nwork, dest = sys.argv[1], sys.argv[2]\nnames = [n for n in os.listdir(work) if n not in ('.', '..')]\nsrc = os.path.join(work, names[0]) if len(names) == 1 and os.path.isdir(os.path.join(work, names[0])) else work\nos.makedirs(dest, exist_ok=True)\nfor n in os.listdir(src):\n    shutil.move(os.path.join(src, n), os.path.join(dest, n))\n",
+            work,
+            dest,
+        ])
+        if flatten.return_code:
+            fail("flatten %s failed:\n%s\n%s" % (name, flatten.stdout, flatten.stderr))
     ctx.file("zig-pkg/orlix-ready", "Ghostty packages fetched by digest\n")
 
     ctx.file("BUILD.bazel", """
