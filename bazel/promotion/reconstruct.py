@@ -12,7 +12,9 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from sign import attach_registry_config, cosign_env
+from publish import PublishError, verify_component
+from locked_buildset import LockedBuildsetError, load_locked_buildset
+from compare import tree_digest
 
 
 class ReconstructError(ValueError):
@@ -66,15 +68,20 @@ def reconstruct(lock_path: str, out_dir: str, run=_run) -> dict:
         raise ReconstructError("reconstruct out_dir is required")
     if shutil.which("oras") is None or shutil.which("cosign") is None:
         raise ReconstructError("oras and cosign are required to reconstruct")
-    key = os.environ.get("ORLIX_COSIGN_KEY")
-    if not key:
-        raise ReconstructError("ORLIX_COSIGN_KEY is required to verify reconstruction")
-    key_path = key[len("file://") :] if key.startswith("file://") else key
-    pub = os.environ.get("ORLIX_COSIGN_PUB") or f"{key_path}.pub"
+    try:
+        lock = load_locked_buildset(lock_path, required=tuple(components))
+    except (KeyError, ValueError) as error:
+        raise ReconstructError(str(error)) from error
+    buildset = lock["buildset"]
+    components = lock["components"]
     pulled = {}
     root = Path(out_dir) / buildset
-    root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="orlix-reconstruct-") as tmp:
+    root.parent.mkdir(parents=True, exist_ok=True)
+    if root.is_symlink():
+        raise ReconstructError("reconstruction must not replace a symlinked buildset")
+    with tempfile.TemporaryDirectory(prefix="orlix-reconstruct-", dir=root.parent) as tmp:
+        staged = Path(tmp) / "tree"
+        staged.mkdir()
         for name, component in sorted(components.items()):
             reference = component.get("oci_reference")
             digest = component.get("oci_digest")
@@ -83,36 +90,21 @@ def reconstruct(lock_path: str, out_dir: str, run=_run) -> dict:
                 raise ReconstructError(
                     f"{name} lock entry missing oci_reference, oci_digest, or unsigned_digest"
                 )
-            if reference.startswith("localhost:") or "localhost:" in reference.split("/", 1)[0]:
-                raise ReconstructError(
-                    f"{name} oci_reference must be GHCR, not a local registry: {reference}"
-                )
+            try:
+                verify_component({**component, "component": name, "signed": True}, run=run)
+            except (PublishError, LockedBuildsetError, OSError) as error:
+                raise ReconstructError(str(error)) from error
             pull_dest = Path(tmp) / name
             pull_dest.mkdir()
             pull = ["oras", "pull", reference, "-o", str(pull_dest)]
-            if reference.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-                pull.insert(2, "--plain-http")
             config = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
             if config:
                 pull[2:2] = ["--registry-config", config]
             run(pull)
-            verify = [
-                "cosign",
-                "verify",
-                "--key",
-                pub,
-                "--insecure-ignore-tlog",
-            ]
-            if reference.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-                verify.extend(["--allow-http-registry", "--allow-insecure-registry"])
-            run(
-                verify + [reference],
-                env=attach_registry_config(cosign_env(), Path(tmp)),
-            )
             blob = pull_dest / "component.tar"
             if not blob.is_file():
                 raise ReconstructError(f"{name} pull did not write component.tar")
-            dest = root / name
+            dest = staged / name
             dest.mkdir(parents=True, exist_ok=True)
             _extract_component_tar(blob, dest)
             digest_path = _require_unsigned_digest(dest, unsigned, name)
@@ -120,9 +112,14 @@ def reconstruct(lock_path: str, out_dir: str, run=_run) -> dict:
                 "oci_digest": digest,
                 "oci_reference": reference,
                 "unsigned_digest": unsigned,
-                "tree": str(dest),
-                "unsigned_digest_path": digest_path,
+                "tree": str(root / name),
+                "unsigned_digest_path": str(root / Path(digest_path).relative_to(staged)),
             }
+        if root.exists():
+            if tree_digest(root) != tree_digest(staged):
+                raise ReconstructError("existing reconstructed contents differ from signed artifacts")
+        else:
+            staged.rename(root)
     return {"buildset": buildset, "components": pulled}
 
 

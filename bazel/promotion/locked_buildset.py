@@ -11,6 +11,7 @@ from pathlib import Path
 
 REQUIRED = ("uapi", "mlibc", "rootfs")
 OCI_PREFIX = "sha256:"
+GHCR_REPOSITORY = "ghcr.io/rudironsoni/orlix"
 
 
 class LockedBuildsetError(ValueError):
@@ -24,16 +25,21 @@ def require_sha256(digest: str) -> str:
     return text
 
 
-def validate_component(name: str, entry: dict) -> dict:
+def require_component_name(name: str) -> str:
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
         raise LockedBuildsetError(f"invalid component name: {name!r}")
+    return name
+
+
+def validate_component(name: str, entry: dict) -> dict:
+    require_component_name(name)
     unsigned = require_sha256(entry["unsigned_digest"])
     oci = entry.get("oci_digest")
     if not isinstance(oci, str) or not oci.startswith(OCI_PREFIX):
         raise LockedBuildsetError(f"{name} lock entry missing oci_digest")
     require_sha256(oci[len(OCI_PREFIX):])
     reference = entry.get("oci_reference") or ""
-    expected = f"ghcr.io/rudironsoni/orlix/{name}@{oci}"
+    expected = f"{GHCR_REPOSITORY}/{name}@{oci}"
     if reference != expected:
         raise LockedBuildsetError(f"{name} requires {expected}, not {reference!r}; mutable latest is forbidden")
     return {"unsigned_digest": unsigned, "oci_digest": oci, "oci_reference": reference}

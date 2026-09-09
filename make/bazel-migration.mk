@@ -136,9 +136,10 @@ __bazel-promote-$(1): __bazel-version-check
 		digest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path '*/$(3)' -print | /usr/bin/head -n 1)"; \
 		test -n "$$$$digest_file" || { echo "missing $(3) for promote $(1) $$$$side" >&2; exit 1; }; \
 		/bin/cp "$$$$digest_file" "$$$$promote/$$$$side/digest.sha256"; \
+		if [ "$$$$side" = a ]; then first_tree="$$$$(/usr/bin/dirname "$$$$digest_file")"; else second_tree="$$$$(/usr/bin/dirname "$$$$digest_file")"; fi; \
 	done; \
 	lock_before="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
-	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --component $(1) --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
+	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
 	rg -q '"signed": false' "$$$$promote/$(1)-proposal.json"; \
 	rg -q '"oci_digest": null' "$$$$promote/$(1)-proposal.json"; \
@@ -173,6 +174,7 @@ __bazel-publish-$(1): __bazel-version-check
 	test -n "$$$$tree" || { echo "missing $(2) tree for publish $(1)" >&2; exit 1; }; \
 	artifact="$$$$(dirname "$$$$tree")"; \
 	test -d "$$$$artifact" || { echo "missing component directory $$$$artifact" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import json,sys; from pathlib import Path; import compare; p=json.load(open(sys.argv[1])); assert p["signed"] is False and p["component"] == sys.argv[3] and p["unsigned_digest"] == sys.argv[4]; assert p["output_tree_digest"] == compare.tree_digest(Path(sys.argv[2])), "component changed after dual-build comparison"' "$$$$promote/$(1)-proposal.json" "$$$$artifact" "$(1)" "$$$$digest"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$artifact" --proposal "$$$$promote/$(1)-signed.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("oci_digest","").startswith("sha256:"), p' "$$$$promote/$(1)-signed.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/publish.py" --proposal "$$$$promote/$(1)-signed.json"
@@ -208,7 +210,7 @@ __bazel-reconstruct: __bazel-version-check
 	@set -euo pipefail; \
 	command -v oras >/dev/null || { echo "oras is required to reconstruct" >&2; exit 1; }; \
 	command -v cosign >/dev/null || { echo "cosign is required to reconstruct" >&2; exit 1; }; \
-	test -n "$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
+	test -n "$${ORLIX_COSIGN_PUB:-}$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_PUB is required to reconstruct" >&2; exit 1; }; \
 	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct"
 
@@ -484,7 +486,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'promoted-components.json' make/bazel-migration.mk
 	@rg -F -q 'oras is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q 'cosign is required to reconstruct' make/bazel-migration.mk
-	@rg -F -q 'ORLIX_COSIGN_KEY is required to reconstruct' make/bazel-migration.mk
+	@rg -F -q 'ORLIX_COSIGN_PUB is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q -- '--nouse_action_cache' make/bazel-migration.mk
 	@rg -F -q 'unsigned promote mutated artifacts.lock.json' make/bazel-migration.mk
 	@rg -F -q 'unsigned promote must not Cosign-sign' make/bazel-migration.mk

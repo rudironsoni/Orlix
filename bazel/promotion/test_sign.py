@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import subprocess
 from pathlib import Path
 from unittest import mock
 
@@ -10,6 +11,18 @@ import sign
 
 
 class SignTests(unittest.TestCase):
+    def test_other_registries_are_rejected_before_push(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact = Path(tmp) / "artifact"
+            artifact.write_bytes(b"component")
+            run = mock.Mock()
+            with mock.patch.dict(os.environ, {"ORLIX_COSIGN_KEY": "file:///unused"}), \
+                 mock.patch("sign.shutil.which", return_value="/usr/bin/tool"):
+                for repository in ("localhost:5001/orlix", "ghcr.io/example/orlix"):
+                    with self.subTest(repository=repository), self.assertRaises(sign.SignError):
+                        sign.sign_digest("ab" * 32, "uapi", artifact=str(artifact), repository=repository, run=run)
+            run.assert_not_called()
+
     def test_unset_key_does_not_invent_signature(self) -> None:
         os.environ.pop("ORLIX_COSIGN_KEY", None)
         with self.assertRaises(sign.SignError) as raised:
@@ -49,7 +62,7 @@ class SignTests(unittest.TestCase):
         def fake_run(argv: list[str], env=None, cwd=None):
             calls.append(list(argv))
             if argv[0] == "oras" and "push" in argv:
-                return Result(f"Pushed [registry] ghcr.io/example/orlix/uapi\nDigest: sha256:{observed}\n")
+                return Result(f"Pushed [registry] ghcr.io/rudironsoni/orlix/uapi\nDigest: sha256:{observed}\n")
             if argv[0] == "cosign" and "sign" in argv:
                 return Result("")
             raise AssertionError(argv)
@@ -63,14 +76,14 @@ class SignTests(unittest.TestCase):
                         "ab" * 32,
                         "uapi",
                         artifact=str(artifact),
-                        repository="ghcr.io/example/orlix",
+                        repository="ghcr.io/rudironsoni/orlix",
                         run=fake_run,
                     )
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
         self.assertTrue(payload["signed"])
         self.assertEqual(payload["oci_digest"], f"sha256:{observed}")
-        self.assertEqual(payload["oci_reference"], f"ghcr.io/example/orlix/uapi@sha256:{observed}")
+        self.assertEqual(payload["oci_reference"], f"ghcr.io/rudironsoni/orlix/uapi@sha256:{observed}")
         self.assertTrue(any(call[0] == "oras" and "push" in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "sign" in call for call in calls))
         self.assertTrue(
@@ -132,7 +145,8 @@ class SignTests(unittest.TestCase):
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
 
-    def test_ghcr_push_failure_does_not_invent_oci_digest(self) -> None:
+    @mock.patch("sign.subprocess.run", side_effect=subprocess.CalledProcessError(1, "oras", output="denied: permission_denied"))
+    def test_ghcr_push_failure_does_not_invent_oci_digest(self, run) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         with tempfile.TemporaryDirectory() as tmp:
             artifact = Path(tmp) / "uapi.sha256"

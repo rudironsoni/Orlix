@@ -10,11 +10,27 @@ import compare
 
 
 class PromotionCompareTests(unittest.TestCase):
+    def test_component_bytes_and_symlinks_must_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first, second = Path(tmp) / "a", Path(tmp) / "b"
+            for tree in (first, second):
+                tree.mkdir()
+                (tree / "digest.sha256").write_text("a" * 64)
+                (tree / "binary").write_bytes(b"same")
+                (tree / "link").symlink_to("binary")
+            self.assertEqual(compare.compare_trees(str(first), str(second)), compare.tree_digest(first))
+            (second / "binary").write_bytes(b"different")
+            with self.assertRaisesRegex(ValueError, "contents differ"):
+                compare.compare_trees(str(first), str(second))
+
     def test_matching_digests_write_unsigned_proposal(self) -> None:
         digest = "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
-            first = Path(tmp) / "a.sha256"
-            second = Path(tmp) / "b.sha256"
+            first_tree, second_tree = Path(tmp) / "a", Path(tmp) / "b"
+            first_tree.mkdir()
+            second_tree.mkdir()
+            first = first_tree / "digest.sha256"
+            second = second_tree / "digest.sha256"
             proposal = Path(tmp) / "proposal.json"
             first.write_text(digest + "\n", encoding="utf-8")
             second.write_text(digest + "\n", encoding="utf-8")
@@ -25,7 +41,7 @@ class PromotionCompareTests(unittest.TestCase):
             try:
                 self.assertEqual(
                     compare.main(
-                        [str(first), str(second), "--component", "uapi", "--proposal", str(proposal)]
+                        [str(first), str(second), "--first-tree", str(first_tree), "--second-tree", str(second_tree), "--component", "uapi", "--proposal", str(proposal)]
                     ),
                     0,
                 )
@@ -37,13 +53,17 @@ class PromotionCompareTests(unittest.TestCase):
             self.assertIs(payload["signed"], False)
             self.assertIsNone(payload["oci_digest"])
             self.assertEqual(payload["component"], "uapi")
+            self.assertEqual(payload["output_tree_digest"], compare.tree_digest(first_tree))
             self.assertNotIn("signature", payload)
             self.assertNotIn("ghcr", json.dumps(payload))
 
     def test_mismatch_fails_loud(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            first = Path(tmp) / "a.sha256"
-            second = Path(tmp) / "b.sha256"
+            first_tree, second_tree = Path(tmp) / "a", Path(tmp) / "b"
+            first_tree.mkdir()
+            second_tree.mkdir()
+            first = first_tree / "digest.sha256"
+            second = second_tree / "digest.sha256"
             first.write_text("a" * 64 + "\n", encoding="utf-8")
             second.write_text("b" * 64 + "\n", encoding="utf-8")
             with self.assertRaises(ValueError):
@@ -63,8 +83,11 @@ class PromotionCompareTests(unittest.TestCase):
             },
         }
         with tempfile.TemporaryDirectory() as tmp:
-            first = Path(tmp) / "a.sha256"
-            second = Path(tmp) / "b.sha256"
+            first_tree, second_tree = Path(tmp) / "a", Path(tmp) / "b"
+            first_tree.mkdir()
+            second_tree.mkdir()
+            first = first_tree / "digest.sha256"
+            second = second_tree / "digest.sha256"
             proposal = Path(tmp) / "lock-proposal.json"
             lock_path = Path(tmp) / "artifacts.lock.json"
             first.write_text(digest + "\n", encoding="utf-8")
@@ -76,6 +99,8 @@ class PromotionCompareTests(unittest.TestCase):
                     [
                         str(first),
                         str(second),
+                        "--first-tree", str(first_tree),
+                        "--second-tree", str(second_tree),
                         "--component",
                         "uapi",
                         "--lock-proposal",

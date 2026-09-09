@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 from compare import require_sha256
+from locked_buildset import GHCR_REPOSITORY, require_component_name
 
 DIGEST_RE = re.compile(r"Digest:\s*(sha256:[0-9a-f]{64})")
 
@@ -101,13 +102,16 @@ def sign_digest(
     digest = require_sha256(digest)
     if not component:
         raise SignError("sign component name is required")
+    require_component_name(component)
     key = require_signing_env()
     artifact_path = artifact or os.environ.get("ORLIX_PROMOTE_ARTIFACT")
     if not artifact_path:
         raise SignError("artifact path is required to publish; refusing to invent oci_digest")
     if shutil.which("oras") is None:
         raise SignError("oras is required to publish; refusing to invent oci_digest")
-    repo = repository or os.environ.get("ORLIX_GHCR_REPOSITORY", "ghcr.io/rudironsoni/orlix")
+    repo = repository or os.environ.get("ORLIX_GHCR_REPOSITORY", GHCR_REPOSITORY)
+    if repo != GHCR_REPOSITORY:
+        raise SignError(f"promotion requires {GHCR_REPOSITORY}")
     source = Path(artifact_path)
     if not source.exists():
         raise SignError(f"missing promote artifact: {artifact_path}")
@@ -120,8 +124,6 @@ def sign_digest(
             else:
                 archive.add(source, arcname=source.name)
         oras_push = ["oras", "push"]
-        if repo.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-            oras_push.append("--plain-http")
         oras_push.extend(oras_config_args())
         oras_push.extend(
             [
@@ -150,8 +152,6 @@ def sign_digest(
             "--use-signing-config=false",
             "--tlog-upload=false",
         ]
-        if repo.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-            cosign_sign.extend(["--allow-http-registry", "--allow-insecure-registry"])
         run(cosign_sign + [signed_ref], env=env)
     return {
         "schema": 1,

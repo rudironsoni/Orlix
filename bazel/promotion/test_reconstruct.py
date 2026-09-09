@@ -9,10 +9,11 @@ from pathlib import Path
 from unittest import mock
 
 import reconstruct
+import locked_buildset
 
 
 def _lock_payload(reference: str) -> dict:
-    return {
+    payload = {
         "schema": 1,
         "buildset": "ff" * 32,
         "components": {
@@ -23,6 +24,8 @@ def _lock_payload(reference: str) -> dict:
             }
         },
     }
+    payload["buildset"] = locked_buildset.buildset_digest(payload["components"])
+    return payload
 
 
 class ReconstructTests(unittest.TestCase):
@@ -38,7 +41,7 @@ class ReconstructTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "artifacts.lock.json"
-                path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+                path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
                 with mock.patch(
                     "reconstruct.shutil.which",
                     side_effect=lambda name: None if name == "oras" else "/usr/bin/cosign",
@@ -54,7 +57,7 @@ class ReconstructTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "artifacts.lock.json"
-                path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+                path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
                 with mock.patch(
                     "reconstruct.shutil.which",
                     side_effect=lambda name: None if name == "cosign" else "/usr/bin/oras",
@@ -67,13 +70,14 @@ class ReconstructTests(unittest.TestCase):
 
     def test_missing_key_fails_closed(self) -> None:
         os.environ.pop("ORLIX_COSIGN_KEY", None)
+        os.environ.pop("ORLIX_COSIGN_PUB", None)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "artifacts.lock.json"
-            path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+            path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
             with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
                 with self.assertRaises(reconstruct.ReconstructError) as raised:
                     reconstruct.reconstruct(str(path), tmp)
-        self.assertIn("ORLIX_COSIGN_KEY", str(raised.exception))
+        self.assertIn("ORLIX_COSIGN_PUB", str(raised.exception))
 
     def test_localhost_registry_is_rejected(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
@@ -89,7 +93,7 @@ class ReconstructTests(unittest.TestCase):
                 with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
                     with self.assertRaises(reconstruct.ReconstructError) as raised:
                         reconstruct.reconstruct(str(path), tmp)
-            self.assertIn("GHCR", str(raised.exception))
+            self.assertIn("ghcr.io/rudironsoni", str(raised.exception))
             self.assertIn("localhost", str(raised.exception))
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
@@ -114,11 +118,12 @@ class ReconstructTests(unittest.TestCase):
                 with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
                     with self.assertRaises(reconstruct.ReconstructError) as raised:
                         reconstruct.reconstruct(str(path), tmp)
-            self.assertIn("oci_reference", str(raised.exception))
+            self.assertIn("oci_digest", str(raised.exception))
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
 
-    def test_pulls_extracts_component_tar_and_verifies(self) -> None:
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_pulls_extracts_component_tar_and_verifies(self, public_key) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         calls: list[list[str]] = []
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
@@ -158,7 +163,8 @@ class ReconstructTests(unittest.TestCase):
         self.assertTrue(any(call[0] == "oras" and "pull" in call and reference in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "verify" in call and reference in call for call in calls))
 
-    def test_raw_digest_blob_cannot_substitute(self) -> None:
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_raw_digest_blob_cannot_substitute(self, public_key) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 

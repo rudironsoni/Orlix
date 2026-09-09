@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import stat
 from pathlib import Path
 
 
@@ -27,7 +29,37 @@ def compare_digests(first: str, second: str) -> str:
     return left
 
 
-def write_proposal(path: str, component: str, digest: str) -> None:
+def tree_digest(root: Path) -> str:
+    if not root.is_dir():
+        raise ValueError(f"missing component tree: {root}")
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*")):
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            content = str(path.readlink())
+        elif stat.S_ISREG(mode):
+            with path.open("rb") as stream:
+                content = hashlib.file_digest(stream, "sha256").hexdigest()
+        elif stat.S_ISDIR(mode):
+            content = ""
+        else:
+            raise ValueError(f"unsupported component entry: {path}")
+        record = [path.relative_to(root).as_posix(), mode, content]
+        digest.update(json.dumps(record, separators=(",", ":")).encode() + b"\n")
+    return digest.hexdigest()
+
+
+def compare_trees(first: str, second: str) -> str:
+    left, right = Path(first), Path(second)
+    if left.resolve() == right.resolve():
+        raise ValueError("promotion requires independent component trees")
+    digest = tree_digest(left)
+    if digest != tree_digest(right):
+        raise ValueError("promotion component contents differ")
+    return digest
+
+
+def write_proposal(path: str, component: str, digest: str, content_digest: str | None = None) -> None:
     payload = {
         "schema": 1,
         "component": component,
@@ -35,6 +67,8 @@ def write_proposal(path: str, component: str, digest: str) -> None:
         "signed": False,
         "oci_digest": None,
     }
+    if content_digest is not None:
+        payload["output_tree_digest"] = require_sha256(content_digest)
     Path(path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -42,6 +76,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("first")
     parser.add_argument("second")
+    parser.add_argument("--first-tree")
+    parser.add_argument("--second-tree")
     parser.add_argument("--component", default="uapi")
     parser.add_argument("--proposal")
     parser.add_argument("--sbom")
@@ -50,9 +86,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lock", default="artifacts.lock.json")
     args = parser.parse_args(argv)
     digest = compare_digests(args.first, args.second)
+    content_digest = None
+    if any((args.proposal, args.sbom, args.in_toto, args.lock_proposal)) or args.first_tree or args.second_tree:
+        if not args.first_tree or not args.second_tree:
+            raise ValueError("promotion requires both component trees")
+        content_digest = compare_trees(args.first_tree, args.second_tree)
     print(digest)
     if args.proposal:
-        write_proposal(args.proposal, args.component, digest)
+        write_proposal(args.proposal, args.component, digest, content_digest)
     if args.sbom:
         from sbom import write_sbom
 
