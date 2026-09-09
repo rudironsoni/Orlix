@@ -378,5 +378,40 @@ $(ORLIXOS_ZSH_BINARY): $(ORLIXOS_ZSH_SOURCE_STAMP) $(ORLIXOS_NCURSES_LIBTINFO) $
 	if "$(ORLIXOS_READELF)" -l "$(ORLIXOS_ZSH_BINARY)" | grep -F -q 'INTERP'; then echo "zsh must be a static Orlix Linux ELF without PT_INTERP" >&2; exit 1; fi; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=zsh\nversion=%s\nsha256=%s\nterminal_library=ncurses-%s-static\nfeatures=static-no-dynamic-modules\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ZSH_VERSION)" "$(ZSH_SHA256)" "$(NCURSES_VERSION)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/zsh.stamp"; \
 	echo "built Orlix Linux zsh package input: $(ORLIXOS_ZSH_BINARY)"
+
+$(ORLIXOS_TCC_BINARY): $(ORLIXOS_TCC_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
+	@set -euo pipefail; \
+	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
+	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
+	rtlib="$(ORLIXOS_MLIBC_RTLIB)"; \
+	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
+	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
+	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
+	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build tcc; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
+	rm -rf "$(ORLIXOS_TCC_BUILD_DIR)" "$(ORLIXOS_TCC_BINARY)"; \
+	mkdir -p "$(ORLIXOS_TCC_BUILD_DIR)" "$(dir $(ORLIXOS_TCC_BINARY))"; \
+	cp -R "$(ORLIXOS_TCC_SRC_DIR)/." "$(ORLIXOS_TCC_BUILD_DIR)/"; \
+	cc_wrap="$(ORLIXOS_TCC_BUILD_DIR)/orlix-cc"; \
+	cp "$(PROJECT_DIR)/Tests/orlix-linux-cc-wrap.sh" "$$cc_wrap"; \
+	chmod +x "$$cc_wrap"; \
+	export ORLIXOS_LINUX_CC="$(ORLIXOS_CC)"; \
+	export ORLIXOS_LINUX_SYSROOT="$$sysroot"; \
+	export ORLIXOS_LINUX_HEADERS="$$headers"; \
+	export ORLIXOS_LINUX_RTLIB="$$rtlib"; \
+	printf '%s\n' '#!/bin/sh' 'echo Linux' > "$(ORLIXOS_TCC_BUILD_DIR)/uname"; \
+	chmod +x "$(ORLIXOS_TCC_BUILD_DIR)/uname"; \
+	cd "$(ORLIXOS_TCC_BUILD_DIR)"; \
+	"$$cc_wrap" -c "$(PROJECT_DIR)/Tests/clear_cache_stub.c" -o "$(ORLIXOS_TCC_BUILD_DIR)/clear_cache_stub.o"; \
+	PATH="$(ORLIXOS_TCC_BUILD_DIR):$$PATH" ./configure --cc="$$cc_wrap" --ar="$(ORLIXOS_AR)" --cpu=aarch64 --triplet=aarch64-linux-gnu --prefix=/usr --enable-static --extra-ldflags="$(ORLIXOS_TCC_BUILD_DIR)/clear_cache_stub.o"; \
+	$(MAKE) -j1 tcc ONE_SOURCE=yes; \
+	"$$cc_wrap" -Wno-implicit-function-declaration -c "$(ORLIXOS_TCC_BUILD_DIR)/lib/lib-arm64.c" -o "$(ORLIXOS_TCC_BUILD_DIR)/lib-arm64.o"; \
+	"$(ORLIXOS_AR)" rcs "$(ORLIXOS_TCC_BUILD_DIR)/libtcc1.a" "$(ORLIXOS_TCC_BUILD_DIR)/lib-arm64.o" "$(ORLIXOS_TCC_BUILD_DIR)/clear_cache_stub.o"; \
+	cp "$(ORLIXOS_TCC_BUILD_DIR)/tcc" "$(ORLIXOS_TCC_BINARY)"; \
+	mkdir -p "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/lib/tcc"; \
+	cp "$(ORLIXOS_TCC_BUILD_DIR)/libtcc1.a" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/lib/tcc/libtcc1.a"; \
+	"$(ORLIXOS_STRIP)" "$(ORLIXOS_TCC_BINARY)"; \
+	file "$(ORLIXOS_TCC_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_TCC_BINARY)" >&2; exit 1; }; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=tcc\nversion=%s\nsha256=%s\nrole=coreutils-test-fixture\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(TCC_VERSION)" "$(TCC_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/tcc.stamp"; \
+	echo "built Orlix Linux tcc test-fixture compiler: $(ORLIXOS_TCC_BINARY)"
 # Test-fixture package assembly only.
 # The proof is the upstream/runtime test-suite result, not these build artifacts.

@@ -57,3 +57,4 @@ __runtime-log-policy-tests:
 
 __runtime-support-tests: __runtime-log-policy-tests
 	@$(ORLIXOS_MAKE) __payload-sync-tests PROFILE="$(PROFILE)" ORLIX_BUILD_ROOT="$(ORLIX_BUILD_ROOT)"
+	@$(ORLIXOS_MAKE) __coreutils-test-helpers PROFILE="$(PROFILE)" ORLIX_BUILD_ROOT="$(ORLIX_BUILD_ROOT)"

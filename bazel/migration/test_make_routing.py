@@ -62,6 +62,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("deviceTypeIdentifier", makefile)
         self.assertIn("devicetypes", makefile)
         self.assertIn("--ios_simulator_device=", makefile)
+        self.assertIn("build //Orlix:Orlix", makefile)
+        self.assertIn("missing //Orlix:Orlix ipa after iOS 15 UI tests", makefile)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")

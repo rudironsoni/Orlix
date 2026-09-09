@@ -821,9 +821,21 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "__coreutils-test-helpers",
+      "source": "OrlixOS/Makefile",
+      "line": 82,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixCoreUtils",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "environment-runtime-test-fixtures",
       "source": "OrlixOS/Makefile",
-      "line": 170,
+      "line": 174,
       "classification": "command",
       "phony": true,
       "prerequisites": [

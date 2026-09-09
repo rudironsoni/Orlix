@@ -8,11 +8,11 @@
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "1fe365e387348cfa9c45853727d848cfa9c1cbf811c3a69aa4973e282e3d4a53",
-    "OrlixOS/Makefile": "2b1d54ce8dc1f28338c7c7c5661bfbc43941c6eacd49babd86157b9bad8a3eb2",
-    "make/bazel-migration.mk": "02e689645758ad4ddf755522c6256af094b69e1ed60aecdaf2e6051076c75fb7",
+    "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
+    "make/bazel-migration.mk": "79f0ec44ed282768d211064a433bb4114087fb8b505c81595730afe6c362c612",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
-    "make/runtime.mk": "2dc60f9ccd78be2e565843c96873453a123b447603d4484afdfc8517ab4e2cc8",
+    "make/runtime.mk": "8a39d4903607d85e0027306e8aad4556caa55fa3fef2b25c6b122a1802913b0f",
     "make/tcti-proof-registry-provenance.mk": "6033141ec62802ab315cc4f04f0732ba820c8896158f6642b5ec6b92742b154a"
   },
   "targets": [
@@ -5018,9 +5018,19 @@
       ]
     },
     {
-      "name": "kernel-payload",
+      "name": "__coreutils-test-helpers",
       "source": "OrlixOS/Makefile",
       "line": 82,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ]
+    },
+    {
+      "name": "kernel-payload",
+      "source": "OrlixOS/Makefile",
+      "line": 86,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -5030,7 +5040,7 @@
     {
       "name": "environment-root-image",
       "source": "OrlixOS/Makefile",
-      "line": 114,
+      "line": 118,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -5040,7 +5050,7 @@
     {
       "name": "environment-runtime-test-fixtures",
       "source": "OrlixOS/Makefile",
-      "line": 170,
+      "line": 174,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -5050,7 +5060,7 @@
     {
       "name": "$(ORLIXOS_NETWORK_NAMESPACE_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 222,
+      "line": 226,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5060,7 +5070,7 @@
     {
       "name": "$(ORLIXOS_OCI_CGROUP_RESOURCES_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 225,
+      "line": 229,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5070,7 +5080,7 @@
     {
       "name": "$(ORLIXOS_OCI_DEVICE_NODES_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 228,
+      "line": 232,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5080,7 +5090,7 @@
     {
       "name": "$(ORLIXOS_OCI_HOST_MOUNT_TARGET_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 231,
+      "line": 235,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5090,7 +5100,7 @@
     {
       "name": "$(ORLIXOS_OCI_NAMESPACE_IDENTITY_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 234,
+      "line": 238,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5100,7 +5110,7 @@
     {
       "name": "$(ORLIXOS_OCI_PROCESS_ATTRIBUTES_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 237,
+      "line": 241,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5110,7 +5120,7 @@
     {
       "name": "$(ORLIXOS_OCI_ROOTFS_CONTROLS_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 240,
+      "line": 244,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5120,7 +5130,7 @@
     {
       "name": "$(ORLIXOS_OCI_TIME_NAMESPACE_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 243,
+      "line": 247,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5130,7 +5140,7 @@
     {
       "name": "$(ORLIXOS_VIRTIO_NET_DEVICE_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 246,
+      "line": 250,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5140,7 +5150,7 @@
     {
       "name": "$(ORLIXOS_VIRTIO_FS_MOUNT_PROBE)",
       "source": "OrlixOS/Makefile",
-      "line": 249,
+      "line": 253,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5150,7 +5160,7 @@
     {
       "name": "$(ORLIXOS_ENVIRONMENT_RUNTIME_TEST_FIXTURE_STAMP)",
       "source": "OrlixOS/Makefile",
-      "line": 252,
+      "line": 256,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5699,7 +5709,7 @@
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 632,
+      "line": 633,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5709,7 +5719,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 635,
+      "line": 636,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5720,7 +5730,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 646,
+      "line": 647,
       "classification": "private",
       "phony": true,
       "prerequisites": [
