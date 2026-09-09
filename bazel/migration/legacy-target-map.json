@@ -4,7 +4,7 @@
   "source_files": {
     "Makefile": "f0713f179f4d5fce742da50c8c7dcb20968fccf9af69b180c205ff99fc304f64",
     "Orlix/Makefile": "8857a522bac42d41214d13d23bafcc70eeab1d07bd0c9419c122783599b36d54",
-    "OrlixCoreUtils/Makefile": "0a1010402df05d70a6afbb1795c7581883e6f95b7d173ebdedb580d668f25e9a",
+    "OrlixCoreUtils/Makefile": "b3f9af85030ea1eceb64893805cbc716ce277fdbcef401a2f91ee341080d590e",
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "1fe365e387348cfa9c45853727d848cfa9c1cbf811c3a69aa4973e282e3d4a53",
@@ -12,7 +12,7 @@
     "make/bazel-migration.mk": "79f0ec44ed282768d211064a433bb4114087fb8b505c81595730afe6c362c612",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
-    "make/runtime.mk": "8a39d4903607d85e0027306e8aad4556caa55fa3fef2b25c6b122a1802913b0f",
+    "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
     "make/tcti-proof-registry-provenance.mk": "6033141ec62802ab315cc4f04f0732ba820c8896158f6642b5ec6b92742b154a"
   },
   "targets": [
@@ -4439,7 +4439,7 @@
     {
       "name": "all",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 68,
+      "line": 71,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4449,7 +4449,7 @@
     {
       "name": "help",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 70,
+      "line": 73,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4459,7 +4459,7 @@
     {
       "name": "source",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 77,
+      "line": 80,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4469,7 +4469,7 @@
     {
       "name": "dependencies",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 79,
+      "line": 82,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4479,7 +4479,7 @@
     {
       "name": "build",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 82,
+      "line": 85,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4488,9 +4488,19 @@
       ]
     },
     {
+      "name": "__test-dynamic",
+      "source": "OrlixCoreUtils/Makefile",
+      "line": 87,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)"
+      ]
+    },
+    {
       "name": "__selinux-policy-prelude-generator",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 84,
+      "line": 89,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4500,7 +4510,7 @@
     {
       "name": "$(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 86,
+      "line": 91,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4511,7 +4521,7 @@
     {
       "name": "$(ORLIX_COREUTILS_ACL_STAMP)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 93,
+      "line": 98,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4521,7 +4531,7 @@
     {
       "name": "$(ORLIX_COREUTILS_LIBCAP_STAMP)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 93,
+      "line": 98,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4531,7 +4541,7 @@
     {
       "name": "$(ORLIX_COREUTILS_LIBSELINUX_STAMP)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 93,
+      "line": 98,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4541,7 +4551,7 @@
     {
       "name": "$(ORLIX_COREUTILS_MLIBC_RTLIB)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 96,
+      "line": 101,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4551,7 +4561,7 @@
     {
       "name": "$(ORLIX_COREUTILS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 96,
+      "line": 101,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4561,7 +4571,7 @@
     {
       "name": "$(ORLIX_COREUTILS_SOURCE_STAMP)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 99,
+      "line": 104,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4572,7 +4582,7 @@
     {
       "name": "$(ORLIX_COREUTILS_STAMP)",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 143,
+      "line": 148,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -4588,9 +4598,21 @@
       ]
     },
     {
+      "name": "$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)",
+      "source": "OrlixCoreUtils/Makefile",
+      "line": 222,
+      "classification": "generated-or-pattern",
+      "phony": false,
+      "prerequisites": [
+        "$(ORLIX_COREUTILS_STAMP)",
+        "$(ORLIX_COREUTILS_RELINK_DYNAMIC)",
+        "$(PROJECT_DIR)/Makefile"
+      ]
+    },
+    {
       "name": "clean",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 217,
+      "line": 238,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4600,7 +4622,7 @@
     {
       "name": "mrproper",
       "source": "OrlixCoreUtils/Makefile",
-      "line": 222,
+      "line": 243,
       "classification": "command",
       "phony": true,
       "prerequisites": [

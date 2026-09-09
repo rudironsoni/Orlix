@@ -675,6 +675,18 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "__test-dynamic",
+      "source": "OrlixCoreUtils/Makefile",
+      "line": 87,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "test",
       "source": "OrlixHostAdapter/Makefile",
       "line": 21,

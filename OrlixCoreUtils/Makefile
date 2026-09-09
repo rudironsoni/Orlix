@@ -27,6 +27,9 @@ ORLIX_COREUTILS_PACKAGE_BUILD_DIR := $(ORLIX_COREUTILS_BUILD_ROOT)/build/$(PROFI
 ORLIX_COREUTILS_BUILD_DIR := $(ORLIX_COREUTILS_PACKAGE_BUILD_DIR)/coreutils-$(COREUTILS_VERSION)
 ORLIX_COREUTILS_STAGE_DIR := $(ORLIX_COREUTILS_BUILD_ROOT)/stage/$(PROFILE)
 ORLIX_COREUTILS_STAMP := $(ORLIX_COREUTILS_STAGE_DIR)/coreutils.stamp
+ORLIX_COREUTILS_TEST_DYNAMIC_DIR := $(ORLIX_COREUTILS_BUILD_ROOT)/stage/$(PROFILE)-dynamic
+ORLIX_COREUTILS_TEST_DYNAMIC_STAMP := $(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/coreutils-dynamic.stamp
+ORLIX_COREUTILS_RELINK_DYNAMIC := $(PROJECT_DIR)/Tests/relink_dynamic.py
 ORLIX_COREUTILS_GETLIMITS_BINARY := $(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/getlimits
 ORLIX_COREUTILS_EXTRA_PROGRAMS := getconf getent
 ORLIX_COREUTILS_ALL_PROGRAMS := $(ORLIX_COREUTILS_PROGRAMS) $(ORLIX_COREUTILS_EXTRA_PROGRAMS)
@@ -63,7 +66,7 @@ ORLIX_COREUTILS_BUILD_CC ?= xcrun --sdk macosx cc -target arm64-apple-macosx
 ORLIX_COREUTILS_PACKAGE_CFLAGS := -O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h
 ORLIX_COREUTILS_FORCE_RECONFIGURE ?= 0
 
-.PHONY: all help source dependencies build clean mrproper __selinux-policy-prelude-generator
+.PHONY: all help source dependencies build clean mrproper __selinux-policy-prelude-generator __test-dynamic
 
 all: build
 
@@ -80,6 +83,8 @@ dependencies:
 	@$(ORLIXOS_MAKE) "$(ORLIX_COREUTILS_ACL_STAMP)" "$(ORLIX_COREUTILS_LIBCAP_STAMP)" "$(ORLIX_COREUTILS_LIBSELINUX_STAMP)" PROFILE="$(PROFILE)" ORLIX_BUILD_ROOT="$(ORLIX_BUILD_ROOT)"
 
 build: dependencies $(ORLIX_COREUTILS_STAMP)
+
+__test-dynamic: $(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)
 
 __selinux-policy-prelude-generator: $(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR)
 
@@ -213,6 +218,22 @@ $(ORLIX_COREUTILS_STAMP): $(ORLIX_COREUTILS_SOURCE_STAMP) $(ORLIX_COREUTILS_ACL_
 	done; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\ngit_url=%s\ngit_ref=%s\ngit_commit=%s\ngnulib_git_url=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIX_COREUTILS_ALL_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_GIT_URL)" "$(COREUTILS_GIT_REF)" "$(COREUTILS_GIT_COMMIT)" "$(COREUTILS_GNULIB_GIT_URL)" > "$(ORLIX_COREUTILS_STAMP)"; \
 	echo "built Orlix Linux Coreutils provider payload: $(ORLIX_COREUTILS_STAGE_DIR)"
+
+$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP): $(ORLIX_COREUTILS_STAMP) $(ORLIX_COREUTILS_RELINK_DYNAMIC) $(PROJECT_DIR)/Makefile
+	@set -euo pipefail; \
+	mkdir -p "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin"; \
+	for program in $(ORLIX_COREUTILS_TEST_DYNAMIC_PROGRAMS); do \
+		python3 "$(ORLIX_COREUTILS_RELINK_DYNAMIC)" "$$program" \
+			--build-dir "$(ORLIX_COREUTILS_BUILD_DIR)" \
+			--sysroot "$(ORLIX_COREUTILS_MLIBC_SYSROOT)" \
+			--package-lib "$(ORLIX_COREUTILS_OS_PACKAGE_DIR)/usr/lib" \
+			--rtlib "$(ORLIX_COREUTILS_MLIBC_RTLIB)" \
+			--output "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin/$$program"; \
+		file "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin/$$program" >&2; exit 1; }; \
+		file "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin/$$program" | grep -F -q 'interpreter /usr/lib/ld.so' || { echo "dynamic $$program missing mlibc interpreter" >&2; file "$(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)/usr/bin/$$program" >&2; exit 1; }; \
+	done; \
+	printf 'programs=%s\n' "$(ORLIX_COREUTILS_TEST_DYNAMIC_PROGRAMS)" > "$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)"; \
+	echo "built dynamic Coreutils test programs: $(ORLIX_COREUTILS_TEST_DYNAMIC_DIR)"
 
 clean:
 	@set -euo pipefail; \
