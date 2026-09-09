@@ -164,7 +164,7 @@ $(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasi
 define ORLIX_BAZEL_PUBLISH
 __bazel-publish-$(1): __bazel-version-check
 	@set -euo pipefail; \
-	test -n "$$$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to publish $(1)" >&2; exit 1; }; \
+	test -n "$$$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_KEY is required to publish $(1)" >&2; exit 1; }; \
 	if [ -n "$$$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
 	digest_file="$$$$promote/a/digest.sha256"; \
@@ -228,19 +228,21 @@ __bazel-substitute-promoted: __bazel-reconstruct
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "promoted substitute mutated artifacts.lock.json" >&2; exit 1; }
 
-__bazel-reconstruct-source: __bazel-version-check
+__bazel-reconstruct-source: __bazel-feasibility-bootstrap __bazel-reconstruct
 	@set -euo pipefail; \
-	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("buildset") and lock.get("components",{}).get("uapi",{}).get("unsigned_digest"), lock' "$(CURDIR)/artifacts.lock.json"; \
-	cold="$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/cold"; \
-	rm -rf "$$cold"; \
-	mkdir -p "$$cold/disk"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build //bazel/feasibility/kernel:uapi --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --disk_cache="$$cold/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
-	digest_file="$$(/usr/bin/find "$$cold/output-base" -path '*/feasibility/kernel/uapi/uapi.sha256' -print | /usr/bin/head -n 1)"; \
-	test -n "$$digest_file" || { echo "missing cache-cold uapi.sha256" >&2; exit 1; }; \
-	digest="$$(/usr/bin/tr -d '[:space:]' < "$$digest_file")"; \
-	test "$${#digest}" -eq 64 || { echo "cache-cold uapi digest is not 64 hex" >&2; exit 1; }; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); expected=lock["components"]["uapi"]["unsigned_digest"]; got=sys.argv[2]; assert expected==got, (expected, got)' "$(CURDIR)/artifacts.lock.json" "$$digest"; \
-	echo "$$digest"
+	cold="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct-source.XXXXXX")"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build //bazel/feasibility/rootfs:rootfs --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --disk_cache= --remote_cache= --remote_executor= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
+	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildset"])' "$(CURDIR)/artifacts.lock.json")"; \
+	for component in uapi mlibc rootfs; do \
+		case "$$component" in \
+			uapi) label=//bazel/feasibility/kernel:uapi; marker=uapi.sha256 ;; \
+			mlibc) label=//bazel/feasibility/mlibc:sysroot; marker=sysroot.sha256 ;; \
+			rootfs) label=//bazel/feasibility/rootfs:rootfs; marker=source-input.sha256 ;; \
+		esac; \
+		rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" cquery "$$label" --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_KBUILD_PERSIST= --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --output=files | awk -v marker="$$marker" 'substr($$0,length($$0)-length(marker)) == "/" marker {path=$$0; count++} END {if(count != 1) exit 1; print path}')"; \
+		tree="$$(/usr/bin/dirname "$$cold/output-base/execroot/_main/$$rel")"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import compare,sys; print(sys.argv[1], compare.compare_trees(sys.argv[2], sys.argv[3]))' "$$component" "$$tree" "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct/$$buildset/$$component"; \
+	done
 
 __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	@mkdir -p "$(ORLIX_KBUILD_PERSIST)"

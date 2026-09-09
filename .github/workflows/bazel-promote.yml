@@ -50,7 +50,11 @@ jobs:
 
   promote:
     name: Dual-build promote
+    if: github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
     runs-on: macos-26
+    permissions:
+      contents: read
+      packages: write
     environment: bazel-promotion
     timeout-minutes: 360
     steps:
@@ -78,13 +82,15 @@ jobs:
         timeout-minutes: 20
         env:
           ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
           ORLIX_COSIGN_KEY_PASSWORD: ${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${ORLIX_COSIGN_KEY}" ]; then
-            echo "ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished"
-            exit 0
+            echo "ORLIX_COSIGN_KEY is required; promotion failed"
+            exit 1
           fi
           brew list cosign >/dev/null 2>&1 || brew install cosign
           brew list oras >/dev/null 2>&1 || brew install oras
@@ -96,5 +102,12 @@ jobs:
           fi
           export ORLIX_COSIGN_KEY="file://${key_path}"
           export COSIGN_PASSWORD="${ORLIX_COSIGN_KEY_PASSWORD}"
-          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "${GITHUB_ACTOR}" --password-stdin
           make __bazel-publish-${{ inputs.component }}
+      - name: Store the verified signed component proposal
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-${{ inputs.component }}-${{ github.sha }}
+          path: Build/Bazel/promote/${{ inputs.component }}/${{ inputs.component }}-signed.json
+          if-no-files-found: error
+          retention-days: 14

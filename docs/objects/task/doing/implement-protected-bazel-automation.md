@@ -1,7 +1,7 @@
 ---
 type: task
 tags: [task, bazel, github]
-updated: 2026-09-09
+updated: 2026-09-10
 status: doing
 summary: "Implement Make-owned CI entry points, protected workflows and environments, tag rulesets, cache policy, and signing trust policy."
 task_of:
@@ -13,3 +13,5 @@ blocks:
 # Implement Protected Bazel Automation
 
 Add stable pull-request, protected-main, nightly, promotion, TestFlight, App Store, release, benchmark, and garbage-collection workflows. Pin actions, restrict permissions and release tags, protect locks and rules, keep private signing keys in protected environments, and measure private repository cost.
+
+Promotion publishes a signed component proposal as a workflow artifact. Lock proposals consume successful promotion runs from the same main commit and verify the component signatures before assembling the buildset. Nightly reconstruction compares fresh source-built UAPI, mlibc, and rootfs trees with the verified signed artifacts. Missing keys fail these gates.

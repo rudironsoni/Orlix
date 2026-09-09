@@ -2,6 +2,19 @@ name: Bazel lock proposal
 
 on:
   workflow_dispatch:
+    inputs:
+      uapi_run_id:
+        description: Successful uapi promotion run for this commit
+        required: true
+        type: string
+      mlibc_run_id:
+        description: Successful mlibc promotion run for this commit
+        required: true
+        type: string
+      rootfs_run_id:
+        description: Successful rootfs promotion run for this commit
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +53,11 @@ jobs:
 
   lock-proposal:
     name: Write lock proposal
+    if: github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     runs-on: macos-26
     environment: bazel-promotion
     timeout-minutes: 20
@@ -61,8 +79,56 @@ jobs:
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+      - name: Verify promotion run provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UAPI_RUN_ID: ${{ inputs.uapi_run_id }}
+          MLIBC_RUN_ID: ${{ inputs.mlibc_run_id }}
+          ROOTFS_RUN_ID: ${{ inputs.rootfs_run_id }}
+        run: |
+          set -euo pipefail
+          for run_id in "$UAPI_RUN_ID" "$MLIBC_RUN_ID" "$ROOTFS_RUN_ID"; do
+            [[ "$run_id" =~ ^[0-9]+$ ]] || { echo "invalid promotion run ID" >&2; exit 1; }
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,headSha,workflowName,event > "$RUNNER_TEMP/promotion-run.json"
+            jq -e --arg sha "$GITHUB_SHA" '.conclusion == "success" and .headBranch == "main" and .headSha == $sha and .workflowName == "Bazel promote" and .event == "workflow_dispatch"' "$RUNNER_TEMP/promotion-run.json"
+          done
+      - name: Download signed uapi proposal
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-uapi-${{ github.sha }}
+          path: Build/Bazel/promote/uapi
+          run-id: ${{ inputs.uapi_run_id }}
+          github-token: ${{ github.token }}
+      - name: Download signed mlibc proposal
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-mlibc-${{ github.sha }}
+          path: Build/Bazel/promote/mlibc
+          run-id: ${{ inputs.mlibc_run_id }}
+          github-token: ${{ github.token }}
+      - name: Download signed rootfs proposal
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-rootfs-${{ github.sha }}
+          path: Build/Bazel/promote/rootfs
+          run-id: ${{ inputs.rootfs_run_id }}
+          github-token: ${{ github.token }}
+      - name: Configure signature verification
+        env:
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f "$ORLIX_COSIGN_PUB" || { echo "ORLIX_COSIGN_PUB must name the trusted public key file" >&2; exit 1; }
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
       - name: Write the signed lock proposal without mutating artifacts.lock.json
         timeout-minutes: 10
+        env:
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
         run: make __bazel-lock-proposal
       - name: Store the lock proposal
         if: always()

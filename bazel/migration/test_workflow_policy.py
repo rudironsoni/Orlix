@@ -18,10 +18,16 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("environment: bazel-promotion", text)
         self.assertIn("make __bazel-promote-${{ inputs.component }}", text)
         self.assertIn("make __bazel-publish-${{ inputs.component }}", text)
-        self.assertIn("ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished", text)
+        missing_key = text.split('if [ -z "${ORLIX_COSIGN_KEY}" ]; then', 1)[1].split("fi", 1)[0]
+        self.assertIn("exit 1", missing_key)
+        self.assertNotIn("exit 0", missing_key)
+        self.assertIn("github.ref == 'refs/heads/main'", text)
         self.assertIn("Cancel if derailed", text)
         self.assertIn("gh run cancel", text)
         self.assertIn("packages: write", text)
+        self.assertIn("signed-${{ inputs.component }}-${{ github.sha }}", text)
+        self.assertIn("${{ inputs.component }}-signed.json", text)
+        self.assertIn('--registry-config "$ORLIX_ORAS_REGISTRY_CONFIG"', text)
 
     def test_trust_policy_forbids_unsigned_main_lock_writes(self) -> None:
         import json
@@ -40,6 +46,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-nightly.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-matrix-check", text)
         self.assertIn("make __bazel-gc", text)
+        self.assertIn("make __bazel-reconstruct-source", text)
 
     def test_gc_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-gc.yml").read_text(encoding="utf-8")
@@ -87,6 +94,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", text)
         self.assertIn("environment: bazel-promotion", text)
         self.assertIn("make __bazel-lock-proposal", text)
+        self.assertIn(".headSha == $sha", text)
+        self.assertIn('.conclusion == "success"', text)
+        for component in ("uapi", "mlibc", "rootfs"):
+            self.assertIn(f"run-id: ${{{{ inputs.{component}_run_id }}}}", text)
+            self.assertIn(f"signed-{component}-${{{{ github.sha }}}}", text)
         self.assertIn("Cancel if derailed", text)
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)

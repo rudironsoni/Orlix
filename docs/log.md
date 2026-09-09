@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 # Orlix Knowledge Log
+
+## [2026-09-10] record | Bind lock proposals to signed promotion runs
+
+[Protected Bazel automation](objects/task/doing/implement-protected-bazel-automation.md) now requires successful promotion runs from the same main commit, signature verification, and full component-tree comparison during source reconstruction. The task remains in progress. These rules do not establish live signing, runtime proof, or cutover completion.
 
 ## [2026-09-09] record | Promoted Apple inputs verify reconstructed uapi, mlibc, and rootfs
 

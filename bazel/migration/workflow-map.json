@@ -142,11 +142,29 @@
       }
     },
     ".github/workflows/bazel-lock-proposal.yml": {
-      "source_sha256": "78741c7ee32f4a1077660c693d50378683dac0cd862510352613c85ba5876ee7",
+      "source_sha256": "53d25d7436e9cd35a30b87b9c6f41ad12aa62072af62e417309d76162a08cfb1",
       "workflow": {
         "name": "Bazel lock proposal",
         "on": {
-          "workflow_dispatch": null
+          "workflow_dispatch": {
+            "inputs": {
+              "uapi_run_id": {
+                "description": "Successful uapi promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "mlibc_run_id": {
+                "description": "Successful mlibc promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "rootfs_run_id": {
+                "description": "Successful rootfs promotion run for this commit",
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
         },
         "permissions": {
           "contents": "read",
@@ -176,6 +194,12 @@
           },
           "lock-proposal": {
             "name": "Write lock proposal",
+            "if": "github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
+            "permissions": {
+              "contents": "read",
+              "actions": "read",
+              "packages": "read"
+            },
             "runs-on": "macos-26",
             "environment": "bazel-promotion",
             "timeout-minutes": 20,
@@ -202,8 +226,61 @@
                 "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
+                "name": "Verify promotion run provenance",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}",
+                  "UAPI_RUN_ID": "${{ inputs.uapi_run_id }}",
+                  "MLIBC_RUN_ID": "${{ inputs.mlibc_run_id }}",
+                  "ROOTFS_RUN_ID": "${{ inputs.rootfs_run_id }}"
+                },
+                "run": "set -euo pipefail\nfor run_id in \"$UAPI_RUN_ID\" \"$MLIBC_RUN_ID\" \"$ROOTFS_RUN_ID\"; do\n  [[ \"$run_id\" =~ ^[0-9]+$ ]] || { echo \"invalid promotion run ID\" >&2; exit 1; }\n  gh run view \"$run_id\" --repo \"$GITHUB_REPOSITORY\" --json conclusion,headBranch,headSha,workflowName,event > \"$RUNNER_TEMP/promotion-run.json\"\n  jq -e --arg sha \"$GITHUB_SHA\" '.conclusion == \"success\" and .headBranch == \"main\" and .headSha == $sha and .workflowName == \"Bazel promote\" and .event == \"workflow_dispatch\"' \"$RUNNER_TEMP/promotion-run.json\"\ndone\n"
+              },
+              {
+                "name": "Download signed uapi proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-uapi-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/uapi",
+                  "run-id": "${{ inputs.uapi_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Download signed mlibc proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-mlibc-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/mlibc",
+                  "run-id": "${{ inputs.mlibc_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Download signed rootfs proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-rootfs-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/rootfs",
+                  "run-id": "${{ inputs.rootfs_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Configure signature verification",
+                "env": {
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
+                  "GITHUB_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\ntest -f \"$ORLIX_COSIGN_PUB\" || { echo \"ORLIX_COSIGN_PUB must name the trusted public key file\" >&2; exit 1; }\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"$GITHUB_ACTOR\" --password-stdin\n"
+              },
+              {
                 "name": "Write the signed lock proposal without mutating artifacts.lock.json",
                 "timeout-minutes": 10,
+                "env": {
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json"
+                },
                 "run": "make __bazel-lock-proposal"
               },
               {
@@ -288,7 +365,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "553cee6a834a9a1cb0f73f8ece888b61c82853893e7ce523a9e54d871faebc16",
+      "source_sha256": "f1b5221470adbcfe8a85adbb9eca50cbdfc6620066b4b062fba32c5a0570eaa8",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -300,7 +377,8 @@
           ]
         },
         "permissions": {
-          "contents": "read"
+          "contents": "read",
+          "packages": "read"
         },
         "concurrency": {
           "group": "bazel-nightly",
@@ -308,7 +386,7 @@
         },
         "jobs": {
           "reconstruct": {
-            "name": "Source-mode reconstruction smoke",
+            "name": "Verify source reconstruction",
             "runs-on": "macos-26",
             "timeout-minutes": 180,
             "steps": [
@@ -333,6 +411,15 @@
               {
                 "name": "Run Make-owned matrix check",
                 "run": "make __bazel-matrix-check"
+              },
+              {
+                "name": "Reconstruct the signed buildset from source",
+                "env": {
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
+                  "GITHUB_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\ntest -n \"$ORLIX_COSIGN_PUB\" || { echo \"ORLIX_COSIGN_PUB is required\" >&2; exit 1; }\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"$GITHUB_ACTOR\" --password-stdin\nmake __bazel-reconstruct-source\n"
               },
               {
                 "name": "Run Make-owned cache GC",
@@ -405,7 +492,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "1b829d0a3f542009415ed47ccfeaa50598f7eb7addbf142ec7aa370403051d69",
+      "source_sha256": "9af4d15b3cac5d9ae12c2f2ede9ee177c147c08513dc2436706bf176d9341e37",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -453,7 +540,12 @@
           },
           "promote": {
             "name": "Dual-build promote",
+            "if": "github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
             "runs-on": "macos-26",
+            "permissions": {
+              "contents": "read",
+              "packages": "write"
+            },
             "environment": "bazel-promotion",
             "timeout-minutes": 360,
             "steps": [
@@ -488,10 +580,22 @@
                 "timeout-minutes": 20,
                 "env": {
                   "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}",
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
                   "ORLIX_COSIGN_KEY_PASSWORD": "${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
                   "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 },
-                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is not set; leaving the unsigned dual-build unpublished\"\n  exit 0\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io -u \"${GITHUB_ACTOR}\" --password-stdin\nmake __bazel-publish-${{ inputs.component }}\n"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is required; promotion failed\"\n  exit 1\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"${GITHUB_ACTOR}\" --password-stdin\nmake __bazel-publish-${{ inputs.component }}\n"
+              },
+              {
+                "name": "Store the verified signed component proposal",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "signed-${{ inputs.component }}-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/${{ inputs.component }}/${{ inputs.component }}-signed.json",
+                  "if-no-files-found": "error",
+                  "retention-days": 14
+                }
               }
             ]
           }
