@@ -48,6 +48,81 @@ class GraphTests(unittest.TestCase):
             payload = json.loads((Path(tmp) / "kernel-dependency.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["buildset_digest"], buildset)
 
+    def test_select_matching_live_digest_records_mismatch(self) -> None:
+        lock_subjects = {"mlibc": "aa" * 32}
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "sysroot.sha256"
+            mismatch = Path(tmp) / "mlibc-live-mismatch.json"
+            live.write_text("bb" * 32 + "\n", encoding="utf-8")
+            selected = graph.select_matching_live_digest(
+                lock_subjects, "mlibc", str(live), str(mismatch)
+            )
+            self.assertIsNone(selected)
+            payload = json.loads(mismatch.read_text(encoding="utf-8"))
+            self.assertEqual(payload["kind"], "live-lock-mismatch")
+            self.assertEqual(payload["component"], "mlibc")
+            self.assertEqual(payload["live_digest"], "bb" * 32)
+            self.assertEqual(payload["lock_unsigned_digest"], "aa" * 32)
+
+    def test_select_matching_live_digest_keeps_lock_match(self) -> None:
+        digest = "aa" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "sysroot.sha256"
+            live.write_text(digest + "\n", encoding="utf-8")
+            selected = graph.select_matching_live_digest(
+                {"mlibc": digest}, "mlibc", str(live)
+            )
+            self.assertEqual(selected, str(live))
+
+    def test_main_binds_lock_when_live_mlibc_mismatches(self) -> None:
+        uapi = "aa" * 32
+        mlibc = "bb" * 32
+        rootfs = "cc" * 32
+        buildset = "dd" * 32
+        toolchain = "ee" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "buildset": buildset,
+                        "components": {
+                            "uapi": {"unsigned_digest": uapi},
+                            "mlibc": {"unsigned_digest": mlibc},
+                            "rootfs": {"unsigned_digest": rootfs},
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            uapi_file = Path(tmp) / "uapi.sha256"
+            toolchain_file = Path(tmp) / "toolchain.sha256"
+            uapi_file.write_text(uapi + "\n", encoding="utf-8")
+            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
+            out = Path(tmp) / "proof"
+            self.assertEqual(
+                graph.main(
+                    [
+                        "--out",
+                        str(out),
+                        "--lock",
+                        str(lock_path),
+                        "--uapi-digest",
+                        str(uapi_file),
+                        "--toolchain-digest",
+                        str(toolchain_file),
+                    ]
+                ),
+                0,
+            )
+            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["buildset_digest"], buildset)
+            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["subject_digest"], uapi)
+            self.assertEqual(payload["buildset_digest"], buildset)
+
     def test_lock_unsigned_digest_mismatch_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             lock_path = Path(tmp) / "artifacts.lock.json"

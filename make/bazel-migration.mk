@@ -422,8 +422,10 @@ __bazel-proof-graph: __bazel-kernel-uapi
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
 	@toolchain_digest="$$(/usr/bin/shasum -a 256 bazel/config/toolchain-pin.json | /usr/bin/awk '{print $$1}')"; \
 	extra=""; \
-	if [ -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 ]; then extra="$$extra --mlibc-digest bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256"; fi; \
-	if [ -s bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 ]; then extra="$$extra --rootfs-digest bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256"; fi; \
+	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
+	rootfs_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"rootfs",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/rootfs-live-mismatch.json")"; \
+	if [ -n "$$mlibc_digest" ]; then extra="$$extra --mlibc-digest $$mlibc_digest"; fi; \
+	if [ -n "$$rootfs_digest" ]; then extra="$$extra --rootfs-digest $$rootfs_digest"; fi; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
 	if [ -n "$$buildset" ]; then extra="$$extra --buildset-digest $$buildset"; fi; \
 	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then extra="$$extra --evidence kernel-dependency=$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; fi; \

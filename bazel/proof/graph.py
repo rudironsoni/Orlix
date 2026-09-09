@@ -38,6 +38,41 @@ def merge_subjects(lock_subjects: dict[str, str], live: dict[str, str]) -> dict[
     return merged
 
 
+def select_matching_live_digest(
+    lock_subjects: dict[str, str],
+    name: str,
+    digest_path: str | None,
+    mismatch_out: str | None = None,
+) -> str | None:
+    if not digest_path:
+        return None
+    path = Path(digest_path)
+    if not path.is_file() or path.stat().st_size == 0:
+        return None
+    live = load_digest(str(path))
+    locked = lock_subjects.get(name)
+    if locked and live != locked:
+        if mismatch_out:
+            out = Path(mismatch_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "kind": "live-lock-mismatch",
+                        "component": name,
+                        "live_digest": live,
+                        "lock_unsigned_digest": locked,
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        return None
+    return str(path)
+
+
 def write_graph(
     out_dir: str,
     *,

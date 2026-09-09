@@ -907,7 +907,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 503,
+      "line": 505,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -919,7 +919,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 550,
+      "line": 552,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -932,7 +932,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 635,
+      "line": 637,
       "classification": "private",
       "phony": true,
       "prerequisites": [
