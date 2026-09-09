@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from sign import attach_registry_config, cosign_env
+
 
 class PublishError(ValueError):
     pass
@@ -27,7 +29,7 @@ def require_signed_proposal(path: str) -> dict:
     return payload
 
 
-def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(argv: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             argv,
@@ -35,6 +37,7 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env=env,
         )
     except subprocess.CalledProcessError as error:
         output = error.stdout or ""
@@ -70,7 +73,7 @@ def publish(proposal_path: str, run=_run) -> dict:
         ]
         if image.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
             verify.extend(["--allow-http-registry", "--allow-insecure-registry"])
-        run(verify + [image])
+        run(verify + [image], env=attach_registry_config(cosign_env(), Path(tmp)))
     return payload
 
 

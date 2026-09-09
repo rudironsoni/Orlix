@@ -123,7 +123,7 @@ class ReconstructTests(unittest.TestCase):
         calls: list[list[str]] = []
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 
-        def fake_run(argv: list[str]):
+        def fake_run(argv: list[str], env=None, cwd=None):
             calls.append(list(argv))
             if argv[0] == "oras" and "pull" in argv:
                 dest = Path(argv[argv.index("-o") + 1])
@@ -162,7 +162,7 @@ class ReconstructTests(unittest.TestCase):
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 
-        def fake_run(argv: list[str]):
+        def fake_run(argv: list[str], env=None, cwd=None):
             if argv[0] == "oras" and "pull" in argv:
                 dest = Path(argv[argv.index("-o") + 1])
                 (dest / "component.tar").write_text("aa" * 32 + "\n", encoding="utf-8")

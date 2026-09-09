@@ -52,6 +52,18 @@ def oras_config_args() -> list[str]:
     return []
 
 
+def attach_registry_config(env: dict[str, str], tmp: Path) -> dict[str, str]:
+    path = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
+    if not path:
+        return env
+    dest = tmp / "docker-config"
+    dest.mkdir(exist_ok=True)
+    shutil.copy(path, dest / "config.json")
+    attached = dict(env)
+    attached["DOCKER_CONFIG"] = str(dest)
+    return attached
+
+
 def _parse_oras_digest(stdout: str) -> str:
     match = DIGEST_RE.search(stdout)
     if not match:
@@ -122,7 +134,7 @@ def sign_digest(
         oci_digest = _parse_oras_digest(pushed.stdout)
         signed_ref = f"{repo}/{component}@{oci_digest}"
         key_path = _cosign_key_path(key)
-        env = cosign_env()
+        env = attach_registry_config(cosign_env(), Path(tmp))
         cosign_sign = [
             "cosign",
             "sign",

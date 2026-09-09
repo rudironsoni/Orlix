@@ -12,12 +12,14 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+from sign import attach_registry_config, cosign_env
+
 
 class ReconstructError(ValueError):
     pass
 
 
-def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(argv: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             argv,
@@ -25,6 +27,7 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env=env,
         )
     except subprocess.CalledProcessError as error:
         raise ReconstructError(f"{argv[0]} failed: {error.stdout or ''}") from error
@@ -102,7 +105,10 @@ def reconstruct(lock_path: str, out_dir: str, run=_run) -> dict:
             ]
             if reference.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
                 verify.extend(["--allow-http-registry", "--allow-insecure-registry"])
-            run(verify + [reference])
+            run(
+                verify + [reference],
+                env=attach_registry_config(cosign_env(), Path(tmp)),
+            )
             blob = pull_dest / "component.tar"
             if not blob.is_file():
                 raise ReconstructError(f"{name} pull did not write component.tar")

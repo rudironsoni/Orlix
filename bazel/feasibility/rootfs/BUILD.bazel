@@ -1,4 +1,4 @@
-load(":rootfs.bzl", "orlix_rootfs")
+load(":rootfs.bzl", "orlix_rootfs", "orlix_rootfs_payload")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -20,5 +20,20 @@ orlix_rootfs(
     ],
     sysroot = "//bazel/feasibility/mlibc:sysroot",
     tags = ["manual"],
-    visibility = ["//bazel/feasibility:__subpackages__"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
+)
+
+orlix_rootfs_payload(
+    name = "payload",
+    rootfs = ":rootfs",
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+    ],
 )

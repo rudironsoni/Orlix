@@ -7,6 +7,10 @@ updated: 2026-09-09
 ---
 # Orlix Knowledge Log
 
+## [2026-09-09] record | Signed uapi, mlibc, and rootfs published to GHCR
+
+`make __bazel-publish-{uapi,mlibc,rootfs}` pushed Cosign-signed packages to `ghcr.io/rudironsoni/orlix`. `make __bazel-lock-from-signed` wrote buildset `2bd37e90d962cccad334ec041b9f1dc8a5e4d979882f7594686043766434d02d`. `make __bazel-reconstruct` pulled those GHCR references. Promoted Apple compile still does not substitute OCI trees. posix-shell TAP END is missing. Cutover is not done.
+
 ## [2026-09-09] record | Bazel epic is not done without GHCR reuse
 
 [CORRECTION] `docs/objects/epic/done/adopt-bazel-product-graph.md` was wrong. The epic is in `doing/`. Incomplete stories now in `doing/`: feasibility, Apple product graph, routing, proof binding, signed promote, protected automation, parity/cutover, rollback retire. Incomplete tasks match those stories. Kept in `done/`: governance baseline, hermetic upstream rules, and the Apple matrix definition after the promoted row was set back to `gated`. `gh api user/packages?package_type=container` has no `orlix` packages. `artifacts.lock.json` names `localhost:5001`, and that registry is not running. `Build/AgentHarness/bazel-migration/apple-feasibility.json` is `partial`. posix-shell TAP END is missing. No benchmark workflow exists. HostAdapter composition remains `[UNVERIFIED]`.

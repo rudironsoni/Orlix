@@ -74,7 +74,7 @@ class PublishTests(unittest.TestCase):
         observed = "sha256:" + ("cd" * 32)
         reference = f"ghcr.io/example/orlix/uapi@{observed}"
 
-        def fake_run(argv: list[str]):
+        def fake_run(argv: list[str], env=None, cwd=None):
             calls.append(list(argv))
 
             class Result:

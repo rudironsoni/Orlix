@@ -45,11 +45,13 @@ class AppleBuildMatrixTests(unittest.TestCase):
     def test_promoted_mode_consumes_signed_lock(self) -> None:
         row = self.rows["ios-15.0-promoted-buildset"]
         self.assertEqual(row["result"], "gated")
-        self.assertIn("localhost:5001", row["gate"])
         self.assertIn("GHCR", row["gate"])
-        self.assertIn("259dc911", row["proof"])
+        self.assertIn("2bd37e90", row["proof"])
+        self.assertIn("ghcr.io/rudironsoni/orlix", row["proof"])
         self.assertIn("--config=promoted", row["proof"])
         self.assertNotIn("latest", row["proof"])
+        self.assertNotIn("localhost:5001", row["proof"])
+        self.assertNotIn("localhost:5001", row["gate"])
 
     def test_product_graph_names_kernel_and_public_sdk(self) -> None:
         root = Path(__file__).resolve().parents[2]

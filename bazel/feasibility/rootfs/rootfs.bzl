@@ -159,6 +159,42 @@ digest="$( (
         ),
     ]
 
+def _rootfs_payload_impl(ctx):
+    info = ctx.attr.rootfs[OrlixRootfsInfo]
+    root = ctx.actions.declare_directory(ctx.label.name)
+    ctx.actions.run_shell(
+        mnemonic = "OrlixRootfsPayload",
+        progress_message = "Staging OrlixOS rootfs payload images",
+        command = r"""
+set -euo pipefail
+dest="$1"
+/bin/mkdir -p "$dest"
+/bin/cp "$2" "$dest/initramfs.cpio.gz"
+/bin/cp "$3" "$dest/base.ext4"
+/bin/cp "$4" "$dest/state.ext4"
+""",
+        arguments = [
+            root.path,
+            info.initramfs.path,
+            info.base_ext4.path,
+            info.state_ext4.path,
+        ],
+        inputs = [info.initramfs, info.base_ext4, info.state_ext4],
+        outputs = [root],
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+    )
+    return [DefaultInfo(files = depset([root]))]
+
+
+orlix_rootfs_payload = rule(
+    implementation = _rootfs_payload_impl,
+    attrs = {
+        "rootfs": attr.label(mandatory = True, providers = [OrlixRootfsInfo]),
+    },
+)
+
+
 orlix_rootfs = rule(
     implementation = _rootfs_impl,
     attrs = {

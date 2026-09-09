@@ -115,6 +115,7 @@ ios_framework(
     ],
     infoplists = ["//OrlixOS/Sources/Session:BazelInfo.plist"],
     minimum_os_version = "15.0",
+    resources = ["//bazel/feasibility/rootfs:payload"],
     tags = ["manual"],
     deps = [
         "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",

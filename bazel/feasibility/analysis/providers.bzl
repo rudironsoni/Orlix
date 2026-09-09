@@ -234,3 +234,22 @@ def _rootfs_info_test_impl(ctx):
     return analysistest.end(env)
 
 rootfs_info_test = analysistest.make(_rootfs_info_test_impl)
+
+def _kernel_composition_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixKernelAppleProductInfo in target)
+    found = False
+    for action in target.actions:
+        if action.mnemonic == "OrlixKernelComposition":
+            found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            argv = " ".join(action.argv)
+            asserts.true(env, "OrlixHostAdapter" in joined)
+            asserts.true(env, "OrlixKernel" in joined)
+            asserts.false(env, "OrlixKernel/Makefile" in argv)
+            asserts.false(env, "OrlixMLibC/Makefile" in joined)
+    asserts.true(env, found)
+    return analysistest.end(env)
+
+kernel_composition_test = analysistest.make(_kernel_composition_test_impl)

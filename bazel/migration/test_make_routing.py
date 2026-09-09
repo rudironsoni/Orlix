@@ -106,6 +106,9 @@ class MakeRoutingTests(unittest.TestCase):
         )
         self.assertIn("__bazel-rootfs:", mk)
         self.assertIn("//bazel/feasibility/packages:coreutils", mk)
+        app = (ROOT / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/feasibility/rootfs:payload", app)
+        self.assertIn("name = \"OrlixOSFramework\"", app)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
             encoding="utf-8"
         )

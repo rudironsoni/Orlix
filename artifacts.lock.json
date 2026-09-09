@@ -1,21 +1,21 @@
 {
   "schema": 1,
-  "buildset": "259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672",
+  "buildset": "2bd37e90d962cccad334ec041b9f1dc8a5e4d979882f7594686043766434d02d",
   "components": {
     "uapi": {
       "unsigned_digest": "666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07",
-      "oci_digest": "sha256:feb6e8920a8c0d91c43e7115dd59aa2c4e91350595ce9919fd51d9b4c1d32e32",
-      "oci_reference": "localhost:5001/orlix/uapi@sha256:feb6e8920a8c0d91c43e7115dd59aa2c4e91350595ce9919fd51d9b4c1d32e32"
+      "oci_digest": "sha256:8a982f6e781688b29c111972ac2a435fb76a4852e2e1376c6fd184acb8a698d8",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:8a982f6e781688b29c111972ac2a435fb76a4852e2e1376c6fd184acb8a698d8"
     },
     "mlibc": {
-      "unsigned_digest": "74719db18b5f8afd5a447aac704bce3fe02829cd3208bdcca1ac69952034bbf4",
-      "oci_digest": "sha256:1ca307725eee8886bc3c94bf9592a542a033332c1375f0900e45c7090defba4f",
-      "oci_reference": "localhost:5001/orlix/mlibc@sha256:1ca307725eee8886bc3c94bf9592a542a033332c1375f0900e45c7090defba4f"
+      "unsigned_digest": "fc080e3617519e91626335997c270910c691a1ea760cc82d6d36a6f0238448a8",
+      "oci_digest": "sha256:767ebe4ba10832f44a7ba8dc93f5dd0d86bd44c559ff4d50b39ad1fd5b675b70",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:767ebe4ba10832f44a7ba8dc93f5dd0d86bd44c559ff4d50b39ad1fd5b675b70"
     },
     "rootfs": {
-      "unsigned_digest": "1a789b43efb1b89bd5d9543dbc71192d82b7b2a6af7cdeae6d92c088ea2aa0df",
-      "oci_digest": "sha256:dd564477c1f1ba90b8754f2606336d07f68dcb5f8cb321e5447d7938c30f18e1",
-      "oci_reference": "localhost:5001/orlix/rootfs@sha256:dd564477c1f1ba90b8754f2606336d07f68dcb5f8cb321e5447d7938c30f18e1"
+      "unsigned_digest": "794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3",
+      "oci_digest": "sha256:c21a027ed4a78a344f00f8f2aad08fe5a107362f5d089bf116e390d3b02704be",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:c21a027ed4a78a344f00f8f2aad08fe5a107362f5d089bf116e390d3b02704be"
     }
   }
 }

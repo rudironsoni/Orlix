@@ -14,7 +14,7 @@
   "notes": [
     "An installed SDK or simulator does not create a supported row.",
     "iOS 15.5 runtime proof is make ios15-simulator-gate on a local iOS 15.5 simulator. GitHub Actions run 34035260568 did not start: account payments failed or the spending limit must increase. Empty steps are not a workflow YAML defect.",
-    "artifacts.lock.json names localhost:5001. GHCR has no orlix component packages. --config=promoted validates the lock JSON and does not pull or substitute OCI trees.",
+    "artifacts.lock.json names ghcr.io/rudironsoni/orlix digest-pinned uapi, mlibc, and rootfs. make __bazel-reconstruct pulls those GHCR references. --config=promoted still embeds the lock JSON and does not substitute OCI trees into the Apple compile.",
     "Later-system features stay behind availability or capability gates. The iOS 15 product is the reduced feature set from ADR 0038."
   ],
   "rows": [
@@ -71,8 +71,8 @@
       "destination": "iphonesimulator",
       "component_mode": "promoted",
       "result": "gated",
-      "gate": "lock points at localhost:5001; GHCR has no orlix/uapi, orlix/mlibc, or orlix/rootfs; promoted.bzl does not pull OCI",
-      "proof": "make build PROFILE=release passes --config=promoted and embeds locked-buildset.json for buildset 259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672. That is lock selection, not GHCR reuse."
+      "gate": "GHCR lock reconstructs; promoted.bzl does not substitute OCI trees into the Apple compile",
+      "proof": "make __bazel-reconstruct pulled ghcr.io/rudironsoni/orlix/{uapi,mlibc,rootfs} for buildset 2bd37e90d962cccad334ec041b9f1dc8a5e4d979882f7594686043766434d02d. make build --config=promoted still embeds locked-buildset.json only."
     },
     {
       "id": "signing-distribution",

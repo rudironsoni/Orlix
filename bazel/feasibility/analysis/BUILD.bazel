@@ -8,6 +8,7 @@ load(
     "guest_package_tree_test",
     "package_tree_test",
     "rootfs_info_test",
+    "kernel_composition_test",
     "sysroot_uapi_only_test",
     "uapi_providers_test",
     "variant_stamp_test",
@@ -139,4 +140,9 @@ guest_package_tree_test(
 rootfs_info_test(
     name = "rootfs_info_test",
     target_under_test = "//bazel/feasibility/rootfs:rootfs",
+)
+
+kernel_composition_test(
+    name = "kernel_composition_test",
+    target_under_test = "//bazel/product:kernel_composition",
 )
