@@ -58,7 +58,7 @@ extension CloudKitManager {
             let statusLogValue = String(describing: resolvedAccountState)
 
             logger.info("CloudKit account status: \(statusLogValue)")
-            logger.info("Container identifier: \(self.container.containerIdentifier ?? "nil")")
+            logger.info("Container identifier: \(self.container?.containerIdentifier ?? "nil")")
 
             statusStore.accountState = resolvedAccountState
             if status == .available {

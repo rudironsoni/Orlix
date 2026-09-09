@@ -68,7 +68,7 @@ extension CloudKitManager {
     }
 
     func createZoneIfNeeded() async throws {
-        let results = try await database.recordZones(for: [recordZoneID])
+        let results = try await cloudDatabase().recordZones(for: [recordZoneID])
         if let result = results[recordZoneID] {
             switch result {
             case .success:
@@ -76,7 +76,7 @@ extension CloudKitManager {
                 return
             case .failure(let error):
                 if isZoneNotFound(error) {
-                    _ = try await database.modifyRecordZones(saving: [recordZone], deleting: [])
+                    _ = try await cloudDatabase().modifyRecordZones(saving: [recordZone], deleting: [])
                     setZoneReady(true)
                     return
                 }
@@ -84,7 +84,7 @@ extension CloudKitManager {
             }
         }
 
-        _ = try await database.modifyRecordZones(saving: [recordZone], deleting: [])
+        _ = try await cloudDatabase().modifyRecordZones(saving: [recordZone], deleting: [])
         setZoneReady(true)
     }
 
