@@ -29,6 +29,7 @@
 #define ORLIX_TCTI_OP_CBNZ BIT(5)
 #define ORLIX_TCTI_OP_LINK BIT(5)
 #define ORLIX_TCTI_OP_MOVN BIT(6)
+#define ORLIX_TCTI_OP_INVERT BIT(7)
 
 #if defined(__has_attribute)
 #if __has_attribute(musttail)
@@ -154,6 +155,15 @@ static void orlix_tcti_micro_op_from_decoded(
 		else if (decoded->move_wide_op == ORLIX_TCTI_MOVE_WIDE_MOVN)
 			op->flags |= ORLIX_TCTI_OP_MOVN;
 		imm = (u64)decoded->imm16 << decoded->halfword_shift;
+	} else if (decoded->decode_class ==
+		   ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER) {
+		op->rt = decoded->rm;
+		op->access_size = decoded->shift_amount;
+		op->result_size = decoded->logical_op;
+		op->condition = decoded->shift;
+		if (decoded->invert_second_operand)
+			op->flags |= ORLIX_TCTI_OP_INVERT;
+		imm = 0;
 	} else
 		imm = (u64)decoded->memory_offset;
 	op->imm = (s64)imm;
@@ -500,6 +510,87 @@ static int orlix_tcti_gadget_move_wide(struct orlix_tcti_exec *e)
 	ORLIX_TCTI_MUSTTAIL return orlix_tcti_tail_next(e);
 }
 
+static u64 orlix_tcti_shift_logical_value(u64 value, u8 shift, u8 amount,
+				     bool is_64bit)
+{
+	if (is_64bit) {
+		switch (shift) {
+		case 0:
+			return value << amount;
+		case 1:
+			return value >> amount;
+		case 2:
+			return (u64)((s64)value >> amount);
+		case 3:
+			return ror64(value, amount);
+		}
+		return value;
+	}
+	value = (u32)value;
+	switch (shift) {
+	case 0:
+		return (u32)(value << amount);
+	case 1:
+		return (u32)value >> amount;
+	case 2:
+		return (u32)((s32)value >> amount);
+	case 3:
+		return ror32(value, amount);
+	}
+	return value;
+}
+
+static int orlix_tcti_gadget_logical_shifted_register(struct orlix_tcti_exec *e)
+{
+	struct orlix_tcti_micro_op op;
+	u8 access_size;
+	u64 left;
+	u64 right;
+	u64 result;
+	u64 mask;
+	u64 sign_bit;
+	int ret;
+
+	ret = orlix_tcti_micro_op_take(e, &op);
+	if (ret)
+		return ret;
+	orlix_tcti_note_entry(e, op.insn);
+	access_size = (op.flags & ORLIX_TCTI_OP_64BIT) ? sizeof(u64) : sizeof(u32);
+	mask = access_size == sizeof(u32) ? U32_MAX : U64_MAX;
+	sign_bit = access_size == sizeof(u32) ? BIT_ULL(31) : BIT_ULL(63);
+	left = orlix_tcti_read_reg_or_zr(e->regs, op.rn, access_size);
+	right = orlix_tcti_shift_logical_value(
+		orlix_tcti_read_reg_or_zr(e->regs, op.rt, access_size),
+		op.condition, op.access_size, access_size == sizeof(u64));
+	if (op.flags & ORLIX_TCTI_OP_INVERT)
+		right = ~right;
+	switch (op.result_size) {
+	case ORLIX_TCTI_LOGICAL_AND:
+		result = left & right;
+		break;
+	case ORLIX_TCTI_LOGICAL_ORR:
+		result = left | right;
+		break;
+	case ORLIX_TCTI_LOGICAL_EOR:
+		result = left ^ right;
+		break;
+	default:
+		return -EINVAL;
+	}
+	result &= mask;
+	if (op.flags & ORLIX_TCTI_OP_SET_FLAGS) {
+		e->regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
+		if (result & sign_bit)
+			e->regs->pstate |= PSR_N_BIT;
+		if (!result)
+			e->regs->pstate |= PSR_Z_BIT;
+	}
+	if (!(op.flags & ORLIX_TCTI_OP_SET_FLAGS) || op.rd != 31)
+		orlix_tcti_write_reg_or_zr(e->regs, op.rd, access_size, result);
+	e->regs->pc += sizeof(u32);
+	ORLIX_TCTI_MUSTTAIL return orlix_tcti_tail_next(e);
+}
+
 static int orlix_tcti_gadget_cbz(struct orlix_tcti_exec *e)
 {
 	struct orlix_tcti_micro_op op;
@@ -652,6 +743,8 @@ static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 		return orlix_tcti_gadget_b_imm;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_MOVE_WIDE_IMMEDIATE)
 		return orlix_tcti_gadget_move_wide;
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER)
+		return orlix_tcti_gadget_logical_shifted_register;
 	if (decoded->decode_class ==
 		    ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE &&
 	    !decoded->simd_fp && !decoded->prefetch)
