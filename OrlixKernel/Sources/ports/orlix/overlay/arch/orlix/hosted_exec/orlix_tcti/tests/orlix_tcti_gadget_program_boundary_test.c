@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
 #include <linux/errno.h>
+#include <linux/sched.h>
 #include <asm/ptrace.h>
 
+#include "../block_cache.h"
 #include "../decode_aarch64.h"
 #include "../gadget_program.h"
 
@@ -87,9 +89,29 @@ static void orlix_tcti_gadget_program_runs_fused_subs_b_cond(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0UL, fault_address);
 }
 
+static void orlix_tcti_code_generation_does_not_flip_mapping_seqlock(
+	struct kunit *test)
+{
+	u64 old_seq;
+	u64 old_code;
+	u64 new_seq;
+	u64 new_code;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	old_seq = orlix_tcti_translation_generation(current->mm);
+	old_code = orlix_tcti_code_generation(current->mm);
+	orlix_tcti_bump_code_generation(current->mm);
+	new_seq = orlix_tcti_translation_generation(current->mm);
+	new_code = orlix_tcti_code_generation(current->mm);
+	KUNIT_EXPECT_EQ(test, old_seq, new_seq);
+	KUNIT_EXPECT_EQ(test, 0, (int)(new_seq & 1));
+	KUNIT_EXPECT_NE(test, old_code, new_code);
+}
+
 static struct kunit_case orlix_tcti_gadget_program_boundary_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_gadget_program_stores_compact_micro_op),
 	KUNIT_CASE(orlix_tcti_gadget_program_runs_fused_subs_b_cond),
+	KUNIT_CASE(orlix_tcti_code_generation_does_not_flip_mapping_seqlock),
 	{}
 };
 

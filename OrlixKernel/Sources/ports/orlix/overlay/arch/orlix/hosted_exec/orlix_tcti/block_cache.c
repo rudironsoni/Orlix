@@ -133,14 +133,14 @@ u64 orlix_tcti_code_generation(struct mm_struct *mm)
 	u64 local = 0;
 
 	if (mm)
-		local = (u64)atomic64_read(&mm->context.orlix_tcti_mapping_sequence);
+		local = (u64)atomic64_read(&mm->context.orlix_tcti_code_generation);
 	return global + local;
 }
 
 void orlix_tcti_bump_code_generation(struct mm_struct *mm)
 {
 	if (mm)
-		atomic64_inc(&mm->context.orlix_tcti_mapping_sequence);
+		atomic64_inc(&mm->context.orlix_tcti_code_generation);
 	else
 		atomic64_inc(&orlix_tcti_global_code_generation);
 }
