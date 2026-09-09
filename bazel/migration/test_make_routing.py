@@ -70,6 +70,12 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-orlix-archive", makefile)
         self.assertIn("ORLIX_BAZEL_AUTHORITY),1", makefile)
 
+    def test_substitute_promoted_maps_reconstructed_oci(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("__bazel-substitute-promoted", mk)
+        self.assertIn("promoted-components.json", mk)
+        self.assertIn("bazel/promotion/substitute.py", mk)
+
 
 if __name__ == "__main__":
     unittest.main()
