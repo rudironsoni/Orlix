@@ -256,7 +256,8 @@ MLIBC_TEST_ORLIX_CASES := \
 	orlix/stdio_pipe_line_atomic \
 	orlix/strerror \
 	orlix/time_format \
-	orlix/time_relative
+	orlix/time_relative \
+	orlix/wait3
 MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES) $(MLIBC_TEST_ORLIX_CASES)
 # Runtime-log polling uses 0.1s ticks. Scale with the selected upstream mlibc
 # tests so a full suite is not cut off by the focused-case timeout.
