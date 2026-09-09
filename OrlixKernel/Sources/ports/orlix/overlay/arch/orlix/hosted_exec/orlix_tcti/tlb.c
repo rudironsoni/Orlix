@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <linux/compiler.h>
 #include <linux/errno.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
@@ -127,6 +128,21 @@ int orlix_tcti_tlb_lookup_page(struct orlix_tcti_tlb *tlb,
 		if (tlb)
 			tlb->faults++;
 		return -EINVAL;
+	}
+
+	entry = &tlb->entries[orlix_tcti_tlb_index(guest_addr)];
+	if (likely(tlb->active_mm == mm &&
+		   tlb->active_generation == translation_generation &&
+		   entry->mm == mm &&
+		   entry->guest_page == (guest_addr & PAGE_MASK) &&
+		   entry->translation_generation == translation_generation &&
+		   orlix_tcti_tlb_access_allowed(entry, access))) {
+		orlix_tcti_tlb_count_hit(tlb, access);
+		*host_data = (char *)entry->host_page +
+			     offset_in_page(guest_addr);
+		if (linux_perms)
+			*linux_perms = entry->linux_perms;
+		return 0;
 	}
 
 	current_generation = orlix_tcti_translation_generation(mm);

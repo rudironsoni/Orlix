@@ -27,6 +27,9 @@ struct orlix_tcti_block {
 	u64 code_generation;
 	u32 instruction_count;
 	u32 program_words;
+	unsigned long next_pc;
+	u64 next_generation;
+	struct orlix_tcti_block *next;
 	struct orlix_tcti_gadget_word program[];
 };
 
@@ -52,6 +55,10 @@ int orlix_tcti_block_cache_insert(struct mm_struct *mm,
 			    u32 program_words,
 			    struct orlix_tcti_block **out);
 void orlix_tcti_block_put(struct orlix_tcti_block *block);
+void orlix_tcti_block_remember_next(struct orlix_tcti_block *from,
+			      struct orlix_tcti_block *to, u64 generation);
+struct orlix_tcti_block *orlix_tcti_block_follow_next(
+	struct orlix_tcti_block *from, unsigned long guest_pc, u64 generation);
 void orlix_tcti_block_cache_invalidate_mm(struct mm_struct *mm);
 void orlix_tcti_block_cache_invalidate_range(struct mm_struct *mm,
 				       unsigned long start, unsigned long end);

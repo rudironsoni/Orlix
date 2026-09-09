@@ -18,6 +18,16 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-atomic-memory")
     }
 
+    func testFocusedOrlixTCTIGadgetProgramBoundaryDiagnosticUsesUpstreamKUnitParameter() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIGadgetProgramBoundaryDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-gadget-program-boundary"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-gadget-program-boundary")
+    }
+
     func testFocusedOrlixTCTIKthreadHandoffDiagnosticSelectsExactOuterSuite() {
         let spec = OrlixUpstreamTestRunSpec.kernelTCTIKthreadHandoffDiagnostic
 

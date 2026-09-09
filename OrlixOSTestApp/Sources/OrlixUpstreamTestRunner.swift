@@ -102,6 +102,16 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIGadgetProgramBoundaryDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-gadget-program-boundary",
+        expectedKUnitSuite: "orlix-tcti-gadget-program-boundary",
+        hostDirectoryFixture: true
+    )
+
     static let kernelTCTIKthreadHandoffDiagnostic = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

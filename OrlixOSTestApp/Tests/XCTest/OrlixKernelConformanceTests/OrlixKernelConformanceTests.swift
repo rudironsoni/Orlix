@@ -201,6 +201,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelTCTIAtomicMemoryDiagnostic)
     }
 
+    func testOrlixTCTIGadgetProgramBoundaryKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIGadgetProgramBoundaryDiagnostic)
+    }
+
     func testOrlixTCTIKthreadHandoffKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIKthreadHandoffDiagnostic)
     }

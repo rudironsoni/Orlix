@@ -875,11 +875,11 @@ static bool orlix_tcti_decoded_for_program_pc(
 	if (index >= instruction_count)
 		return false;
 
-	offset = index * (1U + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS);
-	if (offset + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS > program_words)
+	offset = index * ORLIX_TCTI_MICRO_OP_WORDS;
+	if (offset + 1 >= program_words)
 		return false;
 
-	memcpy(decoded, &program[offset + 1], sizeof(*decoded));
+	*decoded = orlix_tcti_decode_aarch64((u32)program[offset + 1].value);
 	return true;
 }
 
@@ -1091,6 +1091,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 	unsigned long long instruction_count = 0;
 	struct orlix_tcti_hot_block hot_blocks[ORLIX_TCTI_LOCAL_HOT_BLOCKS] = {};
 	u32 hot_block_cursor = 0;
+	struct orlix_tcti_block *prev_block = NULL;
 	bool successful_gadget_execution = false;
 	struct orlix_tcti_result result = {
 		.reason = ORLIX_TCTI_EXIT_TASK_EXIT,
@@ -1133,8 +1134,11 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 					    regs->pstate);
 
 		code_generation = orlix_tcti_code_generation(mm);
-		block = orlix_tcti_hot_blocks_lookup(hot_blocks, block_pc,
+		block = orlix_tcti_block_follow_next(prev_block, block_pc,
 					       code_generation);
+		if (!block)
+			block = orlix_tcti_hot_blocks_lookup(hot_blocks, block_pc,
+						       code_generation);
 		if (!block) {
 			block = orlix_tcti_block_cache_lookup(mm, block_pc,
 							code_generation);
@@ -1191,10 +1195,16 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						block_decoded.instruction;
 				}
 			}
+			if (!ret) {
+				orlix_tcti_block_remember_next(prev_block, block,
+							 code_generation);
+				prev_block = block;
+				if (global_cache_ref)
+					orlix_tcti_block_put(block);
+				continue;
+			}
 			if (global_cache_ref)
 				orlix_tcti_block_put(block);
-			if (!ret)
-				continue;
 			if (ret == -ESTALE)
 				continue;
 			if (ret == -EAGAIN) {
