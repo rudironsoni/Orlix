@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -7,320 +8,95 @@ from pathlib import Path
 
 import bind
 import graph
+from test_bind import SUBJECT, TOOLCHAIN, write_evidence
 
 
 class GraphTests(unittest.TestCase):
     def test_blocks_without_hosted_evidence(self) -> None:
-        digest = "aa" * 32
-        toolchain = "bb" * 32
         with tempfile.TemporaryDirectory() as tmp:
             index = graph.write_graph(
-                tmp,
-                subjects={
-                    "uapi": digest,
-                    "mlibc": digest,
-                    "rootfs": digest,
-                    "app": digest,
-                },
-                toolchain_digest=toolchain,
-                profile="release",
-                destination="iphonesimulator",
+                tmp, subjects={"kernel": SUBJECT}, toolchain_digest=TOOLCHAIN,
+                profile="release", destination="iphonesimulator", buildset_digest=SUBJECT,
             )
             self.assertFalse(index["complete"])
             self.assertEqual(index["reports"], ["kernel-dependency:blocked"])
-            payload = json.loads((Path(tmp) / "kernel-dependency.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["result"], "blocked")
-            self.assertEqual(payload["subject_digest"], digest)
-
-    def test_records_locked_buildset_digest(self) -> None:
-        digest = "aa" * 32
-        buildset = "cc" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            index = graph.write_graph(
-                tmp,
-                subjects={"uapi": digest},
-                toolchain_digest="bb" * 32,
-                profile="release",
-                destination="iphonesimulator",
-                buildset_digest=buildset,
-            )
-            self.assertEqual(index["buildset_digest"], buildset)
-            payload = json.loads((Path(tmp) / "kernel-dependency.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["buildset_digest"], buildset)
+            self.assertEqual(index["buildset_digest"], SUBJECT)
+            report = json.loads((Path(tmp) / "kernel-dependency.json").read_text())
+            self.assertEqual(report["subject_digest"], SUBJECT)
 
     def test_select_matching_live_digest_records_mismatch(self) -> None:
-        lock_subjects = {"mlibc": "aa" * 32}
         with tempfile.TemporaryDirectory() as tmp:
             live = Path(tmp) / "sysroot.sha256"
-            mismatch = Path(tmp) / "mlibc-live-mismatch.json"
-            live.write_text("bb" * 32 + "\n", encoding="utf-8")
-            selected = graph.select_matching_live_digest(
-                lock_subjects, "mlibc", str(live), str(mismatch)
-            )
-            self.assertIsNone(selected)
-            payload = json.loads(mismatch.read_text(encoding="utf-8"))
-            self.assertEqual(payload["kind"], "live-lock-mismatch")
-            self.assertEqual(payload["component"], "mlibc")
-            self.assertEqual(payload["live_digest"], "bb" * 32)
-            self.assertEqual(payload["lock_unsigned_digest"], "aa" * 32)
-
-    def test_select_matching_live_digest_keeps_lock_match(self) -> None:
-        digest = "aa" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            live = Path(tmp) / "sysroot.sha256"
-            live.write_text(digest + "\n", encoding="utf-8")
-            selected = graph.select_matching_live_digest(
-                {"mlibc": digest}, "mlibc", str(live)
-            )
-            self.assertEqual(selected, str(live))
-
-    def test_main_binds_lock_when_live_mlibc_mismatches(self) -> None:
-        uapi = "aa" * 32
-        mlibc = "bb" * 32
-        rootfs = "cc" * 32
-        buildset = "dd" * 32
-        toolchain = "ee" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            lock_path = Path(tmp) / "artifacts.lock.json"
-            lock_path.write_text(
-                json.dumps(
-                    {
-                        "schema": 1,
-                        "buildset": buildset,
-                        "components": {
-                            "uapi": {"unsigned_digest": uapi},
-                            "mlibc": {"unsigned_digest": mlibc},
-                            "rootfs": {"unsigned_digest": rootfs},
-                        },
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            uapi_file = Path(tmp) / "uapi.sha256"
-            toolchain_file = Path(tmp) / "toolchain.sha256"
-            uapi_file.write_text(uapi + "\n", encoding="utf-8")
-            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
-            out = Path(tmp) / "proof"
-            self.assertEqual(
-                graph.main(
-                    [
-                        "--out",
-                        str(out),
-                        "--lock",
-                        str(lock_path),
-                        "--uapi-digest",
-                        str(uapi_file),
-                        "--toolchain-digest",
-                        str(toolchain_file),
-                    ]
-                ),
-                0,
-            )
-            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
-            self.assertEqual(index["buildset_digest"], buildset)
-            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["subject_digest"], uapi)
-            self.assertEqual(payload["buildset_digest"], buildset)
+            mismatch = Path(tmp) / "mismatch.json"
+            live.write_text("bb" * 32)
+            with self.assertRaisesRegex(bind.BindError, "does not match"):
+                graph.select_matching_live_digest({"mlibc": SUBJECT}, "mlibc", str(live), str(mismatch))
+            self.assertEqual(json.loads(mismatch.read_text())["live_digest"], "bb" * 32)
+            live.write_text(SUBJECT)
+            self.assertEqual(graph.select_matching_live_digest({"mlibc": SUBJECT}, "mlibc", str(live)), str(live))
 
     def test_lock_unsigned_digest_mismatch_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lock_path = Path(tmp) / "artifacts.lock.json"
-            lock_path.write_text(
-                json.dumps(
-                    {
-                        "schema": 1,
-                        "buildset": "dd" * 32,
-                        "components": {
-                            "uapi": {
-                                "unsigned_digest": "aa" * 32,
-                                "oci_digest": "sha256:" + ("ee" * 32),
-                                "oci_reference": "localhost:5001/orlix/uapi@sha256:" + ("ee" * 32),
-                            }
-                        },
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            lock_subjects, buildset = graph.subjects_from_lock(str(lock_path))
-            self.assertEqual(buildset, "dd" * 32)
-            self.assertEqual(lock_subjects["uapi"], "aa" * 32)
-            with self.assertRaises(graph.BindError):
-                graph.merge_subjects(lock_subjects, {"uapi": "bb" * 32})
+        with self.assertRaises(bind.BindError):
+            graph.merge_subjects({"mlibc": SUBJECT}, {"mlibc": "bb" * 32})
 
-    def test_main_binds_lock_unsigned_digests(self) -> None:
-        uapi = "aa" * 32
-        mlibc = "bb" * 32
-        rootfs = "cc" * 32
-        buildset = "dd" * 32
-        toolchain = "ee" * 32
+    def test_complete_graph_binds_evidence_and_report_digests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lock_path = Path(tmp) / "artifacts.lock.json"
-            lock_path.write_text(
-                json.dumps(
-                    {
-                        "schema": 1,
-                        "buildset": buildset,
-                        "components": {
-                            "uapi": {"unsigned_digest": uapi},
-                            "mlibc": {"unsigned_digest": mlibc},
-                            "rootfs": {"unsigned_digest": rootfs},
-                        },
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            uapi_file = Path(tmp) / "uapi.sha256"
-            mlibc_file = Path(tmp) / "mlibc.sha256"
-            rootfs_file = Path(tmp) / "rootfs.sha256"
-            toolchain_file = Path(tmp) / "toolchain.sha256"
-            uapi_file.write_text(uapi + "\n", encoding="utf-8")
-            mlibc_file.write_text(mlibc + "\n", encoding="utf-8")
-            rootfs_file.write_text(rootfs + "\n", encoding="utf-8")
-            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
-            out = Path(tmp) / "proof"
-            self.assertEqual(
-                graph.main(
-                    [
-                        "--out",
-                        str(out),
-                        "--lock",
-                        str(lock_path),
-                        "--uapi-digest",
-                        str(uapi_file),
-                        "--mlibc-digest",
-                        str(mlibc_file),
-                        "--rootfs-digest",
-                        str(rootfs_file),
-                        "--toolchain-digest",
-                        str(toolchain_file),
-                        "--profile",
-                        "release",
-                        "--destination",
-                        "iphonesimulator",
-                    ]
-                ),
-                0,
-            )
-            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
-            self.assertFalse(index["complete"])
-            self.assertEqual(index["buildset_digest"], buildset)
-            self.assertEqual(index["reports"], ["kernel-dependency:blocked"])
-            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["subject_digest"], uapi)
-            self.assertEqual(payload["buildset_digest"], buildset)
-            self.assertEqual(payload["result"], "blocked")
+            root = Path(tmp)
+            markers = {
+                "kernel-dependency": "T _OrlixBoot\nT _arch_boot_entry\n",
+                "kunit": "ORLIX-KSELFTEST-END\n",
+                "kselftest": "ORLIX-KSELFTEST-END\n",
+                "orlixmlibc": "ORLIX-MLIBC-TEST-END\n",
+                "syscall-uapi": "ORLIX-KSELFTEST-END\n",
+                "posix-shell": "ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=1\n",
+            }
+            evidence = {
+                tier: str(write_evidence(root, tier, markers.get(tier, "** TEST SUCCEEDED **\n"), SUBJECT))
+                for tier in bind.TIERS
+            }
+            out = root / "reports"
+            self.assertEqual(graph.main([
+                "--out", str(out), "--uapi-digest", SUBJECT, "--kernel-digest", SUBJECT,
+                "--mlibc-digest", SUBJECT, "--rootfs-digest", SUBJECT, "--app-digest", SUBJECT,
+                "--toolchain-digest", TOOLCHAIN, "--buildset-digest", SUBJECT,
+                *[arg for tier, path in evidence.items() for arg in ("--evidence", f"{tier}={path}")],
+            ]), 0)
+            self.assertTrue(json.loads((out / "index.json").read_text())["complete"])
+            prior = []
+            for tier in bind.TIERS:
+                path = out / f"{tier}.json"
+                report = json.loads(path.read_text())
+                self.assertEqual(report["prerequisite_digests"], prior)
+                self.assertIn("evidence_digest", report["evidence"])
+                prior.append(hashlib.sha256(path.read_bytes()).hexdigest())
 
-    def test_main_passes_kernel_dependency_only_with_evidence(self) -> None:
-        uapi = "aa" * 32
-        toolchain = "ee" * 32
+    def test_invalid_evidence_cannot_pass(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            uapi_file = Path(tmp) / "uapi.sha256"
-            toolchain_file = Path(tmp) / "toolchain.sha256"
-            evidence = Path(tmp) / "kernel-dependency.evidence"
-            uapi_file.write_text(uapi + "\n", encoding="utf-8")
-            toolchain_file.write_text(toolchain + "\n", encoding="utf-8")
-            evidence.write_text("T _OrlixBoot\nT _arch_boot_entry\n", encoding="utf-8")
-            out = Path(tmp) / "proof"
-            self.assertEqual(
-                graph.main(
-                    [
-                        "--out",
-                        str(out),
-                        "--uapi-digest",
-                        str(uapi_file),
-                        "--toolchain-digest",
-                        str(toolchain_file),
-                        "--evidence",
-                        f"kernel-dependency={evidence}",
-                    ]
-                ),
-                0,
-            )
-            index = json.loads((out / "index.json").read_text(encoding="utf-8"))
-            self.assertFalse(index["complete"])
-            self.assertEqual(index["reports"], ["kernel-dependency:pass", "kunit:blocked"])
-            payload = json.loads((out / "kernel-dependency.json").read_text(encoding="utf-8"))
-            self.assertEqual(payload["result"], "pass")
-            self.assertEqual(payload["subject_digest"], uapi)
-            kunit = json.loads((out / "kunit.json").read_text(encoding="utf-8"))
-            self.assertEqual(kunit["result"], "blocked")
-
-    def test_kunit_evidence_unblocks_kselftest_as_blocked(self) -> None:
-        digest = "aa" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            kernel = Path(tmp) / "kernel-dependency.evidence"
-            kunit = Path(tmp) / "kunit.evidence"
-            kernel.write_text("T _OrlixBoot\n", encoding="utf-8")
-            kunit.write_text("ok 1 - orlix-tcti-atomic-memory\n", encoding="utf-8")
-            index = graph.write_graph(
-                tmp,
-                subjects={"uapi": digest, "mlibc": digest, "rootfs": digest, "app": digest},
-                toolchain_digest="bb" * 32,
-                profile="release",
-                destination="iphonesimulator",
-                evidence={
-                    "kernel-dependency": str(kernel),
-                    "kunit": str(kunit),
-                },
-            )
-            self.assertFalse(index["complete"])
-            self.assertEqual(
-                index["reports"],
-                ["kernel-dependency:pass", "kunit:pass", "kselftest:blocked"],
-            )
-
-    def test_kselftest_evidence_unblocks_orlixmlibc_as_blocked(self) -> None:
-        digest = "aa" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            kernel = Path(tmp) / "kernel-dependency.evidence"
-            kunit = Path(tmp) / "kunit.evidence"
-            kselftest = Path(tmp) / "kselftest.evidence"
-            kernel.write_text("T _OrlixBoot\n", encoding="utf-8")
-            kunit.write_text("ok 1 - orlix-tcti-atomic-memory\n", encoding="utf-8")
-            kselftest.write_text("TAP version 13\nok 1 installed Orlix kselftest list is readable\n", encoding="utf-8")
-            index = graph.write_graph(
-                tmp,
-                subjects={"uapi": digest, "mlibc": digest, "rootfs": digest, "app": digest},
-                toolchain_digest="bb" * 32,
-                profile="release",
-                destination="iphonesimulator",
-                evidence={
-                    "kernel-dependency": str(kernel),
-                    "kunit": str(kunit),
-                    "kselftest": str(kselftest),
-                },
-            )
-            self.assertFalse(index["complete"])
-            self.assertEqual(
-                index["reports"],
-                [
-                    "kernel-dependency:pass",
-                    "kunit:pass",
-                    "kselftest:pass",
-                    "orlixmlibc:blocked",
-                ],
-            )
-
-    def test_pass_without_evidence_file_fails(self) -> None:
-        digest = "aa" * 32
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(bind.BindError):
-                graph.write_graph(
-                    tmp,
-                    subjects={
-                        "uapi": digest,
-                        "mlibc": digest,
-                        "rootfs": digest,
-                        "app": digest,
-                    },
-                    toolchain_digest="bb" * 32,
-                    profile="release",
-                    destination="iphonesimulator",
-                    evidence={"kernel-dependency": str(Path(tmp) / "missing.txt")},
-                )
+            root = Path(tmp)
+            for change in ("raw", "identity", "failed", "tampered", "missing_end"):
+                with self.subTest(change=change):
+                    evidence = write_evidence(root, "kernel-dependency", "T _OrlixBoot\nT _arch_boot_entry\n")
+                    payload = json.loads(evidence.read_text())
+                    if change == "raw":
+                        evidence.write_text("T _OrlixBoot\nT _arch_boot_entry\n")
+                    elif change == "tampered":
+                        (root / "artifact").write_bytes(b"changed")
+                    else:
+                        if change == "identity":
+                            payload["profile"] = "development"
+                        elif change == "failed":
+                            payload["exit_code"] = 1
+                        else:
+                            log = root / "kernel-dependency.log"
+                            log.write_text("started\n")
+                            payload["log_digest"] = hashlib.sha256(log.read_bytes()).hexdigest()
+                        evidence.write_text(json.dumps(payload))
+                    with self.assertRaises(bind.BindError):
+                        graph.write_graph(
+                            str(root / "reports"), subjects={"kernel": SUBJECT}, toolchain_digest=TOOLCHAIN,
+                            profile="release", destination="iphonesimulator",
+                            evidence={"kernel-dependency": str(evidence)},
+                        )
 
 
 if __name__ == "__main__":

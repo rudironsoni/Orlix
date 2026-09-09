@@ -419,69 +419,34 @@ __bazel-kernel-boot: __bazel-feasibility-bootstrap
 	test -n "$$macho" && test -s "$$macho" || { echo "missing Mach-O OrlixKernel.a" >&2; exit 1; }; \
 	/usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' "$${macho%/*}/symbols.txt" >/dev/null || /usr/bin/nm -gU "$$macho" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "OrlixKernel.a missing defined _arch_boot_entry" >&2; exit 1; }
 
-__bazel-proof-graph: __bazel-kernel-uapi
+__bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
-	@toolchain_digest="$$(/usr/bin/shasum -a 256 bazel/config/toolchain-pin.json | /usr/bin/awk '{print $$1}')"; \
-	extra=""; \
+	@set -euo pipefail; \
+	toolchain_digest="$$(/usr/bin/shasum -a 256 bazel/config/toolchain-pin.json | /usr/bin/awk '{print $$1}')"; \
+	extra=(); \
 	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
 	rootfs_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"rootfs",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/rootfs-live-mismatch.json")"; \
-	if [ -n "$$mlibc_digest" ]; then extra="$$extra --mlibc-digest $$mlibc_digest"; fi; \
-	if [ -n "$$rootfs_digest" ]; then extra="$$extra --rootfs-digest $$rootfs_digest"; fi; \
+	if [ -n "$$mlibc_digest" ]; then extra+=(--mlibc-digest "$$mlibc_digest"); fi; \
+	if [ -n "$$rootfs_digest" ]; then extra+=(--rootfs-digest "$$rootfs_digest"); fi; \
+	if [ -s bazel-bin/Orlix/Orlix.ipa ]; then extra+=(--app-digest "$$(/usr/bin/shasum -a 256 bazel-bin/Orlix/Orlix.ipa | /usr/bin/awk '{print $$1}')"); fi; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
-	if [ -n "$$buildset" ]; then extra="$$extra --buildset-digest $$buildset"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then extra="$$extra --evidence kernel-dependency=$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence" ]; then extra="$$extra --evidence kunit=$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then extra="$$extra --evidence kselftest=$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ]; then extra="$$extra --evidence orlixmlibc=$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/syscall-uapi.evidence" ]; then extra="$$extra --evidence syscall-uapi=$(ORLIX_BUILD_ROOT)/Bazel/proof/syscall-uapi.evidence"; fi; \
-	if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/posix-shell.evidence" ]; then extra="$$extra --evidence posix-shell=$(ORLIX_BUILD_ROOT)/Bazel/proof/posix-shell.evidence"; fi; \
+	if [ -n "$$buildset" ]; then extra+=(--buildset-digest "$$buildset"); fi; \
+	for tier in kernel-dependency kunit kselftest orlixmlibc syscall-uapi posix-shell jq curl zsh product-integration; do \
+		name="$$tier"; [ "$$tier" != orlixmlibc ] || name=mlibc; \
+		evidence="$(ORLIX_BUILD_ROOT)/Bazel/proof/$$name.evidence"; \
+		if [ -s "$$evidence" ]; then extra+=(--evidence "$$tier=$$evidence"); fi; \
+	done; \
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
 		--uapi-digest bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256 \
+		--kernel-digest "$$(/usr/bin/shasum -a 256 bazel-bin/bazel/feasibility/kernel/macho/OrlixKernel.a | /usr/bin/awk '{print $$1}')" \
 		--toolchain-digest "$$toolchain_digest" \
 		--profile "$(PROFILE)" \
 		--destination iphonesimulator \
-		$$extra
-	@test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
-	@rg -q '"complete": false' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
-	@if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" ]; then \
-		rg -q 'kernel-dependency:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-		if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kunit.evidence" ]; then \
-			rg -q 'kunit:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-			if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kselftest.evidence" ]; then \
-				rg -q 'kselftest:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-				if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ]; then \
-					rg -q 'orlixmlibc:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-					if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/syscall-uapi.evidence" ]; then \
-						rg -q 'syscall-uapi:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-						if [ -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/posix-shell.evidence" ]; then \
-							rg -q 'posix-shell:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-							rg -q 'jq:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-						else \
-							rg -q 'posix-shell:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-						fi; \
-					else \
-						rg -q 'syscall-uapi:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-					fi; \
-				else \
-					rg -q 'orlixmlibc:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-				fi; \
-			else \
-				rg -q 'kselftest:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-			fi; \
-		else \
-			rg -q 'kunit:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-		fi; \
-	else \
-		rg -q 'kernel-dependency:blocked' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; \
-	fi
-	@if rg -q 'jq:pass|curl:pass|zsh:pass|product-integration:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent a later ADR 0017 pass" >&2; exit 1; fi; \
-	if [ ! -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc.evidence" ] && rg -q 'orlixmlibc:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent orlixmlibc pass" >&2; exit 1; fi; \
-	if [ ! -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/syscall-uapi.evidence" ] && rg -q 'syscall-uapi:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent syscall-uapi pass" >&2; exit 1; fi; \
-	if [ ! -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/posix-shell.evidence" ] && rg -q 'posix-shell:pass' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"; then echo "proof graph must not invent posix-shell pass" >&2; exit 1; fi
-	@python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); idx=json.load(open(sys.argv[2])); buildset=lock.get("buildset"); assert (not buildset) or idx.get("buildset_digest")==buildset, (buildset, idx.get("buildset_digest"))' "$(CURDIR)/artifacts.lock.json" "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
+		"$${extra[@]}"
+	@python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); print("proof graph complete:", p["complete"]); sys.exit(0 if p["complete"] else 1)' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 
 __bazel-prove-matrix: __bazel-orlix-app __bazel-apple-smoke __bazel-live-activity-smoke __bazel-native-dependency-smoke
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"

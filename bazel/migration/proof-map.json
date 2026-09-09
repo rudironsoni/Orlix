@@ -899,7 +899,8 @@
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "__bazel-kernel-uapi"
+        "__bazel-kernel-uapi",
+        "__bazel-kernel-boot"
       ],
       "owner": "Build and release system",
       "artifact_digest_binding": "not-yet-implemented"
@@ -907,7 +908,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 507,
+      "line": 472,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -919,7 +920,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 550,
+      "line": 515,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -932,7 +933,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 640,
+      "line": 605,
       "classification": "private",
       "phony": true,
       "prerequisites": [

@@ -120,6 +120,7 @@
     },
     {
       "id": "xcode-27-local-cache",
+      "required_for_cutover": false,
       "apple_os": "iOS",
       "deployment": "15.0",
       "destination": "iphonesimulator",

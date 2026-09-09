@@ -39,7 +39,7 @@ class ProveMatrixTests(unittest.TestCase):
             self.assertEqual(payload["proved"][0]["id"], "ios-15.5-ci-runtime")
             self.assertFalse(payload["complete"])
 
-    def test_complete_when_every_supported_row_has_evidence(self) -> None:
+    def test_required_gated_rows_block_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             evidence = {}
             for row in self.matrix["rows"]:
@@ -49,9 +49,16 @@ class ProveMatrixTests(unittest.TestCase):
                 path.write_text(row["id"] + "\n", encoding="utf-8")
                 evidence[row["id"]] = str(path)
             payload = prove_matrix.prove_rows(self.matrix, evidence)
-            self.assertTrue(payload["complete"])
+            self.assertFalse(payload["complete"])
             self.assertEqual(len(payload["proved"]), len(evidence))
             self.assertIn("signing-distribution", payload["gated"])
+            for row in self.matrix["rows"]:
+                if row["result"] == "gated" and row.get("required_for_cutover", True):
+                    row["result"] = "supported"
+                    path = Path(tmp) / row["id"]
+                    path.write_text(row["id"] + "\n")
+                    evidence[row["id"]] = str(path)
+            self.assertTrue(prove_matrix.prove_rows(self.matrix, evidence)["complete"])
 
 
 if __name__ == "__main__":

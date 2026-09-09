@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -69,7 +70,7 @@ def select_matching_live_digest(
                 + "\n",
                 encoding="utf-8",
             )
-        return None
+        raise BindError(f"{name} live digest {live} does not match locked digest {locked}")
     return str(path)
 
 
@@ -91,9 +92,9 @@ def write_graph(
     prerequisite: list[str] = []
     for tier in TIERS:
         subject_key = {
-            "kernel-dependency": "uapi",
-            "kunit": "uapi",
-            "kselftest": "uapi",
+            "kernel-dependency": "kernel",
+            "kunit": "kernel",
+            "kselftest": "kernel",
             "orlixmlibc": "mlibc",
             "syscall-uapi": "mlibc",
             "posix-shell": "rootfs",
@@ -134,10 +135,11 @@ def write_graph(
             result=result,
             prerequisite_digests=list(prerequisite),
             buildset_digest=locked,
+            evidence_path=evidence_path,
         )
         reports.append(payload)
         if result == "pass":
-            prerequisite.append(payload["subject_digest"])
+            prerequisite.append(hashlib.sha256(report_path.read_bytes()).hexdigest())
         else:
             break
     index = {
@@ -157,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--uapi-digest", required=True)
+    parser.add_argument("--kernel-digest", required=True)
     parser.add_argument("--mlibc-digest")
     parser.add_argument("--rootfs-digest")
     parser.add_argument("--app-digest")
@@ -183,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     lock_buildset = None
     if args.lock:
         lock_subjects, lock_buildset = subjects_from_lock(args.lock)
-    live = {"uapi": _digest(args.uapi_digest)}
+    live = {"uapi": _digest(args.uapi_digest), "kernel": _digest(args.kernel_digest)}
     if args.mlibc_digest:
         live["mlibc"] = _digest(args.mlibc_digest)
     if args.rootfs_digest:
