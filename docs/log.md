@@ -7,6 +7,10 @@ updated: 2026-09-09
 ---
 # Orlix Knowledge Log
 
+## [2026-09-09] record | Promoted Apple inputs verify reconstructed uapi, mlibc, and rootfs
+
+`//bazel/promotion:promoted_apple_inputs` verifies reconstructed UAPI digest `666af9a6…`, mlibc `fc080e36…`, and rootfs `794e4da2…`. `OrlixOSFramework` takes those stamps as promoted resources plus the reconstructed rootfs payload. Dual-build SBOM, in-toto, and unsigned lock-proposal JSON for uapi, mlibc, and rootfs match the lock and stay unsigned. Full `OrlixOSFramework` link still needs `_arch_boot_entry` from the app-side macho archive.
+
 ## [2026-09-09] record | Promoted payload consumes reconstructed GHCR rootfs
 
 `make __bazel-substitute-promoted` stages reconstructed OCI trees under `bazel/promotion/imported`. `bazel build //bazel/feasibility/rootfs:payload --config=promoted` verifies lock digest `794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3` and does not rebuild guest packages. Full promoted IPA still goes through `make __bazel-orlix-app`.

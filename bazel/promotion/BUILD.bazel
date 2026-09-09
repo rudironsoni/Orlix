@@ -1,4 +1,11 @@
-load(":promoted.bzl", "orlix_locked_buildset", "orlix_promoted_rootfs")
+load(
+    ":promoted.bzl",
+    "orlix_locked_buildset",
+    "orlix_promoted_apple_inputs",
+    "orlix_promoted_rootfs",
+    "orlix_promoted_sysroot",
+    "orlix_promoted_uapi",
+)
 
 package(default_visibility = ["//visibility:public"])
 
@@ -55,4 +62,85 @@ orlix_promoted_rootfs(
     payload_metadata = ":imported_rootfs_payload_metadata",
     state_ext4 = ":imported_rootfs_state_ext4",
     tags = ["manual"],
+)
+
+filegroup(
+    name = "imported_uapi_digest",
+    srcs = glob(["imported/uapi/uapi.sha256"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_uapi_headers",
+    srcs = glob(["imported/uapi/uapi/**"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_uapi_archive",
+    srcs = glob(["imported/uapi/kbuild-archive.tar"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_uapi_manifest",
+    srcs = glob(["imported/uapi/manifest.json"], allow_empty = True),
+)
+
+orlix_promoted_uapi(
+    name = "promoted_uapi",
+    archive = ":imported_uapi_archive",
+    digest = ":imported_uapi_digest",
+    headers = ":imported_uapi_headers",
+    lock = "//:artifacts.lock.json",
+    manifest = ":imported_uapi_manifest",
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "imported_mlibc_digest",
+    srcs = glob(["imported/mlibc/sysroot.sha256"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_mlibc_headers",
+    srcs = glob(["imported/mlibc/headers/**"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_mlibc_libraries",
+    srcs = glob(["imported/mlibc/libraries/**"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_mlibc_abi",
+    srcs = glob(["imported/mlibc/abi.txt"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_mlibc_loader",
+    srcs = glob(["imported/mlibc/ld.so"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_mlibc_runtime",
+    srcs = glob(["imported/mlibc/libcompiler_rt.a"], allow_empty = True),
+)
+
+orlix_promoted_sysroot(
+    name = "promoted_sysroot",
+    abi = ":imported_mlibc_abi",
+    digest = ":imported_mlibc_digest",
+    headers = ":imported_mlibc_headers",
+    libraries = ":imported_mlibc_libraries",
+    loader = ":imported_mlibc_loader",
+    lock = "//:artifacts.lock.json",
+    runtime = ":imported_mlibc_runtime",
+    tags = ["manual"],
+    uapi_digest = ":imported_uapi_digest",
+)
+
+orlix_promoted_apple_inputs(
+    name = "promoted_apple_inputs",
+    rootfs = ":promoted_rootfs",
+    sysroot = ":promoted_sysroot",
+    tags = ["manual"],
+    uapi = ":promoted_uapi",
 )

@@ -117,7 +117,15 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("component_promoted", rootfs)
         promoted = (ROOT / "bazel/promotion/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("orlix_promoted_rootfs", promoted)
+        self.assertIn("orlix_promoted_uapi", promoted)
+        self.assertIn("orlix_promoted_sysroot", promoted)
         self.assertIn("imported/rootfs/initramfs.cpio.gz", promoted)
+        self.assertIn("imported/uapi/uapi.sha256", promoted)
+        self.assertIn("imported/mlibc/sysroot.sha256", promoted)
+        self.assertIn("//bazel/promotion:promoted_apple_inputs", app)
+        self.assertIn("orlix_promoted_apple_inputs", promoted)
+        mlibc = (ROOT / "bazel/feasibility/mlibc/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/promotion:promoted_uapi", mlibc)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
             encoding="utf-8"
         )

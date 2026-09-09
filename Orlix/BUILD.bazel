@@ -115,7 +115,10 @@ ios_framework(
     ],
     infoplists = ["//OrlixOS/Sources/Session:BazelInfo.plist"],
     minimum_os_version = "15.0",
-    resources = ["//bazel/feasibility/rootfs:payload"],
+    resources = ["//bazel/feasibility/rootfs:payload"] + select({
+        "//bazel/config:component_promoted": ["//bazel/promotion:promoted_apple_inputs"],
+        "//conditions:default": [],
+    }),
     tags = ["manual"],
     deps = [
         "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",

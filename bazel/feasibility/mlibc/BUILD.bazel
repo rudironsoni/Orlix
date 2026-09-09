@@ -20,6 +20,9 @@ orlix_mlibc_sysroot(
     mlibc_source = "@orlix_mlibc_source//:source",
     patches = "//OrlixMLibC/Sources/patches:files",
     tags = ["manual"],
-    uapi = "//bazel/feasibility/kernel:uapi",
+    uapi = select({
+        "//bazel/config:component_promoted": "//bazel/promotion:promoted_uapi",
+        "//conditions:default": "//bazel/feasibility/kernel:uapi",
+    }),
     visibility = ["//bazel/feasibility:__subpackages__"],
 )
