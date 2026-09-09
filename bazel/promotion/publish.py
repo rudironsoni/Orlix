@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -12,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from sign import attach_registry_config, cosign_env
+from locked_buildset import validate_component
 
 
 class PublishError(ValueError):
@@ -44,36 +46,46 @@ def _run(argv: list[str], env: dict[str, str] | None = None) -> subprocess.Compl
         raise PublishError(f"{argv[0]} failed: {output}") from error
 
 
+def trusted_public_key() -> str:
+    key_path = os.environ.get("ORLIX_COSIGN_KEY", "").removeprefix("file://")
+    public = os.environ.get("ORLIX_COSIGN_PUB") or (f"{key_path}.pub" if key_path else "")
+    if not public:
+        raise PublishError("ORLIX_COSIGN_PUB is required to verify signatures")
+    path = Path(public.removeprefix("file://"))
+    fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
+    policy = json.loads(Path(__file__).with_name("trust-policy.json").read_text())
+    if fingerprint not in policy["accepted_key_ids"]:
+        raise PublishError("public key is not accepted by trust-policy.json")
+    return str(path)
+
+
+def verify_component(payload: dict, run=_run) -> dict:
+    if payload.get("signed") is not True:
+        raise PublishError("unsigned component cannot authorize promotion")
+    entry = validate_component(payload["component"], payload)
+    if shutil.which("cosign") is None:
+        raise PublishError("cosign is required to verify a published component")
+    public = trusted_public_key()
+    with tempfile.TemporaryDirectory(prefix="orlix-verify-") as tmp:
+        run(
+            ["cosign", "verify", "--key", public, "--insecure-ignore-tlog", entry["oci_reference"]],
+            env=attach_registry_config(cosign_env(), Path(tmp)),
+        )
+    return entry
+
+
 def publish(proposal_path: str, run=_run) -> dict:
     payload = require_signed_proposal(proposal_path)
     if shutil.which("oras") is None:
         raise PublishError("oras is required to pull a published component")
-    if shutil.which("cosign") is None:
-        raise PublishError("cosign is required to verify a published component")
-    key = os.environ.get("ORLIX_COSIGN_KEY")
-    if not key:
-        raise PublishError("ORLIX_COSIGN_KEY is required to verify; refusing unsigned pull")
-    key_path = key[len("file://") :] if key.startswith("file://") else key
-    pub = os.environ.get("ORLIX_COSIGN_PUB") or f"{key_path}.pub"
+    verify_component(payload, run=run)
     image = payload["oci_reference"]
     with tempfile.TemporaryDirectory(prefix="orlix-publish-") as tmp:
         pull = ["oras", "pull", image, "-o", tmp]
-        if image.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-            pull.insert(2, "--plain-http")
         config = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
         if config:
             pull[2:2] = ["--registry-config", config]
         run(pull)
-        verify = [
-            "cosign",
-            "verify",
-            "--key",
-            pub,
-            "--insecure-ignore-tlog",
-        ]
-        if image.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
-            verify.extend(["--allow-http-registry", "--allow-insecure-registry"])
-        run(verify + [image], env=attach_registry_config(cosign_env(), Path(tmp)))
     return payload
 
 

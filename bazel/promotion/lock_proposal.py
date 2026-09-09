@@ -4,14 +4,15 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import tempfile
 from pathlib import Path
 
 from compare import require_sha256
+from locked_buildset import buildset_digest, load_locked_buildset
+from publish import verify_component
 
 EMPTY_LOCK = {"schema": 1, "buildset": None, "components": {}}
-OCI_PREFIX = "sha256:"
 
 
 def read_lock(path: str) -> dict:
@@ -73,26 +74,29 @@ def apply_lock_proposal(proposal_path: str, lock_path: str) -> None:
     proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
     if proposal.get("signed") is not True or not proposal.get("buildset"):
         raise ValueError("unsigned lock proposal must not mutate artifacts.lock.json")
+    components = load_locked_buildset(proposal_path)["components"]
+    for name, entry in components.items():
+        verify_component({**entry, "component": name, "signed": True})
     lock = {
         "schema": 1,
         "buildset": proposal["buildset"],
-        "components": proposal["components"],
+        "components": components,
     }
-    Path(lock_path).write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
-
-
-def _require_oci_digest(value: str) -> str:
-    if not isinstance(value, str) or not value.startswith(OCI_PREFIX):
-        raise ValueError(f"invalid oci digest: {value!r}")
-    require_sha256(value[len(OCI_PREFIX) :])
-    return value
+    destination = Path(lock_path)
+    with tempfile.NamedTemporaryFile(mode="w", dir=destination.parent, delete=False) as output:
+        pending = Path(output.name)
+        try:
+            output.write(json.dumps(lock, indent=2) + "\n")
+            output.flush()
+            pending.replace(destination)
+        finally:
+            pending.unlink(missing_ok=True)
 
 
 def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
     if not signed_paths:
         raise ValueError("signed lock proposal requires at least one signed component")
     components: dict[str, dict] = {}
-    parts: list[str] = []
     for signed_path in signed_paths:
         payload = json.loads(Path(signed_path).read_text(encoding="utf-8"))
         if payload.get("signed") is not True:
@@ -100,18 +104,10 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
         name = payload.get("component")
         if not name:
             raise ValueError(f"signed component missing name: {signed_path}")
-        unsigned = require_sha256(payload["unsigned_digest"])
-        oci = _require_oci_digest(payload["oci_digest"])
-        reference = payload.get("oci_reference")
-        if not reference:
-            raise ValueError(f"signed component missing oci_reference: {signed_path}")
-        components[name] = {
-            "unsigned_digest": unsigned,
-            "oci_digest": oci,
-            "oci_reference": reference,
-        }
-        parts.append(f"{name}:{oci}")
-    buildset = hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
+        if name in components:
+            raise ValueError(f"duplicate component: {name}")
+        components[name] = verify_component(payload)
+    buildset = buildset_digest(components)
     proposal = {
         "schema": 1,
         "kind": "lock-proposal",

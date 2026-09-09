@@ -68,11 +68,12 @@ class PublishTests(unittest.TestCase):
             with self.assertRaises(publish.PublishError):
                 publish.publish(str(path))
 
-    def test_pull_verify_uses_proposal_reference(self) -> None:
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_pull_verify_uses_proposal_reference(self, public_key) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         calls: list[list[str]] = []
         observed = "sha256:" + ("cd" * 32)
-        reference = f"ghcr.io/example/orlix/uapi@{observed}"
+        reference = f"ghcr.io/rudironsoni/orlix/uapi@{observed}"
 
         def fake_run(argv: list[str], env=None, cwd=None):
             calls.append(list(argv))
@@ -107,12 +108,13 @@ class PublishTests(unittest.TestCase):
         self.assertTrue(any(call[0] == "oras" and "pull" in call and reference in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "verify" in call and reference in call for call in calls))
 
-    def test_ghcr_pull_failure_does_not_count_as_publish(self) -> None:
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_ghcr_pull_failure_does_not_count_as_publish(self, public_key) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         observed = "sha256:" + ("cd" * 32)
         reference = f"ghcr.io/rudironsoni/orlix/uapi@{observed}"
 
-        def fake_run(argv: list[str]):
+        def fake_run(argv: list[str], env=None):
             raise publish.PublishError("oras failed: denied: permission_denied")
 
         with tempfile.TemporaryDirectory() as tmp:

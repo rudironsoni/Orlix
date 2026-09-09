@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 from pathlib import Path
 
 REQUIRED = ("uapi", "mlibc", "rootfs")
@@ -22,6 +24,26 @@ def require_sha256(digest: str) -> str:
     return text
 
 
+def validate_component(name: str, entry: dict) -> dict:
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+        raise LockedBuildsetError(f"invalid component name: {name!r}")
+    unsigned = require_sha256(entry["unsigned_digest"])
+    oci = entry.get("oci_digest")
+    if not isinstance(oci, str) or not oci.startswith(OCI_PREFIX):
+        raise LockedBuildsetError(f"{name} lock entry missing oci_digest")
+    require_sha256(oci[len(OCI_PREFIX):])
+    reference = entry.get("oci_reference") or ""
+    expected = f"ghcr.io/rudironsoni/orlix/{name}@{oci}"
+    if reference != expected:
+        raise LockedBuildsetError(f"{name} requires {expected}, not {reference!r}; mutable latest is forbidden")
+    return {"unsigned_digest": unsigned, "oci_digest": oci, "oci_reference": reference}
+
+
+def buildset_digest(components: dict) -> str:
+    parts = [f"{name}:{entry['oci_digest']}" for name, entry in sorted(components.items())]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
 def load_locked_buildset(path: str, required: tuple[str, ...] = REQUIRED) -> dict:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     buildset = payload.get("buildset")
@@ -33,25 +55,10 @@ def load_locked_buildset(path: str, required: tuple[str, ...] = REQUIRED) -> dic
     if missing:
         raise LockedBuildsetError(f"lock missing required components: {missing}")
     locked: dict[str, dict] = {}
-    for name in required:
-        entry = components[name]
-        unsigned = require_sha256(entry["unsigned_digest"])
-        oci = entry.get("oci_digest")
-        if not isinstance(oci, str) or not oci.startswith(OCI_PREFIX):
-            raise LockedBuildsetError(f"{name} lock entry missing oci_digest")
-        require_sha256(oci[len(OCI_PREFIX) :])
-        reference = entry.get("oci_reference") or ""
-        if not reference:
-            raise LockedBuildsetError(f"{name} lock entry missing oci_reference")
-        if ":latest" in reference.split("@", 1)[0] or reference.endswith(":latest"):
-            raise LockedBuildsetError(f"{name} oci_reference must not use mutable latest: {reference}")
-        if f"@{oci}" not in reference:
-            raise LockedBuildsetError(f"{name} oci_reference is not pinned to {oci}")
-        locked[name] = {
-            "unsigned_digest": unsigned,
-            "oci_digest": oci,
-            "oci_reference": reference,
-        }
+    for name, entry in components.items():
+        locked[name] = validate_component(name, entry)
+    if buildset != buildset_digest(locked):
+        raise LockedBuildsetError("buildset digest does not match its component set")
     return {
         "schema": 1,
         "kind": "locked-buildset",

@@ -6,30 +6,33 @@ import unittest
 from pathlib import Path
 
 import substitute
+import locked_buildset
 
 
 def _signed_lock() -> dict:
-    return {
+    payload = {
         "schema": 1,
         "buildset": "cd" * 32,
         "components": {
             "uapi": {
                 "unsigned_digest": "11" * 32,
                 "oci_digest": "sha256:" + ("ab" * 32),
-                "oci_reference": "localhost:5001/orlix/uapi@sha256:" + ("ab" * 32),
+                "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32),
             },
             "mlibc": {
                 "unsigned_digest": "22" * 32,
                 "oci_digest": "sha256:" + ("ef" * 32),
-                "oci_reference": "localhost:5001/orlix/mlibc@sha256:" + ("ef" * 32),
+                "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:" + ("ef" * 32),
             },
             "rootfs": {
                 "unsigned_digest": "33" * 32,
                 "oci_digest": "sha256:" + ("aa" * 32),
-                "oci_reference": "localhost:5001/orlix/rootfs@sha256:" + ("aa" * 32),
+                "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:" + ("aa" * 32),
             },
         },
     }
+    payload["buildset"] = locked_buildset.buildset_digest(payload["components"])
+    return payload
 
 
 def _write_tree(root: Path, name: str, digest: str) -> None:
@@ -45,7 +48,7 @@ class SubstituteTests(unittest.TestCase):
             lock_payload = _signed_lock()
             lock_path.write_text(json.dumps(lock_payload) + "\n", encoding="utf-8")
             reconstruct = Path(tmp) / "reconstruct"
-            root = reconstruct / ("cd" * 32)
+            root = reconstruct / (_signed_lock()["buildset"])
             _write_tree(root, "uapi", "11" * 32)
             _write_tree(root, "mlibc", "22" * 32)
             _write_tree(root, "rootfs", "33" * 32)
@@ -53,7 +56,7 @@ class SubstituteTests(unittest.TestCase):
             before = lock_path.read_bytes()
             payload = substitute.substitute(str(lock_path), str(reconstruct), str(out_path))
             self.assertEqual(payload["kind"], "promoted-components")
-            self.assertEqual(payload["buildset"], "cd" * 32)
+            self.assertEqual(payload["buildset"], _signed_lock()["buildset"])
             self.assertEqual(set(payload["components"]), {"uapi", "mlibc", "rootfs"})
             self.assertEqual(
                 payload["components"]["uapi"]["oci_reference"],
@@ -76,7 +79,7 @@ class SubstituteTests(unittest.TestCase):
             lock_path = Path(tmp) / "artifacts.lock.json"
             lock_path.write_text(json.dumps(_signed_lock()) + "\n", encoding="utf-8")
             reconstruct = Path(tmp) / "reconstruct"
-            root = reconstruct / ("cd" * 32)
+            root = reconstruct / (_signed_lock()["buildset"])
             _write_tree(root, "uapi", "99" * 32)
             _write_tree(root, "mlibc", "22" * 32)
             _write_tree(root, "rootfs", "33" * 32)
