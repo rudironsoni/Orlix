@@ -3,6 +3,7 @@
 //  Orlix
 //
 
+import os
 import SwiftUI
 
 #if os(iOS)
@@ -38,7 +39,6 @@ struct ServerListScreen: View {
     @State private var serverToMove: Server?
     @State private var lockedServerAlert: Server?
     @State private var showingCustomEnvironmentAlert = false
-    @State private var showingLocalInstance = false
 
     init(
         serverManager: ServerManager,
@@ -80,32 +80,24 @@ struct ServerListScreen: View {
     var body: some View {
         List {
             Section("Local") {
-                Button {
-                    showingLocalInstance = true
+                NavigationLink {
+                    DefaultLocalInstanceTerminalView()
                 } label: {
                     Label("Orlix", systemImage: "terminal")
                 }
                 .accessibilityIdentifier("orlix.local-instance.open")
+                .simultaneousGesture(TapGesture().onEnded {
+                    Logger(subsystem: "com.rudironsoni.orlix", category: "ServerList")
+                        .info("local instance open tapped")
+                })
             }
             serversSection
             activeConnectionsSection
         }
         .accessibilityIdentifier("orlix.serverList.list")
-        .overlay(alignment: .center) {
-            if filteredServers.isEmpty {
-                NoServersEmptyState(
-                    onAddServer: { presentAddServer() },
-                    onAddWorkspace: { showingAddWorkspace = true },
-                    requiresWorkspace: serverManager.workspaces.isEmpty
-                )
-            }
-        }
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
-        .orlixNavigationDestination(isPresented: $showingLocalInstance) {
-            DefaultLocalInstanceTerminalView()
-        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 workspaceToolbarButton
@@ -347,10 +339,13 @@ struct ServerListScreen: View {
     private var serversSection: some View {
         Section {
             if filteredServers.isEmpty {
-                Color.clear
-                    .frame(height: 1)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                NoServersEmptyState(
+                    onAddServer: { presentAddServer() },
+                    onAddWorkspace: { showingAddWorkspace = true },
+                    requiresWorkspace: serverManager.workspaces.isEmpty
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
                 ForEach(filteredServers) { server in
                     ServerListRow(

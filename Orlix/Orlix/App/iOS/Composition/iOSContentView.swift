@@ -81,8 +81,7 @@ struct iOSContentView: View {
     }
 
     private var navigationContent: some View {
-        NavigationView {
-            ServerListScreen(
+        ServerListScreen(
                 serverManager: serverManager,
                 tabManager: tabManager,
                 fileTabs: fileTabs,
@@ -124,7 +123,7 @@ struct iOSContentView: View {
                     )
                 }
             }
-        }
+            .orlixNavigationStack()
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
         .adaptiveSoftScrollEdges()
         .onAppear {

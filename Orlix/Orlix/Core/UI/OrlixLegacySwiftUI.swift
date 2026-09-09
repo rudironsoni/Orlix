@@ -47,6 +47,15 @@ extension OrlixLabeledContent where Label == Text, Content == Text {
 
 extension View {
     @ViewBuilder
+    func orlixNavigationStack() -> some View {
+        if #available(iOS 16.0, macOS 13.0, *) {
+            NavigationStack { self }
+        } else {
+            NavigationView { self }
+        }
+    }
+
+    @ViewBuilder
     func orlixNavigationDestination<Destination: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder destination: @escaping () -> Destination
