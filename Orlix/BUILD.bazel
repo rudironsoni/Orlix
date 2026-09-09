@@ -126,6 +126,7 @@ ios_framework(
         "//OrlixKernel/Sources:OrlixKernelBoot",
         "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
         "//OrlixOS/Sources/Session:OrlixOS",
+        "//bazel/feasibility/kernel:macho_link",
     ],
 )
 
