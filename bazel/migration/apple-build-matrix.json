@@ -14,7 +14,7 @@
   "notes": [
     "An installed SDK or simulator does not create a supported row.",
     "iOS 15.5 runtime proof is make ios15-simulator-gate on a local iOS 15.5 simulator. GitHub Actions run 34035260568 did not start: account payments failed or the spending limit must increase. Empty steps are not a workflow YAML defect.",
-    "artifacts.lock.json names ghcr.io/rudironsoni/orlix digest-pinned uapi, mlibc, and rootfs. make __bazel-reconstruct pulls those GHCR references. --config=promoted still embeds the lock JSON and does not substitute OCI trees into the Apple compile.",
+    "artifacts.lock.json names ghcr.io/rudironsoni/orlix digest-pinned uapi, mlibc, and rootfs. make __bazel-substitute-promoted stages reconstructed trees. --config=promoted OrlixOSFramework payload consumes reconstructed rootfs images. Full promoted IPA still requires make __bazel-orlix-app.",
     "Later-system features stay behind availability or capability gates. The iOS 15 product is the reduced feature set from ADR 0038."
   ],
   "rows": [
@@ -71,8 +71,8 @@
       "destination": "iphonesimulator",
       "component_mode": "promoted",
       "result": "gated",
-      "gate": "GHCR lock reconstructs; promoted.bzl does not substitute OCI trees into the Apple compile",
-      "proof": "make __bazel-reconstruct pulled ghcr.io/rudironsoni/orlix/{uapi,mlibc,rootfs} for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d. make build --config=promoted still embeds locked-buildset.json only."
+      "gate": "promoted payload consumes reconstructed rootfs; full IPA path is make __bazel-orlix-app",
+      "proof": "bazel build //bazel/feasibility/rootfs:payload --config=promoted verified reconstructed rootfs digest 794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3 for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d."
     },
     {
       "id": "signing-distribution",

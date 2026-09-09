@@ -62,6 +62,14 @@ class SubstituteTests(unittest.TestCase):
             stamped = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertEqual(stamped["components"]["rootfs"]["unsigned_digest"], "33" * 32)
             self.assertEqual(lock_path.read_bytes(), before)
+            stage = Path(tmp) / "imported"
+            substitute.stage_imported(payload, str(stage))
+            self.assertTrue((stage / "uapi").is_symlink())
+            self.assertEqual(
+                (stage / "uapi").resolve(),
+                Path(payload["components"]["uapi"]["tree"]).resolve(),
+            )
+            self.assertTrue((stage / "rootfs" / "rootfs.sha256").is_file())
 
     def test_digest_mismatch_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

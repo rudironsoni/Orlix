@@ -75,6 +75,9 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-substitute-promoted", mk)
         self.assertIn("promoted-components.json", mk)
         self.assertIn("bazel/promotion/substitute.py", mk)
+        self.assertIn("--stage", mk)
+        self.assertIn("bazel/promotion/imported", mk)
+        self.assertIn("__bazel-substitute-promoted", mk.split("__bazel-orlix-app:")[1].split("__bazel-orlix-archive:")[0])
 
     def test_reconstruct_fails_closed_without_oras_cosign_or_key(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
@@ -109,6 +112,12 @@ class MakeRoutingTests(unittest.TestCase):
         app = (ROOT / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/feasibility/rootfs:payload", app)
         self.assertIn("name = \"OrlixOSFramework\"", app)
+        rootfs = (ROOT / "bazel/feasibility/rootfs/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/promotion:promoted_rootfs", rootfs)
+        self.assertIn("component_promoted", rootfs)
+        promoted = (ROOT / "bazel/promotion/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("orlix_promoted_rootfs", promoted)
+        self.assertIn("imported/rootfs/initramfs.cpio.gz", promoted)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
             encoding="utf-8"
         )

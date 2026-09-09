@@ -29,7 +29,10 @@ orlix_rootfs(
 
 orlix_rootfs_payload(
     name = "payload",
-    rootfs = ":rootfs",
+    rootfs = select({
+        "//bazel/config:component_promoted": "//bazel/promotion:promoted_rootfs",
+        "//conditions:default": ":rootfs",
+    }),
     tags = ["manual"],
     visibility = [
         "//Orlix:__pkg__",

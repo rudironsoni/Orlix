@@ -7,6 +7,10 @@ updated: 2026-09-09
 ---
 # Orlix Knowledge Log
 
+## [2026-09-09] record | Promoted payload consumes reconstructed GHCR rootfs
+
+`make __bazel-substitute-promoted` stages reconstructed OCI trees under `bazel/promotion/imported`. `bazel build //bazel/feasibility/rootfs:payload --config=promoted` verifies lock digest `794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3` and does not rebuild guest packages. Full promoted IPA still goes through `make __bazel-orlix-app`.
+
 ## [2026-09-09] record | Signed uapi, mlibc, and rootfs published to GHCR
 
 `make __bazel-publish-{uapi,mlibc,rootfs}` pushed Cosign-signed packages to `ghcr.io/rudironsoni/orlix` with `org.opencontainers.image.source=https://github.com/rudironsoni/Orlix`. Those user packages now list `repository: rudironsoni/Orlix`. `make __bazel-lock-from-signed` wrote buildset `ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d`. The Orlix repo Packages tab was empty because the first push was not linked to the repo. Promoted Apple compile still does not substitute OCI trees. posix-shell TAP END is missing. Cutover is not done.

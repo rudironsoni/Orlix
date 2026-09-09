@@ -1,4 +1,4 @@
-load(":promoted.bzl", "orlix_locked_buildset")
+load(":promoted.bzl", "orlix_locked_buildset", "orlix_promoted_rootfs")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -12,5 +12,47 @@ filegroup(
 orlix_locked_buildset(
     name = "locked_buildset",
     lock = "//:artifacts.lock.json",
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "imported_rootfs_initramfs",
+    srcs = glob(["imported/rootfs/initramfs.cpio.gz"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_base_ext4",
+    srcs = glob(["imported/rootfs/base.ext4"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_state_ext4",
+    srcs = glob(["imported/rootfs/state.ext4"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_digest",
+    srcs = glob(["imported/rootfs/source-input.sha256"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_payload_metadata",
+    srcs = glob(["imported/rootfs/payload-metadata.txt"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_file_manifest",
+    srcs = glob(["imported/rootfs/file-manifest.txt"], allow_empty = True),
+)
+
+orlix_promoted_rootfs(
+    name = "promoted_rootfs",
+    base_ext4 = ":imported_rootfs_base_ext4",
+    digest = ":imported_rootfs_digest",
+    file_manifest = ":imported_rootfs_file_manifest",
+    initramfs = ":imported_rootfs_initramfs",
+    lock = "//:artifacts.lock.json",
+    payload_metadata = ":imported_rootfs_payload_metadata",
+    state_ext4 = ":imported_rootfs_state_ext4",
     tags = ["manual"],
 )
