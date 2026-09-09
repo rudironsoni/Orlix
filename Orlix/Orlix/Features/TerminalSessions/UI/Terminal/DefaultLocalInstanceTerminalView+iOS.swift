@@ -1,3 +1,4 @@
+import os
 import OrlixOS
 import SwiftUI
 import UIKit
@@ -21,6 +22,7 @@ struct DefaultLocalInstanceTerminalView: View {
         GeometryReader { geometry in
             DefaultLocalInstanceTerminalRepresentable(
                 size: geometry.size,
+                ghosttyReadiness: ghosttyApp.readiness,
                 terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
                     profile: terminalAccessoryPreferencesManager.profile,
                     showsDismissKeyboardButton: keyboardDismissButtonEnabled
@@ -31,6 +33,8 @@ struct DefaultLocalInstanceTerminalView: View {
         .navigationTitle("Orlix")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                .info("local instance terminal appeared; starting Ghostty")
             ghosttyApp.startIfNeeded()
         }
     }
@@ -40,6 +44,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
 
     let size: CGSize
+    let ghosttyReadiness: GhosttyRuntime.Readiness
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
 
     func makeCoordinator() -> Coordinator {
@@ -51,6 +56,10 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: LocalTerminalContainerView, context: Context) {
+        if ghosttyApp.app == nil {
+            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                .info("local instance waiting for Ghostty readiness=\(ghosttyReadiness.rawValue, privacy: .public)")
+        }
         uiView.installTerminalIfNeeded(
             app: ghosttyApp.app,
             appWrapper: ghosttyApp,
@@ -89,7 +98,14 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot,
             coordinator: Coordinator
         ) {
-            guard terminal == nil, let app else { return }
+            guard terminal == nil else { return }
+            guard let app else {
+                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                    .info("local instance skipped Ghostty install; app is nil")
+                return
+            }
+            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                .info("local instance installing Ghostty surface")
 
             let initialSize = bounds.width > 0 && bounds.height > 0
                 ? bounds.size
@@ -192,6 +208,8 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             guard let profile = OrlixOSDistribution.bundledBootProfile,
                   let rootImageIdentifier = OrlixOSDistribution.productRootImageIdentifier
             else {
+                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                    .error("local instance boot failed: missing OrlixOS payload metadata")
                 showError("OrlixOS payload metadata is missing.")
                 return
             }
@@ -205,6 +223,8 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
                     terminalIdentifier: "orlix.local.default"
                 )
             ) else {
+                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                    .error("local instance boot failed: openTerminal returned nil")
                 showError("OrlixOS could not open a terminal for the default machine.")
                 return
             }
@@ -217,15 +237,28 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             lastForwardedGridSize = latestGridSize
 
             output = session.attachOutput { [weak self] data in
+                if let text = String(data: data, encoding: .utf8),
+                   text.contains("orlix-init: process started pid=") {
+                    Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                        .info("local instance shell started")
+                }
                 DispatchQueue.main.async {
                     self?.terminal?.feedData(data)
                     self?.terminal?.accessibilityValue = "output"
                 }
             }
 
+            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                .info("local instance session opened; booting profile=\(String(describing: profile), privacy: .public)")
             DispatchQueue.global(qos: .userInitiated).async { [weak self, session] in
                 let status = session.boot()
-                guard status != .ok else { return }
+                guard status != .ok else {
+                    Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                        .info("local instance boot ok")
+                    return
+                }
+                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                    .error("local instance boot failed: \(status.message, privacy: .public)")
                 DispatchQueue.main.async {
                     self?.showError("Orlix failed to start: \(status.message)")
                 }

@@ -791,7 +791,13 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
     private let transport: OrlixPaneTransport
     private let geometryLock = NSLock()
     private var geometry: (rows: UInt32, columns: UInt32)?
+    private let initResizeLock = NSLock()
+    private var initResizeDelivered = false
+    private var initOutputTail = Data()
     private weak var kernelSession: OrlixKernelSession?
+    private static let initResizeMarker = Data(
+        "orlix-init: runtime filesystems mounted".utf8
+    )
 
     public convenience init() {
         self.init(transport: HostConsolePaneTransport())
@@ -810,7 +816,10 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
     public func attachOutput(
         _ handler: @escaping @Sendable (Data) -> Void
     ) -> OrlixTerminalOutput {
-        transport.attachOutput(handler)
+        transport.attachOutput { [weak self] data in
+            self?.resendGeometryWhenInitAwaitsResize(data)
+            handler(data)
+        }
     }
 
     public func send(_ data: Data) {
@@ -849,6 +858,38 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
 
     func clearRecentOutput() {
         transport.clearRecentOutput()
+        initResizeLock.lock()
+        initResizeDelivered = false
+        initOutputTail = Data()
+        initResizeLock.unlock()
+    }
+
+    private func resendGeometryWhenInitAwaitsResize(_ data: Data) {
+        initResizeLock.lock()
+        if initResizeDelivered {
+            initResizeLock.unlock()
+            return
+        }
+        if initOutputTail.count > 64 {
+            initOutputTail = Data(initOutputTail.suffix(64))
+        }
+        initOutputTail.append(data)
+        let found = initOutputTail.range(of: Self.initResizeMarker) != nil
+        if found {
+            initResizeDelivered = true
+        }
+        initResizeLock.unlock()
+        guard found else { return }
+
+        geometryLock.lock()
+        let geometryToSend = geometry
+        geometryLock.unlock()
+        if let geometryToSend {
+            transport.resize(
+                rows: geometryToSend.rows,
+                columns: geometryToSend.columns
+            )
+        }
     }
 
     func recentOutput() -> Data {

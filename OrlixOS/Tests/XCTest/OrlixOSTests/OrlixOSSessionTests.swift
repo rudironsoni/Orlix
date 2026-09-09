@@ -6722,6 +6722,24 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         }
     }
 
+    func testTerminalResendsGeometryWhenInitAwaitsResize() {
+        let transport = RecordingTerminalTransport()
+        let session = OrlixTerminalSession(transport: transport)
+        session.resize(rows: 31, columns: 101)
+        let output = session.attachOutput { _ in }
+
+        transport.emit(Data("NET: Registered PF_PACKET protocol family\n".utf8))
+        XCTAssertEqual(transport.sentInput, [Data([0, 31, 0, 101])])
+
+        transport.emit(Data("orlix-init: runtime filesystems mounted\n".utf8))
+        withExtendedLifetime(output) {
+            XCTAssertEqual(
+                transport.sentInput,
+                [Data([0, 31, 0, 101]), Data([0, 31, 0, 101])]
+            )
+        }
+    }
+
     func testCancelledTerminalOutputStopsReceivingBytes() {
         let transport = RecordingTerminalTransport()
         let session = OrlixTerminalSession(transport: transport)
