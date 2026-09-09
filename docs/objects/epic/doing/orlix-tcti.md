@@ -3,7 +3,7 @@ type: epic
 tags:
   - epic
   - orlix-tcti
-updated: 2026-07-26
+updated: 2026-09-09
 status: doing
 summary: "Complete safe, conformant hosted Linux ELF execution through OrlixTCTI."
 targets:
@@ -52,4 +52,4 @@ Virtio carries device mechanics. It does not carry Linux process, syscall, signa
 
 The durable implementation contract includes App Store executable-memory invariants in native XCTest.
 
-Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text.
+Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text. Cached gadget programs run a straight-line block of decoded instructions as C handlers. Native codegen remains forbidden. See [ADR 0039](../../architecture-decision/0039-cache-tcti-basic-blocks-as-gadget-programs.md).

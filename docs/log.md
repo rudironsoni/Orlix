@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-06
+updated: 2026-09-09
 ---
 # Orlix Knowledge Log
+
+## [2026-09-09] record | ADR 0039 caches TCTI blocks as gadget programs
+
+Accepted [ADR 0039](objects/architecture-decision/0039-cache-tcti-basic-blocks-as-gadget-programs.md): product TCTI decodes a straight-line A64 block into a data-only C gadget program, caches it, and runs the list. It does not emit host machine code. The decision amends [ADR 0022](objects/architecture-decision/0022-use-hosted-linux-elf-execution.md). QEMU TCG native codegen, `MAP_JIT`, and RWX stay forbidden on the product path.
 
 ## [2026-09-06] record | GitHub Actions iOS 15.5 job did not start
 

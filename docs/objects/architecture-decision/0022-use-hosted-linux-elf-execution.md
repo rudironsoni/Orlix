@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-28
+updated: 2026-09-09
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
@@ -14,6 +14,7 @@ derived_from:
 amended_by:
   - "[ADR 0029](0029-separate-complete-aarch64-target-from-runtime-profile.md)"
   - "[ADR 0031](0031-keep-arm-shared-asl-external-and-prove-orlixtcti-independently.md)"
+  - "[ADR 0039](0039-cache-tcti-basic-blocks-as-gadget-programs.md)"
 ---
 
 # ADR 0022: Use Linux ELF With Orlix TCTI On iOS
