@@ -510,6 +510,10 @@ __bazel-apple-routing-check:
 	@rg -F -q '__bazel-lock-proposal' make/bazel-migration.mk
 	@rg -F -q '__bazel-substitute-promoted' make/bazel-migration.mk
 	@rg -F -q 'promoted-components.json' make/bazel-migration.mk
+	@rg -F -q 'ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi' make/bazel-migration.mk
+	@rg -F -q 'ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot' make/bazel-migration.mk
+	@rg -F -q 'ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs' make/bazel-migration.mk
+	@rg -F -q '"name": "__bazel-substitute-promoted"' bazel/migration/legacy-target-map.json
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'

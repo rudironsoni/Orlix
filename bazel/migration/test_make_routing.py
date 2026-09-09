@@ -76,6 +76,25 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("promoted-components.json", mk)
         self.assertIn("bazel/promotion/substitute.py", mk)
 
+    def test_promotion_consumes_hermetic_feasibility_targets(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi", mk
+        )
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot", mk
+        )
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs", mk
+        )
+        self.assertIn("__bazel-rootfs:", mk)
+        self.assertIn("//bazel/feasibility/packages:coreutils", mk)
+        inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"name": "__bazel-substitute-promoted"', inventory)
+        self.assertIn('"name": "__bazel-promote-$(1)"', inventory)
+
 
 if __name__ == "__main__":
     unittest.main()
