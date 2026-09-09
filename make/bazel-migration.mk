@@ -517,6 +517,9 @@ __bazel-apple-routing-check:
 	@rg -F -q 'oras is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q 'cosign is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_COSIGN_KEY is required to reconstruct' make/bazel-migration.mk
+	@rg -F -q -- '--nouse_action_cache' make/bazel-migration.mk
+	@rg -F -q 'unsigned promote mutated artifacts.lock.json' make/bazel-migration.mk
+	@rg -F -q 'unsigned promote must not Cosign-sign' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs' make/bazel-migration.mk

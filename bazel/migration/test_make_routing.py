@@ -82,6 +82,16 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("cosign is required to reconstruct", mk)
         self.assertIn("ORLIX_COSIGN_KEY is required to reconstruct", mk)
 
+    def test_unsigned_promote_uses_two_clean_output_bases(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn('for side in a b; do', mk)
+        self.assertIn("--nouse_action_cache", mk)
+        self.assertIn('promote/$$$$side/output-base', mk)
+        self.assertIn('promote/$$$$side/disk', mk)
+        self.assertIn('"signed": false', mk)
+        self.assertIn("unsigned promote mutated artifacts.lock.json", mk)
+        self.assertIn("unsigned promote must not Cosign-sign", mk)
+
     def test_promotion_consumes_hermetic_feasibility_targets(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn(
