@@ -1157,17 +1157,10 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 			unsigned long long before_pc = regs->pc;
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
-			bool block_decoded_valid;
+			bool block_decoded_valid = false;
 
-			block_decoded_valid = orlix_tcti_decoded_for_program_pc(
-				block->program, block->program_words,
-				block->guest_start_pc, block->instruction_count,
-				regs->pc, &block_decoded);
-			if (block_decoded_valid) {
-				block_fault_access =
-					orlix_tcti_fault_access_for_decoded(&block_decoded);
-				block_instruction = block_decoded.instruction;
-			}
+			block_instruction = orlix_tcti_program_instruction_at(
+				block->program, block->program_words, 0);
 			ret = orlix_tcti_execute_authorized_capture(
 				mm, regs, block->program, block->program_words,
 				&fault_address, block->code_generation,
@@ -1307,7 +1300,6 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						       successful_gadget_execution);
 		}
 
-		decoded = orlix_tcti_decode_aarch64(instruction);
 		ret = orlix_tcti_block_cache_insert(
 			mm, block_pc,
 			block_pc + block_instruction_count * sizeof(u32),
