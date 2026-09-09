@@ -73,6 +73,13 @@ class SignTests(unittest.TestCase):
         self.assertEqual(payload["oci_reference"], f"ghcr.io/example/orlix/uapi@sha256:{observed}")
         self.assertTrue(any(call[0] == "oras" and "push" in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "sign" in call for call in calls))
+        self.assertTrue(
+            any(
+                "--annotation" in call
+                and "org.opencontainers.image.source=https://github.com/rudironsoni/Orlix" in call
+                for call in calls
+            )
+        )
 
     def test_public_password_env_is_mapped_for_cosign(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"

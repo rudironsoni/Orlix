@@ -1,21 +1,21 @@
 {
   "schema": 1,
-  "buildset": "2bd37e90d962cccad334ec041b9f1dc8a5e4d979882f7594686043766434d02d",
+  "buildset": "ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d",
   "components": {
     "uapi": {
       "unsigned_digest": "666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07",
-      "oci_digest": "sha256:8a982f6e781688b29c111972ac2a435fb76a4852e2e1376c6fd184acb8a698d8",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:8a982f6e781688b29c111972ac2a435fb76a4852e2e1376c6fd184acb8a698d8"
+      "oci_digest": "sha256:ca8480cd8d60048bd275bf16a91d0663508322f5312d7898db93851eea1419a4",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:ca8480cd8d60048bd275bf16a91d0663508322f5312d7898db93851eea1419a4"
     },
     "mlibc": {
       "unsigned_digest": "fc080e3617519e91626335997c270910c691a1ea760cc82d6d36a6f0238448a8",
-      "oci_digest": "sha256:767ebe4ba10832f44a7ba8dc93f5dd0d86bd44c559ff4d50b39ad1fd5b675b70",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:767ebe4ba10832f44a7ba8dc93f5dd0d86bd44c559ff4d50b39ad1fd5b675b70"
+      "oci_digest": "sha256:9a8840d280a3e40194b5b84d135070b27f1bb17aa97ff5e568ec0f5258bd0c32",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:9a8840d280a3e40194b5b84d135070b27f1bb17aa97ff5e568ec0f5258bd0c32"
     },
     "rootfs": {
       "unsigned_digest": "794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3",
-      "oci_digest": "sha256:c21a027ed4a78a344f00f8f2aad08fe5a107362f5d089bf116e390d3b02704be",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:c21a027ed4a78a344f00f8f2aad08fe5a107362f5d089bf116e390d3b02704be"
+      "oci_digest": "sha256:4aa031b629e496e9c27fa1a00a6024e7262c61f90e9b71d7b9e779782a564822",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:4aa031b629e496e9c27fa1a00a6024e7262c61f90e9b71d7b9e779782a564822"
     }
   }
 }

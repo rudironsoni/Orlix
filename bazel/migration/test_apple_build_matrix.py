@@ -46,7 +46,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         row = self.rows["ios-15.0-promoted-buildset"]
         self.assertEqual(row["result"], "gated")
         self.assertIn("GHCR", row["gate"])
-        self.assertIn("2bd37e90", row["proof"])
+        self.assertIn("ce931c25", row["proof"])
         self.assertIn("ghcr.io/rudironsoni/orlix", row["proof"])
         self.assertIn("--config=promoted", row["proof"])
         self.assertNotIn("latest", row["proof"])

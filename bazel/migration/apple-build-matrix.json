@@ -72,7 +72,7 @@
       "component_mode": "promoted",
       "result": "gated",
       "gate": "GHCR lock reconstructs; promoted.bzl does not substitute OCI trees into the Apple compile",
-      "proof": "make __bazel-reconstruct pulled ghcr.io/rudironsoni/orlix/{uapi,mlibc,rootfs} for buildset 2bd37e90d962cccad334ec041b9f1dc8a5e4d979882f7594686043766434d02d. make build --config=promoted still embeds locked-buildset.json only."
+      "proof": "make __bazel-reconstruct pulled ghcr.io/rudironsoni/orlix/{uapi,mlibc,rootfs} for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d. make build --config=promoted still embeds locked-buildset.json only."
     },
     {
       "id": "signing-distribution",

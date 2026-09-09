@@ -123,6 +123,12 @@ def sign_digest(
         if repo.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
             oras_push.append("--plain-http")
         oras_push.extend(oras_config_args())
+        oras_push.extend(
+            [
+                "--annotation",
+                "org.opencontainers.image.source=https://github.com/rudironsoni/Orlix",
+            ]
+        )
         pushed = run(
             oras_push
             + [
