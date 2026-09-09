@@ -44,7 +44,9 @@ class AppleBuildMatrixTests(unittest.TestCase):
 
     def test_promoted_mode_consumes_signed_lock(self) -> None:
         row = self.rows["ios-15.0-promoted-buildset"]
-        self.assertEqual(row["result"], "supported")
+        self.assertEqual(row["result"], "gated")
+        self.assertIn("localhost:5001", row["gate"])
+        self.assertIn("GHCR", row["gate"])
         self.assertIn("259dc911", row["proof"])
         self.assertIn("--config=promoted", row["proof"])
         self.assertNotIn("latest", row["proof"])

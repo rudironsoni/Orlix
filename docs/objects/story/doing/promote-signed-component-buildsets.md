@@ -1,13 +1,13 @@
 ---
 type: story
 tags: [story, bazel, artifacts]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Promote reproducible private components and compatible signed buildsets by immutable OCI digest."
 story_of:
-  - "[Adopt Bazel product graph](../../epic/done/adopt-bazel-product-graph.md)"
+  - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
-  - "[Implement component and buildset promotion](../../task/done/implement-component-and-buildset-promotion.md)"
+  - "[Implement component and buildset promotion](../../task/doing/implement-component-and-buildset-promotion.md)"
 ---
 
 # Promote Signed Component Buildsets

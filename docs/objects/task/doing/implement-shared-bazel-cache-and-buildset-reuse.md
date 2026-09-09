@@ -5,13 +5,13 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Reuse compatible Bazel results and signed component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
-  - "[Route every Apple build through Bazel](../../story/done/route-every-apple-build-through-bazel.md)"
+  - "[Route every Apple build through Bazel](../../story/doing/route-every-apple-build-through-bazel.md)"
 depends_on:
-  - "[Define the supported Apple Bazel build matrix](define-supported-apple-bazel-build-matrix.md)"
+  - "[Define the supported Apple Bazel build matrix](../done/define-supported-apple-bazel-build-matrix.md)"
   - "[Implement component and buildset promotion](implement-component-and-buildset-promotion.md)"
   - "[Implement protected Bazel automation](implement-protected-bazel-automation.md)"
 blocks:

@@ -6,11 +6,11 @@ tags:
   - apple
   - proof
   - compatibility
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Prove every supported Apple matrix row uses Bazel, reuses only valid inputs, and keeps newer features gated on iOS 15."
 task_of:
-  - "[Route every Apple build through Bazel](../../story/done/route-every-apple-build-through-bazel.md)"
+  - "[Route every Apple build through Bazel](../../story/doing/route-every-apple-build-through-bazel.md)"
 depends_on:
   - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
   - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"

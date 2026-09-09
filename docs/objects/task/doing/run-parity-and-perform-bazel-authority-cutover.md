@@ -1,11 +1,11 @@
 ---
 type: task
 tags: [task, bazel, migration]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Run shadow parity, performance, reproducibility, and tamper tests, then perform the single build-authority cutover."
 task_of:
-  - "[Prove parity and cut over build authority](../../story/done/prove-parity-and-cut-over-build-authority.md)"
+  - "[Prove parity and cut over build authority](../../story/doing/prove-parity-and-cut-over-build-authority.md)"
 depends_on:
   - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
 ---

@@ -1,11 +1,11 @@
 ---
 type: task
 tags: [task, bazel, artifacts]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Implement clean component promotion, signed buildsets, lock proposal pull requests, provenance, verification, and retention."
 task_of:
-  - "[Promote signed component buildsets](../../story/done/promote-signed-component-buildsets.md)"
+  - "[Promote signed component buildsets](../../story/doing/promote-signed-component-buildsets.md)"
 blocks:
   - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"
 ---

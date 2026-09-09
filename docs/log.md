@@ -7,6 +7,10 @@ updated: 2026-09-09
 ---
 # Orlix Knowledge Log
 
+## [2026-09-09] record | Bazel epic is not done without GHCR reuse
+
+[CORRECTION] `docs/objects/epic/done/adopt-bazel-product-graph.md` was wrong. The epic is in `doing/`. Incomplete stories now in `doing/`: feasibility, Apple product graph, routing, proof binding, signed promote, protected automation, parity/cutover, rollback retire. Incomplete tasks match those stories. Kept in `done/`: governance baseline, hermetic upstream rules, and the Apple matrix definition after the promoted row was set back to `gated`. `gh api user/packages?package_type=container` has no `orlix` packages. `artifacts.lock.json` names `localhost:5001`, and that registry is not running. `Build/AgentHarness/bazel-migration/apple-feasibility.json` is `partial`. posix-shell TAP END is missing. No benchmark workflow exists. HostAdapter composition remains `[UNVERIFIED]`.
+
 ## [2026-09-09] record | ADR 0039 caches TCTI blocks as gadget programs
 
 Accepted [ADR 0039](objects/architecture-decision/0039-cache-tcti-basic-blocks-as-gadget-programs.md): product TCTI decodes a straight-line A64 block into a data-only C gadget program, caches it, and runs the list. It does not emit host machine code. The decision amends [ADR 0022](objects/architecture-decision/0022-use-hosted-linux-elf-execution.md). QEMU TCG native codegen, `MAP_JIT`, and RWX stay forbidden on the product path.

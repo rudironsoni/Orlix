@@ -6,16 +6,16 @@ tags:
   - apple
   - cache
   - artifacts
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Route every supported iOS, iPadOS, and macOS build through Bazel while reusing only compatible verified outputs."
 story_of:
-  - "[Adopt Bazel product graph](../../epic/done/adopt-bazel-product-graph.md)"
+  - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
   - "[Define the supported Apple Bazel build matrix](../../task/done/define-supported-apple-bazel-build-matrix.md)"
-  - "[Implement universal Apple Bazel build routing](../../task/done/implement-universal-apple-bazel-build-routing.md)"
-  - "[Implement shared Bazel cache and buildset reuse](../../task/done/implement-shared-bazel-cache-and-buildset-reuse.md)"
-  - "[Prove all supported Apple builds and feature gates](../../task/done/prove-all-supported-apple-builds-and-feature-gates.md)"
+  - "[Implement universal Apple Bazel build routing](../../task/doing/implement-universal-apple-bazel-build-routing.md)"
+  - "[Implement shared Bazel cache and buildset reuse](../../task/doing/implement-shared-bazel-cache-and-buildset-reuse.md)"
+  - "[Prove all supported Apple builds and feature gates](../../task/doing/prove-all-supported-apple-builds-and-feature-gates.md)"
 depends_on:
   - "[Prove the Bazel Apple feasibility gate](prove-bazel-apple-feasibility-gate.md)"
 blocks:

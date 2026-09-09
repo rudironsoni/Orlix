@@ -9,12 +9,12 @@ updated: 2026-09-06
 status: done
 summary: "Define every supported Apple build row, stable Make entry point, and Bazel authority contract before routing builds."
 task_of:
-  - "[Route every Apple build through Bazel](../../story/done/route-every-apple-build-through-bazel.md)"
+  - "[Route every Apple build through Bazel](../../story/doing/route-every-apple-build-through-bazel.md)"
 depends_on:
-  - "[Run the Bazel Xcode 26.6 feasibility experiment](run-bazel-xcode-26-6-feasibility-experiment.md)"
+  - "[Run the Bazel Xcode 26.6 feasibility experiment](../doing/run-bazel-xcode-26-6-feasibility-experiment.md)"
 blocks:
-  - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
-  - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"
+  - "[Implement universal Apple Bazel build routing](../doing/implement-universal-apple-bazel-build-routing.md)"
+  - "[Implement shared Bazel cache and buildset reuse](../doing/implement-shared-bazel-cache-and-buildset-reuse.md)"
 ---
 
 # Define The Supported Apple Bazel Build Matrix

@@ -1,13 +1,13 @@
 ---
 type: task
 tags: [task, bazel, apple]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Run the bounded Bazel 9.2.0 and Xcode 26.6 compatibility experiment and record every supported or blocked behavior."
 task_of:
-  - "[Prove the Bazel Apple feasibility gate](../../story/done/prove-bazel-apple-feasibility-gate.md)"
+  - "[Prove the Bazel Apple feasibility gate](../../story/doing/prove-bazel-apple-feasibility-gate.md)"
 blocks:
-  - "[Define the supported Apple Bazel build matrix](define-supported-apple-bazel-build-matrix.md)"
+  - "[Define the supported Apple Bazel build matrix](../done/define-supported-apple-bazel-build-matrix.md)"
 ---
 
 # Run The Bazel Xcode 26.6 Feasibility Experiment

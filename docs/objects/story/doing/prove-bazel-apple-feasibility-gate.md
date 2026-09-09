@@ -1,13 +1,13 @@
 ---
 type: story
 tags: [story, bazel, apple]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Prove the stable Bazel Apple matrix with Xcode 26.6 and every critical Orlix dependency before broad migration."
 story_of:
-  - "[Adopt Bazel product graph](../../epic/done/adopt-bazel-product-graph.md)"
+  - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
-  - "[Run the Bazel Xcode 26.6 feasibility experiment](../../task/done/run-bazel-xcode-26-6-feasibility-experiment.md)"
+  - "[Run the Bazel Xcode 26.6 feasibility experiment](../../task/doing/run-bazel-xcode-26-6-feasibility-experiment.md)"
 blocks:
   - "[Route every Apple build through Bazel](route-every-apple-build-through-bazel.md)"
 ---

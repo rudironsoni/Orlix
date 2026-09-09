@@ -5,16 +5,16 @@ tags:
   - bazel
   - apple
   - build-system
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Make Bazel the product build authority for every supported Apple target while retaining Make as the public interface."
 task_of:
-  - "[Route every Apple build through Bazel](../../story/done/route-every-apple-build-through-bazel.md)"
+  - "[Route every Apple build through Bazel](../../story/doing/route-every-apple-build-through-bazel.md)"
 depends_on:
-  - "[Define the supported Apple Bazel build matrix](define-supported-apple-bazel-build-matrix.md)"
+  - "[Define the supported Apple Bazel build matrix](../done/define-supported-apple-bazel-build-matrix.md)"
   - "[Implement the Bazel Apple product graph](implement-bazel-apple-product-graph.md)"
 blocks:
-  - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
+  - "[Prove all supported Apple builds and feature gates](../doing/prove-all-supported-apple-builds-and-feature-gates.md)"
 ---
 
 # Implement Universal Apple Bazel Build Routing

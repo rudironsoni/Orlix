@@ -8,7 +8,7 @@ updated: 2026-09-01
 status: done
 summary: "Create the durable migration decisions, exhaustive current-build inventory, task envelope, and measured baseline."
 story_of:
-  - "[Adopt Bazel product graph](../../epic/done/adopt-bazel-product-graph.md)"
+  - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
   - "[Record the Bazel migration plan and baseline](../../task/done/record-bazel-migration-plan-and-baseline.md)"
 ---

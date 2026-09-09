@@ -1,13 +1,13 @@
 ---
 type: story
 tags: [story, bazel, apple]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Declare all private Apple layers, OrlixOS, the app, extensions, resources, tests, and Xcode project surfaces in Bazel."
 story_of:
-  - "[Adopt Bazel product graph](../../epic/done/adopt-bazel-product-graph.md)"
+  - "[Adopt Bazel product graph](../../epic/doing/adopt-bazel-product-graph.md)"
 has_task:
-  - "[Implement the Bazel Apple product graph](../../task/done/implement-bazel-apple-product-graph.md)"
+  - "[Implement the Bazel Apple product graph](../../task/doing/implement-bazel-apple-product-graph.md)"
 ---
 
 # Move The Apple Product Graph To Bazel

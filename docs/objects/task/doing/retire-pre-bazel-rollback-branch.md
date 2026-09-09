@@ -1,11 +1,11 @@
 ---
 type: task
 tags: [task, bazel, rollback]
-updated: 2026-09-06
-status: done
+updated: 2026-09-09
+status: doing
 summary: "Retire the read-only rollback branch after one shipped release and one clean reconstruction exercise."
 task_of:
-  - "[Retain a bounded pre-Bazel rollback path](../../story/done/retain-bounded-pre-bazel-rollback-path.md)"
+  - "[Retain a bounded pre-Bazel rollback path](../../story/doing/retain-bounded-pre-bazel-rollback-path.md)"
 ---
 
 # Retire The Pre-Bazel Rollback Branch
