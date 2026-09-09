@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Replace Zig .url/.hash deps with local .path deps from a digest-pinned package tree."""
+"""Unused. Ghostty now comes from libghostty-spm."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
+import stat
 from pathlib import Path
 
 URL_HASH = re.compile(
@@ -27,7 +29,6 @@ def package_dirs(packages_root: Path) -> dict[str, Path]:
 
 def rewrite_text(text: str, zon_dir: Path, packages: dict[str, Path]) -> str:
     def replace(match: re.Match[str]) -> str:
-        indent = match.group(1)
         digest = match.group(2)
         source = packages.get(digest)
         if source is None:
@@ -43,32 +44,48 @@ def os_path_rel(target: Path, start: Path) -> str:
 
 
 def os_relpath(target: str, start: str) -> str:
-    import os
-
     return os.path.relpath(target, start=start)
+
+
+def atomic_write(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".orlix-new")
+    tmp.write_text(text, encoding="utf-8")
+    if path.exists():
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        path.unlink()
+    tmp.replace(path)
+
+
+def rewrite_existing_tree(ghostty_root: Path) -> None:
+    packages = package_dirs(ghostty_root / "vendor-zig")
+    for zon in ghostty_root.rglob("build.zig.zon"):
+        original = zon.read_text(encoding="utf-8")
+        updated = rewrite_text(original, zon.parent, packages)
+        if updated != original:
+            atomic_write(zon, updated)
 
 
 def materialize(ghostty_root: Path, packages_root: Path) -> None:
     vendor = ghostty_root / "vendor-zig"
     vendor.mkdir(parents=True, exist_ok=True)
-    packages = {}
     for name, source in package_dirs(packages_root).items():
-        dest = vendor / name
-        shutil.copytree(source, dest)
-        packages[name] = dest
-    for zon in ghostty_root.rglob("build.zig.zon"):
-        original = zon.read_text(encoding="utf-8")
-        updated = rewrite_text(original, zon.parent, packages)
-        if updated != original:
-            zon.write_text(updated, encoding="utf-8")
+        shutil.copytree(source, vendor / name)
+    rewrite_existing_tree(ghostty_root)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("ghostty_root")
-    parser.add_argument("packages_root")
+    parser.add_argument("packages_root", nargs="?")
+    parser.add_argument("--rewrite-only", action="store_true")
     args = parser.parse_args(argv)
-    materialize(Path(args.ghostty_root), Path(args.packages_root))
+    root = Path(args.ghostty_root)
+    if args.rewrite_only:
+        rewrite_existing_tree(root)
+        return 0
+    if not args.packages_root:
+        raise SystemExit("packages_root is required unless --rewrite-only")
+    materialize(root, Path(args.packages_root))
     return 0
 
 

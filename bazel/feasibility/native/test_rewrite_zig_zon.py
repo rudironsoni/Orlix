@@ -54,6 +54,20 @@ class RewriteZigZonTests(unittest.TestCase):
             self.assertNotIn("deps.files.ghostty.org/uucode-", text)
             self.assertTrue((ghostty / "vendor-zig" / pkg_name).is_dir())
 
+    def test_rewrite_replaces_readonly_zon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkg_name = "uucode-0.2.0-ZZjBPlK5VADj7fdoq7G8LIHzD5o6FSkcBXXrRWr4jnrA"
+            vendor = root / "vendor-zig" / pkg_name
+            vendor.mkdir(parents=True)
+            zon = root / "build.zig.zon"
+            zon.write_text(SAMPLE, encoding="utf-8")
+            zon.chmod(0o444)
+            rewrite_zig_zon.rewrite_existing_tree(root)
+            text = zon.read_text(encoding="utf-8")
+            self.assertIn(".path = \"vendor-zig/", text)
+            self.assertNotIn("deps.files.ghostty.org/uucode-", text)
+
 
 if __name__ == "__main__":
     unittest.main()
