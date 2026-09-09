@@ -76,6 +76,12 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("promoted-components.json", mk)
         self.assertIn("bazel/promotion/substitute.py", mk)
 
+    def test_reconstruct_fails_closed_without_oras_cosign_or_key(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("oras is required to reconstruct", mk)
+        self.assertIn("cosign is required to reconstruct", mk)
+        self.assertIn("ORLIX_COSIGN_KEY is required to reconstruct", mk)
+
     def test_promotion_consumes_hermetic_feasibility_targets(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn(

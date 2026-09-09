@@ -205,7 +205,9 @@ __bazel-lock-from-signed: __bazel-lock-proposal
 
 __bazel-reconstruct: __bazel-version-check
 	@set -euo pipefail; \
-	test -n "$$ORLIX_COSIGN_KEY" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
+	command -v oras >/dev/null || { echo "oras is required to reconstruct" >&2; exit 1; }; \
+	command -v cosign >/dev/null || { echo "cosign is required to reconstruct" >&2; exit 1; }; \
+	test -n "$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct"
 
 __bazel-substitute-promoted: __bazel-reconstruct
@@ -510,6 +512,9 @@ __bazel-apple-routing-check:
 	@rg -F -q '__bazel-lock-proposal' make/bazel-migration.mk
 	@rg -F -q '__bazel-substitute-promoted' make/bazel-migration.mk
 	@rg -F -q 'promoted-components.json' make/bazel-migration.mk
+	@rg -F -q 'oras is required to reconstruct' make/bazel-migration.mk
+	@rg -F -q 'cosign is required to reconstruct' make/bazel-migration.mk
+	@rg -F -q 'ORLIX_COSIGN_KEY is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs' make/bazel-migration.mk

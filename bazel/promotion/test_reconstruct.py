@@ -33,6 +33,72 @@ class ReconstructTests(unittest.TestCase):
             with self.assertRaises(reconstruct.ReconstructError):
                 reconstruct.reconstruct(str(path), tmp)
 
+    def test_missing_oras_fails_closed(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "artifacts.lock.json"
+                path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+                with mock.patch(
+                    "reconstruct.shutil.which",
+                    side_effect=lambda name: None if name == "oras" else "/usr/bin/cosign",
+                ):
+                    with self.assertRaises(reconstruct.ReconstructError) as raised:
+                        reconstruct.reconstruct(str(path), tmp)
+            self.assertIn("oras and cosign are required", str(raised.exception))
+        finally:
+            os.environ.pop("ORLIX_COSIGN_KEY", None)
+
+    def test_missing_cosign_fails_closed(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "artifacts.lock.json"
+                path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+                with mock.patch(
+                    "reconstruct.shutil.which",
+                    side_effect=lambda name: None if name == "cosign" else "/usr/bin/oras",
+                ):
+                    with self.assertRaises(reconstruct.ReconstructError) as raised:
+                        reconstruct.reconstruct(str(path), tmp)
+            self.assertIn("oras and cosign are required", str(raised.exception))
+        finally:
+            os.environ.pop("ORLIX_COSIGN_KEY", None)
+
+    def test_missing_key_fails_closed(self) -> None:
+        os.environ.pop("ORLIX_COSIGN_KEY", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifacts.lock.json"
+            path.write_text(json.dumps(_lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+            with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
+                with self.assertRaises(reconstruct.ReconstructError) as raised:
+                    reconstruct.reconstruct(str(path), tmp)
+        self.assertIn("ORLIX_COSIGN_KEY", str(raised.exception))
+
+    def test_unsigned_lock_fails_closed(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        payload = {
+            "schema": 1,
+            "buildset": "ff" * 32,
+            "components": {
+                "uapi": {
+                    "unsigned_digest": "aa" * 32,
+                    "oci_digest": None,
+                    "oci_reference": None,
+                }
+            },
+        }
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "artifacts.lock.json"
+                path.write_text(json.dumps(payload) + "\n")
+                with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
+                    with self.assertRaises(reconstruct.ReconstructError) as raised:
+                        reconstruct.reconstruct(str(path), tmp)
+            self.assertIn("oci_reference", str(raised.exception))
+        finally:
+            os.environ.pop("ORLIX_COSIGN_KEY", None)
+
     def test_pulls_extracts_component_tar_and_verifies(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         calls: list[list[str]] = []
