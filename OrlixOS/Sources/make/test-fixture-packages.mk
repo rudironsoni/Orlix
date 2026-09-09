@@ -201,7 +201,7 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	ln -sf "$(ORLIXOS_READELF)" "$(ORLIXOS_PERL_TOOLCHAIN_DIR)/readelf"; \
 	ln -sf "$$(command -v gsed)" "$(ORLIXOS_PERL_TOOLCHAIN_DIR)/sed"; \
 	cd "$(ORLIXOS_PERL_SRC_DIR)"; \
-	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf ./configure --target=aarch64-linux-gnu --prefix=/usr --sysroot="$$sysroot" --target-tools-prefix=aarch64-linux-gnu- --no-dynaloader --only-mod=Errno,Fcntl,File-Glob,IO --host-cc="$(ORLIXOS_CC)" --host-set-d_nanosleep=define --host-set-charsize=1 --host-set-shortsize=2 --host-set-intsize=4 --host-set-longsize=8 --host-set-doublesize=8 --host-set-ptrsize=8 --host-set-longdblsize=8 --host-set-longlongsize=8 --host-set-sizesize=8 --host-set-fpossize=8 --host-set-lseeksize=8 --host-set-uidsize=4 --host-set-gidsize=4 --host-set-timesize=8 --host-set-byteorder=12345678 -Ud_syscall -Ud_syscallproto -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Ddoublesize=8 -Dptrsize=8 -Dlongdblsize=16 -Dlonglongsize=8; \
+	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf ./configure --target=aarch64-linux-gnu --prefix=/usr --sysroot="$$sysroot" --target-tools-prefix=aarch64-linux-gnu- --no-dynaloader --only-mod=Errno,Fcntl,File-Glob,IO,POSIX --host-cc="$(ORLIXOS_CC)" --host-set-d_nanosleep=define --host-set-charsize=1 --host-set-shortsize=2 --host-set-intsize=4 --host-set-longsize=8 --host-set-doublesize=8 --host-set-ptrsize=8 --host-set-longdblsize=8 --host-set-longlongsize=8 --host-set-sizesize=8 --host-set-fpossize=8 --host-set-lseeksize=8 --host-set-uidsize=4 --host-set-gidsize=4 --host-set-timesize=8 --host-set-byteorder=12345678 -Ud_syscall -Ud_syscallproto -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Ddoublesize=8 -Dptrsize=8 -Dlongdblsize=16 -Dlonglongsize=8; \
 	perl -0pi -e 's/^# HAS_NANOSLEEP/#define HAS_NANOSLEEP/m' xconfig.h; \
 	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf $(MAKE) -j1 perl; \
 	cp "$(ORLIXOS_PERL_SRC_DIR)/perl" "$(ORLIXOS_PERL_BINARY)"; \
@@ -225,7 +225,7 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	cd "$(ORLIXOS_PERL_SRC_DIR)/dist/XSLoader"; ../../miniperl_top -I../../lib XSLoader_pm.PL; rm -f "$(ORLIXOS_PERL_LIB_DIR)/XSLoader.pm"; cp XSLoader.pm "$(ORLIXOS_PERL_LIB_DIR)/XSLoader.pm"; \
 	cd "$(ORLIXOS_PERL_SRC_DIR)/ext/DynaLoader"; ../../miniperl_top -I../../lib DynaLoader_pm.PL; rm -f "$(ORLIXOS_PERL_LIB_DIR)/DynaLoader.pm"; cp DynaLoader.pm "$(ORLIXOS_PERL_LIB_DIR)/DynaLoader.pm"; \
 	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO,POSIX\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"; \
 	rm -rf "$(ORLIXOS_PERL_TOOLCHAIN_DIR)"; \
 	echo "built Orlix Linux perl package input: $(ORLIXOS_PERL_BINARY)"
 
@@ -233,7 +233,7 @@ $(ORLIXOS_PERL_STAMP): $(ORLIXOS_PERL_BINARY)
 	@set -euo pipefail; \
 	[ -x "$(ORLIXOS_PERL_BINARY)" ] || { echo "missing perl package input: $(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO,POSIX\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"
 
 $(ORLIXOS_JQ_BINARY): $(ORLIXOS_JQ_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
 	@set -euo pipefail; \
