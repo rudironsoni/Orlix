@@ -1120,7 +1120,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 		int ret;
 
 		if (++instruction_count % ORLIX_TCTI_PROGRESS_REPORT_INTERVAL == 0)
-			pr_info_ratelimited("OrlixTCTI: progress task=%s pid=%d pc=%#llx instructions=%llu sp=%#llx x0=%#llx x1=%#llx x2=%#llx x3=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x23=%#llx x24=%#llx x30=%#llx pstate=%#llx\n",
+			pr_debug_ratelimited("OrlixTCTI: progress task=%s pid=%d pc=%#llx instructions=%llu sp=%#llx x0=%#llx x1=%#llx x2=%#llx x3=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x23=%#llx x24=%#llx x30=%#llx pstate=%#llx\n",
 					    task->comm, task_pid_nr(task),
 					    regs->pc, instruction_count,
 					    regs->sp, regs->regs[0],
