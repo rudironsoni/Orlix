@@ -1,0 +1,99 @@
+diff --git a/subprojects/frigg.wrap b/subprojects/frigg.wrap
+--- a/subprojects/frigg.wrap
++++ b/subprojects/frigg.wrap
+@@ -1,4 +1,4 @@
+ [wrap-git]
+ url = https://github.com/managarm/frigg.git
+ revision = b0dbea66bc19f7c5546f0039a3be842feb02678c
+-diff_files = frigg-long-double-format.patch
++diff_files = frigg-long-double-format.patch, frigg-hex-alt-prefix.patch
+diff --git a/subprojects/packagefiles/frigg-hex-alt-prefix.patch b/subprojects/packagefiles/frigg-hex-alt-prefix.patch
+new file mode 100644
+--- /dev/null
++++ b/subprojects/packagefiles/frigg-hex-alt-prefix.patch
+@@ -0,0 +1,85 @@
++diff --git a/include/frg/formatting.hpp b/include/frg/formatting.hpp
++--- a/include/frg/formatting.hpp
+++++ b/include/frg/formatting.hpp
++@@ -158,7 +158,8 @@
++ 	void print_digits(S &sink, T number, bool negative, int radix,
++ 			int width, int precision, char padding, bool left_justify,
++ 			bool group_thousands, bool always_sign, bool plus_becomes_space,
++-			bool use_capitals, locale_options<Char> locale_opts) {
+++			bool use_capitals, locale_options<Char> locale_opts,
+++			const char *alt_prefix = nullptr) {
++ 		const char *digits = use_capitals ? "0123456789ABCDEF" : "0123456789abcdef";
++ 		char buffer[64];
++ 
++@@ -217,6 +218,9 @@
++ 
++ 		if(negative || always_sign || plus_becomes_space)
++ 			extra++;
+++		if(alt_prefix)
+++			for(const char *p = alt_prefix; *p; p++)
+++				extra++;
++ 
++ 		int final_width = max(k, precision) + extra;
++ 
++@@ -230,6 +234,9 @@
++ 			sink.append('+');
++ 		else if(plus_becomes_space)
++ 			sink.append(' ');
+++		if(alt_prefix)
+++			for(const char *p = alt_prefix; *p; p++)
+++				sink.append(static_cast<Char>(*p));
++ 
++ 		if(!left_justify && final_width < width && padding == '0')
++ 			for(int i = 0; i < width - final_width; i++)
++@@ -261,7 +268,8 @@
++ 			int precision = 1, char padding = ' ', bool left_justify = false,
++ 			bool group_thousands = false, bool always_sign = false,
++ 			bool plus_becomes_space = false, bool use_capitals = false,
++-			locale_options<Char> locale_opts = {}) {
+++			locale_options<Char> locale_opts = {},
+++			const char *alt_prefix = nullptr) {
++ 	if constexpr (std::is_signed_v<T>) {
++ 		if(number < 0) {
++ 			// This is valid in C (N3220 6.2.6.2) and C++ ([N4950 basic.fundamental 6.8.2.3])
++@@ -269,13 +277,13 @@
++ 			auto absv = ~static_cast<UnsignedT>(number) + 1;
++ 			print_digits<S, UnsignedT, Char>(sink, absv, true, radix, width, precision, padding,
++ 					left_justify, group_thousands, always_sign, plus_becomes_space, use_capitals,
++-					locale_opts);
+++					locale_opts, alt_prefix);
++ 			return;
++ 		}
++ 	}
++ 	print_digits<S, T, Char>(sink, number, false, radix, width, precision, padding,
++ 			left_justify, group_thousands, always_sign, plus_becomes_space, use_capitals,
++-			locale_opts);
+++			locale_opts, alt_prefix);
++ }
++ 
++ 	template<typename T, Sink S>
++diff --git a/include/frg/printf.hpp b/include/frg/printf.hpp
++--- a/include/frg/printf.hpp
+++++ b/include/frg/printf.hpp
++@@ -873,10 +873,9 @@
++ 	case 'x':
++ 	case 'X': {
++ 		auto print = [&] (auto number) {
++-			if (number && opts.alt_conversion) {
++-				opts.minimum_width -= 2;
++-				sink.append(t == 'x' ? P::hexPrefix : P::hexPrefixUpper);
++-			}
+++			const char *prefix = nullptr;
+++			if (number && opts.alt_conversion)
+++				prefix = t == 'x' ? "0x" : "0X";
++ 
++ 			if(opts.precision && *opts.precision == 0 && !number) {
++ 				pad_to_min();
++@@ -884,7 +883,7 @@
++ 				_fmt_basics::print_int<S, decltype(number), Char>(sink, number, 16, opts.minimum_width,
++ 						opts.precision ? *opts.precision : 1, opts.fill_zeros ? '0' : ' ',
++ 						opts.left_justify, false, opts.always_sign, opts.plus_becomes_space,
++-						t == 'X', locale_opts);
+++						t == 'X', locale_opts, prefix);
++ 			}
++ 		};
++ 

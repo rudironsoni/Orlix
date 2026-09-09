@@ -7,7 +7,7 @@
     "OrlixCoreUtils/Makefile": "0a1010402df05d70a6afbb1795c7581883e6f95b7d173ebdedb580d668f25e9a",
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
-    "OrlixMLibC/Makefile": "f19914c57a2a270def1fb23d982990faa75494ec3e84275ba14f82bfba180b01",
+    "OrlixMLibC/Makefile": "1fe365e387348cfa9c45853727d848cfa9c1cbf811c3a69aa4973e282e3d4a53",
     "OrlixOS/Makefile": "2b1d54ce8dc1f28338c7c7c5661bfbc43941c6eacd49babd86157b9bad8a3eb2",
     "make/bazel-migration.mk": "02e689645758ad4ddf755522c6256af094b69e1ed60aecdaf2e6051076c75fb7",
     "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
@@ -4732,7 +4732,7 @@
     {
       "name": "all",
       "source": "OrlixMLibC/Makefile",
-      "line": 325,
+      "line": 326,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4742,7 +4742,7 @@
     {
       "name": "help",
       "source": "OrlixMLibC/Makefile",
-      "line": 327,
+      "line": 328,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4752,7 +4752,7 @@
     {
       "name": "build",
       "source": "OrlixMLibC/Makefile",
-      "line": 336,
+      "line": 337,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4762,7 +4762,7 @@
     {
       "name": "__build",
       "source": "OrlixMLibC/Makefile",
-      "line": 339,
+      "line": 340,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4773,7 +4773,7 @@
     {
       "name": "headers_install",
       "source": "OrlixMLibC/Makefile",
-      "line": 430,
+      "line": 431,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4783,7 +4783,7 @@
     {
       "name": "__headers-install",
       "source": "OrlixMLibC/Makefile",
-      "line": 433,
+      "line": 434,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4793,7 +4793,7 @@
     {
       "name": "__ensure-kernel-headers",
       "source": "OrlixMLibC/Makefile",
-      "line": 436,
+      "line": 437,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4803,7 +4803,7 @@
     {
       "name": "kselftest",
       "source": "OrlixMLibC/Makefile",
-      "line": 444,
+      "line": 445,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4813,7 +4813,7 @@
     {
       "name": "test",
       "source": "OrlixMLibC/Makefile",
-      "line": 447,
+      "line": 448,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4823,7 +4823,7 @@
     {
       "name": "test-initramfs",
       "source": "OrlixMLibC/Makefile",
-      "line": 450,
+      "line": 451,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4833,7 +4833,7 @@
     {
       "name": "__test-run",
       "source": "OrlixMLibC/Makefile",
-      "line": 453,
+      "line": 454,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4843,7 +4843,7 @@
     {
       "name": "__test-build",
       "source": "OrlixMLibC/Makefile",
-      "line": 481,
+      "line": 482,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4854,7 +4854,7 @@
     {
       "name": "__prepare-test-locale-data",
       "source": "OrlixMLibC/Makefile",
-      "line": 523,
+      "line": 524,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4864,7 +4864,7 @@
     {
       "name": "__test-initramfs",
       "source": "OrlixMLibC/Makefile",
-      "line": 556,
+      "line": 557,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4875,7 +4875,7 @@
     {
       "name": "clean",
       "source": "OrlixMLibC/Makefile",
-      "line": 650,
+      "line": 651,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4885,7 +4885,7 @@
     {
       "name": "__clean",
       "source": "OrlixMLibC/Makefile",
-      "line": 653,
+      "line": 654,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4895,7 +4895,7 @@
     {
       "name": "mrproper",
       "source": "OrlixMLibC/Makefile",
-      "line": 661,
+      "line": 662,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4905,7 +4905,7 @@
     {
       "name": "__bootstrap-mlibc",
       "source": "OrlixMLibC/Makefile",
-      "line": 663,
+      "line": 664,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4915,7 +4915,7 @@
     {
       "name": "__apply-mlibc-patches",
       "source": "OrlixMLibC/Makefile",
-      "line": 690,
+      "line": 691,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4925,7 +4925,7 @@
     {
       "name": "__bootstrap-compiler-rt",
       "source": "OrlixMLibC/Makefile",
-      "line": 709,
+      "line": 710,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4935,7 +4935,7 @@
     {
       "name": "__build-compiler-rt",
       "source": "OrlixMLibC/Makefile",
-      "line": 725,
+      "line": 726,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4945,7 +4945,7 @@
     {
       "name": "__write-cross-file",
       "source": "OrlixMLibC/Makefile",
-      "line": 742,
+      "line": 743,
       "classification": "private",
       "phony": true,
       "prerequisites": [

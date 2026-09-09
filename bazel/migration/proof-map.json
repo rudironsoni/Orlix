@@ -725,7 +725,7 @@
     {
       "name": "kselftest",
       "source": "OrlixMLibC/Makefile",
-      "line": 444,
+      "line": 445,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -737,7 +737,7 @@
     {
       "name": "test",
       "source": "OrlixMLibC/Makefile",
-      "line": 447,
+      "line": 448,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -749,7 +749,7 @@
     {
       "name": "test-initramfs",
       "source": "OrlixMLibC/Makefile",
-      "line": 450,
+      "line": 451,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -761,7 +761,7 @@
     {
       "name": "__test-run",
       "source": "OrlixMLibC/Makefile",
-      "line": 453,
+      "line": 454,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -773,7 +773,7 @@
     {
       "name": "__test-build",
       "source": "OrlixMLibC/Makefile",
-      "line": 481,
+      "line": 482,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -786,7 +786,7 @@
     {
       "name": "__prepare-test-locale-data",
       "source": "OrlixMLibC/Makefile",
-      "line": 523,
+      "line": 524,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -798,7 +798,7 @@
     {
       "name": "__test-initramfs",
       "source": "OrlixMLibC/Makefile",
-      "line": 556,
+      "line": 557,
       "classification": "private",
       "phony": true,
       "prerequisites": [

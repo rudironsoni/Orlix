@@ -249,6 +249,7 @@ MLIBC_TEST_ORLIX_CASES := \
 	orlix/getopt_diagnostics \
 	orlix/getopt_required_dash_arg \
 	orlix/locale_probe \
+	orlix/printf_hex_alt \
 	orlix/qsort_stack \
 	orlix/renameat2 \
 	orlix/stdio_dup2_pipe \
