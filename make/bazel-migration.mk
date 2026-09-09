@@ -73,6 +73,7 @@ __bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"])'
 	@test "$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild -version | /usr/bin/sed -n '1p')" = "Xcode $(ORLIX_XCODE_VERSION)" || { echo "DEVELOPER_DIR is not Xcode $(ORLIX_XCODE_VERSION)" >&2; exit 1; }
 	@test "$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild -version | /usr/bin/sed -n '2p')" = "Build version $(ORLIX_XCODE_BUILD)" || { echo "DEVELOPER_DIR is not Build version $(ORLIX_XCODE_BUILD)" >&2; exit 1; }
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'
 	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=error --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/config:all --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -423,7 +424,7 @@ __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
 	@set -euo pipefail; \
-	toolchain_digest="$$(/usr/bin/shasum -a 256 bazel/config/toolchain-pin.json | /usr/bin/awk '{print $$1}')"; \
+	toolchain_digest="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
 	extra=(); \
 	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
 	rootfs_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"rootfs",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/rootfs-live-mismatch.json")"; \
