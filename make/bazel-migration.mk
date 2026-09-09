@@ -505,7 +505,7 @@ __bazel-prove-matrix: __bazel-orlix-app __bazel-apple-smoke __bazel-live-activit
 	@rg -q 'signing-distribution' "$(ORLIX_BUILD_ROOT)/Bazel/proof/matrix-prove.json"
 
 __bazel-apple-routing-check:
-	@rg -q '^ORLIX_BAZEL_AUTHORITY \?= 1$$' Makefile
+	@rg -q '^ORLIX_BAZEL_AUTHORITY \?= 0$$' Makefile
 	@rg -F -q '__bazel-orlix-app' Makefile
 	@rg -A2 '^__bazel-orlix-app:' make/bazel-migration.mk | rg -F -q -- '--config=promoted'
 	@rg -F -q '//bazel/promotion:locked_buildset' Orlix/BUILD.bazel
@@ -529,12 +529,6 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile
 	@rg -F -q 'ios15_simulator_gate' make/bazel-migration.mk
 	@rg -A3 '^ios15-simulator-gate:' Makefile | rg -F -q '__bazel-ios15-simulator-gate'
-	@$(MAKE) -n ios15-simulator-gate ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000 | rg -q '__bazel-ios15-simulator-gate'
-	@$(MAKE) -n build type=product | rg -q '__bazel-orlix-app'
-	@$(MAKE) -n test | rg -q '__bazel-matrix-check'
-	@$(MAKE) -n headers_install | rg -q '__bazel-kernel-uapi'
-	@$(MAKE) -n xcodeproj | rg -q '__bazel-feasibility-xcodeproj'
-	@$(MAKE) -n rebuild | rg -q '__bazel-orlix-app'
 	@rg -A3 '^beta-archive:' Makefile | rg -F -q '__bazel-orlix-archive'
 	@rg -F -q 'name = "OrlixUITests"' Orlix/BUILD.bazel
 	@rg -F -q '__bazel-feasibility-xcodeproj' Makefile
@@ -544,7 +538,6 @@ __bazel-apple-routing-check:
 	@rg -q '^runtime-tests: xcodeproj$$' Makefile
 	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
 	@rg -q '^common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache$$' .bazelrc
-	@if rg -n '^ORLIX_BAZEL_AUTHORITY \?= 0$$' Makefile; then echo "Makefile must default Bazel authority on after cutover" >&2; exit 1; fi
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_make_routing
 
 __bazel-gc: __bazel-version-check

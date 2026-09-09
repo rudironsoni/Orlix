@@ -61,9 +61,7 @@ ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WAL
 ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
 ORLIX_TCTI_TEST_ONLY_TESTING ?= OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession
 ORLIX_TCTI_XCODEBUILD ?= /usr/bin/xcodebuild
-# ADR 0037 cutover. Make stays the public interface. Bazel owns product compile.
-# Keep this default above every ifeq that reads it.
-ORLIX_BAZEL_AUTHORITY ?= 1
+ORLIX_BAZEL_AUTHORITY ?= 0
 
 define ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS
 run_xcodebuild() { \

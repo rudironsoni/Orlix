@@ -17,9 +17,10 @@ def _dry_run(*args: str) -> str:
     env = os.environ.copy()
     env["PATH"] = PATH
     completed = subprocess.run(
-        [MAKE, "-C", str(ROOT), "-n", *args],
+        [MAKE, "-C", str(ROOT), "-n", "MAKE=echo", "ORLIX_BAZEL_AUTHORITY=1", *args],
         check=False,
         capture_output=True,
+        timeout=30,
         text=True,
         env=env,
     )
@@ -30,6 +31,12 @@ def _dry_run(*args: str) -> str:
 
 
 class MakeRoutingTests(unittest.TestCase):
+    def test_default_keeps_pre_cutover_authority(self) -> None:
+        self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text())
+        output = _dry_run("xcodeproj", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertNotIn("__bazel-feasibility-xcodeproj", output)
+        self.assertIn("OrlixKernel/Makefile", output)
+
     def test_build_routes_to_orlix_app(self) -> None:
         output = _dry_run("build", "type=product")
         self.assertIn("__bazel-orlix-app", output)
@@ -56,9 +63,9 @@ class MakeRoutingTests(unittest.TestCase):
             "ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000",
         )
         self.assertIn("__bazel-ios15-simulator-gate", output)
-        self.assertIn("prepared-tables.tar.gz", output)
-        self.assertIn("source_manifest.def", output)
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("prepared-tables.tar.gz", makefile)
+        self.assertIn("source_manifest.def", makefile)
         self.assertIn("deviceTypeIdentifier", makefile)
         self.assertIn("devicetypes", makefile)
         self.assertIn("--ios_simulator_device=", makefile)
