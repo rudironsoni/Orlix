@@ -81,6 +81,7 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("oras is required to reconstruct", mk)
         self.assertIn("cosign is required to reconstruct", mk)
         self.assertIn("ORLIX_COSIGN_KEY is required to reconstruct", mk)
+        self.assertIn("ORLIX_COSIGN_KEY_PASSWORD", mk)
 
     def test_unsigned_promote_uses_two_clean_output_bases(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

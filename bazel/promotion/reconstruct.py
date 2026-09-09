@@ -80,11 +80,18 @@ def reconstruct(lock_path: str, out_dir: str, run=_run) -> dict:
                 raise ReconstructError(
                     f"{name} lock entry missing oci_reference, oci_digest, or unsigned_digest"
                 )
+            if reference.startswith("localhost:") or "localhost:" in reference.split("/", 1)[0]:
+                raise ReconstructError(
+                    f"{name} oci_reference must be GHCR, not a local registry: {reference}"
+                )
             pull_dest = Path(tmp) / name
             pull_dest.mkdir()
             pull = ["oras", "pull", reference, "-o", str(pull_dest)]
             if reference.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
                 pull.insert(2, "--plain-http")
+            config = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
+            if config:
+                pull[2:2] = ["--registry-config", config]
             run(pull)
             verify = [
                 "cosign",

@@ -57,6 +57,9 @@ def publish(proposal_path: str, run=_run) -> dict:
         pull = ["oras", "pull", image, "-o", tmp]
         if image.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
             pull.insert(2, "--plain-http")
+        config = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
+        if config:
+            pull[2:2] = ["--registry-config", config]
         run(pull)
         verify = [
             "cosign",

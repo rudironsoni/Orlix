@@ -75,6 +75,25 @@ class ReconstructTests(unittest.TestCase):
                     reconstruct.reconstruct(str(path), tmp)
         self.assertIn("ORLIX_COSIGN_KEY", str(raised.exception))
 
+    def test_localhost_registry_is_rejected(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "artifacts.lock.json"
+                path.write_text(
+                    json.dumps(
+                        _lock_payload("localhost:5001/orlix/uapi@sha256:" + ("ab" * 32))
+                    )
+                    + "\n"
+                )
+                with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
+                    with self.assertRaises(reconstruct.ReconstructError) as raised:
+                        reconstruct.reconstruct(str(path), tmp)
+            self.assertIn("GHCR", str(raised.exception))
+            self.assertIn("localhost", str(raised.exception))
+        finally:
+            os.environ.pop("ORLIX_COSIGN_KEY", None)
+
     def test_unsigned_lock_fails_closed(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         payload = {
@@ -102,7 +121,7 @@ class ReconstructTests(unittest.TestCase):
     def test_pulls_extracts_component_tar_and_verifies(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         calls: list[list[str]] = []
-        reference = "localhost:5001/orlix/uapi@sha256:" + ("ab" * 32)
+        reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 
         def fake_run(argv: list[str]):
             calls.append(list(argv))
@@ -141,7 +160,7 @@ class ReconstructTests(unittest.TestCase):
 
     def test_raw_digest_blob_cannot_substitute(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
-        reference = "localhost:5001/orlix/uapi@sha256:" + ("ab" * 32)
+        reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 
         def fake_run(argv: list[str]):
             if argv[0] == "oras" and "pull" in argv:

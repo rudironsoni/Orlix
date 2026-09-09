@@ -208,6 +208,7 @@ __bazel-reconstruct: __bazel-version-check
 	command -v oras >/dev/null || { echo "oras is required to reconstruct" >&2; exit 1; }; \
 	command -v cosign >/dev/null || { echo "cosign is required to reconstruct" >&2; exit 1; }; \
 	test -n "$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_KEY is required to reconstruct" >&2; exit 1; }; \
+	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct"
 
 __bazel-substitute-promoted: __bazel-reconstruct

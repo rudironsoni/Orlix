@@ -37,6 +37,21 @@ def _cosign_key_path(key: str) -> str:
     return key
 
 
+def cosign_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(os.environ if base is None else base)
+    password = env.get("ORLIX_COSIGN_KEY_PASSWORD")
+    if password:
+        env["COSIGN_PASSWORD"] = password
+    return env
+
+
+def oras_config_args() -> list[str]:
+    path = os.environ.get("ORLIX_ORAS_REGISTRY_CONFIG")
+    if path:
+        return ["--registry-config", path]
+    return []
+
+
 def _parse_oras_digest(stdout: str) -> str:
     match = DIGEST_RE.search(stdout)
     if not match:
@@ -95,6 +110,7 @@ def sign_digest(
         oras_push = ["oras", "push"]
         if repo.startswith("localhost:") or os.environ.get("ORLIX_ORAS_PLAIN_HTTP") == "1":
             oras_push.append("--plain-http")
+        oras_push.extend(oras_config_args())
         pushed = run(
             oras_push
             + [
@@ -106,7 +122,7 @@ def sign_digest(
         oci_digest = _parse_oras_digest(pushed.stdout)
         signed_ref = f"{repo}/{component}@{oci_digest}"
         key_path = _cosign_key_path(key)
-        env = os.environ.copy()
+        env = cosign_env()
         cosign_sign = [
             "cosign",
             "sign",
