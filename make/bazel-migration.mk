@@ -569,8 +569,8 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	test "$$(/usr/bin/shasum -a 256 "$$initramfs" | /usr/bin/awk '{print $$1}')" = "$$(/usr/bin/shasum -a 256 "$$imported_initramfs" | /usr/bin/awk '{print $$1}')" || { echo "IPA initramfs does not match reconstructed OCI tree" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$ipa_work/Payload/Orlix.app'))"; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
-	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot|[[:space:]]T[[:space:]]+_arch_boot_entry' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence"; \
-	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-dependency.evidence" || { echo "missing kernel-dependency evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	/usr/bin/nm -gU "$$ipa_work/Payload/Orlix.app/Orlix" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot|[[:space:]]T[[:space:]]+_arch_boot_entry' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log"; \
+	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log" || { echo "missing kernel link evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rm -rf "$$ipa_work"
 
 __bazel-orlix-archive: __bazel-version-check __bazel-substitute-promoted

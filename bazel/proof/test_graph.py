@@ -43,7 +43,7 @@ class GraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             markers = {
-                "kernel-dependency": "T _OrlixBoot\nT _arch_boot_entry\n",
+                "kernel-dependency": "Run /init as init process\n",
                 "kunit": "ORLIX-KSELFTEST-END\n",
                 "kselftest": "ORLIX-KSELFTEST-END\n",
                 "orlixmlibc": "ORLIX-MLIBC-TEST-END\n",
@@ -75,10 +75,10 @@ class GraphTests(unittest.TestCase):
             root = Path(tmp)
             for change in ("raw", "identity", "failed", "tampered", "missing_end"):
                 with self.subTest(change=change):
-                    evidence = write_evidence(root, "kernel-dependency", "T _OrlixBoot\nT _arch_boot_entry\n")
+                    evidence = write_evidence(root, "kernel-dependency", "Run /init as init process\n")
                     payload = json.loads(evidence.read_text())
                     if change == "raw":
-                        evidence.write_text("T _OrlixBoot\nT _arch_boot_entry\n")
+                        evidence.write_text("Run /init as init process\n")
                     elif change == "tampered":
                         (root / "artifact").write_bytes(b"changed")
                     else:

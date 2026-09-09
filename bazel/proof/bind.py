@@ -48,7 +48,9 @@ def validate_evidence(path: str, expected: dict) -> dict:
     for field in ("exit_code", "failures", "skips"):
         if type(evidence.get(field)) is not int or evidence[field] != 0:
             raise BindError(f"evidence {field} must be zero")
-    for name in ("artifact", "log", "toolchain"):
+    tier = expected["proof_tier"]
+    files = ("artifact", "log", "toolchain") + (("no_userspace_log",) if tier == "kernel-dependency" else ())
+    for name in files:
         try:
             source = Path(evidence[f"{name}_path"])
             with source.open("rb") as stream:
@@ -57,9 +59,8 @@ def validate_evidence(path: str, expected: dict) -> dict:
             raise BindError(f"evidence requires a readable {name}") from error
         if digest != evidence.get(f"{name}_digest"):
             raise BindError(f"evidence {name} content changed")
-    tier = expected["proof_tier"]
     host = "Orlix" if tier == "product-integration" else "OrlixOSTestApp"
-    if tier != "kernel-dependency" and evidence.get("test_host") != host:
+    if evidence.get("test_host") != host:
         raise BindError(f"runtime evidence must come from {host}")
     if tier in {"kernel-dependency", "kunit", "kselftest"} and evidence["artifact_digest"] != expected["subject_digest"]:
         raise BindError("kernel proof must identify the tested kernel artifact")
@@ -67,7 +68,7 @@ def validate_evidence(path: str, expected: dict) -> dict:
     if re.search(r"\bnot ok\s+\d+|\bBail out!|\bSKIP\b|Kernel panic|kernel panic|Oops|BUG:|Out of memory|oom-killer|Killed process|Attempted (?:to )?kill init|Assertion .* failed", log):
         raise BindError("evidence log contains a failure or skip")
     markers = {
-        "kernel-dependency": ("_OrlixBoot", "_arch_boot_entry"),
+        "kernel-dependency": ("as init process",),
         "kunit": ("ORLIX-KSELFTEST-END",),
         "kselftest": ("ORLIX-KSELFTEST-END",),
         "orlixmlibc": ("ORLIX-MLIBC-TEST-END",),
@@ -76,6 +77,16 @@ def validate_evidence(path: str, expected: dict) -> dict:
     }.get(tier, ("** TEST SUCCEEDED **",))
     if not all(marker in log for marker in markers):
         raise BindError(f"{tier} completion marker is missing")
+    if tier == "kernel-dependency":
+        if not re.search(r"Run /\S+ as init process", log):
+            raise BindError("kernel boot did not reach Linux init handoff")
+        no_userspace = Path(evidence["no_userspace_log_path"]).read_text()
+        expected_failure = r"[^\n]*Kernel panic[^\n]*No working init found\.[^\n]*"
+        if not re.search(expected_failure, no_userspace):
+            raise BindError("kernel dependency proof lacks the expected no-userspace failure")
+        remaining = re.sub(expected_failure, "", no_userspace)
+        if re.search(r"Kernel panic|kernel panic|Oops|BUG:|Out of memory|oom-killer", remaining):
+            raise BindError("no-userspace proof contains another fatal failure")
     if tier == "posix-shell" and not re.search(r"ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=[1-9][0-9]*$", log, re.MULTILINE):
         raise BindError("Coreutils evidence lacks a complete zero-failure zero-skip result")
     return {**evidence, "evidence_digest": hashlib.sha256(Path(path).read_bytes()).hexdigest()}

@@ -30,6 +30,11 @@ def write_evidence(root: Path, tier: str, log: str, buildset=None) -> Path:
     for name, path in (("artifact", artifact), ("toolchain", toolchain), ("log", output)):
         payload[f"{name}_path"] = str(path)
         payload[f"{name}_digest"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if tier == "kernel-dependency":
+        no_userspace = root / "no-userspace.log"
+        no_userspace.write_text("Kernel panic - not syncing: No working init found.\n")
+        payload["no_userspace_log_path"] = str(no_userspace)
+        payload["no_userspace_log_digest"] = hashlib.sha256(no_userspace.read_bytes()).hexdigest()
     evidence = root / f"{tier}.evidence"
     evidence.write_text(json.dumps(payload))
     return evidence
