@@ -301,26 +301,13 @@
       }
     },
     ".github/workflows/bazel-main.yml": {
-      "source_sha256": "041a16a7a0b33b9f0015a1f872db6eabde6d0b1f79f6282a15b62f0c7b05e8c3",
+      "source_sha256": "1c49cd164275742c8f1848e0897f5a3405a79bb857be71e368221d85bf6a4476",
       "workflow": {
         "name": "Bazel main",
         "on": {
           "push": {
             "branches": [
               "main"
-            ],
-            "paths": [
-              "MODULE.bazel",
-              "MODULE.bazel.lock",
-              "bazel/**",
-              "make/bazel-migration.mk",
-              "artifacts.lock.json",
-              ".github/workflows/bazel-pr.yml",
-              ".github/workflows/bazel-promote.yml",
-              ".github/workflows/bazel-gc.yml",
-              ".github/workflows/bazel-main.yml",
-              ".github/workflows/bazel-nightly.yml",
-              ".github/workflows/bazel-lock-proposal.yml"
             ]
           }
         },
@@ -431,25 +418,11 @@
       }
     },
     ".github/workflows/bazel-pr.yml": {
-      "source_sha256": "851ae68af4bd5be2186c91cc9e8237da0f813bd5fe7033b7a1299dd15a8cf9ab",
+      "source_sha256": "e063be3213afb5531b8ffd4cf188291807a615fa4beec9e4d352631211c00065",
       "workflow": {
         "name": "Bazel pull request",
         "on": {
-          "pull_request": {
-            "paths": [
-              "MODULE.bazel",
-              "MODULE.bazel.lock",
-              "bazel/**",
-              "make/bazel-migration.mk",
-              "artifacts.lock.json",
-              ".github/workflows/bazel-pr.yml",
-              ".github/workflows/bazel-promote.yml",
-              ".github/workflows/bazel-gc.yml",
-              ".github/workflows/bazel-main.yml",
-              ".github/workflows/bazel-nightly.yml",
-              ".github/workflows/bazel-lock-proposal.yml"
-            ]
-          }
+          "pull_request": null
         },
         "permissions": {
           "contents": "read"

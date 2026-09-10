@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Check Bazel policy for every product change
+
+The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) requires the Bazel matrix check on every pull request and `main` push. Removing build-file-only workflow filters includes app, kernel, libc, and userspace changes in that check.
+
 ## [2026-09-10] fix | Restore local terminal keyboard access
 
 The [mobile terminal validation task](objects/task/doing/validate-mobile-terminal-simulator-product.md) requires the system keyboard without a local hardware-state override. Completed focus taps and the shared Keyboard control use the same explicit show action. The local screen exposes the remote control when the software keyboard is absent. Its existing UI test covers dismissal, reopening, and typing.

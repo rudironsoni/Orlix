@@ -2,18 +2,6 @@ name: Bazel pull request
 
 on:
   pull_request:
-    paths:
-      - "MODULE.bazel"
-      - "MODULE.bazel.lock"
-      - "bazel/**"
-      - "make/bazel-migration.mk"
-      - "artifacts.lock.json"
-      - ".github/workflows/bazel-pr.yml"
-      - ".github/workflows/bazel-promote.yml"
-      - ".github/workflows/bazel-gc.yml"
-      - ".github/workflows/bazel-main.yml"
-      - ".github/workflows/bazel-nightly.yml"
-      - ".github/workflows/bazel-lock-proposal.yml"
 
 permissions:
   contents: read

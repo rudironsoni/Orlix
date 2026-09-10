@@ -11,6 +11,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-pr.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-matrix-check", text)
         self.assertNotIn("bazelisk", text)
+        self.assertNotIn("paths:", text)
+        self.assertNotIn("paths-ignore:", text)
 
     def test_promote_workflow_is_dispatch_and_protected(self) -> None:
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
@@ -41,6 +43,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("make __bazel-matrix-check", text)
         self.assertIn("branches: [main]", text)
         self.assertNotIn("bazelisk", text)
+        self.assertNotIn("paths:", text)
+        self.assertNotIn("paths-ignore:", text)
 
     def test_nightly_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-nightly.yml").read_text(encoding="utf-8")
