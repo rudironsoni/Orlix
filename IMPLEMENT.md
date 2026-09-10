@@ -89,3 +89,16 @@ The final `gmake __bazel-matrix-check` exited 0 with 113 Python tests and 28 cac
 This checkpoint proves removal of the unsafe UAPI final-output reuse paths and unchanged semantic UAPI/mlibc products. It does not establish Kernel Mach-O incrementalism, the full mutation matrix, current promoted acquisition behavior, runtime proof, Apple packaging parity, or cutover. TAP remains stopped and `artifacts.lock.json` remains unchanged.
 
 The final legacy-persistence test uses the exact original `ORLIX_KBUILD_PERSIST/headers_install` lookup. The first fixture layout had tested the helper directly one directory above that lookup, so it was corrected before final proof. The old lookup accepts the corrected poisoned fixture. A fresh output base and empty disk cache then produced real upstream headers with one local action, exit 0, matching the clean baseline while leaving every poison byte unchanged. The final log is `uapi-exact.log`, and `verification.json` names its explicit output root.
+
+
+## Checkpoint 3A: deterministic Kernel archive inputs
+
+Status: compiler path and version changes verified locally. Full Kernel incremental-state recovery remains open.
+
+The initial clean Kernel archives contained 500 temporary source paths and two wall-clock banner timestamps. The native compiler now maps prepared-source and build-directory paths to stable paths. Version generation uses the declared deterministic timestamp and build number, and leaves its header untouched when the bytes are unchanged.
+
+Two isolated Kernel builds exited 0 in 518.72 and 538.70 seconds, compiling 918 product source objects each. The second disabled action reuse, disk cache, and remote cache. Their complete output trees match in paths, bytes, modes, and symlink targets with digest `e61eb44ff71602e79d79b3bee5768cc38058668be9daef77b4db046b6507ee11`. Both archives have SHA-256 `f96ef88aaba316b4d09d02d09e99031e18a009b0008ef77ff9f665887d99622b`, no temporary-path strings, and the two declared timestamps. No binary normalization was used. These builds used the pending declared ISA input graph; that graph's maintainer integration is a separate checkpoint. Inputs stayed unchanged during both runs.
+
+Review found that the five nested Kbuild calls also need the fixed build number. They now pass it with the existing timestamp, user, and host values. An actual upstream `init/Makefile` fixture with persistent counters 17 and 700 produces different headers without that setting and identical headers with it. This follow-up occurred after the two full builds; its fixture and the existing archive-cache tests passed. The prior build-graph check passed 113 Python tests and 28 cached Bazel analysis tests.
+
+Evidence is under `Build/AgentHarness/bazel-migration/recovery-checkpoint-3/`: `kernel-reproducibility.json`, `prefix-map-fixture.json`, `kbuild-version-fixture.json`, `repro-a.log`, `repro-b.log`, `repro-b.execution.json`, and the archive-cache test logs. This proves the bounded compiler/version correction. Stable Kbuild state, cache invalidation locality, developer-loop improvements, full runtime proof, and cutover remain open. TAP stays stopped and `artifacts.lock.json` is unchanged.
