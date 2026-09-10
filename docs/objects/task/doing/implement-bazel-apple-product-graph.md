@@ -23,3 +23,7 @@ The app and extension plists preserve their bundle names, package types, and pli
 The SSH archive action copies the contents behind Bazel source symlinks into separate platform build directories. OpenSSL and libssh2 configuration and compilation must not write into repository inputs or reuse another platform's object files.
 
 OrlixOSTestApp hosts the existing XCTest suites through Bazel targets and matching Xcode schemes. Building the host or test bundles does not establish conformance. Runtime proof still requires the appropriate upstream test payloads, complete test output, and artifact-bound evidence.
+
+The native `OrlixTests` target uses the existing `OrlixTestApp` entry point. Its app module shares the production source and dependency declarations while retaining the test host's Swift 5 settings and separate module output directory. The test host embeds the existing resources and StoreKit configuration. The generated project preserves the `Orlix Tests` scheme. Compilation and executed test results remain separate evidence.
+
+Architecture tests read the checked-out sources through `BUILD_WORKSPACE_DIRECTORY`. Both project generators supply that path. A missing or invalid path fails the test instead of relying on compiler source-path spelling.

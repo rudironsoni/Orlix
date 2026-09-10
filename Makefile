@@ -840,6 +840,11 @@ orlixos-tests: xcodeproj console-policy-tests terminal-mux-tests
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		test
 
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+app-tests:
+	@$(MAKE) __bazel-test-app
+	@$(MAKE) __bazel-test-app-architecture
+else
 app-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -854,6 +859,7 @@ app-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		-only-testing:OrlixOSTestAppTests/ArchitectureInvariantTests \
 		test
+endif
 
 runtime-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

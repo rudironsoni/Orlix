@@ -33,3 +33,7 @@ The app Make target selects the requested profile, compilation mode, component m
 Do not make Bazel invoke the repository top-level or component wrapper Makefiles. Bazel may invoke upstream Kbuild, Meson and Ninja, or upstream Autotools and Make inside declared foreign-build actions. Keep Linux ownership, OrlixOS as the sole public SDK, private HostAdapter boundaries, Herdr terminal ownership, and all iOS 15 availability gates unchanged.
 
 Acceptance requires a graph and workflow audit showing no Apple build surface bypasses Bazel, no Xcode phase owns product compilation, every supported matrix row selects the correct target and deployment setting, and private Kernel, mlibc, Coreutils, and HostAdapter products are not exposed as public SDKs.
+
+With `ORLIX_BAZEL_AUTHORITY=1`, `make app-tests` selects the Bazel-owned native app suite and the existing architecture invariant suite through the shared Make test runner. `ORLIX_APP_TEST_ONLY_TESTING` can select an app test without changing the architecture checks. The default authority remains unchanged until cutover.
+
+Make passes `ORLIX_PINNED_DEVELOPER_DIR` to custom component rules, which set `DEVELOPER_DIR` only for their own actions. Standard Apple actions select both compiler and SDK through Bazel's Xcode version setting. Global `DEVELOPER_DIR` action overrides must not mix the selected compiler with the system-default SDK.

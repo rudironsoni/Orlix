@@ -242,7 +242,10 @@ struct GhosttyTerminalInteractionOwnershipTests {
         )
 
         let nativeSelection = try #require(terminal.nativeTextInteraction)
-        let pointerMenu = try #require(terminal.editMenuInteraction)
+        var pointerMenu: (any UIInteraction)?
+        if #available(iOS 16.0, *) {
+            pointerMenu = try #require(terminal.editMenuInteraction)
+        }
         let interactionTextInput = nativeSelection.textInput as AnyObject?
 
         terminal.layoutIfNeeded()
@@ -268,7 +271,9 @@ struct GhosttyTerminalInteractionOwnershipTests {
                 with: nil
             )
         )
-        #expect(pointerMenu.view === terminal)
+        if #available(iOS 16.0, *) {
+            #expect(pointerMenu?.view === terminal)
+        }
         #expect(
             !terminal.gestureRecognizer(
                 terminal.pinchRecognizer,
@@ -316,15 +321,17 @@ struct GhosttyTerminalInteractionOwnershipTests {
         #expect(!terminal.shouldHideKeyboardAccessoryBar)
         #expect(textInput.inputAccessoryView != nil)
         #expect(!terminal.keyboardCoordinatorDiagnosticSnapshot().isSoftwareKeyboardSuppressed)
-        let selectionMenuTitles = Set(
-            terminal.nativeSelectionMenuElements().compactMap {
-                ($0 as? UIAction)?.title
-            }
-        )
-        #expect(selectionMenuTitles.contains(String(localized: "Copy")))
-        #expect(selectionMenuTitles.contains(String(localized: "Paste")))
-        #expect(selectionMenuTitles.contains(String(localized: "Select All")))
-        #expect(selectionMenuTitles.contains(String(localized: "Find")))
+        if #available(iOS 16.0, *) {
+            let selectionMenuTitles = Set(
+                terminal.nativeSelectionMenuElements().compactMap {
+                    ($0 as? UIAction)?.title
+                }
+            )
+            #expect(selectionMenuTitles.contains(String(localized: "Copy")))
+            #expect(selectionMenuTitles.contains(String(localized: "Paste")))
+            #expect(selectionMenuTitles.contains(String(localized: "Select All")))
+            #expect(selectionMenuTitles.contains(String(localized: "Find")))
+        }
 
         let minimumPosition = TerminalNativeTextPosition(offset: Int.min)
         let maximumPosition = TerminalNativeTextPosition(offset: Int.max)
@@ -356,8 +363,10 @@ struct GhosttyTerminalInteractionOwnershipTests {
             titleEditor.presentingViewController == nil
         }
 
-        #expect(terminal.editMenuInteraction == nil)
-        #expect(pointerMenu.view == nil)
+        if #available(iOS 16.0, *) {
+            #expect(terminal.editMenuInteraction == nil)
+            #expect(pointerMenu?.view == nil)
+        }
         #expect(terminal.terminalTitleEditor == nil)
         #expect(titleEditorDismissed)
         #expect(terminal.terminalContextMenuActions == nil)

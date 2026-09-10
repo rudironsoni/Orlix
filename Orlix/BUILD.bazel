@@ -1,5 +1,5 @@
 load("@rules_apple//apple:apple.bzl", "local_provisioning_profile")
-load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework", "ios_ui_test")
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework", "ios_ui_test", "ios_unit_test")
 load("@rules_apple//apple:resources.bzl", "apple_resource_group")
 load("@rules_apple//apple:xcarchive.bzl", "xcarchive")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -49,50 +49,71 @@ objc_library(
     tags = ["manual"],
 )
 
-swift_library(
-    name = "OrlixAppLibrary",
-    srcs = glob([
-        "Orlix/App/**/*.swift",
-        "Orlix/Core/**/*.swift",
-        "Orlix/Features/**/*.swift",
-        "OrlixShared/*.swift",
-    ]),
-    copts = [
-        "-swift-version",
-        "6",
-        "-default-isolation=MainActor",
-        "-strict-concurrency=minimal",
-        "-DORLIX_BETA_OBSERVABILITY",
-        "-import-objc-header",
-        "Orlix/Orlix/ghostty-bridging-header.h",
-    ],
-    swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
-    defines = [
-        "ORLIX_APP_HOSTED_BOOT=1",
-        "ORLIX_BETA_OBSERVABILITY=1",
-        "ORLIX_GHOSTTY_SPM=1",
-    ],
-    module_name = "Orlix",
-    tags = ["manual"],
-    deps = [
-        ":GhosttyAbortShim",
-        ":ghostty_headers",
-        ":ssh2_headers",
-        "//OrlixOS/Sources/Session:OrlixOS",
-        "@swiftpkg_mlx_swift//:MLX",
-        "@swiftpkg_mlx_swift//:MLXFFT",
-        "@swiftpkg_mlx_swift//:MLXNN",
-        "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
-        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
-        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
-        "@swiftpkg_swift_cloudflared//:Cloudflared",
-        "@swiftpkg_swift_et//:ETBootstrap",
-        "@swiftpkg_swift_et//:ETSession",
-        "@swiftpkg_swift_mosh//:MoshBootstrap",
-        "@swiftpkg_swift_mosh//:MoshCore",
-        "@swiftpkg_zipfoundation//:ZIPFoundation",
-    ],
-)
+_TEST_SWIFT_FEATURES = [
+    flag
+    for feature in [
+        "DisableOutwardActorInference",
+        "GlobalActorIsolatedTypesUsability",
+        "InferIsolatedConformances",
+        "InferSendableFromCaptures",
+        "NonisolatedNonsendingByDefault",
+        "MemberImportVisibility",
+    ]
+    for flag in ["-enable-upcoming-feature", feature]
+]
+
+[
+    swift_library(
+        name = name,
+        testonly = is_test_host,
+        srcs = glob([
+            "Orlix/App/**/*.swift",
+            "Orlix/Core/**/*.swift",
+            "Orlix/Features/**/*.swift",
+            "OrlixShared/*.swift",
+        ], exclude = ["Orlix/App/Orlix.swift"]) + [entrypoint],
+        copts = [
+            "-swift-version",
+            "5" if is_test_host else "6",
+            "-default-isolation=MainActor",
+            "-strict-concurrency=minimal",
+            "-DORLIX_BETA_OBSERVABILITY",
+            "-import-objc-header",
+            "Orlix/Orlix/ghostty-bridging-header.h",
+        ] + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
+        features = ["swift.add_target_name_to_output"] if is_test_host else [],
+        swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
+        defines = [
+            "ORLIX_APP_HOSTED_BOOT=1",
+            "ORLIX_BETA_OBSERVABILITY=1",
+            "ORLIX_GHOSTTY_SPM=1",
+        ],
+        module_name = "Orlix",
+        tags = ["manual"],
+        deps = [
+            ":GhosttyAbortShim",
+            ":ghostty_headers",
+            ":ssh2_headers",
+            "//OrlixOS/Sources/Session:OrlixOS",
+            "@swiftpkg_mlx_swift//:MLX",
+            "@swiftpkg_mlx_swift//:MLXFFT",
+            "@swiftpkg_mlx_swift//:MLXNN",
+            "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
+            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
+            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
+            "@swiftpkg_swift_cloudflared//:Cloudflared",
+            "@swiftpkg_swift_et//:ETBootstrap",
+            "@swiftpkg_swift_et//:ETSession",
+            "@swiftpkg_swift_mosh//:MoshBootstrap",
+            "@swiftpkg_swift_mosh//:MoshCore",
+            "@swiftpkg_zipfoundation//:ZIPFoundation",
+        ],
+    )
+    for name, entrypoint, is_test_host in [
+        ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
+        ("OrlixTestAppLibrary", "//OrlixTestApp:Sources/OrlixTestApp.swift", True),
+    ]
+]
 
 swift_library(
     name = "OrlixLiveActivityLibrary",
@@ -235,4 +256,61 @@ ios_ui_test(
     test_host = ":Orlix",
     visibility = ["//visibility:public"],
     deps = [":OrlixUITestsLibrary"],
+)
+
+ios_application(
+    name = "OrlixTestApp",
+    testonly = True,
+    bundle_id = "com.rudironsoni.orlix.test-app",
+    entitlements = "Orlix-iOS/Bazel.entitlements",
+    families = ["iphone", "ipad"],
+    frameworks = [":OrlixOSFramework"],
+    infoplists = ["Orlix-iOS/BazelInfo.plist"],
+    minimum_os_version = "15.0",
+    resources = [
+        "//Orlix/Orlix/Resources:folder_resources",
+        "//Orlix/Orlix/Resources:bundle_resources",
+        "Orlix/PrivacyInfo.xcprivacy",
+        "OrlixStoreKit.storekit",
+        "//docs/sources/release:orlix-app-release-inputs.json",
+    ] + glob(["Orlix/Assets.xcassets/**"]),
+    linkopts = ["-weak_framework", "AppIntents"],
+    tags = ["manual"],
+    deps = [
+        ":OrlixTestAppLibrary",
+        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources:OrlixKernelBoot",
+        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
+        "//bazel/feasibility/kernel:macho_link",
+        "//bazel/feasibility/native:native_link_smoke",
+    ],
+)
+
+swift_library(
+    name = "OrlixTestsLibrary",
+    testonly = True,
+    srcs = glob(["OrlixTests/**/*.swift"]),
+    copts = ["-swift-version", "5"] + _TEST_SWIFT_FEATURES,
+    module_name = "OrlixTests",
+    tags = ["manual"],
+    deps = [
+        ":OrlixTestAppLibrary",
+        "@swiftpkg_swift_cloudflared//:Cloudflared",
+        "@swiftpkg_swift_et//:ETBootstrap",
+        "@swiftpkg_swift_et//:ETSession",
+        "@swiftpkg_swift_mosh//:MoshBootstrap",
+        "@swiftpkg_swift_mosh//:MoshCore",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
+    ],
+)
+
+ios_unit_test(
+    name = "OrlixTests",
+    bundle_id = "com.rudironsoni.orlix.tests",
+    minimum_os_version = "15.0",
+    resources = ["OrlixTests/Core/SSH/RemoteSessions/Fixtures/zellij-fixture.sh"],
+    tags = ["manual"],
+    test_host = ":OrlixTestApp",
+    deps = [":OrlixTestsLibrary"],
 )

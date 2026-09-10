@@ -101,10 +101,18 @@ nonisolated struct ContinuousClock: Sendable {
         static func < (lhs: Instant, rhs: Instant) -> Bool {
             lhs.uptimeNanoseconds < rhs.uptimeNanoseconds
         }
+
+        static func - (lhs: Instant, rhs: Instant) -> Duration {
+            rhs.duration(to: lhs)
+        }
     }
 
     static var now: Instant {
         .now
+    }
+
+    var now: Instant {
+        Self.now
     }
 }
 

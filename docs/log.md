@@ -11,6 +11,10 @@ updated: 2026-09-10
 
 The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) registers the existing public-key fingerprint for GHCR verification. Reconstruction verifies the locked signatures before staging their component trees. The promoted IPA check verifies the embedded rootfs and buildset metadata. Runtime proof and cutover remain separate gates.
 
+## [2026-09-10] build | Include native app unit tests in Bazel
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds the existing `OrlixTestApp` host and `OrlixTests` suite to Bazel. Architecture tests use the workspace path supplied by both project generators. The [build routing task](objects/task/doing/implement-universal-apple-bazel-build-routing.md) preserves `make app-tests` as the public entry point and keeps Bazel authority opt-in.
+
 ## [2026-09-10] build | Record component benchmark evidence
 
 The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) uses the existing cache-equivalence Make target for component benchmarks. Each build emits Bazel events and a timing profile alongside its execution log. The workflow retains those files and the full-tree comparison without uploading mutable build trees.

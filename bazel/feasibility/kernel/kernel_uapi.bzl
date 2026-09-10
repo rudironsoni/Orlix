@@ -4,9 +4,9 @@ load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixLinuxA
 
 def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("DEVELOPER_DIR")
+    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
     if not developer_dir:
-        fail("kernel UAPI requires action_env DEVELOPER_DIR")
+        fail("kernel UAPI requires action_env ORLIX_PINNED_DEVELOPER_DIR")
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",

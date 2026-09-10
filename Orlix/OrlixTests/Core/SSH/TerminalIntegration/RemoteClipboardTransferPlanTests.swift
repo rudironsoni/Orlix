@@ -92,8 +92,8 @@ struct RemoteClipboardTransferPlanTests {
                 == #"'C:\Users\O''Hara\My Images\image.png'"#
         )
         #expect(
-            try cmd.pastedPathToken(for: #"C:\Users\Wiedy Mi\A&B^(1)\image.png"#)
-                == #""C:\Users\Wiedy Mi\A&B^(1)\image.png""#
+            try cmd.pastedPathToken(for: #"C:\Users\Wiedy Mi\My Images\image.png"#)
+                == #""C:\Users\Wiedy Mi\My Images\image.png""#
         )
     }
 

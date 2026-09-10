@@ -52,7 +52,10 @@ struct GhosttySurfaceRegistryTests {
         terminal.onVoiceButtonTapped = { }
         terminal.onKeyboardBrowseModeChange = { _ in }
         let nativeTextInteraction = try #require(terminal.nativeTextInteraction)
-        let nativeFindInteraction = try #require(terminal.nativeFindInteraction)
+        var nativeFindInteraction: (any UIInteraction)?
+        if #available(iOS 16.0, *) {
+            nativeFindInteraction = try #require(terminal.nativeFindInteraction)
+        }
         #endif
         #expect(app.activeSurfaceCount() == 1)
         #expect(app.terminalView(for: surface) === terminal)
@@ -72,9 +75,11 @@ struct GhosttySurfaceRegistryTests {
         #expect(terminal.onVoiceButtonTapped == nil)
         #expect(terminal.onKeyboardBrowseModeChange == nil)
         #expect(terminal.nativeTextInteraction == nil)
-        #expect(terminal.nativeFindInteraction == nil)
         #expect(nativeTextInteraction.view == nil)
-        #expect(nativeFindInteraction.view == nil)
+        if #available(iOS 16.0, *) {
+            #expect(terminal.nativeFindInteraction == nil)
+            #expect(nativeFindInteraction?.view == nil)
+        }
         #else
         #expect(terminal.appearanceObservation == nil)
         #endif

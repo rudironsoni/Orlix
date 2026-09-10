@@ -6,9 +6,9 @@ import Testing
 struct SSHStartupTraceTests {
     @Test
     func recordsMonotonicStructuredStageEvents() {
-        let events = OSAllocatedUnfairLock(initialState: [SSHStartupTrace.Event]())
+        let events = RecordedStartupEvents()
         let trace = SSHStartupTrace(logger: Logger()) { event in
-            events.withLock { $0.append(event) }
+            events.append(event)
         }
 
         let token = trace.begin(.dnsResolution)
@@ -16,7 +16,7 @@ struct SSHStartupTraceTests {
         trace.recordOnce(.firstTerminalByte, detail: "ssh")
         trace.recordOnce(.firstTerminalByte, detail: "ssh")
 
-        let recorded = events.withLock { $0 }
+        let recorded = events.snapshot()
         #expect(recorded.count == 2)
         #expect(recorded.map(\.stage) == [.dnsResolution, .firstTerminalByte])
         #expect(recorded.allSatisfy { $0.stageMilliseconds >= 0 })
@@ -106,5 +106,18 @@ struct SSHStartupTraceTests {
         #expect(!diagnostics.copyText.contains("60001"))
         #expect(!diagnostics.copyText.contains("192.0.2.1"))
         #expect(!diagnostics.copyText.contains("private"))
+    }
+}
+
+private nonisolated final class RecordedStartupEvents: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events = [SSHStartupTrace.Event]()
+
+    func append(_ event: SSHStartupTrace.Event) {
+        lock.withLock { events.append(event) }
+    }
+
+    func snapshot() -> [SSHStartupTrace.Event] {
+        lock.withLock { events }
     }
 }

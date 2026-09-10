@@ -28,9 +28,9 @@ def _result(o):
 
 def _pinned_apple_env(ctx, extra):
     shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("DEVELOPER_DIR")
+    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
     if not developer_dir:
-        fail("native Apple archives require action_env DEVELOPER_DIR")
+        fail("native Apple archives require action_env ORLIX_PINNED_DEVELOPER_DIR")
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",

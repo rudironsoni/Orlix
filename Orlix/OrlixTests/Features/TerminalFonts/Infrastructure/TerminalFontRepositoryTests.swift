@@ -40,16 +40,10 @@ struct TerminalFontRepositoryTests {
     }
 
     private func bundledFontURL() throws -> URL {
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while directory.lastPathComponent != "OrlixTests" {
-            let parent = directory.deletingLastPathComponent()
-            guard parent != directory else {
-                throw TerminalFontValidationError.fileUnavailable
-            }
-            directory = parent
-        }
-        return directory.deletingLastPathComponent()
-            .appendingPathComponent("Orlix/Resources/Fonts/HackNerdFont-Regular.ttf")
+        try #require(Bundle.main.url(
+            forResource: "HackNerdFont-Regular",
+            withExtension: "ttf"
+        ))
     }
 
     private func testDirectory() throws -> URL {

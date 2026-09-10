@@ -23,6 +23,11 @@ xcodeproj(
     scheme_autogeneration_mode = "all",
     xcschemes = [
         xcschemes.scheme(
+            name = "Orlix Tests",
+            test = xcschemes.test(test_targets = ["//Orlix:OrlixTests"]),
+        ),
+    ] + [
+        xcschemes.scheme(
             name = name,
             test = xcschemes.test(test_targets = ["//OrlixOSTestApp:" + target]),
         )
@@ -35,6 +40,8 @@ xcodeproj(
         ]
     ],
     top_level_targets = [
+        top_level_target("//Orlix:OrlixTestApp", target_environments = ["simulator"]),
+        top_level_target("//Orlix:OrlixTests", target_environments = ["simulator"]),
         top_level_target(
             "//bazel/feasibility/apple:SmokeApp",
             target_environments = ["simulator"],

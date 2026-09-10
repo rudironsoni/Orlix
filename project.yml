@@ -1074,6 +1074,8 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: false
+      environmentVariables:
+        BUILD_WORKSPACE_DIRECTORY: $(SRCROOT)
       targets:
         - name: OrlixOSTestAppTests
   "OrlixOS Runtime Tests":

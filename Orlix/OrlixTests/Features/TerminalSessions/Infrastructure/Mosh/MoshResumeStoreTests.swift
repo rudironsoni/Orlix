@@ -60,7 +60,7 @@ struct MoshResumeStoreTests {
             includingPropertiesForKeys: nil
         ).first)
         let checkpointData = try Data(contentsOf: file)
-        #expect(!checkpointData.contains(Data(expected.endpoint.keyBase64_22.utf8)))
+        #expect(checkpointData.range(of: Data(expected.endpoint.keyBase64_22.utf8)) == nil)
         let permissions = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions]
             as? NSNumber
         #expect(permissions?.intValue == 0o600)

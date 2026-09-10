@@ -60,7 +60,7 @@ struct ServerManagerMutationTransactionTests {
         var duplicateCredentials = ServerCredentials(serverId: duplicate.id)
         duplicateCredentials.password = "source-password"
 
-        await #expect(throws: OrlixError.self) {
+        await #expect(throws: TestTransactionError.self) {
             try await useCase.execute(
                 .create(duplicate),
                 credentials: duplicateCredentials,

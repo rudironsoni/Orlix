@@ -4,14 +4,9 @@ import Testing
 
 @Suite("Open-source attribution catalog")
 struct OpenSourceAttributionCatalogTests {
-    @Test("The checked-in manifest has complete, readable documents")
+    @Test("The bundled manifest has complete, readable documents")
     func checkedInManifest() throws {
-        let documents = try OpenSourceAttributionCatalog.load(
-            manifestURL: repositoryRoot
-                .appendingPathComponent("Orlix/Resources/OpenSource/Attributions.json"),
-            licenseDirectoryURL: repositoryRoot
-                .appendingPathComponent("Orlix/Resources/OpenSource/Licenses")
-        )
+        let documents = try OpenSourceAttributionCatalog.load(from: .main)
 
         #expect(documents.count == 19)
         #expect(Set(documents.map(\.id)).count == documents.count)
@@ -22,11 +17,4 @@ struct OpenSourceAttributionCatalogTests {
         #expect(documents.contains { $0.id == "nerd-fonts" })
     }
 
-    private var repositoryRoot: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
 }

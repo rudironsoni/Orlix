@@ -7,9 +7,9 @@ load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
 def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("DEVELOPER_DIR")
+    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
     if not developer_dir:
-        fail("coreutils package requires action_env DEVELOPER_DIR")
+        fail("coreutils package requires action_env ORLIX_PINNED_DEVELOPER_DIR")
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",

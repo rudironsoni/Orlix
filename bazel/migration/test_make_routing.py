@@ -70,6 +70,16 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("test")
         self.assertIn("__bazel-matrix-check", output)
 
+    def test_app_tests_use_bazel_project_and_existing_suites(self) -> None:
+        output = _dry_run("app-tests")
+        self.assertIn("__bazel-test-app", output)
+        self.assertIn("__bazel-test-app-architecture", output)
+        self.assertNotIn("-project Orlix.xcodeproj", output)
+        output = _dry_run("__bazel-test-app")
+        self.assertIn("--action_env=ORLIX_PINNED_DEVELOPER_DIR=", output)
+        self.assertNotIn("--action_env=DEVELOPER_DIR=", output)
+        self.assertNotIn("--host_action_env=DEVELOPER_DIR=", output)
+
     def test_headers_install_routes_to_uapi(self) -> None:
         output = _dry_run("headers_install")
         self.assertIn("__bazel-kernel-uapi", output)
