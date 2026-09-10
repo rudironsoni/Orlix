@@ -4,7 +4,7 @@ The approved recovery contract belongs to [ADR 0040](docs/objects/architecture-d
 
 ## Checkpoint 1: repository authority and prerequisites
 
-Status: verified locally. Publication and current-head CI results remain separate checks.
+Status: verified locally and published. Current-head CI results remain separate checks.
 
 Starting point: [rudironsoni/Orlix#228](https://github.com/rudironsoni/Orlix/pull/228), branch `fix/build-optimizations`, commit `5e2cdebcd88a5f080522cfbf65ea555405bc8e67`. The PR is open against `main`.
 
@@ -55,7 +55,9 @@ The fresh baseline completed before any foreign component-rule changes. Build-ev
 
 ### Remaining gates
 
-Publish the independently reviewed authority and CI-prerequisite changes as separate commits, preserving the original dirty `AGENTS.md` bullet outside the staged change. Verify the remote ref and keep current-head CI results separate from local results.
+The prerequisite and authority changes were published as `db776fe84c08e1587ddc62c780950f1510f66fde` and `9dfa083646cd43da29c2cdbc41ab67d6d56c2f82`. The remote branch and PR head matched the latter commit. The original dirty `AGENTS.md` bullet remains unstaged.
+
+The new [Bazel PR run](https://github.com/rudironsoni/Orlix/actions/runs/34515244045) installed GNU Make but failed before the matrix because Homebrew rejected the untrusted `xcodesorg/made/xcodes` formula. Rudi authorized tap trust. The repository's sole declared tap, `xcodesorg/made`, now has `trusted: true` in `Brewfile`; `brew trust --tap xcodesorg/made` completed locally with exit 0. `brew bundle check --file Brewfile --no-upgrade` and `ruby -c Brewfile` passed. CI must verify this correction on the new commit.
 
 The current TCTI scope envelope reports unverified completion and does not emit `physical_device_allowed`. Its checker validates scope only. The required executable eligibility check remains implementation work for the proof gate. Successful scope commands alone do not authorize physical-device validation.
 

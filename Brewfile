@@ -1,4 +1,4 @@
-tap "xcodesorg/made"
+tap "xcodesorg/made", trusted: true
 
 brew "autoconf"
 brew "actionlint"
