@@ -28,6 +28,26 @@ filegroup(
 )
 
 filegroup(
+    name = "tcti_isa_archive",
+    srcs = ["ports/orlix/isa/prepared-tables.tar.gz"],
+)
+
+filegroup(
+    name = "tcti_isa_archive_sha256",
+    srcs = ["ports/orlix/isa/prepared-tables.sha256"],
+)
+
+filegroup(
+    name = "tcti_isa_members_make",
+    srcs = ["ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/instruction-artifact-contributors.mk"],
+)
+
+filegroup(
+    name = "tcti_isa_members_def",
+    srcs = ["ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/target_refresh_artifacts.def"],
+)
+
+filegroup(
     name = "OrlixKernelBoot_srcs",
     srcs = glob([
         "boot/*.c",

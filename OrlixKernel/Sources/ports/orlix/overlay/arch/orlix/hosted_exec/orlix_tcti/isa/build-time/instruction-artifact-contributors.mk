@@ -17,6 +17,10 @@ ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS := $(shell $(orlix_tcti_target_refresh_artif
 ifneq ($(.SHELLSTATUS),0)
 $(error failed to parse target-refresh publisher declaration: $(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION))
 endif
+ORLIX_TCTI_ISA_ARCHIVE_MEMBERS := manifest $(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS)
+ORLIX_TCTI_ISA_ARCHIVE ?= $(CURDIR)/OrlixKernel/Sources/ports/orlix/isa/prepared-tables.tar.gz
+ORLIX_TCTI_ISA_ARCHIVE_SHA256 ?= $(CURDIR)/OrlixKernel/Sources/ports/orlix/isa/prepared-tables.sha256
+ORLIX_TCTI_ISA_ARCHIVE_SERIALIZER ?= $(CURDIR)/bazel/feasibility/kernel/kbuild_persist.py
 ORLIX_TCTI_ISA_BUILD ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-isa
 export ORLIX_TCTI_ISA_BUILD
 
@@ -142,28 +146,36 @@ $(1)="$$( \
 )" || $(2);
 endef
 
-.PHONY: __orlix-tcti-isa-prepare __orlix-tcti-instruction-artifact-inputs-source-check __orlix-tcti-instruction-artifact-cleanup-failure-source-check __orlix-tcti-instruction-artifact-contract-check __orlix-tcti-target-refresh-publisher-list-source-check
+.PHONY: __orlix-tcti-isa-prepare __orlix-tcti-isa-archive-members __orlix-tcti-instruction-artifact-inputs-source-check __orlix-tcti-instruction-artifact-cleanup-failure-source-check __orlix-tcti-instruction-artifact-contract-check __orlix-tcti-target-refresh-publisher-list-source-check
 
 __orlix-tcti-isa-prepare:
 	@set -euo pipefail; \
 	dest='$(ORLIX_TCTI_ISA_BUILD)'; \
+	temporary="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-tcti-isa-prepare.XXXXXX")"; \
+	trap '/bin/rm -rf "$$temporary"' EXIT; \
+	$(MAKE) --no-print-directory --no-builtin-rules \
+		-f '$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)' \
+		__orlix-tcti-isa-archive-members > "$$temporary/members"; \
+	python3 '$(ORLIX_TCTI_ISA_ARCHIVE_SERIALIZER)' extract \
+		'$(ORLIX_TCTI_ISA_ARCHIVE)' '$(ORLIX_TCTI_ISA_ARCHIVE_SHA256)' \
+		"$$temporary/tree" "$$temporary/members"; \
 	mkdir -p "$$dest"; \
-	if [ -s "$$dest/manifest" ] && [ -s "$$dest/target_instruction_artifact_generated.h" ]; then \
-		exit 0; \
-	fi; \
-	echo "preparing generated ISA tables in $$dest"; \
-	$(MAKE) --no-print-directory -f OrlixKernel/Makefile __tcti-isa-refresh; \
-	current="$$dest/generations/current"; \
-	if [ -e "$$current/manifest" ]; then \
-		for f in "$$current"/*; do \
-			base="$${f##*/}"; \
-			ln -f "$$f" "$$dest/$$base" 2>/dev/null || cp -f "$$f" "$$dest/$$base"; \
-		done; \
-	fi; \
+	while IFS= read -r member; do \
+		[ -n "$$member" ] || exit 1; \
+		if [ -L "$$dest/$$member" ]; then \
+			echo "prepared ISA artifact is a symlink: $$dest/$$member" >&2; exit 1; \
+		fi; \
+		if [ ! -f "$$dest/$$member" ] || ! cmp -s "$$temporary/tree/$$member" "$$dest/$$member"; then \
+			cp -f "$$temporary/tree/$$member" "$$dest/$$member"; \
+		fi; \
+	done < "$$temporary/members"; \
 	[ -s "$$dest/manifest" ] && [ -s "$$dest/target_instruction_artifact_generated.h" ] || { \
 		echo "ISA prepare did not produce tables in $$dest" >&2; \
 		exit 1; \
 	}
+
+__orlix-tcti-isa-archive-members:
+	@printf '%s\n' $(ORLIX_TCTI_ISA_ARCHIVE_MEMBERS)
 
 __orlix-tcti-instruction-artifact-contract-check: __orlix-tcti-isa-prepare
 	@set -euo pipefail; \

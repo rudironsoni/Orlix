@@ -1,5 +1,5 @@
 load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
-load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library")
+load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library", "orlix_tcti_isa_prepare")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -35,6 +35,17 @@ orlix_kernel_uapi(
     ]
 ]
 
+orlix_tcti_isa_prepare(
+    name = "tcti_isa",
+    archive = "//OrlixKernel/Sources:tcti_isa_archive",
+    members_def = "//OrlixKernel/Sources:tcti_isa_members_def",
+    members_make = "//OrlixKernel/Sources:tcti_isa_members_make",
+    pin = "//OrlixKernel/Sources:tcti_isa_archive_sha256",
+    serializer = ":kbuild_persist.py",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
 orlix_kernel_macho_archive(
     name = "macho",
     profile = select({
@@ -51,6 +62,7 @@ orlix_kernel_macho_archive(
         "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
     ],
     kbuild_engine = "//OrlixKernel/Sources:kbuild_engine",
+    isa_tree = ":tcti_isa",
     linux_makefile = "@orlix_linux_source//:Makefile",
     linux_source = "@orlix_linux_source//:source",
     overlay = "//OrlixKernel/Sources:linux_overlay",

@@ -22,10 +22,62 @@ def _pinned_env(ctx):
     tmpdir = shell.get("TMPDIR")
     if tmpdir:
         env["TMPDIR"] = tmpdir
-    prepared_isa = shell.get("ORLIX_TCTI_ISA_PREPARED")
-    if prepared_isa:
-        env["ORLIX_TCTI_ISA_PREPARED"] = prepared_isa
     return env
+
+def _tcti_isa_prepare_impl(ctx):
+    archive = ctx.file.archive
+    pin = ctx.file.pin
+    members_make = ctx.file.members_make
+    members_def = ctx.file.members_def
+    serializer = ctx.file.serializer
+    tree = ctx.actions.declare_directory(ctx.label.name + "/tree")
+    ctx.actions.run_shell(
+        mnemonic = "OrlixTctiIsaRestore",
+        progress_message = "Verifying and extracting pinned OrlixTCTI ISA tables",
+        command = r"""
+set -euo pipefail
+exec_root="$PWD"
+archive="$exec_root/$1"
+pin="$exec_root/$2"
+members_make="$exec_root/$3"
+members_def="$exec_root/$4"
+serializer="$exec_root/$5"
+tree="$exec_root/$6"
+temporary="$(/usr/bin/mktemp -d "/tmp/orlix-tcti-isa-prepare.XXXXXX")"
+trap '/bin/rm -rf "$temporary"' EXIT
+test -s "$members_make"
+test -s "$members_def"
+test -s "$serializer"
+/opt/homebrew/bin/gmake --no-print-directory --no-builtin-rules \
+  -f "$members_make" ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$members_def" \
+  __orlix-tcti-isa-archive-members > "$temporary/members"
+/usr/bin/python3 "$serializer" extract "$archive" "$pin" "$tree" "$temporary/members"
+""",
+        arguments = [
+            archive.path,
+            pin.path,
+            members_make.path,
+            members_def.path,
+            serializer.path,
+            tree.path,
+        ],
+        inputs = [archive, pin, members_make, members_def, serializer],
+        outputs = [tree],
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1"},
+    )
+    return [DefaultInfo(files = depset([tree]))]
+
+orlix_tcti_isa_prepare = rule(
+    implementation = _tcti_isa_prepare_impl,
+    attrs = {
+        "archive": attr.label(allow_single_file = True, mandatory = True),
+        "pin": attr.label(allow_single_file = True, mandatory = True),
+        "members_make": attr.label(allow_single_file = True, mandatory = True),
+        "members_def": attr.label(allow_single_file = True, mandatory = True),
+        "serializer": attr.label(allow_single_file = True, mandatory = True),
+    },
+)
 
 def _kernel_macho_impl(ctx):
     archive = ctx.actions.declare_file(ctx.label.name + "/OrlixKernel.a")
@@ -38,6 +90,9 @@ def _kernel_macho_impl(ctx):
     config_files = ctx.files.configs
     engine_files = ctx.files.kbuild_engine
     extra_files = ctx.files.extra_inputs
+    isa_tree = ctx.file.isa_tree
+    if not isa_tree.is_directory:
+        fail("kernel Mach-O requires a prepared ISA tree artifact")
     ctx.actions.run_shell(
         mnemonic = "OrlixKernelMachOArchive",
         progress_message = "Compiling Mach-O OrlixKernel.a from prepared Linux sources",
@@ -54,8 +109,9 @@ patch_count="$7"
 config_count="$8"
 engine_count="$9"
 extra_count="${10}"
-boot_resources="$exec_root/${11}"
-shift 11
+isa_tree="$exec_root/${11}"
+boot_resources="$exec_root/${12}"
+shift 12
 overlay_paths=()
 i=0
 while [ "$i" -lt "$overlay_count" ]; do
@@ -157,35 +213,15 @@ done
 printf '%s\n' 'linux_version=6.12.105' "profile=$PROFILE" 'linux_uapi_arch=arm64' 'linux_page_size=16384' > "$port/.orlix-port-profile"
 isa_dest="$work/OrlixKernel/orlix-tcti-isa"
 /bin/mkdir -p "$isa_dest"
-prepared_isa="${ORLIX_TCTI_ISA_PREPARED:-}"
-if [ -z "$prepared_isa" ] || [ ! -s "$prepared_isa/source_manifest.def" ]; then
-  candidate="$exec_root/../../../../OrlixKernel/orlix-tcti-isa"
-  if [ -s "$candidate/source_manifest.def" ]; then
-    prepared_isa="$candidate"
-  fi
-fi
-test -s "$prepared_isa/source_manifest.def" || {
-  echo "missing prepared ISA tables at ${prepared_isa:-unset}/source_manifest.def" >&2
-  echo "run make __tcti-isa-refresh so Build/OrlixKernel/orlix-tcti-isa exists" >&2
-  exit 1
-}
+test -d "$isa_tree" || { echo "missing declared prepared ISA tree: $isa_tree" >&2; exit 1; }
 port_isa="$port/arch/orlix/hosted_exec/orlix_tcti/isa"
 /bin/mkdir -p "$port_isa"
-for isa_name in \
-  manifest \
-  source_manifest.def \
-  target_asl_availability.def \
-  target_feature_applicability.def \
-  target_feature_artifact.def \
-  target_feature_field_domain_binding.def \
-  target_instruction_artifact_generated.h \
-  target_register_artifact.def \
-  target_runtime_capability_cohort_artifact.def \
-  target_system_accessor_reconciliation.def
-do
-  test -s "$prepared_isa/$isa_name" || { echo "missing prepared ISA artifact: $prepared_isa/$isa_name" >&2; exit 1; }
-  /bin/cp "$prepared_isa/$isa_name" "$isa_dest/$isa_name"
-  /bin/cp "$prepared_isa/$isa_name" "$port_isa/$isa_name"
+for isa_path in "$isa_tree"/*; do
+  test -f "$isa_path" || { echo "prepared ISA tree contains a non-file member: $isa_path" >&2; exit 1; }
+  isa_name="${isa_path##*/}"
+  /bin/cp "$isa_path" "$isa_dest/$isa_name"
+  /bin/cp "$isa_path" "$port_isa/$isa_name"
+  /bin/chmod u+w "$isa_dest/$isa_name" "$port_isa/$isa_name"
 done
 export ORLIX_BUILD_ROOT="$work"
 export ORLIX_KERNEL_PORT_PREPARED=1
@@ -254,16 +290,17 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             str(len(config_files)),
             str(len(engine_files)),
             str(len(extra_files)),
+            isa_tree.path,
             boot_resources.path,
         ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [f.path for f in extra_files],
         inputs = depset(
-            direct = [ctx.file.linux_makefile] + overlay_files + patch_files + config_files + engine_files + extra_files,
+            direct = [ctx.file.linux_makefile, isa_tree] + overlay_files + patch_files + config_files + engine_files + extra_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, boot_resources],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     return [
         DefaultInfo(files = depset([archive, symbols, digest, manifest, boot_resources])),
@@ -295,6 +332,7 @@ orlix_kernel_macho_archive = rule(
         "configs": attr.label(mandatory = True, allow_files = True),
         "kbuild_engine": attr.label(mandatory = True, allow_files = True),
         "extra_inputs": attr.label_list(allow_files = True),
+        "isa_tree": attr.label(allow_single_file = True, mandatory = True),
     },
 )
 

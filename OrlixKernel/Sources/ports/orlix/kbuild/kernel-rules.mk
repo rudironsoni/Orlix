@@ -1818,7 +1818,7 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 
 ORLIX_KERNEL_PORT_PREPARED ?= 0
 ifeq ($(ORLIX_KERNEL_PORT_PREPARED),1)
-__prepare-kbuild: __validate-profile __orlix-tcti-isa-prepare
+__prepare-kbuild: __validate-profile
 else
 __prepare-kbuild: __prepare-port __orlix-tcti-isa-prepare
 endif
@@ -1828,17 +1828,7 @@ __prepare-kbuild:
 	isa_src="$(ORLIX_TCTI_ISA_BUILD)"; \
 	port_isa="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa"; \
 	mkdir -p "$$port_isa"; \
-	for isa_name in \
-		manifest \
-		source_manifest.def \
-		target_asl_availability.def \
-		target_feature_applicability.def \
-		target_feature_artifact.def \
-		target_feature_field_domain_binding.def \
-		target_instruction_artifact_generated.h \
-		target_register_artifact.def \
-		target_runtime_capability_cohort_artifact.def \
-		target_system_accessor_reconciliation.def; do \
+	for isa_name in $(ORLIX_TCTI_ISA_ARCHIVE_MEMBERS); do \
 		[ -s "$$isa_src/$$isa_name" ] || { echo "missing prepared ISA artifact: $$isa_src/$$isa_name" >&2; exit 1; }; \
 		cp "$$isa_src/$$isa_name" "$$port_isa/$$isa_name"; \
 	done; \

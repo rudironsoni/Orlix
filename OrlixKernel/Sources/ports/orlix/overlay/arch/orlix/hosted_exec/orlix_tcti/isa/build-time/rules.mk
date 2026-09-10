@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Private OrlixKernel build-time rules for validating and atomically refreshing
+# Private OrlixKernel build-time rules for validating and refreshing
 # the checked-in OrlixTCTI ISA artifacts. Developer entry points are owned by
 # the parent OrlixKernel Make surface; this file is not a standalone Makefile.
 
@@ -108,6 +108,13 @@ __tcti-isa-check:
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test' '$(ORLIX_AARCHMRS_INSTRUCTIONS)'
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		target_inventory_import.c target_condition_serialization.c target_manifest_generator.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_manifest_generator'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_manifest_generator' \
+		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' > '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/source_manifest.def'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		-I'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)' \
 		target_inventory_import.c target_classification_generator.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator' \
@@ -199,3 +206,6 @@ __tcti-isa-refresh: __tcti-isa-check
 		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
 		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)' \
 		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)'
+	@python3 '$(ORLIX_TCTI_ISA_ARCHIVE_SERIALIZER)' publish \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)/generations/current' '$(ORLIX_TCTI_ISA_ARCHIVE)' \
+		'$(ORLIX_TCTI_ISA_ARCHIVE_SHA256)' $(ORLIX_TCTI_ISA_ARCHIVE_MEMBERS)

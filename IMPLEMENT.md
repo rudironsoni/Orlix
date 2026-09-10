@@ -111,3 +111,18 @@ The iOS 15 run `34519606349` timed out in the combined 45-minute Make step. The 
 The existing source gate now has private build and test phases. The public `make ios15-simulator-gate` runs them in order under the current source authority. CI gives the build 60 minutes and the test phase 10 minutes within the unchanged 90-minute job. The test phase retains app validation, `test-without-building`, and the existing 120/180-second XCTest limits. Bazel routing and cutover status remain unchanged.
 
 Verification: 38 focused routing, workflow, and iOS 15 unit checks passed. The new routing case executes Make dry runs to verify phase separation, ordering, app validation, and XCTest timeout flags. `make __bazel-matrix-check` exited 0 with 114 Python tests and 28 cached Bazel analysis tests. Inventory generation and checks passed against the exact staged source snapshot. Remote runtime validation is pending the next CI run; no local simulator or device execution was performed for this change.
+
+
+## Checkpoint 3B: declared ISA inputs
+
+Status: maintainer generation, source consumption, and sandboxed Bazel extraction verified locally.
+
+Kernel compilation now consumes the extracted ISA tree. The archive, pin, member declaration, and serializer belong to the separate extraction action. The canonical member list comes from the existing contributor Make module. Source Make uses the same checked extractor; the obsolete mutable restore path is removed from Make, CI, and Xcode.
+
+`make prepare type=tcti-isa` completed with exit 0 against the pinned external Arm inputs in a fresh output root. The existing importer, feature, register, publisher, and full refresh transaction tests passed. All ten published files match the newly selected immutable generation and the previous table contents byte for byte. The archive now excludes AppleDouble entries and uses fixed metadata. Its SHA-256 is `d362cb636638754122e7198a6c9de7c4c76253bcc3ba248c3ba0ba42a258120b`. The component buildset lock did not change.
+
+Two source prepare runs returned 0, retained unchanged file timestamps, and preserved unrelated generator state. The first real Bazel extraction exposed its precreated empty output directory; the extractor now accepts that directory while rejecting symlinks and nonempty destinations. The retry executed the sandboxed extraction successfully. Existing tests cover this output shape. Independent source review found no remaining ISA integration blocker.
+
+Earlier actual pin mutations proved that a whitespace-only pin change reruns extraction while reusing the unchanged Kernel result, and an invalid digest fails before compilation. Those mutations were restored. The full current build-graph check and final focused serializer check are recorded in `Build/AgentHarness/bazel-migration/recovery-checkpoint-3/isa-matrix.log` and `isa-final-check.log`. The maintainer and source-output comparisons are in `isa-refresh-result.json` and `isa-source-prepare.json`.
+
+This checkpoint corrects declared inputs and publication. Stable Kernel build state and measured incremental recompilation remain the next phase 3 work. TAP remains stopped.

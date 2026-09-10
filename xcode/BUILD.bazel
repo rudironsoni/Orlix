@@ -6,7 +6,6 @@ xcodeproj(
     name = "feasibility",
     bazel_env = {
         "DEVELOPER_DIR": None,
-        "ORLIX_TCTI_ISA_PREPARED": None,
         "PATH": None,
     },
     bazel_path = "bazel",

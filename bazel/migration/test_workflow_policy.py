@@ -86,9 +86,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("vendor=all", text)
         self.assertIn("orlix-bazel-disk-", text)
         self.assertIn("orlix-ccache-", text)
-        self.assertIn("make __tcti-isa-restore", text)
-        self.assertIn("orlix-tcti-isa-", text)
-        self.assertIn("OrlixKernel/Sources/ports/orlix/isa/prepared-tables.sha256", text)
+        self.assertNotIn("make __tcti-isa-restore", text)
+        self.assertNotIn("orlix-tcti-isa-", text)
+        self.assertNotIn("Build/OrlixKernel/orlix-tcti-isa", text)
         self.assertNotIn("AARCHMRS", text)
         self.assertNotIn("prepare type=tcti-isa", text)
 

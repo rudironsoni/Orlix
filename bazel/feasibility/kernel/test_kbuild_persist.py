@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +25,102 @@ class KbuildArchiveTests(unittest.TestCase):
             persist.write_archive(str(root), str(second))
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertEqual(source.stat().st_mtime, 1000)
+
+    def test_publish_and_extract_cli_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "manifest").write_text("manifest\n", encoding="utf-8")
+            (root / "source_manifest.def").write_text("source\n", encoding="utf-8")
+            (root / "manifest").chmod(0o755)
+            archive, pin = Path(tmp) / "tables.tar.gz", Path(tmp) / "tables.sha256"
+            extracted = Path(tmp) / "extracted"
+            extracted.mkdir()
+            members_file = Path(tmp) / "members"
+            members = ["manifest", "source_manifest.def"]
+            members_file.write_text("\n".join(members) + "\n", encoding="utf-8")
+            self.assertEqual(
+                persist.main(
+                    [
+                        "publish",
+                        str(root),
+                        str(archive),
+                        str(pin),
+                        *members,
+                    ]
+                ),
+                0,
+            )
+            first_archive = archive.read_bytes()
+            first_pin = pin.read_text(encoding="utf-8")
+            os.utime(root / "manifest", (1000, 1000))
+            second_archive = Path(tmp) / "second.tar.gz"
+            second_pin = Path(tmp) / "second.sha256"
+            self.assertEqual(
+                persist.main(
+                    [
+                        "publish",
+                        str(root),
+                        str(second_archive),
+                        str(second_pin),
+                        *members,
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(second_archive.read_bytes(), first_archive)
+            self.assertEqual(
+                second_pin.read_text(encoding="utf-8"),
+                f"{first_pin.split()[0]}  {second_archive.name}\n",
+            )
+            self.assertEqual(
+                persist.main(
+                    [
+                        "extract",
+                        str(archive),
+                        str(pin),
+                        str(extracted),
+                        str(members_file),
+                    ]
+                ),
+                0,
+            )
+            with tarfile.open(archive, "r:gz") as published:
+                self.assertEqual(published.getnames(), members)
+                self.assertEqual(published.getmember("manifest").mode & 0o777, 0o644)
+            self.assertEqual((extracted / "manifest").read_text(), "manifest\n")
+            self.assertEqual((extracted / "source_manifest.def").read_text(), "source\n")
+
+    def test_extract_rejects_invalid_pin_or_traversal_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "manifest").write_text("manifest\n", encoding="utf-8")
+            archive, pin = Path(tmp) / "tables.tar.gz", Path(tmp) / "tables.sha256"
+            members_file = Path(tmp) / "members"
+            output = Path(tmp) / "extracted"
+            self.assertEqual(
+                persist.main(
+                    ["publish", str(root), str(archive), str(pin), "manifest"]
+                ),
+                0,
+            )
+            pin.write_text(f"{'0' * 64}  {archive.name}\n", encoding="utf-8")
+            members_file.write_text("manifest\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                persist.main(
+                    ["extract", str(archive), str(pin), str(output), str(members_file)]
+                )
+            self.assertFalse(output.exists())
+
+            persist.write_pin(str(archive), str(pin))
+            members_file.write_text("../escape\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                persist.main(
+                    ["extract", str(archive), str(pin), str(output), str(members_file)]
+                )
+            self.assertFalse(output.exists())
+            self.assertFalse((Path(tmp) / "escape").exists())
 
 
 class ContentDigestTests(unittest.TestCase):

@@ -55,6 +55,17 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("--ios_multi_cpus=arm64", command)
         self.assertIn("--platforms=@build_bazel_apple_support//platforms:ios_arm64", command)
 
+    def test_prepared_kernel_does_not_acquire_isa_again(self) -> None:
+        for prepared in ("0", "1"):
+            result = subprocess.run(
+                [MAKE, "-qp", "-f", "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk",
+                 "__prepare-kbuild", f"ORLIX_KERNEL_PORT_PREPARED={prepared}"],
+                cwd=ROOT, capture_output=True, text=True, timeout=30,
+            )
+            self.assertIn(result.returncode, (0, 1), result.stderr)
+            dependencies = next(line for line in result.stdout.splitlines() if line.startswith("__prepare-kbuild:"))
+            self.assertEqual("__orlix-tcti-isa-prepare" in dependencies, prepared == "0")
+
     def test_default_keeps_pre_cutover_authority(self) -> None:
         self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text())
         output = _dry_run("xcodeproj", "ORLIX_BAZEL_AUTHORITY=0")
@@ -105,15 +116,16 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("rebuild")
         self.assertIn("__bazel-orlix-app", output)
 
-    def test_ios15_gate_restores_isa_tables(self) -> None:
+    def test_ios15_gate_keeps_pinned_isa_inputs(self) -> None:
         output = _dry_run(
             "ios15-simulator-gate",
             "ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000",
         )
         self.assertIn("__bazel-ios15-simulator-gate", output)
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        self.assertIn("prepared-tables.tar.gz", makefile)
-        self.assertIn("source_manifest.def", makefile)
+        self.assertNotIn("__tcti-isa-restore", makefile)
+        self.assertNotIn("ORLIX_TCTI_ISA_PREPARED", makefile)
+        self.assertNotIn("ORLIX_TCTI_ISA_ARTIFACTS", makefile)
         self.assertIn("deviceTypeIdentifier", makefile)
         self.assertIn("devicetypes", makefile)
         self.assertIn("--ios_simulator_device=", makefile)
@@ -124,7 +136,7 @@ class MakeRoutingTests(unittest.TestCase):
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)
         self.assertIn("ORLIX_BAZEL_AUTHORITY),1", makefile)
-        recipe = (ROOT / "make/bazel-migration.mk").read_text().split("__bazel-orlix-archive:")[1].split("\n__tcti-isa-restore:")[0]
+        recipe = (ROOT / "make/bazel-migration.mk").read_text().split("__bazel-orlix-archive:")[1].split("\n__bazel-ios15-simulator-gate:")[0]
         self.assertIn("build //Orlix:Orlix.xcarchive --apple_generate_dsym", recipe)
         self.assertIn("codesign --verify --deep --strict", recipe)
         self.assertNotIn("ORLIX_BETA_IPA_PATH", recipe)
