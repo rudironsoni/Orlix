@@ -56,6 +56,20 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-gc.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-gc", text)
 
+    def test_benchmark_keeps_measurements_and_comparison_in_make(self) -> None:
+        text = (ROOT / ".github/workflows/bazel-benchmark.yml").read_text(encoding="utf-8")
+        self.assertIn("make __bazel-cache-equivalence", text)
+        self.assertIn("set -euo pipefail", text)
+        self.assertIn("github.ref == 'refs/heads/main'", text)
+        self.assertIn("contents: read", text)
+        self.assertNotIn("packages: write", text)
+        self.assertNotIn("continue-on-error", text)
+        self.assertNotIn("actions/cache@", text)
+        for artifact in ("build-events.json", "profile.json.gz", "comparison.json", "execution.json"):
+            self.assertIn(artifact, text)
+        self.assertIn("if: always()", text)
+        self.assertIn("retention-days: 14", text)
+
     def test_ios15_runtime_cancels_if_derailed(self) -> None:
         text = (ROOT / ".github/workflows/ios15-runtime.yml").read_text(encoding="utf-8")
         self.assertIn("Cancel if derailed", text)

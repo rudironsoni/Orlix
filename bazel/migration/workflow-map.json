@@ -89,6 +89,74 @@
         }
       }
     },
+    ".github/workflows/bazel-benchmark.yml": {
+      "source_sha256": "5b42915716a3a682e6e90c4efce781a28093838ca0d7fdf23297f0d307ed83bf",
+      "workflow": {
+        "name": "Bazel component benchmark",
+        "on": {
+          "workflow_dispatch": null,
+          "schedule": [
+            {
+              "cron": "39 4 * * 0"
+            }
+          ]
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "bazel-benchmark",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "benchmark": {
+            "name": "Measure clean and cached component builds",
+            "if": "github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
+            "runs-on": "macos-26",
+            "timeout-minutes": 180,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
+                "name": "Install build tools",
+                "run": "brew bundle --file Brewfile\nbrew list jq >/dev/null 2>&1 || brew install jq\n"
+              },
+              {
+                "name": "Measure and compare component builds through Make",
+                "run": "set -euo pipefail\nmkdir -p Build/AgentHarness/bazel-migration\n/usr/bin/time -l make __bazel-cache-equivalence 2>&1 | tee Build/AgentHarness/bazel-migration/benchmark.log\n"
+              },
+              {
+                "name": "Store benchmark evidence",
+                "if": "always()",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "bazel-benchmark-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+                  "path": "Build/AgentHarness/bazel-migration/benchmark.log\nBuild/Bazel/toolchain.json\nBuild/Bazel/cache-equivalence.*/comparison.json\nBuild/Bazel/cache-equivalence.*/*/build-events.json\nBuild/Bazel/cache-equivalence.*/*/profile.json.gz\nBuild/Bazel/cache-equivalence.*/*/execution.json\nBuild/Bazel/cache-equivalence.*/*/cache-observation.json\n",
+                  "if-no-files-found": "error",
+                  "retention-days": 14
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/bazel-gc.yml": {
       "source_sha256": "449321a3ab6d1dbd467c6fb91caf738ea7f6a22f4203fc818759dfa6b0e18ac2",
       "workflow": {

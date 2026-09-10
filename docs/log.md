@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] build | Record component benchmark evidence
+
+The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) uses the existing cache-equivalence Make target for component benchmarks. Each build emits Bazel events and a timing profile alongside its execution log. The workflow retains those files and the full-tree comparison without uploading mutable build trees.
+
 ## [2026-09-10] fix | Check Bazel policy for every product change
 
 The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) requires the Bazel matrix check on every pull request and `main` push. Removing build-file-only workflow filters includes app, kernel, libc, and userspace changes in that check.
