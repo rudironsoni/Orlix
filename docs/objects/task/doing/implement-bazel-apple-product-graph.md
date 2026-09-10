@@ -3,7 +3,7 @@ type: task
 tags: [task, bazel, apple]
 updated: 2026-09-10
 status: doing
-summary: "Implement explicit Bazel targets for HostAdapter, hosted Kernel composition, native layers, OrlixOS, Orlix, extensions, and tests."
+summary: "Implement explicit Bazel targets for HostAdapter, Bootloader, Engine, hosted Kernel composition, OrlixKit, OrlixOS, Orlix, extensions, and tests."
 task_of:
   - "[Move the Apple product graph to Bazel](../../story/doing/move-apple-product-graph-to-bazel.md)"
 blocks:
@@ -14,7 +14,7 @@ blocks:
 
 Determine the HostAdapter composition edge from symbol evidence. Preserve target-specific Swift language modes, all native libraries and frameworks, resources, privacy data, StoreKit configuration, entitlements, deployment targets, and signing behavior. Generate local Xcode projects and commit only the narrow Xcode Cloud bootstrap project.
 
-The app embeds the OrlixOS framework. That framework owns the rootfs images, profile device trees, target-derived plist, and kernel composition record. The existing init component builds OrlixOS `rootinit.c` for `/init` in the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries.
+The app embeds OrlixKit. OrlixKit packages the Apple-native Engine, Bootloader, HostAdapter, and Kernel integration together with OrlixOS guest distribution resources. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries. Guest mlibc, Coreutils, package, and rootfs providers remain resource inputs and are not Apple-native app link dependencies.
 
 The app uses Apple's registered bundle identifier `com.rudironsoni.Orlix`, and the Live Activity extension uses `com.rudironsoni.Orlix.live-activity`. Device builds resolve the installed Development profiles through the upstream `local_provisioning_profile` rule. The app profile includes its existing iCloud container, App Group, Push, and Fonts capabilities. The extension requests its exact application identifier from the team wildcard profile selected by Xcode. Simulator builds do not resolve device profiles. Make verifies bundle signatures and rejects unresolved or mismatched application identifiers. Existing iCloud, keychain, App Group, and widget identifiers remain stable.
 

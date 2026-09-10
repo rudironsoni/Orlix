@@ -4,9 +4,9 @@ tags:
   - story
   - release
   - mobile-terminal
-updated: 2026-07-26
+updated: 2026-09-10
 status: doing
-summary: "Validate and publish the first iOS and iPadOS release with the full terminal, Herdr, and OrlixMachine contract."
+summary: "Validate and publish the first iOS and iPadOS release with the full terminal, Herdr, and OrlixInstance contract."
 story_of:
   - "[Orlix release](../../epic/doing/orlix-release.md)"
 has_task:
@@ -24,6 +24,6 @@ blocks:
 
 # Validate and publish the mobile terminal release
 
-As a release operator, I want one iOS and iPadOS product identity to advance through the terminal, Herdr, OrlixMachine, OrlixTCTI, simulator, signing, and distribution gates so the first public mobile release matches the evidence used to authorize it.
+As a release operator, I want one iOS and iPadOS product identity to advance through the terminal, Herdr, OrlixInstance, OrlixTCTI, simulator, signing, and distribution gates so the first public mobile release matches the evidence used to authorize it.
 
 Simulator validation is mandatory. Physical-device validation requires explicit authorization and becomes a promotion dependency only when selected for the candidate. Archive and upload require passing public-distribution approval and explicit operator authorization.

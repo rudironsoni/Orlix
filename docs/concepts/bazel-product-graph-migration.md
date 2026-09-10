@@ -6,7 +6,7 @@ tags:
   - migration
   - artifacts
   - worktrees
-updated: 2026-09-01
+updated: 2026-09-10
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
   - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
@@ -38,10 +38,10 @@ The migration preserves these product rules:
 4. OrlixHostAdapter owns private Apple and Darwin mechanics only.
 5. OrlixMLibC consumes Linux UAPI only from upstream `headers_install` for `ARCH=arm64`.
 6. Guest packages consume the OrlixMLibC sysroot and installed Linux UAPI contract.
-7. OrlixOS owns distribution policy, rootfs assembly, payload metadata, environments, and the app-facing session API.
-8. Orlix remains the terminal host and user interface.
+7. OrlixOS is the running hosted Linux operating system. The internal OrlixDistribution concept owns guest distribution policy, rootfs assembly, payload metadata, environments, and the resources packaged by OrlixKit.
+8. Orlix remains the terminal host and user interface. Its local runtime entry point is OrlixKit.
 9. `OrlixKernel.xcframework` remains a private product kernel artifact.
-10. `OrlixOS.xcframework` remains the sole public SDK artifact.
+10. `OrlixKit.xcframework` is the public embeddable SDK artifact. OrlixOS is the running OS, not the distribution artifact.
 11. Orlix profiles remain exactly `release` and `development`.
 12. The two profiles remain userspace ABI invariant.
 13. OrlixTCTI remains under `arch/orlix` and keeps the no-JIT, no-RWX, no-`MAP_JIT`, no-QEMU, no-Wasm, and no-host-executable-guest-text constraints.
@@ -50,6 +50,7 @@ The migration preserves these product rules:
 16. A cached result is an optimization. It is not proof.
 17. Promotion and release consume the exact tested artifacts. They do not rebuild those artifacts.
 18. The app and public SDK support iOS and iPadOS 15.0. The optional Live Activity extension has an independent 16.1 minimum.
+19. OrlixEngine, OrlixBootloader, OrlixHostAdapter, and Kernel Mach-O integration are Apple-native implementation layers. OrlixMLibC, OrlixCoreUtils, guest packages, and rootfs/images are Linux guest or distribution artifacts and are not Apple-native link dependencies.
 
 ## Supported Command Surface
 
@@ -66,6 +67,80 @@ make beta-archive
 The current Make target inventory is authoritative until an accepted decision approves a change. Existing targets such as `xcodeproj`, `runtime-tests`, `orlix-tcti-kernel-tests`, `orlix-tcti-isa-host-tests`, and `orlix-tcti-isa-audit` must not disappear silently.
 
 Direct `bazel query`, `bazel aquery`, and Build Event Protocol inspection are maintainer diagnostics. They are not the supported product interface.
+
+## Recovery identities and invalidation proof
+
+The recovery keeps four identities separate:
+
+```text
+action identity
+    every effective input that can change an action result
+incremental-directory identity
+    compatible mutable upstream state retained per worktree
+artifact/content identity
+    real output paths, bytes, modes, symlinks, and image content
+proof/provenance identity
+    tested subject, buildset, toolchain, policy, and proof evidence
+```
+
+Downstream actions consume only semantic product artifacts. Provenance, manifests, proof records, and source identities are not compilation inputs unless their contents semantically affect compilation. Consumers select specific provider fields instead of inheriting a producer's complete `DefaultInfo` output set.
+
+The mutation proof MUST inspect both Bazel action execution and actual upstream compiler or build-engine execution. The required cases are:
+
+| Mutation | Required work | Work that MUST remain reusable |
+| --- | --- | --- |
+| Orlix.app Swift/UI leaf | Affected app target and downstream app link/package | Engine and all Linux foundations |
+| vvterm-derived terminal surface | Affected terminal/app targets | Kernel, mlibc, Coreutils, packages, rootfs |
+| OrlixEngine implementation | Engine and downstream Kit/app products | Kernel, mlibc, Coreutils, packages, rootfs |
+| OrlixBootloader implementation | Affected Bootloader objects and downstream links | Linux/Kbuild, mlibc, Coreutils, packages, rootfs |
+| OrlixHostAdapter implementation | Affected HostAdapter objects and downstream links | mlibc, Coreutils, packages, rootfs; Kernel unless an interface changes |
+| Internal Kernel implementation with unchanged UAPI | Affected Kbuild objects and Kernel products | mlibc, Coreutils, packages, rootfs unless they embed changed Kernel resources |
+| Installed Linux UAPI change | Installed headers and affected mlibc/packages/rootfs | Unrelated native host code |
+| OrlixMLibC implementation | Affected mlibc objects and true downstream consumers | Kernel, Bootloader, HostAdapter, unchanged compiler-rt |
+| OrlixCoreUtils implementation | Affected Coreutils outputs and rootfs/resources | Kernel, mlibc compilation, Bootloader, HostAdapter |
+| Rootfs policy-only change | Rootfs assembly and downstream resource packaging | Kernel, mlibc, Coreutils compilation |
+
+The proof also covers TCTI edits, removed inputs, tool or configuration changes, interrupted builds, corrupted cache entries, concurrent worktrees, and garbage collection during active use. A provenance-only change may update evidence or packaging, but MUST NOT recompile unchanged semantic consumers.
+
+## Developer-loop benchmark contract
+
+The benchmark MUST measure these sixteen scenarios with the same declared toolchain and workload before and after the relevant optimization checkpoint:
+
+1. clean clone to build;
+2. warm no-op build;
+3. Orlix.app Swift leaf edit;
+4. vvterm terminal edit;
+5. OrlixEngine edit;
+6. OrlixBootloader edit;
+7. OrlixHostAdapter edit;
+8. internal Kernel implementation edit;
+9. TCTI implementation edit;
+10. OrlixMLibC implementation edit;
+11. OrlixCoreUtils edit;
+12. rootfs-only policy edit;
+13. second worktree at the same commit;
+14. branch or worktree switch;
+15. cold promoted-artifact acquisition; and
+16. warm promoted build with all locked bytes already local.
+
+Each run records wall-clock duration, critical-path duration, executed actions, Bazel action-cache hits and misses, disk-cache hits and misses, remote-cache hits and misses, compiler-cache hits and misses, bytes downloaded, bytes written, peak memory, temporary disk amplification, and persistent disk growth. Warm cases run three times and report each run and the median. A warm promoted hit performs zero artifact downloads. The benchmark compares real result content, not marker files or cache-hit counts.
+
+## Recovery checkpoints
+
+The approved recovery order is:
+
+1. Encode the OrlixKit, Engine, Bootloader, OS, Instance, Process, Container, and OrlixDistribution authority.
+2. Remove unsafe persistent UAPI/output reuse.
+3. Preserve Kernel prepared-source and Kbuild incremental state.
+4. Preserve mlibc Meson/Ninja state and extract compiler-rt.
+5. Preserve Coreutils and guest-package incremental boundaries.
+6. Make promoted reconstruction local-first and digest-addressed.
+7. Correct the OrlixKit, Engine, Bootloader, HostAdapter, and app dependency graph.
+8. Improve app compilation granularity without moving terminal UI into OrlixKit.
+9. Add invalidation and developer-loop benchmark proof.
+10. Perform one final parity and build-authority cutover.
+
+Each checkpoint MUST leave a diagnosable record in `IMPLEMENT.md`, including changed authority, exact checks and exit codes, artifact identities, evidence paths, and unresolved gates. Checkpoint records do not claim implementation or runtime completion until their owning proof exists.
 
 ## Configuration Dimensions
 
@@ -98,9 +173,9 @@ OrlixProofSubjectInfo
 OrlixProofReportInfo
 ```
 
-OrlixMLibC accepts `OrlixInstalledUapiInfo`. It cannot receive the Linux archive or Apple product provider. Guest packages accept `OrlixLibcSysrootInfo`. Application targets consume OrlixOS, not private component providers.
+OrlixMLibC accepts `OrlixInstalledUapiInfo`. It cannot receive the Linux archive or Apple product provider. Guest packages accept `OrlixLibcSysrootInfo`. Application targets consume OrlixKit, not private component providers or guest build providers. Consumers select specific semantic artifact fields rather than inheriting a producer's complete `DefaultInfo` output set. Provenance, source manifests, proof records, and source identities are not compilation inputs unless their contents semantically affect the result.
 
-The final HostAdapter composition edge remains [UNVERIFIED] until a bounded symbol and link inventory identifies Linux archive imports, HostAdapter exports, boot entry points, callbacks, resource lookup, archive ordering, and framework visibility.
+The final HostAdapter composition edge remains [UNVERIFIED] until a bounded symbol and link inventory identifies Linux archive imports, HostAdapter exports, boot entry points, callbacks, resource lookup, archive ordering, and framework visibility. This evidence cannot make guest artifacts Apple-native link dependencies.
 
 ## Source And Promoted Modes
 
@@ -118,7 +193,7 @@ Use these storage roles:
 | --- | --- | --- |
 | Private promoted components | GHCR OCI artifacts | OCI digest, signature, provenance |
 | Signed compatible component set | GHCR buildset artifact | Buildset digest and signature |
-| Public `OrlixOS.xcframework.zip` and official release evidence | Immutable GitHub Release | Asset hashes, signatures, provenance |
+| Public `OrlixKit.xcframework.zip` and official release evidence | Immutable GitHub Release | Asset hashes, signatures, provenance |
 | Bazel action results | Local disk cache, later remote cache | Disposable speed input |
 | Repository downloads | Digest-verified local and Actions caches | Disposable speed input |
 | CI reports and logs | GitHub Actions artifacts | Disposable evidence transport |
@@ -148,7 +223,20 @@ Worktrees may share only content-addressed or dependency-checked caches:
 
 No worktree shares a Bazel output base, Bazel server, execution root, mutable Kbuild output, `Build/`, DerivedData, or generated Xcode project.
 
-Every action-cache namespace includes the exact Bazel version and Xcode build. This prevents input-discovery results from one Apple toolchain from entering another toolchain build. Promotion disables Bazel action-result reuse, ccache, persistent Kbuild output, and DerivedData. Digest-verified repository downloads and exactly verified tool installations remain allowed.
+Every action-cache namespace includes the exact Bazel version and Xcode build. This prevents input-discovery results from one Apple toolchain from entering another toolchain build. The action identity also includes every effective input that can change the result, while an incremental-directory identity remains stable across source edits that an upstream engine can rebuild. Promotion disables Bazel action-result reuse, ccache, persistent Kbuild output, and DerivedData. Digest-verified repository downloads and exactly verified tool installations remain allowed.
+
+The shared immutable promoted-artifact store is local-first. It stores OCI manifests, blobs, signatures, provenance, and verification records by digest. A warm hit for every locked component performs zero artifact downloads. Verification records bind the artifact digest, signing key, trust-policy identity, and verification-policy version. Locked buildsets and active builds are pinned before cache garbage collection; only unused, unpinned content may be evicted.
+
+The cache split is explicit:
+
+```text
+Action/content cache        reusable declared results and immutable blobs
+Incremental build state     mutable Kbuild, Meson/Ninja, Autotools, and Xcode state per worktree
+Compiler cache              bounded content-addressed compiler objects shared across worktrees
+Promoted products           signed immutable guest and native products addressed by digest
+```
+
+Deleting, disabling, or corrupting any cache may reduce speed only. It must not change a product result. Downstream compilation consumes semantic product artifacts, not provenance or proof metadata unless that metadata changes compilation semantics.
 
 ## Apple Toolchain And Xcode Projects
 
@@ -168,7 +256,7 @@ rules_xcodeproj 4.1.0
 rules_swift_package_manager 1.21.0
 all current Swift packages, including MLXSwift
 Ghostty, Zig, Metal, libssh2, OpenSSL, and resource bundles
-iOS 15.0 compilation for the app and public SDK
+iOS 15.0 compilation for the app and public OrlixKit SDK
 the reviewed MLXSwift compatibility fork at the iOS 15.0 package floor
 the iOS 16.1 live activity extension as an optional embedded product
 iOS 15.5 runtime installation through pinned `xcodes` in GitHub CI
@@ -240,7 +328,7 @@ The private GitHub Pro repository must not rely on GitHub private-repository art
 3. Add Bzlmod bootstrap, independent settings, platforms, toolchain manifests, narrow providers, and policy tests.
 4. Add verified upstream source rules and source mirrors.
 5. Wrap Kbuild, installed UAPI, mlibc, Coreutils, packages, rootfs, initramfs, and ext4 without replacing upstream internal build definitions.
-6. Add explicit HostAdapter, hosted-kernel composition, OrlixMachine, Containers, Herdr, OrlixOS, application, extension, and test targets.
+6. Add explicit HostAdapter, OrlixBootloader, OrlixEngine, hosted-kernel composition, OrlixInstance, OrlixContainer, Herdr, OrlixOS, OrlixKit, application, extension, and test targets. Guest distribution artifacts remain resource inputs and are not Apple-native implementation dependencies.
 7. Model the complete digest-bound proof graph.
 8. Add component promotion, buildset promotion, artifact-lock proposal, provenance, signing, release, and garbage collection workflows.
 9. Run old and Bazel graphs in shadow parity. Compare only outputs defined as reproducible.

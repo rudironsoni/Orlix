@@ -4,7 +4,7 @@ tags:
   - epic
   - bazel
   - build-system
-updated: 2026-09-09
+updated: 2026-09-10
 status: doing
 summary: "Adopt Bazel as the Orlix repository product graph without weakening upstream ownership, proof, release identity, or worktree isolation."
 targets:
@@ -28,6 +28,8 @@ has_story:
 
 Adopt Bazel as the repository product graph while Make remains the supported command interface and upstream build engines remain authoritative inside Linux, mlibc, and imported packages.
 
-The epic is complete when the feasibility gate passes, source and promoted build modes are reproducible and fail closed, the complete proof ladder binds to exact buildset digests, worktrees share only safe caches, Xcode local and cloud workflows work, the final authority cutover removes competing build ownership, and one shipped release plus clean reconstruction completes the rollback window.
+The epic is complete when the OrlixKit product boundary and OrlixEngine lifecycle are authoritative, source and promoted build modes are reproducible and fail closed, the complete proof ladder binds to exact buildset digests, worktrees share only safe immutable caches, the required invalidation matrix and sixteen developer-loop benchmark scenarios are evidenced, Xcode local and cloud workflows work, the final authority cutover removes competing build ownership, and one shipped release plus clean reconstruction completes the rollback window. The epic remains doing until those gates pass. Checkpoint progress is recorded in `IMPLEMENT.md`; checkpoint authority does not claim runtime or release completion.
 
-[CORRECTION] 2026-09-09: this epic is not done. `artifacts.lock.json` names `localhost:5001` for uapi, mlibc, and rootfs. That registry is not running. GHCR has no `orlix`, `orlix/uapi`, `orlix/mlibc`, or `orlix/rootfs` packages. Unsigned dual-build does not publish. Promoted mode still does not substitute OCI components. posix-shell TAP END is missing. Shadow parity, cutover, and release remain open.
+[CORRECTION] 2026-09-09 historical observation: this epic was reopened because the then-current lock named `localhost:5001`, the local registry was not running, promoted mode did not substitute OCI components, and the required TAP END was missing. That observation is preserved as history; it is not the current lock or registry state.
+
+Current execution state belongs in the structured [checkpoint verification report](../../../../Build/AgentHarness/bazel-migration/recovery-checkpoint-1/verification.json). At checkpoint 1, authority documentation is being reconciled. Runtime proof, performance proof, TAP, physical-device validation, parity, cutover, and release remain open.

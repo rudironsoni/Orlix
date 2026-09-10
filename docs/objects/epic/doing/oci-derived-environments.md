@@ -3,7 +3,7 @@ type: epic
 tags:
   - epic
   - oci-derived-environments
-updated: 2026-07-26
+updated: 2026-09-10
 status: doing
 summary: "Deliver OCI-derived Linux environments over upstream kernel and virtio interfaces."
 targets:
@@ -21,7 +21,7 @@ blocks:
 
 Deliver OCI-derived Linux environments over upstream kernel and virtio interfaces.
 
-`OrlixOS.Containers` imports OCI image layouts and root filesystem archives, resolves descriptors, materializes immutable base content with persistent writable state, and constructs machine-scoped workloads. OrlixKernel supplies normal Linux mounts, OverlayFS, namespaces, cgroups, processes, networking, pseudo-filesystems, device nodes, and execution. OrlixHostAdapter supplies only private backing resources and virtio transport mechanics.
+OrlixKit imports OCI image layouts and root filesystem archives, resolves descriptors, materializes immutable base content with persistent writable state, and constructs OrlixInstance-scoped OrlixContainer workloads. OrlixKernel supplies normal Linux mounts, OverlayFS, namespaces, cgroups, processes, networking, pseudo-filesystems, device nodes, and execution. OrlixHostAdapter supplies only private backing resources and virtio transport mechanics.
 
 Compatibility work is divided by contract. OCI Image Spec proof covers import and whiteouts. OCI Runtime Spec proof covers process configuration and the create, start, state, kill, and delete lifecycle. Docker compatibility additionally requires the engine-facing behavior accepted by [ADR 0028](../../architecture-decision/0028-provide-full-docker-engine-compatibility-through-orlixos.md). Image import alone cannot establish runtime or Docker compatibility.
 

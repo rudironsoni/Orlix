@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 tags: [architecture, decision, artifacts, provenance]
-updated: 2026-09-01
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0034"
 summary: "Use signed OCI component buildsets for normal integration and retain source mode for promotion and independent reconstruction."
@@ -10,6 +10,8 @@ part_of:
 relates_to:
   - "[ADR 0017](0017-product-runtime-claim-promotion-order.md)"
   - "[ADR 0030](0030-use-one-public-orlixos-sdk-and-private-static-implementation-layers.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0034: Consume Signed Promoted Buildsets
@@ -32,7 +34,9 @@ Source mode remains required for component-changing pull requests, component pro
 
 Lock updates arrive through reviewed pull requests. Promotion workflows do not mutate `main`.
 
-Only `OrlixOS.xcframework` is a public SDK. Private component OCI artifacts do not become public APIs or SwiftPM products.
+Only OrlixKit is the public embeddable SDK. Private native implementation and Linux guest/distribution OCI artifacts do not become public APIs or SwiftPM products. OrlixKit may package or reference the resulting guest resources without making them Apple-native link dependencies.
+
+Promoted artifacts are immutable, digest-addressed, signed, and verified. A machine-wide local OCI content store is checked before network acquisition. A warm promoted build with all locked bytes present locally performs zero artifact downloads. Verification records bind artifact digest, signing key, trust-policy identity, and verification-policy version. Locked buildsets and active builds are protected from garbage collection.
 
 ## Consequences
 

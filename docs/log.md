@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] decide | Encode the OrlixKit recovery authority
+
+[ADR 0040](objects/architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md) makes OrlixKit the public embeddable SDK and separates OrlixEngine, OrlixBootloader, OrlixOS, OrlixInstance, OrlixProcess, OrlixContainer, and internal OrlixDistribution resources. It amends conflicting SDK and lifecycle clauses while preserving Linux ownership, Make as the public command surface, upstream build-engine authority, iOS proof order, and mobile-first compatibility. The decision records four distinct identities, semantic-artifact-only downstream inputs, worktree-local mutable state, shared immutable content, local-first promoted reuse, runtime and device gates, the invalidation matrix, the sixteen developer-loop benchmarks, and independently verified recovery checkpoints. The source graph and runtime remain under migration.
+
 ## [2026-09-10] build | Register the existing buildset signing key
 
 The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) registers the existing public-key fingerprint for GHCR verification. Reconstruction verifies the locked signatures before staging their component trees. The promoted IPA check verifies the embedded rootfs and buildset metadata. Runtime proof and cutover remain separate gates.

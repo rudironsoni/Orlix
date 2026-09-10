@@ -3,15 +3,17 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0026"
-summary: "Host persistent namespaced OrlixMachine systems inside one upstream Linux kernel."
+summary: "Host persistent namespaced OrlixInstance systems inside one upstream Linux kernel."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
-# ADR 0026: Use One Kernel With Namespaced Orlix Machines
+# ADR 0026: Use One Kernel With Namespaced Orlix Instances
 
 ## Status
 
@@ -23,18 +25,18 @@ OrlixKernel and its host adapter have process-global boot and runtime state. Mul
 
 ## Decision
 
-One upstream OrlixKernel hosts multiple `OrlixMachine` values as persistent, namespaced Linux userspace systems. `OrlixMachine` is the sole public local Linux lifecycle name. Retired Local Runtime and Local Instance names receive no type, symbol, module, target, or documentation compatibility aliases.
+One upstream Linux kernel hosted by OrlixOS hosts multiple `OrlixInstance` values as persistent, namespaced Linux userspace systems. `OrlixInstance` is the public local Linux lifecycle name. Retired Local Runtime and OrlixMachine names receive no new compatibility aliases; existing source identifiers are migration work until the API graph is changed.
 
-Each OrlixMachine owns an init process, root and state, PID namespace, mount namespace, UTS namespace, IPC namespace, network namespace, user namespace, and cgroup v2 subtree. Machines share the kernel while keeping process, mount, hostname, network, root, and resource-policy identity separate.
+Each OrlixInstance owns an init process, root and state, PID namespace, mount namespace, UTS namespace, IPC namespace, network namespace, user namespace, and cgroup v2 subtree. Instances share the kernel while keeping process, mount, hostname, network-namespace identity and namespace-local state, root, credentials, IPC, and resource-policy identity separate.
 
-A normal Linux userspace supervisor manages OrlixMachine lifecycle through Linux-shaped control mechanisms. The default machine starts on demand. New machines are stopped by default, and autostart is explicit.
+A normal Linux userspace supervisor manages OrlixInstance lifecycle through Linux-shaped control mechanisms. The default instance starts on demand. New instances are stopped by default, and autostart is explicit.
 
-Containers are OCI application workloads assigned to exactly one OrlixMachine through `OrlixOS.Containers`. A container cannot exist without a machine, and the machine-local Docker-compatible socket controls only that machine's containers.
+OrlixContainer workloads are OCI application workloads assigned to exactly one OrlixInstance through OrlixKit. A container cannot exist without an instance, and the instance-local Docker-compatible socket controls only that instance's containers.
 
-Upstream Linux owns namespace, cgroup, process, signal, mount, VFS, socket, and networking semantics. OrlixOS owns the app-facing OrlixMachine lifecycle API, distribution assembly, and `OrlixOS.Containers` control-plane integration. OrlixHostAdapter remains private Apple and Darwin mechanics and does not acquire lifecycle policy.
+Upstream Linux owns namespace, cgroup, process, signal, mount, VFS, socket, and networking semantics. OrlixKit owns the app-facing OrlixInstance and OrlixContainer API boundary, OrlixOS owns the running OS, and OrlixDistribution owns guest assembly. OrlixHostAdapter remains private Apple and Darwin mechanics and does not acquire lifecycle policy.
 
 ## Consequences
 
-User-facing language uses OrlixMachine and Container. An OrlixMachine is not called a kernel, VM, environment, Local Runtime, or Local Instance.
+User-facing language uses OrlixInstance and OrlixContainer. An OrlixInstance is not called a kernel, VM, environment, Local Runtime, or Local Instance.
 
-The full machine release must prove at least two concurrent OrlixMachine values with isolated PID, mount, hostname, network, root, and cgroup state through the OrlixOS session surface. It must also prove the ADR 0017 runtime ladder, including PTYs, shell, dynamic loader, networking, persistence, jq, curl, and zsh.
+The full instance release must prove at least two concurrent OrlixInstance values with isolated PID, mount, UTS/hostname, network namespace identity and namespace-local state, user/credential, IPC, root, and cgroup state through OrlixKit. Functional external networking is claimed only to the proof tier established by the current virtio/network implementation. It must also prove the ADR 0017 runtime ladder, including PTYs, shell, dynamic loader, persistence, jq, curl, and zsh.

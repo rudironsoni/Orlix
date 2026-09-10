@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 tags: [architecture, decision, bazel, build-system]
-updated: 2026-09-01
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0033"
 summary: "Use Bazel as the repository product graph while Make remains the supported interface and upstream build engines retain internal ownership."
@@ -9,6 +9,8 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 amends:
   - "[ADR 0019](0019-keep-make-targets-linux-shaped.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0033: Use Bazel As The Repository Product Graph
@@ -31,7 +33,11 @@ Make remains the only supported repository-owned developer and CI command interf
 
 Kbuild, Meson and Ninja, and upstream Autotools and Make remain authoritative inside their components. Bazel invokes these engines directly with pinned tools, prepared source trees, declared inputs, narrow typed providers, and declared outputs. Bazel must not call the top-level Orlix Makefile or component wrapper Makefiles from a Bazel action.
 
-Apple compilation, linking, resources, tests, packaging, Xcode project generation, rootfs assembly, manifests, proof selection, and release bundles become Bazel-declared product graph operations.
+Apple-native compilation, linking, resources, tests, packaging, Xcode project generation, guest distribution assembly, manifests, proof selection, and release bundles become Bazel-declared product graph operations. OrlixKit is the public Apple product boundary. OrlixEngine, OrlixBootloader, OrlixHostAdapter, and Kernel Mach-O integration are native implementation layers. OrlixMLibC, OrlixCoreUtils, guest packages, and rootfs/images remain Linux guest or distribution artifacts and MUST NOT be hidden as Apple-native link dependencies.
+
+Cross-component actions exchange narrow semantic product artifacts. Consumers MUST select specific provider fields rather than inherit a producer's complete `DefaultInfo` output set. Provenance, source manifests, proof records, and source identities MUST NOT invalidate downstream compilation unless their contents semantically affect that compilation.
+
+Action identity contains every effective input that can change an output. Incremental-directory identity selects compatible mutable upstream state and remains stable across ordinary source edits. Artifact/content identity describes real output content and metadata. Proof/provenance identity binds evidence to tested artifacts and policy without becoming a compile input.
 
 Every Apple product build surface uses this Bazel graph for every row in the supported matrix, including iOS and iPadOS 15, later iOS and iPadOS versions, the optional iOS and iPadOS 16.1 Live Activity extension, and every supported Apple-silicon macOS version. A destination or OS version is a declared graph dimension, not a reason to add an XcodeGen, direct `xcodebuild`, or other parallel build authority. Local Xcode projects, the committed Xcode Cloud discovery project, and Make are frontends to the same Bazel graph.
 

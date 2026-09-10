@@ -3,15 +3,17 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0004"
-summary: "Durable Orlix architecture decision ADR 0004."
+summary: "Keep the Linux boot-entry interface private behind OrlixKit's public lifecycle handles."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
-# ADR 0004: Use A Bootloader-Only Product API
+# ADR 0004: Keep The Boot-Entry API Private
 
 ## Status
 
@@ -25,12 +27,12 @@ Exposing Linux management APIs from the product surface would confuse kernel, li
 
 ## Decision
 
-The app-facing product API lives in the sole public `OrlixOS.xcframework`. It exposes `OrlixMachine` sessions with closed profile selection and opaque app-level resource identifiers; [ADR 0028](0028-provide-full-docker-engine-compatibility-through-orlixos.md) separately owns `OrlixOS.Containers`. The lower-level boot entrypoint remains under `OrlixKernel/Sources/include` for private kernel integration, and apps do not target kernel headers directly.
+The app-facing product API lives in the public `OrlixKit.xcframework`. It exposes `OrlixEngine`, `OrlixOS`, `OrlixInstance`, `OrlixProcess`, and `OrlixContainer` handles with closed profile selection and opaque resource identifiers. The lower-level boot entrypoint remains private to OrlixBootloader and Kernel integration, and apps do not target Kernel headers directly. [ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md) defines the updated product boundary.
 
 ## Consequences
 
 Raw `struct boot_params` is not the main public API.
 
-Public syscall, file, mount, exec, task, cgroup, and runtime management APIs are forbidden.
+Raw Linux syscall, fd-table, mount, execve, task-structure, and cgroup implementation interfaces remain private. OrlixKit exposes the Engine, instance, process, and OCI lifecycle handles defined by ADR 0040. Those handles do not transfer Linux semantics into a host-side facade.
 
-`OrlixOS` resolves curated distribution resources from its own framework and registers private HostAdapter resource paths before boot. There is no separate payload bundle or target-selected payload identity. The bootloader under `OrlixKernel/Sources/boot` translates app-level inputs into Linux-shaped boot data.
+OrlixKit packages or references curated OrlixDistribution resources and registers private HostAdapter resource paths before boot. OrlixOS is the running hosted OS, not the rootfs artifact. There is no target-selected mutable payload identity. The private OrlixBootloader translates process-wide app inputs into Linux-shaped boot data.

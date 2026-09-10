@@ -878,11 +878,14 @@ docs-check:
 	@python3 .agents/skills/orlix-docs-lint/scripts/wiki_link_check.py docs
 	@python3 .agents/skills/orlix-docs-lint/scripts/legacy_path_check.py
 
+ORLIX_AGENT_TARGETS ?= copilot,cursor,claudecode,codexcli
+ORLIX_AGENT_FEATURES ?= rules
+
 agent-rules-generate:
-	@rulesync generate --targets copilot,cursor,claudecode,codexcli --features rules
+	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)"
 
 agent-rules-check:
-	@rulesync generate --targets copilot,cursor,claudecode,codexcli --features rules --check
+	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)" --check
 
 agent-harness-check: docs-check
 	@.agents/tests/harness-check all

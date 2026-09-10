@@ -22,4 +22,4 @@ Unsigned promotion disables remote action reuse and clears signing inputs for it
 
 The trust policy registers the SHA-256 fingerprint of the existing GHCR signing public key. Reconstruction verifies each locked OCI signature with that key before extracting and staging the component trees. Oras and Cosign use the same registry configuration; the local configuration uses the macOS Keychain credential helper. Public-key trust does not replace owning runtime proof or protected automation.
 
-The promoted app build verifies the embedded initramfs against the reconstructed rootfs and checks the locked buildset in its composition metadata. The Apple matrix treats this as supported payload consumption, with runtime proof, parity, and cutover still separate gates.
+The promoted OrlixKit build verifies the embedded initramfs against the reconstructed guest rootfs and checks the locked buildset in its composition metadata. The Apple matrix treats this as supported guest-resource consumption, with runtime proof, parity, and cutover still separate gates. Warm reconstruction uses local immutable CAS entries before any network request.

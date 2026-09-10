@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-09-03
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0023"
 summary: "Durable Orlix architecture decision ADR 0023."
@@ -16,9 +16,11 @@ amends:
   - "[ADR 0009](0009-support-serial-and-virtio-console-selection.md)"
   - "[ADR 0010](0010-use-normal-linux-package-and-execution-policy.md)"
   - "[ADR 0017](0017-product-runtime-claim-promotion-order.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
-# ADR 0023: Use Release/Development Profiles And Deliver OrlixOS As The Kit
+# ADR 0023: Use Release/Development Profiles And Curated OrlixDistribution Resources
 
 ## Status
 
@@ -41,11 +43,11 @@ Orlix supports exactly two product profiles:
 
 The profiles must remain userspace ABI invariant. Development may add diagnostics, assertions, tracing, and test knobs, but it must not expose a different Linux ABI, package ABI, device shape, or userspace contract.
 
-`OrlixOS.xcframework`, identified by `com.rudironsoni.orlix.os`, is the sole public SDK. Release builds bundle curated executable userspace content directly as signed OrlixOS framework resources and update that content through app releases first. Apps consume OrlixOS for `OrlixMachine` sessions and `OrlixOS.Containers`; they must not depend on a separate delivery module or make `Orlix` own OS delivery. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
+`OrlixKit.xcframework` is the public SDK. Release builds bundle curated executable userspace content as signed OrlixKit guest distribution resources and update that content through app releases first. Apps consume OrlixKit for OrlixEngine, OrlixOS, OrlixInstance, OrlixProcess, and OrlixContainer handles. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
 
-`OrlixOS` owns curated distribution policy, package/rootfs assembly, framework-owned distribution resources, `OrlixMachine`, and `OrlixOS.Containers`. It may wrap the bootloader-shaped entrypoint as a Linux session. It must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, terminal UI rendering, shell behavior, or Linux test-result interpretation.
+OrlixOS is the running hosted Linux operating system. The internal OrlixDistribution build concept owns curated distribution policy, package/rootfs assembly, and guest distribution resources. OrlixEngine owns process-wide boot orchestration, while OrlixInstance, OrlixProcess, and OrlixContainer expose Linux lifecycle through OrlixKit. These layers must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, terminal UI rendering, shell behavior, or Linux test-result interpretation.
 
-`OrlixOS` resolves curated distribution resources from its own framework. It registers the private resolved resource root with `OrlixHostAdapter` before boot. There is no separate payload bundle, payload target, or target-metadata-selected payload identity.
+OrlixKit resolves curated OrlixDistribution resources and registers the private resolved resource root with OrlixHostAdapter before boot. OrlixOS is the running OS and is not equated with a rootfs, payload bundle, or target-metadata-selected payload identity.
 
 The delivered OrlixOS base rootfs includes these curated packages: bash, coreutils, grep, findutils, e2fsprogs, jq, curl, zsh, plus Orlix-local getconf, getent, and first-stage init. jq, curl, and zsh are delivered base content, not optional extras.
 
@@ -79,6 +81,6 @@ Build defaults, profile device trees, defconfigs, public boot enums, terminal pr
 
 Release package behavior is conservative until an App Store-safe downloadable package channel is separately designed. Orlix can still develop package build recipes and proof packages, but release does not become an unrestricted executable-code download surface.
 
-`OrlixKit` is not a product component. If code, plans, docs, agents, or tests need the OS delivery/session surface, they target `OrlixOS`.
+OrlixKit is the public product boundary. If code, plans, docs, agents, or tests need the local Linux runtime, they target OrlixKit and its public Engine, OS, instance, process, or container contracts. Guest distribution artifacts remain internal resources.
 
 Virtio-rng follows the existing block and console work through upstream Linux `virtio-rng` and the hwrng core, with Orlix supplying only the private host entropy backend behind the virtio transport. Virtio-net follows after rng. External directory mounts follow after root/storage policy is stable.

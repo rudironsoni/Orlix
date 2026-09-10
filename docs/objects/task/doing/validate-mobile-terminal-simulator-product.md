@@ -12,7 +12,7 @@ task_of:
 depends_on:
   - "[Keep Herdr authoritative for terminal topology](keep-herdr-authoritative-for-terminal-topology.md)"
   - "[Validate mobile platform presentation](../todo/validate-mobile-platform-presentation.md)"
-  - "[Prove concurrent OrlixMachine isolation](../todo/prove-concurrent-orlix-machine-isolation.md)"
+  - "[Prove concurrent OrlixInstance isolation](../todo/prove-concurrent-orlix-machine-isolation.md)"
   - "[Promote TCTI as the product default](../todo/promote-tcti-as-product-default.md)"
 blocks:
   - "[Validate an authorized mobile terminal device](../todo/validate-authorized-mobile-terminal-device.md)"
@@ -21,7 +21,7 @@ blocks:
 
 # Validate the mobile terminal simulator product
 
-Advance the exact mobile terminal release candidate through source policy, focused owning regression tests, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, commercially available Herdr, OrlixMachine, and OrlixTCTI contract. OCI and Docker behavior belongs to the later mobile container release.
+Advance the exact mobile terminal release candidate through source policy, focused owning regression tests, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, commercially available Herdr, OrlixInstance, and OrlixTCTI contract. OCI and Docker behavior belongs to the later mobile container release.
 
 The iOS local Orlix terminal and remote panes must use the same `TerminalPaneSurface`, Ghostty appearance settings, surface registry, and keyboard behavior. Their session backends supply input, output, and resize handling. Init diagnostics use Linux `/dev/kmsg` before the console becomes a raw transport. The terminal UI must preserve PTY bytes.
 

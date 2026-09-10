@@ -4,7 +4,7 @@ tags:
   - task
   - release
   - macos
-updated: 2026-07-26
+updated: 2026-09-10
 status: todo
 summary: "Validate the complete native Apple-silicon macOS product contract."
 task_of:
@@ -17,4 +17,4 @@ blocks:
 
 # Validate the native macOS product
 
-Prove the Mac app, runtime service, terminal platform, OrlixMachine systems, `OrlixOS.Containers`, Docker and Compose behavior, shared-folder authorization, signing, and clean lifecycle through focused and complete product tests.
+Prove the Mac app, runtime service, terminal platform, OrlixInstance systems, OrlixContainer, Docker and Compose behavior, shared-folder authorization, signing, and clean lifecycle through focused and complete product tests.

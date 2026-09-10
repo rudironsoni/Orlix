@@ -3,12 +3,12 @@ type: concept
 tags:
   - architecture
   - guidance
-updated: 2026-07-26
-summary: "OrlixOS owns curated root filesystem and package resources directly inside its public SDK."
+updated: 2026-09-10
+summary: "OrlixDistribution assembles guest root filesystem and package resources for OrlixKit to package with OrlixOS."
 applies:
   - "[Orlix](../objects/product/orlix.md)"
 ---
 
 # Root storage, packages, and execution
 
-OrlixOS assembles curated root filesystems and packages as resources owned directly by `OrlixOS.xcframework`; there is no separate payload bundle. Linux mounts and executes them through upstream storage, VFS, exec, and interpreter mechanisms.
+`OrlixDistribution` assembles curated root filesystems and packages as Linux guest resources for `OrlixKit`. OrlixOS is the running hosted OS, not the rootfs artifact. Linux mounts and executes the resources through upstream storage, VFS, `exec`, and interpreter mechanisms.

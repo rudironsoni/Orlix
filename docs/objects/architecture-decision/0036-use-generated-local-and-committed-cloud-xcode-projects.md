@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 tags: [architecture, decision, xcode, bazel]
-updated: 2026-09-01
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0036"
 summary: "Generate local Xcode projects from Bazel and commit one minimal Xcode Cloud discovery project that delegates to Make."
@@ -9,6 +9,8 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 supersedes:
   - "[ADR 0014](0014-use-xcodegen-for-ios-packaging-and-test-harness.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0036: Use Generated Local And Committed Cloud Xcode Projects
@@ -27,7 +29,7 @@ Local development uses `rules_xcodeproj` to generate disposable worktree-local p
 
 Xcode Cloud uses one committed minimal `OrlixCloud.xcodeproj`. It contains only identifiers required for discovery, shared schemes, signing metadata, and one fixed build phase that invokes a fixed Make target. Make delegates to Bazel. The project does not compile Orlix sources or maintain a second dependency graph.
 
-The migration must prove Xcode 26.6 generation, indexing, Swift and Objective-C navigation, C header navigation, breakpoints, LLDB attachment, previews, test discovery and selection, simulator and device launch, archive, signing, extensions, resources, asset catalogs, privacy data, StoreKit configuration, and Metal compilation.
+The migration must prove Xcode 26.6 generation, indexing, Swift and Objective-C navigation, C header navigation, breakpoints, LLDB attachment, previews, test discovery and selection, simulator and device launch, archive, signing, extensions, resources, asset catalogs, privacy data, StoreKit configuration, and Metal compilation. The generated projects expose OrlixKit and the first-party app; they MUST NOT expose guest distribution providers as Apple-native app link dependencies.
 
 ## Consequences
 

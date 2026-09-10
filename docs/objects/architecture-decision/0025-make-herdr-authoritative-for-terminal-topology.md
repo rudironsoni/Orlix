@@ -3,12 +3,14 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0025"
 summary: "Make Herdr authoritative for Session, Workspace, Tab, and Pane topology after its commercial and integration gates pass."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0025: Make Herdr Authoritative For Terminal Topology
@@ -41,7 +43,7 @@ Orlix follows the Herdr hierarchy exactly:
 
 Orlix creates the migrated initial Workspace in the default Session. It does not create a hidden app-specific Session named `orlix`. App-created and user-created Workspaces, Tabs, and Panes are ordinary Herdr resources with equal lifecycle rights. Orlix lists named Sessions without merging them into the default Session.
 
-`OrlixMachine` and `OrlixOS.Containers` targets use Herdr-owned Linux PTYs. App-native SSH, Mosh, and TSSH transports require a commercially licensed external Pane backend extension developed with the Herdr maintainer. The extension preserves ordered input and output, resize ordering, bounded backpressure, controller ownership, takeover, detach, reconnect, terminal-mode restoration, explicit closed/error states, raw TUI compatibility, and protocol-version negotiation.
+OrlixInstance and OrlixContainer targets use Herdr-owned Linux PTYs. Orlix.app retains terminal presentation, while OrlixKit supplies local runtime process and container streams. App-native SSH, Mosh, and TSSH transports require a commercially licensed external Pane backend extension developed with the Herdr maintainer. The extension preserves ordered input and output, resize ordering, bounded backpressure, controller ownership, takeover, detach, reconnect, terminal-mode restoration, explicit closed/error states, raw TUI compatibility, and protocol-version negotiation.
 
 Native clients bootstrap with `session.snapshot`, subscribe to public events, and resnapshot after reconnects, revision gaps, or protocol mismatches. Orlix does not read Herdr private state or implement a parallel split tree.
 

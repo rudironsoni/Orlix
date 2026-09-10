@@ -494,7 +494,7 @@
     {
       "name": "agent-rules-check",
       "source": "Makefile",
-      "line": 884,
+      "line": 887,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -506,7 +506,7 @@
     {
       "name": "agent-hooks-check",
       "source": "Makefile",
-      "line": 893,
+      "line": 896,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -518,7 +518,7 @@
     {
       "name": "agent-skills-check",
       "source": "Makefile",
-      "line": 896,
+      "line": 899,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -530,7 +530,7 @@
     {
       "name": "agent-subagents-check",
       "source": "Makefile",
-      "line": 899,
+      "line": 902,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -542,7 +542,7 @@
     {
       "name": "agent-mcp-check",
       "source": "Makefile",
-      "line": 902,
+      "line": 905,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -554,7 +554,7 @@
     {
       "name": "agent-task-envelope-check",
       "source": "Makefile",
-      "line": 913,
+      "line": 916,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -566,7 +566,7 @@
     {
       "name": "beta-validate-archive",
       "source": "Makefile",
-      "line": 964,
+      "line": 967,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -578,7 +578,7 @@
     {
       "name": "beta-validate-export",
       "source": "Makefile",
-      "line": 1007,
+      "line": 1010,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -590,7 +590,7 @@
     {
       "name": "beta-upload-prerequisites",
       "source": "Makefile",
-      "line": 1017,
+      "line": 1020,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -602,7 +602,7 @@
     {
       "name": "app-store-release-report-check",
       "source": "Makefile",
-      "line": 1044,
+      "line": 1047,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -617,7 +617,7 @@
     {
       "name": "release-workflow-check",
       "source": "Makefile",
-      "line": 1057,
+      "line": 1060,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -629,7 +629,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1098,
+      "line": 1101,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -641,7 +641,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1098,
+      "line": 1101,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -653,7 +653,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1101,
+      "line": 1104,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -665,7 +665,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1132,
+      "line": 1135,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -677,7 +677,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1140,
+      "line": 1143,
       "classification": "command",
       "phony": true,
       "prerequisites": [

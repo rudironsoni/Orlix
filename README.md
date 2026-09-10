@@ -1,19 +1,23 @@
 # Orlix
 
-Orlix is an iOS-hosted upstream Linux port. The product goal is to run Linux userspace inside an iOS app by packaging upstream Linux as `OrlixKernel.xcframework`, pairing it with `OrlixMLibC`, and delivering the curated OS as the `OrlixOS` Kit/framework.
+Orlix is the first-party iOS application and product. The product goal is to run Linux userspace inside an iOS app through the public `OrlixKit.xcframework`. OrlixKit exposes `OrlixEngine`, which boots and hosts one running `OrlixOS`. OrlixOS uses one upstream Linux kernel and hosts persistent `OrlixInstance` userspaces.
 
-Think of the app as the host container. It consumes `OrlixOS`; it does not become Linux and it does not manage Linux through a custom runtime API. `OrlixOS` resolves its delivered payload, starts a bootloader-shaped Linux session, the bootloader prepares Linux-shaped boot inputs, and Linux owns Linux after boot.
+The SDK and lifecycle migration is in progress. [ADR 0040](docs/objects/architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md) defines the required architecture, and [IMPLEMENT.md](IMPLEMENT.md) records verified checkpoints. Current public Swift sources remain under `OrlixOS/Sources/Session`; the new component names below describe the accepted target ownership.
+
+Orlix.app is the complete first-party experience. It keeps its terminal, vvterm-derived surface, Ghostty integration, remote connections, files, settings, navigation, CloudKit, and telemetry. It enters the local Linux runtime through OrlixKit and does not link private Kernel, Bootloader, HostAdapter, libc, Coreutils, TCTI, or Mach-O composition targets directly. Linux owns Linux after boot.
 
 OrlixKernel is Linux. It does not provide a shell, libc, package manager, public syscall API, or fake runtime facade. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms.
 
 ## ELI5 Start
 
-Orlix has five important source areas:
+Source and component ownership:
 
 - `Build/OrlixKernel/upstream/linux-<version>.git` is the generated bare upstream Linux clone. Treat it as read-only input.
 - `OrlixKernel/Sources/ports/orlix` is where durable Orlix Linux port inputs live.
 - `OrlixMLibC/Sources` is the durable component area for OrlixMLibC sysdeps, configs, and patches. The upstream mlibc bare clone is generated under `Build/OrlixMLibC/upstream/mlibc-<version>.git`, and the patched working source is generated under `Build/OrlixMLibC/src/mlibc-<version>`.
-- `OrlixOS` is the delivered OS Kit. It owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API.
+- `OrlixKit` is the public embeddable Swift SDK and XCFramework. It packages the private Apple-native implementation and the guest distribution resources needed by OrlixOS.
+- `OrlixOS` is the running hosted Linux operating system. Its internal `OrlixDistribution` resources contain OrlixMLibC-built userspace, OrlixCoreUtils, guest packages, and rootfs/images.
+- `OrlixEngine` owns process-wide host lifecycle and hosts at most one running OrlixOS. `OrlixInstance` owns persistent isolated Linux userspace state inside that OS.
 - `OrlixHostAdapter/Sources` is where private iOS and Darwin mechanics live.
 
 Project source and test roots are organized consistently:
@@ -65,9 +69,9 @@ make test type=kunit,kselftest
 make clean
 ```
 
-`make setup-env` fetches upstream Linux as a bare clone and generates the disposable Xcode project from `project.yml`. `make build` preserves `Build/` and delegates the selected product build to the component Makefiles. Use `make rebuild` only when you intentionally need `make clean` before `make build`. The build flow materializes upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC`, builds the OrlixMLibC sysroot from upstream mlibc plus durable OrlixMLibC inputs, and stages OrlixOS package/rootfs inputs under `Build/OrlixOS`. It does not prove terminal runtime behavior or build or require `vmlinux` as a normal artifact.
+In the current pre-cutover source path, `make setup-env` fetches upstream Linux as a bare clone and generates the disposable Xcode project from `project.yml`. `make build` preserves `Build/` and delegates the selected product build to the component Makefiles. Use `make rebuild` only when you intentionally need `make clean` before `make build`. This path materializes upstream mlibc as a bare clone plus patched working source under `Build/OrlixMLibC`, builds the guest sysroot from durable inputs, and stages guest distribution assembly under `Build/OrlixOS`. It does not prove terminal runtime behavior or require `vmlinux` as a normal artifact.
 
-The Linux compile lane emits per-profile, per-platform OrlixKernel static archives under `Build/OrlixKernel/<profile>/<platform>/OrlixKernel.a`. Xcode links the matching archive into `OrlixKernel.framework`, and framework slices are packaged into `OrlixKernel.xcframework`. The product rootfs payload is carried by the `OrlixOS` framework, with its payload resource name declared in `project.yml`/target metadata.
+The current Kernel lane emits per-profile, per-platform static archives under `Build/OrlixKernel/<profile>/<platform>/OrlixKernel.a`. Xcode packages matching slices as the private `OrlixKernel.xcframework`. The recovery moves public packaging to `OrlixKit.xcframework`, which MUST package or reference OrlixDistribution guest resources, including rootfs/images. Resource names remain declared in target metadata. OrlixOS denotes the running hosted OS.
 
 `PROFILE=release` is the default profile. Pass another profile only when you intentionally need it.
 
@@ -141,7 +145,9 @@ OrlixKernel/Sources/ports/orlix/
 
 ## Product Surface
 
-The app-facing product surface is `OrlixOS` and is bootloader/session-shaped. It may expose a Linux session API backed by the bootloader path. It must not expose syscall, file, mount, exec, task, cgroup, package-manager, or runtime management APIs.
+The public app-facing product surface is `OrlixKit`. It exposes OrlixEngine, OrlixOS, OrlixInstance, OrlixProcess, and OrlixContainer handles. A third-party app may launch an OrlixProcess through pipes without constructing a terminal. OrlixKit must not expose syscall, file, mount, task, cgroup, package-manager, or private host-mechanics APIs.
+
+OrlixMLibC, OrlixCoreUtils, guest packages, and rootfs/images are Linux guest or distribution artifacts. They may be packaged by OrlixKit, but they are not Apple-native private link dependencies.
 
 ## Current Proof Boundary Snapshot
 
