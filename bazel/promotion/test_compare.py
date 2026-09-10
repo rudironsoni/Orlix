@@ -133,9 +133,12 @@ class PromotionCompareTests(unittest.TestCase):
         body = text.read_text(encoding="utf-8")
         self.assertIn('promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"', body)
         self.assertIn("--nouse_action_cache", body)
+        promote = body.split("define ORLIX_BAZEL_PROMOTE")[1].split("endef")[0]
+        self.assertIn("--remote_cache= --remote_executor=", promote)
         self.assertIn("ORLIX_KBUILD_PERSIST=", body)
         self.assertIn("bazel/promotion/sign.py", body)
         self.assertIn("unsigned promote must not Cosign-sign", body)
+        self.assertIn("env -u ORLIX_COSIGN_KEY -u ORLIX_PROMOTE_ARTIFACT", body)
         self.assertIn("unsigned promote mutated artifacts.lock.json", body)
         self.assertIn("__bazel-reconstruct-source", body)
         self.assertIn("--config=promoted", body)
@@ -162,7 +165,7 @@ class PromotionCompareTests(unittest.TestCase):
         rootfs = (root / "bazel/feasibility/rootfs/rootfs.bzl").read_text(encoding="utf-8")
         self.assertIn('cd "$base_tree"', rootfs)
         self.assertIn('shasum -a 256 < "$payload_metadata"', rootfs)
-        self.assertIn("touch -t 197001010000", rootfs)
+        self.assertIn('"$work/gen_init_cpio" -t 1', rootfs)
         self.assertIn("pkg.source_input_digest", rootfs)
         self.assertIn("kbuild-archive.tar", (root / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8"))
 

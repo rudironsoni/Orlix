@@ -40,6 +40,7 @@ def _rootfs_impl(ctx):
         progress_message = "Assembling feasibility rootfs, initramfs, and ext4",
         command = r"""
 set -euo pipefail
+umask 022
 exec_root="$PWD"
 trees_file="$exec_root/$1"
 gen_init_cpio_src="$exec_root/$2"
@@ -64,9 +65,11 @@ esac
 hostcc="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 mke2fs="$(/usr/bin/command -v mke2fs)"
+debugfs="$(/usr/bin/command -v debugfs)"
 test -x "$hostcc"
 test -n "$sdkroot"
 test -n "$mke2fs"
+test -x "$debugfs"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-rootfs.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 "$hostcc" -isysroot "$sdkroot" -O2 -o "$work/gen_init_cpio" "$gen_init_cpio_src"
@@ -104,20 +107,35 @@ test -x "$base_tree/usr/bin/curl"
 test -x "$base_tree/usr/bin/zsh"
 /bin/ln -sf bash "$base_tree/bin/sh"
 test -x "$work/init"
-TZ=UTC /usr/bin/touch -t 197001010000 "$work/init"
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$work/init"' 0755 0 0' > "$work/initramfs.list"
-"$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
+"$work/gen_init_cpio" -t 1 "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
 test -s "$initramfs_out"
 /bin/dd if=/dev/zero of="$base_ext4" bs=1048576 count=256 status=none
 /bin/dd if=/dev/zero of="$state_ext4" bs=1048576 count=8 status=none
-"$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$base_tree" "$base_ext4"
-"$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
-/usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
+build_ext4() {
+  tree="$1"
+  image="$2"
+  label="$3"
+  SOURCE_DATE_EPOCH=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001 -d "$tree" "$image"
+  (cd "$tree" && /usr/bin/find . -print | /usr/bin/sort) > "$work/paths"
+  while IFS= read -r path; do
+    [ "$path" != . ] || continue
+    /usr/bin/printf 'set_inode_field "%s" uid 0\nset_inode_field "%s" gid 0\n' "${path#.}" "${path#.}"
+  done < "$work/paths" > "$work/owners"
+  SOURCE_DATE_EPOCH=1 "$debugfs" -w -f "$work/owners" "$image" > "$work/owners.out" 2> "$work/owners.err"
+  if /usr/bin/grep -Ev '^(debugfs [0-9].*|[[:space:]]*)$' "$work/owners.err"; then exit 1; fi
+}
+build_ext4 "$base_tree" "$base_ext4" ORLIXROOT
+build_ext4 "$state_tree" "$state_ext4" ORLIXSTATE
+(cd "$base_tree" && /usr/bin/find . -print | /usr/bin/sort) > "$file_manifest"
 /usr/bin/printf 'init=/init\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\nshell=/bin/sh\n' > "$payload_metadata"
 digest="$( (
   cd "$base_tree"
   /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256
   /usr/bin/shasum -a 256 < "$payload_metadata"
+  /usr/bin/shasum -a 256 < "$initramfs_out"
+  /usr/bin/shasum -a 256 < "$base_ext4"
+  /usr/bin/shasum -a 256 < "$state_ext4"
 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
