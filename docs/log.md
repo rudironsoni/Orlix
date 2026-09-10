@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Match Apple's registered application identity
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) uses `com.rudironsoni.Orlix` and the matching extension prefix. Xcode could obtain the full-capability Development profile with this registered spelling. Bazel resolves installed profiles for device builds, and the extension entitlement expands to its exact bundle identifier. Make checks both signatures before accepting the IPA. Release identity consumers use the same spelling; existing cloud, keychain, App Group, and widget identifiers remain unchanged. Device installation and runtime proof remain separate gates.
+
 ## [2026-09-10] fix | Keep rootfs assembly inside its producing action
 
 [Rootfs promotion](objects/task/doing/implement-component-and-buildset-promotion.md) exposes the filesystem images and metadata consumed by OrlixOS. Temporary assembly trees remain inside the build action. Existing content checks now inspect the ext4 images, including executable modes, root ownership, the shell link, and required empty directories. The cache comparison continues to check every declared output.

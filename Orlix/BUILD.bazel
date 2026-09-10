@@ -1,3 +1,4 @@
+load("@rules_apple//apple:apple.bzl", "local_provisioning_profile")
 load("@rules_apple//apple:ios.bzl", "ios_application", "ios_extension", "ios_framework", "ios_ui_test")
 load("@rules_apple//apple:resources.bzl", "apple_resource_group")
 load("@rules_apple//apple:xcarchive.bzl", "xcarchive")
@@ -6,6 +7,20 @@ load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
 package(default_visibility = ["//visibility:public"])
+
+local_provisioning_profile(
+    name = "OrlixDevelopmentProfile",
+    profile_name = "iOS Team Provisioning Profile: com.rudironsoni.Orlix",
+    tags = ["manual"],
+    team_id = "ZQ3L7M567L",
+)
+
+local_provisioning_profile(
+    name = "OrlixLiveActivityDevelopmentProfile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = "ZQ3L7M567L",
+)
 
 cc_library(
     name = "ghostty_headers",
@@ -95,13 +110,21 @@ swift_library(
 
 ios_extension(
     name = "OrlixLiveActivity",
-    bundle_id = "com.rudironsoni.orlix.live-activity",
+    bundle_id = "com.rudironsoni.Orlix.live-activity",
+    entitlements = select({
+        "//bazel/feasibility/native:ios_device": "OrlixLiveActivity/Bazel.entitlements",
+        "//conditions:default": None,
+    }),
     families = [
         "iphone",
         "ipad",
     ],
     infoplists = ["OrlixLiveActivity/BazelInfo.plist"],
     minimum_os_version = "16.1",
+    provisioning_profile = select({
+        "//bazel/feasibility/native:ios_device": ":OrlixLiveActivityDevelopmentProfile",
+        "//conditions:default": None,
+    }),
     resources = glob(["OrlixLiveActivity/Assets.xcassets/**"]) + glob(["OrlixLiveActivity/Resources/**"]),
     tags = ["manual"],
     deps = [":OrlixLiveActivityLibrary"],
@@ -147,7 +170,7 @@ ios_framework(
 
 ios_application(
     name = "Orlix",
-    bundle_id = "com.rudironsoni.orlix",
+    bundle_id = "com.rudironsoni.Orlix",
     entitlements = "Orlix-iOS/Bazel.entitlements",
     extensions = [":OrlixLiveActivity"],
     frameworks = [":OrlixOSFramework"],
@@ -157,6 +180,10 @@ ios_application(
     ],
     infoplists = ["Orlix-iOS/BazelInfo.plist"],
     minimum_os_version = "15.0",
+    provisioning_profile = select({
+        "//bazel/feasibility/native:ios_device": ":OrlixDevelopmentProfile",
+        "//conditions:default": None,
+    }),
     resources = [
         "//Orlix/Orlix/Resources:folder_resources",
         "//Orlix/Orlix/Resources:bundle_resources",

@@ -37,7 +37,7 @@ class CapabilityGateTests(unittest.TestCase):
 
     def expected_entitlements(self) -> dict:
         return {
-            "application-identifier": "TESTTEAM.com.rudironsoni.orlix",
+            "application-identifier": "TESTTEAM.com.rudironsoni.Orlix",
             "keychain-access-groups": ["TESTTEAM.com.rudironsoni.orlix"],
             "com.apple.developer.icloud-container-identifiers": ["iCloud.com.rudironsoni.orlix"],
             "com.apple.developer.icloud-services": ["CloudKit"],
@@ -52,7 +52,7 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             app / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.orlix",
+                "CFBundleIdentifier": "com.rudironsoni.Orlix",
                 "CFBundleDisplayName": "Orlix",
                 "MinimumOSVersion": "15.0",
                 "ITSAppUsesNonExemptEncryption": False,
@@ -66,7 +66,7 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             extension / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.orlix.live-activity",
+                "CFBundleIdentifier": "com.rudironsoni.Orlix.live-activity",
                 "CFBundleExecutable": "OrlixLiveActivity",
                 "MinimumOSVersion": "16.1",
             },

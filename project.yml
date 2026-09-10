@@ -579,7 +579,7 @@ targets:
           - -framework
           - UIKit
         OTHER_MTLFLAGS: -Wno-c++17-extensions
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
         PRODUCT_NAME: Orlix
         APP_REVIEW_CODE: ORLIX-REVIEW-2026
         ORLIX_ANALYTICS_ENABLED: NO
@@ -710,7 +710,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Orlix/OrlixLiveActivity/Info.plist
         IPHONEOS_DEPLOYMENT_TARGET: "16.1"
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.live-activity
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.live-activity
         PRODUCT_NAME: OrlixLiveActivity
         SKIP_INSTALL: YES
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator

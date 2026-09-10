@@ -389,7 +389,7 @@ __bazel-xcode-cloud-project-check:
 	@test -d OrlixCloud.xcodeproj
 	@test -f OrlixCloud.xcodeproj/xcshareddata/xcschemes/OrlixCloud.xcscheme
 	@rg -q '__bazel-feasibility-bootstrap' OrlixCloud.xcodeproj/project.pbxproj
-	@rg -q 'PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.orlix;' OrlixCloud.xcodeproj/project.pbxproj
+	@rg -q 'PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.Orlix;' OrlixCloud.xcodeproj/project.pbxproj
 	@rg -q 'DEVELOPMENT_TEAM = ZQ3L7M567L;' OrlixCloud.xcodeproj/project.pbxproj
 	@rg -q 'CODE_SIGN_STYLE = Automatic;' OrlixCloud.xcodeproj/project.pbxproj
 	@rg -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;' OrlixCloud.xcodeproj/project.pbxproj
@@ -568,6 +568,10 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
 	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
 	test -x "$$ipa_work/Payload/Orlix.app/Orlix"; \
+	if [ "$(ORLIX_BAZEL_DESTINATION)" = iphoneos ]; then \
+	/usr/bin/codesign --verify --deep --strict "$$ipa_work/Payload/Orlix.app"; \
+	python3 -c 'import plistlib,subprocess,sys; from pathlib import Path; app=Path(sys.argv[1]); assert all(plistlib.loads(subprocess.run(["codesign","-d","--entitlements",":-",str(bundle)],check=True,capture_output=True).stdout)["application-identifier"].split(".",1)[1] == plistlib.loads((bundle/"Info.plist").read_bytes())["CFBundleIdentifier"] for bundle in [app,*app.glob("PlugIns/*.appex")]), "app or extension signing identifier differs from its bundle identifier"' "$$ipa_work/Payload/Orlix.app"; \
+	fi; \
 	test -s "$$ipa_work/Payload/Orlix.app/mlx-swift_Cmlx.bundle/default.metallib" || { echo "missing compiled MLX shader library" >&2; exit 1; }; \
 	os_binary="$$ipa_work/Payload/Orlix.app/Frameworks/OrlixOS.framework/OrlixOS"; \
 	test -x "$$os_binary" || { echo "missing embedded OrlixOS.framework" >&2; exit 1; }; \
@@ -605,7 +609,7 @@ __bazel-orlix-archive: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	archive="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$archive_rel"; \
 	test -s "$$archive/Info.plist" || { echo "missing Bazel xcarchive metadata" >&2; exit 1; }; \
 	test -d "$$archive/dSYMs/Orlix.app.dSYM" || { echo "missing Orlix archive debug symbols" >&2; exit 1; }; \
-	python3 -c 'import plistlib,sys; from pathlib import Path; p=plistlib.loads((Path(sys.argv[1])/"Info.plist").read_bytes())["ApplicationProperties"]; assert p["CFBundleIdentifier"] == "com.rudironsoni.orlix"; assert p.get("Team") == sys.argv[2], "archive signing team mismatch"; assert p.get("SigningIdentity"), "archive has no signing identity"' "$$archive" "$(ORLIX_DEVELOPMENT_TEAM)"; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; p=plistlib.loads((Path(sys.argv[1])/"Info.plist").read_bytes())["ApplicationProperties"]; assert p["CFBundleIdentifier"] == "com.rudironsoni.Orlix"; assert p.get("Team") == sys.argv[2], "archive signing team mismatch"; assert p.get("SigningIdentity"), "archive has no signing identity"' "$$archive" "$(ORLIX_DEVELOPMENT_TEAM)"; \
 	/usr/bin/codesign --verify --deep --strict "$$archive/Products/Applications/Orlix.app"; \
 	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
 	if [ -e "$(ORLIX_BETA_ARCHIVE_PATH)" ]; then previous="$$(mktemp -d "$(ORLIX_BETA_ARCHIVE_DIR)/previous-archive.XXXXXX")"; mv "$(ORLIX_BETA_ARCHIVE_PATH)" "$$previous/Orlix.xcarchive"; fi; \

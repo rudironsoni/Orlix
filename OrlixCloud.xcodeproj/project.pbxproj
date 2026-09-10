@@ -215,7 +215,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.orlix;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.Orlix;
 				PROVISIONING_PROFILE_SPECIFIER = "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -300,7 +300,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.orlix;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rudironsoni.Orlix;
 				PROVISIONING_PROFILE_SPECIFIER = "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

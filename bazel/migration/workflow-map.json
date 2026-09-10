@@ -845,7 +845,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "d8ee954729828522a20bee76414b82a4501bc9a8549c66a36beef0d7c3e0f837",
+      "source_sha256": "85d274791df347b82a44c8449ab772f99fc98b3e5a6605f6e721125eeb877fc9",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -945,7 +945,7 @@
                 "name": "Download app provisioning profile",
                 "uses": "Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594",
                 "with": {
-                  "bundle-id": "com.rudironsoni.orlix",
+                  "bundle-id": "com.rudironsoni.Orlix",
                   "profile-type": "IOS_APP_STORE",
                   "issuer-id": "${{ vars.APPSTORE_ISSUER_ID }}",
                   "api-key-id": "${{ vars.APPSTORE_API_KEY_ID }}",
@@ -956,7 +956,7 @@
                 "name": "Download Live Activity provisioning profile",
                 "uses": "Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594",
                 "with": {
-                  "bundle-id": "com.rudironsoni.orlix.live-activity",
+                  "bundle-id": "com.rudironsoni.Orlix.live-activity",
                   "profile-type": "IOS_APP_STORE",
                   "issuer-id": "${{ vars.APPSTORE_ISSUER_ID }}",
                   "api-key-id": "${{ vars.APPSTORE_API_KEY_ID }}",

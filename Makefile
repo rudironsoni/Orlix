@@ -122,7 +122,7 @@ ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_ORDINAL_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_ordinal_ledger_test
 ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_completion_semantic_provenance_test
-ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
+ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk

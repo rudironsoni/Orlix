@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
   "source_file": "project.yml",
-  "source_sha256": "a91287160dcf13e93e188ea69cabb9263e19e614151a0568ea55a0c65e3e21fc",
+  "source_sha256": "6d0ab1c7cb8ab9d8adee7a37475c8732dce8bc3a8a7fae4b5f1739a85f371d9c",
   "project": {
     "name": "Orlix",
     "options": {
@@ -609,7 +609,7 @@
               "UIKit"
             ],
             "OTHER_MTLFLAGS": "-Wno-c++17-extensions",
-            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.Orlix",
             "PRODUCT_NAME": "Orlix",
             "APP_REVIEW_CODE": "ORLIX-REVIEW-2026",
             "ORLIX_ANALYTICS_ENABLED": false,
@@ -884,7 +884,7 @@
             "GENERATE_INFOPLIST_FILE": false,
             "INFOPLIST_FILE": "Orlix/OrlixLiveActivity/Info.plist",
             "IPHONEOS_DEPLOYMENT_TARGET": "16.1",
-            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.live-activity",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.Orlix.live-activity",
             "PRODUCT_NAME": "OrlixLiveActivity",
             "SKIP_INSTALL": true,
             "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
