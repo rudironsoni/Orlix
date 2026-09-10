@@ -21,6 +21,7 @@ SKIPPED_PARTS = {
     (".opencode", "skills", "rulesync"),
     ("tools", "docs"),
     ("Build",),
+    ("third_party", "swift", ".build"),
     (".git",),
 }
 

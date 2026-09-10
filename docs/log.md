@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] record | Exclude generated Swift checkouts from the legacy-path scan
+
+The legacy documentation-path check excludes `third_party/swift/.build`, which contains generated dependency checkouts. References inside those checkouts belong to their upstream projects. Repository source and maintained documentation remain in the scan.
+
 ## [2026-09-10] record | Bind lock proposals to signed promotion runs
 
 [Protected Bazel automation](objects/task/doing/implement-protected-bazel-automation.md) now requires successful promotion runs from the same main commit, signature verification, and full component-tree comparison during source reconstruction. The task remains in progress. These rules do not establish live signing, runtime proof, or cutover completion.
