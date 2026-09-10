@@ -14,7 +14,7 @@ extension TerminalKeyboardCoordinatorTests {
         func reconnectWithTypingIntentKeepsOneInputSessionOwner() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -57,7 +57,7 @@ extension TerminalKeyboardCoordinatorTests {
         func onlyActiveTerminalSceneActivationRequestsDeferredPresentationRepair() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -100,7 +100,7 @@ extension TerminalKeyboardCoordinatorTests {
         func appSwitchPreservesResponderAndTypingIntent() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -151,7 +151,7 @@ extension TerminalKeyboardCoordinatorTests {
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.keyboardLayoutFrame = floating
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
     
             coordinator.setViewActive(true)
             coordinator.keyboardUITestReceiveKeyboardEndFrame(floating, isLocal: true)
@@ -261,7 +261,7 @@ extension TerminalKeyboardCoordinatorTests {
             let docked = CGRect(x: 0, y: 650, width: 1_366, height: 374)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -293,7 +293,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -334,7 +334,7 @@ extension TerminalKeyboardCoordinatorTests {
             let docked = CGRect(x: 0, y: 650, width: 1_366, height: 374)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -364,7 +364,7 @@ extension TerminalKeyboardCoordinatorTests {
             let floating = CGRect(x: 930, y: 620, width: 320, height: 280)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -401,7 +401,7 @@ extension TerminalKeyboardCoordinatorTests {
             let floatingEnd = CGRect(x: 700, y: 500, width: 320, height: 280)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -448,7 +448,7 @@ extension TerminalKeyboardCoordinatorTests {
             let floating = CGRect(x: 930, y: 620, width: 320, height: 280)
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -483,7 +483,7 @@ extension TerminalKeyboardCoordinatorTests {
             let session = TerminalKeyboardInputSessionSpy()
             session.snapshot.keyboardLayoutFrame = floating
             session.snapshot.screenFrame = screen
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -513,7 +513,7 @@ extension TerminalKeyboardCoordinatorTests {
         func sceneActivationRepairsAcquiredSessionOnceWhenKeyboardNeverPresents() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }

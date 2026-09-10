@@ -1102,6 +1102,19 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
         let presentationRequest = pendingPresentationRequest
         let before = terminal.keyboardCoordinatorDiagnosticSnapshot()
+        if !activeTerminalSceneIsForeground,
+           inputs.viewActive,
+           inputs.activePaneInputEligible,
+           inputs.activePaneWindowAttached,
+           !inputs.findNavigatorActive {
+            logSteady(
+                inputSessionDesired: inputSessionDesired,
+                keyboardPresentationDesired: keyboardPresentationDesired,
+                inputs: inputs,
+                before: before
+            )
+            return
+        }
         recordLocalInputOwnershipIfNeeded(
             snapshot: before
         )
