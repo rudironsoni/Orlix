@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] record | Make the UAPI component archive reproducible
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) compares the full UAPI trees from two independent builds. Kbuild uses a source-child output directory so its saved commands contain relative paths. Archive serialization fixes ownership and timestamps and omits macOS extended metadata while retaining file contents. MLibC full-tree comparison still fails. Signed publication requires the trusted signing key.
+
 ## [2026-09-10] record | Connect the OrlixOS framework and test host to Bazel
 
 [The Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) now declares the embedded OrlixOS framework, profile device trees, target-derived plist, and OrlixOSTestApp test suites. Its initramfs contains the existing OrlixOS root initializer. The task remains in progress. Build and packaging checks do not establish runtime conformance, signing, parity, or cutover.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import os
 import unittest
 from pathlib import Path
 
@@ -8,6 +9,19 @@ import kbuild_persist as persist
 
 
 class KbuildPersistTests(unittest.TestCase):
+    def test_archive_bytes_do_not_depend_on_source_timestamps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            source = root / "header.h"
+            source.write_bytes(b"#define VALUE 1\n")
+            first, second = Path(tmp) / "first.tar", Path(tmp) / "second.tar"
+            persist.write_archive(str(root), str(first))
+            os.utime(source, (1000, 1000))
+            persist.write_archive(str(root), str(second))
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            self.assertEqual(source.stat().st_mtime, 1000)
+
     def test_identity_includes_linux_revision_tag_and_xcode_build(self) -> None:
         ident = persist.identity("6.12.105", "14c37ff05f22da2fa7076d10f6a07c7ede330c83", "17F113")
         self.assertIn("6.12.105", ident)

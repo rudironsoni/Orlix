@@ -71,9 +71,10 @@ if [ "$reused" -eq 0 ]; then
   linux_src="$(/usr/bin/dirname "$linux_makefile")"
   work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-linux-uapi.XXXXXX")"
   trap '/bin/rm -rf "$work"' EXIT
-  /bin/mkdir -p "$work/linux" "$work/kbuild" "$work/hdr"
+  /bin/mkdir -p "$work/linux" "$work/hdr"
   /bin/cp -R "$linux_src/." "$work/linux"
   /usr/bin/find "$work/linux" -type d -exec /bin/chmod u+w {} +
+  /bin/mkdir -p "$work/linux/.orlix-uapi-build"
   cd "$work/linux"
   env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
       -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
@@ -81,13 +82,13 @@ if [ "$reused" -eq 0 ]; then
       KBUILD_BUILD_TIMESTAMP="1970-01-01" \
       KBUILD_BUILD_USER="orlix" \
       KBUILD_BUILD_HOST="bazel" \
-      "$gmake" -j1 -C "$work/linux" O="$work/kbuild" ARCH=arm64 LLVM=1 \
+      "$gmake" -j1 -C "$work/linux" O="$work/linux/.orlix-uapi-build" ARCH=arm64 LLVM=1 \
           HOSTCC="$hostcc" INSTALL_HDR_PATH="$work/hdr" headers_install
   test -s "$work/hdr/include/linux/unistd.h"
   test -s "$work/hdr/include/asm/unistd.h"
   /bin/mkdir -p "$headers_out"
   /bin/cp -R "$work/hdr/include" "$headers_out/include"
-  /usr/bin/tar -C "$work/kbuild" -cf "$archive_out" .
+  /usr/bin/python3 "$persist_py" archive "$work/linux/.orlix-uapi-build" "$archive_out"
   if [ -n "$persist_dir" ]; then
     /usr/bin/python3 "$persist_py" store "$persist_dir" "$ident" "$headers_out" "$archive_out"
   fi

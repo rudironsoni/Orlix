@@ -5,11 +5,26 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import tarfile
 from pathlib import Path
 
 
 def identity(linux_revision: str, linux_tag_commit: str, xcode_build: str) -> str:
-    return f"{linux_revision}:{linux_tag_commit}:{xcode_build}"
+    return f"archive-v2:{linux_revision}:{linux_tag_commit}:{xcode_build}"
+
+
+def write_archive(source: str, output: str) -> None:
+    def normalized(info: tarfile.TarInfo) -> tarfile.TarInfo:
+        info.uid = 0
+        info.gid = 0
+        info.uname = ""
+        info.gname = ""
+        info.mtime = 0
+        info.pax_headers = {}
+        return info
+
+    with tarfile.open(output, "w", format=tarfile.PAX_FORMAT) as archive:
+        archive.add(source, arcname=".", filter=normalized)
 
 
 def can_reuse(persist_dir: str, ident: str) -> bool:
@@ -58,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     ident_p.add_argument("linux_revision")
     ident_p.add_argument("linux_tag_commit")
     ident_p.add_argument("xcode_build")
+    archive_p = sub.add_parser("archive")
+    archive_p.add_argument("source")
+    archive_p.add_argument("output")
     reuse_p = sub.add_parser("reuse")
     reuse_p.add_argument("persist_dir")
     reuse_p.add_argument("ident")
@@ -74,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "reuse":
         return 0 if reuse_outputs(args.persist_dir, args.ident, args.headers_out, args.archive_out) else 1
+    if args.cmd == "archive":
+        write_archive(args.source, args.output)
+        return 0
     store_outputs(args.persist_dir, args.ident, args.headers_src, args.archive_src)
     return 0
 
