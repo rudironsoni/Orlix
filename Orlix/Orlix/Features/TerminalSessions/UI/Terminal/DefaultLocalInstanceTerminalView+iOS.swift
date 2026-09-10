@@ -5,156 +5,115 @@ import UIKit
 
 #if os(iOS)
 struct DefaultLocalInstanceTerminalView: View {
+    let tabManager: TerminalTabManager
+    @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.darkTheme) private var terminalThemeName = "Orlix Dark"
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.lightTheme) private var terminalThemeNameLight = "Orlix Light"
-    @AppStorage(TerminalThemeUserDefaultsKeys.live.usesPerAppearanceTheme) private var usePerAppearanceTheme = true
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
+    @State private var paneId = UUID()
+    @State private var isVisible = false
+    @State private var surfaceChange: TerminalSurfaceStoreChange?
 
-    private var effectiveThemeName: String {
-        guard usePerAppearanceTheme else { return terminalThemeName }
-        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+    init(tabManager: TerminalTabManager) {
+        self.tabManager = tabManager
+        _keyboardCoordinator = ObservedObject(wrappedValue: tabManager.keyboardCoordinator)
+    }
+
+    private var appearance: TerminalAppearanceSnapshot {
+        terminalThemeManager.appearanceSnapshot(for: colorScheme == .dark ? .dark : .light)
     }
 
     var body: some View {
         GeometryReader { geometry in
-            DefaultLocalInstanceTerminalRepresentable(
-                size: geometry.size,
-                ghosttyReadiness: ghosttyApp.readiness,
-                terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
-                    profile: terminalAccessoryPreferencesManager.profile,
-                    showsDismissKeyboardButton: keyboardDismissButtonEnabled
-                )
-            )
+            ZStack {
+                Color.fromHex(appearance.activeTheme.palette.backgroundHex)
+                if ghosttyApp.readiness == .ready {
+                    DefaultLocalInstanceTerminalRepresentable(
+                        paneId: paneId,
+                        tabManager: tabManager,
+                        size: geometry.size,
+                        terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot(
+                            profile: terminalAccessoryPreferencesManager.profile,
+                            showsDismissKeyboardButton: keyboardDismissButtonEnabled
+                        )
+                    )
+                }
+            }
         }
-        .background(ThemeColorParser.backgroundColor(for: effectiveThemeName)!)
+        .terminalKeyboardAvoidance(
+            focusedPaneId: paneId,
+            paneIds: [paneId],
+            terminalSurfaceChange: surfaceChange,
+            terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
+            keyboardCoordinator: keyboardCoordinator
+        )
         .navigationTitle("Orlix")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .onReceive(tabManager.terminalSurfaceStore.changes) { surfaceChange = $0 }
+        .task(id: appearance) {
             Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
-                .info("local instance terminal appeared; starting Ghostty")
-            ghosttyApp.startIfNeeded()
+                .info("local instance terminal appeared; starting shared Ghostty surface")
+            ghosttyApp.startIfNeeded(appearance: terminalThemeManager.activateAppearance(
+                colorScheme == .dark ? .dark : .light
+            ))
+        }
+        .onAppear {
+            isVisible = true
+            keyboardCoordinator.setActivePane(paneId)
+            keyboardCoordinator.setViewActive(scenePhase == .active)
+        }
+        .onChange(of: scenePhase) { phase in
+            keyboardCoordinator.setViewActive(isVisible && phase == .active)
+        }
+        .onDisappear {
+            isVisible = false
+            keyboardCoordinator.setViewActive(false)
+            keyboardCoordinator.setActivePane(nil)
         }
     }
 }
 
-private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
-    @EnvironmentObject private var ghosttyApp: GhosttyRuntime
-
+private struct DefaultLocalInstanceTerminalRepresentable: View {
+    let paneId: UUID
+    let tabManager: TerminalTabManager
     let size: CGSize
-    let ghosttyReadiness: GhosttyRuntime.Readiness
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeUIView(context: Context) -> LocalTerminalContainerView {
-        LocalTerminalContainerView()
-    }
-
-    func updateUIView(_ uiView: LocalTerminalContainerView, context: Context) {
-        if ghosttyApp.app == nil {
-            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
-                .info("local instance waiting for Ghostty readiness=\(ghosttyReadiness.rawValue, privacy: .public)")
-        }
-        uiView.installTerminalIfNeeded(
-            app: ghosttyApp.app,
-            appWrapper: ghosttyApp,
+    var body: some View {
+        TerminalPaneSurface(
+            paneId: paneId.uuidString,
+            size: size,
+            isActive: true,
+            presentationOverrides: .empty,
             terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
-            coordinator: context.coordinator
+            makeBackend: { Coordinator(paneId: paneId, tabManager: tabManager) },
+            reusableTerminal: { _ in nil },
+            configure: { terminal, coordinator, _ in
+                terminal.accessibilityIdentifier = "orlix.local-instance.terminal"
+                terminal.accessibilityLabel = "Orlix local terminal"
+                terminal.accessibilityValue = "initializing"
+                #if DEBUG
+                if Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-local-terminal") {
+                    terminal.keyboardUITestSetHardwareKeyboardAttached(false)
+                }
+                #endif
+                coordinator.attach(to: terminal)
+                terminal.onReady = { [weak coordinator, weak terminal] in
+                    guard let terminal else { return }
+                    coordinator?.terminalDidBecomeReady(terminal)
+                }
+            },
+            update: { _, _ in },
+            dismantle: { _, coordinator in coordinator.stop() }
         )
-        uiView.updateAvailableSize(size)
-    }
-
-    static func dismantleUIView(_ uiView: LocalTerminalContainerView, coordinator: Coordinator) {
-        coordinator.stop()
-    }
-
-    final class LocalTerminalContainerView: UIView {
-        private(set) weak var terminal: GhosttyTerminalView?
-        private var lastReportedSize: CGSize?
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            backgroundColor = .clear
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            synchronizeTerminalGeometry()
-        }
-
-        func installTerminalIfNeeded(
-            app: ghostty_app_t?,
-            appWrapper: GhosttyRuntime,
-            terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot,
-            coordinator: Coordinator
-        ) {
-            guard terminal == nil else { return }
-            guard let app else {
-                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
-                    .info("local instance skipped Ghostty install; app is nil")
-                return
-            }
-            Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
-                .info("local instance installing Ghostty surface")
-
-            let initialSize = bounds.width > 0 && bounds.height > 0
-                ? bounds.size
-                : CGSize(width: 800, height: 600)
-            let terminal = GhosttyTerminalView(
-                frame: CGRect(origin: .zero, size: initialSize),
-                worktreePath: NSHomeDirectory(),
-                ghosttyApp: app,
-                appWrapper: appWrapper,
-                paneId: "orlix.local.default",
-                terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
-                useCustomIO: true
-            )
-            terminal.accessibilityIdentifier = "orlix.local-instance.terminal"
-            terminal.accessibilityLabel = "Orlix local terminal"
-            terminal.accessibilityValue = "initializing"
-            terminal.isAccessibilityElement = true
-            terminal.acceptsTerminalInput = true
-            terminal.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            coordinator.attach(to: terminal)
-            terminal.onReady = { [weak self, weak coordinator, weak terminal] in
-                guard let self, let terminal else { return }
-                self.synchronizeTerminalGeometry(force: true)
-                coordinator?.terminalDidBecomeReady(terminal)
-            }
-            addSubview(terminal)
-            self.terminal = terminal
-            synchronizeTerminalGeometry(force: true)
-        }
-
-        func updateAvailableSize(_ size: CGSize) {
-            guard size.width > 0, size.height > 0 else { return }
-            if bounds.size != size {
-                setNeedsLayout()
-            }
-            synchronizeTerminalGeometry()
-        }
-
-        private func synchronizeTerminalGeometry(force: Bool = false) {
-            guard bounds.width > 0, bounds.height > 0, let terminal else { return }
-            let size = bounds.size
-            terminal.frame = bounds
-            guard force || size != lastReportedSize else { return }
-            lastReportedSize = size
-            terminal.sizeDidChange(size)
-        }
     }
 
     final class Coordinator: @unchecked Sendable {
+        private let paneId: UUID
+        private let tabManager: TerminalTabManager
         private weak var terminal: GhosttyTerminalView?
         private var session: OrlixTerminalSession?
         private var output: OrlixTerminalOutput?
@@ -164,9 +123,18 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
         private var lastForwardedGridSize: (rows: UInt32, columns: UInt32)?
 
         @MainActor
+        init(paneId: UUID, tabManager: TerminalTabManager) {
+            self.paneId = paneId
+            self.tabManager = tabManager
+        }
+
+        @MainActor
         func attach(to terminal: GhosttyTerminalView) {
             self.terminal = terminal
+            tabManager.registerTerminalSurface(terminal, for: paneId, inputEligible: true)
             terminal.writeCallback = { [weak self] data in
+                Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
+                    .debug("local instance input bytes=\(data.count, privacy: .public)")
                 self?.session?.send(data)
             }
             terminal.setupWriteCallback()
@@ -240,7 +208,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
                 if let text = String(data: data, encoding: .utf8),
                    text.contains("orlix-init: process started pid=") {
                     Logger(subsystem: "com.rudironsoni.orlix", category: "LocalInstance")
-                        .info("local instance shell started")
+                        .info("local instance init reported child process start")
                 }
                 DispatchQueue.main.async {
                     self?.terminal?.feedData(data)
@@ -277,6 +245,9 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             output?.cancel()
             output = nil
             session = nil
+            if let terminal {
+                tabManager.unregisterTerminalSurface(terminal, for: paneId)
+            }
             terminal = nil
             latestGridSize = nil
             lastForwardedGridSize = nil

@@ -91,6 +91,7 @@ static void die(const char *message);
 static int read_cmdline_decoded(const char *key, char *value,
 				size_t value_size);
 static int read_cmdline_unsigned(const char *key, unsigned long *value);
+static int diagnostic_fd = STDERR_FILENO;
 
 static int write_all(int fd, const void *bytes, size_t length)
 {
@@ -118,14 +119,18 @@ static void write_literal(int fd, const char *message)
 	while (message[length] != '\0')
 		length++;
 
-	(void)write_all(fd, message, length);
+	(void)write_all(fd == STDERR_FILENO ? diagnostic_fd : fd,
+			message, length);
 }
 
 static void write_errno_message(int fd, const char *prefix, int error)
 {
-	write_literal(fd, prefix);
-	write_literal(fd, strerror(error));
-	write_literal(fd, "\n");
+	char buffer[512];
+	int length = snprintf(buffer, sizeof(buffer), "%s%s\n",
+			      prefix, strerror(error));
+
+	if (length > 0 && (size_t)length < sizeof(buffer))
+		write_literal(fd, buffer);
 }
 
 static void write_process_started(pid_t pid)
@@ -135,7 +140,7 @@ static void write_process_started(pid_t pid)
 			      "orlix-init: process started pid=%ld\n",
 			      (long)pid);
 	if (length > 0 && (size_t)length < sizeof(buffer))
-		(void)write_all(STDERR_FILENO, buffer, (size_t)length);
+		write_literal(STDERR_FILENO, buffer);
 }
 
 static void write_process_completion(pid_t pid, int status)
@@ -158,7 +163,7 @@ static void write_process_completion(pid_t pid, int status)
 	}
 
 	if (length > 0 && (size_t)length < sizeof(buffer))
-		(void)write_all(STDERR_FILENO, buffer, (size_t)length);
+		write_literal(STDERR_FILENO, buffer);
 }
 
 static void flush_filesystems_before_completion(void)
@@ -169,20 +174,6 @@ static void flush_filesystems_before_completion(void)
 				    "orlix-init: remount root read-only failed: ",
 				    errno);
 	sync();
-}
-
-static void write_unsigned_decimal(int fd, unsigned long value)
-{
-	char buffer[32];
-	size_t offset = sizeof(buffer);
-
-	buffer[--offset] = '\0';
-	do {
-		buffer[--offset] = (char)('0' + (value % 10));
-		value /= 10;
-	} while (value != 0);
-
-	(void)write_all(fd, &buffer[offset], sizeof(buffer) - offset - 1);
 }
 
 static int read_kernel_command_line(char *buffer, size_t size)
@@ -210,6 +201,7 @@ static int read_kernel_command_line(char *buffer, size_t size)
 static int open_controlling_tty(void)
 {
 	char command_line[ORLIX_INIT_CMDLINE_SIZE];
+	char message[128];
 	enum orlix_console_device device;
 	const char *path;
 	int policy_result;
@@ -239,9 +231,8 @@ static int open_controlling_tty(void)
 	if (path == NULL)
 		return -1;
 
-	write_literal(STDERR_FILENO, "orlix-init: opening configured tty ");
-	write_literal(STDERR_FILENO, path);
-	write_literal(STDERR_FILENO, "\n");
+	snprintf(message, sizeof(message), "orlix-init: opening configured tty %s\n", path);
+	write_literal(STDERR_FILENO, message);
 	fd = open(path, O_RDWR | O_NONBLOCK);
 	if (fd < 0) {
 		write_literal(STDERR_FILENO,
@@ -256,7 +247,7 @@ static int open_controlling_tty(void)
 	}
 
 	if (ioctl(fd, TIOCSCTTY, 0) < 0 && errno != EPERM)
-		write_literal(fd, "orlix-init: TIOCSCTTY failed\n");
+		write_literal(STDERR_FILENO, "orlix-init: TIOCSCTTY failed\n");
 
 	return fd;
 }
@@ -1562,12 +1553,11 @@ enum {
 
 static void die(const char *message)
 {
-	static const char prefix[] = "orlix-init: ";
-	static const char suffix[] = "\n";
+	char buffer[512];
+	int length = snprintf(buffer, sizeof(buffer), "orlix-init: %s\n", message);
 
-	(void)write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
-	(void)write(STDERR_FILENO, message, strlen(message));
-	(void)write(STDERR_FILENO, suffix, sizeof(suffix) - 1);
+	if (length > 0 && (size_t)length < sizeof(buffer))
+		write_literal(STDERR_FILENO, buffer);
 	_exit(127);
 }
 
@@ -2292,9 +2282,12 @@ static int wait_for_shell_exit(pid_t shell, int *status)
 
 static void write_shell_exit_status(int exit_status)
 {
-	write_literal(STDERR_FILENO, "orlix-init: shell exit status=");
-	write_unsigned_decimal(STDERR_FILENO, (unsigned long)exit_status);
-	write_literal(STDERR_FILENO, "\n");
+	char buffer[64];
+	int length = snprintf(buffer, sizeof(buffer),
+			      "orlix-init: shell exit status=%d\n", exit_status);
+
+	if (length > 0 && (size_t)length < sizeof(buffer))
+		write_literal(STDERR_FILENO, buffer);
 }
 
 static int relay_pty(int console_fd, int master, pid_t shell,
@@ -2809,6 +2802,10 @@ static pid_t start_command_on_pty(int master, int slave)
 			      "orlix-init: shell TIOCSPGRP failed\n");
 
 	install_stdio(slave);
+	if (diagnostic_fd != STDERR_FILENO) {
+		close(diagnostic_fd);
+		diagnostic_fd = STDERR_FILENO;
+	}
 	run_configured_command_child();
 	_exit(127);
 }
@@ -2906,6 +2903,12 @@ int main(void)
 	terminal = terminal_enabled();
 	if (!terminal)
 		goto runtime_setup;
+	diagnostic_fd = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+	if (diagnostic_fd < 0) {
+		write_errno_message(STDOUT_FILENO,
+				    "orlix-init: open /dev/kmsg failed: ", errno);
+		return 127;
+	}
 	if (mount_proc_filesystem() != 0) {
 		write_literal(STDERR_FILENO,
 			      "orlix-init: unable to read Linux console policy\n");

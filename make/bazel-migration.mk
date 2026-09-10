@@ -535,13 +535,16 @@ __bazel-orlixos: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS //Orlix:OrlixOSFramework //OrlixOSTestApp:OrlixOSTestApp //OrlixOSTestApp:OrlixOSTestAppTests //OrlixOSTestApp:OrlixKernelConformanceTests //OrlixOSTestApp:OrlixMLibCConformanceTests //OrlixOSTestApp:OrlixPackagesConformanceTests //OrlixOSTestApp:OrlixOSRuntimeTests --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
 
-.PHONY: __bazel-test-output-parser __bazel-test-native-smoke
-__bazel-test-output-parser __bazel-test-native-smoke: __bazel-feasibility-xcodeproj
+.PHONY: __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface
+__bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface: __bazel-feasibility-xcodeproj
 	@set -euo pipefail; \
 	case "$@" in \
 		__bazel-test-output-parser) test_scheme="OrlixOSTestApp Tests"; test_filter="OrlixOSTestAppTests/OrlixUpstreamTestOutputParserTests" ;; \
 		__bazel-test-native-smoke) test_scheme="NativeSmokeTests"; test_filter="NativeSmokeTests/NativeSmokeTests/testMLXMetalLibraryContainsCompiledKernels" ;; \
+		__bazel-test-terminal-surface) test_scheme="OrlixUITests"; test_filter="$(or $(ORLIX_APP_TEST_ONLY_TESTING),OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal)" ;; \
 	esac; \
+	test_filters=("-only-testing:$$test_filter"); \
+	if [ "$@" = "__bazel-test-terminal-surface" ] && [ -z "$(ORLIX_APP_TEST_ONLY_TESTING)" ]; then test_filters+=("-only-testing:OrlixUITests/TerminalProductionSSHUITests/testProductionSSHBackgroundPreservesSessionKeyboardAndTyping"); fi; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
 	result_dir="$$(mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/proof/$(patsubst __bazel-test-%,%,$@).XXXXXX")"; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild \
@@ -552,7 +555,7 @@ __bazel-test-output-parser __bazel-test-native-smoke: __bazel-feasibility-xcodep
 		-derivedDataPath "$(ORLIX_BUILD_ROOT)/Bazel/DerivedData/OutputParser" \
 		-resultBundlePath "$$result_dir/tests.xcresult" \
 		-parallel-testing-enabled NO \
-		-only-testing:"$$test_filter" \
+		"$${test_filters[@]}" \
 		test; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcrun xcresulttool get test-results summary --path "$$result_dir/tests.xcresult" > "$$result_dir/summary.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["result"] == "Passed" and p["passedTests"] > 0 and p["totalTestCount"] == p["passedTests"] and p["failedTests"] == p["skippedTests"] == p["expectedFailures"] == 0, p' "$$result_dir/summary.json"

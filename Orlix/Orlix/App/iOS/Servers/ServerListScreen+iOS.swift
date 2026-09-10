@@ -81,7 +81,7 @@ struct ServerListScreen: View {
         List {
             Section("Local") {
                 NavigationLink {
-                    DefaultLocalInstanceTerminalView()
+                    DefaultLocalInstanceTerminalView(tabManager: tabManager)
                 } label: {
                     Label("Orlix", systemImage: "terminal")
                 }

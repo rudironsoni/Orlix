@@ -11,6 +11,10 @@ updated: 2026-09-10
 
 The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) copies native source contents instead of preserving Bazel's repository symlinks. The old copy could configure OpenSSL inside the repository input and carry iOS objects into the simulator build. Each platform now builds in its own copied source directory.
 
+## [2026-09-10] fix | Share the local and remote terminal surface
+
+The [mobile terminal validation task](objects/task/doing/validate-mobile-terminal-simulator-product.md) requires one iOS surface for local Orlix and remote sessions. The shared surface owns Ghostty creation, appearance, geometry, and rendering. Local input uses the existing surface registry and keyboard coordinator. Init sends its diagnostics through Linux's kernel log so console formatting does not alter raw PTY data. The focused Make gate covers local keyboard behavior and the existing remote SSH regression.
+
 ## [2026-09-10] fix | Preserve required iOS bundle metadata and signing entitlements
 
 The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) preserves app and extension bundle names, package types, and plist versions. Both iOS signatures carry the team entitlement. The app's entitlements match Xcode's iOS signing output and exclude the macOS sandbox network keys. Make rejects missing bundle metadata and mismatched app or team signing identifiers before staging the IPA.

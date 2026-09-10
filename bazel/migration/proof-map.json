@@ -955,9 +955,21 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "__bazel-test-terminal-surface",
+      "source": "make/bazel-migration.mk",
+      "line": 539,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 638,
+      "line": 641,
       "classification": "private",
       "phony": true,
       "prerequisites": [

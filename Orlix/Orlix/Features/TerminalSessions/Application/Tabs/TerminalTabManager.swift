@@ -812,7 +812,7 @@ final class TerminalTabManager {
 
     // MARK: - Terminal Registry
 
-    func registerTerminalSurface(_ terminal: any TerminalSurface, for paneId: UUID) {
+    func registerTerminalSurface(_ terminal: any TerminalSurface, for paneId: UUID, inputEligible: Bool? = nil) {
         #if os(iOS)
         terminal.setLifecycleCallbacks(TerminalSurfaceLifecycleCallbacks(
             windowAttachmentChanged: { [weak self, weak terminal] _ in
@@ -853,7 +853,7 @@ final class TerminalTabManager {
         #endif
         let replacesRegisteredTerminal = terminalSurfaceStore.register(terminal, for: paneId)
         #if os(iOS)
-        terminal.acceptsTerminalInput = sessionState.paneState(for: paneId)?.connectionState.isConnected == true
+        terminal.acceptsTerminalInput = inputEligible ?? (sessionState.paneState(for: paneId)?.connectionState.isConnected == true)
         // A replacement is commonly registered before UIKit attaches it.
         // Publish that fact before reconciling its new identity so the
         // coordinator cannot spend an acquisition or repair off-window.
@@ -868,7 +868,11 @@ final class TerminalTabManager {
                 terminal.isAttachedToWindow,
                 for: paneId
             )
-            self.publishTerminalInputAvailability(for: paneId)
+            if let inputEligible {
+                self.keyboardCoordinator.setPaneInputEligible(inputEligible, for: paneId)
+            } else {
+                self.publishTerminalInputAvailability(for: paneId)
+            }
             self.setTerminalFindNavigatorVisible(terminal.isFindNavigatorVisible, for: paneId)
             self.keyboardCoordinator.setFindNavigatorActive(
                 terminal.isFindNavigatorVisible,
