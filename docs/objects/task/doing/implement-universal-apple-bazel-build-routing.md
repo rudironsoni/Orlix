@@ -23,6 +23,11 @@ Route every matrix row through the Bazel product graph for iOS, iPadOS, and Appl
 
 Keep Make as the stable repository-owned interface. Each Make operation delegates to a fixed Bazel target and preserves current command names unless a separate accepted decision changes them. The generated local Xcode project and committed Xcode Cloud project may provide indexing, debugging, previews, signing discovery, and workflow discovery, but neither project may compile sources or select dependencies through a second graph.
 
+The GNU Make delegation preserves dry-run behavior. Loaded makefiles have
+explicit empty recipes so the delegation catch-all cannot treat them as build
+goals during makefile regeneration. Recursive delegation passes Make flags to
+the required GNU Make version.
+
 The app Make target selects the requested profile, compilation mode, component mode, and iOS destination. The local Xcode project declares Debug and Release configurations. The archive target uses the upstream `rules_apple` `xcarchive` rule and requires archive metadata, debug symbols, the signing team, and a valid code signature before staging. IPA export remains the existing separate Make operation. Signed device builds and device project generation remain gated on compatible app and extension provisioning profiles.
 
 Do not make Bazel invoke the repository top-level or component wrapper Makefiles. Bazel may invoke upstream Kbuild, Meson and Ninja, or upstream Autotools and Make inside declared foreign-build actions. Keep Linux ownership, OrlixOS as the sole public SDK, private HostAdapter boundaries, Herdr terminal ownership, and all iOS 15 availability gates unchanged.

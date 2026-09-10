@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Preserve dry runs through GNU Make delegation
+
+[Make routing](objects/task/doing/implement-universal-apple-bazel-build-routing.md) excludes loaded makefiles from the delegation catch-all. The catch-all previously ran during makefile regeneration, so `make -n` could execute the requested target. Recursive delegation now preserves the caller's Make flags.
+
 ## [2026-09-10] fix | Package the real MLX Metal library
 
 The [Apple feasibility experiment](objects/task/doing/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.

@@ -10,7 +10,7 @@
     "OrlixMLibC/Makefile": "97e9c0e6ab14a119b47a8a83a7e046b5efaab47fe61d4ceb833ba22a77fd96b5",
     "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
     "make/bazel-migration.mk": "eb1d4cb6d3214cd796a95f6b42db395853ba4b708ba7d7bb1eb2d6838347d8f8",
-    "make/gnu-make-contract.mk": "e7f84fa9322c14125a3e855facf66f702d2c3c755b508bf36cbd1351467e1c9c",
+    "make/gnu-make-contract.mk": "33975f64db094c955695e2f03759edc308ed324face23147f84d58c0e7447a06",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
     "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
     "make/tcti-proof-registry-provenance.mk": "6033141ec62802ab315cc4f04f0732ba820c8896158f6642b5ec6b92742b154a"
@@ -5872,9 +5872,19 @@
       ]
     },
     {
-      "name": "%",
+      "name": "$(MAKEFILE_LIST)",
       "source": "make/gnu-make-contract.mk",
       "line": 33,
+      "classification": "generated-or-pattern",
+      "phony": false,
+      "prerequisites": [
+        ";"
+      ]
+    },
+    {
+      "name": "%",
+      "source": "make/gnu-make-contract.mk",
+      "line": 35,
       "classification": "generated-or-pattern",
       "phony": false,
       "prerequisites": [
@@ -5886,7 +5896,7 @@
     {
       "name": "__orlix-gnu-make-contract-reexec",
       "source": "make/gnu-make-contract.mk",
-      "line": 35,
+      "line": 37,
       "classification": "private",
       "phony": true,
       "prerequisites": [
