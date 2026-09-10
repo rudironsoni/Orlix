@@ -15,6 +15,10 @@ xcodeproj(
     ios_simulator_cpus = "sim_arm64",
     minimum_xcode_version = "26.6",
     project_name = "OrlixBazelFeasibility",
+    xcode_configurations = {
+        "Debug": {"//command_line_option:compilation_mode": "dbg"},
+        "Release": {"//command_line_option:compilation_mode": "opt"},
+    },
     tags = ["manual"],
     scheme_autogeneration_mode = "all",
     xcschemes = [

@@ -573,19 +573,19 @@ __bazel-test-output-parser: __bazel-feasibility-xcodeproj
 		test
 
 __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=dbg --config=release --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@set -euo pipefail; \
-	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=dbg --config=release --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
+	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
 	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
 	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
 	/usr/bin/unzip -l "$$ipa" | /usr/bin/grep -F 'Payload/Orlix.app/Info.plist'; \
-	/usr/bin/unzip -p "$$ipa" Payload/Orlix.app/Info.plist | /usr/bin/grep -F -q '15.0'; \
+	/usr/bin/unzip -p "$$ipa" Payload/Orlix.app/Info.plist | python3 -c 'import plistlib,sys; info=plistlib.loads(sys.stdin.buffer.read()); assert info["MinimumOSVersion"] == "15.0"; assert info["CFBundleSupportedPlatforms"] == [sys.argv[1]]' "$(if $(filter iphoneos,$(ORLIX_BAZEL_DESTINATION)),iPhoneOS,iPhoneSimulator)"; \
 	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
 	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
 	test -x "$$ipa_work/Payload/Orlix.app/Orlix"; \
 	os_binary="$$ipa_work/Payload/Orlix.app/Frameworks/OrlixOS.framework/OrlixOS"; \
 	test -x "$$os_binary" || { echo "missing embedded OrlixOS.framework" >&2; exit 1; }; \
-	python3 -c 'import plistlib,sys; from pathlib import Path; root=Path(sys.argv[1]); info=plistlib.loads((root/"Info.plist").read_bytes()); assert info["OrlixSelectedProfile"] == "release"; assert len(info["OrlixOSRootImages"]) == 4; paths=[info[key] for key in ("OrlixRootInitramfs", "OrlixBaseRootImage", "OrlixStateRootImage")]+["arch/orlix/boot/dts/release.dtb", "arch/orlix/boot/dts/development.dtb", "composition.json"]; missing=[name for name in paths if not (root/name).is_file() or (root/name).stat().st_size == 0]; assert not missing, missing' "$${os_binary%/*}"; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; root=Path(sys.argv[1]); info=plistlib.loads((root/"Info.plist").read_bytes()); assert info["OrlixSelectedProfile"] == sys.argv[2]; assert len(info["OrlixOSRootImages"]) == 4; paths=[info[key] for key in ("OrlixRootInitramfs", "OrlixBaseRootImage", "OrlixStateRootImage")]+["arch/orlix/boot/dts/release.dtb", "arch/orlix/boot/dts/development.dtb", "composition.json"]; missing=[name for name in paths if not (root/name).is_file() or (root/name).stat().st_size == 0]; assert not missing, missing' "$${os_binary%/*}" "$(PROFILE)"; \
 	/usr/bin/nm -gU "$$os_binary" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot' >/dev/null || { echo "missing defined _OrlixBoot in OrlixOS.framework" >&2; /usr/bin/nm -gU "$$os_binary" | /usr/bin/grep OrlixBoot >&2 || true; rm -rf "$$ipa_work"; exit 1; }; \
 	if /usr/bin/nm "$$os_binary" | /usr/bin/grep -E '[[:space:]]U[[:space:]]+_OrlixBoot' >/dev/null; then echo "_OrlixBoot must not remain undefined" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
 	/usr/bin/nm -gU "$$os_binary" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "missing defined _arch_boot_entry in OrlixOS.framework" >&2; /usr/bin/nm "$$os_binary" | /usr/bin/grep arch_boot_entry >&2 || true; rm -rf "$$ipa_work"; exit 1; }; \
@@ -610,20 +610,20 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log" || { echo "missing kernel link evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rm -rf "$$ipa_work"
 
-__bazel-orlix-archive: __bazel-version-check __bazel-substitute-promoted
+__bazel-orlix-archive: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	@test -n "$(ORLIX_DEVELOPMENT_TEAM)" || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=opt --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix.xcarchive --apple_generate_dsym --compilation_mode=opt --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@set -euo pipefail; \
-	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=opt --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
-	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
-	test -n "$$ipa" && test -s "$$ipa" || { echo "missing device //Orlix:Orlix ipa" >&2; exit 1; }; \
-	mkdir -p "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications" "$(ORLIX_BETA_EXPORT_DIR)"; \
-	rm -rf "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app"; \
-	/usr/bin/unzip -q "$$ipa" -d "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
-	mv "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work/Payload/Orlix.app" "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app"; \
-	rm -rf "$(ORLIX_BETA_ARCHIVE_DIR)/ipa-work"; \
-	/bin/cp "$$ipa" "$(ORLIX_BETA_IPA_PATH)"
+	archive_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix.xcarchive --apple_generate_dsym --compilation_mode=opt --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --output=files | awk '/Orlix[.]xcarchive$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
+	archive="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$archive_rel"; \
+	test -s "$$archive/Info.plist" || { echo "missing Bazel xcarchive metadata" >&2; exit 1; }; \
+	test -d "$$archive/dSYMs/Orlix.app.dSYM" || { echo "missing Orlix archive debug symbols" >&2; exit 1; }; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; p=plistlib.loads((Path(sys.argv[1])/"Info.plist").read_bytes())["ApplicationProperties"]; assert p["CFBundleIdentifier"] == "com.rudironsoni.orlix"; assert p.get("Team") == sys.argv[2], "archive signing team mismatch"; assert p.get("SigningIdentity"), "archive has no signing identity"' "$$archive" "$(ORLIX_DEVELOPMENT_TEAM)"; \
+	/usr/bin/codesign --verify --deep --strict "$$archive/Products/Applications/Orlix.app"; \
+	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
+	if [ -e "$(ORLIX_BETA_ARCHIVE_PATH)" ]; then previous="$$(mktemp -d "$(ORLIX_BETA_ARCHIVE_DIR)/previous-archive.XXXXXX")"; mv "$(ORLIX_BETA_ARCHIVE_PATH)" "$$previous/Orlix.xcarchive"; fi; \
+	/usr/bin/ditto "$$archive" "$(ORLIX_BETA_ARCHIVE_PATH)"
 
 __tcti-isa-restore:
 	@set -euo pipefail; \

@@ -53,9 +53,16 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-orlix-app", output)
 
     def test_source_app_does_not_reconstruct_promoted_components(self) -> None:
-        output = _dry_run("__bazel-orlix-app", "ORLIX_BAZEL_COMPONENT_MODE=source")
+        output = _dry_run(
+            "__bazel-orlix-app", "ORLIX_BAZEL_COMPONENT_MODE=source",
+            "PROFILE=development", "ORLIX_BAZEL_DESTINATION=iphoneos",
+            "ORLIX_BAZEL_COMPILATION_MODE=opt",
+        )
         command = next(line for line in output.splitlines() if " build //Orlix:Orlix " in line)
         self.assertIn("--config=source", command)
+        self.assertIn("--config=development", command)
+        self.assertIn("--compilation_mode=opt", command)
+        self.assertIn("--ios_multi_cpus=arm64", command)
         self.assertNotIn("bazel/promotion/reconstruct.py", output)
         self.assertIn(" cquery //Orlix:Orlix ", output)
 
@@ -94,6 +101,10 @@ class MakeRoutingTests(unittest.TestCase):
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)
         self.assertIn("ORLIX_BAZEL_AUTHORITY),1", makefile)
+        recipe = (ROOT / "make/bazel-migration.mk").read_text().split("__bazel-orlix-archive:")[1].split("\n__tcti-isa-restore:")[0]
+        self.assertIn("build //Orlix:Orlix.xcarchive --apple_generate_dsym", recipe)
+        self.assertIn("codesign --verify --deep --strict", recipe)
+        self.assertNotIn("ORLIX_BETA_IPA_PATH", recipe)
 
     def test_substitute_promoted_maps_reconstructed_oci(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
