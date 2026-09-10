@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import stat
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from content_digest import tree_digest  # noqa: E402
 
 
 def require_sha256(digest: str) -> str:
@@ -27,26 +29,6 @@ def compare_digests(first: str, second: str) -> str:
     if left != right:
         raise ValueError(f"promotion mismatch: {left} != {right}")
     return left
-
-
-def tree_digest(root: Path) -> str:
-    if not root.is_dir():
-        raise ValueError(f"missing component tree: {root}")
-    digest = hashlib.sha256()
-    for path in sorted(root.rglob("*")):
-        mode = path.lstat().st_mode
-        if stat.S_ISLNK(mode):
-            content = str(path.readlink())
-        elif stat.S_ISREG(mode):
-            with path.open("rb") as stream:
-                content = hashlib.file_digest(stream, "sha256").hexdigest()
-        elif stat.S_ISDIR(mode):
-            content = ""
-        else:
-            raise ValueError(f"unsupported component entry: {path}")
-        record = [path.relative_to(root).as_posix(), mode, content]
-        digest.update(json.dumps(record, separators=(",", ":")).encode() + b"\n")
-    return digest.hexdigest()
 
 
 def compare_trees(first: str, second: str) -> str:

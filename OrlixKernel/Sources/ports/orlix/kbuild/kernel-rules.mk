@@ -1974,7 +1974,6 @@ __headers-install: __prepare-port
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	header_install_dir="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)"; \
-	header_install_stamp="$$header_install_dir/.orlix-headers-ready"; \
 	uapi_build_dir="$(ORLIX_KERNEL_BUILD_DIR)-uapi-$(LINUX_UAPI_ARCH)"; \
 	if [ -L "$$header_install_dir" ]; then echo "refusing to clean symlinked OrlixMLibC kernel header path: $$header_install_dir" >&2; exit 1; fi; \
 	for path in "$$uapi_build_dir" "$$(dirname "$$uapi_build_dir")"; do \
@@ -1982,36 +1981,22 @@ __headers-install: __prepare-port
 	done; \
 	header_staging_parent="$$uapi_build_dir/usr"; \
 	header_staging="$$header_staging_parent/include"; \
-	if [ -s "$$header_install_stamp" ] && \
-		[ "$$header_install_stamp" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
-		[ -d "$$header_install_dir/include" ]; then \
-		echo "reusing installed Orlix UAPI headers: $$header_install_dir/include"; \
-		exit 0; \
-	fi; \
-	resume_headers=0; \
-	if [ -d "$$header_install_dir/include" ] && [ -d "$$header_staging" ]; then resume_headers=1; fi; \
-	if [ "$$resume_headers" -eq 1 ]; then \
-		echo "resuming partial Orlix UAPI header install: $$header_install_dir/include"; \
-	else \
-		for attempt in 1 2 3 4 5; do \
-			rm -rf "$$header_install_dir" 2>/dev/null || true; \
-			[ ! -e "$$header_install_dir" ] && break; \
-			sleep 1; \
-		done; \
-		[ ! -e "$$header_install_dir" ] || { echo "failed to clean generated OrlixMLibC kernel header path: $$header_install_dir" >&2; exit 1; }; \
-		mkdir -p "$$header_install_dir"; \
-	fi; \
+	for attempt in 1 2 3 4 5; do \
+		rm -rf "$$header_install_dir" 2>/dev/null || true; \
+		[ ! -e "$$header_install_dir" ] && break; \
+		sleep 1; \
+	done; \
+	[ ! -e "$$header_install_dir" ] || { echo "failed to clean generated OrlixMLibC kernel header path: $$header_install_dir" >&2; exit 1; }; \
+	mkdir -p "$$header_install_dir"; \
 	for path in "$$header_staging_parent" "$$header_staging"; do \
 		if [ -L "$$path" ]; then echo "refusing to clean symlinked Linux UAPI header staging path: $$path" >&2; exit 1; fi; \
 	done; \
-	if [ "$$resume_headers" -ne 1 ]; then \
-		for attempt in 1 2 3 4 5; do \
-			rm -rf "$$header_staging" 2>/dev/null || true; \
-			[ ! -e "$$header_staging" ] && break; \
-			sleep 1; \
-		done; \
-		[ ! -e "$$header_staging" ] || { echo "failed to clean generated Linux UAPI header staging path: $$header_staging" >&2; exit 1; }; \
-	fi; \
+	for attempt in 1 2 3 4 5; do \
+		rm -rf "$$header_staging" 2>/dev/null || true; \
+		[ ! -e "$$header_staging" ] && break; \
+		sleep 1; \
+	done; \
+	[ ! -e "$$header_staging" ] || { echo "failed to clean generated Linux UAPI header staging path: $$header_staging" >&2; exit 1; }; \
 	mkdir -p "$$header_staging"; \
 	for uapi_root in \
 		"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" \
@@ -2028,7 +2013,6 @@ __headers-install: __prepare-port
 	mkdir -p "$$uapi_build_dir"; \
 	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
 	[ -d "$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" ] || { echo "missing installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" >&2; exit 1; }; \
-	printf 'profile=%s\nlinux_version=%s\nlinux_uapi_arch=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(LINUX_UAPI_ARCH)" > "$$header_install_stamp"; \
 	echo "installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include"
 
 __kunit: __prepare-kbuild

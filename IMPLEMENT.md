@@ -57,12 +57,35 @@ The fresh baseline completed before any foreign component-rule changes. Build-ev
 
 The prerequisite and authority changes were published as `db776fe84c08e1587ddc62c780950f1510f66fde` and `9dfa083646cd43da29c2cdbc41ab67d6d56c2f82`. The remote branch and PR head matched the latter commit. The original dirty `AGENTS.md` bullet remains unstaged.
 
-The new [Bazel PR run](https://github.com/rudironsoni/Orlix/actions/runs/34515244045) installed GNU Make but failed before the matrix because Homebrew rejected the untrusted `xcodesorg/made/xcodes` formula. Rudi authorized tap trust. The repository's sole declared tap, `xcodesorg/made`, now has `trusted: true` in `Brewfile`; `brew trust --tap xcodesorg/made` completed locally with exit 0. `brew bundle check --file Brewfile --no-upgrade` and `ruby -c Brewfile` passed. CI must verify this correction on the new commit.
+The new [Bazel PR run](https://github.com/rudironsoni/Orlix/actions/runs/34515244045) installed GNU Make but failed before the matrix because Homebrew rejected the untrusted `xcodesorg/made/xcodes` formula. Rudi authorized tap trust. The repository's sole declared tap, `xcodesorg/made`, now has `trusted: true` in `Brewfile`; `brew trust --tap xcodesorg/made` completed locally with exit 0. `brew bundle check --file Brewfile --no-upgrade` and `ruby -c Brewfile` passed. The correction was published as `332704c12088980a7e64c8822a7e12a550a247bd`. Its [Bazel PR run](https://github.com/rudironsoni/Orlix/actions/runs/34516175684) passed provisioning and the matrix, including 28 freshly executed Bazel analysis tests. The preceding iOS 15 run was cancelled when the newer commit started its replacement; it is not recorded as a passing run.
 
 The current TCTI scope envelope reports unverified completion and does not emit `physical_device_allowed`. Its checker validates scope only. The required executable eligibility check remains implementation work for the proof gate. Successful scope commands alone do not authorize physical-device validation.
 
 TAP remains stopped. No physical-device validation, runtime completion, cache-performance improvement, parity, cutover, or release is established by this checkpoint. `artifacts.lock.json`, `.xcodebuildmcp/`, and `third_party/swift/.build/` remain outside its changes.
 
-## Next checkpoint: remove unsafe output persistence
+## Checkpoint 2: remove unsafe output persistence
 
 Read-only preparation identified two stale-output shortcuts: Bazel's incomplete UAPI persistence key in `bazel/feasibility/kernel/kbuild_persist.py`, and the `.orlix-headers-ready` timestamp shortcut in the owning Kernel Make rules. Checkpoint 2 removes both authorizations while retaining upstream incremental state and deterministic artifact serialization. It must prove stale-state rejection and semantic UAPI content identities before claiming the cache-correctness gate passes.
+
+
+Status: verified locally. Publication and current-head CI remain separate checks.
+
+The old Bazel helper accepted an owned test directory containing a bogus `linux/unistd.h` and invalid archive bytes when its `archive-v2` stamp matched the Linux revision, tag, and Xcode build. The executed legacy `can_reuse` check returned true. The fixture and its byte digests are recorded in `Build/AgentHarness/bazel-migration/recovery-checkpoint-2/stale-state.json`.
+
+Independent review also found that the source Make path retained installed and staging headers through `resume_headers`. Removing only the ready-stamp early return does not close that path. This checkpoint must remove both output shortcuts, prove stale-header removal, run a real upstream UAPI build with the poisoned legacy persistence directory present, and verify the shared semantic digest with the actual action interpreter.
+
+
+The source Make regression fails against the prior committed rule because obsolete output survives, and passes after the cleanup change. The fixture invokes the real owning Make recipe with a minimal upstream install fixture; it proves cleanup and preservation of unrelated Kbuild state, not Linux runtime behavior. The post-edit `gmake __bazel-matrix-check` passed with 113 Python tests and 28 cached Bazel analysis tests.
+
+A fresh `gmake __bazel-kernel-uapi` used an isolated output base and initially empty disk cache while the poisoned legacy persistence directory remained configured. The first upstream build succeeded, but Make correctly failed the new semantic digest check: the action hashed modes 0644/0755 before Bazel materialized the outputs as 0555. The action now sets the delivered modes before hashing. The retry exited 0, executed one local header-install action, and verified digest `5664459c80f50b46ea399fd4d0e2c37154ba6ff7f96ec281e31aaf5f74e128a0`. Its actual header tree matches the clean checkpoint 1 baseline in paths, bytes, modes, and symlink targets. The poisoned fixture remains unchanged.
+
+The one shared digest implementation serves UAPI artifact identity and promotion tree comparison. It works with both system Python 3.9.6 and repository PATH Python 3.14.7. Removing the old persistence API does not remove upstream Kbuild incremental state. Kernel source-preparation cost and broader foreign-build incremental reuse remain checkpoint 3 work.
+
+
+`gmake __bazel-mlibc-from-uapi` exited 0 using the checkpoint's explicit isolated output base. Its headers, libraries, complete sysroot, compiler-rt archive, loader, and ABI manifest match the clean baseline. The initial comparison used `bazel-bin` after the matrix had repointed that link to an older output base; repeating against the explicit checkpoint output directory removed that measurement error. Evidence always names that explicit directory in `mlibc-baseline-comparison.json`.
+
+The final `gmake __bazel-matrix-check` exited 0 with 113 Python tests and 28 cached Bazel analysis tests. Migration inventory checks and diff whitespace checks passed. Raw commands, output roots, failed first attempt, regression results, and artifact comparisons are recorded in `Build/AgentHarness/bazel-migration/recovery-checkpoint-2/verification.json`.
+
+This checkpoint proves removal of the unsafe UAPI final-output reuse paths and unchanged semantic UAPI/mlibc products. It does not establish Kernel Mach-O incrementalism, the full mutation matrix, current promoted acquisition behavior, runtime proof, Apple packaging parity, or cutover. TAP remains stopped and `artifacts.lock.json` remains unchanged.
+
+The final legacy-persistence test uses the exact original `ORLIX_KBUILD_PERSIST/headers_install` lookup. The first fixture layout had tested the helper directly one directory above that lookup, so it was corrected before final proof. The old lookup accepts the corrected poisoned fixture. A fresh output base and empty disk cache then produced real upstream headers with one local action, exit 0, matching the clean baseline while leaving every poison byte unchanged. The final log is `uapi-exact.log`, and `verification.json` names its explicit output root.

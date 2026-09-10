@@ -135,7 +135,7 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("--nouse_action_cache", body)
         promote = body.split("define ORLIX_BAZEL_PROMOTE")[1].split("endef")[0]
         self.assertIn("--remote_cache= --remote_executor=", promote)
-        self.assertIn("ORLIX_KBUILD_PERSIST=", body)
+        self.assertNotIn("ORLIX_KBUILD_PERSIST", body)
         self.assertIn("bazel/promotion/sign.py", body)
         self.assertIn("unsigned promote must not Cosign-sign", body)
         self.assertIn("env -u ORLIX_COSIGN_KEY -u ORLIX_PROMOTE_ARTIFACT", body)
@@ -143,7 +143,6 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("__bazel-reconstruct-source", body)
         self.assertIn("--config=promoted", body)
         self.assertIn("--lock", body)
-        self.assertIn("ORLIX_KBUILD_PERSIST", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,uapi,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,mlibc,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,rootfs,", body)
