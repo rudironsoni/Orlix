@@ -159,5 +159,33 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
         "trees": {name: value for name, value in tree_hashes.items() if name.endswith("/lib/clang")},
     }
     Path(output).with_name("compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
+    runtime_paths = {
+        xcode_tools / "bin/clang",
+        Path("/opt/homebrew/opt/llvm/bin/llvm-ar"),
+    }
+    pending = list(runtime_paths)
+    while pending:
+        binary = pending.pop()
+        libraries = subprocess.check_output(["/usr/bin/otool", "-L", str(binary)], text=True)
+        for line in libraries.splitlines()[1:]:
+            name = line.strip().split(" (", 1)[0]
+            if name.startswith(("/usr/lib/", "/System/Library/")):
+                continue
+            if name.startswith("@rpath/"):
+                path = Path("/opt/homebrew/opt/llvm/lib") / name.removeprefix("@rpath/")
+            elif name.startswith("/opt/homebrew/"):
+                path = Path(name)
+            else:
+                raise PinError(f"unresolved compiler runtime dependency: {name}")
+            if path not in runtime_paths:
+                runtime_paths.add(path)
+                pending.append(path)
+    runtime = {
+        "schema": 1, "macos": payload["macos"], "host_arch": payload["host_arch"],
+        "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(runtime_paths)},
+        "trees": {str(xcode_tools / "lib/clang"): tree_hashes[str(xcode_tools / "lib/clang")]},
+    }
+    Path(output).with_name("compiler-runtime-identity.json").write_text(json.dumps(runtime, sort_keys=True) + "\n")
+    tools += sorted(runtime_paths)
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
     return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}

@@ -29,12 +29,23 @@ def _sysroot_uapi_only_test_impl(ctx):
     asserts.true(env, sysroot.sysroot_digest != None)
     asserts.true(env, sysroot.consumed_uapi_digest != None)
     found = False
+    runtime_found = False
     for action in target.actions:
+        if action.mnemonic == "OrlixCompilerRuntime":
+            runtime_found = True
+            joined = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.true(env, sysroot.compiler_runtime in action.outputs.to_list())
+            asserts.true(env, "compiler-runtime-identity.json" in joined)
+            asserts.false(env, "mlibc" in joined)
+            asserts.false(env, "/uapi/" in joined)
         if action.mnemonic == "OrlixMLibCSysroot":
             found = True
             joined = " ".join([f.path for f in action.inputs.to_list()])
             argv = " ".join(action.argv)
             asserts.false(env, "kbuild-archive.tar" in joined)
+            asserts.true(env, sysroot.compiler_runtime in action.inputs.to_list())
+            asserts.false(env, "compiler-rt/lib/builtins" in joined)
+            asserts.false(env, "compiler-runtime-identity.json" in joined)
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.false(env, "OrlixMLibC/Makefile" in argv)
@@ -44,6 +55,7 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.true(env, "0024-options-ansi-fclose-preserve-flush-errno.patch" in joined)
             asserts.true(env, "0025-subprojects-frigg-hex-alt-prefix.patch" in joined)
     asserts.true(env, found)
+    asserts.true(env, runtime_found)
     return analysistest.end(env)
 
 sysroot_uapi_only_test = analysistest.make(_sysroot_uapi_only_test_impl)

@@ -7,6 +7,10 @@ updated: 2026-09-11
 ---
 # Orlix Knowledge Log
 
+## [2026-09-11] build | Separate the compiler runtime artifact
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) gives compiler-rt an independent Bazel action. Mlibc compilation consumes its archive instead of its source tree or tool-identity metadata. `IMPLEMENT.md` records unchanged complete output content and reuse during an mlibc implementation mutation. Meson/Ninja incremental state remains open.
+
 ## [2026-09-11] build | Preserve Kernel incremental state
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) retains prepared Kernel sources and Kbuild output within each worktree. Native objects use their compiler commands and dependencies for invalidation. State integrity checks protect reuse, and promotion disables incremental and compiler-cache acceleration. `IMPLEMENT.md` records the verified Kernel mutation and complete cache-on/cache-off output comparison. The broader recovery and authority cutover remain open.

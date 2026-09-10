@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:private"])
 
 orlix_mlibc_sysroot(
     name = "sysroot",
+    runtime_toolchain_identity = "@orlix_kernel_toolchain//:compiler-runtime-identity.json",
     bragi = "@orlix_bragi_source//:Cargo.toml",
     bragi_source = "@orlix_bragi_source//:source",
     compiler_rt = "@orlix_compiler_rt_source//:compiler-rt/lib/builtins/addtf3.c",
