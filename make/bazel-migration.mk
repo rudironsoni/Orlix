@@ -568,9 +568,10 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
 	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
 	test -x "$$ipa_work/Payload/Orlix.app/Orlix"; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; app=Path(sys.argv[1]); assert all(info.get("CFBundleName") and info.get("CFBundlePackageType") == kind and info.get("CFBundleInfoDictionaryVersion") == "6.0" for bundle,kind in [(app,"APPL"),*((p,"XPC!") for p in app.glob("PlugIns/*.appex"))] for info in [plistlib.loads((bundle/"Info.plist").read_bytes())]), "app or extension is missing required bundle metadata"' "$$ipa_work/Payload/Orlix.app"; \
 	if [ "$(ORLIX_BAZEL_DESTINATION)" = iphoneos ]; then \
 	/usr/bin/codesign --verify --deep --strict "$$ipa_work/Payload/Orlix.app"; \
-	python3 -c 'import plistlib,subprocess,sys; from pathlib import Path; app=Path(sys.argv[1]); assert all(plistlib.loads(subprocess.run(["codesign","-d","--entitlements",":-",str(bundle)],check=True,capture_output=True).stdout)["application-identifier"].split(".",1)[1] == plistlib.loads((bundle/"Info.plist").read_bytes())["CFBundleIdentifier"] for bundle in [app,*app.glob("PlugIns/*.appex")]), "app or extension signing identifier differs from its bundle identifier"' "$$ipa_work/Payload/Orlix.app"; \
+	python3 -c 'import plistlib,subprocess,sys; from pathlib import Path; app=Path(sys.argv[1]); assert all(ent["application-identifier"] == sys.argv[2]+"."+plistlib.loads((bundle/"Info.plist").read_bytes())["CFBundleIdentifier"] and ent["com.apple.developer.team-identifier"] == sys.argv[2] for bundle in [app,*app.glob("PlugIns/*.appex")] for ent in [plistlib.loads(subprocess.run(["codesign","-d","--entitlements",":-",str(bundle)],check=True,capture_output=True).stdout)]), "app or extension signing identity differs from its bundle or team"' "$$ipa_work/Payload/Orlix.app" "$(ORLIX_DEVELOPMENT_TEAM)"; \
 	fi; \
 	test -s "$$ipa_work/Payload/Orlix.app/mlx-swift_Cmlx.bundle/default.metallib" || { echo "missing compiled MLX shader library" >&2; exit 1; }; \
 	os_binary="$$ipa_work/Payload/Orlix.app/Frameworks/OrlixOS.framework/OrlixOS"; \

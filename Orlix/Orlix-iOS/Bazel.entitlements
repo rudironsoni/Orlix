@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>com.apple.developer.team-identifier</key>
+	<string>ZQ3L7M567L</string>
 	<key>aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
@@ -22,10 +24,6 @@
 	<array>
 		<string>app-usage</string>
 	</array>
-	<key>com.apple.security.network.client</key>
-	<true/>
-	<key>com.apple.security.network.server</key>
-	<true/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>ZQ3L7M567L.com.rudironsoni.orlix</string>

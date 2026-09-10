@@ -9,7 +9,7 @@
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "97e9c0e6ab14a119b47a8a83a7e046b5efaab47fe61d4ceb833ba22a77fd96b5",
     "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
-    "make/bazel-migration.mk": "40bb0c83eac31b93ca5fd739d59e25b0902cfdb02fd0a3d7466d2a5091579899",
+    "make/bazel-migration.mk": "4ffc548dbe2961851162d4e5fc0a0538c26097168721c10d5e0ad1626d8cce4b",
     "make/gnu-make-contract.mk": "33975f64db094c955695e2f03759edc308ed324face23147f84d58c0e7447a06",
     "make/release.mk": "996e11533d33420f94df2efa5a707b1e6f05a8ca69e0ae0030eeb720ab19a6b4",
     "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
@@ -5735,7 +5735,7 @@
     {
       "name": "__bazel-orlix-archive",
       "source": "make/bazel-migration.mk",
-      "line": 603,
+      "line": 604,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5746,7 +5746,7 @@
     {
       "name": "__tcti-isa-restore",
       "source": "make/bazel-migration.mk",
-      "line": 618,
+      "line": 619,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5756,7 +5756,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 637,
+      "line": 638,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5767,7 +5767,7 @@
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 660,
+      "line": 661,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5777,7 +5777,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 663,
+      "line": 664,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -5788,7 +5788,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 674,
+      "line": 675,
       "classification": "private",
       "phony": true,
       "prerequisites": [

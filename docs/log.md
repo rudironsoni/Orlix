@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Preserve required iOS bundle metadata and signing entitlements
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) preserves app and extension bundle names, package types, and plist versions. Both iOS signatures carry the team entitlement. The app's entitlements match Xcode's iOS signing output and exclude the macOS sandbox network keys. Make rejects missing bundle metadata and mismatched app or team signing identifiers before staging the IPA.
+
 ## [2026-09-10] fix | Match Apple's registered application identity
 
 The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) uses `com.rudironsoni.Orlix` and the matching extension prefix. Xcode could obtain the full-capability Development profile with this registered spelling. Bazel resolves installed profiles for device builds, and the extension entitlement expands to its exact bundle identifier. Make checks both signatures before accepting the IPA. Release identity consumers use the same spelling; existing cloud, keychain, App Group, and widget identifiers remain unchanged. Device installation and runtime proof remain separate gates.
