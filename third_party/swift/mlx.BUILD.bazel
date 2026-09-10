@@ -1,4 +1,5 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library", "swift_library_group")
+load("@build_bazel_rules_apple//apple:resources.bzl", "apple_metal_library", "apple_resource_bundle")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_license//rules:license.bzl", "license")
 load("@rules_license//rules:package_info.bzl", "package_info")
@@ -13,8 +14,25 @@ package(
 
 exports_files(["pkg_info.json"])
 
+apple_metal_library(
+    name = "mlx_metallib",
+    srcs = glob(["Source/Cmlx/mlx-generated/metal/**/*.metal"]),
+    hdrs = glob(["Source/Cmlx/mlx-generated/metal/**/*.h"]),
+    copts = [
+        "-ffast-math",
+        "-I" + package_relative_label(":pkg_info.json").workspace_root + "/Source/Cmlx/mlx-generated/metal",
+    ],
+)
+
+apple_resource_bundle(
+    name = "Cmlx.rspm_resources",
+    bundle_name = "mlx-swift_Cmlx",
+    resources = [":mlx_metallib"],
+)
+
 cc_library(
     name = "Cmlx.rspm.__impl",
+    data = [":Cmlx.rspm_resources"],
     deps = [":Cmlx.rspm_cxx"],
     tags = ["manual"],
     visibility = ["//:__subpackages__"],

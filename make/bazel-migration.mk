@@ -556,21 +556,27 @@ __bazel-orlixos: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS //Orlix:OrlixOSFramework //OrlixOSTestApp:OrlixOSTestApp //OrlixOSTestApp:OrlixOSTestAppTests //OrlixOSTestApp:OrlixKernelConformanceTests //OrlixOSTestApp:OrlixMLibCConformanceTests //OrlixOSTestApp:OrlixPackagesConformanceTests //OrlixOSTestApp:OrlixOSRuntimeTests --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
 
-.PHONY: __bazel-test-output-parser
-__bazel-test-output-parser: __bazel-feasibility-xcodeproj
+.PHONY: __bazel-test-output-parser __bazel-test-native-smoke
+__bazel-test-output-parser __bazel-test-native-smoke: __bazel-feasibility-xcodeproj
 	@set -euo pipefail; \
+	case "$@" in \
+		__bazel-test-output-parser) test_scheme="OrlixOSTestApp Tests"; test_filter="OrlixOSTestAppTests/OrlixUpstreamTestOutputParserTests" ;; \
+		__bazel-test-native-smoke) test_scheme="NativeSmokeTests"; test_filter="NativeSmokeTests/NativeSmokeTests/testMLXMetalLibraryContainsCompiledKernels" ;; \
+	esac; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
-	result_dir="$$(mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/proof/output-parser.XXXXXX")"; \
+	result_dir="$$(mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/proof/$(patsubst __bazel-test-%,%,$@).XXXXXX")"; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild \
 		-project "$(CURDIR)/Build/XcodeProjects/OrlixBazelFeasibility.xcodeproj" \
-		-scheme "OrlixOSTestApp Tests" \
+		-scheme "$$test_scheme" \
 		-configuration Debug \
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		-derivedDataPath "$(ORLIX_BUILD_ROOT)/Bazel/DerivedData/OutputParser" \
 		-resultBundlePath "$$result_dir/tests.xcresult" \
 		-parallel-testing-enabled NO \
-		-only-testing:OrlixOSTestAppTests/OrlixUpstreamTestOutputParserTests \
-		test
+		-only-testing:"$$test_filter" \
+		test; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcrun xcresulttool get test-results summary --path "$$result_dir/tests.xcresult" > "$$result_dir/summary.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["result"] == "Passed" and p["passedTests"] > 0 and p["totalTestCount"] == p["passedTests"] and p["failedTests"] == p["skippedTests"] == p["expectedFailures"] == 0, p' "$$result_dir/summary.json"
 
 __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_TCTI_ISA_PREPARED="$(ORLIX_TCTI_ISA_PREPARED)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -583,6 +589,7 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
 	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
 	test -x "$$ipa_work/Payload/Orlix.app/Orlix"; \
+	test -s "$$ipa_work/Payload/Orlix.app/mlx-swift_Cmlx.bundle/default.metallib" || { echo "missing compiled MLX shader library" >&2; exit 1; }; \
 	os_binary="$$ipa_work/Payload/Orlix.app/Frameworks/OrlixOS.framework/OrlixOS"; \
 	test -x "$$os_binary" || { echo "missing embedded OrlixOS.framework" >&2; exit 1; }; \
 	python3 -c 'import plistlib,sys; from pathlib import Path; root=Path(sys.argv[1]); info=plistlib.loads((root/"Info.plist").read_bytes()); assert info["OrlixSelectedProfile"] == sys.argv[2]; assert len(info["OrlixOSRootImages"]) == 4; paths=[info[key] for key in ("OrlixRootInitramfs", "OrlixBaseRootImage", "OrlixStateRootImage")]+["arch/orlix/boot/dts/release.dtb", "arch/orlix/boot/dts/development.dtb", "composition.json"]; missing=[name for name in paths if not (root/name).is_file() or (root/name).stat().st_size == 0]; assert not missing, missing' "$${os_binary%/*}" "$(PROFILE)"; \

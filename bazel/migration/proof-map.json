@@ -931,6 +931,18 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "__bazel-test-native-smoke",
+      "source": "make/bazel-migration.mk",
+      "line": 560,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "__bazel-test-output-parser",
       "source": "make/bazel-migration.mk",
       "line": 560,
@@ -945,7 +957,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 647,
+      "line": 654,
       "classification": "private",
       "phony": true,
       "prerequisites": [

@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Package the real MLX Metal library
+
+The [Apple feasibility experiment](objects/task/doing/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
+
 ## [2026-09-10] record | Make full rootfs outputs reproducible
 
 [Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now compares matching complete rootfs trees from independent builds. The producer fixes image timestamps, the ext4 hash seed, guest ownership, and manifest paths. The rootfs digest covers initramfs, base, and state images. Unsigned promotion disables remote action reuse and keeps the real signing-rejection check with signing inputs cleared for that check. The lock remains a signed-only output.

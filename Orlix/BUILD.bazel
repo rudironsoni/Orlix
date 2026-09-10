@@ -51,7 +51,6 @@ swift_library(
         "-import-objc-header",
         "Orlix/Orlix/ghostty-bridging-header.h",
     ],
-    data = ["Orlix/ghostty-bridging-header.h"],
     swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
     defines = [
         "ORLIX_APP_HOSTED_BOOT=1",
@@ -163,7 +162,6 @@ ios_application(
         "//Orlix/Orlix/Resources:bundle_resources",
         "Orlix/PrivacyInfo.xcprivacy",
         "//docs/sources/release:orlix-app-release-inputs.json",
-        "//bazel/product:OrlixBazelPlaceholder.metal",
     ] + glob(["Orlix/Assets.xcassets/**"]) + select({
         "//bazel/config:component_promoted": ["//bazel/promotion:locked_buildset"],
         "//conditions:default": [],

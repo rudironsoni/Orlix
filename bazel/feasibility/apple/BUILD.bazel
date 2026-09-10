@@ -161,6 +161,7 @@ swift_library(
     name = "NativeSmokeTestsLibrary",
     testonly = True,
     srcs = ["NativeSmokeTests.swift"],
+    deps = ["@swiftpkg_mlx_swift//:MLX"],
     module_name = "OrlixNativeSmokeTests",
     tags = ["manual"],
 )
