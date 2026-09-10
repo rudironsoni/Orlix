@@ -192,6 +192,7 @@ orlix_local_c_package(
 
 orlix_local_c_package(
     name = "init",
+    root_init = "//OrlixOS/Sources/init:rootinit.c",
     output = "sbin/init",
     package_name = "init",
     srcs = [

@@ -74,6 +74,7 @@ trap '/bin/rm -rf "$work"' EXIT
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
   tree="$exec_root/$rel"
+  if [ -x "$tree/rootinit" ]; then /bin/cp "$tree/rootinit" "$work/init"; fi
   if [ -d "$tree/usr/bin" ]; then /bin/cp -R "$tree/usr/bin/." "$base_tree/usr/bin/"; fi
   if [ -d "$tree/bin" ]; then /bin/cp -R "$tree/bin/." "$base_tree/bin/"; fi
   if [ -d "$tree/sbin" ]; then /bin/cp -R "$tree/sbin/." "$base_tree/sbin/"; fi
@@ -102,7 +103,7 @@ test -x "$base_tree/usr/bin/jq"
 test -x "$base_tree/usr/bin/curl"
 test -x "$base_tree/usr/bin/zsh"
 /bin/ln -sf bash "$base_tree/bin/sh"
-/bin/cp "$base_tree/bin/true" "$work/init"
+test -x "$work/init"
 TZ=UTC /usr/bin/touch -t 197001010000 "$work/init"
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$work/init"' 0755 0 0' > "$work/initramfs.list"
 "$work/gen_init_cpio" "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
@@ -112,7 +113,7 @@ test -s "$initramfs_out"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXROOT -E root_owner=0:0 -d "$base_tree" "$base_ext4"
 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L ORLIXSTATE -E root_owner=0:0 -d "$state_tree" "$state_ext4"
 /usr/bin/find "$base_tree" -print | /usr/bin/sort > "$file_manifest"
-/usr/bin/printf 'init=/bin/true\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\nshell=/bin/sh\n' > "$payload_metadata"
+/usr/bin/printf 'init=/init\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\nshell=/bin/sh\n' > "$payload_metadata"
 digest="$( (
   cd "$base_tree"
   /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256
@@ -161,7 +162,7 @@ digest="$( (
 
 def _rootfs_payload_impl(ctx):
     info = ctx.attr.rootfs[OrlixRootfsInfo]
-    root = ctx.actions.declare_directory(ctx.label.name)
+    root = ctx.actions.declare_directory(ctx.label.name + "/rootfs")
     ctx.actions.run_shell(
         mnemonic = "OrlixRootfsPayload",
         progress_message = "Staging OrlixOS rootfs payload images",

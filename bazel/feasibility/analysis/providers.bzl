@@ -93,10 +93,15 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
     asserts.true(env, OrlixLinuxArchiveInfo in target)
+    archive = target[OrlixLinuxArchiveInfo]
+    asserts.equals(env, ctx.attr.expected_profile, archive.profile)
+    asserts.equals(env, ctx.attr.expected_destination, archive.destination)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixKernelMachOArchive":
             found = True
+            asserts.equals(env, archive.profile, action.env["PROFILE"])
+            asserts.equals(env, archive.destination, action.env["ORLIX_KERNEL_ARCHIVE_PLATFORMS"])
             argv = " ".join(action.argv)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.true(env, "__kernel-archive" in argv)
@@ -104,7 +109,25 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
     asserts.true(env, found)
     return analysistest.end(env)
 
-macho_no_wrapper_makefile_test = analysistest.make(_macho_no_wrapper_makefile_test_impl)
+macho_no_wrapper_makefile_test = analysistest.make(
+    _macho_no_wrapper_makefile_test_impl,
+    attrs = {
+        "expected_profile": attr.string(default = "release"),
+        "expected_destination": attr.string(default = "iphonesimulator"),
+    },
+)
+
+macho_device_development_test = analysistest.make(
+    _macho_no_wrapper_makefile_test_impl,
+    attrs = {
+        "expected_profile": attr.string(default = "development"),
+        "expected_destination": attr.string(default = "iphoneos"),
+    },
+    config_settings = {
+        str(Label("//bazel/config:profile")): "development",
+        "//command_line_option:platforms": str(Label("@build_bazel_apple_support//platforms:ios_arm64")),
+    },
+)
 
 def _package_tree_test_impl(ctx):
     env = analysistest.begin(ctx)

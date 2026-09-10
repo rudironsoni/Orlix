@@ -31,6 +31,17 @@ def _dry_run(*args: str) -> str:
 
 
 class MakeRoutingTests(unittest.TestCase):
+    def test_kernel_build_respects_profile_and_destination(self) -> None:
+        output = _dry_run(
+            "__bazel-kernel-boot", "PROFILE=development",
+            "ORLIX_BAZEL_DESTINATION=iphoneos", "ORLIX_BAZEL_COMPILATION_MODE=opt",
+        )
+        command = next(line for line in output.splitlines() if " build //bazel/feasibility/kernel:macho " in line)
+        self.assertIn("--config=development", command)
+        self.assertIn("--compilation_mode=opt", command)
+        self.assertIn("--ios_multi_cpus=arm64", command)
+        self.assertIn("--platforms=@build_bazel_apple_support//platforms:ios_arm64", command)
+
     def test_default_keeps_pre_cutover_authority(self) -> None:
         self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text())
         output = _dry_run("xcodeproj", "ORLIX_BAZEL_AUTHORITY=0")
@@ -40,6 +51,13 @@ class MakeRoutingTests(unittest.TestCase):
     def test_build_routes_to_orlix_app(self) -> None:
         output = _dry_run("build", "type=product")
         self.assertIn("__bazel-orlix-app", output)
+
+    def test_source_app_does_not_reconstruct_promoted_components(self) -> None:
+        output = _dry_run("__bazel-orlix-app", "ORLIX_BAZEL_COMPONENT_MODE=source")
+        command = next(line for line in output.splitlines() if " build //Orlix:Orlix " in line)
+        self.assertIn("--config=source", command)
+        self.assertNotIn("bazel/promotion/reconstruct.py", output)
+        self.assertIn(" cquery //Orlix:Orlix ", output)
 
     def test_test_routes_to_matrix_check(self) -> None:
         output = _dry_run("test")

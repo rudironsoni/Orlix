@@ -859,7 +859,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 61,
+      "line": 66,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -871,7 +871,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 401,
+      "line": 409,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -883,7 +883,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 414,
+      "line": 422,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -895,7 +895,7 @@
     {
       "name": "__bazel-proof-graph",
       "source": "make/bazel-migration.mk",
-      "line": 427,
+      "line": 439,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -908,7 +908,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 477,
+      "line": 489,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -920,7 +920,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 520,
+      "line": 532,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -931,9 +931,21 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "__bazel-test-output-parser",
+      "source": "make/bazel-migration.mk",
+      "line": 560,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 610,
+      "line": 647,
       "classification": "private",
       "phony": true,
       "prerequisites": [

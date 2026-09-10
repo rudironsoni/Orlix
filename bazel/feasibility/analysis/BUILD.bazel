@@ -3,6 +3,7 @@ load(
     "config_flags_test",
     "no_wrapper_makefile_test",
     "macho_no_wrapper_makefile_test",
+    "macho_device_development_test",
     "bash_package_tree_test",
     "coreutils_package_tree_test",
     "guest_package_tree_test",
@@ -15,6 +16,11 @@ load(
 )
 
 package(default_visibility = ["//visibility:private"])
+
+macho_device_development_test(
+    name = "macho_device_development_test",
+    target_under_test = "//bazel/feasibility/kernel:macho",
+)
 
 uapi_providers_test(
     name = "uapi_providers_test",

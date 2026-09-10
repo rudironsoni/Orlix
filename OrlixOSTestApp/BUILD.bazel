@@ -1,0 +1,81 @@
+load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+_TEST_SUITES = {
+    "OrlixOSTestAppTests": "com.rudironsoni.orlix.os.test-app.tests",
+    "OrlixKernelConformanceTests": "com.rudironsoni.orlix.kernel-conformance-tests",
+    "OrlixMLibCConformanceTests": "com.rudironsoni.orlix.mlibc-conformance-tests",
+    "OrlixPackagesConformanceTests": "com.rudironsoni.orlix.packages-conformance-tests",
+    "OrlixOSRuntimeTests": "com.rudironsoni.orlix.os.runtime-tests",
+}
+
+expand_template(
+    name = "info_plist",
+    out = "BazelInfo.plist",
+    substitutions = {
+        "$(DEVELOPMENT_LANGUAGE)": "en",
+        "$(EXECUTABLE_NAME)": "OrlixOSTestApp",
+        "$(PRODUCT_BUNDLE_IDENTIFIER)": "com.rudironsoni.orlix.os.test-app",
+        "$(PRODUCT_NAME)": "OrlixOSTestApp",
+        "$(PRODUCT_MODULE_NAME)": "OrlixOSTestApp",
+        "$(PRODUCT_BUNDLE_PACKAGE_TYPE)": "APPL",
+        "$(MARKETING_VERSION)": "0.1",
+        "$(CURRENT_PROJECT_VERSION)": "44",
+    },
+    template = "Info.plist",
+)
+
+swift_library(
+    name = "OrlixOSTestAppLibrary",
+    testonly = True,
+    srcs = glob(["Sources/*.swift"]),
+    copts = ["-swift-version", "6", "-enable-testing", "-DORLIX_BETA_OBSERVABILITY"],
+    module_name = "OrlixOSTestApp",
+    tags = ["manual"],
+    deps = ["//OrlixOS/Sources/Session:OrlixOS"],
+)
+
+ios_application(
+    name = "OrlixOSTestApp",
+    testonly = True,
+    bundle_id = "com.rudironsoni.orlix.os.test-app",
+    families = ["iphone", "ipad"],
+    frameworks = ["//Orlix:OrlixOSFramework"],
+    infoplists = [":info_plist"],
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [":OrlixOSTestAppLibrary"],
+)
+
+[
+    swift_library(
+        name = suite + "Library",
+        testonly = True,
+        srcs = glob(["Tests/XCTest/%s/*.swift" % suite]) + (
+            glob(["Tests/XCTest/Support/*.swift"]) if "Conformance" in suite else []
+        ),
+        copts = ["-swift-version", "6", "-DORLIX_BETA_OBSERVABILITY"],
+        module_name = suite,
+        tags = ["manual"],
+        deps = [
+            ":OrlixOSTestAppLibrary",
+            "//OrlixOS/Sources/Session:OrlixOS",
+        ],
+    )
+    for suite in _TEST_SUITES
+]
+
+[
+    ios_unit_test(
+        name = suite,
+        bundle_id = _TEST_SUITES[suite],
+        minimum_os_version = "15.0",
+        tags = ["manual"],
+        test_host = ":OrlixOSTestApp",
+        deps = [":" + suite + "Library"],
+    )
+    for suite in _TEST_SUITES
+]

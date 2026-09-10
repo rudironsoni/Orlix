@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] record | Connect the OrlixOS framework and test host to Bazel
+
+[The Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) now declares the embedded OrlixOS framework, profile device trees, target-derived plist, and OrlixOSTestApp test suites. Its initramfs contains the existing OrlixOS root initializer. The task remains in progress. Build and packaging checks do not establish runtime conformance, signing, parity, or cutover.
+
 ## [2026-09-10] record | Exclude generated Swift checkouts from the legacy-path scan
 
 The legacy documentation-path check excludes `third_party/swift/.build`, which contains generated dependency checkouts. References inside those checkouts belong to their upstream projects. Repository source and maintained documentation remain in the scan.

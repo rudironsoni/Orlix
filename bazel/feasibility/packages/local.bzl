@@ -45,7 +45,8 @@ digest_out="$exec_root/$9"
 output_rel="${10}"
 package_name="${11}"
 package_version="${12}"
-shift 12
+root_init_source="${13}"
+shift 13
 c_srcs=""
 inc=""
 for rel in "$@"; do
@@ -72,13 +73,20 @@ libssp_ns=""
 [ -s "$libraries/libssp_nonshared.a" ] && libssp_ns="$libraries/libssp_nonshared.a"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-local.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
-out="$work/dest/$output_rel"
+build_program() {
+out="$1"
+shift
 /bin/mkdir -p "$(/usr/bin/dirname "$out")"
 # shellcheck disable=SC2086
-"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" $c_srcs -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
+"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" "$@" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
 "$strip_bin" "$out"
 /usr/bin/file "$out" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file "$out" >&2; exit 1; }
 "$objdump_bin" -p "$out" | /usr/bin/awk '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'
+ }
+build_program "$work/dest/$output_rel" $c_srcs
+if [ -n "$root_init_source" ]; then
+  build_program "$work/dest/rootinit" "$exec_root/$root_init_source"
+fi
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
@@ -100,6 +108,7 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
             ctx.attr.output,
             ctx.attr.package_name,
             ctx.attr.package_version,
+            ctx.file.root_init.path if ctx.file.root_init else "",
         ] + [f.path for f in ctx.files.srcs],
         inputs = depset(
             direct = [
@@ -109,7 +118,7 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 sysroot.consumed_uapi_digest,
-            ] + ctx.files.srcs,
+            ] + ctx.files.srcs + ([ctx.file.root_init] if ctx.file.root_init else []),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),
@@ -135,6 +144,7 @@ orlix_local_c_package = rule(
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
         "srcs": attr.label_list(allow_files = True, mandatory = True),
         "output": attr.string(mandatory = True),
+        "root_init": attr.label(allow_single_file = [".c"]),
         "package_name": attr.string(mandatory = True),
         "package_version": attr.string(default = "orlix"),
     },

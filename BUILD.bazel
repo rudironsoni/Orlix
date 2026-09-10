@@ -7,4 +7,5 @@ exports_files([
     "artifacts.lock.json",
     "make/tcti-proof-registry-provenance.mk",
     "OrlixOS/Sources/distribution/target-settings.xcconfig",
+    "OrlixOS/Sources/make/payload.mk",
 ])

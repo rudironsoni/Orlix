@@ -16,7 +16,8 @@ def _pinned_env(ctx):
         "ORLIX_KERNEL_KUNIT": "0",
         "ORLIX_OS_LINUX_PAGE_SIZE": "16384",
         "ORLIX_COMPILER_LAUNCHER": "",
-        "PROFILE": "release",
+        "PROFILE": ctx.attr.profile,
+        "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
     tmpdir = shell.get("TMPDIR")
     if tmpdir:
@@ -31,6 +32,7 @@ def _kernel_macho_impl(ctx):
     symbols = ctx.actions.declare_file(ctx.label.name + "/symbols.txt")
     digest = ctx.actions.declare_file(ctx.label.name + "/archive.sha256")
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
+    boot_resources = ctx.actions.declare_directory(ctx.label.name + "/arch")
     overlay_files = ctx.files.overlay
     patch_files = ctx.files.patches
     config_files = ctx.files.configs
@@ -52,7 +54,8 @@ patch_count="$7"
 config_count="$8"
 engine_count="$9"
 extra_count="${10}"
-shift 10
+boot_resources="$exec_root/${11}"
+shift 11
 overlay_paths=()
 i=0
 while [ "$i" -lt "$overlay_count" ]; do
@@ -110,7 +113,7 @@ linux_src="$(/usr/bin/dirname "$linux_makefile")"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-kernel-macho.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 port="$work/OrlixKernel/src/linux-6.12.105-port"
-/bin/mkdir -p "$port" "$work/OrlixKernel/orlix-tcti-isa" "$work/OrlixKernel/release"
+/bin/mkdir -p "$port" "$work/OrlixKernel/orlix-tcti-isa" "$work/OrlixKernel/$PROFILE"
 hostcc="$work/hostcc"
 /usr/bin/printf '%s\n' '#!/bin/bash' "exec \"$xcode_clang\" -isysroot \"$sdkroot\" \"\$@\"" > "$hostcc"
 /bin/chmod +x "$hostcc"
@@ -137,7 +140,7 @@ fi
 profile_config=""
 for rel in "${config_paths[@]}"; do
   case "$rel" in
-    */release_defconfig) profile_config="$exec_root/$rel" ;;
+    */"${PROFILE}_defconfig") profile_config="$exec_root/$rel" ;;
   esac
 done
 test -n "$profile_config" && test -s "$profile_config"
@@ -151,7 +154,7 @@ for rel in "${patch_paths[@]}"; do
       ;;
   esac
 done
-printf '%s\n' 'linux_version=6.12.105' 'profile=release' 'linux_uapi_arch=arm64' 'linux_page_size=16384' > "$port/.orlix-port-profile"
+printf '%s\n' 'linux_version=6.12.105' "profile=$PROFILE" 'linux_uapi_arch=arm64' 'linux_page_size=16384' > "$port/.orlix-port-profile"
 isa_dest="$work/OrlixKernel/orlix-tcti-isa"
 /bin/mkdir -p "$isa_dest"
 prepared_isa="${ORLIX_TCTI_ISA_PREPARED:-}"
@@ -189,11 +192,11 @@ export ORLIX_KERNEL_PORT_PREPARED=1
 export ORLIX_KERNEL_KUNIT=0
 export ORLIX_OS_LINUX_PAGE_SIZE=16384
 export ORLIX_COMPILER_LAUNCHER=
-export PROFILE=release
+export PROFILE
 export ORLIX_KERNEL_CC="$clang"
 export ORLIX_KERNEL_HOSTCC="$hostcc"
 export ORLIX_KERNEL_HOST_SDKROOT="$sdkroot"
-export ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphonesimulator
+export ORLIX_KERNEL_ARCHIVE_PLATFORMS
 export DEVELOPER_DIR
 cd "$exec_root"
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
@@ -204,14 +207,20 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     ORLIX_KERNEL_KUNIT=0 \
     ORLIX_OS_LINUX_PAGE_SIZE=16384 \
     ORLIX_COMPILER_LAUNCHER= \
-    PROFILE=release \
+    PROFILE="$PROFILE" \
     ORLIX_KERNEL_CC="$clang" \
     ORLIX_KERNEL_HOSTCC="$hostcc" \
     ORLIX_KERNEL_HOST_SDKROOT="$sdkroot" \
-    ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphonesimulator \
+    ORLIX_KERNEL_ARCHIVE_PLATFORMS="$ORLIX_KERNEL_ARCHIVE_PLATFORMS" \
     "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive
-built="$work/OrlixKernel/release/iphonesimulator/OrlixKernel.a"
+built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"
+/bin/mkdir -p "$boot_resources/orlix/boot/dts"
+for dtb in release development; do
+  source_dtb="$work/OrlixKernel/build/$PROFILE/arch/orlix/boot/dts/$dtb.dtb"
+  test -s "$source_dtb"
+  /bin/cp "$source_dtb" "$boot_resources/orlix/boot/dts/$dtb.dtb"
+done
 nm_cmd="$(/usr/bin/command -v llvm-nm)"
 if [ -z "$nm_cmd" ]; then nm_cmd="$(/usr/bin/command -v nm)"; fi
 test -n "$nm_cmd"
@@ -227,7 +236,8 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
 /usr/bin/printf '%s\n' '{' \
   '  "component": "OrlixKernel",' \
   '  "format": "mach-o-static-archive",' \
-  '  "platform": "iphonesimulator",' \
+  '  "platform": "'"$ORLIX_KERNEL_ARCHIVE_PLATFORMS"'",' \
+  '  "profile": "'"$PROFILE"'",' \
   '  "linked_symbol": "_arch_boot_entry",' \
   '  "wrapper_makefile": false,' \
   '  "archive_digest": "'"$digest"'"' \
@@ -244,28 +254,30 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             str(len(config_files)),
             str(len(engine_files)),
             str(len(extra_files)),
+            boot_resources.path,
         ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [f.path for f in extra_files],
         inputs = depset(
             direct = [ctx.file.linux_makefile] + overlay_files + patch_files + config_files + engine_files + extra_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
-        outputs = [archive, symbols, digest, manifest],
+        outputs = [archive, symbols, digest, manifest, boot_resources],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     return [
-        DefaultInfo(files = depset([archive, symbols, digest, manifest])),
+        DefaultInfo(files = depset([archive, symbols, digest, manifest, boot_resources])),
         OutputGroupInfo(
             archive = depset([archive]),
             symbols = depset([symbols]),
             manifest = depset([manifest]),
+            boot_resources = depset([boot_resources]),
         ),
         OrlixLinuxArchiveInfo(
             archive = archive,
             build_manifest = manifest,
-            destination = "iphonesimulator",
-            profile = "release",
+            destination = ctx.attr.destination,
+            profile = ctx.attr.profile,
             source_input_digest = digest,
             symbol_manifest = symbols,
         ),
@@ -274,6 +286,8 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
 orlix_kernel_macho_archive = rule(
     implementation = _kernel_macho_impl,
     attrs = {
+        "profile": attr.string(mandatory = True, values = ["release", "development"]),
+        "destination": attr.string(mandatory = True, values = ["iphoneos", "iphonesimulator"]),
         "linux_source": attr.label(mandatory = True),
         "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
         "overlay": attr.label(mandatory = True, allow_files = True),

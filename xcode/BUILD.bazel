@@ -1,4 +1,4 @@
-load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj", "xcschemes")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -6,6 +6,7 @@ xcodeproj(
     name = "feasibility",
     bazel_env = {
         "DEVELOPER_DIR": None,
+        "ORLIX_TCTI_ISA_PREPARED": None,
         "PATH": None,
     },
     bazel_path = "bazel",
@@ -15,6 +16,20 @@ xcodeproj(
     minimum_xcode_version = "26.6",
     project_name = "OrlixBazelFeasibility",
     tags = ["manual"],
+    scheme_autogeneration_mode = "all",
+    xcschemes = [
+        xcschemes.scheme(
+            name = name,
+            test = xcschemes.test(test_targets = ["//OrlixOSTestApp:" + target]),
+        )
+        for name, target in [
+            ("OrlixOSTestApp Tests", "OrlixOSTestAppTests"),
+            ("OrlixKernel Conformance", "OrlixKernelConformanceTests"),
+            ("OrlixMLibC Conformance", "OrlixMLibCConformanceTests"),
+            ("OrlixPackages Conformance", "OrlixPackagesConformanceTests"),
+            ("OrlixOS Runtime Tests", "OrlixOSRuntimeTests"),
+        ]
+    ],
     top_level_targets = [
         top_level_target(
             "//bazel/feasibility/apple:SmokeApp",
@@ -48,5 +63,15 @@ xcodeproj(
             "//Orlix:OrlixUITests",
             target_environments = ["simulator"],
         ),
+    ] + [
+        top_level_target("//OrlixOSTestApp:" + target, target_environments = ["simulator"])
+        for target in [
+            "OrlixOSTestApp",
+            "OrlixOSTestAppTests",
+            "OrlixKernelConformanceTests",
+            "OrlixMLibCConformanceTests",
+            "OrlixPackagesConformanceTests",
+            "OrlixOSRuntimeTests",
+        ]
     ],
 )

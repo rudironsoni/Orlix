@@ -37,6 +37,14 @@ orlix_kernel_uapi(
 
 orlix_kernel_macho_archive(
     name = "macho",
+    profile = select({
+        "//bazel/config:profile_development": "development",
+        "//conditions:default": "release",
+    }),
+    destination = select({
+        "//bazel/feasibility/native:ios_device": "iphoneos",
+        "//conditions:default": "iphonesimulator",
+    }),
     configs = "//OrlixKernel/Sources:linux_configs",
     extra_inputs = [
         "//:make/tcti-proof-registry-provenance.mk",
@@ -53,6 +61,14 @@ orlix_kernel_macho_archive(
         "//bazel/feasibility:__subpackages__",
         "//bazel/product:__pkg__",
     ],
+)
+
+filegroup(
+    name = "macho_boot_resources",
+    srcs = [":macho"],
+    output_group = "boot_resources",
+    tags = ["manual"],
+    visibility = ["//Orlix:__pkg__"],
 )
 
 filegroup(
