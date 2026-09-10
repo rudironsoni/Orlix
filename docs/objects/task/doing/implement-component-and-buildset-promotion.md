@@ -19,3 +19,7 @@ UAPI dual-build comparison now checks the entire output tree, including the Kbui
 Rootfs generation fixes initramfs and ext4 timestamps, the ext4 hash seed, Linux file ownership, and relative manifest paths. Its digest includes all three filesystem images. The rootfs provider exposes those images and their metadata. Filesystem assembly trees stay inside the producing action. Before publishing its outputs, the action checks executable modes, root ownership, the shell link, and required mount and state directories in the ext4 images.
 
 Unsigned promotion disables remote action reuse and clears signing inputs for its expected signing-rejection check. Signed publication and reconstruction still require the existing trusted key, owning runtime proof, and protected automation.
+
+The trust policy registers the SHA-256 fingerprint of the existing GHCR signing public key. Reconstruction verifies each locked OCI signature with that key before extracting and staging the component trees. Oras and Cosign use the same registry configuration; the local configuration uses the macOS Keychain credential helper. Public-key trust does not replace owning runtime proof or protected automation.
+
+The promoted app build verifies the embedded initramfs against the reconstructed rootfs and checks the locked buildset in its composition metadata. The Apple matrix treats this as supported payload consumption, with runtime proof, parity, and cutover still separate gates.

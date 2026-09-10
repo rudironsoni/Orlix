@@ -1,7 +1,9 @@
 {
   "schema": 1,
   "trust_model": "protected-cosign-key",
-  "accepted_key_ids": [],
+  "accepted_key_ids": [
+    "7d2b6c7a15b2b8d063a25f4fd9b4004db272f39de46c1b98087de42e343f9e8d"
+  ],
   "validity": {
     "overlap_days": 14,
     "retirement": "explicit",

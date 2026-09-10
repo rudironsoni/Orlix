@@ -70,9 +70,9 @@
       "deployment": "15.0",
       "destination": "iphonesimulator",
       "component_mode": "promoted",
-      "result": "gated",
-      "gate": "promoted payload consumes reconstructed rootfs; full IPA path is make __bazel-orlix-app",
-      "proof": "bazel build //bazel/feasibility/rootfs:payload --config=promoted verified reconstructed rootfs digest 794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3 for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d."
+      "result": "supported",
+      "gate": "IPA payload consumption is verified; runtime proof, parity, and cutover remain separate gates",
+      "proof": "make __bazel-orlix-app ORLIX_BAZEL_COMPONENT_MODE=promoted ORLIX_BAZEL_DESTINATION=iphonesimulator passed with Bazel --config=promoted, real Cosign verification, and embedded initramfs equality against reconstructed rootfs digest 794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3 for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d."
     },
     {
       "id": "signing-distribution",

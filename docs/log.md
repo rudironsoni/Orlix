@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] build | Register the existing buildset signing key
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) registers the existing public-key fingerprint for GHCR verification. Reconstruction verifies the locked signatures before staging their component trees. The promoted IPA check verifies the embedded rootfs and buildset metadata. Runtime proof and cutover remain separate gates.
+
 ## [2026-09-10] build | Record component benchmark evidence
 
 The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) uses the existing cache-equivalence Make target for component benchmarks. Each build emits Bazel events and a timing profile alongside its execution log. The workflow retains those files and the full-tree comparison without uploading mutable build trees.
