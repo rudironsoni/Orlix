@@ -50,6 +50,14 @@ struct DefaultLocalInstanceTerminalView: View {
             terminalProvider: { tabManager.terminalSurfaceStore.ghosttySurface(for: $0) },
             keyboardCoordinator: keyboardCoordinator
         )
+        .overlay(alignment: .bottom) {
+            if !keyboardCoordinator.isSoftwareKeyboardVisible {
+                TerminalFloatingControlButton.keyboard(showsTitle: true) {
+                    keyboardCoordinator.userRequestedShow()
+                }
+                .padding(.bottom, 4)
+            }
+        }
         .navigationTitle("Orlix")
         .navigationBarTitleDisplayMode(.inline)
         .onReceive(tabManager.terminalSurfaceStore.changes) { surfaceChange = $0 }
@@ -95,11 +103,6 @@ private struct DefaultLocalInstanceTerminalRepresentable: View {
                 terminal.accessibilityIdentifier = "orlix.local-instance.terminal"
                 terminal.accessibilityLabel = "Orlix local terminal"
                 terminal.accessibilityValue = "initializing"
-                #if DEBUG
-                if Foundation.ProcessInfo.processInfo.arguments.contains("--orlix-ui-test-local-terminal") {
-                    terminal.keyboardUITestSetHardwareKeyboardAttached(false)
-                }
-                #endif
                 coordinator.attach(to: terminal)
                 terminal.onReady = { [weak coordinator, weak terminal] in
                     guard let terminal else { return }

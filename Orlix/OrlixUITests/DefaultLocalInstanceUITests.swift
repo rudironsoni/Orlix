@@ -30,6 +30,7 @@ final class DefaultLocalInstanceUITests: XCTestCase {
         XCTAssertNotEqual(terminal.value as? String, "failed")
 
         terminal.tap()
+        let showKeyboard = app.buttons["orlix.terminal.floating.keyboard"]
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
         let hideKeyboard = app.descendants(matching: .any)["orlix.keyboard.accessory.hide"]
         XCTAssertTrue(hideKeyboard.waitForExistence(timeout: 5))
@@ -48,5 +49,20 @@ final class DefaultLocalInstanceUITests: XCTestCase {
         }
         hideKeyboard.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 8))
+        XCTAssertTrue(showKeyboard.waitForExistence(timeout: 5))
+        terminal.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        hideKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 8))
+        showKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        let key = app.keys["x"]
+        XCTAssertTrue(key.waitForExistence(timeout: 5))
+        key.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let restoredScreenshot = XCTAttachment(screenshot: app.screenshot())
+        restoredScreenshot.name = "Orlix keyboard restored and typing"
+        restoredScreenshot.lifetime = .keepAlways
+        add(restoredScreenshot)
     }
 }

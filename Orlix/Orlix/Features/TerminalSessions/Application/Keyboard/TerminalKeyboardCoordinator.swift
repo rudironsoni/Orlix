@@ -737,6 +737,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             return
         }
         claimLocalInputOwnershipForExplicitInteraction()
+        if isFocusTap, !isSoftwareKeyboardVisible {
+            userRequestedShow()
+            return
+        }
         guard !isUserHidden, !isSoftwareKeyboardVisible else { return }
         requestAutomaticPresentationRefresh()
         // See userRequestedShow: user actions get a fresh repair budget.

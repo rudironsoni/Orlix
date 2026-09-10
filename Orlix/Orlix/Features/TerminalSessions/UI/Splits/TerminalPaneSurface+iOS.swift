@@ -105,4 +105,83 @@ struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
         coordinator.dismantle(terminal, coordinator.backend)
     }
 }
+
+struct TerminalFloatingControlButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let accessibilityLabel: LocalizedStringKey
+    let accessibilityIdentifier: String
+    let showsTitle: Bool
+    var isPrimary: Bool = false
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    static func keyboard(showsTitle: Bool, action: @escaping () -> Void) -> Self {
+        Self(
+            title: "Keyboard",
+            systemImage: "keyboard",
+            accessibilityLabel: "Show Keyboard",
+            accessibilityIdentifier: "orlix.terminal.floating.keyboard",
+            showsTitle: showsTitle,
+            action: action
+        )
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: showsTitle ? 6 : 0) {
+                Image(systemName: systemImage)
+                if showsTitle {
+                    Text(title)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .foregroundStyle(isPrimary ? Color.accentColor : Color.primary)
+            .padding(.horizontal, showsTitle ? 2 : 0)
+        }
+        .accessibilityLabel(Text(accessibilityLabel))
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .modifier(
+            FloatingTerminalControlButtonStyle(
+                isPrimary: isPrimary,
+                colorScheme: colorScheme
+            )
+        )
+    }
+}
+
+private struct FloatingTerminalControlButtonStyle: ViewModifier {
+    let isPrimary: Bool
+    let colorScheme: ColorScheme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            if isPrimary {
+                content
+                    .tint(Color.accentColor)
+                    .buttonStyle(SwiftUI.GlassButtonStyle())
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+            } else {
+                content
+                    .buttonStyle(SwiftUI.GlassButtonStyle())
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+            }
+        } else {
+            content
+                .buttonStyle(
+                    .glass(
+                        tint: Color.accentColor.opacity(
+                            isPrimary ? 0.5 : (colorScheme == .dark ? 0.24 : 0.14)
+                        )
+                    )
+                )
+        }
+    }
+}
 #endif

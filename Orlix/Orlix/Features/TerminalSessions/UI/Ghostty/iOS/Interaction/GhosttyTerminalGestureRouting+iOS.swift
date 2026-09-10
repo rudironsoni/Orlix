@@ -113,11 +113,11 @@ extension GhosttyTerminalView {
                 return
             }
             guard shouldAutoFocusKeyboard(for: touches) else { return }
-            notifyDirectTouchOnTerminal(isFocusTap: true)
+            notifyDirectTouchOnTerminal()
             return
         }
         // Tap just focuses keyboard - no mouse events (avoids accidental selection).
-        notifyDirectTouchOnTerminal(isFocusTap: true)
+        notifyDirectTouchOnTerminal()
         requestKeyboardFocus(for: .directTouch)
     }
 
@@ -149,6 +149,7 @@ extension GhosttyTerminalView {
 
         let selectionWasActive = hasActiveSelectionInteraction
         clearNativeSelectionStateForTerminalInput()
+        notifyDirectTouchOnTerminal(isFocusTap: true)
         if selectionWasActive {
             _ = requestKeyboardFocus(for: .directTouch)
         }

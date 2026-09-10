@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Restore local terminal keyboard access
+
+The [mobile terminal validation task](objects/task/doing/validate-mobile-terminal-simulator-product.md) requires the system keyboard without a local hardware-state override. Completed focus taps and the shared Keyboard control use the same explicit show action. The local screen exposes the remote control when the software keyboard is absent. Its existing UI test covers dismissal, reopening, and typing.
+
 ## [2026-09-10] fix | Isolate native SSH sources by platform
 
 The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) copies native source contents instead of preserving Bazel's repository symlinks. The old copy could configure OpenSSL inside the repository input and carry iOS objects into the simulator build. Each platform now builds in its own copied source directory.
