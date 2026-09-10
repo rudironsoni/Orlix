@@ -721,7 +721,7 @@
       }
     },
     ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "f970e748c74526cfe42bedc547cbaf018b3815df97c3ecba17da184594439eee",
+      "source_sha256": "7b7df5d895a185e33159dcd4740690d0d364a9823d2dc5ae938c781d83667eef",
       "workflow": {
         "name": "iOS 15 runtime",
         "on": {
@@ -881,12 +881,17 @@
                 "run": "make __tcti-isa-restore"
               },
               {
-                "name": "Run the iOS 15 launch test",
-                "timeout-minutes": 45,
+                "name": "Build the iOS 15 launch test",
+                "timeout-minutes": 60,
                 "env": {
                   "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
                 },
-                "run": "make ios15-simulator-gate"
+                "run": "make __ios15-simulator-build"
+              },
+              {
+                "name": "Run the iOS 15 launch test",
+                "timeout-minutes": 10,
+                "run": "make __ios15-simulator-test"
               },
               {
                 "name": "Store iOS 15 test evidence",

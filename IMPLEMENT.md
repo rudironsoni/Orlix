@@ -102,3 +102,12 @@ Two isolated Kernel builds exited 0 in 518.72 and 538.70 seconds, compiling 918 
 Review found that the five nested Kbuild calls also need the fixed build number. They now pass it with the existing timestamp, user, and host values. An actual upstream `init/Makefile` fixture with persistent counters 17 and 700 produces different headers without that setting and identical headers with it. This follow-up occurred after the two full builds; its fixture and the existing archive-cache tests passed. The prior build-graph check passed 113 Python tests and 28 cached Bazel analysis tests.
 
 Evidence is under `Build/AgentHarness/bazel-migration/recovery-checkpoint-3/`: `kernel-reproducibility.json`, `prefix-map-fixture.json`, `kbuild-version-fixture.json`, `repro-a.log`, `repro-b.log`, `repro-b.execution.json`, and the archive-cache test logs. This proves the bounded compiler/version correction. Stable Kbuild state, cache invalidation locality, developer-loop improvements, full runtime proof, and cutover remain open. TAP stays stopped and `artifacts.lock.json` is unchanged.
+
+
+## CI checkpoint: separate iOS 15 build and test deadlines
+
+The iOS 15 run `34519606349` timed out in the combined 45-minute Make step. The test build succeeded at 20:19:43 UTC, app validation passed at 20:19:49, and the test runner started at 20:20:28. The step was killed at 20:20:31. This produced no completed runtime result.
+
+The existing source gate now has private build and test phases. The public `make ios15-simulator-gate` runs them in order under the current source authority. CI gives the build 60 minutes and the test phase 10 minutes within the unchanged 90-minute job. The test phase retains app validation, `test-without-building`, and the existing 120/180-second XCTest limits. Bazel routing and cutover status remain unchanged.
+
+Verification: 38 focused routing, workflow, and iOS 15 unit checks passed. The new routing case executes Make dry runs to verify phase separation, ordering, app validation, and XCTest timeout flags. `make __bazel-matrix-check` exited 0 with 114 Python tests and 28 cached Bazel analysis tests. Inventory generation and checks passed against the exact staged source snapshot. Remote runtime validation is pending the next CI run; no local simulator or device execution was performed for this change.

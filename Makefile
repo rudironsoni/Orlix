@@ -375,6 +375,12 @@ ios15-simulator-gate:
 ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-ios15-simulator-gate
 else
+	@$(MAKE) __ios15-simulator-build
+	@$(MAKE) __ios15-simulator-test
+endif
+
+.PHONY: __ios15-simulator-build __ios15-simulator-test
+__ios15-simulator-build:
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
@@ -399,7 +405,16 @@ else
 		-resultBundlePath "$$result_bundle" \
 		ENABLE_DEBUG_DYLIB=NO \
 		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
-		build-for-testing 2>&1 | tee "$$result_log"; \
+		build-for-testing 2>&1 | tee "$$result_log"
+
+__ios15-simulator-test:
+	@set -euo pipefail; \
+	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
+	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
+	result_log="$$result_dir/Orlix-iOS15.log"; \
+	derived_data="$$result_dir/DerivedData"; \
+	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
 	app="$$derived_data/Build/Products/Debug-iphonesimulator/Orlix.app"; \
 	test -d "$$app" || { echo "missing iOS 15 simulator app: $$app" >&2; exit 1; }; \
 	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
@@ -417,7 +432,6 @@ else
 		-default-test-execution-time-allowance 120 \
 		-maximum-test-execution-time-allowance 180 \
 		test-without-building 2>&1 | tee -a "$$result_log"
-endif
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \

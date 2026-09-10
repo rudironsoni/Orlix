@@ -31,6 +31,19 @@ def _dry_run(*args: str) -> str:
 
 
 class MakeRoutingTests(unittest.TestCase):
+    def test_ios15_source_gate_separates_build_from_runtime(self) -> None:
+        aggregate = _dry_run("ios15-simulator-gate", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertLess(aggregate.index("__ios15-simulator-build"), aggregate.index("__ios15-simulator-test"))
+        build = _dry_run("__ios15-simulator-build", "ORLIX_BAZEL_AUTHORITY=0")
+        runtime = _dry_run("__ios15-simulator-test", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertIn("build-for-testing", build)
+        self.assertNotIn("test-without-building", build)
+        self.assertIn("test-without-building", runtime)
+        self.assertNotIn("build-for-testing", runtime)
+        self.assertIn("validate_simulator_app", runtime)
+        self.assertIn("-test-timeouts-enabled YES", runtime)
+        self.assertIn("-maximum-test-execution-time-allowance 180", runtime)
+
     def test_kernel_build_respects_profile_and_destination(self) -> None:
         output = _dry_run(
             "__bazel-kernel-boot", "PROFILE=development",
