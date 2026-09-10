@@ -77,7 +77,7 @@ for relative in "$@"; do
     source="$exec_root/$relative"
     source_name="${source#"$builtins/"}"
     object_name="${source_name//\//-}"
-    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -O2 -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
+    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -ffixed-x18 -O2 -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
 done
 "$ar" rcs "$runtime_out" "$work"/*.o
 test -s "$runtime_out"
@@ -158,30 +158,28 @@ while [ "$#" -gt 0 ]; do
     /usr/bin/patch --batch --forward -p1 -d "$work/mlibc" -i "$patch"
     shift
 done
-/bin/mkdir -p "$work/mlibc/subprojects"
-copy_wrap() {
-    marker="$1"
-    dest="$2"
-    src="$(/usr/bin/dirname "$marker")"
-    /bin/rm -rf "$dest"
-    /bin/mkdir -p "$dest"
-    /bin/cp -R "$src/." "$dest"
+/bin/mkdir -p "$work/subproject-cache"
+export MESON_PACKAGE_CACHE_DIR="$work/subproject-cache"
+stage_subproject() {
+    source="$(/usr/bin/dirname "$1")"
+    /bin/ln -s "$source" "$MESON_PACKAGE_CACHE_DIR/$2"
 }
-copy_wrap "$frigg_meson" "$work/mlibc/subprojects/frigg"
-copy_wrap "$c_hdrs" "$work/mlibc/subprojects/freestnd-c-hdrs"
-copy_wrap "$cxx_hdrs" "$work/mlibc/subprojects/freestnd-cxx-hdrs"
-copy_wrap "$smarter" "$work/mlibc/subprojects/libsmarter"
-copy_wrap "$bragi" "$work/mlibc/subprojects/bragi"
+stage_subproject "$frigg_meson" frigg
+stage_subproject "$c_hdrs" freestnd-c-hdrs
+stage_subproject "$cxx_hdrs" freestnd-cxx-hdrs
+stage_subproject "$smarter" libsmarter
+stage_subproject "$bragi" bragi
 /bin/mkdir -p "$work/arch"
 /usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp"
 lld="$(/usr/bin/command -v ld.lld)"
 test -n "$lld"
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-I$work/arch', '-isystem', '$work/mlibc/subprojects/freestnd-c-hdrs/aarch64/include']" "cpp_args = ['-I$work/arch', '-isystem', '$work/mlibc/subprojects/freestnd-c-hdrs/aarch64/include', '-isystem', '$work/mlibc/subprojects/freestnd-cxx-hdrs/aarch64/include']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
 /usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot']" "cpp = ['$clangxx', '-isysroot', '$sdkroot']" > "$work/native.ini"
 env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
     SDKROOT="$sdkroot" \
     "$meson_bin" setup "$work/build" "$work/mlibc" \
         --wrap-mode=nodownload \
+        --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter \
         --cross-file "$work/cross.ini" \
         --native-file "$work/native.ini" \
         --prefix /usr \

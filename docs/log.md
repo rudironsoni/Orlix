@@ -7,6 +7,10 @@ updated: 2026-09-11
 ---
 # Orlix Knowledge Log
 
+## [2026-09-11] fix | Honor mlibc guest build inputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) prepares declared subprojects through Meson's source package cache so its wrap patches apply. Bazel mlibc compilation now uses the owning Make rules' page-size header and guest code-generation flags. `IMPLEMENT.md` records the compiler fixture and source build; persistent Ninja state and runtime proof remain open.
+
 ## [2026-09-11] build | Separate the compiler runtime artifact
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) gives compiler-rt an independent Bazel action. Mlibc compilation consumes its archive instead of its source tree or tool-identity metadata. `IMPLEMENT.md` records unchanged complete output content and reuse during an mlibc implementation mutation. Meson/Ninja incremental state remains open.
