@@ -34,9 +34,7 @@ jobs:
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
       - name: Install build tools
-        run: |
-          brew bundle --file Brewfile
-          brew list jq >/dev/null 2>&1 || brew install jq
+        run: brew bundle --file Brewfile
       - name: Measure and compare component builds through Make
         run: |
           set -euo pipefail
