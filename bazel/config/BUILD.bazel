@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "toolchain-pin.json",
+    "toolchain_pin.py",
 ])
 
 string_flag(

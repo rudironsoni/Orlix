@@ -126,3 +126,34 @@ Two source prepare runs returned 0, retained unchanged file timestamps, and pres
 Earlier actual pin mutations proved that a whitespace-only pin change reruns extraction while reusing the unchanged Kernel result, and an invalid digest fails before compilation. Those mutations were restored. The full current build-graph check and final focused serializer check are recorded in `Build/AgentHarness/bazel-migration/recovery-checkpoint-3/isa-matrix.log` and `isa-final-check.log`. The maintainer and source-output comparisons are in `isa-refresh-result.json` and `isa-source-prepare.json`.
 
 This checkpoint corrects declared inputs and publication. Stable Kernel build state and measured incremental recompilation remain the next phase 3 work. TAP remains stopped.
+
+
+## Checkpoint 3C: retain Kernel build state
+
+Status: verified locally. The full recovery remains in progress.
+
+The Kernel source action retains its prepared source and upstream Kbuild output beneath the worktree's Bazel output base. Preparation patches only the touched files in temporary staging and replaces materialized source only when bytes or modes change. Kbuild owns its generated headers, host tools, initramfs, and console map. The native projection checks each object's compiler command and dependency file. A source edit no longer deletes Kbuild output or recompiles every native object.
+
+The action identity includes declared source, overlays, patches, configuration, ISA artifacts, build rules, and observed tool identities. The incremental directory uses the worktree output base, profile, and destination; source digests do not select a fresh directory. State compatibility includes the generated action script, Kbuild rules, and full tool identity. Before reuse, the state record checks actual output content and modes. Compiler-cache identity excludes unrelated archive-processing tools. The prepared-source digest is computed from current inputs and supplies the embedded proof identity without an undeclared Git read.
+
+A file lock covers preparation, Kbuild, native compilation, and state recording. Symlinked state ancestors, malformed records, and corrupted object bytes cannot authorize reuse. The existing seven focused tests cover unchanged-file timestamps, same-size edits with preserved source timestamps, fresh-tree equivalence, lock exclusion, corruption, and path redirection. GNU find is now a declared host prerequisite because upstream Kbuild uses its `-printf` operation. No guest package was added.
+
+Measured results for the release simulator Kernel:
+
+| Workload | Wall time | Native compilation requests | Upstream object/tool compilation requests | Reuse |
+| --- | ---: | ---: | ---: | --- |
+| Seed with compiler cache enabled | 620.87 s | 918 | 51 | Fresh Kbuild state |
+| No source change | 1.30 s | 0 | 0 | Bazel action result |
+| Kernel `time.c` constant change | 208.99 s | 2 | 0 | 916 native objects retained |
+| Restore original source | 1.72 s | 0 | 0 | One Bazel disk-cache hit |
+| Independent caches-disabled build | 516.21 s | 918 | 51 | No build-result, compiler, or incremental reuse |
+
+The mutation preserved source length and mtime. Only `time.c` and the embedded Kernel proof registry required native compilation; downstream composition outputs changed as expected. The source was restored exactly. Compiler-cache counters across the mutation showed two misses and 209 direct hits, including Kbuild configuration probes. These counters are machine-wide; the action logs and object snapshots establish the bounded object-reuse claim. Cached action stdout is retained in raw logs but is not counted as current compiler execution.
+
+The independent build disabled action, disk, remote, compiler-cache, and persistent Kbuild reuse. The existing full-tree comparator checked paths, file bytes, modes, and symlink targets. Both output trees have digest `71dc84a37e6179b39090c16e907810b1ebea2de8394b780cfb9e31d30bbc20fb`; both archives have SHA-256 `ac0fa15c5b06603aee06aefea5f12912c7afc9ced9f1fee9db7ff71160c5abe7`. All implementation input hashes remained unchanged during these builds. No binary normalization was used.
+
+The retained Kernel state occupies 2,213,404 KiB after the seed and 2,221,052 KiB after the mutation, an increase of 7,648 KiB. The compiler cache is shared and bounded to 20 GB; prepared sources and mutable build state remain local to this worktree. These measurements do not establish the full developer-loop disk comparison or cross-worktree Kernel performance. The cache-enabled seed was slower than the cache-disabled full build; the demonstrated improvement is avoiding 916 native compilations on the measured edit. Batch-build maximum RSS was 1,380,433,920 bytes. The persistent-server client timing does not measure total build memory.
+
+The full graph check passed 119 Python tests and 28 cached Bazel analysis tests. Archive contract checks, migration inventory, documentation checks, 13 repository hook tests, generated-hook checks, and diff whitespace checks passed. Independent source review found no remaining checkpoint 3 blocker. Evidence is under `Build/AgentHarness/bazel-migration/recovery-checkpoint-3/`: `kernel-locality-summary.json`, `kernel-final-seed2.json`, `kernel-mutation.json`, `kernel-cache-equivalence.json`, their execution/BEP/profile logs, and the `kernel-final-*` check logs. Earlier failed launcher and generator attempts remain in their original logs.
+
+This checkpoint proves Kernel incremental object reuse and real cache-on/cache-off product equivalence for the tested profile and destination. The full mutation matrix, mlibc/package incremental state, promoted reuse, SDK graph, runtime ladder, Apple parity, and authority cutover remain open. Phase 4 is next. TAP remains stopped and `artifacts.lock.json` is unchanged.

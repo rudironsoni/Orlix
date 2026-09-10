@@ -1830,7 +1830,7 @@ __prepare-kbuild:
 	mkdir -p "$$port_isa"; \
 	for isa_name in $(ORLIX_TCTI_ISA_ARCHIVE_MEMBERS); do \
 		[ -s "$$isa_src/$$isa_name" ] || { echo "missing prepared ISA artifact: $$isa_src/$$isa_name" >&2; exit 1; }; \
-		cp "$$isa_src/$$isa_name" "$$port_isa/$$isa_name"; \
+		if ! cmp -s "$$isa_src/$$isa_name" "$$port_isa/$$isa_name"; then cp "$$isa_src/$$isa_name" "$$port_isa/$$isa_name"; fi; \
 	done; \
 	linux_make="$(LINUX_MAKE)"; \
 	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
@@ -1843,25 +1843,6 @@ __prepare-kbuild:
 	if [ "$$build_dir" != "$$expected_build_dir" ]; then \
 		echo "Orlix kernel build directory must be $$expected_build_dir: $$build_dir" >&2; \
 		exit 1; \
-	fi; \
-	ready_stamp="$$build_dir/.orlix-kbuild-ready"; \
-	if [ -s "$$ready_stamp" ] && \
-		[ "$$ready_stamp" -nt "$(ORLIX_PROFILE_CONFIG)" ] && \
-		[ "$$ready_stamp" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
-		grep -Fxq "kunit=$(ORLIX_KERNEL_KUNIT)" "$$ready_stamp" && \
-		{ [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] || [ "$$ready_stamp" -nt "$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig" ]; } && \
-		[ -s "$$build_dir/.config" ] && \
-		[ -s "$$build_dir/include/generated/autoconf.h" ] && \
-		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
-		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" ] && \
-		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb" ] && \
-		[ -s "$$build_dir/drivers/of/empty_root.dtb" ] && \
-		[ -s "$$build_dir/security/selinux/flask.h" ] && \
-		[ -s "$$build_dir/security/selinux/av_permissions.h" ] && \
-		[ -x "$$build_dir/usr/gen_init_cpio" ] && \
-		[ -s "$$build_dir/usr/initramfs_inc_data" ]; then \
-		echo "reusing prepared Orlix Kbuild output: $$build_dir (profile $(PROFILE))"; \
-		exit 0; \
 	fi; \
 	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel/build"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked path: $$path" >&2; exit 1; fi; \
@@ -1887,32 +1868,19 @@ __prepare-kbuild:
 	elif [ -x /opt/homebrew/opt/coreutils/libexec/gnubin/readlink ]; then coreutils_dir=/opt/homebrew/opt/coreutils/libexec/gnubin; \
 	else echo "GNU readlink is required by Linux Kbuild; install coreutils" >&2; exit 1; fi; \
 	linux_llvm_bin="$(LINUX_LLVM_BIN)"; \
-	PATH="$$linux_sed_dir:$$coreutils_dir:$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
+	PATH="$$linux_sed_dir:$$coreutils_dir:/opt/homebrew/opt/findutils/libexec/gnubin:$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
 	export PATH; \
+	find --version >/dev/null 2>&1 || { echo "GNU find is required by Linux initramfs generation; install the declared Brewfile" >&2; exit 1; }; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux Kbuild on this host" >&2; exit 1; }; \
 	command -v llvm-ar >/dev/null 2>&1 || { echo "llvm-ar is required by Linux Kbuild; install LLVM or set LINUX_LLVM_BIN=/path/to/llvm/bin" >&2; exit 1; }; \
 	command -v ld.lld >/dev/null 2>&1 || { echo "ld.lld is required by Linux Kbuild LLVM=1; install LLVM or set LINUX_LLVM_BIN to a directory that contains ld.lld" >&2; exit 1; }; \
-	if [ -s "$$build_dir/.config" ] && \
-		[ "$$build_dir/.config" -nt "$(ORLIX_PROFILE_CONFIG)" ] && \
-		[ "$$build_dir/.config" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
-		{ [ "$(ORLIX_KERNEL_KUNIT)" = 1 ] && grep -Fxq 'CONFIG_KUNIT=y' "$$build_dir/.config" || [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] && ! grep -Fxq 'CONFIG_KUNIT=y' "$$build_dir/.config"; } && \
-		{ [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] || [ "$$build_dir/.config" -nt "$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig" ]; }; then \
-		echo "resuming partial Orlix Kbuild output: $$build_dir (profile $(PROFILE))"; \
-	else \
-		for attempt in 1 2 3 4 5; do \
-			rm -rf "$$build_dir" 2>/dev/null || true; \
-			[ ! -e "$$build_dir" ] && break; \
-			sleep 1; \
-		done; \
-		[ ! -e "$$build_dir" ] || { echo "failed to remove disposable Orlix Kbuild output: $$build_dir" >&2; exit 1; }; \
-		mkdir -p "$$build_dir"; \
-	fi; \
+	mkdir -p "$$build_dir"; \
 	[ -n "$(ORLIX_KERNEL_HOST_SDKROOT)" ] || { echo "macOS SDK is required for Linux Kbuild host tools; set ORLIX_KERNEL_HOST_SDKROOT=/path/to/MacOSX.sdk" >&2; exit 1; }; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_VERSION="$(ORLIX_KERNEL_KBUILD_BUILD_VERSION)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
 	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
 		"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$$build_dir" "$$build_dir/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_VERSION="$(ORLIX_KERNEL_KBUILD_BUILD_VERSION)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o security/selinux/avc.o; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_VERSION="$(ORLIX_KERNEL_KBUILD_BUILD_VERSION)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o security/selinux/avc.o usr/initramfs_data.o drivers/tty/vt/consolemap_deftbl.o; \
 	for dtb in release development; do \
 		[ -f "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" ] || { echo "missing profile DTB: $$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" >&2; exit 1; }; \
 	done; \
@@ -1920,17 +1888,13 @@ __prepare-kbuild:
 	mkdir -p "$$build_dir/usr"; \
 	gen_init_cpio="$$build_dir/usr/gen_init_cpio"; \
 	initramfs_list="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" $(ORLIX_KERNEL_KBUILD_HOSTCC) -O2 -Wall -Wmissing-prototypes -Wstrict-prototypes -o "$$gen_init_cpio" "$(ORLIX_KERNEL_PORT_ABS)/usr/gen_init_cpio.c"; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing executable Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	[ -s "$$initramfs_list" ] || { echo "missing Orlix no-init initramfs list: $$initramfs_list" >&2; exit 1; }; \
 	grep -Fxq 'CONFIG_INITRAMFS_SOURCE="$$(srctree)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_SOURCE; update Orlix initramfs generation policy" >&2; exit 1; }; \
 	grep -Fxq 'CONFIG_INITRAMFS_COMPRESSION_GZIP=y' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_COMPRESSION policy; update Orlix initramfs generation policy" >&2; exit 1; }; \
-	"$$gen_init_cpio" "$$initramfs_list" > "$$build_dir/usr/initramfs_data.cpio"; \
-	gzip -n -c "$$build_dir/usr/initramfs_data.cpio" > "$$build_dir/usr/initramfs_inc_data"; \
 	[ -s "$$build_dir/usr/initramfs_inc_data" ] || { echo "missing generated initramfs input: $$build_dir/usr/initramfs_inc_data" >&2; exit 1; }; \
 	linker_script="$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds"; \
 	[ -s "$$linker_script" ] || { echo "missing generated Orlix Kbuild linker script: $$linker_script" >&2; exit 1; }; \
-	printf 'profile=%s\nlinux_version=%s\nkunit=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(ORLIX_KERNEL_KUNIT)" > "$$ready_stamp"; \
 	echo "verified Orlix Kbuild linker script: $$linker_script"; \
 	echo "prepared Orlix Kbuild output without a standalone image: $$build_dir (profile $(PROFILE))"
 
@@ -2214,83 +2178,20 @@ __kernel-archive: __prepare-kbuild
 			rm -f "$$dependency_list"; \
 			return "$$status"; \
 		}; \
-		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ]; then \
-			symbols="$$output_dir/symbols.txt"; \
-			required_symbols=(_arch_boot_entry _arch_boot_params _orlix_tcti_system_accessor_decode _orlix_tcti_execute_system_register); \
-			cache_deps=(); sources=(); objects=(); depfiles=(); \
-			for cache_dep in \
-				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
-				"$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" \
-				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
-				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
-				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
-				"$$orlix_tcti_kbuild" \
-				OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk \
-				"$$inventory_generator" \
-				"$$inventory_definition" \
-				"$$target_inventory_generator" \
-				"$$target_inventory_generator_header" \
-				"$$target_inventory_source_manifest" \
-					"$$target_inventory_classification" \
-					"$$target_inventory_system_accessors" \
-					"$$target_proof_registry_provenance_header" \
-					"$$target_proof_registry_decode_source" \
-					"$$target_proof_registry_partition_source" \
-					"$$target_proof_registry_build_source" \
-					"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do cache_deps+=("$$cache_dep"); done; \
-			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
-				src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
-				obj_name="$${src_rel//\//_}.o"; \
-				obj="$$obj_dir/$$obj_name"; \
-				dep="$$obj_dir/$${obj_name%.o}.d"; \
-				sources+=("$$src"); objects+=("$$obj"); depfiles+=("$$dep"); \
-			done; \
-			if orlix_archive_cache_current; then \
-				echo "reusing OrlixKernel archive: $$archive ($$target)"; \
-				return 0; \
-			fi; \
-		fi; \
-		rm -f "$$archive_tmp" "$$symbols_tmp"; \
-		object_set_ready=1; \
-		objects_probe=(); \
-		for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
-			src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
-			obj_name="$${src_rel//\//_}.o"; \
-			obj="$$obj_dir/$$obj_name"; \
-			verified="$$obj.verified"; \
-			dep="$$obj_dir/$${obj_name%.o}.d"; \
-			if [ ! -s "$$obj" ] || [ ! -e "$$verified" ]; then object_set_ready=0; break; fi; \
-			if [ ! -s "$$src" ] || [ ! "$$obj" -nt "$$src" ]; then object_set_ready=0; break; fi; \
-			for cache_dep in \
-				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
-				"$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" \
-				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
-				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
-					"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
-					"$$orlix_tcti_kbuild" \
-					"$$target_proof_registry_provenance_header" \
-					"$$target_proof_registry_decode_source" \
-					"$$target_proof_registry_partition_source" \
-					"$$target_proof_registry_build_source" \
-					"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
-				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
-			done; \
-			if ! object_dependencies_current "$$obj" "$$dep"; then object_set_ready=0; break; fi; \
-			objects_probe+=("$$obj"); \
-		done; \
-		if [ "$$object_set_ready" -eq 1 ]; then \
-			objs=("$${objects_probe[@]}"); \
-			printf '  ORLIXOBJS %s %s objects\n' "$$platform" "$${#objs[@]}" >&2; \
-		else \
 			objs=(); \
 			config_fingerprint="$$(shasum -a 256 "$(ORLIX_KERNEL_BUILD_DIR)/.config" | awk '{ print substr($$1, 1, 16) }')"; \
 			proof_config_sha256="$$(orlix_tcti_file_sha256 "$(ORLIX_KERNEL_BUILD_DIR)/.config")" || exit 1; \
 			proof_profile_sha256="$$(orlix_tcti_proof_profile_sha256 '$(PROFILE)' "$(ORLIX_PROFILE_CONFIG)")" || exit 1; \
+			proof_source_revision="$(ORLIX_KERNEL_PREPARED_SOURCE_SHA256)"; \
+			if [ -n "$$proof_source_revision" ]; then \
+				[[ "$$proof_source_revision" =~ ^[0-9a-f]{64}$$ ]] || { echo "invalid prepared source digest" >&2; exit 1; }; \
+			else \
 			proof_source_tmp_root="$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}"; mkdir -p "$$proof_source_tmp_root"; \
 			proof_source_paths="$$(mktemp "$$proof_source_tmp_root/orlix-tcti-candidate-paths.XXXXXX")"; \
 			if ! git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			rm -f "$$proof_source_paths"; \
+			fi; \
 				proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" "$$target_proof_registry_provenance_header" "$$target_proof_registry_decode_source" "$$target_proof_registry_partition_source" "$$target_proof_registry_build_source"); \
 			for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do proof_archive_inputs+=("$$(orlix_product_adapter_source_for "$$proof_src_rel")"); done; \
 			printf -v proof_archive_prefix 'platform=%s\ntarget=%s\nsource_revision=%s\n' "$$platform" "$$target" "$$proof_source_revision"; \
@@ -2328,26 +2229,13 @@ __kernel-archive: __prepare-kbuild
 				lib/crc32.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/lib -I$(ORLIX_KERNEL_BUILD_DIR)/lib" ;; \
 				lib/fdt*.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/scripts/dtc/libfdt" ;; \
 			esac; \
+			compile_command=("$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_modname\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags $$product_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"); \
+			printf '%q ' "$${compile_command[@]}" > "$$obj.command.tmp"; \
 			needs_build=1; \
-			if [ -s "$$obj" ] && \
-				[ "$$obj" -nt "$$src" ] && \
-				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
-				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
-				[ "$$obj" -nt "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" ] && \
-				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
-				[ "$$obj" -nt "$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" ] && \
-					[ "$$obj" -nt "$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" ] && \
-					[ "$$obj" -nt "$$orlix_tcti_kbuild" ] && \
-					[ "$$obj" -nt "$$target_proof_registry_provenance_header" ] && \
-					[ "$$obj" -nt "$$target_proof_registry_decode_source" ] && \
-					[ "$$obj" -nt "$$target_proof_registry_partition_source" ] && \
-					[ "$$obj" -nt "$$target_proof_registry_build_source" ] && \
-					object_dependencies_current "$$obj" "$$dep"; then \
-				needs_build=0; \
-			fi; \
+			if [ -s "$$obj" ] && cmp -s "$$obj.command.tmp" "$$obj.command" && object_dependencies_current "$$obj" "$$dep"; then needs_build=0; fi; \
 			if [ "$$needs_build" -eq 1 ]; then \
 				printf '  ORLIXCC %s %s\n' "$$platform" "$$src_rel" >&2; \
-			/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_modname\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags $$product_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+			/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$${CCACHE_EXTRAFILES:+$$CCACHE_EXTRAFILES:}$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$${compile_command[@]}"; \
 				if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 					echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 					exit 1; \
@@ -2358,6 +2246,7 @@ __kernel-archive: __prepare-kbuild
 				fi; \
 				orlix_product_adapter_verify_object_contract "$$obj"; \
 				: > "$$verified"; \
+				mv "$$obj.command.tmp" "$$obj.command"; \
 			else \
 				if [ ! -e "$$verified" ] || [ "$$verified" -ot "$$obj" ]; then \
 					orlix_product_adapter_verify_object_contract "$$obj"; \
@@ -2366,7 +2255,6 @@ __kernel-archive: __prepare-kbuild
 			fi; \
 			objs+=("$$obj"); \
 			done; \
-		fi; \
 		orlix_product_adapter_generate_payloads "$$platform" "$$target"; \
 		orlix_product_adapter_generate_boundaries "$$platform" "$$target" "$${objs[@]}"; \
 		orlix_product_adapter_generate_kallsyms "$$platform" "$$target" "$${objs[@]}"; \

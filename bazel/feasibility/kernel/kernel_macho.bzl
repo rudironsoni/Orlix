@@ -11,11 +11,14 @@ def _pinned_env(ctx):
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
-        "PATH": "/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
         "ORLIX_KERNEL_PORT_PREPARED": "1",
         "ORLIX_KERNEL_KUNIT": "0",
         "ORLIX_OS_LINUX_PAGE_SIZE": "16384",
-        "ORLIX_COMPILER_LAUNCHER": "",
+        "CCACHE_MAXSIZE": "20G",
+        "CCACHE_COMPILERCHECK": "content",
+        "CCACHE_CONFIGPATH": "/dev/null",
+        "PYTHONDONTWRITEBYTECODE": "1",
         "PROFILE": ctx.attr.profile,
         "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
@@ -93,10 +96,8 @@ def _kernel_macho_impl(ctx):
     isa_tree = ctx.file.isa_tree
     if not isa_tree.is_directory:
         fail("kernel Mach-O requires a prepared ISA tree artifact")
-    ctx.actions.run_shell(
-        mnemonic = "OrlixKernelMachOArchive",
-        progress_message = "Compiling Mach-O OrlixKernel.a from prepared Linux sources",
-        command = r"""
+    script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(script, r"""
 set -euo pipefail
 exec_root="$PWD"
 linux_makefile="$exec_root/$1"
@@ -110,8 +111,10 @@ config_count="$8"
 engine_count="$9"
 extra_count="${10}"
 isa_tree="$exec_root/${11}"
+toolchain_identity="$exec_root/${13}"
+compiler_identity="$exec_root/${14}"
 boot_resources="$exec_root/${12}"
-shift 12
+shift 14
 overlay_paths=()
 i=0
 while [ "$i" -lt "$overlay_count" ]; do
@@ -166,33 +169,16 @@ test -x "$clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 test -n "$sdkroot"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
-work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-kernel-macho.XXXXXX")"
-trap '/bin/rm -rf "$work"' EXIT
-port="$work/OrlixKernel/src/linux-6.12.105-port"
-/bin/mkdir -p "$port" "$work/OrlixKernel/orlix-tcti-isa" "$work/OrlixKernel/$PROFILE"
-hostcc="$work/hostcc"
-/usr/bin/printf '%s\n' '#!/bin/bash' "exec \"$xcode_clang\" -isysroot \"$sdkroot\" \"\$@\"" > "$hostcc"
-/bin/chmod +x "$hostcc"
-/bin/cp -R "$linux_src/." "$port"
-/usr/bin/find "$port" -type d -exec /bin/chmod u+w {} +
-overlay_prefix="OrlixKernel/Sources/ports/orlix/overlay/"
-for rel in "${overlay_paths[@]}"; do
-  case "$rel" in
-    *"$overlay_prefix"*) dest_rel="${rel#*"$overlay_prefix"}" ;;
-    *) echo "overlay path missing overlay prefix: $rel" >&2; exit 1 ;;
-  esac
-  /bin/mkdir -p "$port/$(/usr/bin/dirname "$dest_rel")"
-  /bin/cp "$exec_root/$rel" "$port/$dest_rel"
-done
-uapi_source="$port/arch/arm64/include/uapi/asm"
-uapi_target="$port/arch/orlix/include/uapi/asm"
-test -d "$uapi_source"
-/bin/rm -rf "$uapi_target"
-/bin/mkdir -p "$(/usr/bin/dirname "$uapi_target")"
-/bin/cp -R "$uapi_source" "$uapi_target"
-if [ ! -s "$uapi_target/types.h" ]; then
-  /bin/cp "$port/include/uapi/asm-generic/types.h" "$uapi_target/types.h"
+export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
+if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
+  test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; }
 fi
+work="$ORLIX_KERNEL_WORK_ROOT"
+/bin/mkdir -p "$work"
+export PYTHONPATH="$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}"
+port="$work/OrlixKernel/src/linux-6.12.105-port"
 profile_config=""
 for rel in "${config_paths[@]}"; do
   case "$rel" in
@@ -200,34 +186,21 @@ for rel in "${config_paths[@]}"; do
   esac
 done
 test -n "$profile_config" && test -s "$profile_config"
-/bin/mkdir -p "$port/arch/orlix/configs"
-/usr/bin/awk '!/^CONFIG_PAGE_SIZE_[0-9]+KB=y$/' "$profile_config" > "$port/arch/orlix/configs/defconfig"
-printf '%s\n' 'CONFIG_PAGE_SIZE_16KB=y' >> "$port/arch/orlix/configs/defconfig"
-for rel in "${patch_paths[@]}"; do
-  case "$rel" in
-    *.patch|*.diff)
-      /usr/bin/patch -d "$port" -p1 < "$exec_root/$rel" >/dev/null
-      ;;
-  esac
-done
-printf '%s\n' 'linux_version=6.12.105' "profile=$PROFILE" 'linux_uapi_arch=arm64' 'linux_page_size=16384' > "$port/.orlix-port-profile"
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; n=int(sys.argv[6]); result=source_state.prepare(Path(sys.argv[1]), Path(sys.argv[2]), [Path(p) for p in sys.argv[7:7+n]], [Path(p) for p in sys.argv[7+n:]], Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5], Path(sys.argv[2]).parents[2]); output=Path(sys.argv[2]).parents[2]/"prepared-source.sha256"; output.unlink(missing_ok=True); output.write_text(result["sha256"])' "$linux_src" "$port" "$profile_config" "$isa_tree" "$PROFILE" "$overlay_count" "${overlay_paths[@]}" "${patch_paths[@]}"
 isa_dest="$work/OrlixKernel/orlix-tcti-isa"
-/bin/mkdir -p "$isa_dest"
-test -d "$isa_tree" || { echo "missing declared prepared ISA tree: $isa_tree" >&2; exit 1; }
-port_isa="$port/arch/orlix/hosted_exec/orlix_tcti/isa"
-/bin/mkdir -p "$port_isa"
-for isa_path in "$isa_tree"/*; do
-  test -f "$isa_path" || { echo "prepared ISA tree contains a non-file member: $isa_path" >&2; exit 1; }
-  isa_name="${isa_path##*/}"
-  /bin/cp "$isa_path" "$isa_dest/$isa_name"
-  /bin/cp "$isa_path" "$port_isa/$isa_name"
-  /bin/chmod u+w "$isa_dest/$isa_name" "$port_isa/$isa_name"
-done
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.sync(source_state._files(Path(sys.argv[1])), Path(sys.argv[2]), Path(sys.argv[2]).parents[1])' "$isa_tree" "$isa_dest"
+hostcc="$(/usr/bin/mktemp "$work/.hostcc.XXXXXX")"
+/usr/bin/printf '%s\n' '#!/bin/bash' "exec \"$xcode_clang\" -isysroot \"$sdkroot\" \"\$@\"" > "$hostcc"
+/bin/chmod +x "$hostcc"
+/bin/mv -f "$hostcc" "$work/hostcc"
+hostcc="$work/hostcc"
+export ORLIX_KERNEL_PREPARED_SOURCE_SHA256="$(/bin/cat "$work/prepared-source.sha256")"
+export CCACHE_BASEDIR="$work"
+export CCACHE_EXTRAFILES="$compiler_identity"
 export ORLIX_BUILD_ROOT="$work"
 export ORLIX_KERNEL_PORT_PREPARED=1
 export ORLIX_KERNEL_KUNIT=0
 export ORLIX_OS_LINUX_PAGE_SIZE=16384
-export ORLIX_COMPILER_LAUNCHER=
 export PROFILE
 export ORLIX_KERNEL_CC="$clang"
 export ORLIX_KERNEL_HOSTCC="$hostcc"
@@ -242,13 +215,13 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     ORLIX_KERNEL_PORT_PREPARED=1 \
     ORLIX_KERNEL_KUNIT=0 \
     ORLIX_OS_LINUX_PAGE_SIZE=16384 \
-    ORLIX_COMPILER_LAUNCHER= \
     PROFILE="$PROFILE" \
     ORLIX_KERNEL_CC="$clang" \
     ORLIX_KERNEL_HOSTCC="$hostcc" \
     ORLIX_KERNEL_HOST_SDKROOT="$sdkroot" \
     ORLIX_KERNEL_ARCHIVE_PLATFORMS="$ORLIX_KERNEL_ARCHIVE_PLATFORMS" \
     "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
 built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"
 /bin/mkdir -p "$boot_resources/orlix/boot/dts"
@@ -278,8 +251,13 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
   '  "wrapper_makefile": false,' \
   '  "archive_digest": "'"$digest"'"' \
   '}' > "$manifest_out"
-""",
+""")
+    ctx.actions.run_shell(
+        mnemonic = "OrlixKernelMachOArchive",
+        progress_message = "Compiling Mach-O OrlixKernel.a from prepared Linux sources",
+        command = "PYTHONPATH=OrlixKernel/Sources/ports/orlix/kbuild /usr/bin/python3 -B -c 'import source_state,sys; raise SystemExit(source_state.run_locked(sys.argv[1],sys.argv[2:]))' \"$@\"",
         arguments = [
+            script.path,
             ctx.file.linux_makefile.path,
             archive.path,
             symbols.path,
@@ -292,14 +270,16 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             str(len(extra_files)),
             isa_tree.path,
             boot_resources.path,
+            ctx.file.toolchain_identity.path,
+            ctx.file.compiler_identity.path,
         ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [f.path for f in extra_files],
         inputs = depset(
-            direct = [ctx.file.linux_makefile, isa_tree] + overlay_files + patch_files + config_files + engine_files + extra_files,
+            direct = [script, ctx.file.linux_makefile, isa_tree, ctx.file.toolchain_identity, ctx.file.compiler_identity] + overlay_files + patch_files + config_files + engine_files + extra_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, boot_resources],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     return [
@@ -333,6 +313,8 @@ orlix_kernel_macho_archive = rule(
         "kbuild_engine": attr.label(mandatory = True, allow_files = True),
         "extra_inputs": attr.label_list(allow_files = True),
         "isa_tree": attr.label(allow_single_file = True, mandatory = True),
+        "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
+        "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
     },
 )
 

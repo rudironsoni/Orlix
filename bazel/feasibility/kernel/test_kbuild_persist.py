@@ -1,15 +1,101 @@
 from __future__ import annotations
 
 import os
+import fcntl
 import stat
 import subprocess
 import tarfile
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 import kbuild_persist as persist
 from bazel.content_digest import tree_digest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "OrlixKernel/Sources/ports/orlix/kbuild"))
+import source_state
+
+
+class KernelStateTests(unittest.TestCase):
+    def test_source_updates_keep_unchanged_files_and_match_clean_preparation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            linux, isa, port = root / "linux", root / "isa", root / "port"
+            overlay = root / "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/example.c"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_bytes(b"int value = 1;\n")
+            for name, data in {"include/uapi/asm-generic/types.h": b"types\n", "include/value.h": b"old\n"}.items():
+                path = linux / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            isa.mkdir()
+            (isa / "manifest").write_bytes(b"isa\n")
+            config = root / "config"
+            config.write_bytes(b"CONFIG_PAGE_SIZE_4KB=y\n")
+            patch = root / "source.patch"
+            patch.write_text("--- a/include/value.h\n+++ b/include/value.h\n@@ -1 +1 @@\n-old\n+new\n")
+            def prepare(destination):
+                return source_state.prepare(linux, destination, [overlay], [patch], config, isa, "release", root)
+            prepare(port)
+            before = {name: path.stat().st_mtime_ns for name, path in source_state._files(port).items()}
+            self.assertEqual(prepare(port)["changed"], 0)
+            self.assertEqual(before, {name: path.stat().st_mtime_ns for name, path in source_state._files(port).items()})
+            old_time = overlay.stat().st_mtime_ns
+            overlay.write_bytes(b"int value = 2;\n")
+            os.utime(overlay, ns=(old_time, old_time))
+            self.assertEqual(prepare(port)["changed"], 1)
+            self.assertEqual((port / "include/value.h").read_bytes(), b"new\n")
+            clean = root / "clean"
+            prepare(clean)
+            self.assertEqual(tree_digest(port), tree_digest(clean))
+            execution = root / "execroot/_main"
+            execution.mkdir(parents=True)
+            state = root / "orlix-kernel-state/release/iphonesimulator"
+            state.mkdir(parents=True)
+            script = root / "build.sh"
+            marker = root / "started"
+            script.write_text('printf started > "$1"\n')
+            environment = {**os.environ, "PROFILE": "release", "ORLIX_KERNEL_ARCHIVE_PLATFORMS": "iphonesimulator", "ORLIX_KERNEL_INCREMENTAL": "1", "PYTHONPATH": str(Path(source_state.__file__).parent)}
+            with (state / "build.lock").open("w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                child = subprocess.Popen([sys.executable, "-B", "-c", "import source_state,sys; sys.exit(source_state.run_locked(sys.argv[1],sys.argv[2:]))", str(script), str(marker)], cwd=execution, env=environment)
+                try:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        child.wait(timeout=0.2)
+                    self.assertFalse(marker.exists())
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
+                    self.assertEqual(child.wait(timeout=5), 0)
+            self.assertEqual(marker.read_text(), "started")
+
+    def test_corrupt_build_bytes_cannot_authorize_incremental_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity = root / "toolchain"
+            identity.write_text("compiler flags and build rules\n")
+            source_state.resume(root, [identity])
+            output = root / "OrlixKernel/build/release/kernel.o"
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b"correct object\n")
+            source_state.record(root)
+            source_state.resume(root, [identity])
+            self.assertTrue(output.exists())
+            source_state.record(root)
+            timestamp = output.stat().st_mtime_ns
+            output.write_bytes(b"corrupt object\n")
+            os.utime(output, ns=(timestamp, timestamp))
+            source_state.resume(root, [identity])
+            self.assertFalse(output.exists())
+            (root / "build-state.json").write_text("[]")
+            source_state.resume(root, [identity])
+            redirected = root / "redirected"
+            redirected.mkdir()
+            link = root / "OrlixKernel/src"
+            link.symlink_to(redirected)
+            with self.assertRaises(ValueError):
+                source_state.sync({"file": b"data"}, link / "linux", root)
+            self.assertEqual(list(redirected.iterdir()), [])
 
 
 class KbuildArchiveTests(unittest.TestCase):

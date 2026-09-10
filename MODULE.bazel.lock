@@ -296,10 +296,14 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "9A/6xZECMAfoVPv/6Ic12SlIOadjBJHq89yaSIhFtWc=",
+        "bzlTransitiveDigest": "/G7G1DH6FMaACozXnbjdWF8obS49wU1IdiWzzh0/yR0=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
+          "orlix_kernel_toolchain": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_kernel_toolchain_repository",
+            "attributes": {}
+          },
           "orlix_ghostty_kit": {
             "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_ghostty_kit_repository",
             "attributes": {

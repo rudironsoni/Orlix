@@ -7,6 +7,7 @@ import hashlib
 import os
 import platform
 import subprocess
+import shutil
 from pathlib import Path
 
 PIN_PATH = Path(__file__).with_name("toolchain-pin.json")
@@ -101,3 +102,62 @@ def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return payload
+
+
+def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
+    developer = Path(developer_dir).resolve(strict=True)
+    environment = {**os.environ, "DEVELOPER_DIR": str(developer)}
+    sdk = Path(subprocess.check_output(
+        ["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
+        env=environment, text=True,
+    ).strip()).resolve(strict=True)
+    xcode_tools = developer / "Toolchains/XcodeDefault.xctoolchain/usr"
+    tools = [
+        Path("/opt/homebrew/opt/llvm/bin") / name
+        for name in ("clang", "llvm-ar", "llvm-nm")
+    ] + [
+        Path("/opt/homebrew/opt/lld/bin/ld.lld"),
+        Path("/opt/homebrew/bin/gmake"),
+        Path("/opt/homebrew/opt/gnu-sed/libexec/gnubin/sed"),
+        Path("/opt/homebrew/opt/coreutils/libexec/gnubin/readlink"),
+        xcode_tools / "bin/clang", xcode_tools / "bin/ld",
+    ]
+    search_path = "/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin"
+    names = ("perl", "awk", "stat", "gzip", "git", "sort", "tr", "find", "strings", "nm", "otool")
+    tools += [Path(shutil.which(name, path=search_path)) for name in names]
+    tools += [Path(path) for path in ("/usr/bin/python3", "/usr/bin/patch", "/usr/bin/rsync", "/opt/homebrew/bin/ccache", "/bin/bash", "/bin/cp", "/usr/bin/shasum")]
+    for name in ("python3", "nm", "otool"):
+        tools.append(Path(subprocess.check_output(["/usr/bin/xcrun", "--find", name], env=environment, text=True).strip()))
+    tools.append(sdk / "SDKSettings.json")
+    trees = [sdk / "usr/include", sdk / "usr/lib", Path("/opt/homebrew/opt/llvm/lib/clang"), xcode_tools / "lib/clang"]
+    tools += sorted(Path("/opt/homebrew/opt/llvm/lib").glob("*.dylib"))
+    tools += sorted((xcode_tools / "lib").glob("*.dylib"))
+    files = {}
+    for path in tools:
+        files[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    tree_hashes = {}
+    for tree in trees:
+        digest = hashlib.sha256()
+        for path in sorted(tree.rglob("*")):
+            if path.is_symlink():
+                data = str(path.readlink()).encode()
+            elif path.is_file():
+                data = path.read_bytes()
+            else:
+                continue
+            digest.update(path.relative_to(tree).as_posix().encode() + b"\0")
+            digest.update(hashlib.sha256(data).digest())
+        tree_hashes[str(tree)] = digest.hexdigest()
+    payload = {
+        "schema": 1, "files": files, "trees": tree_hashes,
+        "macos": platform.mac_ver()[0], "host_arch": platform.machine(),
+    }
+    Path(output).write_text(json.dumps(payload, sort_keys=True) + "\n")
+    compiler = {
+        "schema": 1, "macos": payload["macos"], "host_arch": payload["host_arch"],
+        "files": {name: value for name, value in files.items() if name.endswith("/clang") or name.endswith(".dylib")},
+        "trees": {name: value for name, value in tree_hashes.items() if name.endswith("/lib/clang")},
+    }
+    Path(output).with_name("compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
+    candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
+    return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}

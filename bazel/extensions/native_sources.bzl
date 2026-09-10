@@ -179,7 +179,33 @@ _cmake_repository = repository_rule(
     },
 )
 
+def _kernel_toolchain_repository_impl(ctx):
+    developer = ctx.getenv("DEVELOPER_DIR", "/Applications/Xcode-26.6.0.app/Contents/Developer")
+    observer = ctx.path(ctx.attr.observer)
+    result = ctx.execute([
+        "/usr/bin/python3", "-B", "-c",
+        "import sys,json; sys.path.insert(0,sys.argv[1]); import toolchain_pin; print(json.dumps(toolchain_pin.capture_kernel_manifest(sys.argv[2],sys.argv[3])))",
+        str(observer.dirname), developer, str(ctx.path("identity.json")),
+    ], timeout = 300)
+    if result.return_code:
+        fail("Kernel toolchain identity failed:\n%s" % result.stderr)
+    watched = json.decode(result.stdout)
+    ctx.watch(observer)
+    for path in watched["files"]:
+        ctx.watch(path)
+    for path in watched["trees"]:
+        ctx.watch_tree(path)
+    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json"], visibility = ["//visibility:public"])\n')
+
+_kernel_toolchain_repository = repository_rule(
+    implementation = _kernel_toolchain_repository_impl,
+    attrs = {"observer": attr.label(default = "//bazel/config:toolchain_pin.py")},
+    local = True,
+    configure = True,
+)
+
 def _native_sources_impl(_ctx):
+    _kernel_toolchain_repository(name = "orlix_kernel_toolchain")
     _ghostty_kit_repository(
         name = "orlix_ghostty_kit",
         pin = "//bazel/extensions:ghostty_kit.json",

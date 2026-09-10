@@ -48,6 +48,8 @@ orlix_tcti_isa_prepare(
 
 orlix_kernel_macho_archive(
     name = "macho",
+    toolchain_identity = "@orlix_kernel_toolchain//:identity.json",
+    compiler_identity = "@orlix_kernel_toolchain//:compiler-identity.json",
     profile = select({
         "//bazel/config:profile_development": "development",
         "//conditions:default": "release",

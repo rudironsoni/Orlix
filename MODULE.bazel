@@ -53,6 +53,7 @@ use_repo(
     "orlix_libssh2_source",
     "orlix_libsmarter_source",
     "orlix_linux_source",
+    "orlix_kernel_toolchain",
     "orlix_mlibc_source",
     "orlix_openssl_source",
 )

@@ -97,6 +97,7 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
     asserts.equals(env, ctx.attr.expected_profile, archive.profile)
     asserts.equals(env, ctx.attr.expected_destination, archive.destination)
     found = False
+    script = "\n".join([action.content for action in target.actions if action.content != None])
     for action in target.actions:
         if action.mnemonic == "OrlixKernelMachOArchive":
             found = True
@@ -105,8 +106,10 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
             argv = " ".join(action.argv)
             inputs = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "OrlixKernel/Makefile" in argv)
-            asserts.true(env, "__kernel-archive" in argv)
-            asserts.true(env, "kernel-rules.mk" in argv)
+            asserts.true(env, "source_state.run_locked" in argv)
+            asserts.true(env, "__kernel-archive" in script)
+            asserts.true(env, "kernel-rules.mk" in script)
+            asserts.false(env, "OrlixKernel/Makefile" in script)
             asserts.false(env, "ORLIX_TCTI_ISA_PREPARED" in action.env)
             asserts.false(env, "../../../../OrlixKernel/orlix-tcti-isa" in argv)
             asserts.true(env, "tcti_isa" in inputs)
