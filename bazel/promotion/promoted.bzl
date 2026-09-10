@@ -80,14 +80,12 @@ test "$got" = "$want" || { echo "promoted rootfs digest $got does not match lock
         DefaultInfo(files = depset([initramfs, base_ext4, state_ext4, digest, stamp])),
         OrlixRootfsInfo(
             base_ext4 = base_ext4,
-            base_tree = base_ext4,
             file_manifest = manifest,
             initramfs = initramfs,
             package_closure = digest,
             payload_metadata = metadata,
             source_input_digest = digest,
             state_ext4 = state_ext4,
-            state_tree = state_ext4,
         ),
     ]
 

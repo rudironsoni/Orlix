@@ -236,6 +236,7 @@ def _rootfs_info_test_impl(ctx):
     for action in target.actions:
         if action.mnemonic == "OrlixRootfs":
             found = True
+            asserts.false(env, any([output.is_directory for output in action.outputs.to_list()]))
             joined = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in joined)

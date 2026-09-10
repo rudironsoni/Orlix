@@ -39,3 +39,6 @@ changing the signed buildset lock.
 Rootfs output representation must retain empty directories across cache
 restoration. Bazel's [tree-artifact limitation](https://github.com/bazelbuild/bazel/issues/15901)
 cannot justify removing those directories from the full-tree comparison.
+Rootfs uses its existing filesystem images as the cacheable product outputs.
+The producing action owns temporary assembly trees and validates their
+contents in the images. The provider and app consumers share this image boundary.

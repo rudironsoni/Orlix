@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Keep rootfs assembly inside its producing action
+
+[Rootfs promotion](objects/task/doing/implement-component-and-buildset-promotion.md) exposes the filesystem images and metadata consumed by OrlixOS. Temporary assembly trees remain inside the build action. Existing content checks now inspect the ext4 images, including executable modes, root ownership, the shell link, and required empty directories. The cache comparison continues to check every declared output.
+
 ## [2026-09-10] fix | Require observed cache reuse and full output comparison
 
 The [shared-cache gate](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) uses separate seed, cached, and uncached output bases. It checks execution logs for the required cache behavior and compares complete UAPI, MLibC, and rootfs trees, including empty directories. Matching digest markers alone cannot pass the gate. This evidence does not authorize a release or change the signed lock.

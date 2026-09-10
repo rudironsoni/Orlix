@@ -22,8 +22,6 @@ def _pinned_env(ctx):
 def _rootfs_impl(ctx):
     pkgs = [p[OrlixPackageTreeInfo] for p in ctx.attr.packages]
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
-    base_tree = ctx.actions.declare_directory(ctx.label.name + "/base-tree")
-    state_tree = ctx.actions.declare_directory(ctx.label.name + "/state-tree")
     initramfs = ctx.actions.declare_file(ctx.label.name + "/initramfs.cpio.gz")
     base_ext4 = ctx.actions.declare_file(ctx.label.name + "/base.ext4")
     state_ext4 = ctx.actions.declare_file(ctx.label.name + "/state.ext4")
@@ -44,14 +42,12 @@ umask 022
 exec_root="$PWD"
 trees_file="$exec_root/$1"
 gen_init_cpio_src="$exec_root/$2"
-base_tree="$exec_root/$3"
-state_tree="$exec_root/$4"
-initramfs_out="$exec_root/$5"
-base_ext4="$exec_root/$6"
-state_ext4="$exec_root/$7"
-file_manifest="$exec_root/$8"
-payload_metadata="$exec_root/$9"
-digest_out="$exec_root/${10}"
+initramfs_out="$exec_root/$3"
+base_ext4="$exec_root/$4"
+state_ext4="$exec_root/$5"
+file_manifest="$exec_root/$6"
+payload_metadata="$exec_root/$7"
+digest_out="$exec_root/$8"
 case "$gen_init_cpio_src" in
   *usr/gen_init_cpio.c) ;;
   *) echo "rootfs must compile upstream Linux gen_init_cpio.c, got $gen_init_cpio_src" >&2; exit 1 ;;
@@ -72,6 +68,8 @@ test -n "$mke2fs"
 test -x "$debugfs"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-rootfs.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
+base_tree="$work/base-tree"
+state_tree="$work/state-tree"
 "$hostcc" -isysroot "$sdkroot" -O2 -o "$work/gen_init_cpio" "$gen_init_cpio_src"
 /bin/mkdir -p "$base_tree/bin" "$base_tree/sbin" "$base_tree/usr/bin" "$base_tree/dev" "$base_tree/proc" "$base_tree/sys" "$base_tree/tmp" "$state_tree/upper" "$state_tree/work"
 while IFS= read -r rel; do
@@ -127,6 +125,21 @@ build_ext4() {
 }
 build_ext4 "$base_tree" "$base_ext4" ORLIXROOT
 build_ext4 "$state_tree" "$state_ext4" ORLIXSTATE
+check_image_entry() {
+  entry_stat="$("$debugfs" -R "stat $2" "$1")"
+  if ! /usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Eq "Type: $3[[:space:]]+Mode:[[:space:]]+0[0-7]*[1357][0-7][0-7][[:space:]]"; then
+    echo "invalid rootfs image entry $1:$2, expected $3 with owner execute permission" >&2
+    exit 1
+  fi
+  /usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Eq 'User:[[:space:]]+0[[:space:]]+Group:[[:space:]]+0[[:space:]]' || { echo "non-root image ownership at $1:$2" >&2; exit 1; }
+}
+for entry in /bin/true /bin/ls /usr/bin/true /usr/bin/ls /bin/bash /usr/bin/bash /bin/grep /bin/find /bin/xargs /bin/mke2fs /bin/mkfs.ext4 /bin/debugfs /bin/e2fsck /usr/bin/getconf /usr/bin/getent /sbin/init /usr/bin/jq /usr/bin/curl /usr/bin/zsh; do
+  check_image_entry "$base_ext4" "$entry" regular
+done
+for entry in /dev /proc /sys /tmp; do check_image_entry "$base_ext4" "$entry" directory; done
+for entry in /upper /work; do check_image_entry "$state_ext4" "$entry" directory; done
+check_image_entry "$base_ext4" /bin/sh symlink
+/usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Fx 'Fast link dest: "bash"'
 (cd "$base_tree" && /usr/bin/find . -print | /usr/bin/sort) > "$file_manifest"
 /usr/bin/printf 'init=/init\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\nshell=/bin/sh\n' > "$payload_metadata"
 digest="$( (
@@ -142,8 +155,6 @@ digest="$( (
         arguments = [
             trees.path,
             ctx.file.gen_init_cpio.path,
-            base_tree.path,
-            state_tree.path,
             initramfs.path,
             base_ext4.path,
             state_ext4.path,
@@ -158,23 +169,21 @@ digest="$( (
                 sysroot.consumed_uapi_digest,
             ],
         ),
-        outputs = [base_tree, state_tree, initramfs, base_ext4, state_ext4, file_manifest, payload_metadata, digest],
+        outputs = [initramfs, base_ext4, state_ext4, file_manifest, payload_metadata, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     return [
-        DefaultInfo(files = depset([base_tree, state_tree, initramfs, base_ext4, state_ext4, file_manifest, payload_metadata, digest])),
+        DefaultInfo(files = depset([initramfs, base_ext4, state_ext4, file_manifest, payload_metadata, digest])),
         OrlixRootfsInfo(
             base_ext4 = base_ext4,
-            base_tree = base_tree,
             file_manifest = file_manifest,
             initramfs = initramfs,
             package_closure = pkgs[0].source_input_digest,
             payload_metadata = payload_metadata,
             source_input_digest = digest,
             state_ext4 = state_ext4,
-            state_tree = state_tree,
         ),
     ]
 

@@ -371,27 +371,6 @@ __bazel-rootfs: __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __
 	if rg '^  Inputs:' "$$aquery_out" | rg -q 'kbuild-archive.tar'; then echo "rootfs must not consume the Kernel Kbuild archive" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	if rg '^  Inputs:' "$$aquery_out" | rg -q 'OrlixOS/Sources/make'; then echo "rootfs must not consume OrlixOS wrapper Make" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	rm -f "$$aquery_out"
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/true
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/ls
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/true
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/ls
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/bash
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/bash
-	@test -L bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/sh
-	@test "$$(/usr/bin/readlink bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/sh)" = "bash"
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/grep
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/find
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/xargs
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/mke2fs
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/mkfs.ext4
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/debugfs
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/bin/e2fsck
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/getconf
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/getent
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/sbin/init
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/jq
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/curl
-	@test -x bazel-bin/bazel/feasibility/rootfs/rootfs/base-tree/usr/bin/zsh
 	@rg -q 'base_packages=bash coreutils grep findutils e2fsprogs jq curl zsh' bazel-bin/bazel/feasibility/rootfs/rootfs/payload-metadata.txt
 	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/initramfs.cpio.gz
 	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/base.ext4
