@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-09-09
+updated: 2026-09-10
 status: doing
 summary: "Reuse compatible Bazel results and signed component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -27,3 +27,15 @@ Use Bazel action-result caching for speed with namespaces that include the exact
 Use GHCR OCI artifacts for private components and one signed compatible buildset. `artifacts.lock.json` selects the buildset and immutable component digests. Normal app-only, Xcode Cloud, TestFlight, and release-candidate builds consume that buildset in promoted mode. Source mode remains required for component changes, promotion, nightly reconstruction, and toolchain changes. Immutable GitHub Releases hold the public `OrlixOS.xcframework` and official release evidence.
 
 Acceptance requires cache-on and cache-off output equivalence for reproducible outputs, rejection of wrong toolchain, destination, profile, or dependency identities, no release authorization from a cache hit alone, and successful reuse of compatible private artifacts without cross-worktree mutation or duplicate component builds.
+
+The cache-equivalence gate uses independent seed, cached, and uncached output
+bases. It requires observed disk-cache hits for UAPI, MLibC, and rootfs, then
+local execution with action, disk, remote, compiler, and persistent Kbuild
+reuse disabled. Full component-tree comparison covers paths, modes, symlinks,
+and file contents. Digest marker equality alone cannot satisfy this gate.
+The gate produces verification evidence without publishing artifacts or
+changing the signed buildset lock.
+
+Rootfs output representation must retain empty directories across cache
+restoration. Bazel's [tree-artifact limitation](https://github.com/bazelbuild/bazel/issues/15901)
+cannot justify removing those directories from the full-tree comparison.

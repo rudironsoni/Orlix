@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Require observed cache reuse and full output comparison
+
+The [shared-cache gate](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) uses separate seed, cached, and uncached output bases. It checks execution logs for the required cache behavior and compares complete UAPI, MLibC, and rootfs trees, including empty directories. Matching digest markers alone cannot pass the gate. This evidence does not authorize a release or change the signed lock.
+
 ## [2026-09-10] fix | Preserve dry runs through GNU Make delegation
 
 [Make routing](objects/task/doing/implement-universal-apple-bazel-build-routing.md) excludes loaded makefiles from the delegation catch-all. The catch-all previously ran during makefile regeneration, so `make -n` could execute the requested target. Recursive delegation now preserves the caller's Make flags.
