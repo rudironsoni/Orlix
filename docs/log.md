@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] fix | Isolate native SSH sources by platform
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) copies native source contents instead of preserving Bazel's repository symlinks. The old copy could configure OpenSSL inside the repository input and carry iOS objects into the simulator build. Each platform now builds in its own copied source directory.
+
 ## [2026-09-10] fix | Preserve required iOS bundle metadata and signing entitlements
 
 The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) preserves app and extension bundle names, package types, and plist versions. Both iOS signatures carry the team entitlement. The app's entitlements match Xcode's iOS signing output and exclude the macOS sandbox network keys. Make rejects missing bundle metadata and mismatched app or team signing identifiers before staging the IPA.

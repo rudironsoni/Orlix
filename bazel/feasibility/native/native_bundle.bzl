@@ -83,7 +83,7 @@ build_one() {
     name="$1"; sdk="$2"; target="$3"; min_flag="$4"; deployment="$5"; output="$6"
     openssl_src="$work/openssl-$name"; openssl_prefix="$work/openssl-install-$name"
     libssh2_src="$work/libssh2-$name"; libssh2_build="$work/libssh2-build-$name"; libssh2_install="$work/libssh2-install-$name"
-    /bin/cp -R "$openssl_root" "$openssl_src"; /bin/cp -R "$libssh2_root" "$libssh2_src"
+    /bin/cp -RL "$openssl_root" "$openssl_src"; /bin/cp -RL "$libssh2_root" "$libssh2_src"
     /bin/chmod -R u+w "$openssl_src" "$libssh2_src"
     sdk_path="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" --show-sdk-path)"
     clang="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" -f clang)"

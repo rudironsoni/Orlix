@@ -20,4 +20,6 @@ The app uses Apple's registered bundle identifier `com.rudironsoni.Orlix`, and t
 
 The app and extension plists preserve their bundle names, package types, and plist versions. Their iOS signatures include the team entitlement. The iOS app entitlement list matches Xcode's output, which excludes macOS sandbox network entitlements. Make checks this bundle metadata and both signing identities before accepting the device IPA.
 
+The SSH archive action copies the contents behind Bazel source symlinks into separate platform build directories. OpenSSL and libssh2 configuration and compilation must not write into repository inputs or reuse another platform's object files.
+
 OrlixOSTestApp hosts the existing XCTest suites through Bazel targets and matching Xcode schemes. Building the host or test bundles does not establish conformance. Runtime proof still requires the appropriate upstream test payloads, complete test output, and artifact-bound evidence.
