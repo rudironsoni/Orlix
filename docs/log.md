@@ -7,6 +7,18 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] record | Make full rootfs outputs reproducible
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now compares matching complete rootfs trees from independent builds. The producer fixes image timestamps, the ext4 hash seed, guest ownership, and manifest paths. The rootfs digest covers initramfs, base, and state images. Unsigned promotion disables remote action reuse and keeps the real signing-rejection check with signing inputs cleared for that check. The lock remains a signed-only output.
+
+## [2026-09-10] record | Prune excluded trees before documentation checks
+
+The legacy-path check now prunes its existing excluded directories before walking their contents. It also skips environment credential files before reading files. Source documentation still fails on retired paths. Generated build caches no longer add recursive traversal work to this check.
+
+## [2026-09-10] record | Preserve requested Apple configurations and archive metadata
+
+[Apple build routing](objects/task/doing/implement-universal-apple-bazel-build-routing.md) passes the requested profile, compilation mode, component mode, and iOS destination to the app build and its artifact query. The Xcode project declares Debug and Release. The archive recipe uses upstream `rules_apple` packaging and verifies metadata, debug symbols, team identity, and code signing before staging. Compatible device profiles and signed-buildset verification remain required.
+
 ## [2026-09-10] record | Publish the sysroot dynamic loader consistently
 
 [Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now publishes the same stripped `ld.so` as the MLibC sysroot. The standalone loader previously retained temporary build paths in debug data. Full-tree comparison passes for the two independent MLibC builds. Signed publication remains gated on the existing trusted key.
