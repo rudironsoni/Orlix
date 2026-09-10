@@ -144,8 +144,8 @@ test -s "$work/dest/usr/lib/libc.a"
 /bin/cp -R "$work/dest/usr/include/." "$headers_out/"
 /bin/cp -R "$work/dest/usr/lib/." "$libraries_out/"
 /usr/bin/find "$libraries_out" "$sysroot_out/usr/lib" -type f \( -name '*.a' -o -name '*.so' -o -name '*.o' -o -name 'ld.so' \) -print0 | /usr/bin/xargs -0 -n 1 "$strip" -g
-if [ -s "$work/dest/usr/lib/ld.so" ]; then
-    /bin/cp "$work/dest/usr/lib/ld.so" "$loader_out"
+if [ -s "$libraries_out/ld.so" ]; then
+    /bin/cp "$libraries_out/ld.so" "$loader_out"
 else
     /usr/bin/printf '' > "$loader_out"
 fi

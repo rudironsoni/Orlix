@@ -7,6 +7,10 @@ updated: 2026-09-10
 ---
 # Orlix Knowledge Log
 
+## [2026-09-10] record | Publish the sysroot dynamic loader consistently
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now publishes the same stripped `ld.so` as the MLibC sysroot. The standalone loader previously retained temporary build paths in debug data. Full-tree comparison passes for the two independent MLibC builds. Signed publication remains gated on the existing trusted key.
+
 ## [2026-09-10] record | Make the UAPI component archive reproducible
 
 [Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) compares the full UAPI trees from two independent builds. Kbuild uses a source-child output directory so its saved commands contain relative paths. Archive serialization fixes ownership and timestamps and omits macOS extended metadata while retaining file contents. MLibC full-tree comparison still fails. Signed publication requires the trusted signing key.
