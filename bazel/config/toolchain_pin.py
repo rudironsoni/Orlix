@@ -187,23 +187,52 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     }
     Path(output).with_name("compiler-runtime-identity.json").write_text(json.dumps(runtime, sort_keys=True) + "\n")
     tools += sorted(runtime_paths)
-    mlibc = capture_mlibc_manifest(developer, sdk, runtime, tree_hashes)
+    mlibc = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "meson")
     tools += [Path(path) for path in mlibc["files"]]
     trees += [Path(path) for path in mlibc["trees"]]
     Path(output).with_name("mlibc-identity.json").write_text(json.dumps(mlibc, sort_keys=True) + "\n")
+    coreutils = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools")
+    tools += [Path(path) for path in coreutils["files"]]
+    trees += [Path(path) for path in coreutils["trees"]]
+    Path(output).with_name("coreutils-identity.json").write_text(json.dumps(coreutils, sort_keys=True) + "\n")
     compiler = {**runtime, "files": {name: digest for name, digest in runtime["files"].items() if name.endswith("/clang")}}
     Path(output).with_name("guest-compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
     return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
 
 
-def capture_mlibc_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict) -> dict:
-    meson = Path("/opt/homebrew/bin/meson")
-    interpreter = Path(meson.read_text().splitlines()[0].removeprefix("#!"))
-    modules = json.loads(subprocess.check_output([
-        str(interpreter), "-I", "-B", "-c",
-        "import json,mesonbuild,sysconfig; print(json.dumps([list(mesonbuild.__path__)[0],sysconfig.get_path('stdlib')]))",
-    ], text=True))
+def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str) -> dict:
+    scripts = set()
+    engine_tools = set()
+    modules = []
+    if engine == "meson":
+        meson = Path("/opt/homebrew/bin/meson")
+        interpreter = Path(meson.read_text().splitlines()[0].removeprefix("#!"))
+        modules = json.loads(subprocess.check_output([
+            str(interpreter), "-I", "-B", "-c",
+            "import json,mesonbuild,sysconfig; print(json.dumps([list(mesonbuild.__path__)[0],sysconfig.get_path('stdlib')]))",
+        ], text=True))
+        scripts.add(meson)
+        engine_tools |= {interpreter, Path("/opt/homebrew/bin/ninja"), developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++"}
+    elif engine == "autotools":
+        scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoconf", "autoheader", "autom4te", "autoreconf", "automake", "aclocal", "autopoint"))
+        version = subprocess.check_output(["/opt/homebrew/bin/automake", "--version"], text=True).splitlines()[0].split()[-1]
+        api_version = ".".join(version.split(".")[:2])
+        scripts.update(Path("/opt/homebrew/bin") / (name + "-" + api_version) for name in ("aclocal", "automake"))
+        engine_tools.update(Path(path) for path in ("/opt/homebrew/bin/gmake", "/opt/homebrew/opt/m4/bin/m4", "/opt/homebrew/bin/pkgconf", "/opt/homebrew/opt/bison/bin/bison", "/opt/homebrew/opt/llvm/bin/llvm-ranlib"))
+        engine_tools.update(Path("/opt/homebrew/bin") / name for name in ("ggrep", "gsed", "gawk", "gtar"))
+        for package, patterns in {
+            "autoconf": ("autoconf",),
+            "automake": ("automake-*", "aclocal-*"),
+            "gettext": ("gettext", "aclocal"),
+        }.items():
+            for pattern in patterns:
+                modules.extend(str(path) for path in (Path("/opt/homebrew/opt") / package / "share").glob(pattern))
+        scripts.update(Path("/usr/bin") / name for name in ("install", "file", "grep", "head", "uname", "basename", "wc", "touch"))
+        scripts.update({Path("/bin/chmod"), Path("/bin/expr")})
+        engine_tools.update(Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("env", "sort", "tr", "cat", "cp", "mv", "mkdir", "rm", "install", "head", "uname", "expr", "basename", "wc", "touch", "chmod", "printf", "readlink", "ln"))
+    else:
+        raise PinError(f"unknown guest build engine: {engine}")
     action_python, action_stdlib = json.loads(subprocess.check_output([
         "/usr/bin/python3", "-B", "-c",
         "import json,sys,sysconfig; print(json.dumps([sys.executable,sysconfig.get_path('stdlib')]))",
@@ -212,13 +241,12 @@ def capture_mlibc_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
     paths = {
         Path(name) for name in runtime["files"]
     } | {
-        interpreter, Path(action_python), Path("/opt/homebrew/bin/ninja"),
+        Path(action_python),
         developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/ld",
         Path("/opt/homebrew/opt/lld/bin/ld.lld"),
         Path("/opt/homebrew/opt/llvm/bin/llvm-strip"),
         Path("/opt/homebrew/bin/ccache"),
-        developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++",
-    }
+    } | engine_tools
     for module in modules:
         paths.update((Path(module) / "lib-dynload").glob("*.so"))
     pending = list(paths)
@@ -242,15 +270,15 @@ def capture_mlibc_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
                 candidates = [path / name.removeprefix("@rpath/") for path in rpaths]
                 path = next((path for path in candidates if path.is_file()), None)
                 if path is None:
-                    raise PinError(f"unresolved mlibc tool dependency: {name} from {binary}")
+                    raise PinError(f"unresolved guest tool dependency: {name} from {binary}")
             else:
                 path = Path(name.replace("@loader_path", str(binary.resolve().parent)).replace("@executable_path", str(binary.resolve().parent)))
             if not path.is_absolute():
-                raise PinError(f"unresolved mlibc tool dependency: {name}")
+                raise PinError(f"unresolved guest tool dependency: {name}")
             if path not in paths:
                 paths.add(path)
                 pending.append(path)
-    paths |= {meson, Path("/usr/bin/python3"), Path("/usr/bin/patch"), Path("/bin/bash"),
+    paths |= scripts | {Path("/usr/bin/python3"), Path("/usr/bin/patch"), Path("/bin/bash"),
               Path("/bin/cp"), Path("/usr/bin/nm"), sdk / "SDKSettings.json"}
     paths.update(Path("/usr/bin") / name for name in (
         "find", "xargs", "awk", "sort", "tr", "shasum", "xcodebuild", "xcrun",

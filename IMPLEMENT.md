@@ -219,3 +219,42 @@ The final independent output bases used the current rules. The cache-disabled bu
 The full `make __bazel-matrix-check` passed 119 Python tests and 28 cached Bazel analysis tests. Documentation, migration inventory, diff checks, all 13 lifecycle-hook tests, and generated-hook checks passed. Independent source review found and rechecked the timestamp, metadata, and tool-identity corrections. This checkpoint does not run or claim Linux runtime, TAP, simulator, device, packaging parity, or cutover proof. TAP remains stopped, `artifacts.lock.json` is unchanged, and the original dirty `AGENTS.md` delta and local caches stay outside the commit.
 
 Raw commands, failed initial attempts, execution logs, object snapshots, cache counts, and final independently preserved products are under `Build/AgentHarness/bazel-migration/recovery-checkpoint-4/`. `ninja-final-equivalence.json`, `ninja-reviewed-mutation-result.json`, `ninja-future-result.json`, and the matching action records identify the verified results. The checkpoint's reports were captured with a minimal client environment.
+
+
+## Checkpoint 5A: retain checked Coreutils Make state
+
+Status: Coreutils incremental compilation and cache equivalence verified locally. The remaining package boundaries and full recovery remain open.
+
+Coreutils now retains its source, configure state, Make dependency files, and objects under the worktree's Bazel output base at `orlix-package-state/coreutils/aarch64-linux-gnu`. Source edits do not select a new directory. The existing shared state implementation locks the complete operation and verifies recorded bytes, executable modes, symlinks, and timestamps before reuse. Promotion disables package incremental state and the compiler cache.
+
+Preparation tracks declared source identities separately from upstream-generated files. It replaces changed declared inputs and removes deleted declared inputs without rewriting valid generated source. A failing regression exposed identical readonly generated headers being rewritten and triggering four unrelated compilation requests. The corrected existing sync operation preserves these files and their timestamps. The package test covers source edits with preserved timestamps, readonly upstream regeneration, compiler-runtime changes, and `config.hin` changes. Shared Kernel-state tests retain coverage for corrupt bytes, timestamps, records, locks, and redirected paths.
+
+Action inputs include source, installed UAPI headers, mlibc headers and libraries, compiler runtime, the curated program list, build rules, and observed tools. Unused UAPI/provenance digest files are no longer compilation inputs. Persistent compatibility includes build scripts, state modules, full tool identity, guest compiler identity, and launcher selection. Configure identity covers actual Autotools inputs, including `lib/config.hin`, and consumed dependency content. Ordinary source changes preserve Make's object graph.
+
+The tool identity records 184 executable/library files and nine resource trees. It includes selected GNU Make, Autoconf/Automake and their modules, the selected versioned Automake/aclocal binaries, GNU grep/sed/awk/tar/ln, Xcode compiler and SDK inputs, LLVM tools, Python, and native tool dependencies. The compiler cache uses the narrower guest compiler identity plus compiler inputs and flags. It remains shared and bounded to 20 GiB. GNU awk, tar, and grep are now declared host prerequisites in `Brewfile`; no guest package was added.
+
+Both configuration and compilation use the declared GNU Make. The curated 103 program targets now run in one Make invocation through upstream `GNUmakefile`, retaining its `Makefile`, `cfg.mk`, and `maint.mk` rules. The added prerequisite file describes only externally supplied link artifacts. It does not model internal Coreutils objects. Installed copies are stripped; upstream build products remain available for incremental linking. File manifests use relative paths.
+
+Actual cache comparison exposed a compiler-path difference in 37 binaries. For example, `cat` embedded `src/src/cat.c` without ccache and `../src/src/cat.c` with it. A real compiler fixture verified the additional file-prefix mapping. The final installed tree matches the pre-change install tree by paths, bytes, modes, and symlinks, with digest `6b730b9305b5bf7a4b3b79de5cbdaa4e28eafb032efa33b19a41deb41e2cf148`. No binary normalization was used.
+
+Measured results:
+
+| Workload | Bazel elapsed time | Coreutils compilation requests | Coreutils links | Observed reuse |
+| --- | ---: | ---: | ---: | --- |
+| Previous rule, action miss | 255.746 s | 508 | 103 | Fresh configure/Make tree |
+| Retained state, before batching | 26.972 s | 1 | 1 | Other 507 objects retained |
+| Final warm source edit | 8.787 s | 1 | 1 | One compiler-cache miss; other 507 objects retained |
+| Restore original source | 1.416 s | 0 | 0 | One Bazel disk-cache hit |
+| Warm no-op | 0.492 s | 0 | 0 | No executed build action |
+| Final cache-enabled clean state | 239.884 s | 508 | 103 | Compiler-cache reuse, including configure probes |
+| Independent cache-disabled build | 369.526 s | 508 | 103 | UAPI, compiler runtime, mlibc, and Coreutils rebuilt |
+
+The final edit changes the `yes.c` program-name constant in a separate source fixture while preserving its size and timestamp. Only `yes.o` changed in bytes or mtime among 508 objects. Only the Coreutils action executed; Kernel, UAPI, mlibc, and compiler-runtime actions did not execute. The first final edit also paid for Bazel's analysis-cache reset after the test configuration, so its 31.360-second total is retained separately from the warm measurement. Its actual package action took 8.395 seconds. Every fixture edit was restored, and the recovered product again matches the preserved original product.
+
+The independent build disabled action-result, disk, remote, compiler-cache, Kernel, mlibc, and package incremental reuse. Execution records confirm local UAPI, mlibc, and Coreutils work and sandboxed compiler-runtime compilation. All four actions succeeded without cache hits. The complete cached and uncached product trees match with digest `50f392f6991b3c6bbf96a2a2195ef68a58aeab8fc4a08912e91f424ce3fca4fa`, including manifests and the curated program list. The clean proof builds partly overlapped, so their timings do not establish an isolated cold-build speed comparison. The cache-disabled batch peak memory footprint was 1,265,485,648 bytes.
+
+Retained Coreutils state measured 244,416 KiB after the final seed and 241,840 KiB after the edit. This adds disposable local state to avoid cold rebuilds; it does not claim lower total disk use. The full disk, download, cross-worktree, and developer-loop matrix remains checkpoint 9 work.
+
+Verification passed: 120 Python tests, 28 cached Bazel analysis tests, build prerequisites, documentation and inventory checks, 13 lifecycle-hook tests, generated-hook checks, and diff checks. Independent source review rechecked the configuration inputs, selected tools, generated-file preservation, upstream Make entry point, and batched build. Raw commands, failed checks, action records, object snapshots, counters, and independent products are under `Build/AgentHarness/bazel-migration/recovery-checkpoint-5/`. `coreutils-summary.json`, `coreutils-warm-mutation-result.json`, and `coreutils-cache-equivalence.json` identify the final evidence.
+
+Next in phase 5: preserve the other package engines' incremental state, remove fake Autotools generator commands, and restore the seven existing guest library dependencies and corresponding Coreutils features missing from the Bazel graph. This checkpoint does not claim package-feature parity, TAP, Linux runtime, Apple product readiness, or cutover. TAP stays stopped, `artifacts.lock.json` is unchanged, and the original dirty `AGENTS.md` change and local caches remain outside the commit.

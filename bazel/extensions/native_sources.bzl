@@ -195,7 +195,7 @@ def _kernel_toolchain_repository_impl(ctx):
         ctx.watch(path)
     for path in watched["trees"]:
         ctx.watch_tree(path)
-    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json"], visibility = ["//visibility:public"])\n')
+    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json"], visibility = ["//visibility:public"])\n')
 
 _kernel_toolchain_repository = repository_rule(
     implementation = _kernel_toolchain_repository_impl,

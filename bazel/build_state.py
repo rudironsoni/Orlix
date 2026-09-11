@@ -46,7 +46,7 @@ def directory(path: Path, boundary: Path) -> None:
         current.mkdir(exist_ok=True)
 
 
-def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path) -> dict:
+def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path, *, remove_stale: bool = True) -> dict:
     directory(destination, boundary)
     directories = {destination}
     changed = 0
@@ -80,10 +80,11 @@ def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path) -> d
             target.write_bytes(data)
             target.chmod(stat.S_IMODE(mode))
         changed += 1
-    for name, path in _files(destination).items():
-        if name not in files:
-            _remove(path)
-            changed += 1
+    if remove_stale:
+        for name, path in _files(destination).items():
+            if name not in files:
+                _remove(path)
+                changed += 1
     return {"sha256": digest.hexdigest(), "files": len(files), "changed": changed}
 
 
