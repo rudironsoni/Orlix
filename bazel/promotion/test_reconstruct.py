@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import tarfile
@@ -10,6 +11,13 @@ from unittest import mock
 
 import reconstruct
 import locked_buildset
+
+
+_VERIFICATION = {
+    "signing_key_fingerprint": "11" * 32,
+    "trust_policy_sha256": "22" * 32,
+    "verification_policy_version": 1,
+}
 
 
 def _lock_payload(reference: str) -> dict:
@@ -29,6 +37,18 @@ def _lock_payload(reference: str) -> dict:
 
 
 class ReconstructTests(unittest.TestCase):
+    def test_component_tar_cannot_escape_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            blob = Path(tmp) / "component.tar"
+            payload = b"escape"
+            with tarfile.open(blob, "w") as archive:
+                member = tarfile.TarInfo("../escape")
+                member.size = len(payload)
+                archive.addfile(member, io.BytesIO(payload))
+            with self.assertRaises(reconstruct.ReconstructError) as raised:
+                reconstruct._extract_component_tar(blob, Path(tmp) / "tree")
+        self.assertIn("unsafe component tar entry", str(raised.exception))
+
     def test_empty_lock_cannot_reconstruct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "artifacts.lock.json"
@@ -42,13 +62,13 @@ class ReconstructTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "artifacts.lock.json"
                 path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
-                with mock.patch(
+                with mock.patch("reconstruct.verification_context", return_value=_VERIFICATION), mock.patch(
                     "reconstruct.shutil.which",
                     side_effect=lambda name: None if name == "oras" else "/usr/bin/cosign",
                 ):
                     with self.assertRaises(reconstruct.ReconstructError) as raised:
-                        reconstruct.reconstruct(str(path), tmp)
-            self.assertIn("oras and cosign are required", str(raised.exception))
+                        reconstruct.reconstruct(str(path), tmp, store_root=Path(tmp) / "store")
+            self.assertIn("oras is required", str(raised.exception))
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
 
@@ -58,13 +78,13 @@ class ReconstructTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "artifacts.lock.json"
                 path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
-                with mock.patch(
+                with mock.patch("reconstruct.verification_context", return_value=_VERIFICATION), mock.patch(
                     "reconstruct.shutil.which",
                     side_effect=lambda name: None if name == "cosign" else "/usr/bin/oras",
                 ):
                     with self.assertRaises(reconstruct.ReconstructError) as raised:
-                        reconstruct.reconstruct(str(path), tmp)
-            self.assertIn("oras and cosign are required", str(raised.exception))
+                        reconstruct.reconstruct(str(path), tmp, store_root=Path(tmp) / "store")
+            self.assertIn("cosign is required", str(raised.exception))
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
 
@@ -122,8 +142,9 @@ class ReconstructTests(unittest.TestCase):
         finally:
             os.environ.pop("ORLIX_COSIGN_KEY", None)
 
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
-    def test_pulls_extracts_component_tar_and_verifies(self, public_key) -> None:
+    def test_pulls_extracts_component_tar_and_verifies(self, public_key, verification) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         calls: list[list[str]] = []
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
@@ -153,7 +174,9 @@ class ReconstructTests(unittest.TestCase):
             out_dir = Path(tmp) / "reconstruct"
             try:
                 with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
-                    payload = reconstruct.reconstruct(str(path), str(out_dir), run=fake_run)
+                    payload = reconstruct.reconstruct(
+                        str(path), str(out_dir), run=fake_run, store_root=Path(tmp) / "store"
+                    )
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
             tree = Path(payload["components"]["uapi"]["tree"])
@@ -163,8 +186,9 @@ class ReconstructTests(unittest.TestCase):
         self.assertTrue(any(call[0] == "oras" and "pull" in call and reference in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "verify" in call and reference in call for call in calls))
 
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
-    def test_raw_digest_blob_cannot_substitute(self, public_key) -> None:
+    def test_raw_digest_blob_cannot_substitute(self, public_key, verification) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
         reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
 
@@ -184,10 +208,90 @@ class ReconstructTests(unittest.TestCase):
             try:
                 with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
                     with self.assertRaises(reconstruct.ReconstructError) as raised:
-                        reconstruct.reconstruct(str(path), tmp, run=fake_run)
+                        reconstruct.reconstruct(
+                            str(path), tmp, run=fake_run, store_root=Path(tmp) / "store"
+                        )
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
         self.assertIn("not a component tar", str(raised.exception))
+
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_warm_hit_has_no_network_tool_calls(self, public_key, verification) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
+        calls: list[list[str]] = []
+
+        def fake_run(argv: list[str], env=None, cwd=None):
+            calls.append(list(argv))
+            if argv[0] == "oras":
+                dest = Path(argv[argv.index("-o") + 1])
+                with tarfile.open(dest / "component.tar", "w") as archive:
+                    marker = dest / "uapi.sha256"
+                    marker.write_text("aa" * 32 + "\n", encoding="utf-8")
+                    archive.add(marker, arcname="uapi.sha256")
+
+            class Result:
+                stdout = ""
+
+            return Result()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifacts.lock.json"
+            path.write_text(json.dumps(_lock_payload(reference)) + "\n")
+            store = Path(tmp) / "store"
+            try:
+                with mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
+                    reconstruct.reconstruct(str(path), tmp, run=fake_run, store_root=store)
+                calls.clear()
+                with mock.patch("reconstruct.shutil.which", return_value=None):
+                    reconstruct.reconstruct(str(path), str(Path(tmp) / "second"), run=fake_run, store_root=store)
+            finally:
+                os.environ.pop("ORLIX_COSIGN_KEY", None)
+        self.assertEqual(calls, [])
+
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_trust_policy_change_reverifies_without_oras_pull(self, public_key) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        reference = "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32)
+        calls: list[list[str]] = []
+        changed = {**_VERIFICATION, "trust_policy_sha256": "33" * 32}
+
+        def fake_run(argv: list[str], env=None, cwd=None):
+            calls.append(list(argv))
+            if argv[0] == "oras":
+                dest = Path(argv[argv.index("-o") + 1])
+                with tarfile.open(dest / "component.tar", "w") as archive:
+                    marker = dest / "uapi.sha256"
+                    marker.write_text("aa" * 32 + "\n", encoding="utf-8")
+                    archive.add(marker, arcname="uapi.sha256")
+
+            class Result:
+                stdout = ""
+
+            return Result()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifacts.lock.json"
+            path.write_text(json.dumps(_lock_payload(reference)) + "\n")
+            store = Path(tmp) / "store"
+            try:
+                with mock.patch("reconstruct.verification_context", return_value=_VERIFICATION), mock.patch(
+                    "reconstruct.shutil.which", return_value="/usr/bin/tool"
+                ):
+                    reconstruct.reconstruct(str(path), tmp, run=fake_run, store_root=store)
+                calls.clear()
+                with mock.patch("reconstruct.verification_context", return_value=changed), mock.patch(
+                    "reconstruct.shutil.which",
+                    side_effect=lambda name: None if name == "oras" else "/usr/bin/cosign",
+                ):
+                    reconstruct.reconstruct(
+                        str(path), str(Path(tmp) / "second"), run=fake_run, store_root=store
+                    )
+            finally:
+                os.environ.pop("ORLIX_COSIGN_KEY", None)
+        self.assertTrue(any(call[0] == "cosign" for call in calls))
+        self.assertFalse(any(call[0] == "oras" for call in calls))
 
 
 if __name__ == "__main__":

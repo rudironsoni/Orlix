@@ -20,6 +20,9 @@ class PublishError(ValueError):
     pass
 
 
+VERIFICATION_POLICY_VERSION = 1
+
+
 def require_signed_proposal(path: str) -> dict:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("signed") is not True:
@@ -57,6 +60,17 @@ def trusted_public_key() -> str:
     if fingerprint not in policy["accepted_key_ids"]:
         raise PublishError("public key is not accepted by trust-policy.json")
     return str(path)
+
+
+def verification_context() -> dict:
+    public = Path(trusted_public_key())
+    policy_path = Path(__file__).with_name("trust-policy.json")
+    policy_bytes = policy_path.read_bytes()
+    return {
+        "signing_key_fingerprint": hashlib.sha256(public.read_bytes()).hexdigest(),
+        "trust_policy_sha256": hashlib.sha256(policy_bytes).hexdigest(),
+        "verification_policy_version": VERIFICATION_POLICY_VERSION,
+    }
 
 
 def verify_component(payload: dict, run=_run) -> dict:

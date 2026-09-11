@@ -4,6 +4,7 @@ ORLIX_XCODE_VERSION ?= 26.6
 ORLIX_XCODE_BUILD ?= 17F113
 ORLIX_BAZEL_DISK_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/disk-cache/bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)
 ORLIX_BAZEL_REPOSITORY_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/repository-cache
+ORLIX_PROMOTED_ARTIFACT_STORE ?= $(HOME)/Library/Caches/Orlix/Artifacts
 ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_BAZEL_DESTINATION ?= iphonesimulator
 ORLIX_BAZEL_COMPILATION_MODE ?= dbg
@@ -25,6 +26,7 @@ export ORLIX_XCODE_VERSION
 export ORLIX_XCODE_BUILD
 export ORLIX_BAZEL_DISK_CACHE
 export ORLIX_BAZEL_REPOSITORY_CACHE
+export ORLIX_PROMOTED_ARTIFACT_STORE
 export ORLIX_BAZEL_OUTPUT_BASE
 export ORLIX_BAZEL_TOOL_ROOT
 export CCACHE_BASEDIR
@@ -200,11 +202,9 @@ __bazel-lock-from-signed: __bazel-lock-proposal
 
 __bazel-reconstruct: __bazel-version-check
 	@set -euo pipefail; \
-	command -v oras >/dev/null || { echo "oras is required to reconstruct" >&2; exit 1; }; \
-	command -v cosign >/dev/null || { echo "cosign is required to reconstruct" >&2; exit 1; }; \
 	test -n "$${ORLIX_COSIGN_PUB:-}$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_PUB is required to reconstruct" >&2; exit 1; }; \
 	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct"
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)"
 
 __bazel-substitute-promoted: __bazel-reconstruct
 	@set -euo pipefail; \
@@ -507,6 +507,8 @@ __bazel-gc: __bazel-version-check
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"])'
 	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/cache_gc.py" --root "$(ORLIX_BAZEL_DISK_CACHE)" --namespace "bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)"
+	@mkdir -p "$(ORLIX_PROMOTED_ARTIFACT_STORE)"
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m artifact_store --root "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --lock "$(CURDIR)/artifacts.lock.json"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" shutdown >/dev/null 2>&1 || true
 
 __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
@@ -525,6 +527,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_lock_proposal
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_artifact_store
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_reconstruct
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_locked_buildset
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_substitute

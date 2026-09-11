@@ -14,6 +14,6 @@ part_of:
 
 Repository-local rules, skills, hooks, and structured workflow state.
 
-Command policies and inspector instructions invoke tools directly. The retired RTK wrapper is not a prerequisite and has no command-policy variants. Bare-command policies retain their existing decisions.
+Command policies and inspector instructions invoke tools directly. Bare-command policies retain their existing decisions.
 
 Its authoritative ownership boundaries are defined by [component ownership](../../concepts/component-ownership.md).
