@@ -15,6 +15,8 @@ def _uapi_providers_test_impl(ctx):
     asserts.false(env, OrlixLibcSysrootInfo in target)
     uapi = target[OrlixInstalledUapiInfo]
     asserts.equals(env, "arm64", uapi.arch)
+    asserts.true(env, uapi.artifact_identity_digest != None)
+    asserts.true(env, uapi.artifact_identity_manifest != None)
     return analysistest.end(env)
 
 uapi_providers_test = analysistest.make(_uapi_providers_test_impl)
@@ -26,6 +28,10 @@ def _sysroot_uapi_only_test_impl(ctx):
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
     sysroot = target[OrlixLibcSysrootInfo]
+    asserts.true(env, sysroot.artifact_identity_digest != None)
+    asserts.true(env, sysroot.artifact_identity_manifest != None)
+    asserts.true(env, sysroot.compiler_runtime_identity_digest != None)
+    asserts.true(env, sysroot.compiler_runtime_identity_manifest != None)
     asserts.true(env, sysroot.sysroot_digest != None)
     asserts.true(env, sysroot.consumed_uapi_digest != None)
     found = False
@@ -162,6 +168,10 @@ def _package_tree_test_impl(ctx):
     asserts.true(env, OrlixPackageTreeInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    package = target[OrlixPackageTreeInfo]
+    asserts.true(env, package.artifact_identity_closure != None)
+    asserts.true(env, package.artifact_identity_digest != None)
+    asserts.true(env, package.artifact_identity_manifest != None)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixGuestPackage":
@@ -183,6 +193,10 @@ def _coreutils_package_tree_test_impl(ctx):
     asserts.true(env, OrlixPackageTreeInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    package = target[OrlixPackageTreeInfo]
+    asserts.true(env, package.artifact_identity_closure != None)
+    asserts.true(env, package.artifact_identity_digest != None)
+    asserts.true(env, package.artifact_identity_manifest != None)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixGuestPackage":
@@ -206,6 +220,10 @@ def _bash_package_tree_test_impl(ctx):
     asserts.true(env, OrlixPackageTreeInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    package = target[OrlixPackageTreeInfo]
+    asserts.true(env, package.artifact_identity_closure != None)
+    asserts.true(env, package.artifact_identity_digest != None)
+    asserts.true(env, package.artifact_identity_manifest != None)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixGuestPackage":
@@ -231,6 +249,10 @@ def _guest_package_tree_test_impl(ctx):
     asserts.true(env, OrlixPackageTreeInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    package = target[OrlixPackageTreeInfo]
+    asserts.true(env, package.artifact_identity_closure != None)
+    asserts.true(env, package.artifact_identity_digest != None)
+    asserts.true(env, package.artifact_identity_manifest != None)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixGuestPackage":
@@ -268,6 +290,10 @@ def _rootfs_info_test_impl(ctx):
     asserts.true(env, OrlixRootfsInfo in target)
     asserts.false(env, OrlixLinuxArchiveInfo in target)
     asserts.false(env, OrlixKernelAppleProductInfo in target)
+    rootfs = target[OrlixRootfsInfo]
+    asserts.true(env, rootfs.artifact_identity_digest != None)
+    asserts.true(env, rootfs.artifact_identity_manifest != None)
+    asserts.true(env, rootfs.package_closure != None)
     found = False
     for action in target.actions:
         if action.mnemonic == "OrlixRootfs":
@@ -278,7 +304,11 @@ def _rootfs_info_test_impl(ctx):
             asserts.false(env, "OrlixKernel/Makefile" in joined)
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "kbuild-archive.tar" in joined)
-            asserts.true(env, "gen_init_cpio.c" in joined)
+            asserts.false(env, "gen_init_cpio.c" in joined)
+            asserts.true(env, "gen_init_cpio" in joined)
+            asserts.false(env, "file-manifest.txt" in joined)
+            asserts.false(env, "source-input.sha256" in joined)
+            asserts.false(env, "uapi.sha256" in joined)
             asserts.true(env, "bash" in joined)
             asserts.true(env, "coreutils" in joined)
             asserts.true(env, "grep" in joined)
@@ -287,9 +317,28 @@ def _rootfs_info_test_impl(ctx):
             asserts.true(env, "jq" in joined)
             asserts.true(env, "curl" in joined)
             asserts.true(env, "zsh" in joined)
+            asserts.true(env, "attr" in joined)
+            asserts.true(env, "acl" in joined)
+            asserts.true(env, "libcap" in joined)
+            asserts.true(env, "libselinux" in joined)
             asserts.true(env, "getconf" in joined)
             asserts.true(env, "getent" in joined)
             asserts.true(env, "init" in joined)
+            command = " ".join(action.argv)
+            for tool in [
+                "getfattr",
+                "setfattr",
+                "getfacl",
+                "setfacl",
+                "getcap",
+                "setcap",
+                "getenforce",
+                "setenforce",
+                "selinuxenabled",
+                "policyvers",
+                "getpolicyload",
+            ]:
+                asserts.true(env, tool in command)
     asserts.true(env, found)
     return analysistest.end(env)
 

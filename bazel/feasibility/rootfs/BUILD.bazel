@@ -1,10 +1,18 @@
 load(":rootfs.bzl", "orlix_rootfs", "orlix_rootfs_payload")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
 package(default_visibility = ["//visibility:private"])
 
+cc_binary(
+    name = "gen_init_cpio",
+    srcs = ["@orlix_linux_source//:usr/gen_init_cpio.c"],
+    tags = ["manual", "no-remote-cache", "no-remote-exec"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
 orlix_rootfs(
     name = "rootfs",
-    gen_init_cpio = "@orlix_linux_source//:usr/gen_init_cpio.c",
+    gen_init_cpio = ":gen_init_cpio",
     packages = [
         "//bazel/feasibility/packages:coreutils",
         "//bazel/feasibility/packages:bash",
@@ -17,8 +25,11 @@ orlix_rootfs(
         "//bazel/feasibility/packages:jq",
         "//bazel/feasibility/packages:curl",
         "//bazel/feasibility/packages:zsh",
+        "//bazel/feasibility/packages:attr",
+        "//bazel/feasibility/packages:acl",
+        "//bazel/feasibility/packages:libcap",
+        "//bazel/feasibility/packages:libselinux",
     ],
-    sysroot = "//bazel/feasibility/mlibc:sysroot",
     tags = ["manual"],
     visibility = [
         "//Orlix:__pkg__",

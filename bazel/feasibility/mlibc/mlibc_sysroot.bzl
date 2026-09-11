@@ -1,5 +1,6 @@
 """Meson/Ninja OrlixMLibC sysroot from installed Linux UAPI only."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
@@ -103,6 +104,13 @@ test -s "$runtime_out"
         use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1"},
     )
+    return declare_artifact_identity(
+        ctx,
+        "compiler-runtime",
+        ctx.file._artifact_identity_serializer,
+        tool_identity = ctx.file.compiler_identity,
+        artifacts = {"libcompiler_rt.a": runtime},
+    )
 
 def _mlibc_sysroot_impl(ctx):
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
@@ -114,7 +122,7 @@ def _mlibc_sysroot_impl(ctx):
     loader = ctx.actions.declare_file(ctx.label.name + "/ld.so")
     runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
     digest = ctx.actions.declare_file(ctx.label.name + "/sysroot.sha256")
-    _compiler_runtime(ctx, runtime)
+    runtime_identity = _compiler_runtime(ctx, runtime)
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(script, r"""
 set -euo pipefail
@@ -295,11 +303,35 @@ test "${#sysroot_digest}" -eq 64
         use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
+    artifact_identity = declare_artifact_identity(
+        ctx,
+        "sysroot",
+        ctx.file._artifact_identity_serializer,
+        tool_identity = ctx.file.compiler_identity,
+        root = sysroot,
+    )
     return [
-        DefaultInfo(files = depset([sysroot, headers, libraries, manifest, abi, loader, runtime, digest])),
+        DefaultInfo(files = depset([
+            sysroot,
+            headers,
+            libraries,
+            manifest,
+            abi,
+            loader,
+            runtime,
+            digest,
+            artifact_identity.manifest,
+            artifact_identity.digest,
+            runtime_identity.manifest,
+            runtime_identity.digest,
+        ])),
         OrlixLibcSysrootInfo(
             abi_manifest = abi,
+            artifact_identity_digest = artifact_identity.digest,
+            artifact_identity_manifest = artifact_identity.manifest,
             compiler_runtime = runtime,
+            compiler_runtime_identity_digest = runtime_identity.digest,
+            compiler_runtime_identity_manifest = runtime_identity.manifest,
             consumed_uapi_digest = uapi.uapi_digest,
             dynamic_loader = loader,
             headers = headers,
@@ -333,5 +365,9 @@ orlix_mlibc_sysroot = rule(
         "bragi": attr.label(allow_single_file = True, mandatory = True),
         "compiler_rt_source": attr.label(mandatory = True),
         "compiler_rt": attr.label(allow_single_file = True, mandatory = True),
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
     },
 )

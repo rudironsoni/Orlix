@@ -79,10 +79,12 @@ test "$got" = "$want" || { echo "promoted rootfs digest $got does not match lock
     return [
         DefaultInfo(files = depset([initramfs, base_ext4, state_ext4, digest, stamp])),
         OrlixRootfsInfo(
+            artifact_identity_digest = None,
+            artifact_identity_manifest = None,
             base_ext4 = base_ext4,
             file_manifest = manifest,
             initramfs = initramfs,
-            package_closure = digest,
+            package_closure = depset(),
             payload_metadata = metadata,
             source_input_digest = digest,
             state_ext4 = state_ext4,
@@ -147,6 +149,8 @@ def _promoted_uapi_impl(ctx):
         DefaultInfo(files = depset([digest, archive, manifest, stamp, headers])),
         OrlixInstalledUapiInfo(
             arch = "arm64",
+            artifact_identity_digest = None,
+            artifact_identity_manifest = None,
             headers = headers,
             linux_revision = "6.12.105",
             uapi_digest = digest,
@@ -189,7 +193,11 @@ def _promoted_sysroot_impl(ctx):
         DefaultInfo(files = depset([digest, abi, loader, runtime, stamp, headers, libraries])),
         OrlixLibcSysrootInfo(
             abi_manifest = abi,
+            artifact_identity_digest = None,
+            artifact_identity_manifest = None,
             compiler_runtime = runtime,
+            compiler_runtime_identity_digest = None,
+            compiler_runtime_identity_manifest = None,
             consumed_uapi_digest = uapi_digest,
             dynamic_loader = loader,
             headers = headers,

@@ -1,5 +1,6 @@
 """Orlix-local C programs against OrlixMLibC sysroot and UAPI."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -125,9 +126,26 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
+    artifact_identity = declare_artifact_identity(
+        ctx,
+        "install",
+        ctx.file._artifact_identity_serializer,
+        root = install_tree,
+    )
     return [
-        DefaultInfo(files = depset([install_tree, file_manifest, license_manifest, metadata, digest])),
+        DefaultInfo(files = depset([
+            install_tree,
+            file_manifest,
+            license_manifest,
+            metadata,
+            digest,
+            artifact_identity.manifest,
+            artifact_identity.digest,
+        ])),
         OrlixPackageTreeInfo(
+            artifact_identity_closure = depset([artifact_identity.digest]),
+            artifact_identity_digest = artifact_identity.digest,
+            artifact_identity_manifest = artifact_identity.manifest,
             dependency_digests = sysroot.consumed_uapi_digest,
             file_manifest = file_manifest,
             install_tree = install_tree,
@@ -147,5 +165,9 @@ orlix_local_c_package = rule(
         "root_init": attr.label(allow_single_file = [".c"]),
         "package_name": attr.string(mandatory = True),
         "package_version": attr.string(default = "orlix"),
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
     },
 )

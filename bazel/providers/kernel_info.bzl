@@ -25,6 +25,8 @@ OrlixInstalledUapiInfo = provider(
     doc = "Provides only upstream Linux headers_install output for ARCH=arm64.",
     fields = {
         "arch": "Upstream Linux architecture, fixed to arm64.",
+        "artifact_identity_digest": "SHA-256 of the canonical artifact-identity-v2 manifest.",
+        "artifact_identity_manifest": "Canonical artifact-identity-v2 manifest.",
         "headers": "Installed UAPI headers tree.",
         "linux_revision": "Exact upstream Linux revision.",
         "uapi_digest": "Content digest of the installed UAPI tree.",

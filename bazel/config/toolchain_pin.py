@@ -204,6 +204,34 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     tools += [Path(path) for path in bootstrap["files"]]
     trees += [Path(path) for path in bootstrap["trees"]]
     Path(output).with_name("autotools-bootstrap-identity.json").write_text(json.dumps(bootstrap, sort_keys=True) + "\n")
+    rootfs_tools = {
+        Path(path) for path in (
+            "/bin/bash", "/bin/chmod", "/bin/cp", "/bin/dd", "/bin/ln", "/bin/mkdir", "/bin/rm",
+            "/usr/bin/awk", "/usr/bin/command", "/usr/bin/find", "/usr/bin/grep", "/usr/bin/gzip",
+            "/usr/bin/mktemp", "/usr/bin/printf", "/usr/bin/shasum", "/usr/bin/sort", "/usr/bin/xargs",
+            "/opt/homebrew/opt/e2fsprogs/sbin/debugfs", "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs",
+        )
+    }
+    pending = [path for path in rootfs_tools if str(path).startswith("/opt/homebrew/")]
+    while pending:
+        binary = pending.pop()
+        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
+        for line in libraries.splitlines()[1:]:
+            name = line.strip().split(" (", 1)[0]
+            if name.startswith(("/usr/lib/", "/System/Library/")):
+                continue
+            path = Path(name)
+            if path not in rootfs_tools:
+                rootfs_tools.add(path)
+                pending.append(path)
+    rootfs = {
+        "schema": 1,
+        "macos": payload["macos"],
+        "host_arch": payload["host_arch"],
+        "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(rootfs_tools)},
+    }
+    Path(output).with_name("rootfs-identity.json").write_text(json.dumps(rootfs, sort_keys=True) + "\n")
+    tools += sorted(rootfs_tools)
     bash_tools = (Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),) + tuple(
         Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "mktemp", "sleep")
     )

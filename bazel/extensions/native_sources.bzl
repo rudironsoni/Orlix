@@ -6,6 +6,8 @@ def _archive_repository_impl(ctx):
         sha256 = ctx.attr.sha256,
         strip_prefix = ctx.attr.strip_prefix,
     )
+    if ctx.attr.patch:
+        ctx.patch(ctx.attr.patch, strip = 1)
     export_patterns = [ctx.attr.marker] + list(ctx.attr.extra_exports)
     quoted = ", ".join(['"%s"' % pattern for pattern in export_patterns])
     ctx.file("BUILD.bazel", """
@@ -27,6 +29,7 @@ _archive_repository = repository_rule(
         "strip_prefix": attr.string(mandatory = True),
         "marker": attr.string(mandatory = True),
         "extra_exports": attr.string_list(),
+        "patch": attr.label(allow_single_file = True),
     },
 )
 
@@ -195,7 +198,7 @@ def _kernel_toolchain_repository_impl(ctx):
         ctx.watch(path)
     for path in watched["trees"]:
         ctx.watch_tree(path)
-    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json", "bash-identity.json", "autotools-identity.json", "autotools-bootstrap-identity.json"], visibility = ["//visibility:public"])\n')
+    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json", "bash-identity.json", "autotools-identity.json", "autotools-bootstrap-identity.json", "rootfs-identity.json"], visibility = ["//visibility:public"])\n')
 
 _kernel_toolchain_repository = repository_rule(
     implementation = _kernel_toolchain_repository_impl,
@@ -347,6 +350,14 @@ def _native_sources_impl(_ctx):
         sha256 = "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11",
         strip_prefix = "libcap-2.78",
         marker = "Makefile",
+    )
+    _archive_repository(
+        name = "orlix_libselinux_source",
+        url = "https://github.com/SELinuxProject/selinux/releases/download/3.10/libselinux-3.10.tar.gz",
+        sha256 = "1ef216c5b56fb7e0a51cd2909787a175a17ee391e0467894807873539ebe766b",
+        strip_prefix = "libselinux-3.10",
+        marker = "Makefile",
+        patch = "//OrlixOS/Sources/patches:libselinux-3.10-strong-pthread-once.patch",
     )
     _archive_repository(
         name = "orlix_grep_source",

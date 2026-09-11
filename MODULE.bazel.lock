@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "n1FF/1b7UYz17VfK2L+lBnx2dI0PsbzJzxGXYaoZtsQ=",
+        "bzlTransitiveDigest": "6L/xChYNO2RTFwoxJ8LtOzWpTCAUvdj3m8k5cZtjM+A=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -480,6 +480,16 @@
               "sha256": "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11",
               "strip_prefix": "libcap-2.78",
               "marker": "Makefile"
+            }
+          },
+          "orlix_libselinux_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://github.com/SELinuxProject/selinux/releases/download/3.10/libselinux-3.10.tar.gz",
+              "sha256": "1ef216c5b56fb7e0a51cd2909787a175a17ee391e0467894807873539ebe766b",
+              "strip_prefix": "libselinux-3.10",
+              "marker": "Makefile",
+              "patch": "@@//OrlixOS/Sources/patches:libselinux-3.10-strong-pthread-once.patch"
             }
           },
           "orlix_grep_source": {

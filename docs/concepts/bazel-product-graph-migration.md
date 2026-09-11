@@ -6,7 +6,7 @@ tags:
   - migration
   - artifacts
   - worktrees
-updated: 2026-09-10
+updated: 2026-09-11
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
   - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
@@ -84,6 +84,44 @@ proof/provenance identity
 ```
 
 Downstream actions consume only semantic product artifacts. Provenance, manifests, proof records, and source identities are not compilation inputs unless their contents semantically affect compilation. Consumers select specific provider fields instead of inheriting a producer's complete `DefaultInfo` output set.
+
+### Guest artifact identity format
+
+`artifact-identity-v2` identifies selected product content. Its canonical
+serializer is [content_digest.py](../../bazel/content_digest.py). The manifest
+contains the domain `orlix.artifact.identity`, version `2`, format
+`artifact-identity-v2`, and entries sorted by relative path. Each entry records
+its type and exact POSIX permission bits, including special bits. Regular
+files record SHA-256 of their bytes. Symlinks record their target without
+following it. Tree selection includes empty directories. The containing
+directory's host path is not part of the product identity.
+
+The manifest uses ASCII-escaped JSON, sorted keys, compact separators, and one
+final newline. Its SHA-256 is the artifact digest. Consumers MUST retain the
+format, hash algorithm, and digest together. The content namespace is
+`artifact-identity-v2/sha256/<digest>`; an unqualified digest cannot select a
+format. Equivalent selected entries have the same identity regardless of
+their build directory or selection method.
+
+Product selection MUST exclude proof and provenance through declared artifact
+boundaries. The serializer does not ignore files by name. A real product file
+named `provenance.json` is still product content. Timestamps do not affect the
+identity, but path, type, permission, file-content, and symlink-target changes
+do. Callers MUST hash the delivered artifact representation and MUST NOT erase
+mode differences to make a comparison pass.
+
+Existing signed digests retain their original serializer and schema. They
+MUST NOT be relabelled, overwritten, or treated as `artifact-identity-v2`.
+Promotion of a new format requires independent source reproduction, its own
+proof, a signature, and a reviewed lock proposal. Unknown formats fail before
+reuse or promotion. Unsigned Phase 5 records cannot change
+`artifacts.lock.json`.
+
+Phase 6 verification MUST bind this content identity to the OCI manifest
+digest, signing identity, trust policy, and verification-policy version.
+These verification facts remain separate from action identity and the
+worktree-local incremental-directory identity. A verification-policy change
+requires verification again; it does not by itself change product content.
 
 The mutation proof MUST inspect both Bazel action execution and actual upstream compiler or build-engine execution. The required cases are:
 

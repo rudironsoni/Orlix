@@ -1,5 +1,6 @@
 """Bounded Kbuild headers_install for upstream ARCH=arm64 UAPI."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixLinuxArchiveInfo")
 
 def _pinned_env(ctx):
@@ -106,8 +107,21 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
+    artifact_identity = declare_artifact_identity(
+        ctx,
+        "uapi",
+        ctx.file.digest_tool,
+        root = headers,
+    )
     return [
-        DefaultInfo(files = depset([headers, archive, manifest, digest])),
+        DefaultInfo(files = depset([
+            headers,
+            archive,
+            manifest,
+            digest,
+            artifact_identity.manifest,
+            artifact_identity.digest,
+        ])),
         OutputGroupInfo(
             headers = depset([headers]),
             archive = depset([archive]),
@@ -115,6 +129,8 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
         ),
         OrlixInstalledUapiInfo(
             arch = "arm64",
+            artifact_identity_digest = artifact_identity.digest,
+            artifact_identity_manifest = artifact_identity.manifest,
             headers = headers,
             linux_revision = "6.12.105",
             uapi_digest = digest,
@@ -168,6 +184,8 @@ def _kernel_uapi_variant_impl(ctx):
         DefaultInfo(files = depset([stamped], transitive = [ctx.attr.uapi[DefaultInfo].files])),
         OrlixInstalledUapiInfo(
             arch = uapi.arch,
+            artifact_identity_digest = uapi.artifact_identity_digest,
+            artifact_identity_manifest = uapi.artifact_identity_manifest,
             headers = uapi.headers,
             linux_revision = uapi.linux_revision,
             uapi_digest = uapi.uapi_digest,

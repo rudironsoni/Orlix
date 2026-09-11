@@ -1,5 +1,6 @@
 """Pinned Autotools guest packages from OrlixMLibC sysroot and UAPI."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -27,6 +28,75 @@ def _pinned_env(ctx):
         env["TMPDIR"] = tmpdir
     return env
 
+def declare_orlix_package_interface(ctx, package_trees, paths_by_package):
+    if not package_trees:
+        if paths_by_package:
+            fail("package interface paths require package trees")
+        return None
+    packages = []
+    names = {}
+    for package in package_trees:
+        tree = package[OrlixPackageTreeInfo]
+        name = package.label.name
+        if name in names:
+            fail("duplicate package interface: %s" % name)
+        names[name] = True
+        packages.append((tree, name))
+    for name in paths_by_package:
+        if name not in names:
+            fail("package interface has no tree: %s" % name)
+        for path in paths_by_package[name]:
+            if not path or path.startswith("/") or ".." in path.split("/"):
+                fail("invalid package interface path: %s" % path)
+    extra_input = ctx.actions.declare_directory(ctx.label.name + ".dependency")
+    arguments = [extra_input.path]
+    inputs = [ctx.file.toolchain_identity]
+    for package, name in packages:
+        paths = paths_by_package.get(name, [])
+        arguments += [package.install_tree.path, str(len(paths))] + paths
+        inputs.append(package.install_tree)
+    ctx.actions.run_shell(
+        mnemonic = "OrlixPackageInterface",
+        command = r"""
+set -euo pipefail
+output="$1"
+shift
+/bin/mkdir -p "$output"
+copy_path() {
+  source="$1"
+  destination="$2"
+  relative="$3"
+  input="$source/$relative"
+  test -e "$input"
+  /bin/mkdir -p "$destination/$(/usr/bin/dirname "$relative")"
+  if test -e "$destination/$relative" || test -L "$destination/$relative"; then
+    echo "duplicate package interface path: $relative" >&2
+    exit 1
+  fi
+  if test -d "$input"; then
+    /bin/cp -R -P "$input" "$destination/$(/usr/bin/dirname "$relative")/"
+  else
+    /bin/cp -P "$input" "$destination/$relative"
+  fi
+}
+while test "$#" -gt 0; do
+  source="$1"
+  path_count="$2"
+  shift 2
+  while test "$path_count" -gt 0; do
+    copy_path "$source" "$output" "$1"
+    path_count=$((path_count - 1))
+    shift
+  done
+done
+""",
+        arguments = arguments,
+        inputs = inputs,
+        outputs = [extra_input],
+        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1"},
+    )
+    return extra_input
+
 def _autotools_package_impl(ctx):
     if ctx.attr.bootstrap and not ctx.attr.in_tree:
         fail("autotools bootstrap requires in_tree=True")
@@ -36,32 +106,15 @@ def _autotools_package_impl(ctx):
         fail("autotools make_only cannot bootstrap")
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
-    extra = None
-    if ctx.attr.extra_sysroot:
-        extra = ctx.attr.extra_sysroot[OrlixPackageTreeInfo]
-    extra_input = None
-    if extra:
-        extra_input = ctx.actions.declare_directory(ctx.label.name + ".dependency")
-        ctx.actions.run_shell(
-            mnemonic = "OrlixPackageInterface",
-            command = r"""
-set -euo pipefail
-source="$1"
-output="$2"
-shift 2
-/bin/mkdir -p "$output/usr/include"
-/bin/cp -R "$source/usr/include/." "$output/usr/include/"
-for archive in "$@"; do
-  test -s "$source/$archive"
-  /bin/mkdir -p "$output/$(/usr/bin/dirname "$archive")"
-  /bin/cp "$source/$archive" "$output/$archive"
-done
-""",
-            arguments = [extra.install_tree.path, extra_input.path] + ctx.attr.extra_archives + ctx.attr.extra_prerequisites,
-            inputs = [extra.install_tree, ctx.file.toolchain_identity],
-            outputs = [extra_input],
-            execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1"},
-        )
+    interface_packages = list(ctx.attr.interface_packages)
+    interface_paths = {}
+    for name, paths in ctx.attr.interface_paths.items():
+        interface_paths[name] = paths
+    extra_input = declare_orlix_package_interface(
+        ctx,
+        interface_packages,
+        interface_paths,
+    )
     install_tree = ctx.actions.declare_directory(ctx.label.name + "/install")
     file_manifest = ctx.actions.declare_file(ctx.label.name + "/file-manifest.txt")
     license_manifest = ctx.actions.declare_file(ctx.label.name + "/license-manifest.txt")
@@ -251,14 +304,14 @@ if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
 fi
 gmake_bin="$(/usr/bin/command -v gmake)"
 test -x "$gmake_bin"
-make_tools=(AUTOMAKE=/opt/homebrew/bin/automake ACLOCAL=/opt/homebrew/bin/aclocal AUTOCONF=/opt/homebrew/bin/autoconf AUTOHEADER=/opt/homebrew/bin/autoheader AUTOM4TE=/opt/homebrew/bin/autom4te AUTOPOINT=/opt/homebrew/bin/autopoint)
-make_vars=()
+make_vars=(AUTOMAKE=/opt/homebrew/bin/automake ACLOCAL=/opt/homebrew/bin/aclocal AUTOCONF=/opt/homebrew/bin/autoconf AUTOHEADER=/opt/homebrew/bin/autoheader AUTOM4TE=/opt/homebrew/bin/autom4te AUTOPOINT=/opt/homebrew/bin/autopoint)
 remaining="$MAKE_VARS"
 while [ -n "$remaining" ]; do
   case "$remaining" in
     *\;*) item="${remaining%%;*}"; remaining="${remaining#*;}" ;;
     *) item="$remaining"; remaining="" ;;
   esac
+  item="${item//@EXTRA@/$extra_tree}"
   make_vars+=("$item")
 done
 link_inputs="$libraries/libc.a $libm $libpthread $libssp_ns $libssp $runtime $extra_archives $libraries/crt1.o $libraries/crti.o $libraries/crtn.o"
@@ -283,13 +336,16 @@ remaining="$INSTALL_MAP"
 while [ -n "$remaining" ]; do
   case "$remaining" in
     *,*) mapping="${remaining%%,*}"; remaining="${remaining#*,}" ;;
-    *) mapping="$remaining"; remaining="" ;;
+  *) mapping="$remaining"; remaining="" ;;
   esac
   target="${mapping%%:*}"
-  /usr/bin/printf '%s: %s\n' "${target##*/}" "$link_inputs" >> "$work/toolchain/link-inputs.mk"
+  case "$target" in
+    *.a|*.h) ;;
+    *) /usr/bin/printf '%s: private .EXTRA_PREREQS := %s\n' "${target##*/}" "$link_inputs" >> "$work/toolchain/link-inputs.mk" ;;
+  esac
 done
 if [ "$MAKE_ONLY" = 1 ]; then
-  /usr/bin/printf '%s\n' '-include $(wildcard *.d)' >> "$work/toolchain/link-inputs.mk"
+  /usr/bin/printf '%s\n' '%: %.c' '	$(LINK.c) $< $(LOADLIBES) $(LDLIBS) -o $@' '-include $(wildcard *.d)' >> "$work/toolchain/link-inputs.mk"
 fi
 export MAKEFILES="$work/toolchain/link-inputs.mk"
 remaining="$MAKE_STEPS"
@@ -304,12 +360,12 @@ while [ -n "$remaining" ]; do
       step="${step//@USELIBS@/}"
       echo "orlix-autotools: $gmake_bin $step LIBS=<sysroot>" >&2
       # shellcheck disable=SC2086
-      "$gmake_bin" "${make_tools[@]}" "${make_vars[@]}" $step LIBS="$LIBS" || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
+      "$gmake_bin" "${make_vars[@]}" $step LIBS="$LIBS" || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
       ;;
     *)
       echo "orlix-autotools: $gmake_bin $step" >&2
       # shellcheck disable=SC2086
-      "$gmake_bin" "${make_tools[@]}" "${make_vars[@]}" $step || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
+      "$gmake_bin" "${make_vars[@]}" $step || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
       ;;
   esac
 done
@@ -406,9 +462,30 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
+    artifact_identity = declare_artifact_identity(
+        ctx,
+        "install",
+        ctx.file._artifact_identity_serializer,
+        tool_identity = ctx.file.compiler_identity,
+        root = install_tree,
+    )
     return [
-        DefaultInfo(files = depset([install_tree, file_manifest, license_manifest, metadata, digest])),
+        DefaultInfo(files = depset([
+            install_tree,
+            file_manifest,
+            license_manifest,
+            metadata,
+            digest,
+            artifact_identity.manifest,
+            artifact_identity.digest,
+        ])),
         OrlixPackageTreeInfo(
+            artifact_identity_closure = depset(
+                direct = [artifact_identity.digest],
+                transitive = [package[OrlixPackageTreeInfo].artifact_identity_closure for package in ctx.attr.interface_packages],
+            ),
+            artifact_identity_digest = artifact_identity.digest,
+            artifact_identity_manifest = artifact_identity.manifest,
             dependency_digests = sysroot.consumed_uapi_digest,
             file_manifest = file_manifest,
             install_tree = install_tree,
@@ -444,10 +521,15 @@ orlix_autotools_package = rule(
         "require_static": attr.bool(default = False),
         "cppflags": attr.string(default = ""),
         "cflags": attr.string(default = ""),
-        "extra_sysroot": attr.label(providers = [OrlixPackageTreeInfo]),
+        "interface_packages": attr.label_list(providers = [OrlixPackageTreeInfo]),
+        "interface_paths": attr.string_list_dict(),
         "extra_archives": attr.string_list(),
         "extra_prerequisites": attr.string_list(),
         "sysroot_archives": attr.string_list(),
         "verify_files": attr.string_list(),
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
     },
 )

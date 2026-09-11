@@ -37,7 +37,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
 .PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
-.PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs
+.PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs __bazel-attr __bazel-acl __bazel-pcre2 __bazel-musl-fts __bazel-libsepol __bazel-libcap __bazel-libselinux
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
@@ -92,6 +92,8 @@ __bazel-native-dependency-smoke: __bazel-native-archives
 __bazel-kernel-uapi: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/kernel:uapi --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@sh bazel/feasibility/kernel/uapi_contract_test.sh
+	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.json
+	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256
 
 __bazel-kernel-uapi-variants: __bazel-kernel-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/kernel:uapi_iphonesimulator_release //bazel/feasibility/kernel:uapi_iphonesimulator_development //bazel/feasibility/kernel:uapi_iphoneos_release //bazel/feasibility/kernel:uapi_iphoneos_development --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -253,6 +255,10 @@ __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	@sysroot_digest="$$(/usr/bin/tr -d '[:space:]' < bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256)"; \
 	test "$${#sysroot_digest}" -eq 64 || { echo "mlibc sysroot missing 64-hex sysroot.sha256" >&2; exit 1; }; \
 	rg -q '"sysroot_digest": "'"$$sysroot_digest"'"' bazel-bin/bazel/feasibility/mlibc/sysroot/manifest.json
+	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json
+	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256
+	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/compiler-runtime.artifact-identity-v2.json
+	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/compiler-runtime.artifact-identity-v2.sha256
 
 __bazel-guest-package: __bazel-mlibc-from-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/packages:true --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -267,6 +273,7 @@ __bazel-guest-package: __bazel-mlibc-from-uapi
 	@rg -q 'usr/bin/true' bazel-bin/bazel/feasibility/packages/true/file-manifest.txt
 	@rg -q 'engine=configure-make-destdir' bazel-bin/bazel/feasibility/packages/true/package-metadata.txt
 	@test -s bazel-bin/bazel/feasibility/packages/true/source-input.sha256
+	@test -s bazel-bin/bazel/feasibility/packages/true/install.artifact-identity-v2.sha256
 
 __bazel-coreutils: __bazel-mlibc-from-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/packages:coreutils --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -286,6 +293,7 @@ __bazel-coreutils: __bazel-mlibc-from-uapi
 		test -x "bazel-bin/bazel/feasibility/packages/coreutils/install/usr/bin/$$program" || { echo "missing coreutils program: $$program" >&2; exit 1; }; \
 		/usr/bin/file "bazel-bin/bazel/feasibility/packages/coreutils/install/usr/bin/$$program" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file "bazel-bin/bazel/feasibility/packages/coreutils/install/usr/bin/$$program" >&2; exit 1; }; \
 	done
+	@test -s bazel-bin/bazel/feasibility/packages/coreutils/install.artifact-identity-v2.sha256
 
 __bazel-bash: __bazel-mlibc-from-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/packages:bash --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -300,6 +308,7 @@ __bazel-bash: __bazel-mlibc-from-uapi
 	@rg -q 'version=5.3' bazel-bin/bazel/feasibility/packages/bash/package-metadata.txt
 	@test -x bazel-bin/bazel/feasibility/packages/bash/install/usr/bin/bash
 	@/usr/bin/file bazel-bin/bazel/feasibility/packages/bash/install/usr/bin/bash | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file bazel-bin/bazel/feasibility/packages/bash/install/usr/bin/bash >&2; exit 1; }
+	@test -s bazel-bin/bazel/feasibility/packages/bash/install.artifact-identity-v2.sha256
 
 define ORLIX_BAZEL_PACKAGE_PROOF
 __bazel-$(1): __bazel-mlibc-from-uapi
@@ -321,6 +330,7 @@ __bazel-$(1): __bazel-mlibc-from-uapi
 		test -e "$$$$install/$$$$rel" || { echo "missing $(1) output: $$$$rel" >&2; exit 1; }; \
 		case "$$$$rel" in \
 		  *.a) test -s "$$$$install/$$$$rel" || { echo "empty $(1) archive: $$$$rel" >&2; exit 1; } ;; \
+		  *.h) test -s "$$$$install/$$$$rel" || { echo "empty $(1) header: $$$$rel" >&2; exit 1; } ;; \
 		  *) \
 		    test -x "$$$$install/$$$$rel" || { echo "not executable: $$$$rel" >&2; exit 1; }; \
 		    /usr/bin/file "$$$$install/$$$$rel" | /usr/bin/grep -F -q 'ELF 64-bit LSB' || { /usr/bin/file "$$$$install/$$$$rel" >&2; exit 1; }; \
@@ -329,6 +339,7 @@ __bazel-$(1): __bazel-mlibc-from-uapi
 		esac; \
 	done
 	@if [ "$(1)" = "init" ]; then /usr/bin/file bazel-bin/bazel/feasibility/packages/init/install/sbin/init | /usr/bin/grep -F -q 'pie executable' || { /usr/bin/file bazel-bin/bazel/feasibility/packages/init/install/sbin/init >&2; exit 1; }; fi
+	@test -s bazel-bin/bazel/feasibility/packages/$(1)/install.artifact-identity-v2.sha256
 endef
 $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,grep,usr/bin/grep,3.12))
 $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,findutils,usr/bin/find usr/bin/xargs,4.10.0))
@@ -340,6 +351,13 @@ $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,jq,usr/bin/jq,1.7.1))
 $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,curl,usr/bin/curl,8.20.0))
 $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,ncurses,usr/lib/libtinfo.a,6.6))
 $(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,zsh,usr/bin/zsh,5.9))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,attr,usr/lib/libattr.a usr/include/attr/libattr.h usr/bin/getfattr usr/bin/setfattr,2.5.2))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,acl,usr/lib/libacl.a usr/include/sys/acl.h usr/bin/getfacl usr/bin/setfacl,2.3.2))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,pcre2,usr/lib/libpcre2-8.a usr/include/pcre2.h,10.47))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,musl-fts,usr/lib/libfts.a usr/include/fts.h,1.2.7))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,libsepol,usr/lib/libsepol.a usr/include/sepol/sepol.h,3.10))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,libcap,usr/lib/libcap.a usr/include/sys/capability.h usr/include/linux/capability.h usr/bin/getcap usr/bin/setcap,2.78))
+$(eval $(call ORLIX_BAZEL_PACKAGE_PROOF,libselinux,usr/lib/libselinux.a usr/include/selinux/selinux.h usr/bin/getenforce usr/bin/setenforce usr/bin/selinuxenabled usr/bin/policyvers usr/bin/getpolicyload,3.10))
 
 __bazel-zsh: __bazel-ncurses
 
@@ -348,7 +366,8 @@ __bazel-rootfs: __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __
 	@aquery_out="$$(mktemp -t orlix-rootfs-aquery)"; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" aquery 'mnemonic("OrlixRootfs", //bazel/feasibility/rootfs:rootfs)' --output=text --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" > "$$aquery_out"; \
 	rg -q 'Mnemonic: OrlixRootfs' "$$aquery_out" || { echo "missing OrlixRootfs action" >&2; rm -f "$$aquery_out"; exit 1; }; \
-	rg -q 'gen_init_cpio.c' "$$aquery_out" || { echo "rootfs must compile upstream Linux gen_init_cpio.c" >&2; rm -f "$$aquery_out"; exit 1; }; \
+	rg '^  Inputs:' "$$aquery_out" | rg -q 'feasibility/rootfs/gen_init_cpio' || { echo "rootfs must consume the built gen_init_cpio tool" >&2; rm -f "$$aquery_out"; exit 1; }; \
+	if rg '^  Inputs:' "$$aquery_out" | rg -q 'gen_init_cpio.c|configure|package-metadata.txt|source-input.sha256'; then echo "rootfs must consume completed install trees only" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	if rg '^  Inputs:' "$$aquery_out" | rg -q 'kbuild-archive.tar'; then echo "rootfs must not consume the Kernel Kbuild archive" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	if rg '^  Inputs:' "$$aquery_out" | rg -q 'OrlixOS/Sources/make'; then echo "rootfs must not consume OrlixOS wrapper Make" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	rm -f "$$aquery_out"
@@ -356,6 +375,8 @@ __bazel-rootfs: __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __
 	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/initramfs.cpio.gz
 	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/base.ext4
 	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/state.ext4
+	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json
+	@test -s bazel-bin/bazel/feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.sha256
 	@rg -q 'init=/init' bazel-bin/bazel/feasibility/rootfs/rootfs/payload-metadata.txt
 	@/usr/bin/gzip -t bazel-bin/bazel/feasibility/rootfs/rootfs/initramfs.cpio.gz
 

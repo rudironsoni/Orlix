@@ -9,7 +9,7 @@ updated: 2026-09-11
 
 ## [2026-09-11] fix | Remove retired command wrapper integration
 
-The [agent harness](objects/software-component/agent-harness.md) now describes direct tool invocation. Removed RTK instructions, policy variants, and hook recognition. Publication preserves the user-owned AGENTS.md bullet and records unfinished guest-library work separately in IMPLEMENT.md.
+The [agent harness](objects/software-component/agent-harness.md) now describes direct tool invocation. Removed wrapper instructions, policy variants, and hook recognition. Publication preserves the user-owned AGENTS.md bullet and records unfinished guest-library work separately in IMPLEMENT.md.
 
 ## [2026-09-11] fix | Align helper invocation with Bazel authority
 
@@ -1234,3 +1234,12 @@ Make-to-Bazel routing, shared cache and signed buildset reuse, and runtime proof
 for each supported iOS, iPadOS, and macOS row. The iOS 15 row keeps its reduced
 feature set, and later-system features remain unavailable until their owning
 matrix row proves them.
+
+## [2026-09-11] contract | Version guest artifact content identity
+
+Defined the `artifact-identity-v2` serialization and namespace contract in the
+Bazel migration concept. Product content, provenance, and verification policy
+remain separate. Existing signed identities retain their original format;
+new-format promotion requires independent proof and a new signed proposal.
+Phase 5 source providers expose v2 identities while signed legacy promotion
+remains unchanged until format-aware verification exists.

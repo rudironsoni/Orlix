@@ -7,9 +7,138 @@ import unittest
 from pathlib import Path
 
 import compare
+from bazel.content_digest import artifact_identity_v2, artifact_manifest_v2
 
 
 class PromotionCompareTests(unittest.TestCase):
+    def test_artifact_identity_v2_is_canonical_and_tracks_product_mutations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            vector_payload = base / "vector"
+            vector_payload.mkdir()
+            vector_file = vector_payload / "payload"
+            vector_file.write_bytes(b"artifact-vector\n")
+            vector_file.chmod(0o755)
+            vector_artifacts = {"payload": vector_file}
+            self.assertEqual(
+                artifact_manifest_v2(artifacts=vector_artifacts),
+                b'{"domain":"orlix.artifact.identity","entries":[{"content_sha256":"34c691454bd53ef9ded2c6559e92ea259c2234fcb1849da0e5f40dfdbc21544e","mode":493,"path":"payload","type":"file"}],"format":"artifact-identity-v2","version":2}\n',
+            )
+            self.assertEqual(
+                artifact_identity_v2(artifacts=vector_artifacts),
+                "c37f1577d77a12919a6814cbda1ff49170729044b5acf786cb273f91346085b3",
+            )
+            outside = base / "provenance.json"
+            outside.write_text("first", encoding="utf-8")
+
+            def make_tree(name: str, reverse: bool = False) -> Path:
+                root = base / name
+                if reverse:
+                    (root / "bin").mkdir(parents=True)
+                    (root / "bin" / "tool").write_bytes(b"same")
+                    (root / "bin" / "tool").chmod(0o755)
+                    (root / "empty").mkdir()
+                    (root / "empty").chmod(0o755)
+                else:
+                    (root / "empty").mkdir(parents=True)
+                    (root / "empty").chmod(0o755)
+                    (root / "bin").mkdir()
+                    (root / "bin" / "tool").write_bytes(b"same")
+                    (root / "bin" / "tool").chmod(0o755)
+                (root / "alias").symlink_to("bin/tool")
+                (root / "escape").symlink_to(outside)
+                return root
+
+            first = make_tree("first")
+            second = make_tree("second", reverse=True)
+            first_digest = artifact_identity_v2(first)
+            second_digest = artifact_identity_v2(second)
+            self.assertEqual(first_digest, second_digest)
+            manifest = json.loads(artifact_manifest_v2(first))
+            self.assertEqual(manifest["domain"], "orlix.artifact.identity")
+            self.assertEqual(manifest["version"], 2)
+            self.assertEqual(manifest["format"], "artifact-identity-v2")
+            self.assertEqual(
+                [entry["path"] for entry in manifest["entries"]],
+                sorted(entry["path"] for entry in manifest["entries"]),
+            )
+            self.assertIn(
+                {"mode": 0o755, "path": "bin/tool", "type": "file"},
+                [
+                    {key: entry[key] for key in ("mode", "path", "type")}
+                    for entry in manifest["entries"]
+                ],
+            )
+            self.assertIn(
+                {"mode": 0o755, "path": "empty", "type": "directory"},
+                [
+                    {key: entry[key] for key in ("mode", "path", "type")}
+                    for entry in manifest["entries"]
+                ],
+            )
+            outside.write_text("updated", encoding="utf-8")
+            self.assertEqual(first_digest, artifact_identity_v2(first))
+            os.utime(first / "bin" / "tool", ns=(1, 1))
+            self.assertEqual(first_digest, artifact_identity_v2(first))
+
+            mutations = (
+                ("content", lambda root: (root / "bin" / "tool").write_bytes(b"changed")),
+                ("rename", lambda root: (root / "bin" / "tool").rename(root / "renamed")),
+                ("mode", lambda root: (root / "bin" / "tool").chmod(0o1755)),
+                ("file-to-symlink", lambda root: ((root / "bin" / "tool").unlink(), (root / "bin" / "tool").symlink_to("other"))),
+                ("symlink-target", lambda root: ((root / "alias").unlink(), (root / "alias").symlink_to("missing"))),
+            )
+            for name, mutate in mutations:
+                with self.subTest(name=name):
+                    root = make_tree(name)
+                    before = artifact_identity_v2(root)
+                    mutate(root)
+                    self.assertNotEqual(before, artifact_identity_v2(root))
+
+            selected = {
+                "images/base.ext4": first / "bin" / "tool",
+                "images/initramfs.cpio": first / "alias",
+            }
+            selected_digest = artifact_identity_v2(artifacts=selected)
+            selected_manifest = json.loads(
+                artifact_manifest_v2(artifacts=selected)
+            )
+            self.assertEqual(
+                [entry["path"] for entry in selected_manifest["entries"]],
+                ["images/base.ext4", "images/initramfs.cpio"],
+            )
+            single = base / "single"
+            single.mkdir()
+            single_payload = single / "payload"
+            single_payload.write_bytes(b"payload")
+            single_payload.chmod(0o755)
+            self.assertEqual(
+                artifact_identity_v2(single),
+                artifact_identity_v2(artifacts={"payload": single_payload}),
+            )
+            (first / "bin" / "tool").write_bytes(b"large" * (1024 * 1024))
+            self.assertNotEqual(selected_digest, artifact_identity_v2(artifacts=selected))
+
+    def test_artifact_identity_v2_rejects_unknown_formats_invalid_paths_and_types(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / "tree"
+            root.mkdir()
+            source = root / "file"
+            source.write_bytes(b"data")
+            with self.assertRaisesRegex(ValueError, "unknown artifact identity format"):
+                artifact_manifest_v2(root, format="legacy")
+            with self.assertRaisesRegex(ValueError, "invalid artifact path"):
+                artifact_identity_v2(artifacts={"../escape": source})
+            fifo = root / "fifo"
+            os.mkfifo(fifo)
+            with self.assertRaisesRegex(ValueError, "unsupported artifact entry"):
+                artifact_identity_v2(artifacts={"fifo": fifo})
+            root_link = base / "root-link"
+            root_link.symlink_to(root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "not a real directory"):
+                artifact_identity_v2(root_link)
+
     def test_component_bytes_and_symlinks_must_match(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             first, second = Path(tmp) / "a", Path(tmp) / "b"
@@ -164,8 +293,13 @@ class PromotionCompareTests(unittest.TestCase):
         rootfs = (root / "bazel/feasibility/rootfs/rootfs.bzl").read_text(encoding="utf-8")
         self.assertIn('cd "$base_tree"', rootfs)
         self.assertIn('shasum -a 256 < "$payload_metadata"', rootfs)
-        self.assertIn('"$work/gen_init_cpio" -t 1', rootfs)
-        self.assertIn("pkg.source_input_digest", rootfs)
+        self.assertIn('"$gen_init_cpio" -t 1', rootfs)
+        self.assertIn("package_closure = depset(transitive = [pkg.artifact_identity_closure for pkg in pkgs])", rootfs)
+        self.assertIn('"rootfs",', rootfs)
+        self.assertIn("@orlix_kernel_toolchain//:rootfs-identity.json", rootfs)
+        self.assertIn('"rootfs-identity.json"', (root / "bazel/extensions/native_sources.bzl").read_text(encoding="utf-8"))
+        artifact_rule = (root / "bazel/artifact_identity.bzl").read_text(encoding="utf-8")
+        self.assertIn('"no-sandbox": "1"', artifact_rule)
         self.assertIn("kbuild-archive.tar", (root / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8"))
 
 
