@@ -127,3 +127,4 @@ Keep mutable build state worktree-local. Share only immutable, content-addressed
 ## XcodeBuildMCP
 
 If using XcodeBuildMCP, use the installed XcodeBuildMCP skill before calling XcodeBuildMCP tools.
+- If using XcodeBuildMCP, use the installed XcodeBuildMCP skill before calling XcodeBuildMCP tools.

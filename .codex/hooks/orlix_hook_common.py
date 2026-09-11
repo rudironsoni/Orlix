@@ -151,7 +151,7 @@ def tool_mutates_workspace(payload) -> bool:
     if name not in BASH_TOOLS:
         return False
     command = _command(payload)
-    return bool(re.search(r"(?:^|[;&|]\s*)(?:rtk\s+(?:proxy\s+)?)?(?:apply_patch|make|rm|mkdir|mv|cp|install|touch|git\s+(?:apply|commit|push))\b|(?:^|\s)(?:>|>>)\s*\S", command))
+    return bool(re.search(r"(?:^|[;&|]\s*)(?:apply_patch|make|rm|mkdir|mv|cp|install|touch|git\s+(?:apply|commit|push))\b|(?:^|\s)(?:>|>>)\s*\S", command))
 
 
 def tool_requires_plan_context(payload) -> bool:
@@ -159,7 +159,7 @@ def tool_requires_plan_context(payload) -> bool:
 
 
 def is_git_commit_or_push(payload) -> bool:
-    return bool(re.search(r"(?:^|[;&|]\s*)(?:rtk\s+(?:proxy\s+)?)?git\s+(?:commit|push)\b", _command(payload)))
+    return bool(re.search(r"(?:^|[;&|]\s*)git\s+(?:commit|push)\b", _command(payload)))
 
 
 def oversized_goal_messages(root: Path) -> list[str]:

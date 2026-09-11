@@ -7,6 +7,10 @@ updated: 2026-09-11
 ---
 # Orlix Knowledge Log
 
+## [2026-09-11] fix | Remove retired command wrapper integration
+
+The [agent harness](objects/software-component/agent-harness.md) now describes direct tool invocation. Removed RTK instructions, policy variants, and hook recognition. Publication preserves the user-owned AGENTS.md bullet and records unfinished guest-library work separately in IMPLEMENT.md.
+
 ## [2026-09-11] fix | Align helper invocation with Bazel authority
 
 [ADR 0033](objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md) and generated instructions explicitly permit private Make targets and Bazel actions to invoke non-executable implementation modules. Bazel invokes upstream build engines directly. Make remains the public developer and CI interface. Repository wrapper Makefiles remain prohibited inside Bazel actions. The original user-owned `AGENTS.md` delta is preserved separately.

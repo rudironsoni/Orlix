@@ -24,11 +24,11 @@ Inspect ELF, Mach-O, disassembly, relocations, symbols, sections, and debugger f
 
 ## Commands it may run
 
-- `rtk proxy file <path>`
-- `rtk proxy xcrun llvm-objdump -d <path>`
-- `rtk proxy xcrun llvm-readelf -a <path>`
-- `rtk proxy nm <path>`
-- `rtk proxy otool -l <path>`
+- `file <path>`
+- `xcrun llvm-objdump -d <path>`
+- `xcrun llvm-readelf -a <path>`
+- `nm <path>`
+- `otool -l <path>`
 - LLDB MCP `lldb_command` when a running LLDB MCP server is configured
 
 ## Required output format
