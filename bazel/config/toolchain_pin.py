@@ -200,6 +200,10 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     tools += [Path(path) for path in autotools["files"]]
     trees += [Path(path) for path in autotools["trees"]]
     Path(output).with_name("autotools-identity.json").write_text(json.dumps(autotools, sort_keys=True) + "\n")
+    bootstrap = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools-bootstrap", autotools_tools)
+    tools += [Path(path) for path in bootstrap["files"]]
+    trees += [Path(path) for path in bootstrap["trees"]]
+    Path(output).with_name("autotools-bootstrap-identity.json").write_text(json.dumps(bootstrap, sort_keys=True) + "\n")
     bash_tools = (Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),) + tuple(
         Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "mktemp", "sleep")
     )
@@ -226,10 +230,10 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
         ], text=True))
         scripts.add(meson)
         engine_tools |= {interpreter, Path("/opt/homebrew/bin/ninja"), developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++"}
-    elif engine in ("autotools", "autoconf"):
+    elif engine in ("autotools", "autoconf", "autotools-bootstrap"):
         scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoconf", "autoheader", "autom4te"))
         modules.append("/opt/homebrew/opt/autoconf/share/autoconf")
-        if engine == "autotools":
+        if engine in ("autotools", "autotools-bootstrap"):
             scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoreconf", "automake", "aclocal", "autopoint"))
             version = subprocess.check_output(["/opt/homebrew/bin/automake", "--version"], text=True).splitlines()[0].split()[-1]
             api_version = ".".join(version.split(".")[:2])
@@ -240,6 +244,9 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
             }.items():
                 for pattern in patterns:
                     modules.extend(str(path) for path in (Path("/opt/homebrew/opt") / package / "share").glob(pattern))
+        if engine == "autotools-bootstrap":
+            scripts.update((Path("/opt/homebrew/bin/glibtoolize"), Path("/bin/sh")))
+            modules.extend(("/opt/homebrew/opt/libtool/share/libtool", "/opt/homebrew/opt/libtool/share/aclocal", "/opt/homebrew/opt/pkgconf/share/aclocal"))
         engine_tools.update(Path(path) for path in ("/opt/homebrew/bin/gmake", "/opt/homebrew/opt/m4/bin/m4", "/opt/homebrew/bin/pkgconf", "/opt/homebrew/opt/bison/bin/bison", "/opt/homebrew/opt/llvm/bin/llvm-ranlib"))
         engine_tools.update(Path("/opt/homebrew/bin") / name for name in ("ggrep", "gsed", "gawk", "gtar"))
         scripts.update(Path("/usr/bin") / name for name in ("install", "file", "grep", "head", "uname", "basename", "wc", "touch"))

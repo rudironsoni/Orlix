@@ -195,7 +195,7 @@ def _kernel_toolchain_repository_impl(ctx):
         ctx.watch(path)
     for path in watched["trees"]:
         ctx.watch_tree(path)
-    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json", "bash-identity.json", "autotools-identity.json"], visibility = ["//visibility:public"])\n')
+    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json", "bash-identity.json", "autotools-identity.json", "autotools-bootstrap-identity.json"], visibility = ["//visibility:public"])\n')
 
 _kernel_toolchain_repository = repository_rule(
     implementation = _kernel_toolchain_repository_impl,
@@ -305,6 +305,48 @@ def _native_sources_impl(_ctx):
         sha256 = "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba",
         strip_prefix = "bash-5.3",
         marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_attr_source",
+        url = "https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz",
+        sha256 = "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b",
+        strip_prefix = "attr-2.5.2",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_acl_source",
+        url = "https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz",
+        sha256 = "97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd",
+        strip_prefix = "acl-2.3.2",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_pcre2_source",
+        url = "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.bz2",
+        sha256 = "47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7",
+        strip_prefix = "pcre2-10.47",
+        marker = "configure",
+    )
+    _archive_repository(
+        name = "orlix_musl_fts_source",
+        url = "https://github.com/pullmoll/musl-fts/archive/refs/tags/v1.2.7.tar.gz",
+        sha256 = "49ae567a96dbab22823d045ffebe0d6b14b9b799925e9ca9274d47d26ff482a6",
+        strip_prefix = "musl-fts-1.2.7",
+        marker = "configure.ac",
+    )
+    _archive_repository(
+        name = "orlix_libsepol_source",
+        url = "https://github.com/SELinuxProject/selinux/releases/download/3.10/libsepol-3.10.tar.gz",
+        sha256 = "d555586797fa9f38344496d2a7ec1147b6caaf3fcc44c42d8d5173edd7a79a71",
+        strip_prefix = "libsepol-3.10",
+        marker = "Makefile",
+    )
+    _archive_repository(
+        name = "orlix_libcap_source",
+        url = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.78.tar.xz",
+        sha256 = "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11",
+        strip_prefix = "libcap-2.78",
+        marker = "Makefile",
     )
     _archive_repository(
         name = "orlix_grep_source",

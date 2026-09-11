@@ -338,3 +338,41 @@ Verification passed: 122 Python tests, 28 cached Bazel analysis tests, documenta
 Evidence resides under `Build/AgentHarness/bazel-migration/recovery-checkpoint-5/`. `autotools-checkpoint-summary.json` records products, actions, timings, and state sizes. `autotools-final-equivalence.json`, `grep-mutation-result.json`, `jq-mutation-result.json`, `ncurses-unused-archive-result.json`, and `jq-auxiliary-result.json` carry the detailed comparisons and mutation results. Matching execution logs distinguish real compiler work from replayed cached stdout. `autotools-final-matrix.log` and `autotools-final-checks.log` record the checks.
 
 TAP remains stopped. No Linux runtime, package-feature parity, device, promoted-storage, or cutover proof is claimed. The signed artifacts.lock.json remains unchanged. The original duplicate XcodeBuildMCP bullet in AGENTS.md, .xcodebuildmcp/, and third_party/swift/.build/ remain outside this checkpoint.
+
+
+## Checkpoint 5C2: restore guest libraries and features
+
+Phase 5: IN PROGRESS. This checkpoint is not yet accepted or published. Attr 2.5.2, ACL 2.3.2, and PCRE2 10.47 now have independent pinned-source package targets using the existing retained upstream configure/Make runner. Their curated outputs include getfattr, setfattr, getfacl, setfacl, public headers, and static libraries. ACL consumes selected attr headers and libattr.a. The other four libraries and corresponding Coreutils feature restoration remain under implementation.
+
+The first three complete product trees match independent cache-disabled builds by the canonical path/content/mode/symlink comparator. Tree digests are attr `4a32b857d62a6308e66d598e37f36ad335c26b60f8280a6bc36006014b9cdf16`, ACL `cab5d7fac2bdc50c77904eb408762e3cc05c8891bcc0d4283d79bb1d78f6928b`, and PCRE2 `ca147c2160f6132685164ecffce1518f9b03aed821ed8bf9f003e426d668c7d5`. The independent build took 237.073 seconds and executed seven actions with no cache hits: UAPI, compiler runtime, mlibc, three packages, and ACL input selection. The first build took 126.311 seconds; the later curated build took 63.733 seconds. These are observed overlapping workloads, not an isolated before/after speed comparison.
+
+A separate ACL source fixture changed acl_valid.c while preserving its size and timestamp. Only la-acl_valid.o changed bytes among 60 objects. Upstream Make requested seven compilations: one compiler miss and six direct hits, then the archive and two utility links. Only the ACL package action executed, taking 3.336 seconds; Bazel analysis reset made total elapsed time 34.700 seconds. The other 53 object timestamps stayed unchanged. The fixture was restored exactly, and the original product was recovered in 0.800 seconds through a disk-cache hit. This is not a claim that only one compiler request occurred.
+
+Retained state measured attr 27,324 KiB, ACL 29,256 KiB, and PCRE2 36,932 KiB. Records identify each package and aarch64-linux-gnu separately. The archives contain no nested libc archives. Upstream installation generates usable public attr/ACL headers through its real GNU sed rules, without the old post-install header rewrite.
+
+Evidence is under `Build/AgentHarness/bazel-migration/recovery-checkpoint-5/`: `libraries-first-three-summary.json`, `libraries-equivalence.json`, `acl-library-mutation-result.json`, and matching command/execution logs. This evidence applies to the tested first-three-library rules before the remaining build-engine integration. Final integrated verification is pending.
+
+Musl-fts 1.2.7 now uses pinned source, real autoreconf with explicit GNU libtoolize and m4, configure, and upstream Make installation through the same retained runner. Its first build passed in 63.031 seconds. An independent build with all action, compiler, and retained-state caches disabled passed in 200.382 seconds. The complete product trees match with SHA-256 `adf9e3fb7b96eeb87bbbc879d057ffb41642545e23fc2d897b7838fa787f62d7`. Evidence: `musl-fts-seed.log`, `musl-fts-uncached.execution.json`, and `musl-fts-equivalence.json` in the same checkpoint directory. Final integrated mutation verification remains pending.
+
+The live bootstrap identity capture includes GNU libtoolize, its actual /bin/sh interpreter, GNU m4, libtool runtime/macros, and pkgconf macros. All eight existing identity JSON files remain byte-identical to their prior generated versions, including Kernel, mlibc, compiler runtime, Coreutils, Bash, and generic Autotools identities. `bootstrap-tool-identity-result.json` records the comparison. A bounded source reviewer confirmed this scope; the package bootstrap explicitly selects the pinned m4 instead of the system gm4 found on PATH.
+
+GNU libtool is now a declared host prerequisite for musl-fts's real upstream bootstrap. `brew bundle --file Brewfile` and `make check-build-tools` passed; five existing toolchain-pin tests passed. The planned dedicated bootstrap tool identity keeps libtool and its macro resources out of unrelated package identities. No additional guest package is introduced.
+
+TAP stays stopped. The signed artifacts.lock.json and original user-owned AGENTS.md delta remain unchanged. Phase 5D rootfs and artifact-identity-v2 acceptance and all Phase 6 promoted-store work remain pending.
+
+## Command wrapper removal checkpoint
+
+Removed the retired command wrapper instructions, command-policy variants, and hook recognition. Inspector commands and policy tests now invoke tools directly. Existing bare-command rules are unchanged. Two stale test expectations now match the original rule file, which returned an empty matchedRules list for the timeout-prefixed Make commands.
+
+The machine package uninstall exited 0. `make agent-harness-check` exited 0 with 13 hook tests passing, current generated hooks, and clean documentation checks. Six policy tests and `git diff --check` passed. The tracked-source scan found no wrapper references, and the shell cannot resolve the removed command. Raw final checks are in `Build/AgentHarness/command-wrapper-removal/checks.json`. After explicit user approval, the narrow machine configuration scan passed with no remaining active references. The two package cache downloads and their symlinks were removed. The two historical instruction backups were subsequently deleted on explicit user request, and their absence was verified. Machine verification is recorded in `Build/AgentHarness/command-wrapper-removal/machine-check.json`. Application and runtime tests were not run because this change only removes developer-tool integration. Existing build-optimization edits, the original AGENTS.md delta, and untracked tool/build directories remain preserved.
+
+
+## User-requested publication of local work
+
+On 2026-09-11, Rudi stopped implementation and requested publication of all local work. This preserves partial 5C2 implementation and command-wrapper removal without accepting Phase 5C2. Final libcap/libsepol integration, libselinux, Coreutils feature parity, and integrated mutation/equivalence checks remain pending. Phase 5D and later phases remain pending.
+
+Fresh publication checks: `gmake __bazel-matrix-check` exited 0 with 122 Python tests and 32 passing Bazel analysis tests (four executed, 28 cached). `gmake agent-harness-check` exited 0 with 13 hook tests and current generated hooks. `python3 .codex/rules/tests/test_execpolicy_rules.py` exited 0 with six tests. `git diff --check` passed. Logs: `/private/tmp/orlix-recovery-current-matrix.log`, `/private/tmp/orlix-publish-harness.log`, and `/private/tmp/orlix-publish-policy.log`. No new package/runtime build completed during this publication pass.
+
+The inspected remote head was `9df61327255e923a8317cd217a6d72c8895f1fcf`. Its Bazel CI passed. Its iOS 15 run `34599070354` failed because OrlixUITests-Runner hung before establishing connection, error 65 through Make exit 2. Root cause remains unverified. The failed log is `/private/tmp/orlix-ios15-failed.log`. New-commit CI is a separate gate.
+
+The duplicate XcodeBuildMCP bullet in AGENTS.md is included under the explicit all-local-work publication request. Untracked `.xcodebuildmcp/` and `third_party/swift/.build/` remain excluded machine/build state. TAP stays stopped and artifacts.lock.json remains unchanged. No runtime, device, promotion, cutover, or release readiness is established.

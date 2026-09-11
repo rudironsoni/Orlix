@@ -112,6 +112,10 @@ bash_package_tree_test(
         target_under_test = "//bazel/feasibility/packages:%s" % pkg,
     )
     for pkg in [
+        "attr",
+        "acl",
+        "pcre2",
+        "musl-fts",
         "grep",
         "findutils",
         "e2fsprogs",

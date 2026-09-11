@@ -28,6 +28,12 @@ def _pinned_env(ctx):
     return env
 
 def _autotools_package_impl(ctx):
+    if ctx.attr.bootstrap and not ctx.attr.in_tree:
+        fail("autotools bootstrap requires in_tree=True")
+    if ctx.attr.make_only and not ctx.attr.in_tree:
+        fail("autotools make_only requires in_tree=True")
+    if ctx.attr.make_only and ctx.attr.bootstrap:
+        fail("autotools make_only cannot bootstrap")
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
     extra = None
@@ -70,10 +76,13 @@ done
             "PACKAGE_VERSION=%s" % _shell_squote(ctx.attr.package_version),
             "LINK_MODE=%s" % _shell_squote(ctx.attr.link_mode),
             "IN_TREE=%s" % _shell_squote("1" if ctx.attr.in_tree else "0"),
+            "BOOTSTRAP=%s" % _shell_squote("1" if ctx.attr.bootstrap else "0"),
+            "MAKE_ONLY=%s" % _shell_squote("1" if ctx.attr.make_only else "0"),
             "FILE_EXPECT=%s" % _shell_squote(ctx.attr.file_expect),
             "REQUIRE_STATIC=%s" % _shell_squote("1" if ctx.attr.require_static else "0"),
             "CONFIGURE_ARGS=%s" % _shell_squote(" ".join(ctx.attr.configure_args)),
             "MAKE_STEPS=%s" % _shell_squote("|".join(ctx.attr.make_steps)),
+            "MAKE_VARS=%s" % _shell_squote(";".join(ctx.attr.make_vars)),
             "INSTALL_MAP=%s" % _shell_squote(",".join(ctx.attr.install_map)),
             "CACHE_VARS=%s" % _shell_squote(";".join(ctx.attr.cache_vars)),
             "CPPFLAGS_EXTRA=%s" % _shell_squote(ctx.attr.cppflags),
@@ -204,6 +213,9 @@ CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
 export PATH="$work/toolchain:$PATH"
 export CC=aarch64-linux-gnu-gcc
 export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h -ffile-prefix-map=..=. -ffile-prefix-map=../..=. -ffile-prefix-map=../../..=. $CFLAGS_EXTRA"
+if [ "$MAKE_ONLY" = 1 ]; then
+  export CFLAGS="$CFLAGS -MD -MP"
+fi
 export CPPFLAGS="$CPPFLAGS_EXTRA"
 export LDFLAGS=""
 export LIBS=""
@@ -228,11 +240,27 @@ else
   conf="../src/configure"
 fi
 if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
-  "$conf" $CONFIGURE_ARGS
+  if [ "$BOOTSTRAP" = 1 ]; then
+    export LIBTOOLIZE=/opt/homebrew/bin/glibtoolize
+    export M4=/opt/homebrew/opt/m4/bin/m4
+    /opt/homebrew/bin/autoreconf --force --install --verbose
+  fi
+  if [ "$MAKE_ONLY" != 1 ]; then
+    "$conf" $CONFIGURE_ARGS
+  fi
 fi
 gmake_bin="$(/usr/bin/command -v gmake)"
 test -x "$gmake_bin"
 make_tools=(AUTOMAKE=/opt/homebrew/bin/automake ACLOCAL=/opt/homebrew/bin/aclocal AUTOCONF=/opt/homebrew/bin/autoconf AUTOHEADER=/opt/homebrew/bin/autoheader AUTOM4TE=/opt/homebrew/bin/autom4te AUTOPOINT=/opt/homebrew/bin/autopoint)
+make_vars=()
+remaining="$MAKE_VARS"
+while [ -n "$remaining" ]; do
+  case "$remaining" in
+    *\;*) item="${remaining%%;*}"; remaining="${remaining#*;}" ;;
+    *) item="$remaining"; remaining="" ;;
+  esac
+  make_vars+=("$item")
+done
 link_inputs="$libraries/libc.a $libm $libpthread $libssp_ns $libssp $runtime $extra_archives $libraries/crt1.o $libraries/crti.o $libraries/crtn.o"
 if [ -n "$EXTRA_PREREQUISITES" ]; then
   IFS=,
@@ -260,6 +288,9 @@ while [ -n "$remaining" ]; do
   target="${mapping%%:*}"
   /usr/bin/printf '%s: %s\n' "${target##*/}" "$link_inputs" >> "$work/toolchain/link-inputs.mk"
 done
+if [ "$MAKE_ONLY" = 1 ]; then
+  /usr/bin/printf '%s\n' '-include $(wildcard *.d)' >> "$work/toolchain/link-inputs.mk"
+fi
 export MAKEFILES="$work/toolchain/link-inputs.mk"
 remaining="$MAKE_STEPS"
 while [ -n "$remaining" ]; do
@@ -273,12 +304,12 @@ while [ -n "$remaining" ]; do
       step="${step//@USELIBS@/}"
       echo "orlix-autotools: $gmake_bin $step LIBS=<sysroot>" >&2
       # shellcheck disable=SC2086
-      "$gmake_bin" "${make_tools[@]}" $step LIBS="$LIBS" || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
+      "$gmake_bin" "${make_tools[@]}" "${make_vars[@]}" $step LIBS="$LIBS" || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
       ;;
     *)
       echo "orlix-autotools: $gmake_bin $step" >&2
       # shellcheck disable=SC2086
-      "$gmake_bin" "${make_tools[@]}" $step || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
+      "$gmake_bin" "${make_tools[@]}" "${make_vars[@]}" $step || { echo "orlix-autotools: make failed $?" >&2; /bin/ls -la . .libs 2>/dev/null || true; exit 1; }
       ;;
   esac
 done
@@ -296,7 +327,9 @@ while [ -n "$remaining" ]; do
   fi
   test -e "$src_rel" || { echo "missing built $PACKAGE_NAME file: $src_rel" >&2; /bin/ls -la . ".libs" 2>/dev/null || true; exit 1; }
   /bin/mkdir -p "$work/dest/$(/usr/bin/dirname "$dest_rel")"
-  /usr/bin/install -m 0755 "$src_rel" "$work/dest/$dest_rel"
+  mode=0644
+  if [ -x "$src_rel" ] || /usr/bin/file "$src_rel" | /usr/bin/grep -F -q 'ELF 64-bit'; then mode=0755; fi
+  /usr/bin/install -m "$mode" "$src_rel" "$work/dest/$dest_rel"
   echo "orlix-autotools: installed $src_rel -> $dest_rel $(/usr/bin/file "$work/dest/$dest_rel")" >&2
 done
 /usr/bin/find "$work/dest" -type f -perm -111 -print | while IFS= read -r bin; do
@@ -331,7 +364,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
         progress_message = "Building %s with incremental upstream Make state" % ctx.attr.package_name,
-        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[7:], configuration=sys.argv[5], in_tree=sys.argv[6] == \"1\", extra_tree=sys.argv[-1] or None))' \"$@\"",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[8:], configuration=sys.argv[5], in_tree=sys.argv[6] == \"1\", make_only=sys.argv[7] == \"1\", extra_tree=sys.argv[-1] or None))' \"$@\"",
         arguments = [
             ctx.attr.package_name,
             script.path,
@@ -339,6 +372,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             ctx.file.compiler_identity.path,
             recipe.path,
             "1" if ctx.attr.in_tree else "0",
+            "1" if ctx.attr.make_only else "0",
             ctx.file.configure.path,
             sysroot.headers.path,
             uapi.headers.path,
@@ -403,6 +437,9 @@ orlix_autotools_package = rule(
         "cache_vars": attr.string_list(),
         "link_mode": attr.string(default = "pie"),
         "in_tree": attr.bool(default = False),
+        "bootstrap": attr.bool(default = False),
+        "make_only": attr.bool(default = False),
+        "make_vars": attr.string_list(),
         "file_expect": attr.string(default = "ARM aarch64"),
         "require_static": attr.bool(default = False),
         "cppflags": attr.string(default = ""),

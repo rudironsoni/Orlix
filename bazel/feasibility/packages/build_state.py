@@ -14,10 +14,42 @@ from bazel import build_state as state
 
 _TREES = ("src", "build", "inputs")
 _CONFIGURATION_NAMES = {
-    "configure", "configure.ac", "Makefile.am", "Makefile.in", "config.hin",
+    "configure", "configure.ac", "Makefile", "Make.Rules", "Makefile.am", "Makefile.in", "config.hin",
     "ltmain.sh", "config.guess", "config.sub", "install-sh", "missing",
-    "compile", "depcomp", "ar-lib", "mkinstalldirs", "ylwrap", "config.rpath",
+    "compile", "depcomp", "ar-lib", "mkinstalldirs", "ylwrap", "config.rpath", "VERSION",
 }
+_COMPILED_SUFFIXES = {".c", ".h", ".cc", ".cpp", ".cxx", ".m", ".mm", ".s", ".S", ".y", ".l"}
+
+
+def _source_identity_file(path: Path) -> bool:
+    return (
+        path.name in _CONFIGURATION_NAMES
+        or path.name.startswith("Makefile.")
+        or path.suffix == ".mk"
+        or path.suffix == ".m4"
+        or (path.name.startswith("config") and path.suffix == ".in")
+        or path.suffix in _COMPILED_SUFFIXES
+    )
+
+
+def _source_identity(source: Path) -> bytes:
+    entries = {}
+    for name, path in state._files(source).items():
+        if name == "BUILD.bazel" or not _source_identity_file(path):
+            continue
+        mode, data = state._entry(path)
+        digest = ""
+        if (
+            path.is_symlink()
+            or path.name in _CONFIGURATION_NAMES
+            or path.name.startswith("Makefile.")
+            or path.suffix == ".mk"
+            or path.suffix in {".m4", ".y", ".l"}
+            or (path.name.startswith("config") and path.suffix == ".in")
+        ):
+            digest = hashlib.sha256(data).hexdigest()
+        entries[name] = [mode, digest]
+    return (json.dumps(entries, sort_keys=True) + "\n").encode()
 
 
 def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tree: str | None = None) -> None:
@@ -64,7 +96,7 @@ def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tr
     print("Orlix package source: " + json.dumps(source_result, sort_keys=True), flush=True)
 
 
-def run(package: str, script: str, toolchain: str, compiler: str, arguments: list[str], *, configuration: str | None = None, in_tree: bool = False, extra_tree: str | None = None) -> int:
+def run(package: str, script: str, toolchain: str, compiler: str, arguments: list[str], *, configuration: str | None = None, in_tree: bool = False, make_only: bool = False, extra_tree: str | None = None) -> int:
     if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", package):
         raise ValueError(f"invalid package state name: {package}")
     environment = dict(os.environ)
@@ -77,7 +109,17 @@ def run(package: str, script: str, toolchain: str, compiler: str, arguments: lis
         launcher = root / "compiler-launcher"
         state._remove(launcher)
         launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", "/opt/homebrew/bin/ccache"))
-        valid = state.resume(root, [*identity, launcher], _TREES, compatibility=compatibility)
+        identity_inputs = [*identity, launcher]
+        if make_only and arguments:
+            source_identity = root / "source-identity.json"
+            state.sync(
+                {source_identity.name: _source_identity(Path(arguments[0]).absolute().parent)},
+                root,
+                root,
+                remove_stale=False,
+            )
+            identity_inputs.append(source_identity)
+        valid = state.resume(root, identity_inputs, _TREES, compatibility=compatibility)
         print("Orlix package Make state: " + ("verified" if valid else "clean"), flush=True)
         prepare(root, arguments, in_tree=in_tree, extra_tree=extra_tree)
         state._remove(root / "dest")

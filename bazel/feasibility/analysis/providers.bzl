@@ -246,7 +246,8 @@ def _guest_package_tree_test_impl(ctx):
                 asserts.true(env, "configure" in joined)
                 asserts.false(env, "uapi.sha256" in joined)
                 asserts.false(env, "source-input.sha256" in joined)
-                asserts.true(env, "autotools-identity.json" in joined)
+                identity = "autotools-bootstrap-identity.json" if ctx.attr.expected_token == "musl-fts" else "autotools-identity.json"
+                asserts.true(env, identity in joined)
                 if ctx.attr.expected_token == "zsh":
                     asserts.true(env, "zsh.dependency" in joined)
                     asserts.false(env, "ncurses/install" in joined)

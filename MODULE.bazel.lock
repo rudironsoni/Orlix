@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "ufQGbth5Y6jyM/w8kGxYezznaFs7Tyek0aKQuhK6TBM=",
+        "bzlTransitiveDigest": "n1FF/1b7UYz17VfK2L+lBnx2dI0PsbzJzxGXYaoZtsQ=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -426,6 +426,60 @@
               "sha256": "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba",
               "strip_prefix": "bash-5.3",
               "marker": "configure"
+            }
+          },
+          "orlix_attr_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz",
+              "sha256": "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b",
+              "strip_prefix": "attr-2.5.2",
+              "marker": "configure"
+            }
+          },
+          "orlix_acl_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz",
+              "sha256": "97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd",
+              "strip_prefix": "acl-2.3.2",
+              "marker": "configure"
+            }
+          },
+          "orlix_pcre2_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.bz2",
+              "sha256": "47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7",
+              "strip_prefix": "pcre2-10.47",
+              "marker": "configure"
+            }
+          },
+          "orlix_musl_fts_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://github.com/pullmoll/musl-fts/archive/refs/tags/v1.2.7.tar.gz",
+              "sha256": "49ae567a96dbab22823d045ffebe0d6b14b9b799925e9ca9274d47d26ff482a6",
+              "strip_prefix": "musl-fts-1.2.7",
+              "marker": "configure.ac"
+            }
+          },
+          "orlix_libsepol_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://github.com/SELinuxProject/selinux/releases/download/3.10/libsepol-3.10.tar.gz",
+              "sha256": "d555586797fa9f38344496d2a7ec1147b6caaf3fcc44c42d8d5173edd7a79a71",
+              "strip_prefix": "libsepol-3.10",
+              "marker": "Makefile"
+            }
+          },
+          "orlix_libcap_source": {
+            "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
+            "attributes": {
+              "url": "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.78.tar.xz",
+              "sha256": "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11",
+              "strip_prefix": "libcap-2.78",
+              "marker": "Makefile"
             }
           },
           "orlix_grep_source": {
