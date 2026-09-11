@@ -166,7 +166,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     pending = list(runtime_paths)
     while pending:
         binary = pending.pop()
-        libraries = subprocess.check_output(["/usr/bin/otool", "-L", str(binary)], text=True)
+        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
         for line in libraries.splitlines()[1:]:
             name = line.strip().split(" (", 1)[0]
             if name.startswith(("/usr/lib/", "/System/Library/")):
@@ -187,5 +187,86 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     }
     Path(output).with_name("compiler-runtime-identity.json").write_text(json.dumps(runtime, sort_keys=True) + "\n")
     tools += sorted(runtime_paths)
+    mlibc = capture_mlibc_manifest(developer, sdk, runtime, tree_hashes)
+    tools += [Path(path) for path in mlibc["files"]]
+    trees += [Path(path) for path in mlibc["trees"]]
+    Path(output).with_name("mlibc-identity.json").write_text(json.dumps(mlibc, sort_keys=True) + "\n")
+    compiler = {**runtime, "files": {name: digest for name, digest in runtime["files"].items() if name.endswith("/clang")}}
+    Path(output).with_name("guest-compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
     return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
+
+
+def capture_mlibc_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict) -> dict:
+    meson = Path("/opt/homebrew/bin/meson")
+    interpreter = Path(meson.read_text().splitlines()[0].removeprefix("#!"))
+    modules = json.loads(subprocess.check_output([
+        str(interpreter), "-I", "-B", "-c",
+        "import json,mesonbuild,sysconfig; print(json.dumps([list(mesonbuild.__path__)[0],sysconfig.get_path('stdlib')]))",
+    ], text=True))
+    action_python, action_stdlib = json.loads(subprocess.check_output([
+        "/usr/bin/python3", "-B", "-c",
+        "import json,sys,sysconfig; print(json.dumps([sys.executable,sysconfig.get_path('stdlib')]))",
+    ], env={**os.environ, "DEVELOPER_DIR": str(developer)}, text=True))
+    modules.append(action_stdlib)
+    paths = {
+        Path(name) for name in runtime["files"]
+    } | {
+        interpreter, Path(action_python), Path("/opt/homebrew/bin/ninja"),
+        developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/ld",
+        Path("/opt/homebrew/opt/lld/bin/ld.lld"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-strip"),
+        Path("/opt/homebrew/bin/ccache"),
+        developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++",
+    }
+    for module in modules:
+        paths.update((Path(module) / "lib-dynload").glob("*.so"))
+    pending = list(paths)
+    while pending:
+        binary = pending.pop()
+        load_commands = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-l", str(binary)], text=True).splitlines()
+        rpaths = []
+        library_ids = set()
+        for i, line in enumerate(load_commands):
+            if line.strip() == "cmd LC_ID_DYLIB":
+                library_ids.add(load_commands[i + 2].strip().removeprefix("name ").split(" (offset", 1)[0])
+            if line.strip() == "cmd LC_RPATH":
+                name = load_commands[i + 2].strip().removeprefix("path ").split(" (offset", 1)[0]
+                rpaths.append(Path(name.replace("@loader_path", str(binary.resolve().parent)).replace("@executable_path", str(binary.resolve().parent))))
+        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
+        for line in libraries.splitlines()[1:]:
+            name = line.strip().split(" (", 1)[0]
+            if name in library_ids or name.startswith(("/usr/lib/", "/System/Library/")):
+                continue
+            if name.startswith("@rpath/"):
+                candidates = [path / name.removeprefix("@rpath/") for path in rpaths]
+                path = next((path for path in candidates if path.is_file()), None)
+                if path is None:
+                    raise PinError(f"unresolved mlibc tool dependency: {name} from {binary}")
+            else:
+                path = Path(name.replace("@loader_path", str(binary.resolve().parent)).replace("@executable_path", str(binary.resolve().parent)))
+            if not path.is_absolute():
+                raise PinError(f"unresolved mlibc tool dependency: {name}")
+            if path not in paths:
+                paths.add(path)
+                pending.append(path)
+    paths |= {meson, Path("/usr/bin/python3"), Path("/usr/bin/patch"), Path("/bin/bash"),
+              Path("/bin/cp"), Path("/usr/bin/nm"), sdk / "SDKSettings.json"}
+    paths.update(Path("/usr/bin") / name for name in (
+        "find", "xargs", "awk", "sort", "tr", "shasum", "xcodebuild", "xcrun",
+        "sed", "cmp", "printf", "mktemp", "dirname", "command", "perl", "env",
+    ))
+    paths.update(Path("/bin") / name for name in ("cat", "mv", "mkdir", "rm"))
+    files = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)}
+    trees = dict(runtime["trees"])
+    trees.update({str(path): tree_hashes[str(path)] for path in (sdk / "usr/include", sdk / "usr/lib")})
+    for name in modules:
+        tree = Path(name)
+        digest = hashlib.sha256()
+        for path in sorted(tree.rglob("*")):
+            relative = path.relative_to(tree)
+            if "__pycache__" in relative.parts or "site-packages" in relative.parts or not path.is_file():
+                continue
+            digest.update(relative.as_posix().encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+        trees[str(tree)] = digest.hexdigest()
+    return {"schema": 1, "macos": runtime["macos"], "host_arch": runtime["host_arch"], "files": files, "trees": trees}

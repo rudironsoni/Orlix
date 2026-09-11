@@ -187,3 +187,35 @@ An actual AArch64 compiler fixture rejects a 16 KB static assertion with the pre
 The full graph check passed 119 Python tests and 28 cached Bazel analysis tests. The existing sysroot case checks the package-cache, forced-include, and fixed-register configuration. Source/compiler checks identify the correction; no binary-debugging or runtime claim is made. Evidence is recorded in `page-size-include-fixture.json`, `mlibc-prepared-final.json`, and their build/check logs under `Build/AgentHarness/bazel-migration/recovery-checkpoint-4/`.
 
 Next: retain Meson/Ninja state with exact input and output integrity, then prove partial object recompilation and full cache equivalence. These corrected unsigned source products do not update `artifacts.lock.json`, complete runtime proof, or authorize cutover. TAP remains stopped.
+
+
+## Checkpoint 4C: retain checked mlibc Ninja state
+
+Status: verified locally. Coreutils/package incremental state, the public product graph, and the full recovery remain open.
+
+The mlibc action now retains its prepared source, installed UAPI, compiler runtime, Meson configuration, and Ninja objects beneath the worktree's Bazel output base. The directory identity is `aarch64-linux-gnu`; source changes do not select a new directory. Preparation replaces only changed source/header content and preserves unchanged timestamps. Meson still prepares the declared subprojects and applies their wrap patches. Changed UAPI or subproject inputs clear Meson's configuration checks. A changed compiler-runtime digest changes the link command without changing the build directory.
+
+Kernel and mlibc share the existing content-sync, lock, and state-verification implementation, now in `bazel/build_state.py`. The entire mutable operation stays under one file lock. State reuse checks actual file bytes, executable modes, symlink targets, and mtimes. Invalid records, changed object bytes, future-dated objects, metadata directories, and redirected metadata cannot authorize stale output. The existing failure test covers these cases and preserves unrelated external bytes. A real future-mtime/source-mutation build rejected its previous state, invoked 739 Ninja compilation tasks, and produced the changed object in 20.666 seconds. Its 743 compiler-cache hits include compiler setup checks.
+
+Action identity includes the declared upstream source, patches, wrap inputs, installed UAPI, compiler-runtime archive, build script, state modules, and observed tool identities. Persistent-state compatibility includes the full tool identity, the separate compiler identity, build rules, and selected launcher. Source and dependency content are reconciled before Ninja runs. The mlibc tool identity records 215 executable/library files and six resource/module trees, including Xcode compiler resources, host SDK inputs, Meson and Python modules, Ninja, link/archive tools, system action tools, and Python's transitive native-library dependencies. The compiler cache uses the narrower guest compiler identity plus normal compiler source/header/flag inputs. It is shared and bounded at 20 GiB. Mutable source, configuration, and object databases remain worktree-local.
+
+The compiler-runtime action remains independent and now uses the compiler cache in developer mode. Promotion disables both compiler-cache and mlibc incremental reuse. Native and guest file-prefix mappings make output independent of temporary or worktree paths. The private generated build script remains outside the component product directory.
+
+Measured mlibc results:
+
+| Workload | Bazel elapsed time | Ninja compilation requests | Observed reuse |
+| --- | ---: | ---: | --- |
+| Previous wait3 source mutation | 25.49 s | 739 | Fresh Meson/Ninja build |
+| Incremental mutation with warm compiler objects | 9.448 s | 2 | Two compiler-cache hits |
+| Fresh source mutation after state verification | 9.952 s | 2 | Two compiler-cache misses, other objects retained |
+| Restore the original source | 1.442 s | 0 | Bazel disk-cache result |
+| Final independent cache-enabled output base | 49.315 s | 739 | UAPI/runtime disk-cache hits; 743 compiler-cache hits |
+| Final independent cache-disabled output base | 162.149 s | 739 | UAPI, runtime, and mlibc actions executed locally |
+
+The real mutation preserves source length and mtime. Only the two static/shared `sys-wait.cpp` objects changed among 747 recorded object files. All patch bytes and timestamps were restored. Actual action execution records distinguish current compilation from cached stdout. Retained mlibc state measured 209,408 KiB before one mutation and 209,276 KiB after it. This checkpoint trades bounded local state for incremental work; it does not claim lower total machine disk use. The full temporary-disk and multi-worktree benchmark matrix remains checkpoint 9 work.
+
+The final independent output bases used the current rules. The cache-disabled build disabled action, disk, remote, compiler-cache, and persistent Kbuild/mlibc reuse. The existing comparator checked all eight component outputs, including file paths, bytes, modes, symlink targets, headers, libraries, loader, ABI, and digest records. Both complete trees have SHA-256 `d4e65eb82b0781956ce4d17b2bb65c6f4d1fb54088ee0b906be99be19f6df06b`. The compiler-runtime archive remains `24fc4cbb20a3c243a677398f211d56ba84503cc7c2c31db7e357e615de7bbac8`; libc.a is `3a192997962c23c1518e93ecd188b0c5a952cbaedd384cee3a1837779f33c004`. Wall-clock durations including batch startup/shutdown were 50.98 and 163.72 seconds. The cache-disabled batch peak memory footprint was 1,762,101,408 bytes.
+
+The full `make __bazel-matrix-check` passed 119 Python tests and 28 cached Bazel analysis tests. Documentation, migration inventory, diff checks, all 13 lifecycle-hook tests, and generated-hook checks passed. Independent source review found and rechecked the timestamp, metadata, and tool-identity corrections. This checkpoint does not run or claim Linux runtime, TAP, simulator, device, packaging parity, or cutover proof. TAP remains stopped, `artifacts.lock.json` is unchanged, and the original dirty `AGENTS.md` delta and local caches stay outside the commit.
+
+Raw commands, failed initial attempts, execution logs, object snapshots, cache counts, and final independently preserved products are under `Build/AgentHarness/bazel-migration/recovery-checkpoint-4/`. `ninja-final-equivalence.json`, `ninja-reviewed-mutation-result.json`, `ninja-future-result.json`, and the matching action records identify the verified results. The checkpoint's reports were captured with a minimal client environment.

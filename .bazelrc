@@ -9,6 +9,7 @@ build --verbose_failures
 build --action_env=CCACHE_DIR
 build --action_env=CCACHE_DISABLE
 build --action_env=ORLIX_COMPILER_LAUNCHER
+build --action_env=ORLIX_MLIBC_INCREMENTAL
 build --action_env=ORLIX_KERNEL_INCREMENTAL
 build --experimental_disk_cache_gc_max_size=30G
 build --experimental_disk_cache_gc_max_age=30d
@@ -26,6 +27,7 @@ build:ci --remote_download_outputs=toplevel
 
 build:promotion --//bazel/config:component_mode=source
 build:promotion --remote_upload_local_results=false
+build:promotion --action_env=ORLIX_MLIBC_INCREMENTAL=0
 build:promotion --action_env=ORLIX_KERNEL_INCREMENTAL=0
 build:promotion --action_env=ORLIX_COMPILER_LAUNCHER=
 build:promotion --action_env=CCACHE_DISABLE=1

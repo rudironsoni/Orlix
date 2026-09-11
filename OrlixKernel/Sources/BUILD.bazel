@@ -6,7 +6,7 @@ exports_files(["BazelInfo.plist"])
 
 filegroup(
     name = "kbuild_engine",
-    srcs = glob(["ports/orlix/kbuild/*.mk", "ports/orlix/kbuild/*.py"]),
+    srcs = glob(["ports/orlix/kbuild/*.mk", "ports/orlix/kbuild/*.py"]) + ["//bazel:build_state.py"],
 )
 
 filegroup(

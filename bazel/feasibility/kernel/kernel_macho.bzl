@@ -176,7 +176,7 @@ if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
 fi
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
-export PYTHONPATH="$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
+export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}"
 port="$work/OrlixKernel/src/linux-6.12.105-port"
 profile_config=""
@@ -255,7 +255,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
     ctx.actions.run_shell(
         mnemonic = "OrlixKernelMachOArchive",
         progress_message = "Compiling Mach-O OrlixKernel.a from prepared Linux sources",
-        command = "PYTHONPATH=OrlixKernel/Sources/ports/orlix/kbuild /usr/bin/python3 -B -c 'import source_state,sys; raise SystemExit(source_state.run_locked(sys.argv[1],sys.argv[2:]))' \"$@\"",
+        command = "PYTHONPATH=.:OrlixKernel/Sources/ports/orlix/kbuild /usr/bin/python3 -B -c 'import source_state,sys; raise SystemExit(source_state.run_locked(sys.argv[1],sys.argv[2:]))' \"$@\"",
         arguments = [
             script.path,
             ctx.file.linux_makefile.path,

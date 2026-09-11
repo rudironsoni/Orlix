@@ -56,7 +56,7 @@ class KernelStateTests(unittest.TestCase):
             script = root / "build.sh"
             marker = root / "started"
             script.write_text('printf started > "$1"\n')
-            environment = {**os.environ, "PROFILE": "release", "ORLIX_KERNEL_ARCHIVE_PLATFORMS": "iphonesimulator", "ORLIX_KERNEL_INCREMENTAL": "1", "PYTHONPATH": str(Path(source_state.__file__).parent)}
+            environment = {**os.environ, "PROFILE": "release", "ORLIX_KERNEL_ARCHIVE_PLATFORMS": "iphonesimulator", "ORLIX_KERNEL_INCREMENTAL": "1", "PYTHONPATH": os.pathsep.join([str(Path(source_state.__file__).parent), str(Path(__file__).resolve().parents[3])])}
             with (state / "build.lock").open("w") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 child = subprocess.Popen([sys.executable, "-B", "-c", "import source_state,sys; sys.exit(source_state.run_locked(sys.argv[1],sys.argv[2:]))", str(script), str(marker)], cwd=execution, env=environment)
@@ -87,6 +87,23 @@ class KernelStateTests(unittest.TestCase):
             os.utime(output, ns=(timestamp, timestamp))
             source_state.resume(root, [identity])
             self.assertFalse(output.exists())
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b"correct object\n")
+            source_state.record(root)
+            os.utime(output, ns=(timestamp, timestamp + 3600 * 10**9))
+            source_state.resume(root, [identity])
+            self.assertFalse(output.exists())
+            (root / "build-state.json").mkdir()
+            (root / "build-identity").unlink()
+            (root / "build-identity").mkdir()
+            source_state.resume(root, [identity])
+            external = root / "unrelated"
+            external.write_bytes(b"unchanged\n")
+            (root / "build-state.json").symlink_to(external)
+            (root / "build-identity").unlink()
+            (root / "build-identity").symlink_to(external)
+            source_state.resume(root, [identity])
+            self.assertEqual(external.read_bytes(), b"unchanged\n")
             (root / "build-state.json").write_text("[]")
             source_state.resume(root, [identity])
             redirected = root / "redirected"

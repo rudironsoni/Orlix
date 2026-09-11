@@ -11,7 +11,11 @@ def _pinned_env(ctx):
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
-        "PATH": "/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "CCACHE_CONFIGPATH": "/dev/null",
+        "CCACHE_COMPILERCHECK": "content",
+        "CCACHE_MAXSIZE": "20G",
     }
     tmpdir = shell.get("TMPDIR")
     if tmpdir:
@@ -68,8 +72,18 @@ set -euo pipefail
 exec_root="$PWD"
 builtins="$exec_root/$1"
 runtime_out="$exec_root/$2"
-shift 2
+export CCACHE_EXTRAFILES="$exec_root/$3"
+export CCACHE_BASEDIR="$exec_root"
+shift 3
+launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+case "$launcher" in
+  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  "") ;;
+  *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
+esac
 clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+compiler=("$clang")
+if [ -n "$launcher" ]; then compiler=("$launcher" "$clang"); fi
 ar="/opt/homebrew/opt/llvm/bin/llvm-ar"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-compiler-rt.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
@@ -77,16 +91,16 @@ for relative in "$@"; do
     source="$exec_root/$relative"
     source_name="${source#"$builtins/"}"
     object_name="${source_name//\//-}"
-    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -ffixed-x18 -O2 -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
+    "${compiler[@]}" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
 done
 "$ar" rcs "$runtime_out" "$work"/*.o
 test -s "$runtime_out"
 """,
-        arguments = [builtins, runtime.path] + [f.path for f in selected],
-        inputs = depset(selected + headers + [ctx.file.runtime_toolchain_identity]),
+        arguments = [builtins, runtime.path, ctx.file.compiler_identity.path] + [f.path for f in selected],
+        inputs = depset(selected + headers + [ctx.file.runtime_toolchain_identity, ctx.file.compiler_identity]),
         outputs = [runtime],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1"},
     )
 
@@ -101,10 +115,8 @@ def _mlibc_sysroot_impl(ctx):
     runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
     digest = ctx.actions.declare_file(ctx.label.name + "/sysroot.sha256")
     _compiler_runtime(ctx, runtime)
-    ctx.actions.run_shell(
-        mnemonic = "OrlixMLibCSysroot",
-        progress_message = "Building OrlixMLibC sysroot from installed UAPI",
-        command = r"""
+    script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(script, r"""
 set -euo pipefail
 exec_root="$PWD"
 mlibc_meson="$exec_root/$1"
@@ -146,38 +158,38 @@ test -x "$clang"; test -d "$sdkroot"
 test -d "$uapi_dir/include"
 test -s "$uapi_dir/include/linux/unistd.h"
 test -s "$uapi_dir/include/asm/unistd.h"
-work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-mlibc.XXXXXX")"
-trap '/bin/rm -rf "$work"' EXIT
-mlibc_src="$(/usr/bin/dirname "$mlibc_meson")"
-/bin/mkdir -p "$work/mlibc" "$work/build" "$work/dest"
-/bin/cp -R "$mlibc_src/." "$work/mlibc"
-/usr/bin/find "$work/mlibc" -type d -exec /bin/chmod u+w {} +
+work="$ORLIX_MLIBC_WORK_ROOT"
+export PYTHONPATH="$exec_root"
 shift 16
-while [ "$#" -gt 0 ]; do
-    patch="$exec_root/$1"
-    /usr/bin/patch --batch --forward -p1 -d "$work/mlibc" -i "$patch"
-    shift
-done
-/bin/mkdir -p "$work/subproject-cache"
-export MESON_PACKAGE_CACHE_DIR="$work/subproject-cache"
-stage_subproject() {
-    source="$(/usr/bin/dirname "$1")"
-    /bin/ln -s "$source" "$MESON_PACKAGE_CACHE_DIR/$2"
-}
-stage_subproject "$frigg_meson" frigg
-stage_subproject "$c_hdrs" freestnd-c-hdrs
-stage_subproject "$cxx_hdrs" freestnd-cxx-hdrs
-stage_subproject "$smarter" libsmarter
-stage_subproject "$bragi" bragi
+/usr/bin/python3 -B -c 'from pathlib import Path; import sys; from bazel.feasibility.mlibc import build_state; build_state.prepare(Path(sys.argv[1]), Path(sys.argv[2]).parent, [Path(p) for p in sys.argv[10:]], dict(zip(("frigg", "freestnd-c-hdrs", "freestnd-cxx-hdrs", "libsmarter", "bragi"), (Path(p).parent for p in sys.argv[5:10]))), Path(sys.argv[3]), Path(sys.argv[4]))' "$work" "$mlibc_meson" "$uapi_dir" "$runtime_in" "$frigg_meson" "$c_hdrs" "$cxx_hdrs" "$smarter" "$bragi" "$@"
+uapi_dir="$work/inputs/uapi"
+runtime_archives=("$work"/inputs/runtime/libcompiler_rt-*.a)
+runtime_in="${runtime_archives[0]}"
+export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
+launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+case "$launcher" in
+  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  "") ;;
+  *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
+esac
+export CCACHE_BASEDIR="$work"
+export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
+export CCACHE_STATSLOG="$work/compiler-cache.log"
+: > "$CCACHE_STATSLOG"
+compiler_prefix=""
+if [ -n "$launcher" ]; then compiler_prefix="'$launcher', "; fi
 /bin/mkdir -p "$work/arch"
-/usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp"
+/usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp.new"
+if ! /usr/bin/cmp -s "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; then /bin/mv "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; fi
 lld="$(/usr/bin/command -v ld.lld)"
 test -n "$lld"
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = [${compiler_prefix}'$clang', '--target=aarch64-linux-gnu']" "cpp = [${compiler_prefix}'$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
 /usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot']" "cpp = ['$clangxx', '-isysroot', '$sdkroot']" > "$work/native.ini"
-env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+configure_args=(--reconfigure)
+if [ "$(/bin/cat "$work/inputs/configure-cache")" = clear ]; then configure_args+=(--clearcache); fi
+/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
     SDKROOT="$sdkroot" \
-    "$meson_bin" setup "$work/build" "$work/mlibc" \
+    "$meson_bin" setup "${configure_args[@]}" "$work/build" "$work/mlibc" \
         --wrap-mode=nodownload \
         --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter \
         --cross-file "$work/cross.ini" \
@@ -192,9 +204,13 @@ env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMEN
         -Dposix_option=enabled \
         -Dglibc_option=enabled \
         -Dbsd_option=enabled \
-        -Dlinux_kernel_headers="$uapi_dir/include"
-env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_bin" compile -C "$work/build"
-env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" DESTDIR="$work/dest" "$meson_bin" install -C "$work/build"
+        -Dlinux_kernel_headers="$uapi_dir/include" \
+        "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']" \
+        "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_bin" compile -C "$work/build"
+if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
+/usr/bin/python3 -B -c 'from pathlib import Path; from bazel.build_state import _remove; import sys; _remove(Path(sys.argv[1]))' "$work/dest"
+/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" DESTDIR="$work/dest" "$meson_bin" install -C "$work/build"
 test -d "$work/dest/usr/include"
 test -d "$work/dest/usr/lib"
 test -s "$work/dest/usr/lib/libc.a"
@@ -222,8 +238,15 @@ test "${#sysroot_digest}" -eq 64
     '  "linux_input": "OrlixInstalledUapiInfo",' \
     '  "target_triple": "aarch64-linux-gnu"' \
     '}' > "$manifest_out"
-""",
+""".replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
+    ctx.actions.run_shell(
+        mnemonic = "OrlixMLibCSysroot",
+        progress_message = "Building OrlixMLibC with incremental Ninja state",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.mlibc import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]))' \"$@\"",
         arguments = [
+            script.path,
+            ctx.file.toolchain_identity.path,
+            ctx.file.compiler_identity.path,
             ctx.file.mlibc_meson.path,
             uapi.headers.path,
             sysroot.path,
@@ -243,6 +266,11 @@ test "${#sysroot_digest}" -eq 64
         ] + [f.path for f in ctx.files.patches],
         inputs = depset(
             direct = [
+                script,
+                ctx.file.toolchain_identity,
+                ctx.file.compiler_identity,
+                ctx.file.build_state,
+                ctx.file.shared_state,
                 ctx.file.mlibc_meson,
                 uapi.headers,
                 uapi.uapi_digest,
@@ -264,7 +292,7 @@ test "${#sysroot_digest}" -eq 64
         ),
         outputs = [sysroot, headers, libraries, manifest, abi, loader, digest],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     return [
@@ -284,6 +312,10 @@ test "${#sysroot_digest}" -eq 64
 orlix_mlibc_sysroot = rule(
     implementation = _mlibc_sysroot_impl,
     attrs = {
+        "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
+        "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
+        "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
+        "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "runtime_toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
         "mlibc_source": attr.label(mandatory = True),

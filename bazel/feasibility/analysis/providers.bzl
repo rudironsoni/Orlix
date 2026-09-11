@@ -30,6 +30,7 @@ def _sysroot_uapi_only_test_impl(ctx):
     asserts.true(env, sysroot.consumed_uapi_digest != None)
     found = False
     runtime_found = False
+    script = " ".join([action.content for action in target.actions if action.mnemonic == "FileWrite" and any([f.basename == "sysroot.sh" for f in action.outputs.to_list()])])
     for action in target.actions:
         if action.mnemonic == "OrlixCompilerRuntime":
             runtime_found = True
@@ -46,11 +47,11 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.true(env, sysroot.compiler_runtime in action.inputs.to_list())
             asserts.false(env, "compiler-rt/lib/builtins" in joined)
             asserts.false(env, "compiler-runtime-identity.json" in joined)
-            asserts.true(env, "MESON_PACKAGE_CACHE_DIR" in argv)
-            asserts.false(env, "-isystem" in argv)
-            asserts.true(env, "--force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter" in argv)
-            asserts.true(env, "-include" in argv)
-            asserts.true(env, "-ffixed-x18" in argv)
+            asserts.true(env, "MESON_PACKAGE_CACHE_DIR" in script)
+            asserts.false(env, "-isystem" in script)
+            asserts.true(env, "--force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter" in script)
+            asserts.true(env, "-include" in script)
+            asserts.true(env, "-ffixed-x18" in script)
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.false(env, "OrlixMLibC/Makefile" in argv)
