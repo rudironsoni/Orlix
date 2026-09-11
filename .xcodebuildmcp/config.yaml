@@ -1,0 +1,29 @@
+schemaVersion: 1
+enabledWorkflows:
+  - coverage
+  - debugging
+  - device
+  - doctor
+  - macos
+  - project-discovery
+  - project-scaffolding
+  - simulator
+  - simulator-management
+  - swift-package
+  - ui-automation
+  - utilities
+  - xcode-ide
+debug: true
+sentryDisabled: true
+setupPreferences:
+  platforms:
+    - iOS
+    - macOS
+    - watchOS
+sessionDefaults:
+  projectPath: Orlix.xcodeproj
+  scheme: Orlix
+  deviceId: 26BA2133-1065-4700-B419-952E908D9EF5
+  simulatorId: 26BA2133-1065-4700-B419-952E908D9EF5
+  simulatorName: iPhone 17 Pro
+  simulatorPlatform: iOS Simulator
