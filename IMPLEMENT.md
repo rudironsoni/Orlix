@@ -292,3 +292,49 @@ Final verification passed: 122 Python tests, 28 cached Bazel analysis tests, doc
 Raw evidence is under `Build/AgentHarness/bazel-migration/recovery-checkpoint-5/`: `bash-isolation-unit.log`, `bash-final-matrix-5b.log`, `bash-final-leaf-result-5b.json`, `bash-final-before-objects-5b.json`, `bash-psize-mutation.execution.json`, `bash-version-mutation.execution.json`, and the matching seed, restore, no-op, and independent cache-disabled logs. Initial sandbox process-inspection failure and intermediate generator-rule checks do not substitute for the final checks. Independent review passed the final bounded source change; it did not run the build tests.
 
 No TAP, Linux runtime, device, package-feature parity, promoted-store, or cutover claim is made. TAP stays stopped. `artifacts.lock.json`, the original user-owned `AGENTS.md` delta, `.xcodebuildmcp/`, and `third_party/swift/.build/` remain unchanged by publication. Phase 5C must restore the seven existing guest libraries/features; phase 5D must enforce install-tree-only rootfs assembly and `artifact-identity-v2`. Shared promoted storage remains phase 6 work.
+
+
+## Checkpoint 5C1: retain generic upstream package state
+
+Phase 5: IN PROGRESS. 5A Coreutils and 5B Bash are verified and pushed. This checkpoint verifies retained upstream builds for grep, jq, findutils, e2fsprogs, curl, ncurses, and zsh. Restoring the seven missing guest libraries and features remains 5C work. The rootfs boundary and `artifact-identity-v2` remain 5D work. Phase 6 has not started.
+
+The existing package runner now supports each package's real configure/Make engine, including jq's in-source build. Each package retains a distinct worktree-local root and lock, explicit package compatibility, declared-source reconciliation, and checked retained content. Recipe, rule implementation, tool identity, compiler identity, and launcher determine state compatibility. Source edits retain the directory. Configuration inputs include actual Autotools files and auxiliary scripts, consumed headers, libraries, compiler runtime, and selected dependency content. Future-dated retained files are rejected even when the saved record contains the same timestamp.
+
+Actions consume semantic headers and libraries without unused UAPI or provenance digests. A separate zsh input-selection action exports only ncurses headers, libncursesw.a, and libtinfo.a. Changes to other ncurses libraries can execute selection without invalidating zsh compilation. External link prerequisites supplement upstream Make recipes without replacing its object dependency graph. Dedicated tool identity includes the selected GNU tools and their native dependencies. Mutable source, configuration, objects, and locks remain beneath the worktree's Bazel output base. Shared compiler cache remains bounded to 20 GiB; foreign remote action caching and execution remain disabled.
+
+Real pinned Autotools commands replace fake generator commands. Actual compilation exposed bundled Oniguruma's old C definitions after configure selected C23; jq now declares GNU C17. Cache comparison exposed absolute source paths in e2fsprogs and ncurses products. Relative configure invocation fixes their production paths. Ncurses now creates deterministic archives through upstream Make's ARFLAGS=crD, replacing its timestamp-preserving U flag. No generated upstream tree was edited and no output normalization hides differences.
+
+| Workload | Bazel elapsed | Actual work and reuse |
+| --- | ---: | --- |
+| Final seven-package seed | 336.673 s | Completed package builds |
+| Independent fully cache-disabled build | 492.533 s | Eleven actions, all exit zero, no action-cache hits |
+| grep C edit | 5.430 s | One compilation miss and one link; only grep.o changed among 135 objects |
+| jq C edit | 4.806 s | Two compiler requests: jv_aux.o miss and main.o direct hit; libjq and jq linked; other 68 objects untouched |
+| Unused ncurses form-library edit | 6.593 s | One compilation miss and form archive update; selection output unchanged; no zsh build |
+| jq ltmain.sh edit | 28.126 s | Real configure regenerated libtool with changed input |
+| Restore all source fixtures | 1.138 s | Original products recovered |
+| Warm seven-package no-op | 0.912 s | No package compilation |
+
+The C mutations preserve source size and mtime in separate source fixtures. Grep changes only grep.o. Jq changes only jv_aux.o bytes, while both jv_aux.o and main.o timestamps change. Ncurses changes only fld_newftyp.o among 250 objects. The ncurses action and zsh input-selection action execute, but the selected interface and zsh product remain byte-identical. Unchanged UAPI, mlibc, compiler runtime, and unrelated packages do not execute for these source edits. Kernel compilation is outside this package graph. The auxiliary-file check also restores the prior jq C edit, so its compiler count does not establish auxiliary-only locality. All fixture bytes and timestamps were restored.
+
+The complete canonical comparator checks paths, contents, modes, and symlink targets. Each restored product equals both its preserved original and the independent cache-disabled product:
+
+| Package | Complete tree SHA-256 |
+| --- | --- |
+| grep | `be71927ac2f2a4d98854915f47abb1c0ce89d1fc29f5c220ff250e0dbda24bf4` |
+| jq | `25bdad236876d48db76a43a8f91da8b7d8201a61da01f81f6eb4e35948999252` |
+| findutils | `ea9e47f612339026c5564cc25103232b6c82d82327edaa27b2096b316d945808` |
+| e2fsprogs | `d67f5e8742ac44e1d38533afafca272483913edd34ff62362e1a4e0c8a552f4e` |
+| curl | `0a8a539d0a70b212cbf66ca12343cb602ae3f7bd1c63d2b1839d7924b4d742cc` |
+| ncurses | `a46d24bb990e24e7b36699c286b5b1b8ea9ac9c848c59370ed22b3d9848b8524` |
+| zsh | `8d8c967c45988651053af8b21e4580d375a88285ad87600fb9b1be2195ff3a01` |
+
+The independent build disables action, disk, remote, compiler-cache, Kernel, mlibc, and package incremental reuse. Its eleven actions cover installed UAPI, compiler runtime, mlibc, seven packages, and selected zsh inputs. Peak memory footprint was 1,512,245,120 bytes. Seed and clean work overlapped other activity, so these durations do not establish an isolated cold-build speed comparison.
+
+Final retained state in KiB: grep 57,816; jq 39,068; findutils 72,388; e2fsprogs 75,816; curl 66,056; ncurses 45,680; zsh 53,656. This checkpoint does not claim reduced total disk use. Cross-worktree, profile, disk amplification, and integrity-check cost measurements remain phase 9 work.
+
+Verification passed: 122 Python tests, 28 cached Bazel analysis tests, documentation and migration inventory checks, 13 lifecycle-hook tests, generated-hook checks, and focused package/Kernel state tests. Independent bounded source review rechecked the tool identity, auxiliary configuration inputs, external link prerequisites, dependency selection, relative configure, and deterministic archive changes. The reviewer did not execute builds; the implementation session executed the reported checks.
+
+Evidence resides under `Build/AgentHarness/bazel-migration/recovery-checkpoint-5/`. `autotools-checkpoint-summary.json` records products, actions, timings, and state sizes. `autotools-final-equivalence.json`, `grep-mutation-result.json`, `jq-mutation-result.json`, `ncurses-unused-archive-result.json`, and `jq-auxiliary-result.json` carry the detailed comparisons and mutation results. Matching execution logs distinguish real compiler work from replayed cached stdout. `autotools-final-matrix.log` and `autotools-final-checks.log` record the checks.
+
+TAP remains stopped. No Linux runtime, package-feature parity, device, promoted-storage, or cutover proof is claimed. The signed artifacts.lock.json remains unchanged. The original duplicate XcodeBuildMCP bullet in AGENTS.md, .xcodebuildmcp/, and third_party/swift/.build/ remain outside this checkpoint.

@@ -195,6 +195,11 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     tools += [Path(path) for path in coreutils["files"]]
     trees += [Path(path) for path in coreutils["trees"]]
     Path(output).with_name("coreutils-identity.json").write_text(json.dumps(coreutils, sort_keys=True) + "\n")
+    autotools_tools = tuple(Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "dirname", "mktemp", "sleep", "stat"))
+    autotools = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools", autotools_tools)
+    tools += [Path(path) for path in autotools["files"]]
+    trees += [Path(path) for path in autotools["trees"]]
+    Path(output).with_name("autotools-identity.json").write_text(json.dumps(autotools, sort_keys=True) + "\n")
     bash_tools = (Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),) + tuple(
         Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "mktemp", "sleep")
     )

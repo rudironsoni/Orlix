@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import tempfile
+import time
 
 
 def _files(root: Path) -> dict[str, Path]:
@@ -116,7 +117,9 @@ def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...], *, c
             owner = stored.get("package") if isinstance(stored, dict) else None
             if owner is not None and owner != compatibility.get("package"):
                 raise RuntimeError(f"package state mismatch: {owner} != {compatibility.get('package')}")
-        valid = isinstance(previous, dict) and previous["identity"] == expected and previous["files"] == _build_content(root, trees)
+        current = _build_content(root, trees)
+        checked_at = time.time_ns()
+        valid = isinstance(previous, dict) and previous["identity"] == expected and previous["files"] == current and all(entry[2] <= checked_at for entry in current.values())
         if compatibility is not None:
             valid = valid and previous.get("compatibility") == compatibility
     except (OSError, ValueError, KeyError, TypeError):

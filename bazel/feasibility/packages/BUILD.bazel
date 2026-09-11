@@ -154,6 +154,7 @@ orlix_autotools_package(
     ],
     package_name = "e2fsprogs",
     package_version = "1.47.1",
+    sysroot_archives = ["libdl.a"],
     require_static = True,
     sources = "@orlix_e2fsprogs_source//:source",
     sysroot = _SYSROOT,
@@ -210,6 +211,7 @@ orlix_local_c_package(
 
 orlix_autotools_package(
     name = "jq",
+    cflags = "-std=gnu17",
     cache_vars = [
         "ac_cv_func_isatty=yes",
         "ac_cv_func_setlocale=yes",
@@ -321,8 +323,8 @@ orlix_autotools_package(
     file_expect = "",
     link_mode = "static_nopie",
     make_steps = [
-        "-j1 libs",
-        "-j1 DESTDIR=@DEST@ install.libs install.includes",
+        "-j1 ARFLAGS=crD libs",
+        "-j1 ARFLAGS=crD DESTDIR=@DEST@ install.libs install.includes",
     ],
     package_name = "ncurses",
     package_version = "6.6",
@@ -362,6 +364,7 @@ orlix_autotools_package(
         "--enable-zlogout=/etc/zsh/zlogout",
     ],
     extra_archives = ["usr/lib/libtinfo.a"],
+    extra_prerequisites = ["usr/lib/libncursesw.a"],
     extra_sysroot = ":ncurses",
     file_expect = "ELF 64-bit LSB executable, ARM aarch64",
     install_map = ["Src/zsh:usr/bin/zsh"],
@@ -369,6 +372,7 @@ orlix_autotools_package(
     make_steps = ["-C Src -j1 zsh"],
     package_name = "zsh",
     package_version = "5.9",
+    sysroot_archives = ["librt.a"],
     require_static = True,
     sources = "@orlix_zsh_source//:source",
     sysroot = _SYSROOT,

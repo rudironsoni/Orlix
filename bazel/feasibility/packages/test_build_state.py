@@ -61,6 +61,26 @@ class PackageStateTests(unittest.TestCase):
             (source / "config.h.in").write_bytes(b"#undef BASH_FEATURE\n")
             build_state.prepare(work, arguments)
             self.assertEqual((work / "inputs/configure-required").read_text(), "1")
+            in_tree = base / "in-tree"
+            in_tree.mkdir()
+            build_state.prepare(in_tree, arguments, in_tree=True)
+            (in_tree / "build/Makefile").write_bytes(b"configured\n")
+            (in_tree / "build/leaf.o").write_bytes(b"compiled\n")
+            generated = in_tree / "build/configure"
+            generated.write_bytes(b"upstream regenerated configure\n")
+            generated.chmod(0o444)
+            before = generated.stat().st_mtime_ns
+            leaf.write_bytes(b"int value = 3;\n")
+            os.utime(leaf, ns=(timestamp, timestamp))
+            build_state.prepare(in_tree, arguments, in_tree=True)
+            self.assertEqual(generated.stat().st_mtime_ns, before)
+            self.assertEqual((in_tree / "build/leaf.c").read_bytes(), leaf.read_bytes())
+            self.assertEqual((in_tree / "build/leaf.o").read_bytes(), b"compiled\n")
+            self.assertEqual((in_tree / "inputs/configure-required").read_text(), "0")
+            (source / "config").mkdir()
+            (source / "config/ltmain.sh").write_text("upstream libtool generator")
+            build_state.prepare(in_tree, arguments, in_tree=True)
+            self.assertEqual((in_tree / "inputs/configure-required").read_text(), "1")
 
     def test_package_name_cannot_escape_local_state(self):
         with self.assertRaisesRegex(ValueError, "invalid package state name"):
