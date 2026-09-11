@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -37,7 +38,7 @@ def prepare(root: Path, arguments: list[str]) -> None:
     source_index.write_text(json.dumps(current, sort_keys=True) + "\n")
     configuration = hashlib.sha256()
     for name, path in sorted(files.items()):
-        if path.name in ("configure", "configure.ac", "Makefile.am", "Makefile.in", "config.hin") or path.suffix == ".m4":
+        if path.name in ("configure", "configure.ac", "Makefile.am", "Makefile.in", "config.hin") or path.suffix == ".m4" or (path.name.startswith("config") and path.suffix == ".in"):
             configuration.update(name.encode() + hashlib.sha256(path.read_bytes()).digest())
     for name, argument in zip(("headers", "uapi", "libraries"), arguments[1:4]):
         result = state.sync(state._files(Path(argument)), root / "inputs" / name, root)
@@ -54,15 +55,18 @@ def prepare(root: Path, arguments: list[str]) -> None:
     print("Orlix package source: " + json.dumps(source_result, sort_keys=True), flush=True)
 
 
-def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int:
+def run(package: str, script: str, toolchain: str, compiler: str, arguments: list[str]) -> int:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", package):
+        raise ValueError(f"invalid package state name: {package}")
     environment = dict(os.environ)
     identity = [Path(script), Path(toolchain), Path(compiler), Path(__file__), Path(state.__file__)]
+    compatibility = {"package": package, "target": "aarch64-linux-gnu"}
 
     def build(root: Path) -> int:
         launcher = root / "compiler-launcher"
         state._remove(launcher)
         launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", "/opt/homebrew/bin/ccache"))
-        valid = state.resume(root, [*identity, launcher], _TREES)
+        valid = state.resume(root, [*identity, launcher], _TREES, compatibility=compatibility)
         print("Orlix package Make state: " + ("verified" if valid else "clean"), flush=True)
         prepare(root, arguments)
         state._remove(root / "dest")
@@ -70,13 +74,13 @@ def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int
         environment["ORLIX_PACKAGE_WORK_ROOT"] = str(root)
         result = subprocess.call(["/bin/bash", script, *arguments], env=environment)
         if result == 0:
-            state.record(root, _TREES)
+            state.record(root, _TREES, compatibility=compatibility)
         return result
 
     if environment.get("ORLIX_PACKAGE_INCREMENTAL", "1") == "0":
-        with tempfile.TemporaryDirectory(prefix="orlix-coreutils.") as temporary:
+        with tempfile.TemporaryDirectory(prefix="orlix-" + package + ".") as temporary:
             return build(Path(temporary).resolve())
     base = Path.cwd().parent.parent
-    root = base / "orlix-package-state/coreutils/aarch64-linux-gnu"
+    root = base / "orlix-package-state" / package / "aarch64-linux-gnu"
     with state.locked(root, base):
         return build(root)

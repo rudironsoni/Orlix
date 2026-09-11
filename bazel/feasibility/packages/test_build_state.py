@@ -1,7 +1,9 @@
 from pathlib import Path
+import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from bazel.feasibility.packages import build_state
 
@@ -55,3 +57,39 @@ class PackageStateTests(unittest.TestCase):
             config_header.write_bytes(b"#undef HAVE_OTHER_FEATURE\n")
             build_state.prepare(work, arguments)
             self.assertEqual((work / "inputs/configure-required").read_text(), "1")
+            build_state.prepare(work, arguments)
+            (source / "config.h.in").write_bytes(b"#undef BASH_FEATURE\n")
+            build_state.prepare(work, arguments)
+            self.assertEqual((work / "inputs/configure-required").read_text(), "1")
+
+    def test_package_name_cannot_escape_local_state(self):
+        with self.assertRaisesRegex(ValueError, "invalid package state name"):
+            build_state.run("../bash", "", "", "", [])
+
+    def test_cross_package_state_is_rejected_before_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            identity = base / "tool"
+            identity.write_text("same tools and build rules")
+            roots = {name: base / "orlix-package-state" / name / "aarch64-linux-gnu"
+                     for name in ("bash", "coreutils")}
+            with patch.object(Path, "cwd", return_value=base / "execroot/_main"), \
+                 patch.dict(os.environ, {"ORLIX_PACKAGE_INCREMENTAL": "1"}), \
+                 patch.object(build_state, "prepare"), \
+                 patch.object(build_state.subprocess, "call", return_value=0) as upstream:
+                for package, root in roots.items():
+                    self.assertEqual(build_state.run(package, str(identity), str(identity), str(identity), []), 0)
+                    record = json.loads((root / "build-state.json").read_text())
+                    self.assertEqual(record["compatibility"], {"package": package, "target": "aarch64-linux-gnu"})
+                self.assertNotEqual(roots["bash"].resolve(), roots["coreutils"].resolve())
+                self.assertFalse(os.path.samefile(roots["bash"] / "build.lock", roots["coreutils"] / "build.lock"))
+                records = {name: (root / "build-state.json").read_bytes() for name, root in roots.items()}
+                for producer, consumer in (("coreutils", "bash"), ("bash", "coreutils")):
+                    with self.subTest(producer=producer, consumer=consumer):
+                        root = roots[consumer]
+                        (root / "build-state.json").write_bytes(records[producer])
+                        upstream.reset_mock()
+                        with self.assertRaisesRegex(RuntimeError, f"package state mismatch: {producer} != {consumer}"):
+                            build_state.run(consumer, str(identity), str(identity), str(identity), [])
+                        upstream.assert_not_called()
+                        self.assertEqual((root / "build-state.json").read_bytes(), records[producer])

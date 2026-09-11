@@ -101,7 +101,7 @@ def _build_content(root: Path, trees: tuple[str, ...]) -> dict:
     return result
 
 
-def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...]) -> bool:
+def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...], *, compatibility: dict | None = None) -> bool:
     identity = hashlib.sha256()
     for path in identity_inputs:
         identity.update(path.name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
@@ -111,7 +111,14 @@ def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...]) -> b
         if record.is_symlink():
             raise ValueError("build state record is a symlink")
         previous = json.loads(record.read_text())
+        if compatibility is not None and isinstance(previous, dict):
+            stored = previous.get("compatibility")
+            owner = stored.get("package") if isinstance(stored, dict) else None
+            if owner is not None and owner != compatibility.get("package"):
+                raise RuntimeError(f"package state mismatch: {owner} != {compatibility.get('package')}")
         valid = isinstance(previous, dict) and previous["identity"] == expected and previous["files"] == _build_content(root, trees)
+        if compatibility is not None:
+            valid = valid and previous.get("compatibility") == compatibility
     except (OSError, ValueError, KeyError, TypeError):
         valid = False
     if not valid:
@@ -124,8 +131,10 @@ def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...]) -> b
     return valid
 
 
-def record(root: Path, trees: tuple[str, ...]) -> None:
+def record(root: Path, trees: tuple[str, ...], *, compatibility: dict | None = None) -> None:
     payload = {"identity": (root / "build-identity").read_text(), "files": _build_content(root, trees)}
+    if compatibility is not None:
+        payload["compatibility"] = compatibility
     with tempfile.NamedTemporaryFile(mode="w", dir=root, delete=False) as stream:
         stream.write(json.dumps(payload, sort_keys=True) + "\n")
     Path(stream.name).replace(root / "build-state.json")

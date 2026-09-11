@@ -195,15 +195,22 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     tools += [Path(path) for path in coreutils["files"]]
     trees += [Path(path) for path in coreutils["trees"]]
     Path(output).with_name("coreutils-identity.json").write_text(json.dumps(coreutils, sort_keys=True) + "\n")
+    bash_tools = (Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),) + tuple(
+        Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "mktemp", "sleep")
+    )
+    bash = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autoconf", bash_tools)
+    tools += [Path(path) for path in bash["files"]]
+    trees += [Path(path) for path in bash["trees"]]
+    Path(output).with_name("bash-identity.json").write_text(json.dumps(bash, sort_keys=True) + "\n")
     compiler = {**runtime, "files": {name: digest for name, digest in runtime["files"].items() if name.endswith("/clang")}}
     Path(output).with_name("guest-compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
     return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
 
 
-def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str) -> dict:
+def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str, extra_tools: tuple[Path, ...] = ()) -> dict:
     scripts = set()
-    engine_tools = set()
+    engine_tools = set(extra_tools)
     modules = []
     if engine == "meson":
         meson = Path("/opt/homebrew/bin/meson")
@@ -214,20 +221,22 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
         ], text=True))
         scripts.add(meson)
         engine_tools |= {interpreter, Path("/opt/homebrew/bin/ninja"), developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++"}
-    elif engine == "autotools":
-        scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoconf", "autoheader", "autom4te", "autoreconf", "automake", "aclocal", "autopoint"))
-        version = subprocess.check_output(["/opt/homebrew/bin/automake", "--version"], text=True).splitlines()[0].split()[-1]
-        api_version = ".".join(version.split(".")[:2])
-        scripts.update(Path("/opt/homebrew/bin") / (name + "-" + api_version) for name in ("aclocal", "automake"))
+    elif engine in ("autotools", "autoconf"):
+        scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoconf", "autoheader", "autom4te"))
+        modules.append("/opt/homebrew/opt/autoconf/share/autoconf")
+        if engine == "autotools":
+            scripts.update(Path("/opt/homebrew/bin") / name for name in ("autoreconf", "automake", "aclocal", "autopoint"))
+            version = subprocess.check_output(["/opt/homebrew/bin/automake", "--version"], text=True).splitlines()[0].split()[-1]
+            api_version = ".".join(version.split(".")[:2])
+            scripts.update(Path("/opt/homebrew/bin") / (name + "-" + api_version) for name in ("aclocal", "automake"))
+            for package, patterns in {
+                "automake": ("automake-*", "aclocal-*"),
+                "gettext": ("gettext", "aclocal"),
+            }.items():
+                for pattern in patterns:
+                    modules.extend(str(path) for path in (Path("/opt/homebrew/opt") / package / "share").glob(pattern))
         engine_tools.update(Path(path) for path in ("/opt/homebrew/bin/gmake", "/opt/homebrew/opt/m4/bin/m4", "/opt/homebrew/bin/pkgconf", "/opt/homebrew/opt/bison/bin/bison", "/opt/homebrew/opt/llvm/bin/llvm-ranlib"))
         engine_tools.update(Path("/opt/homebrew/bin") / name for name in ("ggrep", "gsed", "gawk", "gtar"))
-        for package, patterns in {
-            "autoconf": ("autoconf",),
-            "automake": ("automake-*", "aclocal-*"),
-            "gettext": ("gettext", "aclocal"),
-        }.items():
-            for pattern in patterns:
-                modules.extend(str(path) for path in (Path("/opt/homebrew/opt") / package / "share").glob(pattern))
         scripts.update(Path("/usr/bin") / name for name in ("install", "file", "grep", "head", "uname", "basename", "wc", "touch"))
         scripts.update({Path("/bin/chmod"), Path("/bin/expr")})
         engine_tools.update(Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("env", "sort", "tr", "cat", "cp", "mv", "mkdir", "rm", "install", "head", "uname", "expr", "basename", "wc", "touch", "chmod", "printf", "readlink", "ln"))

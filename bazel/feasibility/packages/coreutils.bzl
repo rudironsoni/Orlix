@@ -144,8 +144,9 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
         progress_message = "Building GNU Coreutils with incremental Make state",
-        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]))' \"$@\"",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:]))' \"$@\"",
         arguments = [
+            ctx.attr.package_name,
             script.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,

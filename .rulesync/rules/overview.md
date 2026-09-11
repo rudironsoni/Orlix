@@ -123,7 +123,7 @@ Keep mutable build state worktree-local. Share only immutable, content-addressed
 2. Prefer the smallest correct change; avoid speculative abstractions.
 3. Touch only what the task requires.
 4. Surface ownership conflicts directly.
-5. Use Make as the only repository-owned executable developer interface. Keep implementation in the owning component's Make rules or non-executable source modules invoked only by private Make targets; do not add standalone command scripts.
+5. Make is the only repository-owned developer and CI command interface. Non-executable implementation modules may be invoked by private Make targets or Bazel actions. Bazel actions must not call the top-level or component wrapper Makefiles. Do not add standalone command scripts.
 6. Use `rg`/`rg --files` for searches.
 7. Preserve unrelated dirty worktree changes. Identify and preserve user-owned generated-file deltas before regeneration, then reapply or incorporate their intent without loss.
 8. Fail loud when evidence is missing, partial, skipped, or stale.

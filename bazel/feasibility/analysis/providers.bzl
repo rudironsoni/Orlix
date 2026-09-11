@@ -218,6 +218,8 @@ def _bash_package_tree_test_impl(ctx):
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, "configure" in joined)
             asserts.true(env, "bash" in joined)
+            asserts.false(env, "uapi.sha256" in joined)
+            asserts.true(env, "bash-identity.json" in joined)
     asserts.true(env, found)
     return analysistest.end(env)
 

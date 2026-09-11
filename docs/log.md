@@ -7,6 +7,10 @@ updated: 2026-09-11
 ---
 # Orlix Knowledge Log
 
+## [2026-09-11] fix | Align helper invocation with Bazel authority
+
+[ADR 0033](objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md) and generated instructions explicitly permit private Make targets and Bazel actions to invoke non-executable implementation modules. Bazel invokes upstream build engines directly. Make remains the public developer and CI interface. Repository wrapper Makefiles remain prohibited inside Bazel actions. The original user-owned `AGENTS.md` delta is preserved separately.
+
 ## [2026-09-11] fix | Honor mlibc guest build inputs
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) prepares declared subprojects through Meson's source package cache so its wrap patches apply. Bazel mlibc compilation now uses the owning Make rules' page-size header and guest code-generation flags. `IMPLEMENT.md` records the compiler fixture and source build; persistent Ninja state and runtime proof remain open.

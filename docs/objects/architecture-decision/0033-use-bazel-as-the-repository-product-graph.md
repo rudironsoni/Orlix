@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 tags: [architecture, decision, bazel, build-system]
-updated: 2026-09-10
+updated: 2026-09-11
 status: accepted
 external_id: "ADR-0033"
 summary: "Use Bazel as the repository product graph while Make remains the supported interface and upstream build engines retain internal ownership."
@@ -31,7 +31,7 @@ Bazel is the repository-level product graph, cross-component dependency graph, t
 
 Make remains the only supported repository-owned developer and CI command interface. Make delegates fixed product operations to Bazel. Direct Bazel commands remain maintainer diagnostics.
 
-Kbuild, Meson and Ninja, and upstream Autotools and Make remain authoritative inside their components. Bazel invokes these engines directly with pinned tools, prepared source trees, declared inputs, narrow typed providers, and declared outputs. Bazel must not call the top-level Orlix Makefile or component wrapper Makefiles from a Bazel action.
+Kbuild, Meson and Ninja, and upstream Autotools and Make remain authoritative inside their components. Bazel invokes these engines directly with pinned tools, prepared source trees, declared inputs, narrow typed providers, and declared outputs. Non-executable implementation modules may be invoked by private Make targets or Bazel actions. Bazel must not call the top-level Orlix Makefile or component wrapper Makefiles from a Bazel action.
 
 Apple-native compilation, linking, resources, tests, packaging, Xcode project generation, guest distribution assembly, manifests, proof selection, and release bundles become Bazel-declared product graph operations. OrlixKit is the public Apple product boundary. OrlixEngine, OrlixBootloader, OrlixHostAdapter, and Kernel Mach-O integration are native implementation layers. OrlixMLibC, OrlixCoreUtils, guest packages, and rootfs/images remain Linux guest or distribution artifacts and MUST NOT be hidden as Apple-native link dependencies.
 
