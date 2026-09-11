@@ -295,11 +295,14 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn('shasum -a 256 < "$payload_metadata"', rootfs)
         self.assertIn('"$gen_init_cpio" -t 1', rootfs)
         self.assertIn("package_closure = depset(transitive = [pkg.artifact_identity_closure for pkg in pkgs])", rootfs)
+        self.assertIn('"MKE2FS_CONFIG": "/opt/homebrew/etc/mke2fs.conf"', rootfs)
         self.assertIn('"rootfs",', rootfs)
+        self.assertIn('rootfs_tools.add(Path("/opt/homebrew/etc/mke2fs.conf"))', (root / "bazel/config/toolchain_pin.py").read_text(encoding="utf-8"))
         self.assertIn("@orlix_kernel_toolchain//:rootfs-identity.json", rootfs)
         self.assertIn('"rootfs-identity.json"', (root / "bazel/extensions/native_sources.bzl").read_text(encoding="utf-8"))
         artifact_rule = (root / "bazel/artifact_identity.bzl").read_text(encoding="utf-8")
         self.assertIn('"no-sandbox": "1"', artifact_rule)
+        self.assertNotIn("tool_identity", artifact_rule)
         self.assertIn("kbuild-archive.tar", (root / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8"))
 
 

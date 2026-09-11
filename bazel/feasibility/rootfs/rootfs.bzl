@@ -8,6 +8,7 @@ def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
     env = {
         "HOME": "/var/empty",
+        "MKE2FS_CONFIG": "/opt/homebrew/etc/mke2fs.conf",
         "PATH": "/opt/homebrew/opt/e2fsprogs/sbin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
     tmpdir = shell.get("TMPDIR")

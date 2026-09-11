@@ -108,7 +108,6 @@ test -s "$runtime_out"
         ctx,
         "compiler-runtime",
         ctx.file._artifact_identity_serializer,
-        tool_identity = ctx.file.compiler_identity,
         artifacts = {"libcompiler_rt.a": runtime},
     )
 
@@ -307,7 +306,6 @@ test "${#sysroot_digest}" -eq 64
         ctx,
         "sysroot",
         ctx.file._artifact_identity_serializer,
-        tool_identity = ctx.file.compiler_identity,
         root = sysroot,
     )
     return [

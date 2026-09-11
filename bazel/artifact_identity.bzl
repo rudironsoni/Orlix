@@ -1,6 +1,6 @@
 """Declare a separate canonical artifact identity action."""
 
-def declare_artifact_identity(ctx, name, serializer, tool_identity = None, root = None, artifacts = None):
+def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None):
     if not name:
         fail("artifact identity output name is required")
     if (root == None) == (artifacts == None):
@@ -20,11 +20,6 @@ def declare_artifact_identity(ctx, name, serializer, tool_identity = None, root 
         digest.path,
     ]
     inputs = [serializer]
-    if tool_identity != None:
-        arguments.append(tool_identity.path)
-        inputs.append(tool_identity)
-    else:
-        arguments.append("")
     arguments.append("artifact-identity-v2")
     if root != None:
         arguments.extend(["tree", root.path])
@@ -44,12 +39,10 @@ exec_root="$PWD"
 serializer="$exec_root/$1"
 manifest="$exec_root/$2"
 digest="$exec_root/$3"
-tool_identity="$4"
-format="$5"
-mode="$6"
-shift 6
+format="$4"
+mode="$5"
+shift 5
 serializer_dir="$(/usr/bin/dirname "$serializer")"
-if [ -n "$tool_identity" ]; then test -s "$exec_root/$tool_identity"; fi
 PYTHONPATH="$serializer_dir" /usr/bin/python3 -B -c '
 import hashlib
 import sys
@@ -85,6 +78,7 @@ Path(digest_path).write_text(hashlib.sha256(manifest).hexdigest() + "\n", encodi
             "block-network": "1",
             "no-remote-cache": "1",
             "no-remote-exec": "1",
+            # Bazel's sandbox presents tree entries as absolute symlinks, changing their semantic type and target.
             "no-sandbox": "1",
         },
     )

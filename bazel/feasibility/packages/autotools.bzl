@@ -466,7 +466,6 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         ctx,
         "install",
         ctx.file._artifact_identity_serializer,
-        tool_identity = ctx.file.compiler_identity,
         root = install_tree,
     )
     return [

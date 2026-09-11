@@ -224,6 +224,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
             if path not in rootfs_tools:
                 rootfs_tools.add(path)
                 pending.append(path)
+    rootfs_tools.add(Path("/opt/homebrew/etc/mke2fs.conf"))
     rootfs = {
         "schema": 1,
         "macos": payload["macos"],
