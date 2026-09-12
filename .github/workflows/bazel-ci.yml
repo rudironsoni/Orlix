@@ -1,0 +1,143 @@
+name: Bazel CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('bazel-ci-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'bazel-ci-main' || format('bazel-ci-manual-{0}', github.ref_name)) }}
+  cancel-in-progress: true
+
+jobs:
+  apple-ci:
+    name: Bazel matrix check
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+
+      - name: Restore Bazel repository cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
+      - name: Restore iOS 15.5 runtime archive
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Install declared build tools
+        run: |
+          set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
+          brew bundle --file Brewfile
+          test "$(xcodes version)" = "2.0.3"
+
+      - name: Export the selected Xcode to Make
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+
+      - name: Resolve BuildBuddy cache policy
+        id: buildbuddy
+        env:
+          ORLIX_BUILDBUDDY_CACHE_MODE: ${{ vars.ORLIX_BUILDBUDDY_CACHE_MODE || 'normal' }}
+          ORLIX_BUILDBUDDY_CONTEXT: ${{ github.event_name == 'push' && 'main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && 'pr' || 'fork') }}
+        run: make __bazel-buildbuddy-policy
+
+      - name: Configure trusted BuildBuddy writes
+        if: steps.buildbuddy.outputs.access == 'write'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY_WRITE }}
+          ORLIX_BUILDBUDDY_ACCESS: write
+        run: make __bazel-buildbuddy-configure
+
+      - name: Configure read-only BuildBuddy access
+        if: steps.buildbuddy.outputs.access == 'read'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY_READ }}
+          ORLIX_BUILDBUDDY_ACCESS: read
+        run: make __bazel-buildbuddy-configure
+
+      - name: Prepare both simulator runtimes
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Caches/Orlix/ios15-runtime"
+          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --directory "$HOME/Library/Caches/Orlix/ios15-runtime" --keep-archive --no-color
+          current_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "26.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          ios15_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          test -n "$current_runtime_id"
+          test -n "$ios15_runtime_id"
+          device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"
+          xcrun simctl list devicetypes -j | jq -e --arg identifier "$device_type" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null
+          current_id="$(xcrun simctl create "Orlix current CI" "$device_type" "$current_runtime_id")"
+          ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
+          test -n "$current_id"
+          test -n "$ios15_id"
+          xcrun simctl boot "$current_id"
+          xcrun simctl boot "$ios15_id"
+          xcrun simctl bootstatus "$current_id" -b
+          xcrun simctl bootstatus "$ios15_id" -b
+          {
+            echo "ORLIX_CURRENT_SIMULATOR_ID=$current_id"
+            echo "ORLIX_CURRENT_SIMULATOR_VERSION=26.5"
+            echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
+          } >> "$GITHUB_ENV"
+
+      - name: Run the Make-owned Apple CI operation
+        env:
+          ORLIX_BAZEL_COMPONENT_MODE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'source' || 'promoted' }}
+          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+        run: make __bazel-apple-ci
+
+      - name: Save Bazel repository cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+
+      - name: Save iOS 15.5 runtime archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: make __bazel-buildbuddy-cleanup
+
+      - name: Store Apple CI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bazel-apple-ci-${{ github.sha }}
+          path: |
+            Build/AgentHarness/bazel-ci
+            Build/**/*.xcresult
+            Build/**/*.log
+            ~/Library/Logs/DiagnosticReports
+          if-no-files-found: warn
+          retention-days: 14

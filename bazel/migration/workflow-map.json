@@ -157,6 +157,151 @@
         }
       }
     },
+    ".github/workflows/bazel-ci.yml": {
+      "source_sha256": "0b8c28a4228a9c5801d54749a13fe618181f6a79693408f431247dd2d3314aaa",
+      "workflow": {
+        "name": "Bazel CI",
+        "on": {
+          "workflow_dispatch": null,
+          "pull_request": null,
+          "push": {
+            "branches": [
+              "main"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "${{ github.event_name == 'pull_request' && format('bazel-ci-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'bazel-ci-main' || format('bazel-ci-manual-{0}', github.ref_name)) }}",
+          "cancel-in-progress": true
+        },
+        "jobs": {
+          "apple-ci": {
+            "name": "Bazel matrix check",
+            "runs-on": "macos-26",
+            "timeout-minutes": 120,
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Select Xcode 26.6",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "26.6"
+                }
+              },
+              {
+                "name": "Restore Bazel repository cache",
+                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
+                  "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
+                  "restore-keys": "orlix-bazel-repos-\n"
+                }
+              },
+              {
+                "name": "Restore iOS 15.5 runtime archive",
+                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ios15-runtime",
+                  "key": "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
+                }
+              },
+              {
+                "name": "Install declared build tools",
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\n"
+              },
+              {
+                "name": "Export the selected Xcode to Make",
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+              },
+              {
+                "name": "Resolve BuildBuddy cache policy",
+                "id": "buildbuddy",
+                "env": {
+                  "ORLIX_BUILDBUDDY_CACHE_MODE": "${{ vars.ORLIX_BUILDBUDDY_CACHE_MODE || 'normal' }}",
+                  "ORLIX_BUILDBUDDY_CONTEXT": "${{ github.event_name == 'push' && 'main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && 'pr' || 'fork') }}"
+                },
+                "run": "make __bazel-buildbuddy-policy"
+              },
+              {
+                "name": "Configure trusted BuildBuddy writes",
+                "if": "steps.buildbuddy.outputs.access == 'write'",
+                "env": {
+                  "BUILDBUDDY_API_KEY": "${{ secrets.BUILDBUDDY_API_KEY_WRITE }}",
+                  "ORLIX_BUILDBUDDY_ACCESS": "write"
+                },
+                "run": "make __bazel-buildbuddy-configure"
+              },
+              {
+                "name": "Configure read-only BuildBuddy access",
+                "if": "steps.buildbuddy.outputs.access == 'read'",
+                "env": {
+                  "BUILDBUDDY_API_KEY": "${{ secrets.BUILDBUDDY_API_KEY_READ }}",
+                  "ORLIX_BUILDBUDDY_ACCESS": "read"
+                },
+                "run": "make __bazel-buildbuddy-configure"
+              },
+              {
+                "name": "Prepare both simulator runtimes",
+                "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"26.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Run the Make-owned Apple CI operation",
+                "env": {
+                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'source' || 'promoted' }}",
+                  "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}",
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json"
+                },
+                "run": "make __bazel-apple-ci"
+              },
+              {
+                "name": "Save Bazel repository cache",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
+                  "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
+                }
+              },
+              {
+                "name": "Save iOS 15.5 runtime archive",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ios15-runtime",
+                  "key": "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
+                }
+              },
+              {
+                "name": "Remove BuildBuddy credentials",
+                "if": "always()",
+                "run": "make __bazel-buildbuddy-cleanup"
+              },
+              {
+                "name": "Store Apple CI evidence",
+                "if": "always()",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "bazel-apple-ci-${{ github.sha }}",
+                  "path": "Build/AgentHarness/bazel-ci\nBuild/**/*.xcresult\nBuild/**/*.log\n~/Library/Logs/DiagnosticReports\n",
+                  "if-no-files-found": "warn",
+                  "retention-days": 14
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/bazel-gc.yml": {
       "source_sha256": "0d9d1f9a60bde2b321b55896d87118b29f7901176adb22d0a7503ff53322cb89",
       "workflow": {
@@ -214,7 +359,7 @@
       }
     },
     ".github/workflows/bazel-lock-proposal.yml": {
-      "source_sha256": "53d25d7436e9cd35a30b87b9c6f41ad12aa62072af62e417309d76162a08cfb1",
+      "source_sha256": "ea5d97bd704e9b9cb86aba647c18f5a2a9deb0aaab959f4d8eeaa17e4c11b9ba",
       "workflow": {
         "name": "Bazel lock proposal",
         "on": {
@@ -232,6 +377,26 @@
               },
               "rootfs_run_id": {
                 "description": "Successful rootfs promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "kernel_release_iphoneos_run_id": {
+                "description": "Successful kernel-release-iphoneos promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "kernel_release_iphonesimulator_run_id": {
+                "description": "Successful kernel-release-iphonesimulator promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "kernel_development_iphoneos_run_id": {
+                "description": "Successful kernel-development-iphoneos promotion run for this commit",
+                "required": true,
+                "type": "string"
+              },
+              "kernel_development_iphonesimulator_run_id": {
+                "description": "Successful kernel-development-iphonesimulator promotion run for this commit",
                 "required": true,
                 "type": "string"
               }
@@ -303,9 +468,13 @@
                   "GH_TOKEN": "${{ github.token }}",
                   "UAPI_RUN_ID": "${{ inputs.uapi_run_id }}",
                   "MLIBC_RUN_ID": "${{ inputs.mlibc_run_id }}",
-                  "ROOTFS_RUN_ID": "${{ inputs.rootfs_run_id }}"
+                  "ROOTFS_RUN_ID": "${{ inputs.rootfs_run_id }}",
+                  "KERNEL_RELEASE_IPHONEOS_RUN_ID": "${{ inputs.kernel_release_iphoneos_run_id }}",
+                  "KERNEL_RELEASE_IPHONESIMULATOR_RUN_ID": "${{ inputs.kernel_release_iphonesimulator_run_id }}",
+                  "KERNEL_DEVELOPMENT_IPHONEOS_RUN_ID": "${{ inputs.kernel_development_iphoneos_run_id }}",
+                  "KERNEL_DEVELOPMENT_IPHONESIMULATOR_RUN_ID": "${{ inputs.kernel_development_iphonesimulator_run_id }}"
                 },
-                "run": "set -euo pipefail\nfor run_id in \"$UAPI_RUN_ID\" \"$MLIBC_RUN_ID\" \"$ROOTFS_RUN_ID\"; do\n  [[ \"$run_id\" =~ ^[0-9]+$ ]] || { echo \"invalid promotion run ID\" >&2; exit 1; }\n  gh run view \"$run_id\" --repo \"$GITHUB_REPOSITORY\" --json conclusion,headBranch,headSha,workflowName,event > \"$RUNNER_TEMP/promotion-run.json\"\n  jq -e --arg sha \"$GITHUB_SHA\" '.conclusion == \"success\" and .headBranch == \"main\" and .headSha == $sha and .workflowName == \"Bazel promote\" and .event == \"workflow_dispatch\"' \"$RUNNER_TEMP/promotion-run.json\"\ndone\n"
+                "run": "set -euo pipefail\nfor run_id in \"$UAPI_RUN_ID\" \"$MLIBC_RUN_ID\" \"$ROOTFS_RUN_ID\" \\\n  \"$KERNEL_RELEASE_IPHONEOS_RUN_ID\" \"$KERNEL_RELEASE_IPHONESIMULATOR_RUN_ID\" \\\n  \"$KERNEL_DEVELOPMENT_IPHONEOS_RUN_ID\" \"$KERNEL_DEVELOPMENT_IPHONESIMULATOR_RUN_ID\"; do\n  [[ \"$run_id\" =~ ^[0-9]+$ ]] || { echo \"invalid promotion run ID\" >&2; exit 1; }\n  gh run view \"$run_id\" --repo \"$GITHUB_REPOSITORY\" --json conclusion,headBranch,headSha,workflowName,event > \"$RUNNER_TEMP/promotion-run.json\"\n  jq -e --arg sha \"$GITHUB_SHA\" '.conclusion == \"success\" and .headBranch == \"main\" and .headSha == $sha and .workflowName == \"Bazel promote\" and .event == \"workflow_dispatch\"' \"$RUNNER_TEMP/promotion-run.json\"\ndone\n"
               },
               {
                 "name": "Download signed uapi proposal",
@@ -338,6 +507,46 @@
                 }
               },
               {
+                "name": "Download signed kernel release iphoneos proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-kernel-release-iphoneos-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/kernel-release-iphoneos",
+                  "run-id": "${{ inputs.kernel_release_iphoneos_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Download signed kernel release iphonesimulator proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-kernel-release-iphonesimulator-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/kernel-release-iphonesimulator",
+                  "run-id": "${{ inputs.kernel_release_iphonesimulator_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Download signed kernel development iphoneos proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-kernel-development-iphoneos-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/kernel-development-iphoneos",
+                  "run-id": "${{ inputs.kernel_development_iphoneos_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
+                "name": "Download signed kernel development iphonesimulator proposal",
+                "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                "with": {
+                  "name": "signed-kernel-development-iphonesimulator-${{ github.sha }}",
+                  "path": "Build/Bazel/promote/kernel-development-iphonesimulator",
+                  "run-id": "${{ inputs.kernel_development_iphonesimulator_run_id }}",
+                  "github-token": "${{ github.token }}"
+                }
+              },
+              {
                 "name": "Configure signature verification",
                 "env": {
                   "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
@@ -366,61 +575,6 @@
                   "if-no-files-found": "error",
                   "retention-days": 14
                 }
-              }
-            ]
-          }
-        }
-      }
-    },
-    ".github/workflows/bazel-main.yml": {
-      "source_sha256": "273437fa83c3b43eb3e446c70ecb8ee6e114eee12c711ae336a25b84992c061b",
-      "workflow": {
-        "name": "Bazel main",
-        "on": {
-          "push": {
-            "branches": [
-              "main"
-            ]
-          }
-        },
-        "permissions": {
-          "contents": "read"
-        },
-        "concurrency": {
-          "group": "bazel-main-${{ github.sha }}",
-          "cancel-in-progress": true
-        },
-        "jobs": {
-          "matrix-check": {
-            "name": "Bazel matrix check",
-            "runs-on": "macos-26",
-            "timeout-minutes": 60,
-            "steps": [
-              {
-                "name": "Check out the exact commit",
-                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "with": {
-                  "persist-credentials": false
-                }
-              },
-              {
-                "name": "Select Xcode 26.6",
-                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
-                "with": {
-                  "xcode-version": "26.6"
-                }
-              },
-              {
-                "name": "Install declared build tools",
-                "run": "brew bundle --file Brewfile"
-              },
-              {
-                "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
-              },
-              {
-                "name": "Run Make-owned Bazel matrix check",
-                "run": "make __bazel-matrix-check"
               }
             ]
           }
@@ -497,59 +651,8 @@
         }
       }
     },
-    ".github/workflows/bazel-pr.yml": {
-      "source_sha256": "de2e0acd376b1f1598c44bd565d93573933894e480da75d1efe158cfdc2e93be",
-      "workflow": {
-        "name": "Bazel pull request",
-        "on": {
-          "pull_request": null
-        },
-        "permissions": {
-          "contents": "read"
-        },
-        "concurrency": {
-          "group": "bazel-pr-${{ github.event.pull_request.number || github.ref }}",
-          "cancel-in-progress": true
-        },
-        "jobs": {
-          "matrix-check": {
-            "name": "Bazel matrix check",
-            "runs-on": "macos-26",
-            "timeout-minutes": 60,
-            "steps": [
-              {
-                "name": "Check out the exact commit",
-                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "with": {
-                  "persist-credentials": false
-                }
-              },
-              {
-                "name": "Select Xcode 26.6",
-                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
-                "with": {
-                  "xcode-version": "26.6"
-                }
-              },
-              {
-                "name": "Install declared build tools",
-                "run": "brew bundle --file Brewfile"
-              },
-              {
-                "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
-              },
-              {
-                "name": "Run Make-owned Bazel matrix check",
-                "run": "make __bazel-matrix-check"
-              }
-            ]
-          }
-        }
-      }
-    },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "19f8dd681cc25271c02585cdaf09491711be0dff1fc1d3dc539bd5cd20e05e89",
+      "source_sha256": "9e9500dd3d12fe73b63c5d4ed6a802d6a7331ca1e83afac983c90a26886854ba",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -562,7 +665,11 @@
                 "options": [
                   "uapi",
                   "mlibc",
-                  "rootfs"
+                  "rootfs",
+                  "kernel-release-iphoneos",
+                  "kernel-release-iphonesimulator",
+                  "kernel-development-iphoneos",
+                  "kernel-development-iphonesimulator"
                 ]
               }
             }
@@ -641,12 +748,11 @@
                 "timeout-minutes": 20,
                 "env": {
                   "ORLIX_COSIGN_KEY": "${{ secrets.ORLIX_COSIGN_KEY }}",
-                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
                   "ORLIX_COSIGN_KEY_PASSWORD": "${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}",
                   "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
                   "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 },
-                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is required; promotion failed\"\n  exit 1\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"${GITHUB_ACTOR}\" --password-stdin\nmake __bazel-publish-${{ inputs.component }}\n"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is required; promotion failed\"\n  exit 1\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\ncosign public-key --key \"$key_path\" > \"$key_path.pub\"\nexport ORLIX_COSIGN_PUB=\"$key_path.pub\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"${GITHUB_ACTOR}\" --password-stdin\nmake __bazel-publish-${{ inputs.component }}\n"
               },
               {
                 "name": "Store the verified signed component proposal",
@@ -713,182 +819,6 @@
                   "grok_auth_json": "${{ secrets.GROK_AUTH_JSON }}",
                   "roast_level": "professional",
                   "custom_instructions": "Follow AGENTS.md from the pull request base revision. Orlix compiles\nupstream Linux into an iOS-hosted kernel. Do not suggest edits to\ngenerated trees under Build/. Do not move Linux policy into\nOrlixHostAdapter. Do not invent a parallel OrlixKit API. Fail loud\nwhen evidence is missing.\n"
-                }
-              }
-            ]
-          }
-        }
-      }
-    },
-    ".github/workflows/ios15-runtime.yml": {
-      "source_sha256": "4047091cd35666e8ee9064f24e9820c48e2db8e64a24763cdea9e2853c5d25dd",
-      "workflow": {
-        "name": "iOS 15 runtime",
-        "on": {
-          "workflow_dispatch": null,
-          "pull_request": {
-            "paths": [
-              ".github/workflows/ios15-runtime.yml",
-              "Brewfile",
-              "Makefile",
-              "Orlix/**",
-              "OrlixHostAdapter/**",
-              "OrlixKernel/**",
-              "OrlixMLibC/**",
-              "OrlixOS/**",
-              "project.yml"
-            ]
-          },
-          "push": {
-            "branches": [
-              "main"
-            ]
-          }
-        },
-        "permissions": {
-          "contents": "read",
-          "actions": "write"
-        },
-        "concurrency": {
-          "group": "ios15-runtime-${{ github.event.pull_request.number || github.ref }}",
-          "cancel-in-progress": true
-        },
-        "jobs": {
-          "derail-watchdog": {
-            "name": "Cancel if derailed",
-            "runs-on": "ubuntu-latest",
-            "timeout-minutes": 12,
-            "permissions": {
-              "actions": "write"
-            },
-            "steps": [
-              {
-                "name": "Cancel when macos-26 stays queued",
-                "env": {
-                  "GH_TOKEN": "${{ github.token }}"
-                },
-                "run": "set -euo pipefail\nfor _ in $(seq 1 20); do\n  job_status=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs\" --jq '.jobs[] | select(.name == \"iOS 15 runtime\") | .status' | head -n 1)\"\n  case \"$job_status\" in\n    in_progress|completed)\n      echo \"macos-26 job is $job_status\"\n      exit 0\n      ;;\n  esac\n  sleep 30\ndone\ngh run cancel \"${GITHUB_RUN_ID}\" --repo \"${GITHUB_REPOSITORY}\"\necho \"cancelled: macos-26 job still queued after 10 minutes\"\nexit 1\n"
-              }
-            ]
-          },
-          "ios15-runtime": {
-            "name": "iOS 15 runtime",
-            "runs-on": "macos-26",
-            "timeout-minutes": 90,
-            "steps": [
-              {
-                "name": "Check out the exact commit",
-                "timeout-minutes": 5,
-                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "with": {
-                  "persist-credentials": false
-                }
-              },
-              {
-                "name": "Select Xcode 26.6",
-                "timeout-minutes": 5,
-                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
-                "with": {
-                  "xcode-version": "26.6"
-                }
-              },
-              {
-                "name": "Export the selected Xcode to Make",
-                "timeout-minutes": 1,
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
-              },
-              {
-                "name": "Restore Homebrew cache",
-                "timeout-minutes": 10,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Homebrew",
-                  "key": "orlix-brew-${{ runner.os }}-${{ hashFiles('Brewfile') }}",
-                  "restore-keys": "orlix-brew-${{ runner.os }}-\n"
-                }
-              },
-              {
-                "name": "Restore iOS 15.5 runtime archive",
-                "timeout-minutes": 15,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/ios15-runtime",
-                  "key": "orlix-ios15-runtime-15.5-arm64-v1"
-                }
-              },
-              {
-                "name": "Restore Bazel repository cache",
-                "timeout-minutes": 15,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
-                  "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
-                  "restore-keys": "orlix-bazel-repos-\n"
-                }
-              },
-              {
-                "name": "Restore Bazel disk cache",
-                "timeout-minutes": 20,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/Bazel/disk-cache",
-                  "key": "orlix-bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json', 'OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}",
-                  "restore-keys": "orlix-bazel-disk-${{ runner.os }}-\n"
-                }
-              },
-              {
-                "name": "Restore ccache",
-                "timeout-minutes": 10,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ runner.os }}-${{ hashFiles('OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}",
-                  "restore-keys": "orlix-ccache-${{ runner.os }}-\n"
-                }
-              },
-              {
-                "name": "Restore git clones",
-                "timeout-minutes": 15,
-                "uses": "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/git\nBuild/OrlixKernel/upstream\nBuild/OrlixMLibC/upstream\n",
-                  "key": "orlix-git-clones-${{ runner.os }}-${{ hashFiles('Orlix/make/vendor.mk', 'OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk', 'OrlixMLibC/Makefile') }}",
-                  "restore-keys": "orlix-git-clones-${{ runner.os }}-\n"
-                }
-              },
-              {
-                "name": "Install pinned build tools",
-                "timeout-minutes": 20,
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\nllvm_bin=\"$(brew --prefix llvm)/bin\"\nlld_bin=\"$(brew --prefix lld)/bin\"\ntest -x \"$lld_bin/ld.lld\" || test -x \"$llvm_bin/ld.lld\"\necho \"$lld_bin\" >> \"$GITHUB_PATH\"\necho \"$llvm_bin\" >> \"$GITHUB_PATH\"\n"
-              },
-              {
-                "name": "Install the iOS 15.5 runtime with xcodes",
-                "timeout-minutes": 30,
-                "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\nruntime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" \\\n  '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\nsimulator_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$runtime_id\")\"\ntest -n \"$simulator_id\"\nxcrun simctl boot \"$simulator_id\"\nxcrun simctl bootstatus \"$simulator_id\" -b\necho \"ORLIX_IOS15_SIMULATOR_ID=$simulator_id\" >> \"$GITHUB_ENV\"\n"
-              },
-              {
-                "name": "Build the iOS 15 launch test",
-                "timeout-minutes": 60,
-                "env": {
-                  "LINUX_REMOTE": "https://github.com/gregkh/linux.git"
-                },
-                "run": "make __ios15-simulator-build"
-              },
-              {
-                "name": "Run the iOS 15 launch test",
-                "timeout-minutes": 10,
-                "run": "make __ios15-simulator-test"
-              },
-              {
-                "name": "Store iOS 15 test evidence",
-                "if": "always()",
-                "timeout-minutes": 5,
-                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-                "with": {
-                  "name": "ios15-runtime-${{ github.sha }}",
-                  "path": "Build/**/*.xcresult\nBuild/**/*.log\n",
-                  "if-no-files-found": "warn",
-                  "retention-days": 14
                 }
               }
             ]

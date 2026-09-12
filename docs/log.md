@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-11
+updated: 2026-09-12
 ---
 # Orlix Knowledge Log
+
+## [2026-09-12] build | Define canonical Apple CI and BuildBuddy policy
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) defines one Make-owned simulator build for current and iOS 15.5 runtime proof. BuildBuddy is the optional shared Bazel action cache with distinct main, same-repository pull-request, fork, promotion, nightly, and release policy. The manual transfer circuit breaker protects the 80 GB monthly operating ceiling. Runtime, transfer, and account-state proof remain separate checks.
 
 ## [2026-09-11] fix | Remove retired command wrapper integration
 

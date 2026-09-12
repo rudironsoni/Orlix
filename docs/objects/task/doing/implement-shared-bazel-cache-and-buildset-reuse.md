@@ -30,6 +30,12 @@ Acceptance requires cache-on and cache-off output equivalence for reproducible o
 
 The shared promoted-artifact store is local-first and digest-addressed. A warm hit for all locked artifacts performs zero downloads. Locked buildsets and active consumers are pinned against garbage collection. OrlixDistribution artifacts remain guest resources and are not hidden as Apple-native link dependencies.
 
+BuildBuddy Cloud is the shared Bazel AC/CAS at `grpcs://remote.buildbuddy.io`. The compatible cache instance is `orlix/apple/bazel-9.2.0/xcode-17F113/v1`; `v1` is the tracked `ORLIX_BAZEL_CACHE_EPOCH`. The instance excludes commit, branch, pull-request, and simulator-runtime identity. Remote execution stays disabled. Cache-enabled builds use compression, content-defined chunking, minimal downloads by default, the local disk cache, and BuildBuddy BES. The canonical simulator-product operation requests top-level outputs only when it needs the app locally.
+
+`ORLIX_BUILDBUDDY_CACHE_MODE` accepts only `normal`, `conserve`, or `off`, and defaults to `normal`. In `normal`, main reads and writes, same-repository pull requests read with a read-only key and disabled uploads, and forks stay off. In `conserve`, only main reads and writes. In `off`, all contexts stay off. Promotion, nightly independent reconstruction, TestFlight, and release do not use BuildBuddy action results. Local use is explicit through the untracked `.bazelrc.local`.
+
+The operating ceiling is 80 GB of the 100 GB monthly transfer allowance. From 0 to less than 60 GB, keep `normal`. From 60 to less than 75 GB, keep `normal` and inspect actions with high transfer. From 75 to less than 80 GB, use `conserve`. At 80 GB or more, use `off` until the billing period resets. The 20 GB reserve is not an operating target. Optimize for CI time avoided per GB transferred, not cache-hit percentage alone. Publication artifacts stay in GHCR or release storage, never BuildBuddy.
+
 The cache-equivalence gate uses independent seed, cached, and uncached output
 bases. It requires observed disk-cache hits for UAPI, MLibC, and rootfs, then
 local execution with action, disk, remote, compiler, and persistent Kbuild

@@ -15,6 +15,17 @@ build --action_env=ORLIX_KERNEL_INCREMENTAL
 build --experimental_disk_cache_gc_max_size=30G
 build --experimental_disk_cache_gc_max_age=30d
 
+build:buildbuddy --remote_cache=grpcs://remote.buildbuddy.io
+build:buildbuddy --remote_cache_compression
+build:buildbuddy --experimental_remote_cache_chunking
+build:buildbuddy --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/v1
+build:buildbuddy --remote_download_outputs=minimal
+build:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/
+build:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io
+build:buildbuddy-read --config=buildbuddy
+build:buildbuddy-read --remote_upload_local_results=false
+build:buildbuddy-write --config=buildbuddy
+
 test --test_output=errors
 test --flaky_test_attempts=1
 
