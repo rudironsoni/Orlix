@@ -37,17 +37,40 @@ def _lock_payload(reference: str) -> dict:
 
 
 class ReconstructTests(unittest.TestCase):
-    def test_component_tar_cannot_escape_destination(self) -> None:
+    def test_component_tar_preserves_directories_and_cannot_escape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             blob = Path(tmp) / "component.tar"
             payload = b"escape"
             with tarfile.open(blob, "w") as archive:
-                member = tarfile.TarInfo("../escape")
+                first = tarfile.TarInfo("a")
+                first.type = tarfile.SYMTYPE
+                first.linkname = "."
+                archive.addfile(first)
+                second = tarfile.TarInfo("b")
+                second.type = tarfile.SYMTYPE
+                second.linkname = "a/.."
+                archive.addfile(second)
+                member = tarfile.TarInfo("b/escaped")
                 member.size = len(payload)
                 archive.addfile(member, io.BytesIO(payload))
             with self.assertRaises(reconstruct.ReconstructError) as raised:
                 reconstruct._extract_component_tar(blob, Path(tmp) / "tree")
-        self.assertIn("unsafe component tar entry", str(raised.exception))
+            self.assertFalse((Path(tmp) / "escaped").exists())
+            self.assertIn("unsafe component tar link", str(raised.exception))
+
+            valid = Path(tmp) / "valid.tar"
+            with tarfile.open(valid, "w") as archive:
+                directory = tarfile.TarInfo("include")
+                directory.type = tarfile.DIRTYPE
+                directory.mode = 0o555
+                archive.addfile(directory)
+                member = tarfile.TarInfo("include/a.h")
+                member.size = len(payload)
+                archive.addfile(member, io.BytesIO(payload))
+            destination = Path(tmp) / "valid"
+            reconstruct._extract_component_tar(valid, destination)
+            self.assertEqual((destination / "include" / "a.h").read_bytes(), payload)
+            self.assertEqual((destination / "include").stat().st_mode & 0o777, 0o555)
 
     def test_empty_lock_cannot_reconstruct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -150,12 +150,20 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("bazel/promotion/imported", mk)
         self.assertIn("__bazel-substitute-promoted", mk.split("__bazel-orlix-app:")[1].split("__bazel-orlix-archive:")[0])
 
-    def test_reconstruct_fails_closed_without_oras_cosign_or_key(self) -> None:
+    def test_reconstruct_checks_local_store_before_network_tools(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        self.assertIn("oras is required to reconstruct", mk)
-        self.assertIn("cosign is required to reconstruct", mk)
-        self.assertIn("ORLIX_COSIGN_PUB is required to reconstruct", mk)
-        self.assertIn("ORLIX_COSIGN_KEY_PASSWORD", mk)
+        recipe = mk.split("__bazel-reconstruct:", 1)[1].split(
+            "__bazel-substitute-promoted:", 1
+        )[0]
+        self.assertNotIn("command -v oras", recipe)
+        self.assertNotIn("command -v cosign", recipe)
+        self.assertIn("ORLIX_COSIGN_PUB is required to reconstruct", recipe)
+        self.assertIn("ORLIX_PROMOTED_ARTIFACT_STORE", recipe)
+        reconstruct = (ROOT / "bazel" / "promotion" / "reconstruct.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("cosign is required to reconstruct", reconstruct)
+        self.assertIn("oras is required to reconstruct", reconstruct)
 
     def test_unsigned_promote_uses_two_clean_output_bases(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

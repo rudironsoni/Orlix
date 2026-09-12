@@ -478,8 +478,6 @@ __bazel-apple-routing-check:
 	@rg -F -q '__bazel-lock-proposal' make/bazel-migration.mk
 	@rg -F -q '__bazel-substitute-promoted' make/bazel-migration.mk
 	@rg -F -q 'promoted-components.json' make/bazel-migration.mk
-	@rg -F -q 'oras is required to reconstruct' make/bazel-migration.mk
-	@rg -F -q 'cosign is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_COSIGN_PUB is required to reconstruct' make/bazel-migration.mk
 	@rg -F -q -- '--nouse_action_cache' make/bazel-migration.mk
 	@rg -F -q 'unsigned promote mutated artifacts.lock.json' make/bazel-migration.mk

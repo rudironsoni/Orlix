@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 from compare import tree_digest
+from locked_buildset import load_locked_buildset
 
 
 STORE_SCHEMA = 1
@@ -179,7 +180,7 @@ class ArtifactStore:
             "reference": entry["oci_reference"],
         }:
             raise ArtifactStoreError("promoted artifact manifest record does not match the lock")
-        identity = record.get("artifact_identity") or {}
+        identity = record.get("artifact_identity")
         if not isinstance(identity, dict):
             raise ArtifactStoreError("promoted artifact identity must be a JSON object")
         marker = identity.get("marker")
@@ -200,13 +201,17 @@ class ArtifactStore:
             raise ArtifactStoreError("promoted artifact unsigned digest marker is unreadable") from error
         if marker_text != entry["unsigned_digest"]:
             raise ArtifactStoreError("promoted artifact unsigned digest marker differs from the lock")
-        blob_record = record.get("blob") or {}
-        if not isinstance(blob_record, dict) or blob_record.get("path") != "component.tar" or not _valid_digest(blob_record.get("sha256")) or blob_record.get("sha256") != _sha256_file(blob):
+        blob_record = record.get("blob")
+        if not isinstance(blob_record, dict):
+            raise ArtifactStoreError("promoted artifact blob record must be a JSON object")
+        if blob_record.get("path") != "component.tar" or not _valid_digest(blob_record.get("sha256")) or blob_record.get("sha256") != _sha256_file(blob):
             raise ArtifactStoreError("promoted artifact tar digest is invalid")
         if not isinstance(blob_record.get("size"), int) or isinstance(blob_record.get("size"), bool) or blob_record.get("size") < 0 or blob_record.get("size") != blob.stat().st_size:
             raise ArtifactStoreError("promoted artifact tar size is invalid")
-        tree_record = record.get("tree") or {}
-        if not isinstance(tree_record, dict) or tree_record.get("path") != "tree" or not _valid_digest(tree_record.get("sha256")) or tree_record.get("sha256") != tree_digest(tree):
+        tree_record = record.get("tree")
+        if not isinstance(tree_record, dict):
+            raise ArtifactStoreError("promoted artifact tree record must be a JSON object")
+        if tree_record.get("path") != "tree" or not _valid_digest(tree_record.get("sha256")) or tree_record.get("sha256") != tree_digest(tree):
             raise ArtifactStoreError("promoted artifact tree digest is invalid")
         verification = record.get("verification")
         if not isinstance(verification, dict) or not _valid_digest(verification.get("signing_key_fingerprint")) or not _valid_digest(verification.get("trust_policy_sha256")) or not isinstance(verification.get("verification_policy_version"), int) or isinstance(verification.get("verification_policy_version"), bool) or not _valid_timestamp(record.get("last_used_at")):
@@ -221,18 +226,19 @@ class ArtifactStore:
 
     def lookup(self, component: str, entry: dict, verification: dict | None = None) -> dict | None:
         with self._locked():
-            return self._lookup_unlocked(component, entry, verification)
+            found = self._lookup_unlocked(component, entry, verification)
+            if found is not None and not found["needs_reverify"]:
+                self._touch_unlocked(found)
+            return found
 
     def _lookup_unlocked(
         self, component: str, entry: dict, verification: dict | None = None
     ) -> dict | None:
         try:
             found = self._validate(component, entry)
-        except (ArtifactStoreError, OSError, TypeError, ValueError):
+        except (ArtifactStoreError, OSError, TypeError, ValueError, AttributeError, KeyError):
             return None
         found["needs_reverify"] = verification is not None and found["verification"] != verification
-        if not found["needs_reverify"]:
-            self._touch_unlocked(found)
         return found
 
     @staticmethod
@@ -267,10 +273,6 @@ class ArtifactStore:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(found["tree"], target, symlinks=True)
             return {"marker": found["marker"]}
-
-    def refresh_verification(self, component: str, entry: dict, verification: dict) -> dict:
-        with self._locked():
-            return self._refresh_unlocked(component, entry, verification)
 
     def _refresh_unlocked(self, component: str, entry: dict, verification: dict) -> dict:
         found = self._validate(component, entry)
@@ -311,26 +313,26 @@ class ArtifactStore:
                 tree_digest_value = tree_digest(staged_tree)
                 blob_digest = _sha256_file(staged_object / "component.tar")
                 record = {
-                "schema": STORE_SCHEMA,
-                "kind": "orlix-promoted-artifact",
-                "component": component,
-                "unsigned_digest": entry["unsigned_digest"],
-                "oci_digest": entry["oci_digest"],
-                "oci_reference": entry["oci_reference"],
-                "artifact_identity": self._expected_identity(entry, marker),
-                "oci_manifest": {
-                    "digest": entry["oci_digest"],
-                    "reference": entry["oci_reference"],
-                },
-                "blob": {
-                    "path": "component.tar",
-                    "sha256": blob_digest,
-                    "size": (staged_object / "component.tar").stat().st_size,
-                },
-                "tree": {"path": "tree", "sha256": tree_digest_value},
-                "verification": verification,
-                "last_used_at": time.time(),
-            }
+                    "schema": STORE_SCHEMA,
+                    "kind": "orlix-promoted-artifact",
+                    "component": component,
+                    "unsigned_digest": entry["unsigned_digest"],
+                    "oci_digest": entry["oci_digest"],
+                    "oci_reference": entry["oci_reference"],
+                    "artifact_identity": self._expected_identity(entry, marker),
+                    "oci_manifest": {
+                        "digest": entry["oci_digest"],
+                        "reference": entry["oci_reference"],
+                    },
+                    "blob": {
+                        "path": "component.tar",
+                        "sha256": blob_digest,
+                        "size": (staged_object / "component.tar").stat().st_size,
+                    },
+                    "tree": {"path": "tree", "sha256": tree_digest_value},
+                    "verification": verification,
+                    "last_used_at": time.time(),
+                }
                 (staged_object / "manifest.json").write_text(
                     json.dumps(self._expected_manifest(component, entry), indent=2) + "\n",
                     encoding="utf-8",
@@ -339,11 +341,16 @@ class ArtifactStore:
                 destination = self._object_dir(entry)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.is_symlink() or destination.exists():
-                    if destination.is_symlink() or destination.is_file():
-                        destination.unlink()
-                    else:
-                        shutil.rmtree(destination)
-                os.replace(staged_object, destination)
+                    replaced = staging / "replaced"
+                    os.replace(destination, replaced)
+                    try:
+                        os.replace(staged_object, destination)
+                    except OSError:
+                        os.replace(replaced, destination)
+                        raise
+                    shutil.rmtree(replaced, ignore_errors=True)
+                else:
+                    os.replace(staged_object, destination)
                 return self._validate(component, entry)
             finally:
                 shutil.rmtree(staging, ignore_errors=True)
@@ -369,44 +376,62 @@ class ArtifactStore:
     def _pinned_digests(
         self,
         lock_path: str | Path | None,
-        *,
-        now: float,
     ) -> set[str]:
         pinned: set[str] = set()
         if lock_path:
             try:
                 payload = json.loads(Path(lock_path).read_text(encoding="utf-8"))
-                for entry in (payload.get("components") or {}).values():
-                    digest = entry.get("oci_digest")
-                    if isinstance(digest, str):
-                        pinned.add(digest)
-            except (OSError, ValueError) as error:
+                if not isinstance(payload, dict) or not isinstance(payload.get("components"), dict):
+                    raise ArtifactStoreError("promoted lock must contain a component object")
+                locked = load_locked_buildset(
+                    str(lock_path), required=tuple(payload["components"])
+                )
+                pinned.update(entry["oci_digest"] for entry in locked["components"].values())
+            except (KeyError, OSError, ValueError) as error:
                 raise ArtifactStoreError(f"cannot read promoted lock for garbage collection: {lock_path}") from error
         leases = self.root / "leases"
         if leases.is_dir():
             for path in leases.glob("*.json"):
                 try:
+                    if path.is_symlink() or not path.is_file():
+                        raise ArtifactStoreError("invalid promoted artifact lease")
                     lease = json.loads(path.read_text(encoding="utf-8"))
                     if not isinstance(lease, dict) or lease.get("schema") != STORE_SCHEMA or lease.get("kind") != "active-reconstruction":
-                        continue
+                        raise ArtifactStoreError("invalid promoted artifact lease")
                     consumer_value = lease.get("consumer")
                     digests = lease.get("oci_digests")
                     if not isinstance(consumer_value, str) or not isinstance(digests, list) or not digests or not all(isinstance(digest, str) and _oci_digest_hex(digest) for digest in digests):
-                        continue
+                        raise ArtifactStoreError("invalid promoted artifact lease")
                     if not _valid_digest(lease.get("buildset")) or not _valid_timestamp(lease.get("updated_at")):
-                        continue
-                    if Path(consumer_value).exists():
+                        raise ArtifactStoreError("invalid promoted artifact lease")
+                    consumer = Path(consumer_value)
+                    if not consumer.is_absolute():
+                        raise ArtifactStoreError("invalid promoted artifact lease")
+                    if consumer.exists():
                         pinned.update(digests)
-                except (OSError, ValueError, KeyError, TypeError, ArtifactStoreError):
-                    continue
+                    else:
+                        path.unlink(missing_ok=True)
+                except (OSError, ValueError, KeyError, TypeError, AttributeError, ArtifactStoreError):
+                    if path.is_dir() and not path.is_symlink():
+                        shutil.rmtree(path)
+                    else:
+                        path.unlink(missing_ok=True)
         return pinned
 
     @staticmethod
     def _entry_size(path: Path) -> int:
+        if not path.is_dir() or path.is_symlink():
+            try:
+                return path.stat().st_size if path.exists() and not path.is_symlink() else 0
+            except OSError:
+                return 0
         total = 0
         for child in path.rglob("*"):
             if child.is_file() and not child.is_symlink():
-                total += child.stat().st_size
+                try:
+                    total += child.stat().st_size
+                except OSError:
+                    pass
         return total
 
     def gc(
@@ -419,13 +444,14 @@ class ArtifactStore:
     ) -> dict:
         clock = time.time() if now is None else now
         with self._locked():
-            pinned = self._pinned_digests(lock_path, now=clock)
+            pinned = self._pinned_digests(lock_path)
             objects_root = self.root / "objects" / "oci" / "sha256"
             candidates: list[tuple[float, int, str, Path]] = []
             stale: list[tuple[int, Path]] = []
             retained = 0
             removed = 0
             bytes_removed = 0
+
             if objects_root.is_dir():
                 for object_dir in objects_root.iterdir():
                     if object_dir.is_symlink() or not object_dir.is_dir():
@@ -445,16 +471,18 @@ class ArtifactStore:
                         stale.append((size, object_dir))
                     else:
                         candidates.append((last_used, size, digest, object_dir))
-            if retained > max_bytes:
-                raise ArtifactStoreError(
-                    "pinned promoted artifacts exceed the combined storage budget"
-                )
-            for size, object_dir in stale:
-                shutil.rmtree(object_dir)
+
+            for size, path in stale:
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink(missing_ok=True)
                 removed += 1
                 bytes_removed += size
-            candidates.sort(key=lambda item: item[0])
+
             retained += sum(item[1] for item in candidates)
+
+            candidates.sort(key=lambda item: item[0])
             for last_used, size, digest, object_dir in candidates:
                 del last_used, digest
                 if retained > max_bytes:
@@ -462,16 +490,23 @@ class ArtifactStore:
                     removed += 1
                     bytes_removed += size
                     retained -= size
+
+            if retained > max_bytes:
+                required = retained - max_bytes
+                raise ArtifactStoreError(
+                    f"pinned promoted artifacts exceed the combined storage budget by {required} bytes"
+                )
+
             return {
-            "schema": STORE_SCHEMA,
-            "root": str(self.root),
-            "removed_objects": removed,
-            "bytes_removed": bytes_removed,
-            "bytes_retained": retained,
-            "pinned_objects": len(pinned),
-            "prepared_bytes": 0,
-            "combined_bytes": retained,
-            "max_combined_bytes": max_bytes,
+                "schema": STORE_SCHEMA,
+                "root": str(self.root),
+                "removed_objects": removed,
+                "bytes_removed": bytes_removed,
+                "bytes_retained": retained,
+                "pinned_objects": len(pinned),
+                "prepared_bytes": 0,
+                "combined_bytes": retained,
+                "max_combined_bytes": max_bytes,
             }
 
 

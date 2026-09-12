@@ -382,3 +382,29 @@ Fresh publication checks: `gmake __bazel-matrix-check` exited 0 with 122 Python 
 The inspected remote head was `9df61327255e923a8317cd217a6d72c8895f1fcf`. Its Bazel CI passed. Its iOS 15 run `34599070354` failed because OrlixUITests-Runner hung before establishing connection, error 65 through Make exit 2. Root cause remains unverified. The failed log is `/private/tmp/orlix-ios15-failed.log`. New-commit CI is a separate gate.
 
 The duplicate XcodeBuildMCP bullet in AGENTS.md is included under the explicit all-local-work publication request. Untracked `.xcodebuildmcp/` and `third_party/swift/.build/` remain excluded machine/build state. TAP stays stopped and artifacts.lock.json remains unchanged. No runtime, device, promotion, cutover, or release readiness is established.
+
+## Checkpoint 6A: local-first trust-bound promoted reconstruction
+
+Phase 6A: ACCEPTED locally. Promoted reconstruction consults a digest-addressed local artifact store before network acquisition. Warm hits reuse verified local trees without `oras` or `cosign`. Trust-policy changes reverify signatures using `cosign` without re-downloading valid immutable blobs. A verified staged replacement removes corrupt cache bytes under the same store lock, so no persistent quarantine is retained. Active reconstruction leases protect their pinned artifacts across GC as long as the recorded consumer directory exists on disk, regardless of lease age, while dead or malformed leases are purged and their objects collected.
+
+Reconstruction routes through `ArtifactStore.materialize_local` under a shared exclusive store lock (`fcntl.flock`), guaranteeing that validation, signature reverification, touch, and destination tree copying are atomic and cannot race with concurrent GC or replacement across worktrees. `ArtifactStore._validate` defensively checks all metadata types, and `_lookup_unlocked` treats malformed records (e.g. non-dict JSON or null markers) as cache misses, allowing clean reacquisition and complete reconstruction.
+
+Verification passed on both system `python3` (3.14) and macOS system `/usr/bin/python3` (Python 3.9 compatibility contract):
+- 56 promotion unit tests passed on system `python3`, exit 0.
+- 56 promotion unit tests passed on `/usr/bin/python3`, exit 0.
+- `make __bazel-matrix-check` exited 0 with 17 Make routing tests, 126 Python tests, and 32 passing Bazel analysis tests.
+- `make test` exited 0 after building current KUnit objects; it did not execute runtime tests.
+- `make agent-harness-check` exited 0 with 13 lifecycle-hook tests and current generated documentation.
+- Deterministic proof tests in `bazel/promotion/test_artifact_store.py`:
+  - `test_concurrent_reader_and_gc_synchronization`: proves mutual exclusion between `materialize_local` and `gc`.
+  - `test_replacement_does_not_retain_corrupt_bytes`: proves corrupt cache bytes do not survive verified replacement.
+  - `test_durable_live_consumer_pin_across_gc`: proves live-consumer retention beyond 30 days and dead lease cleanup.
+  - `test_malformed_metadata_recovers_via_reacquisition`: proves malformed records return cache miss and reacquire cleanly.
+- `git diff --check` passed cleanly.
+- `artifacts.lock.json` remains SHA-256 `d8b90ca1fa57a2e0cd61fb35335345e11f442c29219c225026923d110ffca174` (untouched).
+
+Raw evidence resides under `Build/AgentHarness/bazel-migration/recovery-checkpoint-6/verification.json`.
+
+Independent review returned PASS after the ordered tar extraction preserved read-only directory metadata, rejected chained symlink escapes, and malformed lease directories stopped aborting GC.
+
+Phase 6B (kernel promotion into the signed buildset), Phase 7 through 10, physical-device validation, TAP, runtime readiness, cutover, and release remain separate future gates. Untracked `.build/` and machine state remain excluded.

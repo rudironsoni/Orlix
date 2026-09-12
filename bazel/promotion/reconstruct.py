@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import posixpath
@@ -41,20 +42,40 @@ def _run(argv: list[str], env: dict[str, str] | None = None) -> subprocess.Compl
 
 def _extract_component_tar(blob: Path, dest: Path) -> None:
     try:
+        dest.mkdir(parents=True, exist_ok=True)
+        root = dest.resolve()
         with tarfile.open(blob, "r") as archive:
+            directories = []
             for member in archive.getmembers():
                 path = PurePosixPath(member.name)
                 if path.is_absolute() or ".." in path.parts or member.isdev() or member.isfifo():
                     raise ReconstructError(f"unsafe component tar entry: {member.name}")
+                extracted = (dest / member.name).resolve()
+                if os.path.commonpath((str(root), str(extracted))) != str(root):
+                    raise ReconstructError(f"unsafe component tar entry: {member.name}")
                 if member.issym():
-                    target = posixpath.normpath((path.parent / member.linkname).as_posix())
-                    if member.linkname.startswith("/") or target == ".." or target.startswith("../"):
+                    target = (dest / path.parent / member.linkname).resolve()
+                    if os.path.commonpath((str(root), str(target))) != str(root):
                         raise ReconstructError(f"unsafe component tar link: {member.name}")
                 if member.islnk():
-                    target = posixpath.normpath(member.linkname)
-                    if member.linkname.startswith("/") or target == ".." or target.startswith("../"):
+                    target = (dest / posixpath.normpath(member.linkname)).resolve()
+                    if os.path.commonpath((str(root), str(target))) != str(root):
                         raise ReconstructError(f"unsafe component tar link: {member.name}")
-            archive.extractall(dest)
+                extracted_member = member
+                if member.isdir():
+                    directories.append(member)
+                    extracted_member = copy.copy(member)
+                    extracted_member.mode = 0o700
+                archive.extract(
+                    extracted_member,
+                    dest,
+                    set_attrs=not member.isdir(),
+                )
+            for member in sorted(directories, key=lambda item: item.name, reverse=True):
+                directory = dest / member.name
+                archive.chown(member, directory, numeric_owner=False)
+                archive.utime(member, directory)
+                archive.chmod(member, directory)
     except (OSError, tarfile.TarError) as error:
         raise ReconstructError(
             f"{blob.name} is not a component tar; refusing to substitute a raw digest blob"
@@ -85,6 +106,7 @@ def reconstruct(
     store = ArtifactStore(store_root) if store_root is not None else store_from_environment()
     buildset = lock["buildset"]
     components = lock["components"]
+    acquired = False
     pulled = {}
     root = Path(out_dir) / buildset
     root.parent.mkdir(parents=True, exist_ok=True)
@@ -101,19 +123,25 @@ def reconstruct(
                 raise ReconstructError(
                     f"{name} lock entry missing oci_reference, oci_digest, or unsigned_digest"
                 )
-            local = store.lookup(name, component, verification)
-            if local is not None:
-                if local["needs_reverify"]:
-                    try:
-                        verify_component(
-                            {**component, "component": name, "signed": True}, run=run
-                        )
-                        local = store.refresh_verification(name, component, verification)
-                    except (PublishError, ArtifactStoreError, OSError) as error:
-                        raise ReconstructError(str(error)) from error
-                dest = staged / name
-                shutil.copytree(local["tree"], dest, symlinks=True)
-                marker = local["marker"]
+            dest = staged / name
+            def _reverify():
+                verify_component(
+                    {**component, "component": name, "signed": True}, run=run
+                )
+
+            try:
+                materialized = store.materialize_local(
+                    name,
+                    component,
+                    verification,
+                    dest,
+                    reverify=_reverify,
+                )
+            except (ArtifactStoreError, PublishError, OSError) as error:
+                raise ReconstructError(str(error)) from error
+
+            if materialized is not None:
+                marker = materialized["marker"]
             else:
                 if shutil.which("cosign") is None:
                     raise ReconstructError("cosign is required to reconstruct")
@@ -145,6 +173,7 @@ def reconstruct(
                 except (ArtifactStoreError, OSError) as error:
                     raise ReconstructError(str(error)) from error
                 marker = stored["marker"]
+                acquired = True
             pulled[name] = {
                 "oci_digest": digest,
                 "oci_reference": reference,
@@ -152,6 +181,11 @@ def reconstruct(
                 "tree": str(root / name),
                 "unsigned_digest_path": str(root / name / marker),
             }
+        if acquired:
+            try:
+                store.gc(lock_path)
+            except (ArtifactStoreError, OSError) as error:
+                raise ReconstructError(str(error)) from error
         if root.exists():
             if tree_digest(root) != tree_digest(staged):
                 raise ReconstructError("existing reconstructed contents differ from signed artifacts")
