@@ -470,7 +470,7 @@ Status: source and policy gates pass locally. Runtime, remote-cache, transfer, a
 
 Changed behavior: `.github/workflows/bazel-ci.yml` replaces the separate pull-request, main, and iOS 15 workflows while preserving the required `Bazel matrix check` job name. One macOS job restores download caches, selects Xcode once, configures BuildBuddy once, builds the iOS 15-floor simulator app and UI-test bundle in one Bazel invocation, then installs and launches the same extracted `Orlix.app` on current and iOS 15.5 simulators. `make __bazel-apple-ci` owns orchestration. The retained `__bazel-ios15-simulator-gate` is runtime-only and contains no Bazel build or test command.
 
-BuildBuddy uses `grpcs://remote.buildbuddy.io`, compression, content-defined chunking, minimal downloads by default, BuildBuddy BES, the existing local disk cache, and instance `orlix/apple/bazel-9.2.0/xcode-17F113/v1`. `ORLIX_BAZEL_CACHE_EPOCH` defaults to `v1`. `ORLIX_BUILDBUDDY_CACHE_MODE` accepts only `normal`, `conserve`, or `off`. Main receives write access, same-repository pull requests receive a read-only key plus `--remote_upload_local_results=false`, and forks receive no key. Promotion, independent reconstruction, TestFlight, App Review, and App Store release do not enable BuildBuddy. The credential rc is created under `$RUNNER_TEMP` with mode `0600`, linked through the existing untracked `.bazelrc.local` import, and removed by an `if: always()` step.
+BuildBuddy uses `grpcs://remote.buildbuddy.io`, compression, content-defined chunking, minimal downloads by default, BuildBuddy BES, the existing local disk cache, and instance `orlix/apple/bazel-9.2.0/xcode-17F113/v1`. `ORLIX_BAZEL_CACHE_EPOCH` defaults to `v1`. `ORLIX_BUILDBUDDY_CACHE_MODE` accepts only `normal`, `conserve`, or `off`. Main selects `ORLIX_CI_BUILDBUDDY_WRITE_API_KEY`, same-repository pull requests select `ORLIX_CI_BUILDBUDDY_READ_API_KEY` plus `--remote_upload_local_results=false`, and forks receive no key. Promotion, independent reconstruction, TestFlight, App Review, and App Store release do not enable BuildBuddy. The credential rc is created under `$RUNNER_TEMP` with mode `0600`, linked through the existing untracked `.bazelrc.local` import, and removed by an `if: always()` step.
 
 The canonical workflow persists the checksum-verified Bazel repository cache and the iOS 15.5 download archive only from trusted `main`. It does not persist Bazel disk-cache or ccache results. The runtime cache key includes archive SHA-256 `71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150`. `artifacts.lock.json` remains unchanged at SHA-256 `d8b90ca1fa57a2e0cd61fb35335345e11f442c29219c225026923d110ffca174`, selecting buildset `ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d`.
 
@@ -478,8 +478,51 @@ Verification: 33 focused workflow and Make-routing tests passed. The cache-obser
 
 Current CI: PR [rudironsoni/Orlix#228](https://github.com/rudironsoni/Orlix/pull/228) was already merged before this checkpoint. Its head was `baac9c07c91a897fb0e062465cfcd0bd3e2ab168`. Run `34689170970` failed during checksum-declared ACL source acquisition because Savannah returned HTTP 502. It did not reach compilation. The new repository download cache addresses warm-host resilience, but no current-head workflow has proved it.
 
-Runtime and external gates: the exact iOS 15.5 archive downloaded successfully, but local installation needs an interactive administrator password. `xcrun simctl runtime add` rejected the older HFS package image with `mount_apfs exited with code 65`. The GitHub runner retains the existing passwordless Xcodes install path. Anonymous GHCR reads for `orlix/uapi`, `orlix/mlibc`, and `orlix/rootfs` returned `unauthorized: authentication required`; repository Actions access is `UNVERIFIED`. BuildBuddy keys, cache traffic, main and pull-request transfer per build, monthly projection, and the 80 GB ceiling are `UNVERIFIED` until account credentials and representative runs exist.
+Runtime and external gates: the exact iOS 15.5 archive downloaded successfully, but local installation needs an interactive administrator password. `xcrun simctl runtime add` rejected the older HFS package image with `mount_apfs exited with code 65`. The GitHub runner retains the existing passwordless Xcodes install path. Rudi reports that GHCR package Actions access and the `ORLIX_CI_BUILDBUDDY_WRITE_API_KEY` and `ORLIX_CI_BUILDBUDDY_READ_API_KEY` secrets are configured. Actual GHCR write access, BuildBuddy authentication, cache traffic, main and pull-request transfer per build, monthly projection, the repository variable value, and the 80 GB ceiling remain `UNVERIFIED` until representative trusted workflows run.
 
 The canonical workflow and BuildBuddy wiring share the one required workflow and one Make operation. Splitting them would publish an intermediate required check without the mandated cache setup on its sole runner, so this checkpoint keeps them atomic. The Cosign correction remains the separate preceding commit `185b9f9df5e2ded602ef471e7133bac316d7f66e`; `cosign public-key --help` confirms that deriving the public key from the private key file is supported. This checkpoint does not describe that correction as build-optimization completion.
 
 TAP remains stopped. No simulator runtime result, BuildBuddy performance result, transfer budget, promotion, App Store release, or physical-device claim is established.
+
+## Buildset-level promotion checkpoint
+
+Status: the source reconstruction and policy gates pass locally. Protected Cosign signing, GHCR publication, GitHub attestation, and signed schema-2 lock proposal creation remain `UNVERIFIED`, so this checkpoint does not activate a new buildset.
+
+Changed behavior: `make __bazel-promote-buildset` now builds `uapi`, `mlibc`, `rootfs`, and all four Kernel profile/destination components in one Bazel graph under clean root A, then repeats the same graph under clean root B. Both invocations use `--nouse_action_cache`, `--disk_cache=`, `--remote_cache=`, `--remote_executor=`, `--batch`, and `--config=promotion`. The promotion config disables ccache and retained Kernel, mlibc, and package state. The only reusable input store is Bazel's checksum-verified repository download cache.
+
+The Make operation stages each component from the two shared output bases and uses the existing full comparator. It compares paths, entry types, modes, file bytes, and symlink targets. The four Kernel products also validate `artifact-identity-v2`. The three legacy components retain explicit marker identities. Per-component promotion targets remain for diagnosis, but the protected workflow no longer uses them for reconstruction.
+
+`.github/workflows/bazel-promote.yml` is now the sole normal promotion authority. It invokes the buildset Make operation, publishes all seven components through the existing Cosign and GHCR targets, writes one signed lock proposal, and attests that proposal. The retired `.github/workflows/bazel-lock-proposal.yml` no longer joins seven separate runs. The workflow restores and saves only the Bazel repository cache. It does not persist Bazel action results, compiler objects, output bases, or retained build state. `artifacts.lock.json` is not changed by promotion.
+
+The aggregate proposal now binds a component type for every key plus the signing-key fingerprint, trust-policy digest, and verification-policy version. `make __bazel-lock-proposal` writes the proposal, Cosign signs its exact bytes into `buildset-lock-proposal.sigstore.json`, and Cosign verifies that bundle. `make __bazel-lock-from-signed` verifies the same bundle again immediately before atomic lock replacement. The protected trust policy names only `.github/workflows/bazel-promote.yml`, requires `bazel-promotion`, and permits `main` plus the exact pre-merge `fix/build-optimizations` branch requested for this protected proof. Pull-request events still have no automatic package-write path.
+
+Artifact identities from the local independent A/B proof:
+
+| Component | Matching A/B identity |
+| --- | --- |
+| `uapi` | `5664459c80f50b46ea399fd4d0e2c37154ba6ff7f96ec281e31aaf5f74e128a0` |
+| `mlibc` | `66bb6f940a1b7b4eac7ec3c5b7779debed2b921d575eb661e7f702813cb37a5d` |
+| `rootfs` | `68e0a778107c9402ee7f76b686fd05b55e8a522fe2556798a7a0a35db180b9f2` |
+| `kernel-release-iphoneos` | `c99bd1f1fe0208d9a294ec87ac60c262fdd91a5fbb1cd91dbec67606bfde5162` |
+| `kernel-release-iphonesimulator` | `a002988e35ec3228c22055970c18a86db1c0012895043b24e6d821c02c1d7702` |
+| `kernel-development-iphoneos` | `980868f597cb9cd94161870a832bc0454c6316fb83304b63468383de462d5abf` |
+| `kernel-development-iphonesimulator` | `a157b3084a9297801f30fd527f288f15ef32f9be7cffb3862e5c16fcfeb28393` |
+
+Verification results: the combined seven-target Bazel analysis passed. Clean build A executed 88 actions in 695.702 seconds with a 654.26-second critical path. Clean build B executed 88 actions in 692.427 seconds with a 651.75-second critical path. All seven A/B identities and staged product trees matched. The seven unsigned schema-2 proposals contain no OCI digest or signature. The final `artifacts.lock.json` SHA-256 remains `d8b90ca1fa57a2e0cd61fb35335345e11f442c29219c225026923d110ffca174`.
+
+Verification commands: `gmake __bazel-promote-buildset`; `PYTHONPATH=bazel/promotion python3 -m unittest discover -v -s bazel/promotion -p 'test_*.py'`; the same 63-test suite on `/usr/bin/python3`; `python3 -m unittest bazel.migration.test_make_routing bazel.migration.test_workflow_policy`; `actionlint .github/workflows/*.yml`; `zizmor .github/workflows`; `gmake __bazel-migration-inventory`; `gmake __bazel-migration-inventory-check`; `gmake __bazel-matrix-check`; `gmake test`; and `gmake docs-check agent-harness-check`. The clean-build evidence is under `Build/Bazel/promote/buildset/{a,b}/`, including `build-events.json`, `execution.json`, and `profile.json.gz`. Component proposals and staged comparisons are under `Build/Bazel/promote/<component>/`.
+
+Remaining gates: a protected workflow must publish all seven GHCR artifacts successfully before GHCR access is verified. The workflow must produce its GitHub attestation and signed buildset proposal before those claims are verified. Applying a verified schema-2 proposal to `artifacts.lock.json` remains an atomic transition after all seven artifacts pass pull, signature, and identity verification.
+
+Claims not established: no GHCR write, Cosign signature, signed buildset identity, lock activation, BuildBuddy transfer, simulator runtime, physical-device, TestFlight, App Review, or App Store result is claimed. TAP remains stopped. The user-owned `AGENTS.md` content, current signed `artifacts.lock.json`, and `third_party/swift/.build/` remain outside this checkpoint.
+
+Checkpoint status remains separate:
+
+- 6B1 Kernel promotion mechanics: VERIFIED LOCALLY.
+- 6B2 protected GHCR publication: UNVERIFIED.
+- 6B3 signed schema-2 activation: PENDING.
+- 6B4 promoted consumer cutover: PENDING.
+- Phase 6B: IN PROGRESS.
+- Canonical Apple CI and BuildBuddy: IN PROGRESS.
+
+Commit separation constraint: `f264e6d074d79079726ae07b45fe40a0b91516fe` already published the canonical Apple workflow and BuildBuddy configuration together before the current instruction. Splitting that published commit would require forbidden history rewriting and a force-push. The current work therefore preserves it and adds the corrected configured secret identifiers with the separately reviewable buildset-promotion checkpoint.

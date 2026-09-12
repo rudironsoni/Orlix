@@ -278,9 +278,10 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    @mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION)
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
     def test_schema2_buildset_applies_and_reuses_all_components(
-        self, public_key, verification
+        self, public_key, proposal_verification, verification
     ) -> None:
         calls: list[list[str]] = []
         with tempfile.TemporaryDirectory() as tmp:

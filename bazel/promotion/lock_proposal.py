@@ -10,6 +10,7 @@ from pathlib import Path
 
 from compare import require_sha256
 from locked_buildset import (
+    KERNEL_COMPONENTS,
     LEGACY_IDENTITY_FORMAT,
     SCHEMA1,
     SCHEMA2,
@@ -19,7 +20,7 @@ from locked_buildset import (
     required_components,
     validate_artifact_identity,
 )
-from publish import verify_component
+from publish import verification_context, verify_component
 
 EMPTY_LOCK = {"schema": 1, "buildset": None, "components": {}}
 
@@ -189,7 +190,12 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
         "kind": "lock-proposal",
         "signed": True,
         "buildset": buildset,
+        "component_types": {
+            name: "kernel-apple-product" if name in KERNEL_COMPONENTS else name
+            for name in sorted(components)
+        },
         "components": components,
+        "verification": verification_context(),
     }
     Path(path).write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     return proposal

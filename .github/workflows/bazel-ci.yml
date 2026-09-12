@@ -115,14 +115,14 @@ jobs:
       - name: Configure trusted BuildBuddy writes
         if: steps.buildbuddy.outputs.access == 'write'
         env:
-          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY_WRITE }}
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY }}
           ORLIX_BUILDBUDDY_ACCESS: write
         run: make __bazel-buildbuddy-configure
 
       - name: Configure read-only BuildBuddy access
         if: steps.buildbuddy.outputs.access == 'read'
         env:
-          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY_READ }}
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
           ORLIX_BUILDBUDDY_ACCESS: read
         run: make __bazel-buildbuddy-configure
 

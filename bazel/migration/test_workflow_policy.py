@@ -114,8 +114,10 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
-        self.assertIn("secrets.BUILDBUDDY_API_KEY_WRITE", workflow)
-        self.assertIn("secrets.BUILDBUDDY_API_KEY_READ", workflow)
+        self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
+        self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
+        self.assertNotIn("secrets.BUILDBUDDY_API_KEY_WRITE", workflow)
+        self.assertNotIn("secrets.BUILDBUDDY_API_KEY_READ", workflow)
         self.assertIn("head.repo.full_name == github.repository", workflow)
         self.assertIn("head.repo.full_name != github.repository", workflow)
         self.assertIn("ORLIX_BUILDBUDDY_CONTEXT", workflow)
@@ -135,17 +137,19 @@ class WorkflowPolicyTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch", text)
         self.assertIn("environment: bazel-promotion", text)
-        self.assertIn("make __bazel-promote-${{ inputs.component }}", text)
-        self.assertIn("make __bazel-publish-${{ inputs.component }}", text)
+        self.assertIn("make __bazel-promote-buildset", text)
+        self.assertIn('make "__bazel-publish-${component}"', text)
+        self.assertIn("make __bazel-lock-proposal", text)
         missing_key = text.split('if [ -z "${ORLIX_COSIGN_KEY}" ]; then', 1)[1].split("fi", 1)[0]
         self.assertIn("exit 1", missing_key)
         self.assertNotIn("exit 0", missing_key)
-        self.assertIn("github.ref == 'refs/heads/main'", text)
+        self.assertIn("github.event_name == 'workflow_dispatch'", text)
+        self.assertIn("github.repository == 'rudironsoni/Orlix'", text)
         self.assertIn("Cancel if derailed", text)
         self.assertIn("gh run cancel", text)
         self.assertIn("packages: write", text)
-        self.assertIn("signed-${{ inputs.component }}-${{ github.sha }}", text)
-        self.assertIn("${{ inputs.component }}-signed.json", text)
+        self.assertIn("signed-buildset-${{ github.sha }}", text)
+        self.assertIn("buildset-lock-proposal.json", text)
         self.assertIn('--registry-config "$ORLIX_ORAS_REGISTRY_CONFIG"', text)
         for component in (
             "kernel-release-iphoneos",
@@ -153,7 +157,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             "kernel-development-iphoneos",
             "kernel-development-iphonesimulator",
         ):
-            self.assertIn(f"          - {component}", text)
+            self.assertIn(f"Build/Bazel/promote/{component}/{component}-signed.json", text)
 
     def test_trust_policy_forbids_unsigned_main_lock_writes(self) -> None:
         import json
@@ -161,6 +165,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         policy = json.loads((ROOT / "bazel/promotion/trust-policy.json").read_text(encoding="utf-8"))
         self.assertIs(policy["unsigned_lock_writes_to_main"], False)
         self.assertIs(policy["mutable_latest_tag"], False)
+        self.assertEqual(policy["allowed_workflows"], [".github/workflows/bazel-promote.yml"])
+        self.assertEqual(policy["required_environment"], "bazel-promotion")
+        self.assertIn("refs/heads/fix/build-optimizations", policy["allowed_refs"])
 
     def test_nightly_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-nightly.yml").read_text(encoding="utf-8")
@@ -194,8 +201,18 @@ class WorkflowPolicyTests(unittest.TestCase):
 
     def test_promote_workflow_does_not_use_action_cache(self) -> None:
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("Dual-build without action cache", text)
-        self.assertNotIn("actions/cache@", text)
+        self.assertIn("actions/cache/restore@", text)
+        self.assertIn("actions/cache/save@", text)
+        self.assertIn("Bazel/repository-cache", text)
+        buildset = makefile.split("__bazel-promote-buildset:", 1)[1].split(
+            "define ORLIX_BAZEL_PUBLISH", 1
+        )[0]
+        self.assertIn("--nouse_action_cache", buildset)
+        self.assertIn("--disk_cache= --repository_cache=", buildset)
+        self.assertIn("--remote_cache= --remote_executor=", buildset)
+        self.assertIn("--config=promotion", buildset)
         self.assertIn('export ORLIX_COSIGN_KEY="file://${key_path}"', text)
         self.assertIn('cosign public-key --key "$key_path" > "$key_path.pub"', text)
         self.assertIn('export ORLIX_COSIGN_PUB="$key_path.pub"', text)
@@ -203,27 +220,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("oras login ghcr.io", text)
         self.assertIn("COSIGN_PASSWORD", text)
 
-    def test_lock_proposal_workflow_does_not_write_main(self) -> None:
-        text = (ROOT / ".github/workflows/bazel-lock-proposal.yml").read_text(encoding="utf-8")
-        self.assertIn("workflow_dispatch", text)
-        self.assertIn("environment: bazel-promotion", text)
+    def test_buildset_promotion_has_one_workflow_authority(self) -> None:
+        self.assertFalse((ROOT / ".github/workflows/bazel-lock-proposal.yml").exists())
+        text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-lock-proposal", text)
-        self.assertIn(".headSha == $sha", text)
-        self.assertIn('.conclusion == "success"', text)
-        components = {
-            "uapi": "uapi",
-            "mlibc": "mlibc",
-            "rootfs": "rootfs",
-            "kernel-release-iphoneos": "kernel_release_iphoneos",
-            "kernel-release-iphonesimulator": "kernel_release_iphonesimulator",
-            "kernel-development-iphoneos": "kernel_development_iphoneos",
-            "kernel-development-iphonesimulator": "kernel_development_iphonesimulator",
-        }
-        for component, input_name in components.items():
-            self.assertIn(f"      {input_name}_run_id:\n", text)
-            self.assertIn(f"run-id: ${{{{ inputs.{input_name}_run_id }}}}", text)
-            self.assertIn(f"signed-{component}-${{{{ github.sha }}}}", text)
-        self.assertIn("Cancel if derailed", text)
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)
         self.assertNotIn("--apply-lock", text)

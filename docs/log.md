@@ -15,6 +15,10 @@ The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-autho
 
 The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-authority.md) routes generated client output through a deterministic automation branch and generated pull request. The existing guard independently regenerates the output and requires an exact tree match before protected auto-merge. The main ruleset has no bypass actor.
 
+## [2026-09-12] build | Promote one verified component buildset
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) builds all seven components twice in two clean shared graphs, compares each complete product, and keeps the current lock unchanged. Protected manual automation publishes the verified components, signs and verifies one complete proposal, and permits atomic activation only after all component signatures and identities pass. Per-component builds remain diagnostic operations, and protected publication remains unverified until its workflow succeeds.
+
 ## [2026-09-12] build | Define canonical Apple CI and BuildBuddy policy
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) defines one Make-owned simulator build for current and iOS 15.5 runtime proof. BuildBuddy is the optional shared Bazel action cache with distinct main, same-repository pull-request, fork, promotion, nightly, and release policy. The manual transfer circuit breaker protects the 80 GB monthly operating ceiling. Runtime, transfer, and account-state proof remain separate checks.
