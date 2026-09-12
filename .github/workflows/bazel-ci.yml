@@ -153,10 +153,9 @@ jobs:
 
       - name: Run the Make-owned Apple CI operation
         env:
-          ORLIX_BAZEL_COMPONENT_MODE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'source' || 'promoted' }}
+          ORLIX_BAZEL_COMPONENT_MODE: ${{ github.event_name == 'pull_request' && 'source' || 'promoted' }}
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
           ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
-          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
         run: make __bazel-apple-ci
 
       - name: Save Bazel repository cache

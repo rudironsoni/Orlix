@@ -159,7 +159,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "eb6a32e0ff8ac9712ada9af25d48a963f110ec969d071422546bb101418ee333",
+      "source_sha256": "8978deb71be8ebd4f622f8a47a09f7c3fe99d1bc1a9feb985aa454bb36f8b63c",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -308,10 +308,9 @@
               {
                 "name": "Run the Make-owned Apple CI operation",
                 "env": {
-                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'source' || 'promoted' }}",
+                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ github.event_name == 'pull_request' && 'source' || 'promoted' }}",
                   "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}",
-                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}",
-                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json"
+                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}"
                 },
                 "run": "make __bazel-apple-ci"
               },

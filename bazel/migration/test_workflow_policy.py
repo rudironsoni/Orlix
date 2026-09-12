@@ -58,6 +58,10 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn(f'- "{path}"', text)
         for path in IOS15_RELEVANT_PATHS:
             self.assertIn(f'- "{path}"', text)
+        self.assertIn(
+            "github.event_name == 'pull_request' && 'source' || 'promoted'",
+            text,
+        )
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
@@ -119,7 +123,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("secrets.BUILDBUDDY_API_KEY_WRITE", workflow)
         self.assertNotIn("secrets.BUILDBUDDY_API_KEY_READ", workflow)
         self.assertIn("head.repo.full_name == github.repository", workflow)
-        self.assertIn("head.repo.full_name != github.repository", workflow)
+        self.assertIn("&& 'pr' || 'fork'", workflow)
         self.assertIn("ORLIX_BUILDBUDDY_CONTEXT", workflow)
         configure = makefile.split("__bazel-buildbuddy-configure:", 1)[1].split(
             "__bazel-buildbuddy-cleanup:", 1
