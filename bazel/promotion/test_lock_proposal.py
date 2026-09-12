@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from unittest import mock
@@ -30,7 +31,8 @@ class LockProposalTests(unittest.TestCase):
                 "buildset": locked_buildset.buildset_digest(components),
                 "components": components,
             }))
-            with mock.patch("publish.trusted_public_key", return_value="/unused.pub"), \
+            with mock.patch.dict(os.environ, {"ORLIX_ORAS_REGISTRY_CONFIG": ""}), \
+                 mock.patch("publish.trusted_public_key", return_value="/unused.pub"), \
                  mock.patch("publish.shutil.which", return_value="cosign"), \
                  mock.patch("publish.subprocess.run", side_effect=subprocess.CalledProcessError(1, "cosign", output="invalid signature")):
                 with self.assertRaisesRegex(ValueError, "invalid signature"):
