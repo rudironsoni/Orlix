@@ -3,7 +3,7 @@
   "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
   "workflows": {
     ".github/workflows/app-store-review.yml": {
-      "source_sha256": "38afaa5c6995d1564b0c2111edbe62b9fbdfd72aa397bd30577398240b36ad07",
+      "source_sha256": "9021a6613a966d54b60ea476a4de1fc440d9a82dadb9d57cab8db978adba49b6",
       "workflow": {
         "name": "Promote TestFlight beta to App Review",
         "on": {
@@ -42,7 +42,8 @@
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "with": {
                   "ref": "refs/tags/${{ inputs.beta_tag }}",
-                  "fetch-depth": 0
+                  "fetch-depth": 0,
+                  "persist-credentials": false
                 }
               },
               {
@@ -608,7 +609,7 @@
       }
     },
     ".github/workflows/grok-pr-review.yml": {
-      "source_sha256": "73f77368b853f53a3f441afe358363f1ec6bfbddcaf7b05cc091ab01d917bc27",
+      "source_sha256": "34908ae7fdfd47e970f477678533c5a04c94f162cf8cd53f63842a1348ec6762",
       "workflow": {
         "name": "Grok PR Review",
         "on": {
@@ -639,7 +640,8 @@
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "if": "${{ env.HAS_GROK_AUTH == 'true' }}",
                 "with": {
-                  "ref": "${{ github.event.pull_request.head.sha }}"
+                  "ref": "${{ github.event.pull_request.head.sha }}",
+                  "persist-credentials": false
                 }
               },
               {
@@ -905,7 +907,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "85d274791df347b82a44c8449ab772f99fc98b3e5a6605f6e721125eeb877fc9",
+      "source_sha256": "261c6fa3b7b4e262b6e20f4112274ddb477565a1ec6280e2aeb78bc559bb739d",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -948,7 +950,8 @@
                 "name": "Check out the release tag",
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "with": {
-                  "fetch-depth": 0
+                  "fetch-depth": 0,
+                  "persist-credentials": false
                 }
               },
               {
@@ -975,8 +978,12 @@
                 "uses": "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
                 "with": {
                   "ruby-version": "3.4.8",
-                  "bundler-cache": true
+                  "bundler-cache": false
                 }
+              },
+              {
+                "name": "Install pinned Ruby dependencies",
+                "run": "bundle install --jobs 4 --retry 3"
               },
               {
                 "name": "Install build tools",

@@ -526,3 +526,9 @@ Checkpoint status remains separate:
 - Canonical Apple CI and BuildBuddy: IN PROGRESS.
 
 Commit separation constraint: `f264e6d074d79079726ae07b45fe40a0b91516fe` already published the canonical Apple workflow and BuildBuddy configuration together before the current instruction. Splitting that published commit would require forbidden history rewriting and a force-push. The current work therefore preserves it and adds the corrected configured secret identifiers with the separately reviewable buildset-promotion checkpoint.
+
+## Workflow security checkpoint
+
+Homebrew `zizmor` 1.30.1 is now declared beside `actionlint`. Its first audit found three checkout credential-persistence findings and one writable Ruby cache finding in the tag-triggered TestFlight job. The narrow corrections set `persist-credentials: false` on those checkouts and replace the TestFlight Ruby cache with an explicit pinned dependency install. The final offline `zizmor .github/workflows` audit exited 0 with no findings and 14 repository suppressions. `actionlint .github/workflows/*.yml` exited 0.
+
+These static checks do not establish GitHub-hosted execution, TestFlight eligibility, App Review state, or release readiness. Canonical Apple CI and Phase 6B remain in progress. No release workflow was dispatched. TAP remains stopped.
