@@ -2,6 +2,7 @@ load(
     ":promoted.bzl",
     "orlix_locked_buildset",
     "orlix_promoted_apple_inputs",
+    "orlix_promoted_kernel",
     "orlix_promoted_rootfs",
     "orlix_promoted_sysroot",
     "orlix_promoted_uapi",
@@ -15,6 +16,28 @@ filegroup(
     name = "no_lock",
     srcs = [],
 )
+
+_KERNEL_VARIANTS = [
+    ("release", "iphoneos"),
+    ("release", "iphonesimulator"),
+    ("development", "iphoneos"),
+    ("development", "iphonesimulator"),
+]
+
+[
+    orlix_promoted_kernel(
+        name = "promoted_kernel_%s_%s" % (profile, destination),
+        archive = glob(["imported/kernel-%s-%s/product/OrlixKernel.a" % (profile, destination)], allow_empty = True),
+        component = "kernel-%s-%s" % (profile, destination),
+        development_dtb = glob(["imported/kernel-%s-%s/product/arch/orlix/boot/dts/development.dtb" % (profile, destination)], allow_empty = True),
+        identity_digest = glob(["imported/kernel-%s-%s/artifact-identity-v2.sha256" % (profile, destination)], allow_empty = True),
+        identity_manifest = glob(["imported/kernel-%s-%s/artifact-identity-v2.json" % (profile, destination)], allow_empty = True),
+        lock = ":locked_buildset",
+        release_dtb = glob(["imported/kernel-%s-%s/product/arch/orlix/boot/dts/release.dtb" % (profile, destination)], allow_empty = True),
+        tags = ["manual"],
+    )
+    for profile, destination in _KERNEL_VARIANTS
+]
 
 orlix_locked_buildset(
     name = "locked_buildset",

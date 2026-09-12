@@ -14,7 +14,16 @@ import tempfile
 from pathlib import Path
 
 from compare import require_sha256
-from locked_buildset import GHCR_REPOSITORY, require_component_name
+from locked_buildset import (
+    ARTIFACT_IDENTITY_V2_FORMAT,
+    ARTIFACT_IDENTITY_V2_VERSION,
+    GHCR_REPOSITORY,
+    LEGACY_IDENTITY_FORMAT,
+    LEGACY_IDENTITY_VERSION,
+    validate_artifact_identity,
+    validate_v2_product,
+    require_component_name,
+)
 
 DIGEST_RE = re.compile(r"Digest:\s*(sha256:[0-9a-f]{64})")
 
@@ -98,6 +107,9 @@ def sign_digest(
     artifact: str | None = None,
     repository: str | None = None,
     run=_run,
+    artifact_identity: dict | None = None,
+    identity_format: str | None = None,
+    identity_marker: str | None = None,
 ) -> dict:
     digest = require_sha256(digest)
     if not component:
@@ -115,6 +127,40 @@ def sign_digest(
     source = Path(artifact_path)
     if not source.exists():
         raise SignError(f"missing promote artifact: {artifact_path}")
+    if artifact_identity is None and identity_format is not None:
+        if identity_format == ARTIFACT_IDENTITY_V2_FORMAT:
+            artifact_identity = {
+                "format": ARTIFACT_IDENTITY_V2_FORMAT,
+                "version": ARTIFACT_IDENTITY_V2_VERSION,
+                "digest": digest,
+            }
+        elif identity_format == LEGACY_IDENTITY_FORMAT:
+            if not identity_marker:
+                raise SignError("legacy artifact identity marker is required")
+            artifact_identity = {
+                "format": LEGACY_IDENTITY_FORMAT,
+                "version": LEGACY_IDENTITY_VERSION,
+                "digest": digest,
+                "marker": identity_marker,
+            }
+        else:
+            raise SignError(f"unknown artifact identity format: {identity_format!r}")
+    typed_identity = None
+    if artifact_identity is not None:
+        try:
+            typed_identity = validate_artifact_identity(artifact_identity)
+            if typed_identity["digest"] != digest:
+                raise SignError("artifact identity digest differs from signing digest")
+            if typed_identity["format"] == ARTIFACT_IDENTITY_V2_FORMAT:
+                validate_v2_product(source, typed_identity, component)
+            else:
+                marker = source / typed_identity["marker"]
+                if not marker.is_file() or marker.is_symlink():
+                    raise SignError("legacy artifact identity marker is missing")
+                if marker.read_text(encoding="utf-8").strip() != digest:
+                    raise SignError("legacy artifact identity marker differs from signing digest")
+        except (OSError, UnicodeError, ValueError) as error:
+            raise SignError(str(error)) from error
     image = f"{repo}/{component}:{digest}"
     with tempfile.TemporaryDirectory(prefix="orlix-sign-") as tmp:
         blob = Path(tmp) / "component.tar"
@@ -153,14 +199,17 @@ def sign_digest(
             "--tlog-upload=false",
         ]
         run(cosign_sign + [signed_ref], env=env)
-    return {
-        "schema": 1,
+    payload = {
+        "schema": 2 if typed_identity is not None else 1,
         "component": component,
         "unsigned_digest": digest,
         "signed": True,
         "oci_digest": oci_digest,
         "oci_reference": signed_ref,
     }
+    if typed_identity is not None:
+        payload["artifact_identity"] = typed_identity
+    return payload
 
 
 def write_signed_proposal(
@@ -169,8 +218,19 @@ def write_signed_proposal(
     digest: str,
     artifact: str | None = None,
     repository: str | None = None,
+    artifact_identity: dict | None = None,
+    identity_format: str | None = None,
+    identity_marker: str | None = None,
 ) -> dict:
-    payload = sign_digest(digest, component, artifact=artifact, repository=repository)
+    payload = sign_digest(
+        digest,
+        component,
+        artifact=artifact,
+        repository=repository,
+        artifact_identity=artifact_identity,
+        identity_format=identity_format,
+        identity_marker=identity_marker,
+    )
     Path(path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
 
@@ -182,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--proposal", required=True)
     parser.add_argument("--artifact")
     parser.add_argument("--repository")
+    parser.add_argument("--artifact-identity-format")
+    parser.add_argument("--artifact-identity-marker")
     args = parser.parse_args(argv)
     write_signed_proposal(
         args.proposal,
@@ -189,6 +251,8 @@ def main(argv: list[str] | None = None) -> int:
         args.digest,
         artifact=args.artifact,
         repository=args.repository,
+        identity_format=args.artifact_identity_format,
+        identity_marker=args.artifact_identity_marker,
     )
     return 0
 

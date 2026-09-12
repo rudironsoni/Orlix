@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 import unittest
@@ -8,6 +9,8 @@ from pathlib import Path
 from unittest import mock
 
 import sign
+from bazel.content_digest import artifact_manifest_v2
+from locked_buildset import V2_DIGEST_FILENAME, V2_MANIFEST_FILENAME
 
 
 class SignTests(unittest.TestCase):
@@ -93,6 +96,71 @@ class SignTests(unittest.TestCase):
                 for call in calls
             )
         )
+
+    def test_v2_signing_recomputes_the_declared_product_identity(self) -> None:
+        os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"
+        observed = "11" * 32
+
+        class Result:
+            def __init__(self, stdout: str) -> None:
+                self.stdout = stdout
+
+        def fake_run(argv: list[str], env=None, cwd=None):
+            if argv[0] == "oras":
+                return Result("Digest: sha256:" + observed + "\n")
+            if argv[0] == "cosign":
+                return Result("")
+            raise AssertionError(argv)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact = Path(tmp) / "component"
+            product = artifact / "product"
+            product.mkdir(parents=True)
+            payload = product / "OrlixKernel.a"
+            payload.write_bytes(b"kernel")
+            dts = product / "arch" / "orlix" / "boot" / "dts"
+            dts.mkdir(parents=True)
+            development_dtb = dts / "development.dtb"
+            release_dtb = dts / "release.dtb"
+            development_dtb.write_bytes(b"development")
+            release_dtb.write_bytes(b"release")
+            manifest = artifact_manifest_v2(
+                artifacts={
+                    "OrlixKernel.a": payload,
+                    "arch/orlix/boot/dts/development.dtb": development_dtb,
+                    "arch/orlix/boot/dts/release.dtb": release_dtb,
+                }
+            )
+            (artifact / V2_MANIFEST_FILENAME).write_bytes(manifest)
+            digest = hashlib.sha256(manifest).hexdigest()
+            (artifact / V2_DIGEST_FILENAME).write_text(digest + "\n", encoding="ascii")
+            try:
+                with mock.patch("sign.shutil.which", return_value="/usr/bin/tool"):
+                    result = sign.sign_digest(
+                        digest,
+                        "kernel-release-iphoneos",
+                        artifact=str(artifact),
+                        repository="ghcr.io/rudironsoni/orlix",
+                        identity_format="artifact-identity-v2",
+                        run=fake_run,
+                    )
+                    (artifact / "symbols.txt").write_text("proof", encoding="utf-8")
+                    with self.assertRaisesRegex(
+                        sign.SignError,
+                        "outside its product boundary",
+                    ):
+                        sign.sign_digest(
+                            digest,
+                            "kernel-release-iphoneos",
+                            artifact=str(artifact),
+                            repository="ghcr.io/rudironsoni/orlix",
+                            identity_format="artifact-identity-v2",
+                            run=fake_run,
+                        )
+            finally:
+                os.environ.pop("ORLIX_COSIGN_KEY", None)
+        self.assertEqual(result["schema"], 2)
+        self.assertEqual(result["artifact_identity"]["digest"], digest)
 
     def test_public_password_env_is_mapped_for_cosign(self) -> None:
         os.environ["ORLIX_COSIGN_KEY"] = "file:///unused"

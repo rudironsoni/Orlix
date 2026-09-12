@@ -25,27 +25,42 @@ def substitute(lock_path: str, reconstruct_dir: str, out_path: str) -> dict:
         tree = root / name
         if not tree.is_dir():
             raise SubstituteError(f"missing reconstructed {name} tree: {tree}")
-        matches = [
-            path
-            for path in tree.rglob("*.sha256")
-            if path.read_text(encoding="utf-8").strip() == entry["unsigned_digest"]
-        ]
-        if not matches:
-            raise SubstituteError(
-                f"{name} reconstructed tree is missing unsigned digest {entry['unsigned_digest']}"
-            )
-        components[name] = {
+        identity = entry.get("artifact_identity")
+        component = {
             "unsigned_digest": entry["unsigned_digest"],
             "oci_digest": entry["oci_digest"],
             "oci_reference": entry["oci_reference"],
             "tree": str(tree),
-            "unsigned_digest_path": str(matches[0]),
         }
+        if identity is not None:
+            identity = locked_buildset.validate_artifact_identity(identity)
+            if identity["format"] == locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT:
+                try:
+                    locked_buildset.validate_v2_product(tree, identity, name)
+                except (OSError, TypeError, ValueError) as error:
+                    raise SubstituteError(str(error)) from error
+            else:
+                marker = tree / identity["marker"]
+                if not marker.is_file() or marker.is_symlink() or marker.read_text(encoding="utf-8").strip() != identity["digest"]:
+                    raise SubstituteError(f"{name} reconstructed tree has an invalid legacy artifact marker")
+            component["artifact_identity"] = identity
+        else:
+            matches = [
+                path
+                for path in tree.rglob("*.sha256")
+                if path.read_text(encoding="utf-8").strip() == entry["unsigned_digest"]
+            ]
+            if not matches:
+                raise SubstituteError(
+                    f"{name} reconstructed tree is missing unsigned digest {entry['unsigned_digest']}"
+                )
+            component["unsigned_digest_path"] = str(matches[0])
+        components[name] = component
     after = lock_file.read_bytes()
     if after != before:
         raise SubstituteError("substitute mutated artifacts.lock.json")
     payload = {
-        "schema": 1,
+        "schema": locked["schema"],
         "kind": "promoted-components",
         "buildset": locked["buildset"],
         "components": components,

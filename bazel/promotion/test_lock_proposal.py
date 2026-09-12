@@ -75,6 +75,18 @@ class LockProposalTests(unittest.TestCase):
             lock_proposal.write_lock_proposal(str(proposal_path), "uapi", digest)
             before = lock_path.read_text(encoding="utf-8")
             lock_proposal.assert_unsigned_lock_proposals([str(proposal_path)], str(lock_path))
+            lock_proposal.write_lock_proposal(
+                str(proposal_path),
+                "uapi",
+                digest,
+                artifact_identity={
+                    "format": "legacy-marker-sha256",
+                    "version": 1,
+                    "digest": digest,
+                    "marker": "uapi.sha256",
+                },
+            )
+            lock_proposal.assert_unsigned_lock_proposals([str(proposal_path)], str(lock_path))
             self.assertEqual(lock_path.read_text(encoding="utf-8"), before)
 
     def test_invalid_digest_fails_loud(self) -> None:

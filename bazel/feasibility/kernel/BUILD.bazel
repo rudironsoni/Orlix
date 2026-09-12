@@ -77,6 +77,107 @@ orlix_kernel_macho_archive(
     ],
 )
 
+[
+    orlix_kernel_macho_archive(
+        name = "kernel-%s-%s" % (profile, destination),
+        toolchain_identity = "@orlix_kernel_toolchain//:identity.json",
+        compiler_identity = "@orlix_kernel_toolchain//:compiler-identity.json",
+        profile = profile,
+        destination = destination,
+        configs = "//OrlixKernel/Sources:linux_configs",
+        extra_inputs = [
+            "//:make/tcti-proof-registry-provenance.mk",
+            "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
+        ],
+        kbuild_engine = "//OrlixKernel/Sources:kbuild_engine",
+        isa_tree = ":tcti_isa",
+        linux_makefile = "@orlix_linux_source//:Makefile",
+        linux_source = "@orlix_linux_source//:source",
+        overlay = "//OrlixKernel/Sources:linux_overlay",
+        patches = "//OrlixKernel/Sources:linux_patches",
+        tags = ["manual"],
+        visibility = [
+            "//Orlix:__pkg__",
+            "//bazel/feasibility:__subpackages__",
+            "//bazel/product:__pkg__",
+            "//bazel/promotion:__pkg__",
+        ],
+    )
+    for profile in [
+        "release",
+        "development",
+    ]
+    for destination in [
+        "iphoneos",
+        "iphonesimulator",
+    ]
+]
+
+config_setting(
+    name = "promoted_release_iphoneos",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:device",
+    ],
+    flag_values = {
+        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:profile": "release",
+    },
+)
+
+config_setting(
+    name = "promoted_release_iphonesimulator",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:simulator",
+    ],
+    flag_values = {
+        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:profile": "release",
+    },
+)
+
+config_setting(
+    name = "promoted_development_iphoneos",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:device",
+    ],
+    flag_values = {
+        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:profile": "development",
+    },
+)
+
+config_setting(
+    name = "promoted_development_iphonesimulator",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@build_bazel_apple_support//constraints:simulator",
+    ],
+    flag_values = {
+        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:profile": "development",
+    },
+)
+
+alias(
+    name = "selected_macho",
+    actual = select({
+        ":promoted_development_iphoneos": "//bazel/promotion:promoted_kernel_development_iphoneos",
+        ":promoted_development_iphonesimulator": "//bazel/promotion:promoted_kernel_development_iphonesimulator",
+        ":promoted_release_iphoneos": "//bazel/promotion:promoted_kernel_release_iphoneos",
+        ":promoted_release_iphonesimulator": "//bazel/promotion:promoted_kernel_release_iphonesimulator",
+        "//bazel/config:component_source": ":macho",
+    }),
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+        "//bazel/promotion:__pkg__",
+    ],
+)
+
 filegroup(
     name = "macho_boot_resources",
     srcs = [":macho"],

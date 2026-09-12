@@ -1,5 +1,6 @@
 """Mach-O OrlixKernel.a from Kbuild product compile. Does not invoke OrlixKernel/Makefile."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("//bazel/providers:kernel_info.bzl", "OrlixLinuxArchiveInfo")
 
@@ -87,7 +88,9 @@ def _kernel_macho_impl(ctx):
     symbols = ctx.actions.declare_file(ctx.label.name + "/symbols.txt")
     digest = ctx.actions.declare_file(ctx.label.name + "/archive.sha256")
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
-    boot_resources = ctx.actions.declare_directory(ctx.label.name + "/arch")
+    release_dtb = ctx.actions.declare_file(ctx.label.name + "/arch/orlix/boot/dts/release.dtb")
+    development_dtb = ctx.actions.declare_file(ctx.label.name + "/arch/orlix/boot/dts/development.dtb")
+    product = ctx.actions.declare_directory(ctx.label.name + "/product")
     overlay_files = ctx.files.overlay
     patch_files = ctx.files.patches
     config_files = ctx.files.configs
@@ -111,10 +114,12 @@ config_count="$8"
 engine_count="$9"
 extra_count="${10}"
 isa_tree="$exec_root/${11}"
-toolchain_identity="$exec_root/${13}"
-compiler_identity="$exec_root/${14}"
-boot_resources="$exec_root/${12}"
-shift 14
+release_dtb="$exec_root/${12}"
+development_dtb="$exec_root/${13}"
+product="$exec_root/${14}"
+toolchain_identity="$exec_root/${15}"
+compiler_identity="$exec_root/${16}"
+shift 16
 overlay_paths=()
 i=0
 while [ "$i" -lt "$overlay_count" ]; do
@@ -224,11 +229,15 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
 built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"
-/bin/mkdir -p "$boot_resources/orlix/boot/dts"
+/bin/mkdir -p "$(/usr/bin/dirname "$release_dtb")" "$(/usr/bin/dirname "$development_dtb")" "$product/arch/orlix/boot/dts"
 for dtb in release development; do
   source_dtb="$work/OrlixKernel/build/$PROFILE/arch/orlix/boot/dts/$dtb.dtb"
   test -s "$source_dtb"
-  /bin/cp "$source_dtb" "$boot_resources/orlix/boot/dts/$dtb.dtb"
+  if [ "$dtb" = release ]; then
+    /bin/cp "$source_dtb" "$release_dtb"
+  else
+    /bin/cp "$source_dtb" "$development_dtb"
+  fi
 done
 nm_cmd="$(/usr/bin/command -v llvm-nm)"
 if [ -z "$nm_cmd" ]; then nm_cmd="$(/usr/bin/command -v nm)"; fi
@@ -240,6 +249,9 @@ test -n "$nm_cmd"
   exit 1
 }
 /bin/cp "$built" "$archive_out"
+/bin/cp "$archive_out" "$product/OrlixKernel.a"
+/bin/cp "$release_dtb" "$product/arch/orlix/boot/dts/release.dtb"
+/bin/cp "$development_dtb" "$product/arch/orlix/boot/dts/development.dtb"
 digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 /usr/bin/printf '%s\n' '{' \
@@ -269,7 +281,9 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             str(len(engine_files)),
             str(len(extra_files)),
             isa_tree.path,
-            boot_resources.path,
+            release_dtb.path,
+            development_dtb.path,
+            product.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
         ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [f.path for f in extra_files],
@@ -277,22 +291,50 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             direct = [script, ctx.file.linux_makefile, isa_tree, ctx.file.toolchain_identity, ctx.file.compiler_identity] + overlay_files + patch_files + config_files + engine_files + extra_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
-        outputs = [archive, symbols, digest, manifest, boot_resources],
+        outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
         use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
+    artifact_identity = declare_artifact_identity(
+        ctx,
+        "kernel",
+        ctx.file._artifact_identity_serializer,
+        artifacts = {
+            "OrlixKernel.a": archive,
+            "arch/orlix/boot/dts/development.dtb": development_dtb,
+            "arch/orlix/boot/dts/release.dtb": release_dtb,
+        },
+    )
     return [
-        DefaultInfo(files = depset([archive, symbols, digest, manifest, boot_resources])),
+        DefaultInfo(files = depset([
+            archive,
+            symbols,
+            digest,
+            manifest,
+            release_dtb,
+            development_dtb,
+            product,
+            artifact_identity.manifest,
+            artifact_identity.digest,
+        ])),
         OutputGroupInfo(
             archive = depset([archive]),
             symbols = depset([symbols]),
             manifest = depset([manifest]),
-            boot_resources = depset([boot_resources]),
+            product = depset([product]),
+            boot_resources = depset([release_dtb, development_dtb]),
+            artifact_identity = depset([artifact_identity.manifest, artifact_identity.digest]),
+            artifact_identity_manifest = depset([artifact_identity.manifest]),
+            artifact_identity_digest = depset([artifact_identity.digest]),
         ),
         OrlixLinuxArchiveInfo(
             archive = archive,
             build_manifest = manifest,
+            product = product,
+            artifact_identity_digest = artifact_identity.digest,
+            artifact_identity_manifest = artifact_identity.manifest,
+            boot_resources = depset([release_dtb, development_dtb]),
             destination = ctx.attr.destination,
             profile = ctx.attr.profile,
             source_input_digest = digest,
@@ -315,6 +357,10 @@ orlix_kernel_macho_archive = rule(
         "isa_tree": attr.label(allow_single_file = True, mandatory = True),
         "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
     },
 )
 

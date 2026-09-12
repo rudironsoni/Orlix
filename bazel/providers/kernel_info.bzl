@@ -10,11 +10,15 @@ OrlixPreparedLinuxInfo = provider(
 )
 
 OrlixLinuxArchiveInfo = provider(
-    doc = "Provides one private Linux archive without exposing installed UAPI.",
+    doc = "Provides one private Linux product without exposing installed UAPI.",
     fields = {
         "archive": "Platform archive.",
+        "artifact_identity_digest": "Canonical artifact-identity-v2 digest for the delivered product.",
+        "artifact_identity_manifest": "Canonical artifact-identity-v2 manifest for the delivered product.",
+        "boot_resources": "Delivered device-tree resource files.",
         "build_manifest": "Canonical component build manifest.",
         "destination": "Apple destination for the archive.",
+        "product": "Product tree containing the archive and delivered device trees.",
         "profile": "Orlix release or development profile.",
         "source_input_digest": "Prepared Linux source input digest.",
         "symbol_manifest": "Exported and required symbol manifest.",

@@ -408,3 +408,36 @@ Raw evidence resides under `Build/AgentHarness/bazel-migration/recovery-checkpoi
 Independent review returned PASS after the ordered tar extraction preserved read-only directory metadata, rejected chained symlink escapes, and malformed lease directories stopped aborting GC.
 
 Phase 6B (kernel promotion into the signed buildset), Phase 7 through 10, physical-device validation, TAP, runtime readiness, cutover, and release remain separate future gates. Untracked `.build/` and machine state remain excluded.
+
+## Checkpoint 6B: Kernel promotion foundation
+
+Phase 6B local foundation: VERIFIED locally. Full Phase 6B acceptance remains open until protected automation signs and publishes all seven components, applies one signed schema-2 lock, and atomically switches Kernel consumers to the promoted variants.
+
+Four independently addressable Kernel components now exist for release and development on iphoneos and iphonesimulator. Each component's `artifact-identity-v2` covers exactly `OrlixKernel.a`, `arch/orlix/boot/dts/development.dtb`, and `arch/orlix/boot/dts/release.dtb`. Compiler, symbol, proof, provenance, OCI, and output-base identity stay outside that content identity.
+
+| Component | Independent A/B artifact identity |
+| --- | --- |
+| `kernel-release-iphoneos` | `c99bd1f1fe0208d9a294ec87ac60c262fdd91a5fbb1cd91dbec67606bfde5162` |
+| `kernel-release-iphonesimulator` | `a002988e35ec3228c22055970c18a86db1c0012895043b24e6d821c02c1d7702` |
+| `kernel-development-iphoneos` | `980868f597cb9cd94161870a832bc0454c6316fb83304b63468383de462d5abf` |
+| `kernel-development-iphonesimulator` | `a157b3084a9297801f30fd527f288f15ef32f9be7cffb3862e5c16fcfeb28393` |
+
+Every Make-owned promotion proof used two isolated output bases with Bazel action reuse, remote cache and execution, ccache, and retained Kernel state disabled. Each target compared the canonical identities and exited 0 only after the expected unsigned signing probe failed with `ORLIX_COSIGN_KEY is required to sign; refusing to invent a signature`.
+
+Schema 1 parsing and buildset digest behavior remain unchanged for the current signed `uapi`, `mlibc`, and `rootfs` lock. Schema 2 binds each component key to a typed artifact identity and immutable OCI digest. It requires explicit legacy marker identities for the three existing components and `artifact-identity-v2` for all four Kernel variants. Kernel packages contain only `product/`, `artifact-identity-v2.json`, and `artifact-identity-v2.sha256`; trust transitions recompute the product identity before reuse.
+
+One integration test assembles and applies a complete synthetic seven-component signed schema-2 proposal, performs seven cold signature checks and OCI pulls, stores each verified object, then reconstructs the same buildset from a second consumer with zero network-tool calls. This proves the local contract without inventing a signature or writing the live lock.
+
+Verification passed:
+
+- 63 promotion tests passed on `python3`, exit 0.
+- 63 promotion tests passed on `/usr/bin/python3`, exit 0.
+- 29 focused Make-routing and workflow-policy tests passed, exit 0.
+- `make __bazel-matrix-check` exited 0 with 18 Make routing tests and 36 passing Bazel analysis tests.
+- `make test` exited 0 after building the current Kernel and KUnit objects; it did not execute product runtime validation.
+- `make agent-harness-check` exited 0 with 13 lifecycle-hook tests, current generated files, and zero documentation problems.
+- `artifacts.lock.json` remains byte-unchanged.
+
+Independent review returned PASS with no material finding after the schema-1 compatibility, schema-2 identity contract, Kernel product boundary, promoted shell arguments, workflow routing, and final integration proof were inspected. The reviewer did not rerun builds or tests.
+
+Protected signing, GHCR publication, signed schema-2 lock activation, promoted Kernel target execution against imported artifacts, and consumer cutover remain open. Phase 7 through Phase 10, runtime readiness, TAP, physical-device validation, authority cutover, and release remain separate gates. `third_party/swift/.build/` remains excluded.

@@ -62,6 +62,23 @@ macho_no_wrapper_makefile_test(
     target_under_test = "//bazel/feasibility/kernel:macho",
 )
 
+[
+    macho_no_wrapper_makefile_test(
+        name = "macho_%s_%s_product_identity_test" % (profile, destination),
+        expected_destination = destination,
+        expected_profile = profile,
+        target_under_test = "//bazel/feasibility/kernel:kernel-%s-%s" % (profile, destination),
+    )
+    for profile in [
+        "release",
+        "development",
+    ]
+    for destination in [
+        "iphoneos",
+        "iphonesimulator",
+    ]
+]
+
 variant_stamp_test(
     name = "uapi_iphonesimulator_release_stamp_test",
     expected_destination = "iphonesimulator",

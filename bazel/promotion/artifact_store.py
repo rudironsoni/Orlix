@@ -17,12 +17,18 @@ import uuid
 from pathlib import Path
 
 from compare import tree_digest
-from locked_buildset import load_locked_buildset
+from locked_buildset import (
+    ARTIFACT_IDENTITY_V2_FORMAT,
+    LEGACY_IDENTITY_FORMAT,
+    LEGACY_IDENTITY_VERSION,
+    entry_artifact_digest,
+    load_locked_buildset,
+    validate_artifact_identity,
+    validate_v2_product,
+)
 
 
 STORE_SCHEMA = 1
-LEGACY_IDENTITY_FORMAT = "legacy-marker-sha256"
-LEGACY_IDENTITY_VERSION = 1
 DEFAULT_STORE = Path.home() / "Library" / "Caches" / "Orlix" / "Artifacts"
 MAX_BYTES = 30 * 1024 * 1024 * 1024
 MAX_AGE_SECONDS = 30 * 24 * 60 * 60
@@ -138,6 +144,8 @@ class ArtifactStore:
 
     @staticmethod
     def _expected_identity(entry: dict, marker: str) -> dict:
+        if entry.get("artifact_identity") is not None:
+            return validate_artifact_identity(entry["artifact_identity"])
         return {
             "format": LEGACY_IDENTITY_FORMAT,
             "version": LEGACY_IDENTITY_VERSION,
@@ -168,8 +176,12 @@ class ArtifactStore:
             raise ArtifactStoreError("promoted artifact verification schema is invalid")
         if not isinstance(record.get("component"), str) or record.get("component") != component:
             raise ArtifactStoreError("promoted artifact component does not match the lock")
-        if not _valid_digest(record.get("unsigned_digest")) or record.get("unsigned_digest") != entry["unsigned_digest"]:
-            raise ArtifactStoreError("promoted artifact legacy digest does not match the lock")
+        try:
+            expected_digest = entry_artifact_digest(entry)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ArtifactStoreError("promoted artifact artifact identity is invalid") from error
+        if not _valid_digest(record.get("unsigned_digest")) or record.get("unsigned_digest") != expected_digest:
+            raise ArtifactStoreError("promoted artifact digest does not match the lock")
         if not isinstance(record.get("oci_digest"), str) or not isinstance(record.get("oci_reference"), str) or record.get("oci_digest") != entry["oci_digest"] or record.get("oci_reference") != entry["oci_reference"]:
             raise ArtifactStoreError("promoted artifact OCI identity does not match the lock")
         if manifest != self._expected_manifest(component, entry):
@@ -183,24 +195,37 @@ class ArtifactStore:
         identity = record.get("artifact_identity")
         if not isinstance(identity, dict):
             raise ArtifactStoreError("promoted artifact identity must be a JSON object")
-        marker = identity.get("marker")
-        if identity.get("format") != LEGACY_IDENTITY_FORMAT or identity.get("version") != LEGACY_IDENTITY_VERSION or isinstance(identity.get("version"), bool):
-            raise ArtifactStoreError("promoted artifact identity format is not the locked legacy marker format")
-        if identity.get("digest") != entry["unsigned_digest"] or not _safe_relative(marker):
-            raise ArtifactStoreError("promoted artifact legacy identity does not match the lock")
-        marker_path = tree / marker
-        if not marker_path.is_file() or marker_path.is_symlink():
-            raise ArtifactStoreError("promoted artifact unsigned digest marker is missing")
         try:
-            tree_real = tree.resolve()
-            marker_real = marker_path.resolve()
-            if os.path.commonpath((str(tree_real), str(marker_real))) != str(tree_real):
-                raise ArtifactStoreError("promoted artifact marker escapes its tree")
-            marker_text = marker_path.read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeError) as error:
-            raise ArtifactStoreError("promoted artifact unsigned digest marker is unreadable") from error
-        if marker_text != entry["unsigned_digest"]:
-            raise ArtifactStoreError("promoted artifact unsigned digest marker differs from the lock")
+            locked_identity = validate_artifact_identity(
+                entry["artifact_identity"]
+            ) if entry.get("artifact_identity") is not None else None
+            stored_identity = validate_artifact_identity(identity)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ArtifactStoreError("promoted artifact identity is invalid") from error
+        if locked_identity is not None and stored_identity != locked_identity:
+            raise ArtifactStoreError("promoted artifact identity does not match the lock")
+        if stored_identity["digest"] != expected_digest:
+            raise ArtifactStoreError("promoted artifact identity digest does not match the lock")
+        marker = stored_identity.get("marker")
+        if stored_identity["format"] == LEGACY_IDENTITY_FORMAT:
+            marker_path = tree / marker
+            if not marker_path.is_file() or marker_path.is_symlink():
+                raise ArtifactStoreError("promoted artifact unsigned digest marker is missing")
+            try:
+                tree_real = tree.resolve()
+                marker_real = marker_path.resolve()
+                if os.path.commonpath((str(tree_real), str(marker_real))) != str(tree_real):
+                    raise ArtifactStoreError("promoted artifact marker escapes its tree")
+                marker_text = marker_path.read_text(encoding="utf-8").strip()
+            except (OSError, UnicodeError) as error:
+                raise ArtifactStoreError("promoted artifact unsigned digest marker is unreadable") from error
+            if marker_text != expected_digest:
+                raise ArtifactStoreError("promoted artifact unsigned digest marker differs from the lock")
+        else:
+            try:
+                validate_v2_product(tree, stored_identity, component)
+            except (OSError, TypeError, ValueError) as error:
+                raise ArtifactStoreError(str(error)) from error
         blob_record = record.get("blob")
         if not isinstance(blob_record, dict):
             raise ArtifactStoreError("promoted artifact blob record must be a JSON object")
@@ -220,6 +245,7 @@ class ArtifactStore:
             "object": object_dir,
             "tree": tree,
             "marker": marker,
+            "artifact_identity": stored_identity,
             "record": record,
             "verification": verification,
         }
@@ -272,7 +298,10 @@ class ArtifactStore:
                 raise ArtifactStoreError(f"local materialization destination already exists: {target}")
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(found["tree"], target, symlinks=True)
-            return {"marker": found["marker"]}
+            return {
+                "marker": found["marker"],
+                "artifact_identity": found["artifact_identity"],
+            }
 
     def _refresh_unlocked(self, component: str, entry: dict, verification: dict) -> dict:
         found = self._validate(component, entry)
@@ -299,7 +328,6 @@ class ArtifactStore:
             raise ArtifactStoreError(f"{component} pull did not write component.tar")
         if tree_path.is_symlink() or not tree_path.is_dir():
             raise ArtifactStoreError(f"{component} extracted tree is missing")
-        marker = _unsigned_marker(tree_path, entry["unsigned_digest"], component)
         with self._locked():
             staging_parent = self.root / ".staging"
             staging_parent.mkdir(parents=True, exist_ok=True)
@@ -310,16 +338,28 @@ class ArtifactStore:
                 staged_object.mkdir()
                 shutil.copyfile(blob_path, staged_object / "component.tar")
                 shutil.copytree(tree_path, staged_tree, symlinks=True)
+                if entry.get("artifact_identity") is not None:
+                    identity = validate_artifact_identity(entry["artifact_identity"])
+                    if identity["format"] == ARTIFACT_IDENTITY_V2_FORMAT:
+                        validate_v2_product(staged_tree, identity, component)
+                    else:
+                        marker = identity["marker"]
+                        marker_path = staged_tree / marker
+                        if not marker_path.is_file() or marker_path.is_symlink() or marker_path.read_text(encoding="utf-8").strip() != identity["digest"]:
+                            raise ArtifactStoreError("promoted artifact legacy identity marker differs from the lock")
+                else:
+                    marker = _unsigned_marker(staged_tree, entry_artifact_digest(entry), component)
+                    identity = self._expected_identity(entry, marker)
                 tree_digest_value = tree_digest(staged_tree)
                 blob_digest = _sha256_file(staged_object / "component.tar")
                 record = {
                     "schema": STORE_SCHEMA,
                     "kind": "orlix-promoted-artifact",
                     "component": component,
-                    "unsigned_digest": entry["unsigned_digest"],
+                    "unsigned_digest": entry_artifact_digest(entry),
                     "oci_digest": entry["oci_digest"],
                     "oci_reference": entry["oci_reference"],
-                    "artifact_identity": self._expected_identity(entry, marker),
+                    "artifact_identity": identity,
                     "oci_manifest": {
                         "digest": entry["oci_digest"],
                         "reference": entry["oci_reference"],
@@ -383,8 +423,9 @@ class ArtifactStore:
                 payload = json.loads(Path(lock_path).read_text(encoding="utf-8"))
                 if not isinstance(payload, dict) or not isinstance(payload.get("components"), dict):
                     raise ArtifactStoreError("promoted lock must contain a component object")
+                required = tuple(payload["components"]) if payload.get("schema", 1) == 1 else None
                 locked = load_locked_buildset(
-                    str(lock_path), required=tuple(payload["components"])
+                    str(lock_path), required=required
                 )
                 pinned.update(entry["oci_digest"] for entry in locked["components"].values())
             except (KeyError, OSError, ValueError) as error:

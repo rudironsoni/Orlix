@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -8,6 +9,12 @@ from pathlib import Path
 
 import compare
 from bazel.content_digest import artifact_identity_v2, artifact_manifest_v2
+from locked_buildset import (
+    ARTIFACT_IDENTITY_V2_FORMAT,
+    ARTIFACT_IDENTITY_V2_VERSION,
+    V2_DIGEST_FILENAME,
+    V2_MANIFEST_FILENAME,
+)
 
 
 class PromotionCompareTests(unittest.TestCase):
@@ -151,6 +158,66 @@ class PromotionCompareTests(unittest.TestCase):
             (second / "binary").write_bytes(b"different")
             with self.assertRaisesRegex(ValueError, "contents differ"):
                 compare.compare_trees(str(first), str(second))
+
+    def test_v2_component_contract_recomputes_product_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            roots = [Path(tmp) / name for name in ("a", "b")]
+            for root in roots:
+                product = root / "product"
+                product.mkdir(parents=True)
+                archive = product / "OrlixKernel.a"
+                archive.write_bytes(b"kernel")
+                dts = product / "arch" / "orlix" / "boot" / "dts"
+                dts.mkdir(parents=True)
+                development_dtb = dts / "development.dtb"
+                release_dtb = dts / "release.dtb"
+                development_dtb.write_bytes(b"development")
+                release_dtb.write_bytes(b"release")
+                manifest = artifact_manifest_v2(
+                    artifacts={
+                        "OrlixKernel.a": archive,
+                        "arch/orlix/boot/dts/development.dtb": development_dtb,
+                        "arch/orlix/boot/dts/release.dtb": release_dtb,
+                    }
+                )
+                (root / V2_MANIFEST_FILENAME).write_bytes(manifest)
+                (root / V2_DIGEST_FILENAME).write_text(
+                    hashlib.sha256(manifest).hexdigest() + "\n", encoding="ascii"
+                )
+            digest = compare.compare_trees(
+                str(roots[0]),
+                str(roots[1]),
+                artifact_format=ARTIFACT_IDENTITY_V2_FORMAT,
+                component="kernel-release-iphoneos",
+            )
+            self.assertEqual(len(digest), 64)
+            (roots[1] / "product" / "extra.bin").write_bytes(b"unexpected")
+            with self.assertRaisesRegex(ValueError, "product files differ"):
+                compare.compare_trees(
+                    str(roots[0]),
+                    str(roots[1]),
+                    artifact_format=ARTIFACT_IDENTITY_V2_FORMAT,
+                    component="kernel-release-iphoneos",
+                )
+
+    def test_v2_proposal_preserves_typed_identity(self) -> None:
+        digest = "a" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            proposal = Path(tmp) / "proposal.json"
+            compare.write_proposal(
+                str(proposal),
+                "kernel-release-iphoneos",
+                digest,
+                artifact_identity={
+                    "format": ARTIFACT_IDENTITY_V2_FORMAT,
+                    "version": ARTIFACT_IDENTITY_V2_VERSION,
+                    "digest": digest,
+                },
+            )
+            payload = json.loads(proposal.read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema"], 2)
+        self.assertEqual(payload["artifact_identity"]["format"], ARTIFACT_IDENTITY_V2_FORMAT)
+        self.assertEqual(payload["artifact_identity"]["version"], ARTIFACT_IDENTITY_V2_VERSION)
 
     def test_matching_digests_write_unsigned_proposal(self) -> None:
         digest = "a" * 64

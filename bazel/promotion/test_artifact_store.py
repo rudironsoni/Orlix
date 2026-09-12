@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import tarfile
@@ -13,6 +14,7 @@ from unittest import mock
 import artifact_store
 import locked_buildset
 import reconstruct
+from bazel.content_digest import artifact_manifest_v2
 
 
 ENTRY = {
@@ -70,6 +72,59 @@ class ArtifactStoreTests(unittest.TestCase):
             self.assertEqual(record["artifact_identity"]["version"], 1)
             self.assertEqual(record["artifact_identity"]["digest"], ENTRY["unsigned_digest"])
             self.assertEqual(store.lookup("uapi", ENTRY, VERIFICATION)["needs_reverify"], False)
+
+    def test_publish_and_lookup_recompute_v2_product_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tree = root / "v2-tree"
+            product = tree / "product"
+            product.mkdir(parents=True)
+            archive = product / "OrlixKernel.a"
+            dts = product / "arch" / "orlix" / "boot" / "dts"
+            dts.mkdir(parents=True)
+            development_dtb = dts / "development.dtb"
+            release_dtb = dts / "release.dtb"
+            archive.write_bytes(b"kernel")
+            development_dtb.write_bytes(b"development")
+            release_dtb.write_bytes(b"release")
+            manifest = artifact_manifest_v2(
+                artifacts={
+                    "OrlixKernel.a": archive,
+                    "arch/orlix/boot/dts/development.dtb": development_dtb,
+                    "arch/orlix/boot/dts/release.dtb": release_dtb,
+                }
+            )
+            (tree / locked_buildset.V2_MANIFEST_FILENAME).write_bytes(manifest)
+            digest = hashlib.sha256(manifest).hexdigest()
+            (tree / locked_buildset.V2_DIGEST_FILENAME).write_text(digest + "\n", encoding="ascii")
+            entry = {
+                "unsigned_digest": digest,
+                "artifact_identity": {
+                    "format": locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT,
+                    "version": locked_buildset.ARTIFACT_IDENTITY_V2_VERSION,
+                    "digest": digest,
+                },
+                "oci_digest": "sha256:" + ("bc" * 32),
+                "oci_reference": "ghcr.io/rudironsoni/orlix/kernel-release-iphoneos@sha256:" + ("bc" * 32),
+            }
+            blob = root / "component.tar"
+            with tarfile.open(blob, "w") as archive_tar:
+                archive_tar.add(tree, arcname=".")
+            store = artifact_store.ArtifactStore(root / "store")
+            store.publish_download("kernel-release-iphoneos", entry, blob, tree, VERIFICATION)
+            self.assertIsNotNone(store.lookup("kernel-release-iphoneos", entry, VERIFICATION))
+            stored_archive = (
+                store.root
+                / "objects"
+                / "oci"
+                / "sha256"
+                / ("bc" * 32)
+                / "tree"
+                / "product"
+                / "OrlixKernel.a"
+            )
+            stored_archive.write_bytes(b"changed")
+            self.assertIsNone(store.lookup("kernel-release-iphoneos", entry, VERIFICATION))
 
     def test_corrupt_object_is_not_a_warm_hit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -9,7 +9,16 @@ import tempfile
 from pathlib import Path
 
 from compare import require_sha256
-from locked_buildset import buildset_digest, load_locked_buildset
+from locked_buildset import (
+    LEGACY_IDENTITY_FORMAT,
+    SCHEMA1,
+    SCHEMA2,
+    buildset_digest,
+    entry_artifact_digest,
+    load_locked_buildset,
+    required_components,
+    validate_artifact_identity,
+)
 from publish import verify_component
 
 EMPTY_LOCK = {"schema": 1, "buildset": None, "components": {}}
@@ -26,17 +35,34 @@ def assert_lock_unsigned_empty(path: str) -> dict:
     return lock
 
 
-def write_lock_proposal(path: str, component: str, unsigned_digest: str) -> dict:
+def write_lock_proposal(
+    path: str,
+    component: str,
+    unsigned_digest: str,
+    artifact_identity: dict | None = None,
+) -> dict:
     digest = require_sha256(unsigned_digest)
     if not component:
         raise ValueError("lock proposal component name is required")
+    if artifact_identity is None:
+        component_entry = {"unsigned_digest": digest}
+        schema = SCHEMA1
+    else:
+        identity = validate_artifact_identity(artifact_identity)
+        if identity["digest"] != digest:
+            raise ValueError("artifact identity digest differs from lock proposal digest")
+        component_entry = {
+            "unsigned_digest": digest,
+            "artifact_identity": identity,
+        }
+        schema = SCHEMA2
     payload = {
-        "schema": 1,
+        "schema": schema,
         "kind": "lock-proposal",
         "signed": False,
         "buildset": None,
         "oci_digest": None,
-        "components": {component: {"unsigned_digest": digest}},
+        "components": {component: component_entry},
     }
     Path(path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
@@ -56,10 +82,31 @@ def assert_unsigned_lock_proposals(paths: list[str], lock_path: str) -> None:
         if len(names) != 1:
             raise ValueError(f"unsigned lock proposal must name one component: {path}")
         name = names[0]
-        unsigned = require_sha256(payload["components"][name]["unsigned_digest"])
-        want = (components.get(name) or {}).get("unsigned_digest")
-        if want != unsigned:
-            raise ValueError(f"{name} unsigned digest {unsigned} does not match lock {want}")
+        entry = payload["components"][name]
+        schema = payload.get("schema", SCHEMA1)
+        if schema == SCHEMA1:
+            unsigned = require_sha256(entry["unsigned_digest"])
+            want = (components.get(name) or {}).get("unsigned_digest")
+            if want != unsigned:
+                raise ValueError(f"{name} unsigned digest {unsigned} does not match lock {want}")
+        elif schema == SCHEMA2:
+            identity = validate_artifact_identity(entry.get("artifact_identity"))
+            if lock.get("schema", SCHEMA1) == SCHEMA1:
+                if identity["format"] != LEGACY_IDENTITY_FORMAT:
+                    raise ValueError("schema-1 lock can match only an explicit legacy identity")
+                want = (components.get(name) or {}).get("unsigned_digest")
+                if identity["digest"] != want:
+                    raise ValueError(f"{name} artifact digest does not match lock")
+            else:
+                locked_identity = validate_artifact_identity(
+                    (components.get(name) or {}).get("artifact_identity")
+                )
+                if identity != locked_identity:
+                    raise ValueError(f"{name} artifact identity does not match lock")
+                if entry_artifact_digest(entry) != entry_artifact_digest(components[name]):
+                    raise ValueError(f"{name} artifact digest does not match lock")
+        else:
+            raise ValueError(f"unsupported lock proposal schema: {schema}")
         try:
             apply_lock_proposal(path, lock_path)
         except ValueError:
@@ -74,11 +121,19 @@ def apply_lock_proposal(proposal_path: str, lock_path: str) -> None:
     proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
     if proposal.get("signed") is not True or not proposal.get("buildset"):
         raise ValueError("unsigned lock proposal must not mutate artifacts.lock.json")
+    schema = proposal.get("schema", SCHEMA1)
+    if schema not in (SCHEMA1, SCHEMA2):
+        raise ValueError(f"unsupported lock proposal schema: {schema}")
+    raw_components = proposal.get("components") or {}
+    if not isinstance(raw_components, dict) or not raw_components:
+        raise ValueError("signed lock proposal requires components")
     components = load_locked_buildset(proposal_path)["components"]
     for name, entry in components.items():
-        verify_component({**entry, "component": name, "signed": True})
+        verify_component(
+            {**entry, "component": name, "signed": True, "schema": schema}
+        )
     lock = {
-        "schema": 1,
+        "schema": schema,
         "buildset": proposal["buildset"],
         "components": components,
     }
@@ -97,6 +152,7 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
     if not signed_paths:
         raise ValueError("signed lock proposal requires at least one signed component")
     components: dict[str, dict] = {}
+    payloads: list[dict] = []
     for signed_path in signed_paths:
         payload = json.loads(Path(signed_path).read_text(encoding="utf-8"))
         if payload.get("signed") is not True:
@@ -106,10 +162,30 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
             raise ValueError(f"signed component missing name: {signed_path}")
         if name in components:
             raise ValueError(f"duplicate component: {name}")
+        payloads.append(payload)
         components[name] = verify_component(payload)
-    buildset = buildset_digest(components)
+    schemas = {payload.get("schema", SCHEMA1) for payload in payloads}
+    if not schemas.issubset({SCHEMA1, SCHEMA2}):
+        raise ValueError(f"unsupported signed component schema: {schemas}")
+    schema = SCHEMA2 if SCHEMA2 in schemas else SCHEMA1
+    if schema == SCHEMA2:
+        for payload in payloads:
+            if payload.get("schema", SCHEMA1) == SCHEMA1:
+                identity = payload.get("artifact_identity")
+                if not isinstance(identity, dict) or identity.get("format") != "legacy-marker-sha256":
+                    raise ValueError(
+                        "schema-2 lock requires explicit legacy artifact identities"
+                    )
+                name = payload["component"]
+                components[name] = verify_component(
+                    {**payload, "schema": SCHEMA2}
+                )
+    missing = [name for name in required_components(schema) if name not in components]
+    if missing:
+        raise ValueError(f"signed lock proposal missing required components: {missing}")
+    buildset = buildset_digest(components, schema=schema)
     proposal = {
-        "schema": 1,
+        "schema": schema,
         "kind": "lock-proposal",
         "signed": True,
         "buildset": buildset,

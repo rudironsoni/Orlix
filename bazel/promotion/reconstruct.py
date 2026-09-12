@@ -96,7 +96,8 @@ def reconstruct(
     if not out_dir:
         raise ReconstructError("reconstruct out_dir is required")
     try:
-        lock = load_locked_buildset(lock_path, required=tuple(components))
+        required = tuple(components) if lock.get("schema", 1) == 1 else None
+        lock = load_locked_buildset(lock_path, required=required)
     except (KeyError, ValueError) as error:
         raise ReconstructError(str(error)) from error
     try:
@@ -126,7 +127,7 @@ def reconstruct(
             dest = staged / name
             def _reverify():
                 verify_component(
-                    {**component, "component": name, "signed": True}, run=run
+                    {**component, "component": name, "signed": True, "schema": lock["schema"]}, run=run
                 )
 
             try:
@@ -142,6 +143,7 @@ def reconstruct(
 
             if materialized is not None:
                 marker = materialized["marker"]
+                identity = materialized.get("artifact_identity")
             else:
                 if shutil.which("cosign") is None:
                     raise ReconstructError("cosign is required to reconstruct")
@@ -149,7 +151,7 @@ def reconstruct(
                     raise ReconstructError("oras is required to reconstruct")
                 try:
                     verify_component(
-                        {**component, "component": name, "signed": True}, run=run
+                        {**component, "component": name, "signed": True, "schema": lock["schema"]}, run=run
                     )
                 except (PublishError, LockedBuildsetError, OSError) as error:
                     raise ReconstructError(str(error)) from error
@@ -173,14 +175,18 @@ def reconstruct(
                 except (ArtifactStoreError, OSError) as error:
                     raise ReconstructError(str(error)) from error
                 marker = stored["marker"]
+                identity = stored.get("artifact_identity")
                 acquired = True
             pulled[name] = {
                 "oci_digest": digest,
                 "oci_reference": reference,
                 "unsigned_digest": unsigned,
                 "tree": str(root / name),
-                "unsigned_digest_path": str(root / name / marker),
             }
+            if identity is not None:
+                pulled[name]["artifact_identity"] = identity
+            if marker is not None:
+                pulled[name]["unsigned_digest_path"] = str(root / name / marker)
         if acquired:
             try:
                 store.gc(lock_path)

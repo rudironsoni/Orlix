@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from sign import attach_registry_config, cosign_env
-from locked_buildset import validate_component
+from locked_buildset import LockedBuildsetError, validate_component
 
 
 class PublishError(ValueError):
@@ -24,13 +24,26 @@ VERIFICATION_POLICY_VERSION = 1
 
 
 def require_signed_proposal(path: str) -> dict:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise PublishError(f"invalid signed proposal: {path}") from error
+    if not isinstance(payload, dict):
+        raise PublishError("signed proposal must be a JSON object")
     if payload.get("signed") is not True:
         raise PublishError("unsigned proposal must not publish to GHCR")
     if not payload.get("oci_digest"):
         raise PublishError("proposal missing oci_digest must not publish to GHCR")
     if not payload.get("oci_reference"):
         raise PublishError("proposal missing oci_reference must not publish to GHCR")
+    try:
+        validate_component(
+            payload["component"],
+            payload,
+            schema=payload.get("schema", 1),
+        )
+    except (KeyError, LockedBuildsetError, TypeError, ValueError) as error:
+        raise PublishError(str(error)) from error
     return payload
 
 
@@ -76,7 +89,14 @@ def verification_context() -> dict:
 def verify_component(payload: dict, run=_run) -> dict:
     if payload.get("signed") is not True:
         raise PublishError("unsigned component cannot authorize promotion")
-    entry = validate_component(payload["component"], payload)
+    try:
+        entry = validate_component(
+            payload["component"],
+            payload,
+            schema=payload.get("schema", 1),
+        )
+    except (KeyError, LockedBuildsetError, TypeError, ValueError) as error:
+        raise PublishError(str(error)) from error
     if shutil.which("cosign") is None:
         raise PublishError("cosign is required to verify a published component")
     public = trusted_public_key()
@@ -100,6 +120,20 @@ def publish(proposal_path: str, run=_run) -> dict:
         if config:
             pull[2:2] = ["--registry-config", config]
         run(pull)
+        identity = payload.get("artifact_identity")
+        if isinstance(identity, dict) and identity.get("format") == "artifact-identity-v2":
+            blob = Path(tmp) / "component.tar"
+            if not blob.is_file():
+                raise PublishError("v2 component pull did not write component.tar")
+            from reconstruct import _extract_component_tar
+            from locked_buildset import validate_v2_product
+
+            tree = Path(tmp) / "component"
+            _extract_component_tar(blob, tree)
+            try:
+                validate_v2_product(tree, identity, payload["component"])
+            except (OSError, TypeError, ValueError) as error:
+                raise PublishError(str(error)) from error
     return payload
 
 

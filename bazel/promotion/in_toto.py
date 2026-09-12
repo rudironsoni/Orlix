@@ -7,9 +7,15 @@ import json
 from pathlib import Path
 
 from compare import require_sha256
+from locked_buildset import validate_artifact_identity
 
 
-def write_provenance(path: str, component: str, subject_digest: str) -> dict:
+def write_provenance(
+    path: str,
+    component: str,
+    subject_digest: str,
+    artifact_identity: dict | None = None,
+) -> dict:
     digest = require_sha256(subject_digest)
     if not component:
         raise ValueError("in-toto component name is required")
@@ -23,5 +29,10 @@ def write_provenance(path: str, component: str, subject_digest: str) -> dict:
         "signed": False,
         "oci_digest": None,
     }
+    if artifact_identity is not None:
+        identity = validate_artifact_identity(artifact_identity)
+        if identity["digest"] != digest:
+            raise ValueError("in-toto artifact identity differs from subject digest")
+        payload["artifact_identity"] = identity
     Path(path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
+import shutil
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-import reconstruct
 import locked_buildset
+import lock_proposal
+import reconstruct
+from bazel.content_digest import artifact_manifest_v2
 
 
 _VERIFICATION = {
@@ -272,6 +276,124 @@ class ReconstructTests(unittest.TestCase):
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
         self.assertEqual(calls, [])
+
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
+    def test_schema2_buildset_applies_and_reuses_all_components(
+        self, public_key, verification
+    ) -> None:
+        calls: list[list[str]] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tars = {}
+            signed_paths = []
+            for name in locked_buildset.required_components(locked_buildset.SCHEMA2):
+                tree = root / "fixtures" / name
+                tree.mkdir(parents=True)
+                if name in locked_buildset.KERNEL_COMPONENTS:
+                    product = tree / locked_buildset.V2_PRODUCT_DIRECTORY
+                    files = {}
+                    for relative in sorted(locked_buildset.KERNEL_PRODUCT_PATHS):
+                        source = product / relative
+                        source.parent.mkdir(parents=True, exist_ok=True)
+                        source.write_text(f"{name}:{relative}\n", encoding="utf-8")
+                        files[relative] = source
+                    manifest = artifact_manifest_v2(artifacts=files)
+                    digest = hashlib.sha256(manifest).hexdigest()
+                    (tree / locked_buildset.V2_MANIFEST_FILENAME).write_bytes(manifest)
+                    (tree / locked_buildset.V2_DIGEST_FILENAME).write_text(
+                        digest + "\n", encoding="ascii"
+                    )
+                    identity = {
+                        "format": locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT,
+                        "version": locked_buildset.ARTIFACT_IDENTITY_V2_VERSION,
+                        "digest": digest,
+                    }
+                else:
+                    digest = hashlib.sha256(name.encode("ascii")).hexdigest()
+                    marker = f"{name}.sha256"
+                    (tree / marker).write_text(digest + "\n", encoding="ascii")
+                    identity = {
+                        "format": locked_buildset.LEGACY_IDENTITY_FORMAT,
+                        "version": locked_buildset.LEGACY_IDENTITY_VERSION,
+                        "digest": digest,
+                        "marker": marker,
+                    }
+                blob = root / "fixtures" / f"{name}.tar"
+                with tarfile.open(blob, "w") as archive:
+                    for source in sorted(tree.iterdir()):
+                        archive.add(source, arcname=source.name)
+                tars[name] = blob
+                oci = "sha256:" + hashlib.sha256(
+                    f"oci:{name}".encode("ascii")
+                ).hexdigest()
+                signed = {
+                    "schema": locked_buildset.SCHEMA2,
+                    "component": name,
+                    "unsigned_digest": digest,
+                    "artifact_identity": identity,
+                    "signed": True,
+                    "oci_digest": oci,
+                    "oci_reference": f"{locked_buildset.GHCR_REPOSITORY}/{name}@{oci}",
+                }
+                signed_path = root / f"{name}-signed.json"
+                signed_path.write_text(json.dumps(signed) + "\n", encoding="utf-8")
+                signed_paths.append(str(signed_path))
+
+            def validate(payload: dict) -> dict:
+                return locked_buildset.validate_component(
+                    payload["component"], payload, schema=payload.get("schema", 1)
+                )
+
+            proposal_path = root / "lock-proposal.json"
+            lock_path = root / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8"
+            )
+            with mock.patch("lock_proposal.verify_component", side_effect=validate):
+                proposal = lock_proposal.write_signed_lock_proposal(
+                    str(proposal_path), signed_paths
+                )
+                lock_proposal.apply_lock_proposal(str(proposal_path), str(lock_path))
+            expected = set(locked_buildset.required_components(locked_buildset.SCHEMA2))
+            self.assertEqual(proposal["schema"], locked_buildset.SCHEMA2)
+            self.assertEqual(set(proposal["components"]), expected)
+
+            def fake_run(argv: list[str], env=None, cwd=None):
+                calls.append(list(argv))
+                if argv[0] == "oras":
+                    reference = next(
+                        value for value in argv if value.startswith("ghcr.io/")
+                    )
+                    name = reference.rsplit("/", 1)[1].split("@", 1)[0]
+                    dest = Path(argv[argv.index("-o") + 1])
+                    shutil.copyfile(tars[name], dest / "component.tar")
+
+                class Result:
+                    stdout = ""
+
+                return Result()
+
+            store = root / "store"
+            with mock.patch.dict(
+                os.environ, {"ORLIX_ORAS_REGISTRY_CONFIG": ""}
+            ), mock.patch("reconstruct.shutil.which", return_value="/usr/bin/tool"):
+                first = reconstruct.reconstruct(
+                    str(lock_path), str(root / "first"), run=fake_run, store_root=store
+                )
+            self.assertEqual(set(first["components"]), expected)
+            self.assertEqual(sum(call[0] == "oras" for call in calls), 7)
+            self.assertEqual(sum(call[0] == "cosign" for call in calls), 7)
+
+            calls.clear()
+            with mock.patch.dict(
+                os.environ, {"ORLIX_ORAS_REGISTRY_CONFIG": ""}
+            ), mock.patch("reconstruct.shutil.which", return_value=None):
+                second = reconstruct.reconstruct(
+                    str(lock_path), str(root / "second"), run=fake_run, store_root=store
+                )
+            self.assertEqual(first["buildset"], second["buildset"])
+            self.assertEqual(calls, [])
 
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
     def test_trust_policy_change_reverifies_without_oras_pull(self, public_key) -> None:

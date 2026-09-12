@@ -169,11 +169,45 @@ class MakeRoutingTests(unittest.TestCase):
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn('for side in a b; do', mk)
         self.assertIn("--nouse_action_cache", mk)
+        self.assertIn("--config=release --config=promotion", mk)
         self.assertIn('promote/$$$$side/output-base', mk)
         self.assertIn('promote/$$$$side/disk', mk)
         self.assertIn('"signed": false', mk)
         self.assertIn("unsigned promote mutated artifacts.lock.json", mk)
         self.assertIn("unsigned promote must not Cosign-sign", mk)
+
+    def test_kernel_promotion_routes_use_exact_v2_component_boundaries(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        components = (
+            ("kernel-release-iphoneos", "release", "arm64"),
+            ("kernel-release-iphonesimulator", "release", "sim_arm64"),
+            ("kernel-development-iphoneos", "development", "arm64"),
+            ("kernel-development-iphonesimulator", "development", "sim_arm64"),
+        )
+        for component, profile, cpu in components:
+            promote = _dry_run(f"__bazel-promote-{component}")
+            self.assertIn(
+                f"build //bazel/feasibility/kernel:{component}", promote
+            )
+            self.assertIn("--config=promotion", promote)
+            self.assertIn(f"--config={profile}", promote)
+            self.assertIn("--nouse_action_cache", promote)
+            self.assertIn("--remote_cache= --remote_executor=", promote)
+            self.assertIn(f"--ios_multi_cpus={cpu}", promote)
+            self.assertIn(
+                f"--platforms=@build_bazel_apple_support//platforms:ios_{cpu}",
+                promote,
+            )
+            self.assertIn("--artifact-identity-format artifact-identity-v2", promote)
+            self.assertIn(f"--component {component}", promote)
+            self.assertIn(f"{component}/product", promote)
+            publish = _dry_run(f"__bazel-publish-{component}")
+            self.assertIn(
+                "digest_file=\"$promote/a/digest.sha256\"", publish
+            )
+            self.assertIn(
+                "artifact=\"$promote/a/staged\"", publish
+            )
 
     def test_promotion_consumes_hermetic_feasibility_targets(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
@@ -186,6 +220,30 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn(
             "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs", mk
         )
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.sha256,legacy-marker-sha256,uapi.sha256",
+            mk,
+        )
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.sha256,legacy-marker-sha256,sysroot.sha256",
+            mk,
+        )
+        self.assertIn(
+            "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/source-input.sha256,legacy-marker-sha256,source-input.sha256",
+            mk,
+        )
+        for component in (
+            "kernel-release-iphoneos",
+            "kernel-release-iphonesimulator",
+            "kernel-development-iphoneos",
+            "kernel-development-iphonesimulator",
+        ):
+            self.assertIn(f"__bazel-promote-{component}", mk)
+            self.assertIn(f"__bazel-publish-{component}", mk)
+            self.assertIn(f"kernel-{component.split('-', 1)[1]}", mk)
+        self.assertIn("artifact-identity-v2.json", mk)
+        self.assertIn("artifact-identity-v2.sha256", mk)
+        self.assertIn('schema") == 2', mk)
         self.assertIn("__bazel-rootfs:", mk)
         self.assertIn("//bazel/feasibility/packages:coreutils", mk)
         app = (ROOT / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
@@ -196,6 +254,7 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("//bazel/promotion:promoted_rootfs", rootfs)
         self.assertIn("component_promoted", rootfs)
         promoted = (ROOT / "bazel/promotion/BUILD.bazel").read_text(encoding="utf-8")
+        promoted_rule = (ROOT / "bazel/promotion/promoted.bzl").read_text(encoding="utf-8")
         self.assertIn("orlix_promoted_rootfs", promoted)
         self.assertIn("orlix_promoted_uapi", promoted)
         self.assertIn("orlix_promoted_sysroot", promoted)
@@ -204,6 +263,9 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("imported/mlibc/sysroot.sha256", promoted)
         self.assertIn("//bazel/promotion:promoted_apple_inputs", app)
         self.assertIn("orlix_promoted_apple_inputs", promoted)
+        for position in (11, 12, 13):
+            self.assertIn(f'"$exec_root/${{{position}}}"', promoted_rule)
+            self.assertNotIn(f'"$exec_root/${position}"', promoted_rule)
         mlibc = (ROOT / "bazel/feasibility/mlibc/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/promotion:promoted_uapi", mlibc)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(

@@ -1,5 +1,6 @@
 """Consume artifacts.lock.json in promoted mode. Never accept mutable latest."""
 
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixLinuxArchiveInfo")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -218,6 +219,149 @@ orlix_promoted_sysroot = rule(
         "abi": attr.label(allow_files = True, mandatory = True),
         "loader": attr.label(allow_files = True, mandatory = True),
         "runtime": attr.label(allow_files = True, mandatory = True),
+    },
+)
+
+_PROMOTED_KERNEL_COMPONENTS = [
+    "kernel-release-iphoneos",
+    "kernel-release-iphonesimulator",
+    "kernel-development-iphoneos",
+    "kernel-development-iphonesimulator",
+]
+
+def _promoted_kernel_impl(ctx):
+    archive = _require_one(ctx.files.archive, "%s archive" % ctx.attr.component)
+    release_dtb = _require_one(ctx.files.release_dtb, "%s release DTB" % ctx.attr.component)
+    development_dtb = _require_one(ctx.files.development_dtb, "%s development DTB" % ctx.attr.component)
+    identity_manifest = _require_one(ctx.files.identity_manifest, "%s artifact identity manifest" % ctx.attr.component)
+    identity_digest = _require_one(ctx.files.identity_digest, "%s artifact identity digest" % ctx.attr.component)
+    recomputed = declare_artifact_identity(
+        ctx,
+        "kernel",
+        ctx.file._artifact_identity_serializer,
+        artifacts = {
+            "OrlixKernel.a": archive,
+            "arch/orlix/boot/dts/development.dtb": development_dtb,
+            "arch/orlix/boot/dts/release.dtb": release_dtb,
+        },
+    )
+    verification = ctx.actions.declare_file(ctx.label.name + "/kernel.verified.sha256")
+    verified_archive = ctx.actions.declare_file(ctx.label.name + "/verified/OrlixKernel.a")
+    verified_release_dtb = ctx.actions.declare_file(ctx.label.name + "/verified/arch/orlix/boot/dts/release.dtb")
+    verified_development_dtb = ctx.actions.declare_file(ctx.label.name + "/verified/arch/orlix/boot/dts/development.dtb")
+    ctx.actions.run_shell(
+        mnemonic = "OrlixPromotedKernel",
+        progress_message = "Verifying promoted %s against artifacts.lock.json" % ctx.attr.component,
+        command = r"""
+set -euo pipefail
+exec_root="$PWD"
+lock="$exec_root/$1"
+component="$2"
+imported_manifest="$exec_root/$3"
+imported_digest="$exec_root/$4"
+computed_manifest="$exec_root/$5"
+computed_digest="$exec_root/$6"
+stamp="$exec_root/$7"
+verified_archive="$exec_root/$8"
+verified_release_dtb="$exec_root/$9"
+verified_development_dtb="$exec_root/${10}"
+/usr/bin/cmp -s "$imported_manifest" "$computed_manifest" || {
+  echo "promoted $component artifact identity manifest differs from imported manifest" >&2
+  exit 1
+}
+got="$(/usr/bin/tr -d '[:space:]' < "$imported_digest")"
+computed="$(/usr/bin/tr -d '[:space:]' < "$computed_digest")"
+test "$got" = "$computed" || {
+  echo "promoted $component artifact identity digest differs from recomputed digest" >&2
+  exit 1
+}
+want="$(/usr/bin/python3 -c 'import json,sys; payload=json.load(open(sys.argv[1])); assert payload["schema"] == 2; identity=payload["components"][sys.argv[2]]["artifact_identity"]; assert identity["format"] == "artifact-identity-v2" and identity["version"] == 2; print(identity["digest"])' "$lock" "$component")"
+test "$got" = "$want" || {
+  echo "promoted $component artifact identity digest differs from schema-2 lock" >&2
+  exit 1
+}
+/bin/cp "$imported_digest" "$stamp"
+/bin/mkdir -p "$(/usr/bin/dirname "$verified_archive")" "$(/usr/bin/dirname "$verified_release_dtb")" "$(/usr/bin/dirname "$verified_development_dtb")"
+/bin/cp "$exec_root/${11}" "$verified_archive"
+/bin/cp "$exec_root/${12}" "$verified_release_dtb"
+/bin/cp "$exec_root/${13}" "$verified_development_dtb"
+""",
+        arguments = [
+            ctx.file.lock.path,
+            ctx.attr.component,
+            identity_manifest.path,
+            identity_digest.path,
+            recomputed.manifest.path,
+            recomputed.digest.path,
+            verification.path,
+            verified_archive.path,
+            verified_release_dtb.path,
+            verified_development_dtb.path,
+            archive.path,
+            release_dtb.path,
+            development_dtb.path,
+        ],
+        inputs = [
+            ctx.file.lock,
+            archive,
+            release_dtb,
+            development_dtb,
+            identity_manifest,
+            identity_digest,
+            recomputed.manifest,
+            recomputed.digest,
+        ],
+        outputs = [verification, verified_archive, verified_release_dtb, verified_development_dtb],
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+    )
+    profile = "release" if ctx.attr.component.startswith("kernel-release-") else "development"
+    destination = "iphoneos" if ctx.attr.component.endswith("-iphoneos") else "iphonesimulator"
+    boot_resources = depset([verified_release_dtb, verified_development_dtb])
+    return [
+        DefaultInfo(files = depset([
+            verified_archive,
+            verified_release_dtb,
+            verified_development_dtb,
+            identity_manifest,
+            identity_digest,
+            recomputed.manifest,
+            recomputed.digest,
+            verification,
+        ])),
+        OutputGroupInfo(
+            archive = depset([verified_archive]),
+            boot_resources = boot_resources,
+            verification = depset([verification]),
+        ),
+        OrlixLinuxArchiveInfo(
+            archive = verified_archive,
+            artifact_identity_digest = identity_digest,
+            artifact_identity_manifest = identity_manifest,
+            boot_resources = boot_resources,
+            build_manifest = None,
+            destination = destination,
+            product = None,
+            profile = profile,
+            source_input_digest = identity_digest,
+            symbol_manifest = None,
+        ),
+    ]
+
+orlix_promoted_kernel = rule(
+    implementation = _promoted_kernel_impl,
+    attrs = {
+        "component": attr.string(mandatory = True, values = _PROMOTED_KERNEL_COMPONENTS),
+        "lock": attr.label(allow_single_file = True, mandatory = True),
+        "archive": attr.label_list(allow_files = True, mandatory = True),
+        "release_dtb": attr.label_list(allow_files = True, mandatory = True),
+        "development_dtb": attr.label_list(allow_files = True, mandatory = True),
+        "identity_manifest": attr.label_list(allow_files = True, mandatory = True),
+        "identity_digest": attr.label_list(allow_files = True, mandatory = True),
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
     },
 )
 

@@ -120,7 +120,12 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
     archive = target[OrlixLinuxArchiveInfo]
     asserts.equals(env, ctx.attr.expected_profile, archive.profile)
     asserts.equals(env, ctx.attr.expected_destination, archive.destination)
+    asserts.true(env, archive.product != None)
+    asserts.true(env, archive.artifact_identity_manifest != None)
+    asserts.true(env, archive.artifact_identity_digest != None)
+    asserts.true(env, archive.boot_resources != None)
     found = False
+    identity_found = False
     script = "\n".join([action.content for action in target.actions if action.content != None])
     for action in target.actions:
         if action.mnemonic == "OrlixKernelMachOArchive":
@@ -139,7 +144,20 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
             asserts.true(env, "tcti_isa" in inputs)
             asserts.false(env, "prepared-tables.tar.gz" in inputs)
             asserts.false(env, "prepared-tables.sha256" in inputs)
+            output_paths = [f.path for f in action.outputs.to_list()]
+            asserts.true(env, any([f.path == archive.product.path for f in action.outputs.to_list()]))
+            asserts.true(env, any([p.endswith("/arch/orlix/boot/dts/release.dtb") for p in output_paths]))
+            asserts.true(env, any([p.endswith("/arch/orlix/boot/dts/development.dtb") for p in output_paths]))
+        if action.mnemonic == "OrlixArtifactIdentityV2":
+            identity_found = True
+            argv = " ".join(action.argv)
+            inputs = " ".join([f.path for f in action.inputs.to_list()])
+            asserts.true(env, "OrlixKernel.a" in argv)
+            asserts.true(env, "arch/orlix/boot/dts/release.dtb" in argv)
+            asserts.true(env, "arch/orlix/boot/dts/development.dtb" in argv)
+            asserts.true(env, archive.archive.path in inputs)
     asserts.true(env, found)
+    asserts.true(env, identity_found)
     return analysistest.end(env)
 
 macho_no_wrapper_makefile_test = analysistest.make(

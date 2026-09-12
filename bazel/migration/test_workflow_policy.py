@@ -30,6 +30,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("signed-${{ inputs.component }}-${{ github.sha }}", text)
         self.assertIn("${{ inputs.component }}-signed.json", text)
         self.assertIn('--registry-config "$ORLIX_ORAS_REGISTRY_CONFIG"', text)
+        for component in (
+            "kernel-release-iphoneos",
+            "kernel-release-iphonesimulator",
+            "kernel-development-iphoneos",
+            "kernel-development-iphonesimulator",
+        ):
+            self.assertIn(f"          - {component}", text)
 
     def test_trust_policy_forbids_unsigned_main_lock_writes(self) -> None:
         import json
@@ -114,8 +121,18 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("make __bazel-lock-proposal", text)
         self.assertIn(".headSha == $sha", text)
         self.assertIn('.conclusion == "success"', text)
-        for component in ("uapi", "mlibc", "rootfs"):
-            self.assertIn(f"run-id: ${{{{ inputs.{component}_run_id }}}}", text)
+        components = {
+            "uapi": "uapi",
+            "mlibc": "mlibc",
+            "rootfs": "rootfs",
+            "kernel-release-iphoneos": "kernel_release_iphoneos",
+            "kernel-release-iphonesimulator": "kernel_release_iphonesimulator",
+            "kernel-development-iphoneos": "kernel_development_iphoneos",
+            "kernel-development-iphonesimulator": "kernel_development_iphonesimulator",
+        }
+        for component, input_name in components.items():
+            self.assertIn(f"      {input_name}_run_id:\n", text)
+            self.assertIn(f"run-id: ${{{{ inputs.{input_name}_run_id }}}}", text)
             self.assertIn(f"signed-{component}-${{{{ github.sha }}}}", text)
         self.assertIn("Cancel if derailed", text)
         self.assertNotIn("git commit", text)

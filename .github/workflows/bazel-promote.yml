@@ -11,6 +11,10 @@ on:
           - uapi
           - mlibc
           - rootfs
+          - kernel-release-iphoneos
+          - kernel-release-iphonesimulator
+          - kernel-development-iphoneos
+          - kernel-development-iphonesimulator
 
 permissions:
   contents: read
