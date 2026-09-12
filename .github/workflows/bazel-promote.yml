@@ -2,19 +2,6 @@ name: Bazel promote
 
 on:
   workflow_dispatch:
-    inputs:
-      component:
-        description: Private component to dual-build and compare
-        required: true
-        type: choice
-        options:
-          - uapi
-          - mlibc
-          - rootfs
-          - kernel-release-iphoneos
-          - kernel-release-iphonesimulator
-          - kernel-development-iphoneos
-          - kernel-development-iphonesimulator
 
 permissions:
   contents: read
@@ -22,7 +9,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: bazel-promote-${{ inputs.component }}
+  group: bazel-promote-buildset
   cancel-in-progress: false
 
 jobs:
@@ -54,11 +41,13 @@ jobs:
 
   promote:
     name: Dual-build promote
-    if: github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix'
     runs-on: macos-26
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     environment: bazel-promotion
     timeout-minutes: 360
     steps:
@@ -67,13 +56,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
       - name: Select Xcode 26.6
         timeout-minutes: 5
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: "26.6"
+
+      - name: Restore verified source downloads
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
       - name: Install declared build tools
         run: brew bundle --file Brewfile
+
       - name: Export the selected Xcode to Make
         timeout-minutes: 1
         run: |
@@ -81,11 +81,13 @@ jobs:
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
           test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+
       - name: Dual-build without action cache
         timeout-minutes: 350
-        run: make __bazel-promote-${{ inputs.component }}
-      - name: Sign and publish to GHCR
-        timeout-minutes: 20
+        run: make __bazel-promote-buildset
+
+      - name: Sign and publish the buildset to GHCR
+        timeout-minutes: 40
         env:
           ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
           ORLIX_COSIGN_KEY_PASSWORD: ${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}
@@ -110,11 +112,36 @@ jobs:
           cosign public-key --key "$key_path" > "$key_path.pub"
           export ORLIX_COSIGN_PUB="$key_path.pub"
           printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "${GITHUB_ACTOR}" --password-stdin
-          make __bazel-publish-${{ inputs.component }}
-      - name: Store the verified signed component proposal
+          for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do
+            make "__bazel-publish-${component}"
+          done
+          make __bazel-lock-proposal
+
+      - name: Save verified source downloads
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+
+      - name: Attest the signed buildset proposal
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v3.0.0
+        with:
+          subject-path: Build/Bazel/promote/buildset-lock-proposal.json
+
+      - name: Store the verified signed buildset proposal
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: signed-${{ inputs.component }}-${{ github.sha }}
-          path: Build/Bazel/promote/${{ inputs.component }}/${{ inputs.component }}-signed.json
+          name: signed-buildset-${{ github.sha }}
+          path: |
+            Build/Bazel/promote/uapi/uapi-signed.json
+            Build/Bazel/promote/mlibc/mlibc-signed.json
+            Build/Bazel/promote/rootfs/rootfs-signed.json
+            Build/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json
+            Build/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json
+            Build/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json
+            Build/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json
+            Build/Bazel/promote/buildset-lock-proposal.json
+            Build/Bazel/promote/buildset-lock-proposal.sigstore.json
           if-no-files-found: error
           retention-days: 14

@@ -48,7 +48,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-apple-ci __bazel-simulator-runtime-proof __bazel-current-simulator-gate __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-buildset __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-apple-ci __bazel-simulator-runtime-proof __bazel-current-simulator-gate __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs __bazel-attr __bazel-acl __bazel-pcre2 __bazel-musl-fts __bazel-libsepol __bazel-libcap __bazel-libselinux
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
@@ -249,6 +249,61 @@ $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-release-iphonesimulator,//bazel/
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphoneos,//bazel/feasibility/kernel:kernel-development-iphoneos,development,iphoneos))
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//bazel/feasibility/kernel:kernel-development-iphonesimulator,development,iphonesimulator))
 
+__bazel-promote-buildset: __bazel-version-check
+	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
+	@set -euo pipefail; \
+	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
+	for side in a b; do \
+		if [ -d "$$promote/buildset/$$side/output-base" ]; then \
+			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
+		fi; \
+	done; \
+	/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
+	python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
+	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+		/bin/chmod -R u+w "$$promote/$$component" 2>/dev/null || true; \
+		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/$$component"; \
+	done; \
+	mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
+	labels=(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs //bazel/feasibility/kernel:kernel-release-iphoneos //bazel/feasibility/kernel:kernel-release-iphonesimulator //bazel/feasibility/kernel:kernel-development-iphoneos //bazel/feasibility/kernel:kernel-development-iphonesimulator); \
+	for side in a b; do \
+		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
+		for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+			stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
+			case "$$component" in \
+				uapi) relative='bazel/feasibility/kernel/uapi/uapi.sha256' ;; \
+				mlibc) relative='bazel/feasibility/mlibc/sysroot/sysroot.sha256' ;; \
+				rootfs) relative='bazel/feasibility/rootfs/rootfs/source-input.sha256' ;; \
+				*) relative="bazel/feasibility/kernel/$$component/kernel.artifact-identity-v2.sha256" ;; \
+			esac; \
+			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$relative" -type f -print | /usr/bin/head -n 1)"; \
+			test -n "$$digest_file" || { echo "missing $$relative for promote buildset $$side" >&2; exit 1; }; \
+			if [[ "$$component" == kernel-* ]]; then \
+				product_tree="$$(/usr/bin/dirname "$$digest_file")/product"; \
+				manifest_file="$$(/usr/bin/dirname "$$digest_file")/kernel.artifact-identity-v2.json"; \
+				test -d "$$product_tree" && test -s "$$manifest_file" || { echo "incomplete Kernel product for $$component $$side" >&2; exit 1; }; \
+				mkdir -p "$$stage/product"; /bin/cp -pR "$$product_tree"/. "$$stage/product"/; \
+				/bin/cp "$$manifest_file" "$$stage/artifact-identity-v2.json"; \
+				/bin/cp "$$digest_file" "$$stage/artifact-identity-v2.sha256"; \
+			else \
+				/bin/cp -pR "$$(/usr/bin/dirname "$$digest_file")"/. "$$stage"/; \
+			fi; \
+			mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
+		done; \
+	done; \
+	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+		format=artifact-identity-v2; marker=; \
+		case "$$component" in uapi) format=legacy-marker-sha256; marker=uapi.sha256 ;; mlibc) format=legacy-marker-sha256; marker=sysroot.sha256 ;; rootfs) format=legacy-marker-sha256; marker=source-input.sha256 ;; esac; \
+		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format "$$format" --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
+		if [ -n "$$marker" ]; then args+=(--artifact-identity-marker "$$marker"); fi; \
+		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
+		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
+		python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is False and p.get("oci_digest") is None, p' "$$promote/$$component/$$component-proposal.json"; \
+	done; \
+	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	test "$$lock_before" = "$$lock_after" || { echo "unsigned buildset promotion mutated artifacts.lock.json" >&2; exit 1; }
+
 define ORLIX_BAZEL_PUBLISH
 __bazel-publish-$(1): __bazel-version-check
 	@set -euo pipefail; \
@@ -258,7 +313,7 @@ __bazel-publish-$(1): __bazel-version-check
 	digest_file="$$$$promote/a/digest.sha256"; \
 	test -s "$$$$digest_file" || { echo "missing unsigned digest $$$$digest_file; run make __bazel-promote-$(1) first" >&2; exit 1; }; \
 	digest="$$$$(tr -d '[:space:]' < "$$$$digest_file")"; \
-	if [ "$(3)" = "artifact-identity-v2" ]; then \
+	if [ -d "$$$$promote/a/staged" ]; then \
 		artifact="$$$$promote/a/staged"; \
 	else \
 		tree="$$$$(/usr/bin/find "$$$$promote/a/output-base" -path '*/$(2)' -print | /usr/bin/head -n 1)"; \
@@ -293,11 +348,22 @@ __bazel-lock-proposal: __bazel-version-check
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is True and p.get("buildset") and set(p["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, p' "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
+	key="$${ORLIX_COSIGN_KEY:-}"; public="$${ORLIX_COSIGN_PUB:-}"; \
+	test -n "$$key" && test -n "$$public" || { echo "ORLIX_COSIGN_KEY and ORLIX_COSIGN_PUB are required to sign the buildset proposal" >&2; exit 1; }; \
+	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
+	cosign sign-blob --key "$${key#file://}" --yes --use-signing-config=false --bundle "$$bundle" "$$proposal" >/dev/null; \
+	cosign verify-blob --key "$${public#file://}" --bundle "$$bundle" --insecure-ignore-tlog "$$proposal"; \
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "lock proposal mutated artifacts.lock.json" >&2; exit 1; }
 
 __bazel-lock-from-signed: __bazel-lock-proposal
 	@set -euo pipefail; \
+	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
+	public="$${ORLIX_COSIGN_PUB:-}"; test -n "$$public" || { echo "ORLIX_COSIGN_PUB is required to activate the buildset proposal" >&2; exit 1; }; \
+	cosign verify-blob --key "$${public#file://}" --bundle "$$bundle" --insecure-ignore-tlog "$$proposal"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \

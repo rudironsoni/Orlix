@@ -93,8 +93,13 @@ class LockProposalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             lock_proposal.write_lock_proposal("/unused.json", "uapi", "short")
 
+    @mock.patch("lock_proposal.verification_context", return_value={
+        "signing_key_fingerprint": "11" * 32,
+        "trust_policy_sha256": "22" * 32,
+        "verification_policy_version": 1,
+    })
     @mock.patch("lock_proposal.verify_component", side_effect=lambda p: locked_buildset.validate_component(p["component"], p))
-    def test_signed_components_write_stable_buildset_and_can_apply(self, verify) -> None:
+    def test_signed_components_write_stable_buildset_and_can_apply(self, verify, verification) -> None:
         unsigned = "ab" * 32
         oci = "sha256:" + ("cd" * 32)
         reference = f"ghcr.io/rudironsoni/orlix/uapi@{oci}"
@@ -131,6 +136,8 @@ class LockProposalTests(unittest.TestCase):
             self.assertEqual(len(first["buildset"]), 64)
             self.assertEqual(first["components"]["uapi"]["oci_digest"], oci)
             self.assertEqual(first["components"]["uapi"]["oci_reference"], reference)
+            self.assertEqual(first["component_types"]["uapi"], "uapi")
+            self.assertEqual(first["verification"]["trust_policy_sha256"], "22" * 32)
             lock_path = Path(tmp) / "artifacts.lock.json"
             lock_path.write_text(json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8")
             lock_proposal.apply_lock_proposal(str(out1), str(lock_path))

@@ -10,12 +10,13 @@
     "revocation": "explicit"
   },
   "allowed_workflows": [
-    ".github/workflows/bazel-promote.yml",
-    ".github/workflows/bazel-lock-proposal.yml"
+    ".github/workflows/bazel-promote.yml"
   ],
   "allowed_refs": [
-    "refs/heads/main"
+    "refs/heads/main",
+    "refs/heads/fix/build-optimizations"
   ],
+  "required_environment": "bazel-promotion",
   "allowed_media_types": [
     "application/vnd.oci.image.manifest.v1+json"
   ],

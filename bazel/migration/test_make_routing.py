@@ -215,6 +215,32 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("unsigned promote mutated artifacts.lock.json", mk)
         self.assertIn("unsigned promote must not Cosign-sign", mk)
 
+    def test_buildset_promotion_builds_all_components_twice(self) -> None:
+        output = _dry_run("__bazel-promote-buildset")
+        self.assertEqual(output.count(" build \"${labels[@]}\""), 1)
+        self.assertIn("for side in a b", output)
+        self.assertIn("--nouse_action_cache", output)
+        self.assertIn("--disk_cache= --repository_cache=", output)
+        self.assertIn("--remote_cache= --remote_executor=", output)
+        for label in (
+            "//bazel/feasibility/kernel:uapi",
+            "//bazel/feasibility/mlibc:sysroot",
+            "//bazel/feasibility/rootfs:rootfs",
+            "//bazel/feasibility/kernel:kernel-release-iphoneos",
+            "//bazel/feasibility/kernel:kernel-release-iphonesimulator",
+            "//bazel/feasibility/kernel:kernel-development-iphoneos",
+            "//bazel/feasibility/kernel:kernel-development-iphonesimulator",
+        ):
+            self.assertIn(label, output)
+
+    def test_buildset_lock_requires_cosign_blob_verification(self) -> None:
+        proposal = _dry_run("__bazel-lock-proposal")
+        activation = _dry_run("__bazel-lock-from-signed")
+        self.assertIn("cosign sign-blob", proposal)
+        self.assertIn("cosign verify-blob", proposal)
+        self.assertIn("buildset-lock-proposal.sigstore.json", proposal)
+        self.assertIn("cosign verify-blob", activation)
+
     def test_kernel_promotion_routes_use_exact_v2_component_boundaries(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         components = (
