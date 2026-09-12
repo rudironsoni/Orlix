@@ -35,6 +35,7 @@ jobs:
         if: ${{ env.HAS_GROK_AUTH == 'true' }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Restore trusted reviewer policy from the base revision
         if: ${{ env.HAS_GROK_AUTH == 'true' }}

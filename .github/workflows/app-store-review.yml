@@ -33,6 +33,7 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.beta_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve the tag and successful beta run
         id: beta

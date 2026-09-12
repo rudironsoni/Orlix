@@ -38,6 +38,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Fetch the protected release base
         run: git fetch --no-tags origin main:refs/remotes/origin/main
@@ -61,7 +62,10 @@ jobs:
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: "3.4.8"
-          bundler-cache: true
+          bundler-cache: false
+
+      - name: Install pinned Ruby dependencies
+        run: bundle install --jobs 4 --retry 3
 
       - name: Install build tools
         run: brew bundle --file Brewfile
