@@ -9,7 +9,17 @@ from typing import Any
 def _records(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    text = path.read_text()
+    decoder = json.JSONDecoder()
+    records = []
+    offset = 0
+    while offset < len(text):
+        while offset < len(text) and text[offset].isspace():
+            offset += 1
+        if offset < len(text):
+            record, offset = decoder.raw_decode(text, offset)
+            records.append(record)
+    return records
 
 
 def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
