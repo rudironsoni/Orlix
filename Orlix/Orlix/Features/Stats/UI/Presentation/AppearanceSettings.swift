@@ -13,13 +13,13 @@ struct StatsAppearanceSettingsSheet: View {
             AppearanceSettings(store: store)
         }
         #else
-        NavigationStack {
+        NavigationView {
             AppearanceSettings(store: store)
                 .navigationTitle(Text("Stats Appearance"))
                 .navigationBarTitleDisplayMode(.inline)
                 .statsSheetCloseToolbar(placement: .leading)
         }
-        .presentationDetents([.large])
+        .orlixLargePresentationDetent()
         .adaptiveSoftScrollEdges()
         #endif
     }
@@ -67,7 +67,7 @@ struct AppearanceSettings: View {
                     .listRowBackground(Color.clear)
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         #if os(iOS)
         .environment(\.editMode, $editMode)
         .toolbar {

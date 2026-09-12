@@ -187,7 +187,7 @@ final class OrlixURLSessionTransport: OrlixTelemetryTransport, @unchecked Sendab
     }
 }
 
-protocol OrlixDiagnosticsSink: AnyObject {
+protocol OrlixDiagnosticsSink: AnyObject, Sendable {
     func record(_ event: OrlixDiagnosticEvent)
     func flush()
     func shutdown()

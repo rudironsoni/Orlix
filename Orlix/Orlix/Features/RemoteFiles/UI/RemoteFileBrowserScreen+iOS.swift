@@ -182,7 +182,7 @@ extension RemoteFileBrowserScreen {
                     await browser.refresh(server: server, tab: fileTab)
                 }
                 .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .orlixScrollContentBackgroundHidden()
                 .background(Color.clear)
             }
 
@@ -206,7 +206,7 @@ extension RemoteFileBrowserScreen {
             }
         }
         .background(Color.clear)
-        .navigationDestination(isPresented: previewBinding) {
+        .orlixNavigationDestination(isPresented: previewBinding) {
             fileNoticeHost {
                 RemoteFileInspectorView(
                     selectedEntry: snapshot.selectedEntry,
@@ -265,79 +265,32 @@ extension RemoteFileBrowserScreen {
                 }
             }
         }
-        .toolbar {
-            if #available(iOS 26, *) {
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(
-                        systemName: "arrow.turn.up.left",
-                        isDisabled: snapshot.currentPath == "/"
-                    ) {
-                        Task { await browser.goUp(in: fileTab, server: server) }
-                    }
+        .orlixRemoteFileBrowserToolbar(
+            goUp: AnyView(
+                toolbarButton(
+                    systemName: "arrow.turn.up.left",
+                    isDisabled: snapshot.currentPath == "/"
+                ) {
+                    Task { await browser.goUp(in: fileTab, server: server) }
                 }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "arrow.up.doc") {
-                        beginUpload(to: snapshot.currentPath)
-                    }
+            ),
+            upload: AnyView(
+                toolbarButton(systemName: "arrow.up.doc") {
+                    beginUpload(to: snapshot.currentPath)
                 }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "folder.badge.plus") {
-                        beginCreateFolder(in: snapshot.currentPath)
-                    }
+            ),
+            createFolder: AnyView(
+                toolbarButton(systemName: "folder.badge.plus") {
+                    beginCreateFolder(in: snapshot.currentPath)
                 }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    toolbarButton(systemName: "document.on.document") {
-                        copyPathToClipboard(snapshot.currentPath)
-                    }
+            ),
+            copyPath: AnyView(
+                toolbarButton(systemName: "document.on.document") {
+                    copyPathToClipboard(snapshot.currentPath)
                 }
-
-                ToolbarSpacer(.fixed)
-
-                ToolbarItem(placement: .bottomBar) {
-                    browserMenu()
-                }
-            } else {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    toolbarButton(
-                        systemName: "arrow.turn.up.left",
-                        isDisabled: snapshot.currentPath == "/"
-                    ) {
-                        Task { await browser.goUp(in: fileTab, server: server) }
-                    }
-                }
-
-                ToolbarItemGroup(placement: .bottomBar) {
-                    toolbarButton(systemName: "arrow.up.doc") {
-                        beginUpload(to: snapshot.currentPath)
-                    }
-                }
-
-                ToolbarItemGroup(placement: .bottomBar) {
-                    toolbarButton(systemName: "folder.badge.plus") {
-                        beginCreateFolder(in: snapshot.currentPath)
-                    }
-                }
-
-                ToolbarItemGroup(placement: .bottomBar) {
-                    toolbarButton(systemName: "document.on.document") {
-                        copyPathToClipboard(snapshot.currentPath)
-                    }
-                }
-
-                ToolbarItemGroup(placement: .bottomBar) {
-                    browserMenu()
-                }
-            }
-        }
+            ),
+            menu: AnyView(browserMenu())
+        )
         .onChange(of: snapshot.currentPath) { _ in
             platformState.searchQuery = ""
         }
@@ -461,5 +414,55 @@ extension RemoteFileBrowserScreen {
         .disabled(isDisabled)
     }
 
+}
+
+private extension View {
+    @ViewBuilder
+    func orlixRemoteFileBrowserToolbar(
+        goUp: AnyView,
+        upload: AnyView,
+        createFolder: AnyView,
+        copyPath: AnyView,
+        menu: AnyView
+    ) -> some View {
+        if #available(iOS 26, *) {
+            modernRemoteFileBrowserToolbar(
+                goUp: goUp,
+                upload: upload,
+                createFolder: createFolder,
+                copyPath: copyPath,
+                menu: menu
+            )
+        } else {
+            toolbar {
+                ToolbarItemGroup(placement: .bottomBar) { goUp }
+                ToolbarItemGroup(placement: .bottomBar) { upload }
+                ToolbarItemGroup(placement: .bottomBar) { createFolder }
+                ToolbarItemGroup(placement: .bottomBar) { copyPath }
+                ToolbarItemGroup(placement: .bottomBar) { menu }
+            }
+        }
+    }
+
+    @available(iOS 26, *)
+    private func modernRemoteFileBrowserToolbar(
+        goUp: AnyView,
+        upload: AnyView,
+        createFolder: AnyView,
+        copyPath: AnyView,
+        menu: AnyView
+    ) -> some View {
+        toolbar {
+            ToolbarItem(placement: .bottomBar) { goUp }
+            ToolbarSpacer(.fixed)
+            ToolbarItem(placement: .bottomBar) { upload }
+            ToolbarSpacer(.fixed)
+            ToolbarItem(placement: .bottomBar) { createFolder }
+            ToolbarSpacer(.fixed)
+            ToolbarItem(placement: .bottomBar) { copyPath }
+            ToolbarSpacer(.fixed)
+            ToolbarItem(placement: .bottomBar) { menu }
+        }
+    }
 }
 #endif

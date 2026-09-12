@@ -16,6 +16,7 @@ final class TelemetryTests: XCTestCase {
             Set(OrlixAnalyticsEvent.allCases.map(\.rawValue)),
             [
                 "app_started", "app_launched", "connection_succeeded", "paywall_viewed",
+                "connection_attempted", "connection_failed", "connection_reconnecting",
                 "paywall_cta_tapped", "purchase_started", "purchased", "purchase_succeeded",
                 "purchase_cancelled", "purchase_pending", "purchase_failed", "limit_hit",
                 "free_plan_generation_assigned", "welcome_completed", "custom_action_created",
@@ -217,9 +218,10 @@ final class TelemetryTests: XCTestCase {
     }
 
     func testPrivacyManifestDeclaresCollectedAnalyticsAndDiagnosticsWithoutTracking() throws {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let appRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
-        let manifest = appRoot.appendingPathComponent("Orlix/PrivacyInfo.xcprivacy")
+        let manifest = try XCTUnwrap(Bundle.main.url(
+            forResource: "PrivacyInfo",
+            withExtension: "xcprivacy"
+        ))
         let data = try Data(contentsOf: manifest)
         let plist = try XCTUnwrap(
             PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
@@ -234,6 +236,10 @@ final class TelemetryTests: XCTestCase {
                 "NSPrivacyCollectedDataTypePerformanceData",
                 "NSPrivacyCollectedDataTypeOtherDiagnosticData",
             ]
+        )
+        XCTAssertEqual(
+            Set(collected.flatMap { $0["NSPrivacyCollectedDataTypePurposes"] as? [String] ?? [] }),
+            ["NSPrivacyCollectedDataTypePurposeAnalytics", "NSPrivacyCollectedDataTypePurposeAppFunctionality"]
         )
         XCTAssertTrue(collected.allSatisfy { ($0["NSPrivacyCollectedDataTypeTracking"] as? Bool) == false })
         XCTAssertTrue(collected.allSatisfy { ($0["NSPrivacyCollectedDataTypeLinked"] as? Bool) == false })

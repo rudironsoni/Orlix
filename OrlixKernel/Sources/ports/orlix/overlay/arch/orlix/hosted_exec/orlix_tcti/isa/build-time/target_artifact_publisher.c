@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #define _POSIX_C_SOURCE 200809L
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
 #include "target_artifact_publisher.h"
 
 #include <errno.h>
@@ -1579,6 +1582,59 @@ static void discard_generation(int root_fd, const char *generation,
 	(void)unlinkat(root_fd, generation, AT_REMOVEDIR);
 }
 
+static void remove_tree_at(int dir_fd, const char *name)
+{
+	int fd;
+	DIR *directory;
+	struct dirent *entry;
+
+	fd = openat(dir_fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0) {
+		(void)unlinkat(dir_fd, name, 0);
+		return;
+	}
+	(void)fchmod(fd, 0755);
+	directory = fdopendir(fd);
+	if (!directory) {
+		(void)close(fd);
+		(void)unlinkat(dir_fd, name, AT_REMOVEDIR);
+		return;
+	}
+	while ((entry = readdir(directory))) {
+		if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+			continue;
+		remove_tree_at(dirfd(directory), entry->d_name);
+	}
+	(void)closedir(directory);
+	(void)unlinkat(dir_fd, name, AT_REMOVEDIR);
+}
+
+static void prune_unselected_generations(int root_fd, const char *keep)
+{
+	int dup_fd;
+	DIR *directory;
+	struct dirent *entry;
+
+	dup_fd = dup(root_fd);
+	if (dup_fd < 0)
+		return;
+	directory = fdopendir(dup_fd);
+	if (!directory) {
+		(void)close(dup_fd);
+		return;
+	}
+	while ((entry = readdir(directory))) {
+		if (!strcmp(entry->d_name, ".") ||
+		    !strcmp(entry->d_name, "..") ||
+		    !strcmp(entry->d_name, "current") ||
+		    !strcmp(entry->d_name, keep) ||
+		    entry->d_name[0] == '.')
+			continue;
+		remove_tree_at(root_fd, entry->d_name);
+	}
+	(void)closedir(directory);
+}
+
 const char *orlix_tcti_target_artifact_publish_error_name(
 	enum orlix_tcti_target_artifact_publish_error error)
 {
@@ -1971,17 +2027,19 @@ int orlix_tcti_target_artifact_publish(
 	}
 
 	if (selector_points_to(publisher.root_fd, generation)) {
+		prune_unselected_generations(publisher.root_fd, generation);
 		free(manifest);
 		close(publisher.root_fd);
 		return 0;
 	}
 	if (publish_selector(&publisher, generation))
 		goto fail;
+	prune_unselected_generations(publisher.root_fd, generation);
 
 	/*
 	 * renameat() above is the only visibility point. No operation after it
 	 * may turn a successful canonical selector switch into a reported
-	 * failure.
+	 * failure. Pruning unselected generations is best-effort.
 	 */
 	free(manifest);
 	close(publisher.root_fd);

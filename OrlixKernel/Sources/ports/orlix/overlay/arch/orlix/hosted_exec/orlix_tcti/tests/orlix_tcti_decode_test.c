@@ -1749,15 +1749,40 @@ static void orlix_tcti_decode_rejects_constrained_unpredictable_pair_overlaps(
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_encode_load_store_pair(
 		false, 2, 1, false, 1, 4, 2, 4));
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
-	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_encode_load_store_pair(
-		true, 2, 3, false, -1, 2, 4, 4));
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 
 	/* Offset forms do not write back, so a base overlap remains representable. */
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_encode_load_store_pair(
 		false, 2, 2, true, 0, 4, 2, 4));
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
 			decoded.decode_class);
+}
+
+static void orlix_tcti_decode_accepts_simd_ldp_post_index_matching_gpr_number(
+	struct kunit *test)
+{
+	struct orlix_tcti_decoded_instruction decoded =
+		orlix_tcti_decode_aarch64(0xacc10420U);
+
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 32LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_MEMORY_INDEX_POST,
+			decoded.memory_index_mode);
+
+	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_encode_load_store_pair(
+		true, 2, 3, false, -1, 2, 4, 4));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rt2);
 }
 
 static void orlix_tcti_gadget_executes_non_temporal_simd_pair(struct kunit *test)
@@ -3570,6 +3595,40 @@ static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit 
 
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 		orlix_tcti_decode_aarch64(0xd50b7820U).decode_class);
+}
+
+static void orlix_tcti_switch_executes_el0_cache_maintenance_resume(
+	struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0xd50b7529U,
+		0xd50b7a29U,
+		0xd50b7b29U,
+		0xd50b7e29U,
+	};
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(instructions); index++) {
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(instructions[index]);
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		int ret;
+
+		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_CACHE_MAINTENANCE,
+				decoded.decode_class);
+		regs.regs[9] = 0x1000;
+		regs.sp = 0x2000;
+		regs.pc = 0x4000;
+		before = regs;
+		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs,
+							      &decoded, NULL);
+		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "instruction=%08x",
+				    instructions[index]);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+		KUNIT_EXPECT_EQ(test, before.regs[9], regs.regs[9]);
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+	}
 }
 
 static void orlix_tcti_decode_recognizes_exclusive_monitor_clear(struct kunit *test)
@@ -31706,6 +31765,7 @@ static struct kunit_case orlix_tcti_decode_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_decode_load_store_pair_all_register_fields),
 	KUNIT_CASE(orlix_tcti_decode_load_store_pair_fixed_mask_boundaries),
 	KUNIT_CASE(orlix_tcti_decode_rejects_constrained_unpredictable_pair_overlaps),
+	KUNIT_CASE(orlix_tcti_decode_accepts_simd_ldp_post_index_matching_gpr_number),
 	KUNIT_CASE(orlix_tcti_gadget_executes_non_temporal_simd_pair),
 	KUNIT_CASE(orlix_tcti_gadget_executes_complete_load_store_pair_family),
 	KUNIT_CASE(orlix_tcti_gadget_reports_load_store_pair_second_fault),
@@ -31733,6 +31793,7 @@ static struct kunit_case orlix_tcti_decode_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_decode_recognizes_multiply_add_sub_class),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_move_wide_immediate_class),
 	KUNIT_CASE(orlix_tcti_decode_exhaustive_hint_barrier_cache_family),
+	KUNIT_CASE(orlix_tcti_switch_executes_el0_cache_maintenance_resume),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_load_store_exclusive_class),
 	KUNIT_CASE(orlix_tcti_decode_exhaustive_load_store_exclusive_family),

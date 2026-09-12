@@ -1,0 +1,4 @@
+package(default_visibility = ["//visibility:private"])
+
+exports_files(glob(["migration/*.json"]))
+exports_files(["artifact_identity.bzl", "content_digest.py", "build_state.py"], visibility = ["//visibility:public"])

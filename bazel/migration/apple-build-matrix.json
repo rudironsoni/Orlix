@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "status": "active",
+  "authority": "Bazel is product-compile authority after the ADR 0037 cutover. Make remains the public interface.",
+  "toolchain_pin": {
+    "bazel": "9.2.0",
+    "xcode": "26.6",
+    "xcode_build": "17F113",
+    "apple_sdk": "26.5",
+    "rules_apple": "4.5.3",
+    "rules_swift": "3.6.1",
+    "rules_xcodeproj": "4.1.0"
+  },
+  "notes": [
+    "An installed SDK or simulator does not create a supported row.",
+    "iOS 15.5 runtime proof is make ios15-simulator-gate on a local iOS 15.5 simulator. GitHub Actions run 34035260568 did not start: account payments failed or the spending limit must increase. Empty steps are not a workflow YAML defect.",
+    "artifacts.lock.json names ghcr.io/rudironsoni/orlix digest-pinned uapi, mlibc, and rootfs. make __bazel-substitute-promoted stages reconstructed trees. --config=promoted OrlixOSFramework payload consumes reconstructed rootfs images. Full promoted IPA still requires make __bazel-orlix-app.",
+    "Later-system features stay behind availability or capability gates. The iOS 15 product is the reduced feature set from ADR 0038."
+  ],
+  "rows": [
+    {
+      "id": "ios-15.0-app-sdk-compile",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "proof": "Xcode 26.6 compile of the Orlix app and OrlixOS SDK at MinimumOSVersion 15.0; Bazel //Orlix:Orlix simulator IPA MinimumOSVersion 15.0 with defined _OrlixBoot"
+    },
+    {
+      "id": "ipados-15.0-app-sdk-compile",
+      "apple_os": "iPadOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "proof": "Same 15.0 floor as iOS. No separate iPadOS product binary."
+    },
+    {
+      "id": "ios-15.5-ci-runtime",
+      "apple_os": "iOS",
+      "runtime": "15.5",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "proof": "make ios15-simulator-gate on iOS 15.5 simulator 2DC724EC-5338-493B-BDB3-3CEC8908FE4B; AppLaunchSmoke passed; TEST EXECUTE SUCCEEDED"
+    },
+    {
+      "id": "ios-15.0-development-dbg-source",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "profile": "development",
+      "compilation_mode": "dbg",
+      "component_mode": "source",
+      "result": "supported",
+      "proof": "Make PROFILE=development plus Bazel --compilation_mode=dbg --config=source"
+    },
+    {
+      "id": "ios-15.0-release-opt-source",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "profile": "release",
+      "compilation_mode": "opt",
+      "component_mode": "source",
+      "result": "supported",
+      "proof": "Make PROFILE=release plus Bazel --compilation_mode=opt --config=release --config=source"
+    },
+    {
+      "id": "ios-15.0-promoted-buildset",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "component_mode": "promoted",
+      "result": "supported",
+      "gate": "IPA payload consumption is verified; runtime proof, parity, and cutover remain separate gates",
+      "proof": "make __bazel-orlix-app ORLIX_BAZEL_COMPONENT_MODE=promoted ORLIX_BAZEL_DESTINATION=iphonesimulator passed with Bazel --config=promoted, real Cosign verification, and embedded initramfs equality against reconstructed rootfs digest 794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3 for buildset ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d."
+    },
+    {
+      "id": "signing-distribution",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphoneos",
+      "signing_mode": "distribution",
+      "result": "gated",
+      "gate": "distribution signing stays on the existing TestFlight and App Store workflows until Bazel cutover",
+      "proof": ".github/workflows/testflight-beta.yml and app-store-review.yml"
+    },
+    {
+      "id": "ios-16.1-live-activity",
+      "apple_os": "iOS",
+      "deployment": "16.1",
+      "destination": "iphonesimulator",
+      "result": "supported",
+      "gate": "optional extension; not loaded or invoked from the iOS 15 smoke",
+      "proof": "LiveActivitySmoke MinimumOSVersion 16.1; NativeDependencySmokeApp 15.0 IPA does not embed it"
+    },
+    {
+      "id": "iphoneos-15.0-device-compile",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphoneos",
+      "result": "supported",
+      "proof": "NativeDependencySmokeApp device IPA signed Apple Distribution team ZQ3L7M567L, application-identifier ZQ3L7M567L.com.rudironsoni.Orlix"
+    },
+    {
+      "id": "macos-13.3-apple-silicon",
+      "apple_os": "macOS",
+      "deployment": "13.3",
+      "destination": "macos",
+      "result": "supported",
+      "proof": "NativeDependencyMacSmokeApp.zip LSMinimumSystemVersion 13.3"
+    },
+    {
+      "id": "product-orlix-app-archive",
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphoneos",
+      "result": "gated",
+      "gate": "distribution archive and signing stay on Make plus XcodeGen until cutover",
+      "proof": "make __bazel-orlix-app produces bazel-bin/Orlix/Orlix.ipa MinimumOSVersion 15.0 bundle com.rudironsoni.orlix with a 16.1 Live Activity plugin"
+    },
+    {
+      "id": "xcode-27-local-cache",
+      "required_for_cutover": false,
+      "apple_os": "iOS",
+      "deployment": "15.0",
+      "destination": "iphonesimulator",
+      "result": "gated",
+      "gate": "local cache identity Xcode 27.0 / 27A5252f; not the product pin",
+      "proof": "make __bazel-apple-smoke with ORLIX_XCODE_VERSION=27.0 writes bazel-9.2.0-xcode-27A5252f. Product pin remains 26.6 / 17F113."
+    },
+    {
+      "id": "unknown-xcode",
+      "apple_os": "iOS",
+      "deployment": "unspecified",
+      "destination": "unspecified",
+      "result": "unsupported",
+      "proof": "Make bootstrap rejects any Xcode identity that is not 26.6/17F113 or 27.0/27A5252f before disk-cache write."
+    }
+  ],
+  "feature_gates": [
+    {
+      "feature": "Live Activities / ActivityKit",
+      "ios_15": "unavailable",
+      "newer": "available on iOS 16.1+"
+    },
+    {
+      "feature": "AppIntents.framework",
+      "ios_15": "weak-linked; must not required-load",
+      "newer": "available on iOS 16+"
+    },
+    {
+      "feature": "MLX execution",
+      "ios_15": "disabled; Apple Speech remains the transcription provider",
+      "newer": "MLX on supported iOS 16+"
+    }
+  ],
+  "make_operations": [
+    {
+      "public_name": "build",
+      "later_bazel": "product compile via Make-owned Bazel route",
+      "now": "Make build routes to __bazel-orlix-app after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-orlix-app"
+    },
+    {
+      "public_name": "rebuild",
+      "later_bazel": "clean then product compile",
+      "now": "Make rebuild routes to clean then __bazel-orlix-app after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-orlix-app"
+    },
+    {
+      "public_name": "test",
+      "later_bazel": "hosted proof selection",
+      "now": "Make test routes to __bazel-matrix-check after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-matrix-check"
+    },
+    {
+      "public_name": "app-tests",
+      "later_bazel": "native app unit tests and architecture invariants",
+      "now": "Make app-tests uses the Bazel-owned OrlixTestApp and existing architecture tests when ORLIX_BAZEL_AUTHORITY=1. Default authority stays unchanged until the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-test-app"
+    },
+    {
+      "public_name": "runtime-tests",
+      "later_bazel": "OrlixOS session proof",
+      "now": "Make runtime-tests uses the Bazel-generated Xcode project after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-feasibility-xcodeproj"
+    },
+    {
+      "public_name": "ios15-simulator-gate",
+      "later_bazel": "iOS 15.5 launch proof",
+      "now": "Make ios15-simulator-gate AppLaunchSmoke on a local iOS 15.5 simulator after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-ios15-simulator-gate"
+    },
+    {
+      "public_name": "beta-archive",
+      "later_bazel": "signed product archive from promoted buildset",
+      "now": "Make beta-archive routes to __bazel-orlix-archive after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-orlix-archive"
+    },
+    {
+      "public_name": "xcodeproj",
+      "later_bazel": "local rules_xcodeproj generate",
+      "now": "Make xcodeproj routes to __bazel-feasibility-xcodeproj after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-feasibility-xcodeproj"
+    },
+    {
+      "public_name": "orlix-tcti-kernel-tests",
+      "later_bazel": "KUnit and kselftest inside the app-hosted kernel",
+      "now": "current Make TCTI kernel tests"
+    },
+    {
+      "public_name": "headers_install",
+      "later_bazel": "//... Kernel UAPI headers_install",
+      "now": "Make headers_install routes to __bazel-kernel-uapi after the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-kernel-uapi"
+    }
+  ],
+  "direct_bazel_labels": "maintainer diagnostics only"
+}

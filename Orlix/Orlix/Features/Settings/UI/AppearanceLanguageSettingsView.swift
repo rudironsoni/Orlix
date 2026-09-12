@@ -26,7 +26,7 @@ struct AppearanceLanguageSettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.appearanceAndLanguage")
         .onChange(of: appLanguage) { newValue in

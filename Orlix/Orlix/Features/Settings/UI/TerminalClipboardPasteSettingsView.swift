@@ -80,7 +80,7 @@ struct TerminalClipboardPasteSettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.clipboardAndPaste")
     }

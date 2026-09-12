@@ -1,0 +1,15 @@
+diff --git a/options/ansi/generic/file-io.cpp b/options/ansi/generic/file-io.cpp
+--- a/options/ansi/generic/file-io.cpp
++++ b/options/ansi/generic/file-io.cpp
+@@ -249,7 +249,9 @@ int abstract_file::write(const char *buffer, size_t max_size, size_t *actual_size) {
+ 	// Flush line-buffered streams.
+ 	if(flush_line) {
+ 		if(_write_back())
+ 			return -1;
++		if(int e = _reset(); e)
++			return e;
+ 	}
+ 
+ 	*actual_size = chunk;
+ 	return 0;
+ }

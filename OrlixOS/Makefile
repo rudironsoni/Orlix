@@ -2,6 +2,13 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := all
 .NOTPARALLEL:
 
+# Guest Linux compiles must not see the Xcode iOS SDK. Apple clang honors
+# SDKROOT even when --sysroot points at OrlixMLibC.
+unexport SDKROOT
+unexport IPHONEOS_DEPLOYMENT_TARGET
+unexport TVOS_DEPLOYMENT_TARGET
+unexport WATCHOS_DEPLOYMENT_TARGET
+
 PROJECT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO_ROOT := $(abspath $(PROJECT_DIR)/..)
 MLIBC_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixMLibC/Makefile
@@ -52,7 +59,7 @@ ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mk
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 ORLIX_E2FSCK ?= $(shell if command -v e2fsck >/dev/null 2>&1; then command -v e2fsck; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/e2fsck ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/e2fsck; else printf '%s\n' e2fsck; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures coreutils-test-initramfs test coreutils-test clean mrproper __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures coreutils-test-initramfs test coreutils-test clean mrproper __coreutils-source __coreutils-test-helpers FORCE
 
 all: rootfs
 
@@ -71,6 +78,10 @@ build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STA
 rootfs: $(ORLIXOS_ROOTFS_STAMP)
 
 coreutils-test-initramfs: $(ORLIXOS_COREUTILS_TEST_INITRAMFS)
+
+__coreutils-test-helpers:
+	@chmod +x "$(ORLIXOS_COREUTILS_TEST_VALGRIND)" "$(ORLIXOS_COREUTILS_TEST_CC)" "$(ORLIXOS_COREUTILS_TEST_HELPERS_CHECK)"
+	@"$(ORLIXOS_COREUTILS_TEST_HELPERS_CHECK)"
 
 kernel-payload: rootfs
 	@set -euo pipefail; \

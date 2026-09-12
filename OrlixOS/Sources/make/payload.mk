@@ -2,6 +2,20 @@
 
 .PHONY: __sync-payload __payload-sync-tests
 
+ifeq ($(MAKECMDGOALS),__bazel-info-plist)
+export $(filter ORLIX_OS_%,$(.VARIABLES)) ORLIX_PROFILE
+endif
+
+.PHONY: __bazel-info-plist
+__bazel-info-plist: export DEVELOPMENT_LANGUAGE := en
+__bazel-info-plist: export EXECUTABLE_NAME := OrlixOS
+__bazel-info-plist: export PRODUCT_BUNDLE_IDENTIFIER := com.rudironsoni.orlix.os
+__bazel-info-plist: export PRODUCT_NAME := OrlixOS
+__bazel-info-plist: export MARKETING_VERSION := 0.1
+__bazel-info-plist: export CURRENT_PROJECT_VERSION := 44
+__bazel-info-plist:
+	@python3 -c 'import html,os,plistlib,re,sys; from pathlib import Path; text=Path(sys.argv[1]).read_text(); text=re.sub(r"\$$\(([^)]+)\)", lambda match: html.escape(os.environ[match[1]], quote=True), text); data=plistlib.loads(text.encode()); Path(sys.argv[2]).write_bytes(plistlib.dumps(data))' "$(ORLIX_INFO_SOURCE)" "$(ORLIX_INFO_OUTPUT)"
+
 __sync-payload:
 	@set -euo pipefail; \
 	source_payload="$(ORLIX_PAYLOAD_SOURCE)"; \

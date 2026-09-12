@@ -30,10 +30,12 @@ endif
 .DEFAULT_GOAL := __orlix-gnu-make-contract-reexec
 .PHONY: __orlix-gnu-make-contract-reexec
 
+$(MAKEFILE_LIST): ;
+
 %: __orlix-gnu-make-contract-reexec ; @:
 
 __orlix-gnu-make-contract-reexec:
-	@set -eu; \
+	+@set -eu; \
 	gmake='$(ORLIX_GMAKE)'; \
 	if [ ! -x "$$gmake" ]; then \
 		printf 'Orlix root Make missing required GNU Make >= 4.0 tool: %s; install Homebrew gmake with: brew bundle --file Brewfile\n' "$$gmake" >&2; \

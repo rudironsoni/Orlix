@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "trust_model": "protected-cosign-key",
+  "accepted_key_ids": [
+    "7d2b6c7a15b2b8d063a25f4fd9b4004db272f39de46c1b98087de42e343f9e8d"
+  ],
+  "validity": {
+    "overlap_days": 14,
+    "retirement": "explicit",
+    "revocation": "explicit"
+  },
+  "allowed_workflows": [
+    ".github/workflows/bazel-promote.yml",
+    ".github/workflows/bazel-lock-proposal.yml"
+  ],
+  "allowed_refs": [
+    "refs/heads/main"
+  ],
+  "allowed_media_types": [
+    "application/vnd.oci.image.manifest.v1+json"
+  ],
+  "unsigned_lock_writes_to_main": false,
+  "mutable_latest_tag": false
+}

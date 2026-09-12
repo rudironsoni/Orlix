@@ -14,18 +14,26 @@ static unsigned long orlix_uaccess_copy_from_user(void *to,
 	unsigned char *dst = to;
 
 	/*
-	 * raw_copy_from_user() also backs __copy_from_user_inatomic().  The
-	 * OrlixTCTI transport may fault or acquire sleeping locks, so do not enter it
-	 * when fault handling is disabled.
+	 * raw_copy_from_user() also backs __copy_from_user_inatomic().
+	 * generic_perform_write() copies with pagefaults disabled after
+	 * fault_in_iov_iter_readable(). A full residual here makes that loop
+	 * retry forever. Copy present pages without sleeping; if a page is
+	 * missing or a lock would sleep, return the residual.
 	 */
-	if (!mm || faulthandler_disabled())
+	if (!mm)
 		return n;
 
 	while (remaining) {
 		unsigned long chunk = min(remaining,
 					  PAGE_SIZE - offset_in_page(from));
+		int ret;
 
-		if (orlix_tcti_read_user_data(mm, from, dst, chunk))
+		if (faulthandler_disabled())
+			ret = orlix_tcti_copy_user_data_nofault(
+				mm, from, dst, chunk, ORLIX_TCTI_ACCESS_READ);
+		else
+			ret = orlix_tcti_read_user_data(mm, from, dst, chunk);
+		if (ret)
 			return remaining;
 
 		dst += chunk;
@@ -44,14 +52,21 @@ static unsigned long orlix_uaccess_copy_to_user(unsigned long to,
 	const unsigned char *src = from;
 
 	/* See the corresponding from-user path above. */
-	if (!mm || faulthandler_disabled())
+	if (!mm)
 		return n;
 
 	while (remaining) {
 		unsigned long chunk = min(remaining,
 					  PAGE_SIZE - offset_in_page(to));
+		int ret;
 
-		if (orlix_tcti_write_user_data(mm, to, src, chunk))
+		if (faulthandler_disabled())
+			ret = orlix_tcti_copy_user_data_nofault(
+				mm, to, (void *)src, chunk,
+				ORLIX_TCTI_ACCESS_WRITE);
+		else
+			ret = orlix_tcti_write_user_data(mm, to, src, chunk);
+		if (ret)
 			return remaining;
 
 		src += chunk;

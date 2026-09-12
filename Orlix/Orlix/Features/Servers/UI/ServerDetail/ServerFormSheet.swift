@@ -303,7 +303,7 @@ struct ServerFormSheet: View {
             connectionFormSections
             detailFormSections
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .serverFormPlatformStyle(
             title: isEditing ? String(localized: "Edit Server") : String(localized: "Add Server")
         )
@@ -446,7 +446,7 @@ struct ServerFormSheet: View {
                     }
                 }
             } else {
-                LabeledContent("Workspace") {
+                OrlixLabeledContent("Workspace") {
                     if let selectedWorkspace {
                         HStack(spacing: 8) {
                             if stateStore.isWorkspaceLocked(selectedWorkspace, hasProAccess: storeManager.allowsProFeatures) {
@@ -768,7 +768,7 @@ struct ServerFormSheet: View {
             TextEditor(text: $form.notes)
                 .frame(minHeight: 56)
                 #if os(iOS)
-                .scrollContentBackground(.hidden)
+                .orlixScrollContentBackgroundHidden()
                 .background(Color.clear)
                 #endif
         } header: {
@@ -1113,12 +1113,12 @@ struct MoveServerSheet: View {
     var formContent: some View {
         Form {
             Section {
-                LabeledContent("Server") {
+                OrlixLabeledContent("Server") {
                     Text(server.name)
                         .foregroundStyle(.secondary)
                 }
 
-                LabeledContent("From") {
+                OrlixLabeledContent("From") {
                     Text(currentWorkspace?.name ?? String(localized: "Current Workspace"))
                         .foregroundStyle(.secondary)
                 }
@@ -1175,7 +1175,7 @@ struct MoveServerSheet: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .interactiveDismissDisabled(isMoving)
         .onAppear {
             reconcileSelection()

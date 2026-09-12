@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-28
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
@@ -14,6 +14,8 @@ derived_from:
 amended_by:
   - "[ADR 0029](0029-separate-complete-aarch64-target-from-runtime-profile.md)"
   - "[ADR 0031](0031-keep-arm-shared-asl-external-and-prove-orlixtcti-independently.md)"
+  - "[ADR 0039](0039-cache-tcti-basic-blocks-as-gadget-programs.md)"
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0022: Use Linux ELF With Orlix TCTI On iOS
@@ -28,7 +30,7 @@ Orlix has separate products that must not collapse into one runtime facade:
 
 - `OrlixKernel` is upstream Linux plus the `arch/orlix` port, compiled into the iOS-hosted kernel product.
 - `OrlixMLibC` is the libc for Orlix Linux userspace and tracks upstream mlibc.
-- `OrlixOS.xcframework` is the sole public SDK and app-facing `OrlixMachine` and `OrlixOS.Containers` surface.
+- `OrlixKit.xcframework` is the public SDK and app-facing OrlixEngine, OrlixOS, OrlixInstance, OrlixProcess, and OrlixContainer surface.
 - `OrlixHostAdapter` owns private iOS/Darwin mediation only.
 
 iOS and XNU/Darwin are the physical host environment. They are not the Orlix userspace ABI. Orlix userspace must see Linux UAPI and Linux syscall behavior owned by `OrlixKernel`.

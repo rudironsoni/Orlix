@@ -22,7 +22,7 @@ Add two security features:
 Path note: this spec predates the feature-first migration. Any legacy `Models/`, `Managers/`, `Services/`, or `Views/` file paths in this document should be mapped to the current `App/`, `Core/`, and `Features/` tree.
 
 This spec targets:
-- iOS 16+
+- iOS 15+
 - macOS 13.3+
 
 ## Problem
@@ -74,7 +74,7 @@ Orlix currently protects credentials in Keychain, but opening the app or selecti
 - `LAError` handling (`userCancel`, `systemCancel`, `appCancel`, `biometryNotAvailable`, `biometryNotEnrolled`, `biometryLockout`, `passcodeNotSet`, `authenticationFailed`)
 
 Compatibility note:
-- Do not use SwiftUI-only `LocalAuthenticationView` for V1 because Orlix supports iOS 16, while those newer APIs are iOS 18+.
+- Do not use SwiftUI-only `LocalAuthenticationView` for V1 because Orlix supports iOS 15, while those newer APIs are iOS 18+.
 
 ### 2) Info.plist (iOS required)
 - `NSFaceIDUsageDescription`

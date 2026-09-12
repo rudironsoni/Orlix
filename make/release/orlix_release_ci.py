@@ -152,7 +152,7 @@ def build_release_report(
         "github_run_id": int(run_id),
         "marketing_version": marketing_version,
         "build_number": build_number,
-        "bundle_identifier": "com.rudironsoni.orlix",
+        "bundle_identifier": "com.rudironsoni.Orlix",
         "ipa": {
             "name": ipa_path.name,
             "sha256": sha256(ipa_path),
@@ -181,7 +181,7 @@ def validate_release_report(
         "repository": repository,
         "release_tag": release_tag,
         "commit": commit,
-        "bundle_identifier": "com.rudironsoni.orlix",
+        "bundle_identifier": "com.rudironsoni.Orlix",
     }
     for field, value in expected.items():
         if report.get(field) != value:

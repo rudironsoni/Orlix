@@ -189,15 +189,20 @@ final class TerminalNativeSelectionRect: UITextSelectionRect {
     override var transform: CGAffineTransform { .identity }
 }
 
+enum TerminalNativeFindDecorationStyle {
+    case found
+    case highlighted
+}
+
 struct TerminalNativeFindDecoration {
     let range: NSRange
-    let style: UITextSearchFoundTextStyle
+    let style: TerminalNativeFindDecorationStyle
 }
 
 final class TerminalNativeFindOverlayView: UIView {
     struct Highlight {
         let rect: CGRect
-        let style: UITextSearchFoundTextStyle
+        let style: TerminalNativeFindDecorationStyle
     }
 
     var highlights: [Highlight] = [] {
@@ -392,6 +397,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return rects
     }
 
+    @available(iOS 16.0, *)
     @MainActor func searchRanges(
         query: String,
         options: UITextSearchOptions
@@ -442,6 +448,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return (lines.count - 1, lastLine.utf16Length)
     }
 
+    @available(iOS 16.0, *)
     private func matchesWordMethod(_ range: NSRange, method: UITextSearchOptions.WordMatchMethod) -> Bool {
         switch method {
         case .contains:

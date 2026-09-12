@@ -3,12 +3,14 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0021"
 summary: "Durable Orlix architecture decision ADR 0021."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0021: Keep Libc Out Of OrlixKernel Boundaries
@@ -37,7 +39,7 @@ HostAdapter headers, structs, callbacks, return conventions, ownership rules, an
 
 `OrlixMLibC` remains a separate top-level component under `OrlixMLibC/Sources`, with tests under `OrlixMLibC/Tests`. It consumes Linux UAPI only through `headers_install` output and calls Linux-shaped syscalls. It is the only place for libc sysdeps and libc compatibility work.
 
-`OrlixMLibC.xcframework` and `OrlixCoreUtils.xcframework` are private static implementation artifacts consumed through the sole public `OrlixOS.xcframework`. Coreutils remains ordinary Linux userspace linked against OrlixMLibC; it does not move command behavior into OrlixOS, OrlixKernel, or OrlixHostAdapter.
+OrlixMLibC and OrlixCoreUtils are Linux guest or distribution artifacts packaged or referenced by OrlixKit. They are not Apple-native link dependencies. Coreutils remains ordinary Linux userspace linked against OrlixMLibC; it does not move command behavior into OrlixOS, OrlixKit, OrlixKernel, or OrlixHostAdapter.
 
 Linux kernel internal helper sources are not libc ownership. They may be added to Mach-O-native kernel builds only as real upstream Linux kernel dependencies, never as a libc substitute, and only after auditing header dependencies, exported symbols, and collisions with host or framework symbols.
 

@@ -1,0 +1,1456 @@
+{
+  "schema": 1,
+  "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
+  "source_file": "project.yml",
+  "source_sha256": "cec53a0a64200cae40f3e2acebd4b1025cd08779b8787f5556f8fcc1b3bbf18f",
+  "project": {
+    "name": "Orlix",
+    "options": {
+      "bundleIdPrefix": "com.rudironsoni",
+      "deploymentTarget": {
+        "iOS": "15.0"
+      },
+      "generateEmptyDirectories": true
+    },
+    "configs": {
+      "Debug": "debug",
+      "Release": "release"
+    },
+    "configFiles": {
+      "Debug": "OrlixOS/Sources/distribution/target-settings.xcconfig",
+      "Release": "OrlixOS/Sources/distribution/target-settings.xcconfig"
+    },
+    "settings": {
+      "base": {
+        "ARCHS[sdk=iphonesimulator*]": "arm64",
+        "CLANG_ENABLE_MODULES": true,
+        "CURRENT_PROJECT_VERSION": 44,
+        "ENABLE_DEBUG_DYLIB": false,
+        "ENABLE_USER_SCRIPT_SANDBOXING": false,
+        "MARKETING_VERSION": "0.1",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS": [
+          "$(inherited)",
+          "ORLIX_BETA_OBSERVABILITY"
+        ],
+        "SWIFT_VERSION": "6.0"
+      },
+      "configs": {
+        "Debug": {
+          "GCC_PREPROCESSOR_DEFINITIONS": [
+            "$(inherited)",
+            "DEBUG=1",
+            "ORLIX_APP_HOSTED_BOOT=1",
+            "ORLIX_BETA_OBSERVABILITY=1"
+          ],
+          "SWIFT_ACTIVE_COMPILATION_CONDITIONS": [
+            "$(inherited)",
+            "DEBUG",
+            "ORLIX_BETA_OBSERVABILITY"
+          ]
+        },
+        "Release": {
+          "GCC_PREPROCESSOR_DEFINITIONS": [
+            "$(inherited)",
+            "ORLIX_APP_HOSTED_BOOT=1",
+            "ORLIX_BETA_OBSERVABILITY=1"
+          ]
+        }
+      }
+    },
+    "packages": {
+      "MLXSwift": {
+        "url": "https://github.com/rudironsoni/mlx-swift",
+        "revision": "7b6527f6eb6013c5221679ee08112c04aab6825e"
+      },
+      "SwiftCloudflared": {
+        "url": "https://github.com/rudironsoni/swift-cloudflared.git",
+        "revision": "80eb5b73e00effe78c8d6d44d8aab8ffdd63e976"
+      },
+      "SwiftMosh": {
+        "url": "https://github.com/rudironsoni/swift-mosh",
+        "revision": "e476c1e8745cc1d1a353bc72b8ee1d73eb35e197"
+      },
+      "SwiftET": {
+        "url": "https://github.com/rudironsoni/swift-et",
+        "revision": "47cb48446af6565b5103ddaa431388c1d5bce366"
+      },
+      "SwiftNumerics": {
+        "url": "https://github.com/apple/swift-numerics",
+        "revision": "0c0290ff6b24942dadb83a929ffaaa1481df04a2"
+      },
+      "TweetNaclSwiftwrap": {
+        "url": "https://github.com/bitmark-inc/tweetnacl-swiftwrap.git",
+        "revision": "f8fd111642bf2336b11ef9ea828510693106e954"
+      },
+      "ZIPFoundation": {
+        "url": "https://github.com/weichsel/ZIPFoundation.git",
+        "revision": "edbeaa39b426e54702194b0a601342322f01e400"
+      },
+      "OpenTelemetrySwift": {
+        "url": "https://github.com/open-telemetry/opentelemetry-swift.git",
+        "revision": "9a6d6a8aed22c415bb1673206e337824635f818b"
+      },
+      "OpenTelemetrySwiftCore": {
+        "url": "https://github.com/open-telemetry/opentelemetry-swift-core.git",
+        "revision": "06f8a460a66f813758d22f09025d85df45450a63"
+      }
+    },
+    "targets": {
+      "OrlixKernel": {
+        "type": "framework.static",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixKernel/Sources/boot",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/boot",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/terminal",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/memory",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/observability",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/execution",
+            "createIntermediateGroups": true,
+            "includes": [
+              "*.c"
+            ]
+          },
+          {
+            "path": "OrlixKernel/Sources/include",
+            "createIntermediateGroups": true,
+            "buildPhase": "headers",
+            "headerVisibility": "public"
+          },
+          {
+            "path": "OrlixKernel/Sources/Support",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixKernel/Sources/ports",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          }
+        ],
+        "dependencies": [
+          {
+            "sdk": "CoreFoundation.framework"
+          }
+        ],
+        "preBuildScripts": [
+          {
+            "name": "Build OrlixKernel Archive",
+            "basedOnDependencyAnalysis": false,
+            "script": "set -eu\nexport PATH=\"$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nprofile=\"${ORLIX_PROFILE:-release}\"\nplatform=\"${PLATFORM_NAME:?}\"\nbuild_root=\"${ORLIX_BUILD_ROOT:-$SRCROOT/Build}\"\ncase \"$platform\" in\n    iphoneos|iphonesimulator) ;;\n    *) echo \"unsupported OrlixKernel archive platform: $platform\" >&2; exit 1 ;;\nesac\nif [ \"${ORLIX_XCODE_SKIP_COMPONENT_PREBUILDS:-NO}\" != YES ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixKernel/Makefile\" __kernel-archive PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$build_root\" ORLIX_KERNEL_ARCHIVE_PLATFORMS=\"$platform\"\nelse\n    echo \"Skipping OrlixKernel rebuild for a noncanonical local Xcode compile.\"\nfi\narchive=\"$build_root/OrlixKernel/$profile/$platform/OrlixKernel.a\"\nif [ ! -s \"$archive\" ]; then\n    echo \"missing OrlixKernel archive: $archive\" >&2\n    exit 1\nfi\nmkdir -p \"$TARGET_TEMP_DIR\"\nif [ ! -s \"$TARGET_TEMP_DIR/OrlixKernel.a\" ] || ! cmp -s \"$archive\" \"$TARGET_TEMP_DIR/OrlixKernel.a\"; then\n    cp -f \"$archive\" \"$TARGET_TEMP_DIR/OrlixKernel.a\"\nelse\n    echo \"Reusing unchanged OrlixKernel archive.\"\nfi\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "CLANG_ENABLE_MODULE_VERIFIER": true,
+            "DEFINES_MODULE": true,
+            "INFOPLIST_FILE": "OrlixKernel/Sources/Support/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.kernel",
+            "PRODUCT_NAME": "OrlixKernel",
+            "SKIP_INSTALL": true,
+            "HEADER_SEARCH_PATHS": [
+              "$(SRCROOT)/OrlixKernel/Sources",
+              "$(SRCROOT)/OrlixKernel/Sources/include",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include",
+              "$(SRCROOT)/OrlixHostAdapter/Sources"
+            ],
+            "OTHER_LIBTOOLFLAGS": [
+              "$(inherited)",
+              "$(TARGET_TEMP_DIR)/OrlixKernel.a"
+            ],
+            "ARCHS[sdk=iphonesimulator*]": "arm64"
+          },
+          "GCC_PREPROCESSOR_DEFINITIONS": [
+            "$(inherited)",
+            "ORLIX_APP_HOSTED_BOOT=1",
+            "ORLIX_BETA_OBSERVABILITY=1"
+          ]
+        }
+      },
+      "OrlixMLibC": {
+        "type": "framework.static",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixMLibC/Sources/Provider",
+            "createIntermediateGroups": true,
+            "excludes": [
+              "Info.plist"
+            ]
+          },
+          {
+            "path": "OrlixMLibC/Sources/patches",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixKernel",
+            "link": false
+          }
+        ],
+        "preBuildScripts": [
+          {
+            "name": "Build OrlixMLibC Linux Sysroot",
+            "basedOnDependencyAnalysis": false,
+            "script": "set -eu\nexport PATH=\"$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nunset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET\nprofile=\"${ORLIX_PROFILE:-release}\"\nbuild_root=\"${ORLIX_BUILD_ROOT:-$SRCROOT/Build}\"\nif [ \"${ORLIX_XCODE_SKIP_COMPONENT_PREBUILDS:-NO}\" != YES ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixMLibC/Makefile\" build PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$build_root\"\nelse\n    test -d \"$build_root/OrlixMLibC/sysroot/$profile\" || {\n        echo \"missing prebuilt OrlixMLibC sysroot for profile $profile\" >&2\n        exit 1\n    }\n    echo \"Using the existing OrlixMLibC sysroot for a noncanonical local Xcode compile.\"\nfi\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "DEFINES_MODULE": false,
+            "INFOPLIST_FILE": "OrlixMLibC/Sources/Provider/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.mlibc",
+            "PRODUCT_NAME": "OrlixMLibC",
+            "SKIP_INSTALL": true
+          }
+        }
+      },
+      "OrlixCoreUtils": {
+        "type": "framework.static",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixCoreUtils/Sources/Provider",
+            "createIntermediateGroups": true,
+            "excludes": [
+              "Info.plist"
+            ]
+          },
+          {
+            "path": "OrlixCoreUtils/Sources/Programs",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixCoreUtils/Sources/make",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixMLibC",
+            "link": false
+          }
+        ],
+        "preBuildScripts": [
+          {
+            "name": "Build OrlixCoreUtils Linux Payload",
+            "basedOnDependencyAnalysis": false,
+            "script": "set -eu\nexport PATH=\"$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nunset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET\nprofile=\"${ORLIX_PROFILE:-release}\"\nbuild_root=\"${ORLIX_BUILD_ROOT:-$SRCROOT/Build}\"\nif [ \"${ORLIX_XCODE_SKIP_COMPONENT_PREBUILDS:-NO}\" != YES ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixCoreUtils/Makefile\" build PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$build_root\"\nelse\n    test -d \"$build_root/OrlixCoreUtils/stage/$profile\" || {\n        echo \"missing prebuilt OrlixCoreUtils payload for profile $profile\" >&2\n        exit 1\n    }\n    echo \"Using the existing OrlixCoreUtils payload for a noncanonical local Xcode compile.\"\nfi\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "DEFINES_MODULE": false,
+            "INFOPLIST_FILE": "OrlixCoreUtils/Sources/Provider/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.coreutils",
+            "PRODUCT_NAME": "OrlixCoreUtils",
+            "SKIP_INSTALL": true
+          }
+        }
+      },
+      "OrlixOS": {
+        "type": "framework",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOS/Sources/Session",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixOS/Sources/init",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixOS/Sources/make",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixOS/Sources/include",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixOS/Sources/patches",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixKernel",
+            "link": true
+          },
+          {
+            "target": "OrlixMLibC",
+            "link": true
+          },
+          {
+            "target": "OrlixCoreUtils",
+            "link": true
+          },
+          {
+            "sdk": "libz.tbd"
+          }
+        ],
+        "postBuildScripts": [
+          {
+            "name": "Embed OrlixOS Resources",
+            "basedOnDependencyAnalysis": true,
+            "inputFiles": [
+              "$(SRCROOT)/OrlixOS/Makefile",
+              "$(SRCROOT)/OrlixCoreUtils/Makefile",
+              "$(SRCROOT)/OrlixCoreUtils/Sources/make/config.mk",
+              "$(SRCROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig",
+              "$(SRCROOT)/OrlixOS/Sources/init",
+              "$(SRCROOT)/OrlixOS/Sources/make",
+              "$(SRCROOT)/OrlixOS/Sources/make/rules.mk",
+              "$(SRCROOT)/OrlixKernel/Makefile",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/configs",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/patches",
+              "$(SRCROOT)/OrlixOS/Makefile",
+              "$(SRCROOT)/OrlixOS/Sources/make/payload.mk",
+              "$(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk",
+              "$(SRCROOT)/OrlixOS/Sources/init/init.c",
+              "$(SRCROOT)/OrlixOS/Sources/init/console_policy.c",
+              "$(SRCROOT)/OrlixOS/Sources/init/console_policy.h",
+              "$(SRCROOT)/OrlixOS/Sources/init/terminal_mux.c",
+              "$(SRCROOT)/OrlixOS/Sources/init/terminal_mux.h",
+              "$(SRCROOT)/OrlixOS/Sources/init/rootinit.c",
+              "$(SRCROOT)/OrlixOS/Sources/make/config.mk",
+              "$(SRCROOT)/OrlixOS/Sources/make/packages.mk",
+              "$(SRCROOT)/OrlixOS/Sources/make/rootfs.mk"
+            ],
+            "outputFiles": [
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/OrlixOSManifest.plist",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/.orlix-payload-ready",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/initramfs.cpio.gz",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/base.ext4",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/state.ext4",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts/development.dtb",
+              "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts/release.dtb"
+            ],
+            "script": "set -eu\nexport PATH=\"$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nunset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET\nbuild_root=\"${ORLIX_BUILD_ROOT:-$SRCROOT/Build}\"\nORLIX_BUILD_ROOT=\"$build_root\"\nif [ \"${ORLIX_OS_SKIP_PAYLOAD_EMBED:-NO}\" = YES ]; then\n    echo \"Skipping OrlixOS payload embed because ORLIX_OS_SKIP_PAYLOAD_EMBED=YES\"\n    exit 0\nfi\nprofile=\"${ORLIX_PROFILE:-release}\"\nORLIX_OS_PAYLOAD_SOURCE_ROOT=\"$ORLIX_BUILD_ROOT/OrlixKernel/resource-staging\"\nORLIX_OS_ROOT_INITRAMFS_INPUT=\"$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/rootfs/initramfs.cpio.gz\"\nORLIX_OS_BASE_ROOT_TREE_INPUT=\"$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/base-tree\"\nORLIX_OS_STATE_ROOT_TREE_INPUT=\"$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/state-tree\"\npayload=\"$ORLIX_OS_PAYLOAD_SOURCE_ROOT/$profile\"\nif [ \"${ORLIX_OS_EXPECTED_ROOTFS_INPUT+x}\" = x ]; then\n    expected_rootfs_input=\"$ORLIX_OS_EXPECTED_ROOTFS_INPUT\"\nelse\n    expected_rootfs_input=\"$ORLIX_OS_ROOT_INITRAMFS_INPUT\"\nfi\nif [ \"${ORLIX_OS_EXPECTED_BASE_ROOT_TREE_INPUT+x}\" = x ]; then\n    expected_base_root_tree_input=\"$ORLIX_OS_EXPECTED_BASE_ROOT_TREE_INPUT\"\nelse\n    expected_base_root_tree_input=\"$ORLIX_OS_BASE_ROOT_TREE_INPUT\"\nfi\nif [ \"${ORLIX_OS_EXPECTED_STATE_ROOT_TREE_INPUT+x}\" = x ]; then\n    expected_state_root_tree_input=\"$ORLIX_OS_EXPECTED_STATE_ROOT_TREE_INPUT\"\nelse\n    expected_state_root_tree_input=\"$ORLIX_OS_STATE_ROOT_TREE_INPUT\"\nfi\nstamp=\"$payload/.orlix-payload-ready\"\npayload_needs_rebuild=0\nif [ ! -d \"$payload\" ] || [ ! -s \"$stamp\" ]; then\n    payload_needs_rebuild=1\nelse\n    rootfs_input=\"$(sed -n 's/^rootfs_input=//p' \"$stamp\")\"\n    base_root_tree_input=\"$(sed -n 's/^base_root_tree_input=//p' \"$stamp\")\"\n    state_root_tree_input=\"$(sed -n 's/^state_root_tree_input=//p' \"$stamp\")\"\n    if [ \"$rootfs_input\" != \"$expected_rootfs_input\" ] ||\n       { [ -n \"$expected_base_root_tree_input\" ] && [ \"$base_root_tree_input\" != \"$expected_base_root_tree_input\" ]; } ||\n       { [ -n \"$expected_state_root_tree_input\" ] && [ \"$state_root_tree_input\" != \"$expected_state_root_tree_input\" ]; }; then\n        payload_needs_rebuild=1\n    fi\nfi\nif [ \"$payload_needs_rebuild\" = 1 ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixOS/Makefile\" kernel-payload PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$ORLIX_BUILD_ROOT\"\nelse\n  payload_inputs=\"\n    $SRCROOT/OrlixOS/Makefile\n    $SRCROOT/OrlixOS/Sources/distribution/manifest.mk\n    $SRCROOT/OrlixOS/Sources/distribution/target-settings.xcconfig\n    $SRCROOT/OrlixOS/Sources/init/init.c\n    $SRCROOT/OrlixOS/Sources/init/console_policy.c\n    $SRCROOT/OrlixOS/Sources/init/console_policy.h\n  $SRCROOT/OrlixOS/Sources/init/rootinit.c\n  $SRCROOT/OrlixOS/Sources/make/config.mk\n  $SRCROOT/OrlixOS/Sources/make/packages.mk\n  $SRCROOT/OrlixOS/Sources/make/rootfs.mk\n  $SRCROOT/OrlixKernel/Makefile\n  $SRCROOT/OrlixKernel/Sources/ports/orlix/configs\n  $SRCROOT/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk\n  $SRCROOT/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk\n  $SRCROOT/OrlixKernel/Sources/ports/orlix/overlay\n  $SRCROOT/OrlixKernel/Sources/ports/orlix/patches\n              \"\n    for payload_input in $payload_inputs; do\n        if [ -e \"$payload_input\" ] && [ \"$payload_input\" -nt \"$stamp\" ]; then\n            payload_needs_rebuild=1\n            break\n        fi\n    done\n    if [ \"$payload_needs_rebuild\" = 1 ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixOS/Makefile\" kernel-payload PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$ORLIX_BUILD_ROOT\"\n    fi\nfi\nif [ ! -d \"$payload\" ]; then\n    echo \"missing staged OrlixOS resources after packaging: $payload\" >&2\n    exit 1\nfi\nif [ ! -s \"$stamp\" ]; then\n    echo \"missing OrlixOS payload stamp after packaging: $stamp\" >&2\n    exit 1\nfi\nrootfs_input=\"$(sed -n 's/^rootfs_input=//p' \"$stamp\")\"\nbase_root_tree_input=\"$(sed -n 's/^base_root_tree_input=//p' \"$stamp\")\"\nstate_root_tree_input=\"$(sed -n 's/^state_root_tree_input=//p' \"$stamp\")\"\ncase \"$rootfs_input\" in\n    \"$expected_rootfs_input\") ;;\n    *)\n        echo \"OrlixOS payload is not packaged from the expected rootfs: $rootfs_input\" >&2\n        echo \"expected: $expected_rootfs_input\" >&2\n        exit 1\n        ;;\nesac\nif [ -n \"$expected_base_root_tree_input\" ]; then\n    case \"$base_root_tree_input\" in\n        \"$expected_base_root_tree_input\") ;;\n        *)\n            echo \"OrlixOS payload is missing the expected base root tree: $base_root_tree_input\" >&2\n            echo \"expected: $expected_base_root_tree_input\" >&2\n            exit 1\n            ;;\n    esac\nfi\nif [ -n \"$expected_state_root_tree_input\" ]; then\n    case \"$state_root_tree_input\" in\n        \"$expected_state_root_tree_input\") ;;\n        *)\n            echo \"OrlixOS payload is missing the expected state root tree: $state_root_tree_input\" >&2\n            echo \"expected: $expected_state_root_tree_input\" >&2\n            exit 1\n            ;;\n    esac\nfi\ndestination=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\n\"${MAKE:-make}\" -f \"$SRCROOT/OrlixOS/Makefile\" __sync-payload ORLIX_PAYLOAD_SOURCE=\"$payload\" ORLIX_PAYLOAD_DESTINATION=\"$destination\"\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "BUILD_LIBRARY_FOR_DISTRIBUTION": true,
+            "CLANG_ENABLE_MODULE_VERIFIER": true,
+            "DEFINES_MODULE": true,
+            "INFOPLIST_FILE": "OrlixOS/Sources/Session/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os",
+            "PRODUCT_NAME": "OrlixOS",
+            "SKIP_INSTALL": false
+          }
+        }
+      },
+      "OrlixOSTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOS/Tests/XCTest/OrlixOSTests",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixOS/Tests/ConsolePolicy",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          },
+          {
+            "path": "OrlixOS/Tests/TerminalMux",
+            "createIntermediateGroups": true,
+            "buildPhase": "none"
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          },
+          {
+            "target": "OrlixOS"
+          },
+          {
+            "sdk": "libz.tbd"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "Orlix": {
+        "type": "application",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "Orlix/Orlix/App",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Core",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Features",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/OrlixShared",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Assets.xcassets",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "Orlix/Orlix/Resources",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "excludes": [
+              "Assets.xcassets",
+              "ghostty",
+              "terminfo"
+            ]
+          },
+          {
+            "path": "Orlix/Orlix/Resources/Assets.xcassets",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "Orlix/Orlix/Resources/ghostty",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "type": "folder"
+          },
+          {
+            "path": "Orlix/Orlix/Resources/terminfo",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "type": "folder"
+          },
+          {
+            "path": "Orlix/Orlix/PrivacyInfo.xcprivacy",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "docs/sources/release/orlix-app-release-inputs.json",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/execution/macho_arch_name.c",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOS",
+            "embed": true
+          },
+          {
+            "target": "OrlixLiveActivity",
+            "embed": true
+          },
+          {
+            "package": "MLXSwift",
+            "products": [
+              "MLX",
+              "MLXNN",
+              "MLXFFT"
+            ]
+          },
+          {
+            "package": "SwiftCloudflared",
+            "product": "Cloudflared"
+          },
+          {
+            "package": "SwiftMosh",
+            "products": [
+              "MoshCore",
+              "MoshBootstrap"
+            ]
+          },
+          {
+            "package": "SwiftET",
+            "products": [
+              "ETSession",
+              "ETBootstrap"
+            ]
+          },
+          {
+            "package": "ZIPFoundation",
+            "product": "ZIPFoundation"
+          },
+          {
+            "package": "OpenTelemetrySwift",
+            "product": "OpenTelemetryProtocolExporterHTTP"
+          },
+          {
+            "package": "OpenTelemetrySwiftCore",
+            "products": [
+              "OpenTelemetryApi",
+              "OpenTelemetrySdk"
+            ]
+          },
+          {
+            "sdk": "AppIntents.framework",
+            "weak": true
+          }
+        ],
+        "settings": {
+          "base": {
+            "ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS": true,
+            "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+            "CODE_SIGN_STYLE": "Automatic",
+            "CODE_SIGN_ENTITLEMENTS": "Orlix/Orlix-iOS/Orlix.entitlements",
+            "PROVISIONING_PROFILE_SPECIFIER": "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)",
+            "DEAD_CODE_STRIPPING": true,
+            "ENABLE_DEBUG_DYLIB": false,
+            "ENABLE_PREVIEWS": true,
+            "GENERATE_INFOPLIST_FILE": false,
+            "CLANG_CXX_LANGUAGE_STANDARD": "gnu++20",
+            "HEADER_SEARCH_PATHS[sdk=iphoneos*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "INFOPLIST_FILE": "Orlix/Orlix-iOS/Info.plist",
+            "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+            "INFOPLIST_KEY_CFBundleDisplayName": "Orlix",
+            "INFOPLIST_KEY_CFBundleName": "Orlix",
+            "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.developer-tools",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks",
+            "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios/lib",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/ios/lib"
+            ],
+            "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/lib",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/ios-simulator/lib"
+            ],
+            "OTHER_LDFLAGS": [
+              "$(inherited)",
+              "-lghostty",
+              "-lssh2",
+              "-lssl",
+              "-lcrypto",
+              "-lc++",
+              "-lz",
+              "-framework",
+              "Metal",
+              "-framework",
+              "QuartzCore",
+              "-framework",
+              "UIKit"
+            ],
+            "OTHER_MTLFLAGS": "-Wno-c++17-extensions",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.Orlix",
+            "PRODUCT_NAME": "Orlix",
+            "APP_REVIEW_CODE": "ORLIX-REVIEW-2026",
+            "ORLIX_ANALYTICS_ENABLED": false,
+            "ORLIX_OBSERVABILITY_ENABLED": false,
+            "ORLIX_OPENPANEL_TRACK_ENDPOINT": "https://analytics.orlix.rudironsoni.cloud/track",
+            "ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT": "https://otlp.orlix.rudironsoni.cloud",
+            "ORLIX_TELEMETRY_ENVIRONMENT": "development",
+            "REGISTER_APP_GROUPS": true,
+            "STRING_CATALOG_GENERATE_SYMBOLS": true,
+            "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
+            "SUPPORTS_MACCATALYST": false,
+            "SWIFT_APPROACHABLE_CONCURRENCY": true,
+            "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
+            "SWIFT_EMIT_LOC_STRINGS": true,
+            "SWIFT_OBJC_BRIDGING_HEADER": "Orlix/Orlix/ghostty-bridging-header.h",
+            "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": 12
+          },
+          "configs": {
+            "Debug": {
+              "APS_ENVIRONMENT": "development",
+              "ORLIX_TELEMETRY_ENVIRONMENT": "simulator-validation"
+            },
+            "Release": {
+              "APS_ENVIRONMENT": "production",
+              "ORLIX_TELEMETRY_ENVIRONMENT": "testflight"
+            }
+          }
+        }
+      },
+      "OrlixTestApp": {
+        "type": "application",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "Orlix/Orlix/App",
+            "createIntermediateGroups": true,
+            "excludes": [
+              "Orlix.swift"
+            ]
+          },
+          {
+            "path": "Orlix/Orlix/Core",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Features",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/OrlixShared",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixTestApp/Sources",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "Orlix/Orlix/Assets.xcassets",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "Orlix/Orlix/Resources",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "excludes": [
+              "Assets.xcassets",
+              "ghostty",
+              "terminfo"
+            ]
+          },
+          {
+            "path": "Orlix/Orlix/Resources/Assets.xcassets",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "Orlix/Orlix/Resources/ghostty",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "type": "folder"
+          },
+          {
+            "path": "Orlix/Orlix/Resources/terminfo",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources",
+            "type": "folder"
+          },
+          {
+            "path": "Orlix/Orlix/PrivacyInfo.xcprivacy",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "docs/sources/release/orlix-app-release-inputs.json",
+            "createIntermediateGroups": true,
+            "buildPhase": "resources"
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/execution/macho_arch_name.c",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOS",
+            "embed": true
+          },
+          {
+            "package": "MLXSwift",
+            "products": [
+              "MLX",
+              "MLXNN",
+              "MLXFFT"
+            ]
+          },
+          {
+            "package": "SwiftCloudflared",
+            "product": "Cloudflared"
+          },
+          {
+            "package": "SwiftMosh",
+            "products": [
+              "MoshCore",
+              "MoshBootstrap"
+            ]
+          },
+          {
+            "package": "SwiftET",
+            "products": [
+              "ETSession",
+              "ETBootstrap"
+            ]
+          },
+          {
+            "package": "ZIPFoundation",
+            "product": "ZIPFoundation"
+          },
+          {
+            "package": "OpenTelemetrySwift",
+            "product": "OpenTelemetryProtocolExporterHTTP"
+          },
+          {
+            "package": "OpenTelemetrySwiftCore",
+            "products": [
+              "OpenTelemetryApi",
+              "OpenTelemetrySdk"
+            ]
+          },
+          {
+            "sdk": "AppIntents.framework",
+            "weak": true
+          }
+        ],
+        "settings": {
+          "base": {
+            "ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS": true,
+            "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+            "CODE_SIGN_STYLE": "Automatic",
+            "CODE_SIGN_ENTITLEMENTS": "Orlix/Orlix-iOS/Orlix.entitlements",
+            "PROVISIONING_PROFILE_SPECIFIER": "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)",
+            "DEAD_CODE_STRIPPING": true,
+            "ENABLE_DEBUG_DYLIB": false,
+            "ENABLE_PREVIEWS": true,
+            "GENERATE_INFOPLIST_FILE": false,
+            "CLANG_CXX_LANGUAGE_STANDARD": "gnu++20",
+            "HEADER_SEARCH_PATHS[sdk=iphoneos*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "INFOPLIST_FILE": "Orlix/Orlix-iOS/Info.plist",
+            "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+            "INFOPLIST_KEY_CFBundleDisplayName": "Orlix",
+            "INFOPLIST_KEY_CFBundleName": "Orlix",
+            "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.developer-tools",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks",
+            "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios/lib",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/ios/lib"
+            ],
+            "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/lib",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/ios-simulator/lib"
+            ],
+            "OTHER_LDFLAGS": [
+              "$(inherited)",
+              "-lghostty",
+              "-lssh2",
+              "-lssl",
+              "-lcrypto",
+              "-lc++",
+              "-lz",
+              "-framework",
+              "Metal",
+              "-framework",
+              "QuartzCore",
+              "-framework",
+              "UIKit"
+            ],
+            "OTHER_MTLFLAGS": "-Wno-c++17-extensions",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.test-app",
+            "PRODUCT_NAME": "OrlixTestApp",
+            "APP_REVIEW_CODE": "ORLIX-REVIEW-2026",
+            "ORLIX_ANALYTICS_ENABLED": false,
+            "ORLIX_OBSERVABILITY_ENABLED": false,
+            "ORLIX_OPENPANEL_TRACK_ENDPOINT": "https://analytics.orlix.rudironsoni.cloud/track",
+            "ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT": "https://otlp.orlix.rudironsoni.cloud",
+            "ORLIX_TELEMETRY_ENVIRONMENT": "development",
+            "REGISTER_APP_GROUPS": true,
+            "STRING_CATALOG_GENERATE_SYMBOLS": true,
+            "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
+            "SUPPORTS_MACCATALYST": false,
+            "SWIFT_APPROACHABLE_CONCURRENCY": true,
+            "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
+            "SWIFT_EMIT_LOC_STRINGS": true,
+            "SWIFT_OBJC_BRIDGING_HEADER": "Orlix/Orlix/ghostty-bridging-header.h",
+            "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": 12,
+            "PRODUCT_MODULE_NAME": "Orlix"
+          },
+          "configs": {
+            "Debug": {
+              "APS_ENVIRONMENT": "development",
+              "ORLIX_TELEMETRY_ENVIRONMENT": "simulator-validation"
+            },
+            "Release": {
+              "APS_ENVIRONMENT": "production",
+              "ORLIX_TELEMETRY_ENVIRONMENT": "testflight"
+            }
+          }
+        }
+      },
+      "OrlixLiveActivity": {
+        "type": "app-extension",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "Orlix/OrlixLiveActivity",
+            "createIntermediateGroups": true,
+            "excludes": [
+              "Assets.xcassets",
+              "Info.plist"
+            ]
+          },
+          {
+            "path": "Orlix/OrlixShared",
+            "createIntermediateGroups": true
+          }
+        ],
+        "resources": [
+          {
+            "path": "Orlix/OrlixLiveActivity/Assets.xcassets",
+            "createIntermediateGroups": true
+          }
+        ],
+        "settings": {
+          "base": {
+            "CODE_SIGN_STYLE": "Automatic",
+            "DEAD_CODE_STRIPPING": true,
+            "GENERATE_INFOPLIST_FILE": false,
+            "INFOPLIST_FILE": "Orlix/OrlixLiveActivity/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "16.1",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.Orlix.live-activity",
+            "PRODUCT_NAME": "OrlixLiveActivity",
+            "SKIP_INSTALL": true,
+            "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": 12
+          }
+        }
+      },
+      "OrlixTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "Orlix/OrlixTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixTestApp"
+          },
+          {
+            "package": "SwiftMosh",
+            "product": "MoshBootstrap"
+          },
+          {
+            "package": "SwiftET",
+            "products": [
+              "ETSession",
+              "ETBootstrap"
+            ]
+          }
+        ],
+        "settings": {
+          "base": {
+            "CODE_SIGN_STYLE": "Automatic",
+            "GENERATE_INFOPLIST_FILE": true,
+            "HEADER_SEARCH_PATHS[sdk=iphoneos*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]": [
+              "$(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include",
+              "$(SRCROOT)/Orlix/Vendor/libssh2/include"
+            ],
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)",
+            "STRING_CATALOG_GENERATE_SYMBOLS": false,
+            "SWIFT_APPROACHABLE_CONCURRENCY": true,
+            "SWIFT_EMIT_LOC_STRINGS": false,
+            "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": 12
+          }
+        }
+      },
+      "OrlixUITests": {
+        "type": "bundle.ui-testing",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "Orlix/OrlixUITests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "Orlix"
+          }
+        ],
+        "settings": {
+          "base": {
+            "CODE_SIGN_STYLE": "Automatic",
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.ui-tests",
+            "SWIFT_APPROACHABLE_CONCURRENCY": true,
+            "SWIFT_EMIT_LOC_STRINGS": false,
+            "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": 12,
+            "TEST_TARGET_NAME": "Orlix"
+          }
+        }
+      },
+      "OrlixOSTestApp": {
+        "type": "application",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Sources",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOS",
+            "embed": true
+          }
+        ],
+        "postBuildScripts": [
+          {
+            "name": "Embed Orlix Upstream Test Rootfs Bundles",
+            "basedOnDependencyAnalysis": false,
+            "script": "set -eu\nexport PATH=\"$HOME/.local/bin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nprofile=\"${ORLIX_PROFILE:-release}\"\nbuild_root=\"${ORLIX_BUILD_ROOT:-$SRCROOT/Build}\"\nORLIX_BUILD_ROOT=\"$build_root\"\nrebuild_kselftest_if_stale() {\n  source_root=\"$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension\"\n  archive=\"$source_root/rootfs/initramfs.cpio.gz\"\n    needs_rebuild=0\n    if [ ! -s \"$archive\" ]; then\n        needs_rebuild=1\n    elif find \"$SRCROOT/OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix\" -type f \\( -name '*.c' -o -name '*.h' -o -name Makefile \\) -newer \"$archive\" -print -quit | grep -q .; then\n        needs_rebuild=1\n    elif [ \"$SRCROOT/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk\" -nt \"$archive\" ]; then\n        needs_rebuild=1\n    fi\n  if [ \"$needs_rebuild\" -eq 1 ]; then\n      make -f \"$SRCROOT/OrlixKernel/Makefile\" kselftest PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$ORLIX_BUILD_ROOT\" libc=orlixmlibc\n  fi\n}\nrebuild_mlibc_if_stale() {\n  source_root=\"$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension\"\n  archive=\"$source_root/rootfs/initramfs.cpio.gz\"\n  needs_rebuild=0\n  if [ ! -s \"$archive\" ]; then\n      needs_rebuild=1\n  elif [ \"$SRCROOT/OrlixMLibC/Makefile\" -nt \"$archive\" ]; then\n      needs_rebuild=1\n  elif find \"$SRCROOT/OrlixMLibC/Tests\" \"$SRCROOT/OrlixMLibC/Sources\" -type f \\( -name '*.c' -o -name '*.h' -o -name '*.hpp' -o -name '*.patch' -o -name Makefile \\) -newer \"$archive\" -print -quit | grep -q .; then\n      needs_rebuild=1\n  elif [ -s \"$ORLIX_BUILD_ROOT/OrlixMLibC/sysroot/$profile/.orlixmlibc-sysroot-ready\" ] && [ \"$ORLIX_BUILD_ROOT/OrlixMLibC/sysroot/$profile/.orlixmlibc-sysroot-ready\" -nt \"$archive\" ]; then\n      needs_rebuild=1\n  fi\n  if [ \"$needs_rebuild\" -eq 1 ]; then\n      make -f \"$SRCROOT/OrlixMLibC/Makefile\" test-initramfs PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$ORLIX_BUILD_ROOT\"\n  fi\n}\ncopy_if_present() {\n  source=\"$1\"\n  name=\"$2\"\n    destination=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$name\"\n    if [ -d \"$source\" ]; then\n        rm -rf \"$destination\"\n        cp -R \"$source\" \"$destination\"\n    fi\n}\nextension=\"${ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION:?}\"\nrebuild_kselftest_if_stale\nrebuild_mlibc_if_stale\ncopy_if_present \"$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension\" \"$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension\"\ncopy_if_present \"$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension\" \"$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension\"\ncopy_if_present \"$ORLIX_BUILD_ROOT/OrlixOS/test-initramfs/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension\" \"$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension\"\nif [ \"${ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES:-NO}\" != YES ]; then\n    \"${MAKE:-make}\" -f \"$SRCROOT/OrlixOS/Makefile\" environment-runtime-test-fixtures PROFILE=\"$profile\" ORLIX_BUILD_ROOT=\"$ORLIX_BUILD_ROOT\"\n    copy_if_present \"$ORLIX_BUILD_ROOT/OrlixOS/environment-runtime-test-fixtures\" \"EnvironmentRuntimeTestFixtures\"\nelse\n    rm -rf \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/EnvironmentRuntimeTestFixtures\"\nfi\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "CLANG_ENABLE_MODULE_VERIFIER": true,
+            "DEFINES_MODULE": true,
+            "GENERATE_INFOPLIST_FILE": false,
+            "INFOPLIST_FILE": "OrlixOSTestApp/Info.plist",
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.test-app",
+            "PRODUCT_NAME": "OrlixOSTestApp"
+          }
+        }
+      },
+      "OrlixKernelHostedTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixKernel/Tests/XCTest/OrlixKernelHostedTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixTestApp"
+          },
+          {
+            "target": "OrlixKernel",
+            "embed": false
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.kernel-hosted-tests",
+            "HEADER_SEARCH_PATHS": [
+              "$(SRCROOT)/OrlixKernel/Sources/include"
+            ],
+            "GCC_PREPROCESSOR_DEFINITIONS": [
+              "$(inherited)",
+              "ORLIX_APP_HOSTED_BOOT=1"
+            ],
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "OrlixHostAdapterTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/boot",
+            "createIntermediateGroups": true,
+            "includes": [
+              "progress.c",
+              "resources.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/terminal",
+            "createIntermediateGroups": true,
+            "includes": [
+              "console.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/memory",
+            "createIntermediateGroups": true,
+            "includes": [
+              "kernel_mapping.c"
+            ]
+          },
+          {
+            "path": "OrlixHostAdapter/Sources/OrlixHostAdapter/observability",
+            "createIntermediateGroups": true,
+            "includes": [
+              "log.c"
+            ]
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.host-adapter-tests",
+            "HEADER_SEARCH_PATHS": [
+              "$(SRCROOT)/OrlixHostAdapter/Sources",
+              "$(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include"
+            ],
+            "GCC_PREPROCESSOR_DEFINITIONS": [
+              "$(inherited)",
+              "ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=$(ORLIX_OS_LINUX_PAGE_SIZE)"
+            ]
+          }
+        }
+      },
+      "OrlixOSTestAppTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.test-app.tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "OrlixKernelConformanceTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/Support",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/OrlixKernelConformanceTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.kernel-conformance-tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "OrlixMLibCConformanceTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/Support",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/OrlixMLibCConformanceTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.mlibc-conformance-tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "OrlixPackagesConformanceTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/Support",
+            "createIntermediateGroups": true
+          },
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/OrlixPackagesConformanceTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.packages-conformance-tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      },
+      "OrlixOSRuntimeTests": {
+        "type": "bundle.unit-test",
+        "platform": "iOS",
+        "sources": [
+          {
+            "path": "OrlixOSTestApp/Tests/XCTest/OrlixOSRuntimeTests",
+            "createIntermediateGroups": true
+          }
+        ],
+        "dependencies": [
+          {
+            "target": "OrlixOSTestApp"
+          },
+          {
+            "target": "OrlixOS"
+          }
+        ],
+        "postBuildScripts": [
+          {
+            "name": "Build Orlix Environment Runtime Proof Fixtures",
+            "basedOnDependencyAnalysis": false,
+            "script": "set -eu\nprofile=\"${ORLIX_PROFILE:-release}\"\n\"${MAKE:-make}\" -f \"$SRCROOT/OrlixOS/Makefile\" environment-runtime-test-fixtures PROFILE=\"$profile\"\n"
+          }
+        ],
+        "settings": {
+          "base": {
+            "GENERATE_INFOPLIST_FILE": true,
+            "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.orlix.os.runtime-tests",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp",
+            "BUNDLE_LOADER": "$(TEST_HOST)"
+          }
+        }
+      }
+    },
+    "schemes": {
+      "OrlixKernel": {
+        "build": {
+          "targets": {
+            "OrlixKernel": "all"
+          }
+        }
+      },
+      "OrlixOS": {
+        "build": {
+          "targets": {
+            "OrlixOS": "all"
+          }
+        },
+        "archive": {
+          "config": "Release"
+        }
+      },
+      "Orlix": {
+        "build": {
+          "targets": {
+            "Orlix": "all"
+          }
+        },
+        "run": {
+          "config": "Debug",
+          "executable": "Orlix",
+          "storeKitConfiguration": "Orlix/OrlixStoreKit.storekit"
+        },
+        "archive": {
+          "config": "Release"
+        }
+      },
+      "OrlixOS Tests": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixOSTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixOSTests"
+            }
+          ]
+        }
+      },
+      "OrlixKernel Hosted Tests": {
+        "build": {
+          "targets": {
+            "OrlixTestApp": "all",
+            "OrlixKernelHostedTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixKernelHostedTests"
+            }
+          ]
+        }
+      },
+      "Orlix Tests": {
+        "build": {
+          "targets": {
+            "OrlixTestApp": "all",
+            "OrlixTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixTests"
+            }
+          ]
+        }
+      },
+      "Orlix UI Tests": {
+        "build": {
+          "targets": {
+            "Orlix": "all",
+            "OrlixUITests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixUITests"
+            }
+          ]
+        }
+      },
+      "Orlix Release UI Tests": {
+        "build": {
+          "targets": {
+            "Orlix": "all",
+            "OrlixUITests": "test"
+          }
+        },
+        "test": {
+          "config": "Release",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixUITests"
+            }
+          ]
+        }
+      },
+      "OrlixHostAdapter Tests": {
+        "build": {
+          "targets": {
+            "OrlixHostAdapterTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixHostAdapterTests"
+            }
+          ]
+        }
+      },
+      "OrlixOSTestApp Tests": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixOSTestAppTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "environmentVariables": {
+            "BUILD_WORKSPACE_DIRECTORY": "$(SRCROOT)"
+          },
+          "targets": [
+            {
+              "name": "OrlixOSTestAppTests"
+            }
+          ]
+        }
+      },
+      "OrlixOS Runtime Tests": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixOSRuntimeTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixOSRuntimeTests"
+            }
+          ]
+        }
+      },
+      "OrlixKernel Conformance": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixKernelConformanceTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixKernelConformanceTests"
+            }
+          ]
+        }
+      },
+      "OrlixMLibC Conformance": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixMLibCConformanceTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixMLibCConformanceTests"
+            }
+          ]
+        }
+      },
+      "OrlixPackages Conformance": {
+        "build": {
+          "targets": {
+            "OrlixOSTestApp": "all",
+            "OrlixPackagesConformanceTests": "test"
+          }
+        },
+        "test": {
+          "config": "Debug",
+          "gatherCoverageData": false,
+          "targets": [
+            {
+              "name": "OrlixPackagesConformanceTests"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

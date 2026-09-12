@@ -98,6 +98,26 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelCloneThread)
     }
 
+    func testFutexWaitWakeProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelFutexWaitWake)
+    }
+
+    func testPipeAtomicWriteProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelPipeAtomicWrite)
+    }
+
+    func testTmpfsTruncWriteProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTmpfsTruncWrite)
+    }
+
+    func testPthreadAttrProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelPthreadAttr)
+    }
+
+    func testTCTISystemProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTISystem)
+    }
+
     func testBootProfileContractVerifiesVirtioConsoleThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelBootProfile)
     }
@@ -179,6 +199,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
 
     func testOrlixTCTIAtomicMemoryKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIAtomicMemoryDiagnostic)
+    }
+
+    func testOrlixTCTIGadgetProgramBoundaryKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIGadgetProgramBoundaryDiagnostic)
     }
 
     func testOrlixTCTIKthreadHandoffKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {

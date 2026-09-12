@@ -43,6 +43,16 @@ static struct orlix_tcti_block *orlix_tcti_block_find_locked(struct mm_struct *m
 
 static void orlix_tcti_block_free(struct orlix_tcti_block *block)
 {
+	struct orlix_tcti_block *next;
+
+	if (!block)
+		return;
+	next = block->next;
+	block->next = NULL;
+	block->next_pc = 0;
+	block->next_generation = 0;
+	if (next)
+		orlix_tcti_block_put(next);
 	kfree(block);
 }
 
@@ -106,7 +116,6 @@ void orlix_tcti_mapping_sequence_begin(struct mm_struct *mm)
 
 	write_lock(&mm->context.orlix_tcti_mapping_lock);
 	atomic64_inc(&mm->context.orlix_tcti_mapping_sequence);
-	orlix_tcti_bump_code_generation(mm);
 }
 
 void orlix_tcti_mapping_sequence_end(struct mm_struct *mm)
@@ -120,14 +129,20 @@ void orlix_tcti_mapping_sequence_end(struct mm_struct *mm)
 
 u64 orlix_tcti_code_generation(struct mm_struct *mm)
 {
-	(void)mm;
-	return (u64)atomic64_read(&orlix_tcti_global_code_generation);
+	u64 global = (u64)atomic64_read(&orlix_tcti_global_code_generation);
+	u64 local = 0;
+
+	if (mm)
+		local = (u64)atomic64_read(&mm->context.orlix_tcti_code_generation);
+	return global + local;
 }
 
 void orlix_tcti_bump_code_generation(struct mm_struct *mm)
 {
-	(void)mm;
-	atomic64_inc(&orlix_tcti_global_code_generation);
+	if (mm)
+		atomic64_inc(&mm->context.orlix_tcti_code_generation);
+	else
+		atomic64_inc(&orlix_tcti_global_code_generation);
 }
 
 struct orlix_tcti_block *orlix_tcti_block_cache_lookup(struct mm_struct *mm,
@@ -227,6 +242,36 @@ void orlix_tcti_block_put(struct orlix_tcti_block *block)
 {
 	if (block && refcount_dec_and_test(&block->refs))
 		orlix_tcti_block_free(block);
+}
+
+void orlix_tcti_block_remember_next(struct orlix_tcti_block *from,
+			      struct orlix_tcti_block *to, u64 generation)
+{
+	if (!from || !to || from == to)
+		return;
+	if (from->next == to) {
+		from->next_pc = to->guest_start_pc;
+		from->next_generation = generation;
+		return;
+	}
+	if (from->next)
+		orlix_tcti_block_put(from->next);
+	refcount_inc(&to->refs);
+	from->next = to;
+	from->next_pc = to->guest_start_pc;
+	from->next_generation = generation;
+}
+
+struct orlix_tcti_block *orlix_tcti_block_follow_next(
+	struct orlix_tcti_block *from, unsigned long guest_pc, u64 generation)
+{
+	if (!from || !from->next)
+		return NULL;
+	if (from->next_generation != generation || from->next_pc != guest_pc)
+		return NULL;
+	if (from->next->guest_start_pc != guest_pc)
+		return NULL;
+	return from->next;
 }
 
 void orlix_tcti_block_cache_invalidate_mm(struct mm_struct *mm)

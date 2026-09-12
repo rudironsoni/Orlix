@@ -29,7 +29,7 @@ __vendor-build:
 	LIBSSH2_VERSION="1.11.1"
 	LIBSSH2_SHA256="d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
 	MACOS_DEPLOYMENT_TARGET="13.3"
-	IOS_DEPLOYMENT_TARGET="16.0"
+	IOS_DEPLOYMENT_TARGET="15.0"
 
 	GHOSTTY_REPO="https://github.com/wiedymi/ghostty.git"
 	GHOSTTY_REF="$${GHOSTTY_REF:-02af5158c76036291183e746d436eb8f15356662}"
@@ -95,9 +95,21 @@ __vendor-build:
 	    local workdir="$$GHOSTTY_WORKDIR"
 
 	    log_info "Fetching ghostty @ $${GHOSTTY_REF}..."
+	    git_cache="$${ORLIX_GIT_CACHE:-$${HOME}/Library/Caches/Orlix/git}"
+	    ghostty_mirror="$${git_cache}/ghostty.git"
+	    mkdir -p "$${git_cache}"
+	    if [ ! -d "$${ghostty_mirror}/objects" ]; then
+	        git init --bare "$${ghostty_mirror}" >/dev/null
+	        git -C "$${ghostty_mirror}" remote add origin "$${GHOSTTY_REPO}"
+	    else
+	        git -C "$${ghostty_mirror}" remote set-url origin "$${GHOSTTY_REPO}"
+	    fi
+	    if ! git -C "$${ghostty_mirror}" cat-file -e "$${GHOSTTY_REF}^{commit}" 2>/dev/null; then
+	        git -C "$${ghostty_mirror}" fetch --filter=blob:none --depth 1 origin "$${GHOSTTY_REF}"
+	    fi
 	    git init "$${workdir}/ghostty"
-	    git -C "$${workdir}/ghostty" remote add origin "$${GHOSTTY_REPO}"
-	    git -C "$${workdir}/ghostty" fetch --filter=blob:none --depth 1 origin "$${GHOSTTY_REF}"
+	    git -C "$${workdir}/ghostty" remote add origin "$${ghostty_mirror}"
+	    git -C "$${workdir}/ghostty" fetch --depth 1 origin "$${GHOSTTY_REF}"
 	    git -C "$${workdir}/ghostty" checkout --detach FETCH_HEAD
 
 	    local embedded_path="$${workdir}/ghostty/src/apprt/embedded.zig"
@@ -129,9 +141,9 @@ __vendor-build:
 	    # Patch bundle ID to use Orlix's instead of Ghostty's
 	    sed -i '' "s/com\\.mitchellh\\.ghostty/$${BUNDLE_ID}/g" "$${workdir}/ghostty/src/build_config.zig"
 
-	    # Lower iOS minimum to match app deployment target
-	    perl -0pi -e 's@// iOS [0-9]+ picked arbitrarily@// iOS 16 matches app deployment target@' "$${workdir}/ghostty/src/build/Config.zig"
-	    perl -0pi -e 's/\\.ios => \\.\\{ \\.semver = \\.\\{\\n\\s*\\.major = [0-9]+,\\n\\s*\\.minor = [0-9]+,\\n\\s*\\.patch = [0-9]+,\\n\\s*\\} \\},/\\.ios => .{ .semver = .{\\n            .major = 16,\\n            .minor = 0,\\n            .patch = 0,\\n        } },/s' "$${workdir}/ghostty/src/build/Config.zig"
+	    # Lower the iOS minimum to match the Orlix app deployment target.
+	    perl -0pi -e 's@// iOS [0-9]+ picked arbitrarily@// iOS 15 matches the Orlix app deployment target@' "$${workdir}/ghostty/src/build/Config.zig"
+	    perl -0pi -e 's/\\.ios => \\.\\{ \\.semver = \\.\\{\\n\\s*\\.major = [0-9]+,\\n\\s*\\.minor = [0-9]+,\\n\\s*\\.patch = [0-9]+,\\n\\s*\\} \\},/\\.ios => .{ .semver = .{\\n            .major = 15,\\n            .minor = 0,\\n            .patch = 0,\\n        } },/s' "$${workdir}/ghostty/src/build/Config.zig"
 
 	    log_info "Building GhosttyKit.xcframework..."
 

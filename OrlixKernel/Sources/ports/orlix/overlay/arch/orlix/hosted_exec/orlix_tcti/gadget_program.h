@@ -15,18 +15,15 @@ struct orlix_tcti_gadget_word {
 	unsigned long value;
 };
 
-#define ORLIX_TCTI_DECODED_INSTRUCTION_WORDS \
-	DIV_ROUND_UP(sizeof(struct orlix_tcti_decoded_instruction), \
-		     sizeof(struct orlix_tcti_gadget_word))
+#define ORLIX_TCTI_MICRO_OP_WORDS 4U
 #define ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS \
-	(1U + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS + 1U)
+	(ORLIX_TCTI_MICRO_OP_WORDS + 1U)
 #define ORLIX_TCTI_PROGRAM_WORDS_FOR_INSTRUCTIONS(_count) \
-	((_count) * (1U + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS) + 1U)
+	((_count) * ORLIX_TCTI_MICRO_OP_WORDS + 1U)
 
-typedef int (*orlix_tcti_gadget_fn)(struct mm_struct *mm, struct pt_regs *regs,
-			      const struct orlix_tcti_gadget_word **cursor,
-			      unsigned long *fault_address,
-			      struct orlix_tcti_native_capture *capture);
+struct orlix_tcti_exec;
+
+typedef int (*orlix_tcti_gadget_fn)(struct orlix_tcti_exec *exec);
 
 enum orlix_tcti_gadget_program_kind {
 	ORLIX_TCTI_GADGET_PROGRAM_GENERIC,
@@ -64,9 +61,14 @@ int orlix_tcti_execute_gadget_program_authorized_captured(
 	struct orlix_tcti_native_capture *capture);
 enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
 	const struct orlix_tcti_gadget_word *program, size_t word_count);
+u32 orlix_tcti_program_instruction_at(
+	const struct orlix_tcti_gadget_word *program, size_t word_count,
+	u32 index);
 #ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
 void orlix_tcti_gadget_program_set_pre_authorized_test_hook(
 	void (*hook)(void *), void *data);
+bool orlix_tcti_gadget_program_fuses_subs_b_cond(
+	const struct orlix_tcti_gadget_word *program, size_t word_count);
 #endif
 
 #endif /* ORLIX_TCTI_GADGET_PROGRAM_H */

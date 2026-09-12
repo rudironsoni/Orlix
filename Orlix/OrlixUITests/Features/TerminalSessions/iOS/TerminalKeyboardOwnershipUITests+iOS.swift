@@ -110,7 +110,7 @@ final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
     }
 
     @MainActor
-    func testKeyboardButtonRestoresAfterUserHideButTerminalTapDoesNot() throws {
+    func testKeyboardButtonRestoresAfterUserHideButScrollingDoesNot() throws {
         let app = launchKeyboardHarness(simulatesKeyboardFrames: true)
         let terminal = waitForTerminal(in: app)
         let diagnostics = app.staticTexts["orlix.keyboardTest.diagnostics"]
@@ -163,7 +163,7 @@ final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8), diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "userHidden=true", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "browse=true", timeout: 5, diagnostics: diagnosticsText(in: app))
-        wait(for: diagnostics, labelContaining: "coordinatorKeyboardVisible=false", timeout: 5, diagnostics: diagnosticsText(in: app))
+        wait(for: diagnostics, labelContaining: "keyboardPresentation=hidden", timeout: 5, diagnostics: diagnosticsText(in: app))
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForNonExistence(timeout: 5),
             "The software keyboard returned while dismissed. \(diagnosticsText(in: app))"
@@ -203,7 +203,7 @@ final class TerminalKeyboardOwnershipUITests: TerminalKeyboardUITestCase {
             "Return control did not clear after use. \(diagnosticsText(in: app))"
         )
 
-        terminal.tap()
+        terminal.swipeUp()
         wait(for: diagnostics, labelContaining: "userHidden=true", timeout: 3, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "softwareInputActive=true", timeout: 5, diagnostics: diagnosticsText(in: app))
         wait(for: diagnostics, labelContaining: "browse=true", timeout: 5, diagnostics: diagnosticsText(in: app))

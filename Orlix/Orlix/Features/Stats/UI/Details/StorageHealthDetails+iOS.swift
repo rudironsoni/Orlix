@@ -9,13 +9,13 @@ struct StorageHealthDetailsPlatformShell<Content: View>: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             content()
                 .navigationTitle(Text("Storage Health"))
                 .navigationBarTitleDisplayMode(.inline)
                 .statsSheetCloseToolbar()
         }
-        .presentationDetents([.large])
+        .orlixLargePresentationDetent()
     }
 }
 #endif

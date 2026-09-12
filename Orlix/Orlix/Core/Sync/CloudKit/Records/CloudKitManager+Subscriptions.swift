@@ -26,7 +26,7 @@ extension CloudKitManager {
         subscription.notificationInfo = notification
 
         do {
-            if let existing = try? await database.subscription(for: subscriptionID) as? CKDatabaseSubscription,
+            if let existing = try? await cloudDatabase().subscription(for: subscriptionID) as? CKDatabaseSubscription,
                existing.notificationInfo?.shouldSendContentAvailable == true {
                 guard isCurrentGeneration(generation) else { return }
                 logger.debug("CloudKit database subscription already configured")
@@ -34,7 +34,7 @@ extension CloudKitManager {
             }
 
             guard isCurrentGeneration(generation) else { return }
-            _ = try await database.save(subscription)
+            _ = try await cloudDatabase().save(subscription)
             guard isCurrentGeneration(generation) else { return }
             logger.info("Subscribed to database changes")
         } catch {

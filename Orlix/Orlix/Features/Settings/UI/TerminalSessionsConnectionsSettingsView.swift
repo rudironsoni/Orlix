@@ -77,7 +77,7 @@ struct TerminalSessionsConnectionsSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.sessionsAndConnections")
     }

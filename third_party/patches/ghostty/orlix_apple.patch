@@ -1,0 +1,165 @@
+diff --git a/source/src/apprt/embedded.zig b/source/src/apprt/embedded.zig
+--- a/source/src/apprt/embedded.zig
++++ b/source/src/apprt/embedded.zig
+@@ -2362,33 +2362,12 @@ pub const App = struct {
+     /// Sets the window background blur on macOS to the desired value.
+-    /// I do this in Zig as an extern function because I don't know how to
+-    /// call these functions in Swift.
+-    ///
+-    /// This uses an undocumented, non-public API because this is what
+-    /// every terminal appears to use, including Terminal.app.
+     export fn ghostty_set_window_background_blur(
+         app: *App,
+         window: *anyopaque,
+     ) void {
+-        // This is only supported on macOS
+-        if (comptime builtin.target.os.tag != .macos) return;
+-
+-        const config = &app.config;
+-
+-        // Do nothing if we don't have background transparency enabled
+-        if (config.@"background-opacity" >= 1.0) return;
+-
+-        const nswindow = objc.Object.fromId(window);
+-        _ = CGSSetWindowBackgroundBlurRadius(
+-            CGSDefaultConnectionForThread(),
+-            nswindow.msgSend(usize, objc.sel("windowNumber"), .{}),
+-            @intCast(config.@"background-blur".cval()),
+-        );
++        _ = app;
++        _ = window;
+     }
+ 
+-    /// See ghostty_set_window_background_blur
+-    extern "c" fn CGSSetWindowBackgroundBlurRadius(*anyopaque, usize, c_int) i32;
+-    extern "c" fn CGSDefaultConnectionForThread() *anyopaque;
+-
+     // Darwin-only C APIs.
+     const Darwin = struct {
+         export fn ghostty_surface_set_display_id(ptr: *Surface, display_id: u32) void {
+diff --git a/source/src/build/Config.zig b/source/src/build/Config.zig
+--- a/source/src/build/Config.zig
++++ b/source/src/build/Config.zig
+@@ -797,7 +797,7 @@ pub fn osVersionMin(tag: std.Target.Os.Tag) ?std.Target.Query.OsVersion {
+ 
+         // VVTerm embeds GhosttyKit on iOS.
+         .ios => .{ .semver = .{
+-            .major = 16,
++            .major = 15,
+             .minor = 0,
+             .patch = 0,
+         } },
+diff --git a/source/src/build_config.zig b/source/src/build_config.zig
+--- a/source/src/build_config.zig
++++ b/source/src/build_config.zig
+@@ -58 +58 @@
+-pub const bundle_id = "com.mitchellh.ghostty";
++pub const bundle_id = "com.rudironsoni.orlix";
+diff --git a/source/pkg/freetype/build.zig b/source/pkg/freetype/build.zig
+--- a/source/pkg/freetype/build.zig
++++ b/source/pkg/freetype/build.zig
+@@ -117,9 +117,10 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
+         } else {
+             const libpng_dep = b.dependency(
+                 "libpng",
+                 .{ .target = target, .optimize = optimize },
+             );
+             lib.root_module.linkLibrary(libpng_dep.artifact("png"));
++            lib.root_module.addIncludePath(libpng_dep.artifact("png").getEmittedIncludeTree());
+         }
+     }
+ 
+diff --git a/source/pkg/macos/build.zig b/source/pkg/macos/build.zig
+--- a/source/pkg/macos/build.zig
++++ b/source/pkg/macos/build.zig
+@@ -113,6 +113,8 @@ pub fn build(b: *std.Build) !void {
+ 
+     inline for (.{ lib.root_module, module }) |mod| {
+         try linkFrameworks(if (target.result.os.tag == .macos) .macos else .all, mod);
++        mod.linkFramework("Metal", .{});
++        mod.linkFramework("MetalKit", .{});
+     }
+     try apple_sdk.addPaths(b, lib);
+     b.installArtifact(lib);
+diff --git a/source/pkg/apple-sdk/build.zig b/source/pkg/apple-sdk/build.zig
+--- a/source/pkg/apple-sdk/build.zig
++++ b/source/pkg/apple-sdk/build.zig
+@@ -186,10 +186,17 @@ pub fn addPaths(
+     // Without the checks, it chooses the runtime symbol. Older macOS versions
+     // don't have that symbol, so dyld aborts at launch:
+     // https://github.com/llvm/llvm-project/issues/155531
+-    step.root_module.addCMacro(
+-        "_LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS",
+-        "1",
+-    );
++    const inject = b.allocator.create(LibcxxAvailability) catch @panic("OOM");
++    inject.* = .{
++        .step = std.Build.Step.init(.{
++            .id = .custom,
++            .name = "libcxx-availability",
++            .owner = b,
++            .makeFn = LibcxxAvailability.make,
++        }),
++        .compile = step,
++    };
++    step.step.dependOn(&inject.step);
+ 
+     switch (try pathsForTarget(b, target)) {
+         .native => |native| {
+@@ -210,3 +217,39 @@ pub fn addPaths(
+         },
+     }
+ }
++
++const LibcxxAvailability = struct {
++    step: std.Build.Step,
++    compile: *std.Build.Step.Compile,
++
++    fn make(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerror!void {
++        _ = options;
++        const self: *LibcxxAvailability = @fieldParentPtr("step", step);
++        const b = step.owner;
++        for (self.compile.root_module.link_objects.items) |obj| switch (obj) {
++            .c_source_file => |file| {
++                file.flags = prependLibcxxAvailabilityFlags(b, file.flags);
++            },
++            .c_source_files => |files| {
++                files.flags = prependLibcxxAvailabilityFlags(b, files.flags);
++            },
++            else => {},
++        };
++    }
++};
++
++fn prependLibcxxAvailabilityFlags(
++    b: *std.Build,
++    flags: []const []const u8,
++) []const []const u8 {
++    const undef_flag = "-U_LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS";
++    const def_flag = "-D_LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS=1";
++    for (flags) |flag| {
++        if (std.mem.eql(u8, flag, undef_flag)) return flags;
++    }
++    const out = b.allocator.alloc([]const u8, flags.len + 2) catch @panic("OOM");
++    out[0] = undef_flag;
++    out[1] = def_flag;
++    @memcpy(out[2..], flags);
++    return out;
++}
+diff --git a/source/src/build/SharedDeps.zig b/source/src/build/SharedDeps.zig
+--- a/source/src/build/SharedDeps.zig
++++ b/source/src/build/SharedDeps.zig
+@@ -910,12 +910,13 @@ pub fn addSimd(
+         if (b.lazyDependency("simdutf", .{
+             .target = target,
+             .optimize = optimize,
+             .no_libcxx = true,
+         })) |simdutf_dep| {
+             m.linkLibrary(simdutf_dep.artifact("simdutf"));
++            m.addIncludePath(b.path("pkg/simdutf/vendor"));
+             if (static_libs) |v| try v.append(
+                 b.allocator,
+                 simdutf_dep.artifact("simdutf").getEmittedBin(),
+             );
+         }
+     }

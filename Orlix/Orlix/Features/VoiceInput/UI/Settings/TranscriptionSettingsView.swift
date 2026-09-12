@@ -104,7 +104,7 @@ struct TranscriptionSettingsView: View {
 
             downloadedModelsSection
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.transcription")
         .confirmationDialog(
@@ -209,12 +209,12 @@ struct TranscriptionSettingsView: View {
             modelStatusRow(manager: manager)
 
             if manager.localStorageBytes > 0 {
-                LabeledContent("On This Device") {
+                OrlixLabeledContent("On This Device") {
                     Text(storageSizeLabel(manager.localStorageBytes))
                         .foregroundStyle(.secondary)
                 }
             } else if let repoSize = manager.repoSizeBytes {
-                LabeledContent("Download Size") {
+                OrlixLabeledContent("Download Size") {
                     Text(storageSizeLabel(repoSize))
                         .foregroundStyle(.secondary)
                 }
@@ -303,7 +303,7 @@ struct TranscriptionSettingsView: View {
                 }
             }
         }
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        .orlixListRowSeparatorLeadingZero()
     }
 
     private func formatETA(_ seconds: Int) -> String {
@@ -324,7 +324,7 @@ struct TranscriptionSettingsView: View {
         #if arch(arm64)
         if mlxAvailable && shouldShowDownloadedModels {
             Section("Downloaded Models") {
-                LabeledContent("All Models") {
+                OrlixLabeledContent("All Models") {
                     Text(storageSizeLabel(totalModelStorageBytes))
                         .foregroundStyle(.secondary)
                 }

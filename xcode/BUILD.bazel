@@ -1,0 +1,87 @@
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj", "xcschemes")
+
+package(default_visibility = ["//visibility:private"])
+
+xcodeproj(
+    name = "feasibility",
+    bazel_env = {
+        "DEVELOPER_DIR": None,
+        "PATH": None,
+    },
+    bazel_path = "bazel",
+    install_directory = "Build/XcodeProjects",
+    ios_device_cpus = "arm64",
+    ios_simulator_cpus = "sim_arm64",
+    minimum_xcode_version = "26.6",
+    project_name = "OrlixBazelFeasibility",
+    xcode_configurations = {
+        "Debug": {"//command_line_option:compilation_mode": "dbg"},
+        "Release": {"//command_line_option:compilation_mode": "opt"},
+    },
+    tags = ["manual"],
+    scheme_autogeneration_mode = "all",
+    xcschemes = [
+        xcschemes.scheme(
+            name = "Orlix Tests",
+            test = xcschemes.test(test_targets = ["//Orlix:OrlixTests"]),
+        ),
+    ] + [
+        xcschemes.scheme(
+            name = name,
+            test = xcschemes.test(test_targets = ["//OrlixOSTestApp:" + target]),
+        )
+        for name, target in [
+            ("OrlixOSTestApp Tests", "OrlixOSTestAppTests"),
+            ("OrlixKernel Conformance", "OrlixKernelConformanceTests"),
+            ("OrlixMLibC Conformance", "OrlixMLibCConformanceTests"),
+            ("OrlixPackages Conformance", "OrlixPackagesConformanceTests"),
+            ("OrlixOS Runtime Tests", "OrlixOSRuntimeTests"),
+        ]
+    ],
+    top_level_targets = [
+        top_level_target("//Orlix:OrlixTestApp", target_environments = ["simulator"]),
+        top_level_target("//Orlix:OrlixTests", target_environments = ["simulator"]),
+        top_level_target(
+            "//bazel/feasibility/apple:SmokeApp",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:DependencySmokeApp",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:NativeDependencySmokeApp",
+            target_environments = [
+                "device",
+                "simulator",
+            ],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:LiveActivitySmoke",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//bazel/feasibility/apple:NativeSmokeTests",
+            target_environments = ["simulator"],
+        ),
+        "//bazel/feasibility/apple:NativeDependencyMacSmokeApp",
+        top_level_target(
+            "//Orlix:Orlix",
+            target_environments = ["simulator"],
+        ),
+        top_level_target(
+            "//Orlix:OrlixUITests",
+            target_environments = ["simulator"],
+        ),
+    ] + [
+        top_level_target("//OrlixOSTestApp:" + target, target_environments = ["simulator"])
+        for target in [
+            "OrlixOSTestApp",
+            "OrlixOSTestAppTests",
+            "OrlixKernelConformanceTests",
+            "OrlixMLibCConformanceTests",
+            "OrlixPackagesConformanceTests",
+            "OrlixOSRuntimeTests",
+        ]
+    ],
+)

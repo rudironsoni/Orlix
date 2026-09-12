@@ -12,7 +12,7 @@ extension CustomThemeSaveSheet {
     }
 
     var platformBody: some View {
-        NavigationStack {
+        NavigationView {
             formContent
                 .navigationTitle("Save Custom Theme")
                 .navigationBarTitleDisplayMode(.inline)

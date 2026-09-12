@@ -20,7 +20,7 @@ extension TerminalKeyboardCoordinatorTests {
             replacementSession.snapshot.isFirstResponder = false
             replacementSession.snapshot.isSoftwareInputActive = false
             var providedSession = originalSession
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? providedSession : nil
             }
@@ -82,7 +82,7 @@ extension TerminalKeyboardCoordinatorTests {
         func explicitShowBeginsOnePresentationWithoutRebuildingActiveInput() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -110,7 +110,7 @@ extension TerminalKeyboardCoordinatorTests {
         func explicitShowRepairsUnexpectedlyMissingKeyboardImmediately() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -148,7 +148,7 @@ extension TerminalKeyboardCoordinatorTests {
         func explicitRepairRetriesWhenResponderReacquisitionFails() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -181,7 +181,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.forceSoftwareKeyboardResults = [false, false, true]
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -210,7 +210,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.acquireResults = [false, false, true]
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -239,7 +239,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.acquireResults = [false, false]
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -282,7 +282,7 @@ extension TerminalKeyboardCoordinatorTests {
             originalSession.completesRebuildImmediately = false
             let replacementSession = TerminalKeyboardInputSessionSpy()
             var providedSession = originalSession
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? providedSession : nil
             }
@@ -312,7 +312,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -340,7 +340,7 @@ extension TerminalKeyboardCoordinatorTests {
         func routeModalDeactivationReleasesInputAndCancelsPresentationVerification() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -376,7 +376,7 @@ extension TerminalKeyboardCoordinatorTests {
         func routeModalRoundTripPreservesUserHiddenKeyboardIntent() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -406,7 +406,7 @@ extension TerminalKeyboardCoordinatorTests {
         func contentProtectionRoundTripReplaysSceneActivationRecovery() async {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -455,7 +455,7 @@ extension TerminalKeyboardCoordinatorTests {
             let paneId = UUID()
             let session = TerminalKeyboardInputSessionSpy()
             session.completesRebuildImmediately = false
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 requestedPaneId == paneId ? session : nil
             }
@@ -489,7 +489,7 @@ extension TerminalKeyboardCoordinatorTests {
             let nextPaneId = UUID()
             let originalSession = TerminalKeyboardInputSessionSpy()
             let nextSession = TerminalKeyboardInputSessionSpy()
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { requestedPaneId in
                 switch requestedPaneId {
                 case originalPaneId: originalSession
@@ -544,7 +544,7 @@ extension TerminalKeyboardCoordinatorTests {
                 firstSession.snapshot.isSoftwareInputActive = false
             }
     
-            let coordinator = TerminalKeyboardCoordinator()
+            let coordinator = makeTerminalKeyboardCoordinator()
             coordinator.terminalProvider = { paneId in
                 switch paneId {
                 case firstPaneId: firstSession

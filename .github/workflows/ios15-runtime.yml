@@ -1,0 +1,186 @@
+name: iOS 15 runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/ios15-runtime.yml"
+      - "Brewfile"
+      - "Makefile"
+      - "Orlix/**"
+      - "OrlixHostAdapter/**"
+      - "OrlixKernel/**"
+      - "OrlixMLibC/**"
+      - "OrlixOS/**"
+      - "project.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: ios15-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  derail-watchdog:
+    name: Cancel if derailed
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel when macos-26 stays queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 20); do
+            job_status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "iOS 15 runtime") | .status' | head -n 1)"
+            case "$job_status" in
+              in_progress|completed)
+                echo "macos-26 job is $job_status"
+                exit 0
+                ;;
+            esac
+            sleep 30
+          done
+          gh run cancel "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}"
+          echo "cancelled: macos-26 job still queued after 10 minutes"
+          exit 1
+
+  ios15-runtime:
+    name: iOS 15 runtime
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact commit
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.6
+        timeout-minutes: 5
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+
+      - name: Export the selected Xcode to Make
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+
+      - name: Restore Homebrew cache
+        timeout-minutes: 10
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: orlix-brew-${{ runner.os }}-${{ hashFiles('Brewfile') }}
+          restore-keys: |
+            orlix-brew-${{ runner.os }}-
+
+      - name: Restore iOS 15.5 runtime archive
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios15-runtime-15.5-arm64-v1
+
+      - name: Restore Bazel repository cache
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
+      - name: Restore Bazel disk cache
+        timeout-minutes: 20
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/disk-cache
+          key: orlix-bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json', 'OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
+          restore-keys: |
+            orlix-bazel-disk-${{ runner.os }}-
+
+      - name: Restore ccache
+        timeout-minutes: 10
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/Library/Caches/Orlix/ccache
+          key: orlix-ccache-${{ runner.os }}-${{ hashFiles('OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
+          restore-keys: |
+            orlix-ccache-${{ runner.os }}-
+
+      - name: Restore git clones
+        timeout-minutes: 15
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/Library/Caches/Orlix/git
+            Build/OrlixKernel/upstream
+            Build/OrlixMLibC/upstream
+          key: orlix-git-clones-${{ runner.os }}-${{ hashFiles('Orlix/make/vendor.mk', 'OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk', 'OrlixMLibC/Makefile') }}
+          restore-keys: |
+            orlix-git-clones-${{ runner.os }}-
+
+      - name: Install pinned build tools
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
+          brew bundle --file Brewfile
+          test "$(xcodes version)" = "2.0.3"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          llvm_bin="$(brew --prefix llvm)/bin"
+          lld_bin="$(brew --prefix lld)/bin"
+          test -x "$lld_bin/ld.lld" || test -x "$llvm_bin/ld.lld"
+          echo "$lld_bin" >> "$GITHUB_PATH"
+          echo "$llvm_bin" >> "$GITHUB_PATH"
+
+      - name: Install the iOS 15.5 runtime with xcodes
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Caches/Orlix/ios15-runtime"
+          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --directory "$HOME/Library/Caches/Orlix/ios15-runtime" --keep-archive --no-color
+          runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          test -n "$runtime_id"
+          device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"
+          xcrun simctl list devicetypes -j | jq -e --arg identifier "$device_type" \
+            '.devicetypes[] | select(.identifier == $identifier)' >/dev/null
+          simulator_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$runtime_id")"
+          test -n "$simulator_id"
+          xcrun simctl boot "$simulator_id"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "ORLIX_IOS15_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Build the iOS 15 launch test
+        timeout-minutes: 60
+        env:
+          LINUX_REMOTE: https://github.com/gregkh/linux.git
+        run: make __ios15-simulator-build
+
+      - name: Run the iOS 15 launch test
+        timeout-minutes: 10
+        run: make __ios15-simulator-test
+
+      - name: Store iOS 15 test evidence
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios15-runtime-${{ github.sha }}
+          path: |
+            Build/**/*.xcresult
+            Build/**/*.log
+          if-no-files-found: warn
+          retention-days: 14

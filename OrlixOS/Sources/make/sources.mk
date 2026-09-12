@@ -227,7 +227,12 @@ $(ORLIXOS_ATTR_ARCHIVE):
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch attr source" >&2; exit 1; }; \
 	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify attr source" >&2; exit 1; }; \
 	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
-	if [ ! -s "$(ORLIXOS_ATTR_ARCHIVE)" ]; then curl -fL "$(ATTR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)"; fi; \
+	if [ ! -s "$(ORLIXOS_ATTR_ARCHIVE)" ]; then \
+		curl -fL "$(ATTR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)" || { \
+			rm -f "$(ORLIXOS_ATTR_ARCHIVE)"; \
+			curl -fL "$(ATTR_MIRROR_URL)" -o "$(ORLIXOS_ATTR_ARCHIVE)"; \
+		}; \
+	fi; \
 	echo "upstream attr archive ready: $(ORLIXOS_ATTR_ARCHIVE)"
 
 $(ORLIXOS_ATTR_ARCHIVE_STAMP): $(ORLIXOS_ATTR_ARCHIVE)
@@ -254,7 +259,12 @@ $(ORLIXOS_ACL_ARCHIVE):
 	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch acl source" >&2; exit 1; }; \
 	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify acl source" >&2; exit 1; }; \
 	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
-	if [ ! -s "$(ORLIXOS_ACL_ARCHIVE)" ]; then curl -fL "$(ACL_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)"; fi; \
+	if [ ! -s "$(ORLIXOS_ACL_ARCHIVE)" ]; then \
+		curl -fL "$(ACL_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)" || { \
+			rm -f "$(ORLIXOS_ACL_ARCHIVE)"; \
+			curl -fL "$(ACL_MIRROR_URL)" -o "$(ORLIXOS_ACL_ARCHIVE)"; \
+		}; \
+	fi; \
 	echo "upstream acl archive ready: $(ORLIXOS_ACL_ARCHIVE)"
 
 $(ORLIXOS_ACL_ARCHIVE_STAMP): $(ORLIXOS_ACL_ARCHIVE)
@@ -614,3 +624,30 @@ $(ORLIXOS_ZSH_SOURCE_STAMP): $(ORLIXOS_ZSH_ARCHIVE_STAMP)
 	tar -xJf "$(ORLIXOS_ZSH_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
 	touch "$(ORLIXOS_ZSH_SOURCE_STAMP)"; \
 	echo "extracted zsh source: $(ORLIXOS_ZSH_SRC_DIR)"
+
+$(ORLIXOS_TCC_ARCHIVE):
+	@set -euo pipefail; \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)"; do \
+		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
+	done; \
+	command -v curl >/dev/null 2>&1 || { echo "curl is required to fetch tcc source" >&2; exit 1; }; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify tcc source" >&2; exit 1; }; \
+	mkdir -p "$(ORLIXOS_UPSTREAM_DIR)"; \
+	if [ ! -s "$(ORLIXOS_TCC_ARCHIVE)" ]; then curl -fL "$(TCC_URL)" -o "$(ORLIXOS_TCC_ARCHIVE)"; fi; \
+	echo "upstream tcc archive ready: $(ORLIXOS_TCC_ARCHIVE)"
+
+$(ORLIXOS_TCC_ARCHIVE_STAMP): $(ORLIXOS_TCC_ARCHIVE)
+	@set -euo pipefail; \
+	command -v shasum >/dev/null 2>&1 || { echo "shasum is required to verify tcc source" >&2; exit 1; }; \
+	printf '%s  %s\n' "$(TCC_SHA256)" "$(ORLIXOS_TCC_ARCHIVE)" | shasum -a 256 -c - >/dev/null; \
+	mkdir -p "$(dir $(ORLIXOS_TCC_ARCHIVE_STAMP))"; \
+	touch "$(ORLIXOS_TCC_ARCHIVE_STAMP)"; \
+	echo "upstream tcc ready: $(ORLIXOS_TCC_ARCHIVE)"
+
+$(ORLIXOS_TCC_SOURCE_STAMP): $(ORLIXOS_TCC_ARCHIVE_STAMP)
+	@set -euo pipefail; \
+	rm -rf "$(ORLIXOS_TCC_SRC_DIR)"; \
+	mkdir -p "$(ORLIXOS_SRC_DIR)"; \
+	tar -xzf "$(ORLIXOS_TCC_ARCHIVE)" -C "$(ORLIXOS_SRC_DIR)"; \
+	touch "$(ORLIXOS_TCC_SOURCE_STAMP)"; \
+	echo "extracted tcc source: $(ORLIXOS_TCC_SRC_DIR)"

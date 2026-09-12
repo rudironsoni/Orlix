@@ -10,7 +10,9 @@ final class TerminalAccessoryProfileTests: XCTestCase {
                 activeItems: [
                     .system(.escape),
                     .system(.escape),
-                    .system(.tab)
+                    .system(.tab),
+                    .system(.arrowUp),
+                    .system(.arrowDown)
                 ],
                 updatedAt: Date()
             ),
@@ -23,7 +25,7 @@ final class TerminalAccessoryProfileTests: XCTestCase {
 
         XCTAssertEqual(
             normalized.layout.activeItems,
-            [TerminalAccessoryItemRef.system(.escape), TerminalAccessoryItemRef.system(.tab)]
+            [.system(.escape), .system(.tab), .system(.arrowUp), .system(.arrowDown)]
         )
     }
 
@@ -53,6 +55,6 @@ final class TerminalAccessoryProfileTests: XCTestCase {
 
         let normalized = profile.normalized()
 
-        XCTAssertTrue(normalized.layout.activeItems.isEmpty)
+        XCTAssertFalse(normalized.layout.activeItems.contains(.custom(deletedAction.id)))
     }
 }

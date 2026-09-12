@@ -78,6 +78,18 @@ struct CloudKitManagerLifecycleTests {
     }
 
     @Test
+    func missingICloudEntitlementSkipsContainer() {
+        let manager = CloudKitManager(
+            container: nil,
+            syncEnabled: { true },
+            accountStatus: { .available }
+        )
+        #expect(manager.container == nil)
+        #expect(manager.accountState == .disabled)
+        #expect(manager.syncStatus == .disabled)
+    }
+
+    @Test
     func disableAndReenableRejectsStaleAccountStatus() async {
         let gate = CloudKitAccountStatusGate()
         let syncEnabled = CloudKitSyncEnabledState()

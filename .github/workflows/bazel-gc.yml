@@ -1,0 +1,38 @@
+name: Bazel cache garbage collection
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bazel-gc
+  cancel-in-progress: true
+
+jobs:
+  gc:
+    name: Bound local cache growth
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+      - name: Install declared build tools
+        run: brew bundle --file Brewfile
+      - name: Export the selected Xcode to Make
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+      - name: Run Make-owned cache GC
+        run: make __bazel-gc

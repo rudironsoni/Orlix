@@ -18,6 +18,7 @@ vendor ?= all
 -include $(CURDIR)/.orlix.local.xcconfig
 ORLIX_BUILD_ROOT ?= $(CURDIR)/Build
 export ORLIX_BUILD_ROOT
+include $(CURDIR)/make/bazel-migration.mk
 ORLIXOS_XCFRAMEWORK_ROOT ?= $(ORLIX_BUILD_ROOT)/OrlixOS/xcframework
 ORLIXOS_DEVICE_ARCHIVE ?= $(ORLIXOS_XCFRAMEWORK_ROOT)/iphoneos.xcarchive
 ORLIXOS_SIMULATOR_ARCHIVE ?= $(ORLIXOS_XCFRAMEWORK_ROOT)/iphonesimulator.xcarchive
@@ -28,7 +29,7 @@ ORLIX_BETA_ARCHIVE_DIR ?= $(ORLIX_BUILD_ROOT)/Release
 ORLIX_BETA_ARCHIVE_PATH ?= $(ORLIX_BETA_ARCHIVE_DIR)/Orlix.xcarchive
 ORLIX_BETA_EXPORT_DIR ?= $(ORLIX_BETA_ARCHIVE_DIR)/Export
 ORLIX_BETA_EXPORT_OPTIONS_PLIST ?=
-ORLIX_DEVELOPMENT_TEAM ?=
+ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L
 ORLIX_CODE_SIGN_STYLE ?= Automatic
 ORLIX_CODE_SIGN_IDENTITY ?=
 ORLIX_PROVISIONING_PROFILE_SPECIFIER ?=
@@ -60,6 +61,7 @@ ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WAL
 ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
 ORLIX_TCTI_TEST_ONLY_TESTING ?= OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession
 ORLIX_TCTI_XCODEBUILD ?= /usr/bin/xcodebuild
+ORLIX_BAZEL_AUTHORITY ?= 0
 
 define ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS
 run_xcodebuild() { \
@@ -120,11 +122,11 @@ ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_ORDINAL_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_ordinal_ledger_test
 ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_completion_semantic_provenance_test
-ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
+ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests ios15-simulator-gate beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-resolve-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-options beta-export-archive beta-validate-export beta-upload-prerequisites beta-upload beta-distribute beta-release-report app-store-release-report-check app-store-promote release-workflow-check build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: vvterm-sync vvterm-sync-resolve vvterm-reconcile vvterm-sync-complete vvterm-source-check vvterm-sync-tests vvterm-upstream-tests
@@ -368,6 +370,68 @@ beta-install-simulator: beta-prerequisites
 	plutil -extract OrlixSelectedRootMode raw -o - "$$payload_info" | grep -qx 'direct'; \
 	plutil -extract OrlixKernelCommandLine raw -o - "$$payload_info" | grep -q 'root=/dev/vda'; \
 	xcrun simctl launch "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)"
+
+ios15-simulator-gate:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-ios15-simulator-gate
+else
+	@$(MAKE) __ios15-simulator-build
+	@$(MAKE) __ios15-simulator-test
+endif
+
+.PHONY: __ios15-simulator-build __ios15-simulator-test
+__ios15-simulator-build:
+	@set -euo pipefail; \
+	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
+	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
+	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
+	xcodegen generate --spec project.yml; \
+	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
+	PYTHONPATH="$(CURDIR)/make" python3 -c 'from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_generated_project(Path("Orlix.xcodeproj/project.pbxproj")); print("pass: AppIntents.framework is weakly linked")'; \
+	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
+	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
+	result_log="$$result_dir/Orlix-iOS15.log"; \
+	derived_data="$$result_dir/DerivedData"; \
+	mkdir -p "$$result_dir"; \
+	rm -rf "$$result_bundle"; \
+	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
+	xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "Orlix UI Tests" \
+		-configuration Debug \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
+		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
+		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		build-for-testing 2>&1 | tee "$$result_log"
+
+__ios15-simulator-test:
+	@set -euo pipefail; \
+	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
+	result_bundle="$$result_dir/Orlix-iOS15.xcresult"; \
+	result_log="$$result_dir/Orlix-iOS15.log"; \
+	derived_data="$$result_dir/DerivedData"; \
+	destination="platform=iOS Simulator,id=$(ORLIX_IOS15_SIMULATOR_ID)"; \
+	app="$$derived_data/Build/Products/Debug-iphonesimulator/Orlix.app"; \
+	test -d "$$app" || { echo "missing iOS 15 simulator app: $$app" >&2; exit 1; }; \
+	PYTHONPATH="$(CURDIR)/make" ORLIX_IOS15_APP="$$app" python3 -c 'import os; from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path(os.environ["ORLIX_IOS15_APP"])); print("pass: iOS 15 app does not required-load AppIntents or ActivityKit")'; \
+	rm -rf "$$result_bundle"; \
+	xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "Orlix UI Tests" \
+		-configuration Debug \
+		-destination "$$destination" \
+		-derivedDataPath "$$derived_data" \
+		-resultBundlePath "$$result_bundle" \
+		ENABLE_DEBUG_DYLIB=NO \
+		-only-testing:OrlixUITests/AppLaunchSmokeUITests/testLaunchCapturesScreenshot \
+		-test-timeouts-enabled YES \
+		-default-test-execution-time-allowance 120 \
+		-maximum-test-execution-time-allowance 180 \
+		test-without-building 2>&1 | tee -a "$$result_log"
 
 beta-simulator-gate: beta-prerequisites
 	@set -euo pipefail; \
@@ -722,6 +786,8 @@ orlix-tcti-xcodebuild-watchdog-tests:
 		if [[ "$$build_arguments" == *"-test-timeouts-enabled"* || "$$build_arguments" == *"-only-testing:"* ]]; then echo "build-for-testing received XCTest-only arguments" >&2; exit 1; fi; \
 	echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_TEST normal_status=$$normal_status timeout_status=$$timeout_status blocked_timeout_status=$$blocked_timeout_status child_gone=$$child descendant_gone=$$descendant blocked_child_gone=$$blocked_child blocked_descendant_gone=$$blocked_descendant invocations=2"'
 
+ORLIX_MLIBC_TEST_ONLY_TESTING ?= OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession
+
 mlibc-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -730,6 +796,7 @@ mlibc-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		ORLIX_PROFILE='$(PROFILE)' \
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		-only-testing:$(ORLIX_MLIBC_TEST_ONLY_TESTING) \
 		test
 
 coreutils-tests: xcodeproj
@@ -787,6 +854,11 @@ orlixos-tests: xcodeproj console-policy-tests terminal-mux-tests
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		test
 
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+app-tests:
+	@$(MAKE) __bazel-test-app
+	@$(MAKE) __bazel-test-app-architecture
+else
 app-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -801,6 +873,7 @@ app-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		-only-testing:OrlixOSTestAppTests/ArchitectureInvariantTests \
 		test
+endif
 
 runtime-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
@@ -819,11 +892,14 @@ docs-check:
 	@python3 .agents/skills/orlix-docs-lint/scripts/wiki_link_check.py docs
 	@python3 .agents/skills/orlix-docs-lint/scripts/legacy_path_check.py
 
+ORLIX_AGENT_TARGETS ?= copilot,cursor,claudecode,codexcli
+ORLIX_AGENT_FEATURES ?= rules
+
 agent-rules-generate:
-	@rulesync generate --targets copilot,cursor,claudecode,codexcli --features rules
+	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)"
 
 agent-rules-check:
-	@rulesync generate --targets copilot,cursor,claudecode,codexcli --features rules --check
+	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)" --check
 
 agent-harness-check: docs-check
 	@.agents/tests/harness-check all
@@ -856,6 +932,9 @@ agent-task-envelope-check:
 	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
 
 beta-archive: beta-resolve-build-number
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-archive
+else
 	@set -euo pipefail; \
 	xcodegen generate --spec project.yml; \
 	build_number="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")"; \
@@ -897,6 +976,7 @@ beta-archive: beta-resolve-build-number
 		"$${xcodebuild_signing_flags[@]}" \
 		"$${archive_settings[@]}" \
 		archive
+endif
 
 beta-validate-archive:
 	@set -euo pipefail; \
@@ -994,22 +1074,35 @@ app-store-promote: app-store-release-report-check
 release-workflow-check: __release-workflow-tests
 
 xcodeproj:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-feasibility-xcodeproj
+else
 	@$(KERNEL_MAKE) xcodeproj
+endif
 
 build: __build-$(type)
 
 __build-product: product-build-version-check
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-app
+else
 	@$(MLIBC_MAKE) build
 	@$(COREUTILS_MAKE) build PROFILE="$(PROFILE)"
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
 	@$(KERNEL_MAKE) build PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
 	@$(HOSTADAPTER_MAKE) build
 	@$(APP_MAKE) build
+endif
 
 __build-vendor:
 	@$(APP_MAKE) build type=vendor vendor="$(vendor)"
 
-rebuild: clean build
+rebuild: clean
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-orlix-app
+else
+	@$(MAKE) build
+endif
 
 prepare: __prepare-$(type)
 
@@ -1019,11 +1112,22 @@ __prepare-product:
 __prepare-tcti-isa:
 	@$(KERNEL_MAKE) prepare type=tcti-isa
 
-scripts dtbs kunit kselftest kselftest-install test:
+scripts dtbs kunit kselftest kselftest-install:
 	@$(KERNEL_MAKE) $@
 
+test:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-matrix-check
+else
+	@$(KERNEL_MAKE) test
+endif
+
 headers_install:
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+	@$(MAKE) __bazel-kernel-uapi
+else
 	@$(MLIBC_MAKE) headers_install
+endif
 
 run:
 	@$(APP_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"

@@ -26,7 +26,6 @@ struct SyncSettingsView: View {
                 }
             )
         }
-        .formStyle(.grouped)
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.iCloudSync")
         .onAppear {

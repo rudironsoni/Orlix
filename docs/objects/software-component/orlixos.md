@@ -3,15 +3,15 @@ type: software-component
 tags:
   - architecture
   - ownership
-updated: 2026-07-26
+updated: 2026-09-10
 status: active
-summary: "Sole public SDK for curated Linux distribution, OrlixMachine sessions, and OrlixOS.Containers."
+summary: "Running hosted Linux operating system with one Kernel and persistent OrlixInstances."
 part_of:
   - "[Orlix](../product/orlix.md)"
 ---
 
 # OrlixOS
 
-`OrlixOS.xcframework` is the sole public SDK, with identifier `com.rudironsoni.orlix.os`. It owns curated Linux distribution resources directly, app-facing `OrlixMachine` sessions, and the `OrlixOS.Containers` namespace. It does not ship a separate payload bundle or expose the private static implementation artifacts as public SDKs.
+`OrlixOS` is the running hosted Linux operating system. It uses one upstream Linux kernel and hosts zero or more persistent `OrlixInstance` userspaces containing ordinary `OrlixProcess` values and `OrlixContainer` workloads. OrlixDistribution assembles guest resources for OrlixKit; OrlixOS is not the rootfs artifact and is not the public SDK.
 
-Its authoritative ownership boundaries are defined by [component ownership](../../concepts/component-ownership.md).
+Its public packaging and ownership boundary is OrlixKit. Its authoritative ownership boundaries are defined by [component ownership](../../concepts/component-ownership.md) and [ADR 0040](../architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md).

@@ -39,7 +39,7 @@ struct EnvironmentFormSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
             Section("Name") {
                 TextField(String(localized: "Environment name"), text: $name)
@@ -78,7 +78,7 @@ struct EnvironmentFormSheet: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             .navigationTitle(
                 isEditing
                 ? String(localized: "Edit Environment")

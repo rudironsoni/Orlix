@@ -36,7 +36,7 @@ struct TrustedHostsSettingsUITestHarness: View {
     )
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             TrustedHostsSettingsView()
                 .navigationTitle("Trusted Hosts")
         }

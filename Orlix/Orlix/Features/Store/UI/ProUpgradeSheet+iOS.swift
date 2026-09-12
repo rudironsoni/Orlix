@@ -8,7 +8,7 @@ extension ProUpgradeSheet {
         source: PaywallSource,
         onClose: @escaping () -> Void
     ) -> some View {
-        NavigationStack {
+        NavigationView {
             sheetContent
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
@@ -52,7 +52,7 @@ extension ProUpgradeSheet {
                     .padding(.top, 18)
                     .padding(.bottom, 18)
             }
-            .scrollIndicators(.visible)
+            .orlixVisibleScrollIndicators()
 
             footer
         }

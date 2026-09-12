@@ -3,7 +3,15 @@ import XCTest
 final class DefaultLocalInstanceUITests: XCTestCase {
     func testOpensDefaultLocalInstanceTerminal() {
         let app = XCUIApplication()
-        app.launchArguments += ["-hasSeenWelcome", "YES"]
+        app.launchArguments += [
+            "--orlix-ui-test-local-terminal",
+            "-hasSeenWelcome", "YES",
+            "-iCloudSyncEnabled", "NO",
+            "-terminalUsePerAppearanceTheme", "NO",
+            "-terminalThemeName", "Orlix Dark",
+            "-terminalKeyboardDismissButtonEnabled", "YES",
+            "--orlix-debug-log", "keyboard",
+        ]
         app.launch()
 
         let openButton = app.buttons["orlix.local-instance.open"]
@@ -11,29 +19,50 @@ final class DefaultLocalInstanceUITests: XCTestCase {
         openButton.tap()
 
         XCTAssertTrue(app.navigationBars["Orlix"].waitForExistence(timeout: 5))
-        let terminal = app.textViews["orlix.local-instance.terminal"]
-        XCTAssertTrue(terminal.waitForExistence(timeout: 5))
+        let terminal = app.descendants(matching: .any)["orlix.local-instance.terminal"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 15))
 
         expectation(
             for: NSPredicate(format: "value == %@", "output"),
             evaluatedWith: terminal
         )
         waitForExpectations(timeout: 30)
+        XCTAssertNotEqual(terminal.value as? String, "failed")
 
         terminal.tap()
-        terminal.typeText("echo ORLIX-LOCAL-READY\n")
-
-        let appExited = expectation(
-            for: NSPredicate(format: "state != %d", XCUIApplication.State.runningForeground.rawValue),
-            evaluatedWith: app
-        )
-        appExited.isInverted = true
-        waitForExpectations(timeout: 15)
-        XCTAssertNotEqual(terminal.value as? String, "failed")
+        let showKeyboard = app.buttons["orlix.terminal.floating.keyboard"]
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        let hideKeyboard = app.descendants(matching: .any)["orlix.keyboard.accessory.hide"]
+        XCTAssertTrue(hideKeyboard.waitForExistence(timeout: 5))
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Orlix local terminal after boot"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hittable == true"), object: hideKeyboard
+        )
+        guard XCTWaiter.wait(for: [ready], timeout: 8) == .completed else {
+            XCTFail(hideKeyboard.debugDescription)
+            return
+        }
+        hideKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 8))
+        XCTAssertTrue(showKeyboard.waitForExistence(timeout: 5))
+        terminal.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        hideKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 8))
+        showKeyboard.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        let key = app.keys["x"]
+        XCTAssertTrue(key.waitForExistence(timeout: 5))
+        key.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let restoredScreenshot = XCTAttachment(screenshot: app.screenshot())
+        restoredScreenshot.name = "Orlix keyboard restored and typing"
+        restoredScreenshot.lifetime = .keepAlways
+        add(restoredScreenshot)
     }
 }

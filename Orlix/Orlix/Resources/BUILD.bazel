@@ -1,0 +1,24 @@
+load("@rules_apple//apple:resources.bzl", "apple_resource_group")
+
+package(default_visibility = ["//visibility:public"])
+
+apple_resource_group(
+    name = "folder_resources",
+    structured_resources = glob([
+        "ghostty/**",
+        "terminfo/**",
+    ]),
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "bundle_resources",
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "BUILD.bazel",
+            "ghostty/**",
+            "terminfo/**",
+        ],
+    ),
+)

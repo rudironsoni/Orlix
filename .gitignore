@@ -88,6 +88,11 @@ ModuleCache/
 /.clangd-cache/
 /.clang-tidy-build/
 /.cache/
+/.bazelrc.local
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-*
 # (No @.cache variants should be tracked; only .cache is ignored)
 
 # Generated binary
@@ -115,3 +120,4 @@ init.*.zsh
 /.tokensave/
 __pycache__/
 *.py[cod]
+OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/

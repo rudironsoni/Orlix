@@ -19,8 +19,8 @@ final class CloudKitManager {
     var isAvailable: Bool { statusStore.syncState.isAvailable }
     var cloudKitSyncGeneration = UUID()
 
-    let container: CKContainer
-    let database: CKDatabase
+    let container: CKContainer?
+    let database: CKDatabase?
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
     let recordZoneName = CloudKitSyncConstants.recordZoneName
     lazy var recordZone = CKRecordZone(zoneName: recordZoneName)
@@ -64,17 +64,25 @@ final class CloudKitManager {
     var zoneReady: Bool
 
     private convenience init() {
-        let container = CKContainer(
-            identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
-        )
+        if Self.hasICloudContainerEntitlement() {
+            let container = CKContainer(
+                identifier: CloudKitSyncConstants.cloudKitContainerIdentifier
+            )
+            self.init(
+                container: container,
+                syncEnabled: { SyncSettings.isEnabled },
+                accountStatus: { try await container.accountStatus() }
+            )
+            return
+        }
         self.init(
-            container: container,
-            syncEnabled: { SyncSettings.isEnabled },
-            accountStatus: { try await container.accountStatus() }
+            container: nil,
+            syncEnabled: { false },
+            accountStatus: { .couldNotDetermine }
         )
     }
 
-    init(
+    convenience init(
         container: CKContainer,
         syncEnabled: @escaping @MainActor @Sendable () -> Bool,
         accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
@@ -82,18 +90,55 @@ final class CloudKitManager {
             forKey: CloudKitSyncConstants.zoneReadyKey()
         )
     ) {
+        self.init(
+            container: Optional(container),
+            syncEnabled: syncEnabled,
+            accountStatus: accountStatus,
+            initialZoneReady: initialZoneReady
+        )
+    }
+
+    init(
+        container: CKContainer?,
+        syncEnabled: @escaping @MainActor @Sendable () -> Bool,
+        accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
+        initialZoneReady: Bool = UserDefaults.standard.bool(
+            forKey: CloudKitSyncConstants.zoneReadyKey()
+        )
+    ) {
         self.container = container
-        database = container.privateCloudDatabase
+        database = container?.privateCloudDatabase
         self.syncEnabled = syncEnabled
         fetchAccountStatus = accountStatus
         zoneReady = initialZoneReady
-        if isSyncEnabled {
+        if container == nil || !isSyncEnabled {
+            applySyncDisabledState()
+        } else {
             let generation = cloudKitSyncGeneration
             Task { [weak self] in
                 await self?.checkAccountStatus(for: generation)
             }
-        } else {
-            applySyncDisabledState()
         }
+    }
+
+    static func hasICloudContainerEntitlement() -> Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let raw = String(data: data, encoding: .ascii) ?? String(data: data, encoding: .utf8)
+        else {
+            return false
+        }
+        return raw.contains("icloud-services") || raw.contains("icloud-container-identifiers")
+        #endif
+    }
+
+    func cloudDatabase() throws -> CKDatabase {
+        guard let database else {
+            throw CloudKitError.notAvailable
+        }
+        return database
     }
 }

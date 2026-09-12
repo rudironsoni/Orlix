@@ -39,7 +39,7 @@ The current accessory bar is hard-coded in `GhosttyTerminalView+iOS.swift` and s
 - macOS accessory customization UI (feature remains iOS-focused).
 
 ## Platforms
-- iOS 16+
+- iOS 15+
 - macOS: no accessory customization UI in V1
 
 ## User Stories

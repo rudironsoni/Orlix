@@ -12,7 +12,7 @@ struct MetricPreviewChart: View {
     var body: some View {
         if history.count < 2 {
             PreviewPlaceholder(color: color, style: style)
-        } else {
+        } else if #available(iOS 16.0, macOS 13.0, *) {
             Chart {
                 ForEach(history) { point in
                     AreaMark(
@@ -40,6 +40,27 @@ struct MetricPreviewChart: View {
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartYScale(domain: yDomain)
+        } else {
+            GeometryReader { proxy in
+                Path { path in
+                    let values = Array(history.suffix(30))
+                    guard let first = values.first else { return }
+                    let denominator = CGFloat(max(values.count - 1, 1))
+                    let domainSize = max(yDomain.upperBound - yDomain.lowerBound, 0.000_001)
+                    func point(_ sample: StatsPoint, index: Int) -> CGPoint {
+                        let normalized = min(max((sample.value - yDomain.lowerBound) / domainSize, 0), 1)
+                        return CGPoint(
+                            x: CGFloat(index) / denominator * proxy.size.width,
+                            y: proxy.size.height * (1 - normalized)
+                        )
+                    }
+                    path.move(to: point(first, index: 0))
+                    for (index, sample) in values.enumerated().dropFirst() {
+                        path.addLine(to: point(sample, index: index))
+                    }
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            }
         }
     }
 }

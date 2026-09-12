@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 struct TerminalNativeFindTests {
     @Test
+    @available(iOS 16.0, *)
     func findsRepeatedVisibleMatchesAcrossLines() {
         let snapshot = TerminalNativeTextSnapshot(
             lines: [
@@ -27,6 +28,7 @@ struct TerminalNativeFindTests {
     }
 
     @Test
+    @available(iOS 16.0, *)
     func trimsWhitespaceOnlyQueriesBeforeSearching() {
         let snapshot = TerminalNativeTextSnapshot(
             lines: ["orlix find test"],
@@ -36,7 +38,7 @@ struct TerminalNativeFindTests {
 
         let ranges = snapshot.searchRanges(query: "  find  ", options: UITextSearchOptions())
 
-        #expect(ranges == [NSRange(location: 7, length: 4)])
+        #expect(ranges == [NSRange(location: 6, length: 4)])
     }
 }
 #endif

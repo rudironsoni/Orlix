@@ -1,0 +1,6 @@
+# Disposable build trees. If these stay in the workspace, a second
+# --output_base (for example Xcode 27) sees files under the default
+# output-base and MODULE.bazel.lock fails lockfile_mode=error.
+Build/
+Orlix.xcodeproj/
+OrlixKernel.xcodeproj/

@@ -188,8 +188,10 @@ def validate_manifest(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     for field in (
         "main_bundle_id",
         "display_name",
+        "minimum_os_version",
         "live_activity_bundle_id",
         "live_activity_widget_kind",
+        "live_activity_minimum_os_version",
         "capability_manifest_relative_path",
         "privacy_manifest_relative_path",
         "privacy_manifest_source",
@@ -306,6 +308,8 @@ def validate_exported_app(
         fail("exported application bundle identifier differs release inputs")
     if info.get("CFBundleDisplayName") != exported["display_name"]:
         fail("exported application display name differs release inputs")
+    if info.get("MinimumOSVersion") != exported["minimum_os_version"]:
+        fail("exported application minimum OS version differs release inputs")
     if info.get("ITSAppUsesNonExemptEncryption") is not exported["declared_non_exempt_encryption"]:
         fail("exported application encryption declaration differs release inputs")
 
@@ -325,7 +329,10 @@ def validate_exported_app(
     if len(matching_extensions) != 1:
         fail("exported application must contain exactly one expected Live Activity extension")
 
-    executable_name = load_plist(matching_extensions[0] / "Info.plist").get("CFBundleExecutable")
+    extension_info = load_plist(matching_extensions[0] / "Info.plist")
+    if extension_info.get("MinimumOSVersion") != exported["live_activity_minimum_os_version"]:
+        fail("Live Activity extension minimum OS version differs release inputs")
+    executable_name = extension_info.get("CFBundleExecutable")
     executable = matching_extensions[0] / executable_name if isinstance(executable_name, str) else None
     if executable is None or not executable.is_file():
         fail("Live Activity extension executable is missing")

@@ -119,18 +119,10 @@ enum RemoteFileItemProviderAdapter {
 
     private static func loadURL(from provider: NSItemProvider) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+            provider.loadObject(ofClass: NSURL.self) { item, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if let url = item as? URL {
-                    continuation.resume(returning: url)
-                } else if let url = item as? NSURL {
-                    continuation.resume(returning: url as URL)
-                } else if let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    continuation.resume(returning: url)
-                } else if let text = item as? String,
-                          let url = URL(string: text) {
+                } else if let url = item as? URL, url.isFileURL {
                     continuation.resume(returning: url)
                 } else {
                     continuation.resume(

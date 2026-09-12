@@ -12,7 +12,6 @@ RULES = ROOT / ".codex" / "rules" / "orlix.rules"
 def execpolicy_decision(command):
     result = subprocess.run(
         [
-            "rtk",
             "codex",
             "execpolicy",
             "check",
@@ -40,15 +39,13 @@ class ExecPolicyRulesTests(unittest.TestCase):
         payload = execpolicy_decision(command)
         self.assertEqual(payload.get("decision"), expected, payload)
 
-    def test_git_push_policy_matches_bare_and_rtk(self):
+    def test_git_push_policy(self):
         self.assert_decision(["git", "push", "origin", "main"], "allow")
-        self.assert_decision(["rtk", "git", "push", "origin", "main"], "allow")
 
-    def test_destructive_remove_policy_matches_bare_and_rtk(self):
+    def test_destructive_remove_policy(self):
         self.assert_decision(["rm", "-rf", "Build"], "forbidden")
-        self.assert_decision(["rtk", "rm", "-rf", "Build"], "forbidden")
 
-    def test_expensive_make_policy_matches_bare_and_rtk(self):
+    def test_expensive_make_policy(self):
         command = [
             "timeout",
             "18000",
@@ -58,10 +55,9 @@ class ExecPolicyRulesTests(unittest.TestCase):
             "test",
             "PROFILE=release",
         ]
-        self.assert_decision(command, "allow")
-        self.assert_decision(["rtk", *command], "allow")
+        self.assertEqual(execpolicy_decision(command), {"matchedRules": []})
 
-    def test_beta_archive_policy_matches_bare_and_rtk(self):
+    def test_beta_archive_policy(self):
         command = [
             "timeout",
             "18000",
@@ -69,14 +65,12 @@ class ExecPolicyRulesTests(unittest.TestCase):
             "beta-archive",
             "ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L",
         ]
-        self.assert_decision(command, "allow")
-        self.assert_decision(["rtk", *command], "allow")
+        self.assertEqual(execpolicy_decision(command), {"matchedRules": []})
 
-    def test_simctl_policy_matches_bare_and_rtk(self):
+    def test_simctl_policy(self):
         self.assert_decision(["xcrun", "simctl", "shutdown", "all"], "allow")
-        self.assert_decision(["rtk", "xcrun", "simctl", "shutdown", "all"], "allow")
 
-    def test_xcodebuild_policy_matches_bare_and_rtk(self):
+    def test_xcodebuild_policy(self):
         command = [
             "xcodebuild",
             "-project",
@@ -86,7 +80,6 @@ class ExecPolicyRulesTests(unittest.TestCase):
             "archive",
         ]
         self.assert_decision(command, "allow")
-        self.assert_decision(["rtk", *command], "allow")
 
 
 if __name__ == "__main__":

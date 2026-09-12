@@ -8,15 +8,17 @@ These rules apply to every task in this repository unless the user explicitly ov
 
 ## Project Invariant
 
-Orlix compiles upstream Linux into an iOS-hosted `OrlixKernel.xcframework`, pairs it with `OrlixMLibC`, and delivers the curated OS as the `OrlixOS` Kit/framework.
+Orlix is the full first-party application. It consumes `OrlixKit.xcframework` as its sole local Linux runtime dependency. `OrlixKit` exposes `OrlixEngine`, which boots and hosts one running `OrlixOS` with one upstream Linux kernel.
 
 If a change makes Orlix less suitable for real Linux userspace, the change is wrong.
 
 OrlixKernel is Linux. It does not own shell behavior, libc behavior, package management, public syscall APIs, or a custom runtime facade. Shells and packages are normal Orlix Linux userspace binaries linked against OrlixMLibC and executed through Linux mechanisms.
 
-Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not recreate a separate `OrlixKit` module or move OS delivery into `OrlixTerminal` or `OrlixHostAdapter`.
+`OrlixOS` hosts zero or more persistent, isolated `OrlixInstance`s. Each instance shares the kernel and runs ordinary `OrlixProcess` values and OCI `OrlixContainer` values. OrlixKit is an SDK boundary, not a runtime object. OrlixOS is the running OS, not its rootfs.
 
-The canonical product layers are `OrlixOS`, `OrlixKernel`, `OrlixMLibC`, `OrlixCoreUtils`, `OrlixMachine`, `Containers`, `Herdr`, `OrlixTCTI`, and `OrlixHostAdapter`. Use these names in source, project configuration, tests, and harness guidance. Do not introduce aliases or parallel facades for them.
+The canonical public vocabulary is `Orlix`, `OrlixKit`, `OrlixEngine`, `OrlixOS`, `OrlixInstance`, `OrlixProcess`, and `OrlixContainer`. `OrlixBootloader`, `OrlixKernel`, `OrlixHostAdapter`, and `OrlixTCTI` remain private implementation. `OrlixMLibC`, `OrlixCoreUtils`, packages, and rootfs are Linux guest artifacts, never Apple-native link dependencies.
+
+ADR 0040 (`docs/objects/architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md`) supersedes conflicting SDK and lifecycle naming clauses. Unrelated clauses of earlier ADRs remain authoritative. Existing source names do not establish migration completion.
 
 ## First Reads
 
@@ -42,11 +44,11 @@ Durable Orlix Linux port inputs live under:
 
 `OrlixMLibC/Sources` owns OrlixMLibC sysdeps, configs, and patches. OrlixMLibC consumes Linux UAPI through `headers_install` for upstream `ARCH=arm64` and calls Linux-shaped syscalls.
 
-`OrlixOS` is the only public Kit/framework and the app-facing product boundary. `OrlixKernel`, `OrlixMLibC`, and `OrlixCoreUtils` are private implementation products behind that boundary. Do not expose them as parallel app APIs.
+`OrlixKit` is the public Swift module and complete embeddable XCFramework. Host apps do not directly link private runtime implementation targets. The first-party vvterm/Ghostty terminal and remote features stay in Orlix.app. A consumer must be able to launch a Linux process through pipes without a terminal.
 
-`OrlixOS` owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API. `OrlixMachine` owns Linux machine and session composition behind that API. `Containers` owns container lifecycle and integration with a machine. These layers must not absorb kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, or terminal UI topology.
+`OrlixEngine` owns process-wide host lifecycle, resource establishment, and boot orchestration. `OrlixBootloader` owns the private boot mechanism. Linux userspace supervision manages instance and container lifecycle through Linux mechanisms. Guest distribution assembly owns package/rootfs policy and resources packaged by OrlixKit; it does not make guest libraries Apple-native dependencies.
 
-Herdr is authoritative for the terminal hierarchy: Session, Workspace, Tab, and Pane, including focus and topology. The native app presents that hierarchy; it does not maintain a parallel terminal model. `OrlixOS`, `OrlixMachine`, and `Containers` provide session targets to Herdr-owned panes without taking ownership of terminal topology.
+Herdr is authoritative for the terminal hierarchy: Session, Workspace, Tab, and Pane, including focus and topology. The native app presents that hierarchy; it does not maintain a parallel terminal model. OrlixKit provides process I/O to Herdr-owned panes without taking ownership of terminal topology.
 
 `OrlixTCTI` owns guest instruction translation and execution beneath Linux. It does not own Linux process, syscall, signal, fault, scheduling, or filesystem semantics. `OrlixHostAdapter` owns private Apple and Darwin execution mechanics used by the lower layers. It must not decode guest instructions, own Linux policy, expose public Linux ABI, or become an app-facing runtime facade.
 
@@ -72,14 +74,12 @@ The local kernel prototype is retired. Do not restore `LegacyOrlix/`, `OrlixKern
 Use Codex-native surfaces deliberately:
 
 - `.codex/agents/orlix-planner.toml` for creating or refining epic, story, task, and decision pages.
-- `.codex/agents/orlix-implementer.toml` for executing the selected structured task envelope without maintaining an implementation journal.
+- `.codex/agents/orlix-implementer.toml` for executing the selected structured task envelope and recording independently verified recovery checkpoints in `IMPLEMENT.md`.
 - `.codex/agents/orlix-reviewer.toml` for skeptical review of assumptions, directives, upstream conformance, and evidence.
 - `.agents/skills/orlix-implementation-boundaries/SKILL.md` before deciding which layer owns a fix.
 - `.agents/skills/orlix-upstream-conformance/SKILL.md` for upstream Linux, mlibc, Coreutils, or other upstream test suites.
 - `.agents/skills/orlix-runtime-claim-verification/SKILL.md` before claiming fixed, green, complete, runtime-ready, package-ready, or upstream-test success.
 - `.agents/skills/orlix-write-to-harness/SKILL.md` before editing the ontology, harness, skills, agents, hooks, or generated rules.
-
-`rtk` only shrinks command output. Harness rules and hooks must treat `rtk <command>` as equivalent to `<command>` for approval and block decisions.
 
 Repository lifecycle hooks enforce only repo-wide workflow invariants. They must
 not select, authorize, or validate OrlixTCTI work, release readiness,
@@ -104,19 +104,29 @@ Do not claim product runtime readiness from KUnit, kselftest, no-init boot logs,
 
 For upstream conformance work, upstream sources and tests are authoritative. Fix Orlix to match upstream Linux/mlibc/package behavior; do not edit generated upstream sources or reinterpret failures as success.
 
+Before physical TCTI/product validation, run `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, then `make agent-task-envelope-check AREA=orlix-tcti`. Require current native simulator-ladder evidence and `physical_device_allowed=true`. Missing, stale, false, or unverified eligibility blocks device work. Network namespace isolation does not prove unrestricted external networking.
+
+## Build Reuse
+
+Bazel owns the product dependency graph after the single gated cutover. Kbuild, Meson/Ninja, and upstream package build systems retain their internal dependency graphs. Make remains the public interface.
+
+Keep action identity, incremental-directory identity, artifact/content identity, and proof/provenance identity distinct. Consumers select only semantically relevant artifacts, never a producer's entire `DefaultInfo` output set. Provenance and proof changes must not invalidate compilation unless they affect its result.
+
+Keep mutable build state worktree-local. Share only immutable, content-addressed or dependency-checked content with bounded retention. A missing or corrupt cache may slow a build but cannot change its product. Warm promoted builds require no artifact downloads. Promotion retains independent clean builds and verified signatures; unsigned proposals never update the lock.
+
 ## Working Rules
 
 1. Read owning files, callers, docs, and ADRs before writing.
 2. Prefer the smallest correct change; avoid speculative abstractions.
 3. Touch only what the task requires.
 4. Surface ownership conflicts directly.
-5. Use `rtk` for shell commands in this workspace.
-6. Use Make as the only repository-owned executable developer interface. Keep implementation in the owning component's Make rules or non-executable source modules invoked only by private Make targets; do not add standalone command scripts.
-7. Use `rg`/`rg --files` for searches.
-8. Preserve unrelated dirty worktree changes.
-9. Fail loud when evidence is missing, partial, skipped, or stale.
-10. Check simulator/app crash reports after app-hosted test failures or crashes.
-11. Commit and push after a coherent verified checkpoint when implementation work is complete.
+5. Make is the only repository-owned developer and CI command interface. Non-executable implementation modules may be invoked by private Make targets or Bazel actions. Bazel actions must not call the top-level or component wrapper Makefiles. Do not add standalone command scripts.
+6. Use `rg`/`rg --files` for searches.
+7. Preserve unrelated dirty worktree changes. Identify and preserve user-owned generated-file deltas before regeneration, then reapply or incorporate their intent without loss.
+8. Fail loud when evidence is missing, partial, skipped, or stale.
+9. Check simulator/app crash reports after app-hosted test failures or crashes.
+10. Commit and push after a coherent verified checkpoint when implementation work is complete.
+11. Record each recovery checkpoint, verification result, preserved user delta, and remaining gate in `IMPLEMENT.md`. Keep raw evidence in `Build/AgentHarness/`.
 
 ## XcodeBuildMCP
 

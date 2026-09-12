@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+prefix=/usr
+host=
+for arg in "$@"; do
+    case "$arg" in
+        --prefix=*) prefix=${arg#--prefix=} ;;
+        --host=*) host=${arg#--host=} ;;
+        --build=*|--target=*) ;;
+        *) echo "unsupported configure argument: $arg" >&2; exit 1 ;;
+    esac
+done
+cat > Makefile <<EOF
+prefix = ${prefix}
+host = ${host}
+CC ?= cc
+CFLAGS ?=
+LDFLAGS ?=
+all: true
+true: true.c
+	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o true true.c
+install:
+	mkdir -p "\$(DESTDIR)\$(prefix)/bin"
+	cp true "\$(DESTDIR)\$(prefix)/bin/true"
+	chmod 0755 "\$(DESTDIR)\$(prefix)/bin/true"
+clean:
+	rm -f true
+EOF
+echo "configured prefix=$prefix host=$host"

@@ -57,7 +57,7 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
                 Text("Accessory Bar")
             }
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
     }
 }

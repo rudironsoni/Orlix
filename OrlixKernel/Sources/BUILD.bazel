@@ -1,0 +1,79 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["BazelInfo.plist"])
+
+filegroup(
+    name = "kbuild_engine",
+    srcs = glob(["ports/orlix/kbuild/*.mk", "ports/orlix/kbuild/*.py"]) + ["//bazel:build_state.py"],
+)
+
+filegroup(
+    name = "linux_overlay",
+    srcs = glob(
+        ["ports/orlix/overlay/**"],
+        exclude = ["ports/orlix/overlay/arch/orlix/include/**"],
+    ) + ["//OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include:all_files"],
+)
+
+filegroup(
+    name = "linux_patches",
+    srcs = glob(["ports/orlix/patches/**"]),
+)
+
+filegroup(
+    name = "linux_configs",
+    srcs = glob(["ports/orlix/configs/**"]),
+)
+
+filegroup(
+    name = "tcti_isa_archive",
+    srcs = ["ports/orlix/isa/prepared-tables.tar.gz"],
+)
+
+filegroup(
+    name = "tcti_isa_archive_sha256",
+    srcs = ["ports/orlix/isa/prepared-tables.sha256"],
+)
+
+filegroup(
+    name = "tcti_isa_members_make",
+    srcs = ["ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/instruction-artifact-contributors.mk"],
+)
+
+filegroup(
+    name = "tcti_isa_members_def",
+    srcs = ["ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/target_refresh_artifacts.def"],
+)
+
+filegroup(
+    name = "OrlixKernelBoot_srcs",
+    srcs = glob([
+        "boot/*.c",
+        "boot/*.h",
+        "include/OrlixKernel.h",
+    ]),
+)
+
+objc_library(
+    name = "OrlixKernelBoot",
+    srcs = glob(["boot/*.c"]),
+    hdrs = glob(["boot/*.h"]) + ["include/OrlixKernel.h"],
+    alwayslink = True,
+    copts = [
+        "-fno-objc-arc",
+        "-Wno-unused-parameter",
+        "-DORLIX_APP_HOSTED_BOOT=1",
+    ],
+    includes = [
+        ".",
+        "include",
+    ],
+    tags = ["manual"],
+    deps = [
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include:host_trap_headers",
+        "//OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include:kernel_boot_headers",
+    ],
+)

@@ -1,2 +1,2 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "generations/current/target_instruction_artifact_generated.h"
+#include <target_instruction_artifact_generated.h>

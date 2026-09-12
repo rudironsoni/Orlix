@@ -27,7 +27,6 @@ struct iOSContentView: View {
     @ObservedObject private var engagementTracker: EngagementTracker
     private let tabManager: TerminalTabManager
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
-    @Environment(\.requestReview) private var requestReview
 
     @State private var selectedWorkspace: Workspace?
     @State private var selectedEnvironment: ServerEnvironment?
@@ -82,8 +81,7 @@ struct iOSContentView: View {
     }
 
     private var navigationContent: some View {
-        NavigationStack {
-            ServerListScreen(
+        ServerListScreen(
                 serverManager: serverManager,
                 tabManager: tabManager,
                 fileTabs: fileTabs,
@@ -106,7 +104,7 @@ struct iOSContentView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 ServerLocalStorageNotice(serverManager: serverManager)
             }
-            .navigationDestination(isPresented: terminalPresentation) {
+            .orlixNavigationDestination(isPresented: terminalPresentation) {
                 if let terminalRoute {
                     ServerTerminalRoute(
                         tabManager: tabManager,
@@ -125,7 +123,7 @@ struct iOSContentView: View {
                     )
                 }
             }
-        }
+            .orlixNavigationStack()
         .navigationBarAppearance(backgroundColor: .clear, isTranslucent: true, shadowColor: .clear)
         .adaptiveSoftScrollEdges()
         .onAppear {
@@ -149,7 +147,7 @@ struct iOSContentView: View {
             }
         }
         .onChange(of: engagementTracker.reviewRequestToken) { _ in
-            requestReview()
+            requestAppStoreReview()
         }
         .lockedItemAlert(
             .server,
@@ -159,6 +157,15 @@ struct iOSContentView: View {
                 set: { if !$0 { lockedServerName = nil } }
             )
         )
+    }
+
+    private func requestAppStoreReview() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return
+        }
+        SKStoreReviewController.requestReview(in: scene)
     }
 
     var body: some View {

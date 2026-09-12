@@ -97,18 +97,20 @@ extension GhosttyTerminalView {
         imeProxyTextView.terminalOwner = nil
         _ = imeProxyTextView.resignFirstResponder()
         keyboardToolbar = nil
-        if let nativeFindInteraction {
-            if nativeFindInteraction.isFindNavigatorVisible {
-                nativeFindInteraction.dismissFindNavigator()
+        if #available(iOS 16.0, *) {
+            if let nativeFindInteraction {
+                if nativeFindInteraction.isFindNavigatorVisible {
+                    nativeFindInteraction.dismissFindNavigator()
+                }
+                removeInteraction(nativeFindInteraction)
+                self.nativeFindInteraction = nil
             }
-            removeInteraction(nativeFindInteraction)
-            self.nativeFindInteraction = nil
+            nativeFindSession = nil
         }
-        nativeFindSession = nil
         nativeSelectionLongPressAnchor = nil
         nativeSelectionLifecycle.cancel()
         nativeSelectionSnapshot = .empty
-        if let editMenuInteraction {
+        if #available(iOS 16.0, *), let editMenuInteraction {
             editMenuInteraction.dismissMenu()
             removeInteraction(editMenuInteraction)
             self.editMenuInteraction = nil
@@ -119,7 +121,7 @@ extension GhosttyTerminalView {
 
         // Stop rendering/input callbacks and mark the surface as not visible.
         if let cSurface = surface?.unsafeCValue {
-            ghostty_surface_set_write_callback(cSurface, nil, nil)
+            GhosttyHostIO.setWriteCallback(cSurface, nil, userdata: nil)
             setSurfaceFocus(false)
             ghostty_surface_set_occlusion(cSurface, false)
         }
@@ -467,10 +469,7 @@ extension GhosttyTerminalView {
         guard let surface = surface?.unsafeCValue else { return }
 
         // Feed data to terminal
-        data.withUnsafeBytes { buffer in
-            guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-            ghostty_surface_feed_data(surface, ptr, buffer.count)
-        }
+        GhosttyHostIO.feed(surface, data)
 
         scheduleCustomIORedraw()
         requestRender()
@@ -481,10 +480,10 @@ extension GhosttyTerminalView {
         guard let surface = surface?.unsafeCValue else { return }
         guard let userdata = ghostty_surface_userdata(surface) else { return }
 
-        ghostty_surface_set_write_callback(
+        GhosttyHostIO.setWriteCallback(
             surface,
             ghosttyTerminalWriteCallback,
-            userdata
+            userdata: userdata
         )
     }
 

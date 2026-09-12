@@ -1,0 +1,175 @@
+load(
+    ":providers.bzl",
+    "config_flags_test",
+    "no_wrapper_makefile_test",
+    "macho_no_wrapper_makefile_test",
+    "macho_device_development_test",
+    "bash_package_tree_test",
+    "coreutils_package_tree_test",
+    "guest_package_tree_test",
+    "package_tree_test",
+    "rootfs_info_test",
+    "kernel_composition_test",
+    "sysroot_uapi_only_test",
+    "uapi_providers_test",
+    "variant_stamp_test",
+)
+
+package(default_visibility = ["//visibility:private"])
+
+macho_device_development_test(
+    name = "macho_device_development_test",
+    target_under_test = "//bazel/feasibility/kernel:macho",
+)
+
+uapi_providers_test(
+    name = "uapi_providers_test",
+    target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+sysroot_uapi_only_test(
+    name = "sysroot_uapi_only_test",
+    target_under_test = "//bazel/feasibility/mlibc:sysroot",
+)
+
+config_flags_test(
+    name = "profile_flag_test",
+    target_under_test = "//bazel/config:profile",
+)
+
+config_flags_test(
+    name = "component_mode_flag_test",
+    target_under_test = "//bazel/config:component_mode",
+)
+
+config_flags_test(
+    name = "apple_destination_flag_test",
+    target_under_test = "//bazel/config:apple_destination",
+)
+
+config_flags_test(
+    name = "signing_mode_flag_test",
+    target_under_test = "//bazel/config:signing_mode",
+)
+
+no_wrapper_makefile_test(
+    name = "no_wrapper_makefile_test",
+    target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+macho_no_wrapper_makefile_test(
+    name = "macho_no_wrapper_makefile_test",
+    target_under_test = "//bazel/feasibility/kernel:macho",
+)
+
+[
+    macho_no_wrapper_makefile_test(
+        name = "macho_%s_%s_product_identity_test" % (profile, destination),
+        expected_destination = destination,
+        expected_profile = profile,
+        target_under_test = "//bazel/feasibility/kernel:kernel-%s-%s" % (profile, destination),
+    )
+    for profile in [
+        "release",
+        "development",
+    ]
+    for destination in [
+        "iphoneos",
+        "iphonesimulator",
+    ]
+]
+
+variant_stamp_test(
+    name = "uapi_iphonesimulator_release_stamp_test",
+    expected_destination = "iphonesimulator",
+    expected_profile = "release",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphonesimulator_release",
+)
+
+variant_stamp_test(
+    name = "uapi_iphonesimulator_development_stamp_test",
+    expected_destination = "iphonesimulator",
+    expected_profile = "development",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphonesimulator_development",
+)
+
+variant_stamp_test(
+    name = "uapi_iphoneos_release_stamp_test",
+    expected_destination = "iphoneos",
+    expected_profile = "release",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphoneos_release",
+)
+
+variant_stamp_test(
+    name = "uapi_iphoneos_development_stamp_test",
+    expected_destination = "iphoneos",
+    expected_profile = "development",
+    target_under_test = "//bazel/feasibility/kernel:uapi_iphoneos_development",
+)
+
+package_tree_test(
+    name = "true_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:true",
+)
+
+coreutils_package_tree_test(
+    name = "coreutils_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:coreutils",
+)
+
+bash_package_tree_test(
+    name = "bash_package_tree_test",
+    target_under_test = "//bazel/feasibility/packages:bash",
+)
+
+[
+    guest_package_tree_test(
+        name = "%s_package_tree_test" % pkg,
+        expected_token = pkg,
+        target_under_test = "//bazel/feasibility/packages:%s" % pkg,
+    )
+    for pkg in [
+        "attr",
+        "acl",
+        "pcre2",
+        "musl-fts",
+        "grep",
+        "findutils",
+        "e2fsprogs",
+        "jq",
+        "curl",
+        "ncurses",
+        "zsh",
+    ]
+]
+
+guest_package_tree_test(
+    name = "getconf_package_tree_test",
+    expected_token = "getconf.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:getconf",
+)
+
+guest_package_tree_test(
+    name = "getent_package_tree_test",
+    expected_token = "getent.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:getent",
+)
+
+guest_package_tree_test(
+    name = "init_package_tree_test",
+    expected_token = "init.c",
+    require_configure = False,
+    target_under_test = "//bazel/feasibility/packages:init",
+)
+
+rootfs_info_test(
+    name = "rootfs_info_test",
+    target_under_test = "//bazel/feasibility/rootfs:rootfs",
+)
+
+kernel_composition_test(
+    name = "kernel_composition_test",
+    target_under_test = "//bazel/product:kernel_composition",
+)

@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 enum SyncSettingsPrimaryAction: Equatable {
     case syncNow
@@ -6,12 +6,12 @@ enum SyncSettingsPrimaryAction: Equatable {
     case checkAgain
     case syncing
 
-    var title: LocalizedStringResource {
+    var title: String {
         switch self {
-        case .syncNow: "Sync Now"
-        case .tryAgain: "Try Again"
-        case .checkAgain: "Check Again"
-        case .syncing: "Syncing"
+        case .syncNow: String(localized: "Sync Now")
+        case .tryAgain: String(localized: "Try Again")
+        case .checkAgain: String(localized: "Check Again")
+        case .syncing: String(localized: "Syncing")
         }
     }
 
@@ -39,19 +39,19 @@ enum SyncSettingsContentSyncState: Equatable {
         }
     }
 
-    var sectionTitle: LocalizedStringResource {
+    var sectionTitle: String {
         switch self {
-        case .synced: "Synced with iCloud"
-        case .included: "Included in iCloud Sync"
-        case .notSyncing: "iCloud Sync Includes"
+        case .synced: String(localized: "Synced with iCloud")
+        case .included: String(localized: "Included in iCloud Sync")
+        case .notSyncing: String(localized: "iCloud Sync Includes")
         }
     }
 
-    var rowTitle: LocalizedStringResource {
+    var rowTitle: String {
         switch self {
-        case .synced: "Synced"
-        case .included: "Included"
-        case .notSyncing: "Not Syncing"
+        case .synced: String(localized: "Synced")
+        case .included: String(localized: "Included")
+        case .notSyncing: String(localized: "Not Syncing")
         }
     }
 }
@@ -84,22 +84,22 @@ extension SyncSettingsUserState {
 }
 
 extension SyncSettingsCredentialState {
-    var statusTitle: LocalizedStringResource {
+    var statusTitle: String {
         switch self {
-        case .storedInICloudKeychain: "iCloud Keychain"
-        case .storedOnThisDevice: "On This Device"
-        case .needsAttention: "Needs Attention"
+        case .storedInICloudKeychain: String(localized: "iCloud Keychain")
+        case .storedOnThisDevice: String(localized: "On This Device")
+        case .needsAttention: String(localized: "Needs Attention")
         }
     }
 }
 
 extension SyncSettingsErrorCategory {
-    var title: LocalizedStringResource {
+    var title: String {
         switch self {
-        case .account: "Account"
-        case .cloudData: "App Data"
-        case .credentials: "Credentials"
-        case .network: "Network"
+        case .account: String(localized: "Account")
+        case .cloudData: String(localized: "App Data")
+        case .credentials: String(localized: "Credentials")
+        case .network: String(localized: "Network")
         }
     }
 }

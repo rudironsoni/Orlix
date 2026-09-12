@@ -6,6 +6,10 @@ ORLIX_PRODUCT_BOUNDARY_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-bou
 ORLIX_PRODUCT_KALLSYMS_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-kallsyms.o
 ORLIX_PRODUCT_BOUNDARY_OBJECTS := $(ORLIX_PRODUCT_PAYLOAD_OBJECT) $(ORLIX_PRODUCT_BOUNDARY_OBJECT) $(ORLIX_PRODUCT_KALLSYMS_OBJECT)
 ORLIX_KERNEL_PORT_ABS := $(abspath $(ORLIX_KERNEL_PORT_DIR))
+ORLIX_PRODUCT_ADAPTER_CFLAGS += -ffile-prefix-map="$(ORLIX_KERNEL_PORT_ABS)/=./" -ffile-prefix-map="$(ORLIX_KERNEL_BUILD_DIR)/=./.kbuild/" -ffile-prefix-map="$(abspath $(ORLIX_KERNEL_BUILD_DIR))/=./.kbuild/"
+ORLIX_KERNEL_PORT_REL := $(shell /usr/bin/python3 -c 'import os; print(os.path.relpath("$(ORLIX_KERNEL_PORT_ABS)", "$(CURDIR)"))')
+ORLIX_KERNEL_BUILD_REL := $(shell /usr/bin/python3 -c 'import os; print(os.path.relpath("$(ORLIX_KERNEL_BUILD_DIR)", "$(CURDIR)"))')
+ORLIX_PRODUCT_ADAPTER_CFLAGS += -ffile-prefix-map="$(ORLIX_KERNEL_PORT_REL)/=./" -ffile-prefix-map="$(ORLIX_KERNEL_BUILD_REL)/=./.kbuild/"
 
 ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__TEXT,__text \
@@ -95,26 +99,9 @@ adapter_include="$(ORLIX_PRODUCT_ADAPTER_INCLUDE)"; \
 for path in "$(ORLIX_KERNEL_BUILD_DIR)" "$$adapter_root" "$$adapter_include"; do \
 	if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked product adapter path: $$path" >&2; exit 1; fi; \
 done; \
-adapter_stamp="$$adapter_root/.orlix-product-adapter-ready"; \
-if [ -s "$$adapter_stamp" ] && \
-	[ "$$adapter_stamp" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
-	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
-	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
-	[ -s "$$adapter_include/linux/init.h" ] && \
-	[ -s "$$adapter_include/linux/cache.h" ] && \
-	[ -s "$$adapter_include/linux/compiler.h" ] && \
-	[ -s "$$adapter_include/linux/module.h" ] && \
-	[ -s "$$adapter_include/linux/moduleparam.h" ] && \
-	[ -s "$$adapter_include/kunit/test.h" ] && \
-	[ -s "$$adapter_include/asm-generic/preempt.h" ] && \
-	[ -s "$$adapter_root/source/kernel/sched/core.c" ] && \
-	[ -s "$$adapter_root/source/lib/crc32.c" ] && \
-	[ -s "$$adapter_root/source/mm/page_alloc.c" ] && \
-	[ -s "$$adapter_root/source/security/selinux/flask.h" ] && \
-	[ -s "$$adapter_root/source/security/selinux/av_permissions.h" ]; then \
-	echo "reusing Orlix product compile adapter: $$adapter_root"; \
-else \
-	rm -rf "$$adapter_root"; \
+adapter_destination="$$adapter_root"; \
+adapter_root="$$(mktemp -d "$(ORLIX_KERNEL_BUILD_DIR)/.product-adapter.XXXXXX")"; \
+adapter_include="$$adapter_root/include"; \
 	mkdir -p "$$adapter_include/linux"; \
 	mkdir -p "$$adapter_include/kunit"; \
 	mkdir -p "$$adapter_include/linux/sched"; \
@@ -134,8 +121,12 @@ $(call orlix_product_adapter_validate_linux_truth); \
 $(call orlix_product_adapter_validate_macho_projection); \
 $(call orlix_product_adapter_generate_headers); \
 $(call orlix_product_adapter_generate_sources); \
-	printf 'profile=%s\nlinux_version=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" > "$$adapter_stamp"; \
-fi
+mkdir -p "$$adapter_destination/include" "$$adapter_destination/source"; \
+/usr/bin/rsync -rc --delete "$$adapter_include/" "$$adapter_destination/include/"; \
+/usr/bin/rsync -rc --delete "$$adapter_root/source/" "$$adapter_destination/source/"; \
+rm -rf "$$adapter_root"; \
+adapter_root="$$adapter_destination"; \
+adapter_include="$$adapter_destination/include"
 endef
 
 define orlix_product_adapter_validate_linux_truth
@@ -331,7 +322,6 @@ endef
 
 define orlix_product_adapter_generate_headers
 command -v perl >/dev/null 2>&1 || { echo "perl is required to generate product adapter headers" >&2; exit 1; }; \
-adapter_include="$(ORLIX_PRODUCT_ADAPTER_INCLUDE)"; \
 linux_root="$(ORLIX_KERNEL_PORT_ABS)"; \
 replace_once() { \
 	file="$$1"; from="$$2"; to="$$3"; \
@@ -418,17 +408,12 @@ perl -0pi -e 's/#define PER_CPU_SHARED_ALIGNED_SECTION "\.\.shared_aligned"/#def
 endef
 
 define orlix_product_adapter_generate_sources
-adapter_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)"; \
 	linux_root="$(ORLIX_KERNEL_PORT_ABS)"; \
 	cp "$$linux_root/lib/crc32.c" "$$adapter_root/source/lib/crc32.c"; \
 	cp "$$linux_root/lib/crypto/blake2s-generic.c" "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	cp "$$linux_root/drivers/of/of_reserved_mem.c" "$$adapter_root/source/drivers/of/of_reserved_mem.c"; \
 	cp "$$linux_root/drivers/tty/vt/defkeymap.c_shipped" "$$adapter_root/source/drivers/tty/vt/defkeymap.c"; \
-	host_tool_dir="$$adapter_root/host-tools"; \
-	mkdir -p "$$host_tool_dir"; \
-	hostcc="$${hostcc:-cc}"; \
-	( unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET XROS_DEPLOYMENT_TARGET PLATFORM_NAME EFFECTIVE_PLATFORM_NAME ARCHS CURRENT_ARCH VALID_ARCHS DYLD_ROOT_PATH DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH; "$$hostcc" "$$linux_root/drivers/tty/vt/conmakehash.c" -o "$$host_tool_dir/conmakehash" ); \
-	( unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET XROS_DEPLOYMENT_TARGET PLATFORM_NAME EFFECTIVE_PLATFORM_NAME ARCHS CURRENT_ARCH VALID_ARCHS DYLD_ROOT_PATH DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH; "$$host_tool_dir/conmakehash" "$$linux_root/drivers/tty/vt/cp437.uni" ) > "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c"; \
+	cp "$(ORLIX_KERNEL_BUILD_DIR)/drivers/tty/vt/consolemap_deftbl.c" "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c"; \
 	[ -s "$$adapter_root/source/drivers/tty/vt/consolemap_deftbl.c" ] || { echo "failed to generate Linux VT console map table" >&2; exit 1; }; \
 	cp "$$linux_root/mm/page_alloc.c" "$$adapter_root/source/mm/page_alloc.c"; \
 	cp "$$linux_root/mm/internal.h" "$$adapter_root/source/mm/internal.h"; \

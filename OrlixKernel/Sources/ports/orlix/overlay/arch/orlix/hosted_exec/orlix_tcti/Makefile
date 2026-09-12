@@ -1,6 +1,7 @@
 # FP16 scalar and AdvSIMD instructions use host H registers in these units.
 CFLAGS_switch_debug.o += -march=armv8.2-a+fp16
 CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
+ccflags-y += -I$(ORLIX_TCTI_ISA_BUILD)
 
 obj-y += engine.o
 obj-y += native_capture.o

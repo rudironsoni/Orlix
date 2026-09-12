@@ -888,6 +888,35 @@ static int fresh_checkout_modes_and_unselected_generation_are_reused(void)
 	return 0;
 }
 
+static int successful_publish_keeps_only_current_generation(void)
+{
+	char *root = make_root();
+	char prior_path[PATH_MAX];
+	char current_path[PATH_MAX];
+	char prior[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	char reusable[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	struct orlix_tcti_target_artifact_publish_result result;
+
+	EXPECT(root);
+	EXPECT(!publish(root, "prior", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	memcpy(prior, result.generation, sizeof(prior));
+	EXPECT(!publish(root, "reusable", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	memcpy(reusable, result.generation, sizeof(reusable));
+	EXPECT(snprintf(prior_path, sizeof(prior_path), "%s/target/%s", root,
+			prior) < (int)sizeof(prior_path));
+	EXPECT(snprintf(current_path, sizeof(current_path), "%s/target/%s", root,
+			reusable) < (int)sizeof(current_path));
+	EXPECT(access(prior_path, F_OK) != 0);
+	EXPECT(!access(current_path, F_OK));
+	EXPECT(!selector_is(root, reusable));
+	EXPECT(staging_entry_count(root) == 0);
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
 static int orphaned_hidden_staging_directory_does_not_block_retry(void)
 {
 	char *root = make_root();
@@ -1035,6 +1064,8 @@ int main(void)
 		{ "stale_same_identity_generation_is_rejected", stale_same_identity_generation_is_rejected },
 		{ "coherent_tamper_with_stale_generation_name_is_rejected", coherent_tamper_with_stale_generation_name_is_rejected },
 		{ "fresh_checkout_modes_and_unselected_generation_are_reused", fresh_checkout_modes_and_unselected_generation_are_reused },
+		{ "successful_publish_keeps_only_current_generation",
+		  successful_publish_keeps_only_current_generation },
 		{ "orphaned_hidden_staging_directory_does_not_block_retry", orphaned_hidden_staging_directory_does_not_block_retry },
 	};
 	size_t index;

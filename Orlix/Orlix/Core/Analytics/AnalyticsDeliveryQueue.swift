@@ -4,7 +4,7 @@ actor AnalyticsProductionTransport {
     func send(_ event: TrackEventRequest) async {
         guard let eventType = OrlixAnalyticsEvent(rawValue: event.name) else { return }
         let properties = (event.data ?? [:]).mapValues { $0.telemetryValue }
-        OrlixTelemetry.shared.track(eventType, properties: properties)
+        await OrlixTelemetry.shared.track(eventType, properties: properties)
     }
 }
 

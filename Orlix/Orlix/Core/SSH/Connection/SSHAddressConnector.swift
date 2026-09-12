@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import os
 
 nonisolated enum SSHAddressFamily: String, Equatable, Sendable {
     case ipv4
@@ -76,19 +75,20 @@ nonisolated enum SSHAddressConnector {
         let attemptToken: SSHStartupTrace.Token?
     }
 
-    private final class ResolutionState: Sendable {
+    private final class ResolutionState: @unchecked Sendable {
         private enum Status {
             case waiting
             case suspended(CheckedContinuation<[Candidate], Error>)
             case finished
         }
 
-        private let status = OSAllocatedUnfairLock(initialState: Status.waiting)
+        private let lock = NSLock()
+        private var status = Status.waiting
 
         func install(_ continuation: CheckedContinuation<[Candidate], Error>) -> Bool {
-            let wasCancelled = status.withLock { state -> Bool in
-                guard case .waiting = state else { return true }
-                state = .suspended(continuation)
+            let wasCancelled = lock.withLock { () -> Bool in
+                guard case .waiting = status else { return true }
+                status = .suspended(continuation)
                 return false
             }
             if wasCancelled {
@@ -98,22 +98,22 @@ nonisolated enum SSHAddressConnector {
         }
 
         func complete(_ result: Result<[Candidate], Error>) {
-            let continuation = status.withLock { state -> CheckedContinuation<[Candidate], Error>? in
-                guard case .suspended(let continuation) = state else { return nil }
-                state = .finished
+            let continuation = lock.withLock { () -> CheckedContinuation<[Candidate], Error>? in
+                guard case .suspended(let continuation) = status else { return nil }
+                status = .finished
                 return continuation
             }
             continuation?.resume(with: result)
         }
 
         func cancel() {
-            let continuation = status.withLock { state -> CheckedContinuation<[Candidate], Error>? in
-                switch state {
+            let continuation = lock.withLock { () -> CheckedContinuation<[Candidate], Error>? in
+                switch status {
                 case .waiting:
-                    state = .finished
+                    status = .finished
                     return nil
                 case .suspended(let continuation):
-                    state = .finished
+                    status = .finished
                     return continuation
                 case .finished:
                     return nil

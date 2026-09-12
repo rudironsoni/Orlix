@@ -3,7 +3,7 @@ default_platform(:ios)
 
 require "json"
 
-APP_IDENTIFIER = "com.rudironsoni.orlix"
+APP_IDENTIFIER = "com.rudironsoni.Orlix"
 
 def required_environment(name)
   value = ENV.fetch(name, "").strip

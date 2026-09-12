@@ -416,7 +416,7 @@ private final class TerminalSceneActivationView: UIView {
     }
 }
 
-private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
+private struct RemoteTerminalPaneRepresentable: View {
     let paneId: UUID
     let server: Server
     let credentials: ServerCredentials
@@ -430,8 +430,20 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
     let onVoiceTrigger: (() -> Void)?
 
-    @EnvironmentObject var ghosttyApp: GhosttyRuntime
-    @Environment(\.scenePhase) private var scenePhase
+    var body: some View {
+        TerminalPaneSurface(
+            paneId: paneId.uuidString,
+            size: size,
+            isActive: isActive,
+            presentationOverrides: tabManager.sessionState.presentationOverrides(for: paneId),
+            terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
+            makeBackend: makeCoordinator,
+            reusableTerminal: { _ in tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) },
+            configure: configureTerminal,
+            update: updateTerminal,
+            dismantle: Self.dismantleTerminal
+        )
+    }
 
     func makeCoordinator() -> TerminalPaneConnectionCoordinator {
         TerminalPaneConnectionCoordinator(
@@ -445,50 +457,26 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         )
     }
 
-    func makeUIView(context: Context) -> UIView {
-        guard let app = ghosttyApp.app else {
-            return UIView(frame: .zero)
-        }
-
-        let coordinator = context.coordinator
-
-        if let existingTerminal = tabManager.terminalSurfaceStore.ghosttySurface(for: paneId) {
-            coordinator.terminal = existingTerminal
+    private func configureTerminal(
+        _ terminalView: GhosttyTerminalView,
+        coordinator: TerminalPaneConnectionCoordinator,
+        reusing: Bool
+    ) {
+        if reusing {
+            coordinator.terminal = terminalView
             coordinator.isTerminalReady = true
             coordinator.preservePane = true
-            configureExistingTerminal(existingTerminal, coordinator: coordinator)
-            existingTerminal.acceptsTerminalInput = isActive
-
-            if existingTerminal.superview != nil {
-                existingTerminal.removeFromSuperview()
-            }
-            if size.width > 0 && size.height > 0 {
-                coordinator.lastReportedSize = size
-                existingTerminal.frame = CGRect(origin: .zero, size: size)
-                existingTerminal.sizeDidChange(size)
-            }
-
+            configureExistingTerminal(terminalView, coordinator: coordinator)
             DispatchQueue.main.async {
                 onReady()
                 startConnectionIfNeeded(
-                    terminal: existingTerminal,
+                    terminal: terminalView,
                     coordinator: coordinator,
                     state: tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
                 )
             }
-            return existingTerminal
+            return
         }
-
-        let initialSize = (size.width > 0 && size.height > 0) ? size : CGSize(width: 800, height: 600)
-        let terminalView = GhosttyTerminalView(
-            frame: CGRect(origin: .zero, size: initialSize),
-            worktreePath: NSHomeDirectory(),
-            ghosttyApp: app,
-            appWrapper: ghosttyApp,
-            paneId: paneId.uuidString,
-            terminalAccessoryInputSnapshot: terminalAccessoryInputSnapshot,
-            useCustomIO: true
-        )
 
         terminalView.onReady = { [weak coordinator, weak terminalView] in
             guard let coordinator else { return }
@@ -520,9 +508,6 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         configureMouseReportingSuppression(on: terminalView)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        terminalView.applyPresentationOverrides(
-            tabManager.sessionState.presentationOverrides(for: paneId)
-        )
 
         coordinator.terminal = terminalView
         coordinator.installRichPasteInterception(on: terminalView)
@@ -535,23 +520,12 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         terminalView.onResize = { [weak coordinator] cols, rows in
             coordinator?.handleResize(cols: cols, rows: rows)
         }
-
-        coordinator.lastReportedSize = initialSize
-        if size.width > 0 && size.height > 0 {
-            terminalView.sizeDidChange(size)
-        }
-        if !isActive {
-            terminalView.pauseRendering()
-        }
-
-        return terminalView
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        guard let terminalView = uiView as? GhosttyTerminalView else {
-            return
-        }
-
+    private func updateTerminal(
+        _ terminalView: GhosttyTerminalView,
+        coordinator: TerminalPaneConnectionCoordinator
+    ) {
         guard tabManager.sessionState.paneState(for: paneId) != nil else {
             terminalView.acceptsTerminalInput = false
             terminalView.writeCallback = nil
@@ -562,46 +536,10 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
             return
         }
 
-        let windowScene = terminalView.window?.windowScene
-        let windowSceneIsActive = windowScene.map {
-            $0.activationState == .foregroundActive
-        }
-        let sceneIsActive = TerminalSceneActivityPolicy.isActive(
-            environmentIsActive: scenePhase == .active,
-            windowSceneIsActive: windowSceneIsActive
-        )
-        let renderingTransition = TerminalRenderingPolicy.transition(
-            terminalIsActive: isActive,
-            sceneIsActive: sceneIsActive,
-            renderingIsPaused: terminalView.isRenderingPaused
-        )
-
-        terminalView.acceptsTerminalInput = isActive
-        let presentationOverrides = tabManager.sessionState.presentationOverrides(for: paneId)
-        if terminalView.surfacePresentationOverrides != presentationOverrides {
-            terminalView.applyPresentationOverrides(presentationOverrides)
-        }
         terminalView.onVoiceButtonTapped = onVoiceTrigger
-        terminalView.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         configureMouseReportingSuppression(on: terminalView)
         terminalView.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminalView.terminalContextMenuActions = terminalContextMenuActions
-        if size.width > 0, size.height > 0, size != context.coordinator.lastReportedSize {
-            context.coordinator.lastReportedSize = size
-            terminalView.sizeDidChange(size)
-        }
-
-        if context.coordinator.isTerminalReady {
-            switch renderingTransition {
-            case .resume:
-                terminalView.resumeRendering()
-            case .pause:
-                terminalView.pauseRendering()
-            case .none:
-                break
-            }
-        }
-
         let state = tabManager.sessionState.paneState(for: paneId)?.connectionState ?? .idle
         let shouldStartConnection = TerminalConnectionStartPolicy.shouldStart(
             connectionState: state
@@ -610,15 +548,13 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         if shouldStartConnection {
             startConnectionIfNeeded(
                 terminal: terminalView,
-                coordinator: context.coordinator,
+                coordinator: coordinator,
                 state: state
             )
         }
     }
 
-    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
-        guard let terminalView = uiView as? GhosttyTerminalView else { return }
-
+    private static func dismantleTerminal(_ terminalView: GhosttyTerminalView, coordinator: TerminalPaneConnectionCoordinator) {
         let paneStillExists = coordinator.tabManager.sessionState
             .paneState(for: coordinator.paneId) != nil
         if paneStillExists {
@@ -639,7 +575,6 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
     private func configureExistingTerminal(_ terminal: GhosttyTerminalView, coordinator: TerminalPaneConnectionCoordinator) {
         terminal.onProcessExit = processExitHandler(for: terminal)
         terminal.onVoiceButtonTapped = onVoiceTrigger
-        terminal.applyTerminalAccessoryInputSnapshot(terminalAccessoryInputSnapshot)
         terminal.onPwdChange = { [paneId] rawDirectory in
             DispatchQueue.main.async {
                 tabManager.updatePaneWorkingDirectory(paneId, rawDirectory: rawDirectory)
@@ -654,9 +589,6 @@ private struct RemoteTerminalPaneRepresentable: UIViewRepresentable {
         configureMouseReportingSuppression(on: terminal)
         terminal.onPaneKeyboardShortcut = onPaneKeyboardShortcut
         terminal.terminalContextMenuActions = terminalContextMenuActions
-        terminal.applyPresentationOverrides(
-            tabManager.sessionState.presentationOverrides(for: paneId)
-        )
         terminal.writeCallback = { [weak coordinator] data in
             coordinator?.sendToTransport(data)
         }

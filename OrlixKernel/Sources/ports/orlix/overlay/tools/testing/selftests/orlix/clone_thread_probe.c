@@ -61,7 +61,9 @@ static long orlix_raw_syscall4(long nr, long arg0, long arg1, long arg2,
 
 static int orlix_futex_wait(volatile int *uaddr, int expected)
 {
-	return (int)orlix_raw_syscall4(SYS_futex, (long)uaddr, 0, expected, 0);
+	if (__atomic_load_n(uaddr, __ATOMIC_ACQUIRE) != expected)
+		return 0;
+	return (int)orlix_raw_syscall1(SYS_sched_yield, 0);
 }
 
 static int orlix_futex_wake(volatile int *uaddr)

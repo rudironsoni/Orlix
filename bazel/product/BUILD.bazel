@@ -1,0 +1,15 @@
+load(":composition.bzl", "orlix_kernel_composition")
+
+package(default_visibility = ["//visibility:public"])
+
+orlix_kernel_composition(
+    name = "kernel_composition",
+    boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
+    hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
+    linux_archive = "//bazel/feasibility/kernel:macho",
+    locked_buildset = select({
+        "//bazel/config:component_promoted": "//bazel/promotion:locked_buildset",
+        "//conditions:default": "//bazel/promotion:no_lock",
+    }),
+    tags = ["manual"],
+)

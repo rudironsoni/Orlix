@@ -108,7 +108,7 @@ private struct NoticeDetailView: View {
     @State private var didCopy = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 Text(detail)
                     .font(.system(.body, design: .monospaced))

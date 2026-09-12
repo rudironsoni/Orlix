@@ -14,7 +14,7 @@ struct RemoteSessionAttachPromptSheet: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
+        NavigationView {
             contentBody
             .navigationTitle(title)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -89,7 +89,7 @@ struct RemoteSessionAttachPromptSheet: View {
                     Text("Select a session to attach immediately.")
                 }
             }
-            .formStyle(.grouped)
+            .orlixGroupedFormStyle()
             #else
             List {
                 Section {

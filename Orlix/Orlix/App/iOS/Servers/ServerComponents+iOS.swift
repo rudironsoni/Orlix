@@ -421,7 +421,7 @@ struct WorkspacePickerSheet: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(item: $workspaceToManageServers) { workspace in
-            NavigationStack {
+            NavigationView {
                 LockedWorkspaceServerManagementSheet(
                     serverManager: serverManager,
                     workspace: workspace

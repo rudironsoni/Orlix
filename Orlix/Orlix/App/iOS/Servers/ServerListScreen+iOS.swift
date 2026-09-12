@@ -3,6 +3,7 @@
 //  Orlix
 //
 
+import os
 import SwiftUI
 
 #if os(iOS)
@@ -38,7 +39,6 @@ struct ServerListScreen: View {
     @State private var serverToMove: Server?
     @State private var lockedServerAlert: Server?
     @State private var showingCustomEnvironmentAlert = false
-    @State private var showingLocalInstance = false
 
     init(
         serverManager: ServerManager,
@@ -80,32 +80,24 @@ struct ServerListScreen: View {
     var body: some View {
         List {
             Section("Local") {
-                Button {
-                    showingLocalInstance = true
+                NavigationLink {
+                    DefaultLocalInstanceTerminalView(tabManager: tabManager)
                 } label: {
                     Label("Orlix", systemImage: "terminal")
                 }
                 .accessibilityIdentifier("orlix.local-instance.open")
+                .simultaneousGesture(TapGesture().onEnded {
+                    Logger(subsystem: "com.rudironsoni.orlix", category: "ServerList")
+                        .info("local instance open tapped")
+                })
             }
             serversSection
             activeConnectionsSection
         }
         .accessibilityIdentifier("orlix.serverList.list")
-        .overlay(alignment: .center) {
-            if filteredServers.isEmpty {
-                NoServersEmptyState(
-                    onAddServer: { presentAddServer() },
-                    onAddWorkspace: { showingAddWorkspace = true },
-                    requiresWorkspace: serverManager.workspaces.isEmpty
-                )
-            }
-        }
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $showingLocalInstance) {
-            DefaultLocalInstanceTerminalView()
-        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 workspaceToolbarButton
@@ -129,7 +121,7 @@ struct ServerListScreen: View {
             }
         }
         .sheet(isPresented: $showingAddWorkspace) {
-            NavigationStack {
+            NavigationView {
                 WorkspaceFormSheet(
                     serverManager: serverManager,
                     onSave: { workspace in
@@ -151,7 +143,7 @@ struct ServerListScreen: View {
                 .adaptiveSoftScrollEdges()
         }
         .sheet(isPresented: $showingWorkspacePicker) {
-            NavigationStack {
+            NavigationView {
                 WorkspacePickerSheet(
                     serverManager: serverManager,
                     selectedWorkspace: $selectedWorkspace,
@@ -161,7 +153,7 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverFormIntent) { intent in
-            NavigationStack {
+            NavigationView {
                 ServerFormSheet(
                     serverManager: serverManager,
                     workspace: workspace(for: intent),
@@ -179,7 +171,7 @@ struct ServerListScreen: View {
             .adaptiveSoftScrollEdges()
         }
         .sheet(item: $serverToMove) { server in
-            NavigationStack {
+            NavigationView {
                 MoveServerSheet(
                     serverManager: serverManager,
                     server: server,
@@ -347,10 +339,13 @@ struct ServerListScreen: View {
     private var serversSection: some View {
         Section {
             if filteredServers.isEmpty {
-                Color.clear
-                    .frame(height: 1)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                NoServersEmptyState(
+                    onAddServer: { presentAddServer() },
+                    onAddWorkspace: { showingAddWorkspace = true },
+                    requiresWorkspace: serverManager.workspaces.isEmpty
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
                 ForEach(filteredServers) { server in
                     ServerListRow(

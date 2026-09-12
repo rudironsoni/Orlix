@@ -1,0 +1,1162 @@
+{
+  "schema": 1,
+  "purpose": "Current proof command inventory and accepted product-runtime promotion order.",
+  "promotion_order": [
+    {
+      "tier": 1,
+      "name": "Kernel dependency proof",
+      "owner": "OrlixKernel"
+    },
+    {
+      "tier": 2,
+      "name": "KUnit kernel-internal proof",
+      "owner": "OrlixKernel"
+    },
+    {
+      "tier": 3,
+      "name": "kselftest kernel-interface proof",
+      "owner": "OrlixKernel"
+    },
+    {
+      "tier": 4,
+      "name": "OrlixMLibC proof",
+      "owner": "OrlixMLibC"
+    },
+    {
+      "tier": 5,
+      "name": "OrlixMLibC-built syscall and UAPI proof",
+      "owner": "OrlixMLibC"
+    },
+    {
+      "tier": 6,
+      "name": "POSIX shell proof",
+      "owner": "OrlixOS"
+    },
+    {
+      "tier": 7,
+      "name": "jq proof",
+      "owner": "OrlixOS"
+    },
+    {
+      "tier": 8,
+      "name": "curl proof",
+      "owner": "OrlixOS"
+    },
+    {
+      "tier": 9,
+      "name": "zsh proof",
+      "owner": "OrlixOS"
+    },
+    {
+      "tier": 10,
+      "name": "Product integration proof",
+      "owner": "OrlixOS and Orlix"
+    }
+  ],
+  "commands": [
+    {
+      "name": "__orlix-root-gnu-make-contract-source-check",
+      "source": "Makefile",
+      "line": 179,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "check-build-tools",
+      "source": "Makefile",
+      "line": 215,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "product-build-version-check",
+      "source": "Makefile",
+      "line": 259,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "product-build-prepare"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-capability-gate",
+      "source": "Makefile",
+      "line": 279,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-manifest-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-capability-test",
+      "source": "Makefile",
+      "line": 281,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-tests"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-release-inputs-check",
+      "source": "Makefile",
+      "line": 283,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-inputs-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-release-inputs-test",
+      "source": "Makefile",
+      "line": 285,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-tests"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-exported-product-check",
+      "source": "Makefile",
+      "line": 287,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__exported-app-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "vvterm-source-check",
+      "source": "Makefile",
+      "line": 289,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "vvterm-sync-tests",
+      "source": "Makefile",
+      "line": 289,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "vvterm-upstream-tests",
+      "source": "Makefile",
+      "line": 289,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "beta-prerequisites",
+      "source": "Makefile",
+      "line": 292,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "check-build-tools",
+        "__release-inputs-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "ios15-simulator-gate",
+      "source": "Makefile",
+      "line": 374,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__ios15-simulator-test",
+      "source": "Makefile",
+      "line": 410,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "beta-simulator-gate",
+      "source": "Makefile",
+      "line": 436,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "beta-prerequisites"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-semantic-provenance-tests",
+      "source": "Makefile",
+      "line": 462,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-operational-note-pipeline-test",
+      "source": "Makefile",
+      "line": 480,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "orlix-tcti-isa-maintainer-source-check"
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-isa-maintainer-source-check",
+      "source": "Makefile",
+      "line": 483,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-isa-host-tests",
+      "source": "Makefile",
+      "line": 494,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__orlix-tcti-isa-host-provenance-ready",
+        "__orlix-tcti-instruction-artifact-inputs-source-check"
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__orlix-tcti-proof-registry-provenance-write",
+      "source": "Makefile",
+      "line": 502,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-proof-registry-provenance-regression",
+      "source": "Makefile",
+      "line": 505,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-isa-host-tests",
+      "source": "Makefile",
+      "line": 552,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-native-proof-symbol-check",
+      "source": "Makefile",
+      "line": 690,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-native-proof-symbol-check-dependency-regression",
+      "source": "Makefile",
+      "line": 693,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-proof-source-linkage-tests",
+      "source": "Makefile",
+      "line": 696,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-isa-audit",
+      "source": "Makefile",
+      "line": 699,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "orlix-tcti-isa-host-tests",
+        "orlix-tcti-native-proof-symbol-check"
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-kernel-tests",
+      "source": "Makefile",
+      "line": 718,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-kernel-tests",
+      "source": "Makefile",
+      "line": 719,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-xcodebuild-watchdog-tests",
+      "source": "Makefile",
+      "line": 753,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "mlibc-tests",
+      "source": "Makefile",
+      "line": 791,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "OrlixMLibC",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "coreutils-tests",
+      "source": "Makefile",
+      "line": 802,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "OrlixCoreUtils",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "hostadapter-tests",
+      "source": "Makefile",
+      "line": 814,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "OrlixHostAdapter",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlixos-tests",
+      "source": "Makefile",
+      "line": 849,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj",
+        "console-policy-tests",
+        "terminal-mux-tests"
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-tests",
+      "source": "Makefile",
+      "line": 858,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-tests",
+      "source": "Makefile",
+      "line": 862,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "runtime-tests",
+      "source": "Makefile",
+      "line": 878,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "xcodeproj"
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "docs-check",
+      "source": "Makefile",
+      "line": 890,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-rules-check",
+      "source": "Makefile",
+      "line": 901,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-hooks-check",
+      "source": "Makefile",
+      "line": 910,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-skills-check",
+      "source": "Makefile",
+      "line": 913,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-subagents-check",
+      "source": "Makefile",
+      "line": 916,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-mcp-check",
+      "source": "Makefile",
+      "line": 919,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-task-envelope-check",
+      "source": "Makefile",
+      "line": 930,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "beta-validate-archive",
+      "source": "Makefile",
+      "line": 981,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "beta-validate-export",
+      "source": "Makefile",
+      "line": 1024,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "beta-upload-prerequisites",
+      "source": "Makefile",
+      "line": 1034,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-tag-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "app-store-release-report-check",
+      "source": "Makefile",
+      "line": 1061,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-tag-check",
+        "__release-report-check",
+        "__release-public-approval-check",
+        "__release-metadata-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "release-workflow-check",
+      "source": "Makefile",
+      "line": 1074,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "__release-workflow-tests"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "kselftest",
+      "source": "Makefile",
+      "line": 1115,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixKernel",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "kselftest-install",
+      "source": "Makefile",
+      "line": 1115,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixKernel",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "test",
+      "source": "Makefile",
+      "line": 1118,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "terminal-mux-tests",
+      "source": "Makefile",
+      "line": 1149,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "console-policy-tests",
+      "source": "Makefile",
+      "line": 1157,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__test-dynamic",
+      "source": "OrlixCoreUtils/Makefile",
+      "line": 87,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "$(ORLIX_COREUTILS_TEST_DYNAMIC_STAMP)"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "test",
+      "source": "OrlixHostAdapter/Makefile",
+      "line": 21,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-proof-source-linkage-tests",
+      "source": "OrlixKernel/Makefile",
+      "line": 13,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-native-proof-symbol-check",
+      "source": "OrlixKernel/Makefile",
+      "line": 28,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "kunit"
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "orlix-tcti-native-proof-symbol-check-dependency-regression",
+      "source": "OrlixKernel/Makefile",
+      "line": 139,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixTCTI",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "kselftest",
+      "source": "OrlixMLibC/Makefile",
+      "line": 446,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "build"
+      ],
+      "owner": "OrlixKernel",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "test",
+      "source": "OrlixMLibC/Makefile",
+      "line": 449,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "test-initramfs",
+      "source": "OrlixMLibC/Makefile",
+      "line": 452,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__test-run",
+      "source": "OrlixMLibC/Makefile",
+      "line": 455,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__test-initramfs"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__test-build",
+      "source": "OrlixMLibC/Makefile",
+      "line": 483,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "build",
+        "__build-compiler-rt"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__prepare-test-locale-data",
+      "source": "OrlixMLibC/Makefile",
+      "line": 525,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__test-initramfs",
+      "source": "OrlixMLibC/Makefile",
+      "line": 558,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__test-build",
+        "__prepare-test-locale-data"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "coreutils-test-initramfs",
+      "source": "OrlixOS/Makefile",
+      "line": 80,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "$(ORLIXOS_COREUTILS_TEST_INITRAMFS)"
+      ],
+      "owner": "OrlixCoreUtils",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__coreutils-test-helpers",
+      "source": "OrlixOS/Makefile",
+      "line": 82,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixCoreUtils",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "environment-runtime-test-fixtures",
+      "source": "OrlixOS/Makefile",
+      "line": 174,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-version-check",
+      "source": "make/bazel-migration.mk",
+      "line": 49,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-bootstrap"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-xcode-cloud-project-check",
+      "source": "make/bazel-migration.mk",
+      "line": 390,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-migration-inventory-check",
+      "source": "make/bazel-migration.mk",
+      "line": 403,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-proof-graph",
+      "source": "make/bazel-migration.mk",
+      "line": 420,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-kernel-uapi",
+        "__bazel-kernel-boot"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-apple-routing-check",
+      "source": "make/bazel-migration.mk",
+      "line": 470,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-matrix-check",
+      "source": "make/bazel-migration.mk",
+      "line": 512,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-version-check",
+        "__bazel-apple-routing-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-test-app",
+      "source": "make/bazel-migration.mk",
+      "line": 541,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-test-app-architecture",
+      "source": "make/bazel-migration.mk",
+      "line": 541,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-test-native-smoke",
+      "source": "make/bazel-migration.mk",
+      "line": 541,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-test-output-parser",
+      "source": "make/bazel-migration.mk",
+      "line": 541,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-test-terminal-surface",
+      "source": "make/bazel-migration.mk",
+      "line": 541,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__bazel-ios15-simulator-gate",
+      "source": "make/bazel-migration.mk",
+      "line": 626,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-bootstrap"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-manifest-check",
+      "source": "make/release.mk",
+      "line": 23,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__exported-app-check",
+      "source": "make/release.mk",
+      "line": 29,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-public-approval-check",
+      "source": "make/release.mk",
+      "line": 37,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-tag-check",
+      "source": "make/release.mk",
+      "line": 42,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-metadata-check",
+      "source": "make/release.mk",
+      "line": 53,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-report-check",
+      "source": "make/release.mk",
+      "line": 77,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-inputs-check",
+      "source": "make/release.mk",
+      "line": 83,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__release-manifest-check"
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-tests",
+      "source": "make/release.mk",
+      "line": 128,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__release-workflow-tests",
+      "source": "make/release.mk",
+      "line": 145,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Orlix",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__runtime-log-policy-tests",
+      "source": "make/runtime.mk",
+      "line": 35,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "__runtime-support-tests",
+      "source": "make/runtime.mk",
+      "line": 58,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__runtime-log-policy-tests"
+      ],
+      "owner": "OrlixOS",
+      "artifact_digest_binding": "not-yet-implemented"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:private"])
+
+exports_files([
+    "MODULE.bazel",
+    "MODULE.bazel.lock",
+    "upstreams.lock.json",
+    "artifacts.lock.json",
+    "make/tcti-proof-registry-provenance.mk",
+    "OrlixOS/Sources/distribution/target-settings.xcconfig",
+    "OrlixOS/Sources/make/payload.mk",
+])

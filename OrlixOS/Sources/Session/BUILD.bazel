@@ -1,0 +1,26 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "info_plist",
+    srcs = [
+        "Info.plist",
+        "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
+        "//:OrlixOS/Sources/make/payload.mk",
+    ],
+    outs = ["ExpandedInfo.plist"],
+    cmd = "/opt/homebrew/bin/gmake -f $(location //:OrlixOS/Sources/distribution/target-settings.xcconfig) -f $(location //:OrlixOS/Sources/make/payload.mk) __bazel-info-plist ORLIX_INFO_SOURCE=$(location Info.plist) ORLIX_INFO_OUTPUT=$@ ORLIX_PROFILE=" + select({
+        "//bazel/config:profile_development": "development",
+        "//conditions:default": "release",
+    }),
+    tags = ["manual", "block-network", "no-remote-exec"],
+)
+
+swift_library(
+    name = "OrlixOS",
+    srcs = glob(["*.swift"]),
+    copts = ["-swift-version", "6", "-DORLIX_BETA_OBSERVABILITY"],
+    module_name = "OrlixOS",
+    tags = ["manual"],
+)

@@ -737,6 +737,10 @@ final class TerminalKeyboardCoordinator: ObservableObject {
             return
         }
         claimLocalInputOwnershipForExplicitInteraction()
+        if isFocusTap, !isSoftwareKeyboardVisible {
+            userRequestedShow()
+            return
+        }
         guard !isUserHidden, !isSoftwareKeyboardVisible else { return }
         requestAutomaticPresentationRefresh()
         // See userRequestedShow: user actions get a fresh repair budget.
@@ -1098,6 +1102,19 @@ final class TerminalKeyboardCoordinator: ObservableObject {
 
         let presentationRequest = pendingPresentationRequest
         let before = terminal.keyboardCoordinatorDiagnosticSnapshot()
+        if !activeTerminalSceneIsForeground,
+           inputs.viewActive,
+           inputs.activePaneInputEligible,
+           inputs.activePaneWindowAttached,
+           !inputs.findNavigatorActive {
+            logSteady(
+                inputSessionDesired: inputSessionDesired,
+                keyboardPresentationDesired: keyboardPresentationDesired,
+                inputs: inputs,
+                before: before
+            )
+            return
+        }
         recordLocalInputOwnershipIfNeeded(
             snapshot: before
         )

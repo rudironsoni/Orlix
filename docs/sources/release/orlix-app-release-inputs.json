@@ -12,8 +12,8 @@
   },
   "swift_packages": {
     "MLXSwift": {
-      "revision": "072b684acaae80b6a463abab3a103732f33774bf",
-      "url": "https://github.com/ml-explore/mlx-swift"
+      "revision": "7b6527f6eb6013c5221679ee08112c04aab6825e",
+      "url": "https://github.com/rudironsoni/mlx-swift"
     },
     "OpenTelemetrySwift": {
       "revision": "9a6d6a8aed22c415bb1673206e337824635f818b",
@@ -24,16 +24,16 @@
       "url": "https://github.com/open-telemetry/opentelemetry-swift-core.git"
     },
     "SwiftCloudflared": {
-      "revision": "1be78afe5dae7a20ce0837ce34085f03a77f7587",
-      "url": "https://github.com/wiedymi/swift-cloudflared.git"
+      "revision": "80eb5b73e00effe78c8d6d44d8aab8ffdd63e976",
+      "url": "https://github.com/rudironsoni/swift-cloudflared.git"
     },
     "SwiftET": {
-      "revision": "2e43ccd70cd74cd46e18a92d20a0ea7547ba42ed",
-      "url": "https://github.com/wiedymi/swift-et"
+      "revision": "47cb48446af6565b5103ddaa431388c1d5bce366",
+      "url": "https://github.com/rudironsoni/swift-et"
     },
     "SwiftMosh": {
-      "revision": "9677768702727ba9094d4936062a452b9c544480",
-      "url": "https://github.com/wiedymi/swift-mosh"
+      "revision": "e476c1e8745cc1d1a353bc72b8ee1d73eb35e197",
+      "url": "https://github.com/rudironsoni/swift-mosh"
     },
     "SwiftNumerics": {
       "revision": "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
@@ -1565,10 +1565,12 @@
   ],
   "exported_product": {
     "capability_manifest_relative_path": "ORLIX_APP_RELEASE_INPUTS.json",
-    "main_bundle_id": "com.rudironsoni.orlix",
+    "main_bundle_id": "com.rudironsoni.Orlix",
     "display_name": "Orlix",
-    "live_activity_bundle_id": "com.rudironsoni.orlix.live-activity",
+    "minimum_os_version": "15.0",
+    "live_activity_bundle_id": "com.rudironsoni.Orlix.live-activity",
     "live_activity_widget_kind": "com.rudironsoni.orlix.live-activity",
+    "live_activity_minimum_os_version": "16.1",
     "privacy_manifest_relative_path": "PrivacyInfo.xcprivacy",
     "privacy_manifest_source": "Orlix/Orlix/PrivacyInfo.xcprivacy",
     "privacy_manifest_source_sha256": "af1441f4e96ec1a5cc52f0c0ee2292c29e8d21015fb936259f121c3717086ed0",
@@ -1587,7 +1589,7 @@
       "aps_environment": "production",
       "icloud_container": "iCloud.com.rudironsoni.orlix",
       "icloud_service": "CloudKit",
-      "application_identifier_suffix": "com.rudironsoni.orlix",
+      "application_identifier_suffix": "com.rudironsoni.Orlix",
       "application_group": "group.com.rudironsoni.orlix",
       "keychain_group_suffix": "com.rudironsoni.orlix",
       "ubiquity_kvstore_suffix": "com.rudironsoni.orlix",

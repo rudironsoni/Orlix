@@ -21,7 +21,7 @@ nonisolated enum SSHStartupStage: String, Sendable {
     case connectionDeadline
 }
 
-nonisolated final class SSHStartupTrace: Sendable {
+nonisolated final class SSHStartupTrace: @unchecked Sendable {
     struct Event: Equatable, Sendable {
         let stage: SSHStartupStage
         let stageMilliseconds: Int
@@ -38,8 +38,10 @@ nonisolated final class SSHStartupTrace: Sendable {
     private let logger: Logger
     private let eventHandler: (@Sendable (Event) -> Void)?
     private let startedAt = ContinuousClock.now
-    private let completedStages = OSAllocatedUnfairLock(initialState: Set<SSHStartupStage>())
-    private let events = OSAllocatedUnfairLock(initialState: [Event]())
+    private let completedStagesLock = NSLock()
+    private var completedStages = Set<SSHStartupStage>()
+    private let eventsLock = NSLock()
+    private var events = [Event]()
 
     init(
         logger: Logger,
@@ -71,8 +73,8 @@ nonisolated final class SSHStartupTrace: Sendable {
         outcome: String = "ok",
         detail: String = "none"
     ) {
-        let inserted = completedStages.withLock { stages in
-            stages.insert(stage).inserted
+        let inserted = completedStagesLock.withLock {
+            completedStages.insert(stage).inserted
         }
         guard inserted else { return }
         record(stage, stageMilliseconds: 0, outcome: outcome, detail: detail)
@@ -92,7 +94,7 @@ nonisolated final class SSHStartupTrace: Sendable {
             outcome: outcome,
             detail: detail
         )
-        events.withLock { $0.append(event) }
+        eventsLock.withLock { events.append(event) }
         logger.info(
             "startup stage=\(stage.rawValue, privacy: .public) stageMs=\(stageMilliseconds) totalMs=\(totalMilliseconds) outcome=\(outcome, privacy: .public) detail=\(detail, privacy: .public)"
         )
@@ -100,7 +102,7 @@ nonisolated final class SSHStartupTrace: Sendable {
     }
 
     func snapshot() -> [Event] {
-        events.withLock { $0 }
+        eventsLock.withLock { events }
     }
 
     private static func milliseconds(_ duration: Duration) -> Int {

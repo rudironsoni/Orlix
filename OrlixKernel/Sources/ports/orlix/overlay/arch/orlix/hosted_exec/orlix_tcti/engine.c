@@ -875,11 +875,11 @@ static bool orlix_tcti_decoded_for_program_pc(
 	if (index >= instruction_count)
 		return false;
 
-	offset = index * (1U + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS);
-	if (offset + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS > program_words)
+	offset = index * ORLIX_TCTI_MICRO_OP_WORDS;
+	if (offset + 1 >= program_words)
 		return false;
 
-	memcpy(decoded, &program[offset + 1], sizeof(*decoded));
+	*decoded = orlix_tcti_decode_aarch64((u32)program[offset + 1].value);
 	return true;
 }
 
@@ -1091,6 +1091,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 	unsigned long long instruction_count = 0;
 	struct orlix_tcti_hot_block hot_blocks[ORLIX_TCTI_LOCAL_HOT_BLOCKS] = {};
 	u32 hot_block_cursor = 0;
+	struct orlix_tcti_block *prev_block = NULL;
 	bool successful_gadget_execution = false;
 	struct orlix_tcti_result result = {
 		.reason = ORLIX_TCTI_EXIT_TASK_EXIT,
@@ -1119,7 +1120,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 		int ret;
 
 		if (++instruction_count % ORLIX_TCTI_PROGRESS_REPORT_INTERVAL == 0)
-			pr_info_ratelimited("OrlixTCTI: progress task=%s pid=%d pc=%#llx instructions=%llu sp=%#llx x0=%#llx x1=%#llx x2=%#llx x3=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x23=%#llx x24=%#llx x30=%#llx pstate=%#llx\n",
+			pr_debug_ratelimited("OrlixTCTI: progress task=%s pid=%d pc=%#llx instructions=%llu sp=%#llx x0=%#llx x1=%#llx x2=%#llx x3=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x23=%#llx x24=%#llx x30=%#llx pstate=%#llx\n",
 					    task->comm, task_pid_nr(task),
 					    regs->pc, instruction_count,
 					    regs->sp, regs->regs[0],
@@ -1133,8 +1134,11 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 					    regs->pstate);
 
 		code_generation = orlix_tcti_code_generation(mm);
-		block = orlix_tcti_hot_blocks_lookup(hot_blocks, block_pc,
+		block = orlix_tcti_block_follow_next(prev_block, block_pc,
 					       code_generation);
+		if (!block)
+			block = orlix_tcti_hot_blocks_lookup(hot_blocks, block_pc,
+						       code_generation);
 		if (!block) {
 			block = orlix_tcti_block_cache_lookup(mm, block_pc,
 							code_generation);
@@ -1153,17 +1157,10 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 			unsigned long long before_pc = regs->pc;
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
-			bool block_decoded_valid;
+			bool block_decoded_valid = false;
 
-			block_decoded_valid = orlix_tcti_decoded_for_program_pc(
-				block->program, block->program_words,
-				block->guest_start_pc, block->instruction_count,
-				regs->pc, &block_decoded);
-			if (block_decoded_valid) {
-				block_fault_access =
-					orlix_tcti_fault_access_for_decoded(&block_decoded);
-				block_instruction = block_decoded.instruction;
-			}
+			block_instruction = orlix_tcti_program_instruction_at(
+				block->program, block->program_words, 0);
 			ret = orlix_tcti_execute_authorized_capture(
 				mm, regs, block->program, block->program_words,
 				&fault_address, block->code_generation,
@@ -1191,10 +1188,16 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						block_decoded.instruction;
 				}
 			}
+			if (!ret) {
+				orlix_tcti_block_remember_next(prev_block, block,
+							 code_generation);
+				prev_block = block;
+				if (global_cache_ref)
+					orlix_tcti_block_put(block);
+				continue;
+			}
 			if (global_cache_ref)
 				orlix_tcti_block_put(block);
-			if (!ret)
-				continue;
 			if (ret == -ESTALE)
 				continue;
 			if (ret == -EAGAIN) {
@@ -1297,7 +1300,6 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						       successful_gadget_execution);
 		}
 
-		decoded = orlix_tcti_decode_aarch64(instruction);
 		ret = orlix_tcti_block_cache_insert(
 			mm, block_pc,
 			block_pc + block_instruction_count * sizeof(u32),

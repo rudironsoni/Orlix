@@ -372,6 +372,39 @@ int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 	return ret;
 }
 
+static int orlix_tcti_pin_user_page_trylock(struct mm_struct *mm,
+					unsigned long user_va,
+					enum orlix_tcti_access access,
+					struct orlix_tcti_user_page *out)
+{
+	unsigned long linux_perms = 0;
+	void *host_data = NULL;
+	struct page *page = NULL;
+	int ret;
+
+	if (!mm || !out)
+		return -EINVAL;
+	if (user_va >= TASK_SIZE)
+		return -EFAULT;
+
+	memset(out, 0, sizeof(*out));
+	out->user_page = user_va & PAGE_MASK;
+
+	if (!mmap_read_trylock(mm))
+		return -EBUSY;
+	ret = orlix_tcti_resolve_user_data_locked(mm, user_va, access, &host_data,
+					    &linux_perms, &page,
+					    &out->translation_generation);
+	if (!ret) {
+		out->host_data = (void *)((unsigned long)host_data & PAGE_MASK);
+		out->page = page;
+		out->linux_perms = linux_perms;
+		out->code_generation = orlix_tcti_code_generation(mm);
+	}
+	mmap_read_unlock(mm);
+	return ret;
+}
+
 void orlix_tcti_unpin_user_page(struct orlix_tcti_user_page *page)
 {
 	if (!page || !page->page)
@@ -547,6 +580,55 @@ int orlix_tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 {
 	return orlix_tcti_copy_user_data(mm, user_va, (void *)buffer, size,
 				   ORLIX_TCTI_ACCESS_WRITE);
+}
+
+int orlix_tcti_copy_user_data_nofault(struct mm_struct *mm, unsigned long user_va,
+				void *buffer, size_t size,
+				enum orlix_tcti_access access)
+{
+	size_t copied = 0;
+
+	if (!mm || !buffer)
+		return -EINVAL;
+	if (access != ORLIX_TCTI_ACCESS_READ && access != ORLIX_TCTI_ACCESS_WRITE)
+		return -EINVAL;
+	if (!size)
+		return 0;
+	if (user_va >= TASK_SIZE || size > TASK_SIZE - user_va)
+		return -EFAULT;
+
+	while (copied < size) {
+		unsigned long current_va = user_va + copied;
+		size_t chunk = min(size - copied,
+				   (size_t)(PAGE_SIZE -
+					    offset_in_page(current_va)));
+		struct orlix_tcti_user_page page;
+		void *host_data;
+		int ret;
+
+		ret = orlix_tcti_pin_user_page_trylock(mm, current_va, access,
+						       &page);
+		if (ret)
+			return ret;
+
+		host_data = (char *)page.host_data + offset_in_page(current_va);
+		if (!orlix_tcti_mapping_access_lock(mm,
+					      page.translation_generation)) {
+			orlix_tcti_unpin_user_page(&page);
+			return -EAGAIN;
+		}
+		if (access == ORLIX_TCTI_ACCESS_READ)
+			memcpy((char *)buffer + copied, host_data, chunk);
+		else {
+			memcpy(host_data, (char *)buffer + copied, chunk);
+			orlix_tcti_reservation_generation_bump(page.page);
+		}
+		orlix_tcti_mapping_access_unlock(mm);
+		orlix_tcti_unpin_user_page(&page);
+		copied += chunk;
+	}
+
+	return 0;
 }
 
 static int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,

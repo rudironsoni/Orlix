@@ -2,18 +2,21 @@ import Foundation
 import XCTest
 
 final class ArchitectureInvariantTests: XCTestCase {
-    private lazy var root: URL = {
-        var url = URL(fileURLWithPath: #filePath)
-        while url.path != "/" {
-            let candidate = url.deletingLastPathComponent()
-            if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("project.yml").path) {
-                return candidate
+    private var root: URL {
+        get throws {
+            let path = try XCTUnwrap(ProcessInfo.processInfo.environment["BUILD_WORKSPACE_DIRECTORY"])
+            let url = URL(fileURLWithPath: path, isDirectory: true)
+            guard path.hasPrefix("/"),
+                  FileManager.default.fileExists(atPath: url.appendingPathComponent("project.yml").path) else {
+                throw NSError(
+                    domain: "OrlixArchitectureInvariantTests",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "invalid BUILD_WORKSPACE_DIRECTORY: \(path)"]
+                )
             }
-            url = candidate
+            return url
         }
-        XCTFail("could not locate repository root from \(#filePath)")
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-    }()
+    }
 
     func testActiveProductSourcesDoNotUseHistoricalBranding() throws {
         let forbidden = [
@@ -29,7 +32,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixHostAdapter/Sources",
             "Orlix/Orlix",
             "OrlixOSTestApp/Sources",
-            "tools"
+            "make"
         ])
 
         let hits = try matchingLines(in: files) { line in
@@ -43,20 +46,22 @@ final class ArchitectureInvariantTests: XCTestCase {
         let runtimeOverlayFiles = try sourceFiles(under: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
-        ])
+        ]).filter {
+            !$0.path.contains("/isa/build-time/") && !$0.path.contains("/tests/")
+        }
+        let compileRules = try String(contentsOf: root.appendingPathComponent(
+            "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"
+        ))
+        XCTAssertTrue(
+            compileRules.contains("-nostdinc -D__KERNEL__"),
+            "Kernel compilation must exclude host C headers and select Linux conditional branches"
+        )
         let forbiddenIncludeFragments = [
             "<CoreFoundation/",
             "<Foundation/",
             "<Darwin/",
             "<mach/",
             "<pthread.h>",
-            "<unistd.h>",
-            "<sys/",
-            "<fcntl.h>",
-            "<errno.h>",
-            "<stdio.h>",
-            "<stdlib.h>",
-            "<string.h>",
             "\"OrlixHostAdapter",
             "<OrlixHostAdapter"
         ]
@@ -102,6 +107,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
         ]).filter {
             !$0.path.contains("/tools/testing/selftests/")
+                && !$0.path.contains("/isa/build-time/")
         }
 
         let clonedUAPIDefine = try NSRegularExpression(
@@ -137,7 +143,7 @@ final class ArchitectureInvariantTests: XCTestCase {
         ]
 
         for relativePath in profileConfigs {
-            let url = root.appendingPathComponent(relativePath)
+            let url = try root.appendingPathComponent(relativePath)
             let lines = Set(
                 try String(contentsOf: url)
                     .components(separatedBy: .newlines)
@@ -197,7 +203,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources/ports/orlix/configs/release_defconfig",
             "OrlixKernel/Sources/ports/orlix/configs/development_defconfig"
         ]
-        let configDirectory = root.appendingPathComponent(
+        let configDirectory = try root.appendingPathComponent(
             "OrlixKernel/Sources/ports/orlix/configs"
         )
         let observedProfiles = try FileManager.default
@@ -295,6 +301,7 @@ final class ArchitectureInvariantTests: XCTestCase {
     }
 
     private func sourceFiles(under relativePaths: [String]) throws -> [URL] {
+        let root = try root
         let manager = FileManager.default
         var urls: [URL] = []
         for relativePath in relativePaths {
@@ -366,6 +373,7 @@ final class ArchitectureInvariantTests: XCTestCase {
         in files: [URL],
         where predicate: (String) -> Bool
     ) throws -> [String] {
+        let root = try root
         var hits: [String] = []
         for file in files {
             let contents = try String(contentsOf: file)

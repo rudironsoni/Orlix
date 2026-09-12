@@ -22,7 +22,9 @@ $(ORLIXOS_ATTR_STAMP): $(ORLIXOS_ATTR_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.or
 		printf '%s\n' '  if [ "$$next_output" -eq 1 ]; then output="$$arg"; next_output=0; continue; fi'; \
 		printf '%s\n' '  case "$$arg" in -c|-E|-S) link=0 ;; -o) next_output=1 ;; esac'; \
 		printf '%s\n' 'done'; \
-		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
+		printf '%s\n' 'unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET'; \
+		printf '%s\n' 'export SDKROOT="$$sysroot"'; \
+		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" "-isysroot=$$sysroot" -isystem "$$headers" -isystem "$$sysroot/usr/include" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
 		printf '%s\n' 'if [ "$$link" -eq 1 ] && [ "$${output##*.}" != la ]; then'; \
 		printf '%s\n' '  exec "$$cc" "$${common[@]}" "$$@" -static -no-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o"'; \
 		printf '%s\n' 'fi'; \
@@ -84,7 +86,9 @@ $(ORLIXOS_ACL_STAMP): $(ORLIXOS_ACL_SOURCE_STAMP) $(ORLIXOS_ATTR_STAMP) $(ORLIXO
 		printf '%s\n' '  if [ "$$next_output" -eq 1 ]; then output="$$arg"; next_output=0; continue; fi'; \
 		printf '%s\n' '  case "$$arg" in -c|-E|-S) link=0 ;; -o) next_output=1 ;; esac'; \
 		printf '%s\n' 'done'; \
-		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
+		printf '%s\n' 'unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET'; \
+		printf '%s\n' 'export SDKROOT="$$sysroot"'; \
+		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" "-isysroot=$$sysroot" -isystem "$$headers" -isystem "$$sysroot/usr/include" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
 		printf '%s\n' 'if [ "$$link" -eq 1 ] && [ "$${output##*.}" != la ]; then'; \
 		printf '%s\n' '  exec "$$cc" "$${common[@]}" "$$@" -static -no-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" -Wl,--start-group "$(ORLIXOS_LIBATTR_A)" "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o"'; \
 		printf '%s\n' 'fi'; \
@@ -184,7 +188,9 @@ $(ORLIXOS_E2FSPROGS_STAMP): $(ORLIXOS_E2FSPROGS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SY
 		printf '%s\n' 'rtlib="$(ORLIXOS_MLIBC_RTLIB)"'; \
 		printf '%s\n' 'link=1'; \
 		printf '%s\n' 'for arg in "$$@"; do case "$$arg" in -c|-E|-S) link=0 ;; esac; done'; \
-		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
+		printf '%s\n' 'unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET'; \
+		printf '%s\n' 'export SDKROOT="$$sysroot"'; \
+		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" "-isysroot=$$sysroot" -isystem "$$headers" -isystem "$$sysroot/usr/include" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIC)'; \
 		printf '%s\n' 'if [ "$$link" -eq 1 ]; then'; \
 		printf '%s\n' '  exec "$$cc" "$${common[@]}" "$$@" -static -no-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o"'; \
 		printf '%s\n' 'fi'; \

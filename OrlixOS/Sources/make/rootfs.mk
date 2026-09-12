@@ -57,7 +57,7 @@ $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST) $(PRO
 	[ -s "$$output" ] || { echo "missing generated OrlixOS initramfs: $$output" >&2; exit 1; }; \
 	echo "built OrlixOS product initramfs: $$output"
 
-$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST) $(ORLIXOS_TARGET_SETTINGS) $(ORLIX_PROJECT_YML)
+$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_JQ_BINARY) $(ORLIXOS_CURL_BINARY) $(ORLIXOS_ZSH_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST) $(ORLIXOS_TARGET_SETTINGS) $(ORLIX_PROJECT_YML)
 	@set -euo pipefail; \
 	[ -n "$(ORLIX_PRODUCT_VERSION)" ] || { echo "project.yml lacks MARKETING_VERSION" >&2; exit 1; }; \
 	case "$(ORLIX_PRODUCT_BUILD_ID)" in ''|*[!0-9]*) echo "project.yml CURRENT_PROJECT_VERSION must be an integer" >&2; exit 1 ;; esac; \
@@ -82,6 +82,9 @@ $(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORL
 	install -m 0755 "$(ORLIXOS_GETCONF_BINARY)" "$$root_tree/usr/bin/getconf"; \
 	install -m 0755 "$(ORLIXOS_GETENT_BINARY)" "$$root_tree/usr/bin/getent"; \
 	install -m 0755 "$(ORLIXOS_INIT_BINARY)" "$$root_tree/sbin/init"; \
+	install -m 0755 "$(ORLIXOS_JQ_BINARY)" "$$root_tree/usr/bin/jq"; \
+	install -m 0755 "$(ORLIXOS_CURL_BINARY)" "$$root_tree/usr/bin/curl"; \
+	install -m 0755 "$(ORLIXOS_ZSH_BINARY)" "$$root_tree/usr/bin/zsh"; \
 	ln -s bash "$$root_tree/bin/sh"; \
 	ln -s ../../bin/grep "$$root_tree/usr/bin/grep"; \
 	printf '%s\n' 'root:x:0:0:root:/root:/bin/sh' > "$$root_tree/etc/passwd"; \
@@ -105,5 +108,5 @@ $(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORL
 	chmod 0700 "$$root_tree/root"; \
 	chmod 1777 "$$root_tree/tmp" "$$root_tree/var/tmp"; \
 	chmod 0755 "$$state_tree" "$$state_tree/upper" "$$state_tree/work"; \
-	printf 'profile=%s\nproduct_version=%s\nproduct_build_id=%s\ndistribution=%s\nchannel=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\ninitramfs=%s\nbase_root_tree=%s\nstate_root_tree=%s\ninit=/sbin/init\ntransport=linux-console-policy\nterminal=devpts-pty\nshell=/bin/sh\nbase_packages=bash coreutils grep findutils e2fsprogs\ncoreutils_programs=%s\nfindutils_programs=%s\ne2fsprogs_programs=mke2fs mkfs.ext4 debugfs e2fsck\nbash_version=%s\ncoreutils_version=%s\ngrep_version=%s\nfindutils_version=%s\npackage_behavior_marker=/usr/share/orlixos/package-behavior.txt\n' "$(PROFILE)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_ROOT_MODES)" "$(ORLIXOS_PROFILE_ROOT_MODE)" "$(ORLIXOS_BASE_ROOT_DEVICE)" "$(ORLIXOS_STATE_ROOT_DEVICE)" "$(ORLIXOS_INITRAMFS_CPIO)" "$$root_tree" "$$state_tree" "$(ORLIXOS_COREUTILS_PROGRAMS)" "$(ORLIXOS_FINDUTILS_PROGRAMS)" "$(BASH_VERSION)" "$(COREUTILS_VERSION)" "$(GREP_VERSION)" "$(FINDUTILS_VERSION)" > "$(ORLIXOS_ROOTFS_STAMP)"; \
+	printf 'profile=%s\nproduct_version=%s\nproduct_build_id=%s\ndistribution=%s\nchannel=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\ninitramfs=%s\nbase_root_tree=%s\nstate_root_tree=%s\ninit=/sbin/init\ntransport=linux-console-policy\nterminal=devpts-pty\nshell=/bin/sh\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh\ncoreutils_programs=%s\nfindutils_programs=%s\ne2fsprogs_programs=mke2fs mkfs.ext4 debugfs e2fsck\nbash_version=%s\ncoreutils_version=%s\ngrep_version=%s\nfindutils_version=%s\npackage_behavior_marker=/usr/share/orlixos/package-behavior.txt\n' "$(PROFILE)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_ROOT_MODES)" "$(ORLIXOS_PROFILE_ROOT_MODE)" "$(ORLIXOS_BASE_ROOT_DEVICE)" "$(ORLIXOS_STATE_ROOT_DEVICE)" "$(ORLIXOS_INITRAMFS_CPIO)" "$$root_tree" "$$state_tree" "$(ORLIXOS_COREUTILS_PROGRAMS)" "$(ORLIXOS_FINDUTILS_PROGRAMS)" "$(BASH_VERSION)" "$(COREUTILS_VERSION)" "$(GREP_VERSION)" "$(FINDUTILS_VERSION)" > "$(ORLIXOS_ROOTFS_STAMP)"; \
 	echo "built OrlixOS base root tree: $$root_tree"

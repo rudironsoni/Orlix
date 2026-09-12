@@ -37,7 +37,7 @@ class CapabilityGateTests(unittest.TestCase):
 
     def expected_entitlements(self) -> dict:
         return {
-            "application-identifier": "TESTTEAM.com.rudironsoni.orlix",
+            "application-identifier": "TESTTEAM.com.rudironsoni.Orlix",
             "keychain-access-groups": ["TESTTEAM.com.rudironsoni.orlix"],
             "com.apple.developer.icloud-container-identifiers": ["iCloud.com.rudironsoni.orlix"],
             "com.apple.developer.icloud-services": ["CloudKit"],
@@ -52,8 +52,9 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             app / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.orlix",
+                "CFBundleIdentifier": "com.rudironsoni.Orlix",
                 "CFBundleDisplayName": "Orlix",
+                "MinimumOSVersion": "15.0",
                 "ITSAppUsesNonExemptEncryption": False,
             },
         )
@@ -65,8 +66,9 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             extension / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.orlix.live-activity",
+                "CFBundleIdentifier": "com.rudironsoni.Orlix.live-activity",
                 "CFBundleExecutable": "OrlixLiveActivity",
+                "MinimumOSVersion": "16.1",
             },
         )
         (extension / "OrlixLiveActivity").write_bytes(b"com.rudironsoni.orlix.live-activity")
@@ -123,6 +125,23 @@ class CapabilityGateTests(unittest.TestCase):
         info["ITSAppUsesNonExemptEncryption"] = True
         self.write_plist(app / "Info.plist", info)
         with self.assertRaisesRegex(gate.GateError, "encryption declaration differs"):
+            self.validate_app(app, entitlements, profile)
+
+    def test_application_minimum_os_version_mismatch_fails(self) -> None:
+        app, entitlements, profile = self.make_exported_app()
+        info = plistlib.loads((app / "Info.plist").read_bytes())
+        info["MinimumOSVersion"] = "16.1"
+        self.write_plist(app / "Info.plist", info)
+        with self.assertRaisesRegex(gate.GateError, "application minimum OS version differs"):
+            self.validate_app(app, entitlements, profile)
+
+    def test_live_activity_minimum_os_version_mismatch_fails(self) -> None:
+        app, entitlements, profile = self.make_exported_app()
+        extension_info_path = app / "PlugIns/OrlixLiveActivity.appex/Info.plist"
+        info = plistlib.loads(extension_info_path.read_bytes())
+        info["MinimumOSVersion"] = "15.0"
+        self.write_plist(extension_info_path, info)
+        with self.assertRaisesRegex(gate.GateError, "Live Activity extension minimum OS version differs"):
             self.validate_app(app, entitlements, profile)
 
     def test_missing_privacy_manifest_fails(self) -> None:

@@ -3,12 +3,14 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0020"
 summary: "Durable Orlix architecture decision ADR 0020."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0020: Build Linux As Mach-O-Native Private Static OrlixKernel
@@ -25,7 +27,7 @@ iOS signs and links Mach-O binaries. The product cannot boot a standalone ELF ke
 
 ## Decision
 
-ADR 0030 fixes `OrlixKernel.xcframework` as a private static implementation artifact with identifier `com.rudironsoni.orlix.os.kernel`. `OrlixOS.xcframework` is the sole public SDK and statically consumes OrlixKernel. References below to the product kernel artifact describe this private build artifact, not a consumer-facing framework.
+ADR 0030, as amended by ADR 0040, fixes `OrlixKernel.xcframework` as a private static implementation artifact with identifier `com.rudironsoni.orlix.os.kernel`. `OrlixKit.xcframework` is the public SDK and packages the Apple-native OrlixEngine, OrlixBootloader, OrlixHostAdapter, and Kernel integration. References below to the product kernel artifact describe this private build artifact, not a consumer-facing framework.
 
 `OrlixKernel.xcframework` is the product kernel artifact. It contains upstream Linux plus the Orlix arch port compiled as Mach-O-native iOS code. The app does not boot a standalone ELF image. The framework links real Linux kernel code directly into the signed iOS binary, including `start_kernel()`, once the Mach-O-native Linux build is complete.
 

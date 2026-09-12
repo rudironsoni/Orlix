@@ -546,27 +546,29 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     private func makeCloudSyncTask() -> Task<Void, Never> {
-        Task { [weak self] in
-            guard let self else { return }
+        let synchronize = synchronizeWithCloud
+        let isSyncEnabled = dependencies.isSyncEnabled
+        let logger = logger
+        return Task {
             do {
-                try await self.synchronizeWithCloud()
+                try await synchronize()
             } catch is CancellationError {
                 return
             } catch {
-                guard !Task.isCancelled, self.dependencies.isSyncEnabled() else { return }
-                self.logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
+                guard !Task.isCancelled, isSyncEnabled() else { return }
+                logger.warning("Custom theme CloudKit sync failed: \(error.localizedDescription)")
             }
         }
     }
 
-    private func synchronizeWithCloud() async throws {
+    private lazy var synchronizeWithCloud: @MainActor () async throws -> Void = { [weak self, dependencies] in
         try Task.checkCancellation()
         guard dependencies.isSyncEnabled() else { return }
-        let localThemesSnapshot = customThemes
+        guard let localThemesSnapshot = self?.customThemes else { return }
         let remoteThemes = try await dependencies.cloud.fetchTerminalThemes()
         try Task.checkCancellation()
         guard dependencies.isSyncEnabled() else { throw CancellationError() }
-        try applyRemoteThemesAndEnqueueMissing(
+        try self?.applyRemoteThemesAndEnqueueMissing(
             remoteThemes,
             localThemesSnapshot: localThemesSnapshot,
             mutationQueue: dependencies.mutationQueue
@@ -575,7 +577,7 @@ final class TerminalThemeManager: ObservableObject {
         let remotePreference = try await dependencies.cloud.fetchTerminalThemePreference()
         try Task.checkCancellation()
         guard dependencies.isSyncEnabled() else { throw CancellationError() }
-        try applyRemotePreferenceOrEnqueueLocal(
+        try self?.applyRemotePreferenceOrEnqueueLocal(
             remotePreference,
             mutationQueue: dependencies.mutationQueue
         )

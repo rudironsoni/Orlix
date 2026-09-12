@@ -11,6 +11,7 @@ import AppKit
 import UIKit
 #endif
 
+@available(iOS 16.0, *)
 struct ContentView: View {
     let fileTabs: RemoteFileTabManager
     let fileBrowser: RemoteFileBrowserStore
@@ -28,7 +29,9 @@ struct ContentView: View {
     @StateObject private var terminalNavigation: TerminalSessionNavigationProjection
     @EnvironmentObject private var appLockManager: AppLockManager
     @EnvironmentObject private var storeManager: StoreManager
+    #if os(macOS)
     @Environment(\.requestReview) private var requestReview
+    #endif
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @EnvironmentObject private var viewTabConfigurationManager: ViewTabConfigurationManager
@@ -434,7 +437,11 @@ struct ContentView: View {
 // MARK: - Preview
 
 #Preview("App Shell") {
-    AppPreviewComposition().rootView
+    if #available(iOS 16.0, *) {
+        AppPreviewComposition().rootView
+    } else {
+        Text("Orlix")
+    }
 }
 
 #if os(macOS)

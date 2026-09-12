@@ -3,7 +3,7 @@ type: software-component
 tags:
   - architecture
   - ownership
-updated: 2026-08-25
+updated: 2026-09-09
 status: active
 summary: "Private Orlix-owned AArch64 EL0 execution component for safe Linux ELF execution."
 part_of:
@@ -24,7 +24,7 @@ The complete TCTI target is independent of that runtime projection. It requires 
 
 The A64 `HLT` encoding is inventoried explicitly. Orlix does not expose external halting debug or semihosting, so TCTI reports `HLT` through structured unsupported-instruction state without advancing the instruction PC and Linux delivers `SIGILL`; `BRK` remains a structured breakpoint delivered as `SIGTRAP`.
 
-TCTI's completion target is complete ISA-on-ISA execution for every applicable architecturally valid AArch64 EL0 instruction in that complete target, with direct classification and required EL0 rejection proof for every non-executable leaf. The production path uses Orlix-owned fetch, decode, lowering, data-only gadget dispatch, register state, memory access, and structured exits under `arch/orlix/hosted_exec/orlix_tcti`. Instruction subsets trimmed to a package workload, exact-opcode production special cases, host-native guest execution, and silent semantic approximations are not valid completion strategies.
+TCTI's completion target is complete ISA-on-ISA execution for every applicable architecturally valid AArch64 EL0 instruction in that complete target, with direct classification and required EL0 rejection proof for every non-executable leaf. The production path uses Orlix-owned fetch, decode, lowering, data-only gadget dispatch, register state, memory access, and structured exits under `arch/orlix/hosted_exec/orlix_tcti`. Product TCTI caches a straight-line A64 block as a gadget program of C handlers and runs that cached list. It does not emit host machine code. That translation unit is [ADR 0039](../architecture-decision/0039-cache-tcti-basic-blocks-as-gadget-programs.md). Instruction subsets trimmed to a package workload, exact-opcode production special cases, host-native guest execution, and silent semantic approximations are not valid completion strategies.
 
 Executable blocks carry the stable per-mm mapping generation that authorized their construction. Fetch, cached translation lookup, and guest memory execution must revalidate that generation and hold its mapping-access authorization; a PTE mutation makes stale authorization unusable even when the replacement resolves to the same address or page frame.
 

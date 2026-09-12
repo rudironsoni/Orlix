@@ -3,9 +3,165 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-29
+updated: 2026-09-11
 ---
 # Orlix Knowledge Log
+
+## [2026-09-11] fix | Remove retired command wrapper integration
+
+The [agent harness](objects/software-component/agent-harness.md) now describes direct tool invocation. Removed wrapper instructions, policy variants, and hook recognition. Publication preserves the user-owned AGENTS.md bullet and records unfinished guest-library work separately in IMPLEMENT.md.
+
+## [2026-09-11] fix | Align helper invocation with Bazel authority
+
+[ADR 0033](objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md) and generated instructions explicitly permit private Make targets and Bazel actions to invoke non-executable implementation modules. Bazel invokes upstream build engines directly. Make remains the public developer and CI interface. Repository wrapper Makefiles remain prohibited inside Bazel actions. The original user-owned `AGENTS.md` delta is preserved separately.
+
+## [2026-09-11] fix | Honor mlibc guest build inputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) prepares declared subprojects through Meson's source package cache so its wrap patches apply. Bazel mlibc compilation now uses the owning Make rules' page-size header and guest code-generation flags. `IMPLEMENT.md` records the compiler fixture and source build; persistent Ninja state and runtime proof remain open.
+
+## [2026-09-11] build | Separate the compiler runtime artifact
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) gives compiler-rt an independent Bazel action. Mlibc compilation consumes its archive instead of its source tree or tool-identity metadata. `IMPLEMENT.md` records unchanged complete output content and reuse during an mlibc implementation mutation. Meson/Ninja incremental state remains open.
+
+## [2026-09-11] build | Preserve Kernel incremental state
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) retains prepared Kernel sources and Kbuild output within each worktree. Native objects use their compiler commands and dependencies for invalidation. State integrity checks protect reuse, and promotion disables incremental and compiler-cache acceleration. `IMPLEMENT.md` records the verified Kernel mutation and complete cache-on/cache-off output comparison. The broader recovery and authority cutover remain open.
+
+## [2026-09-10] decide | Encode the OrlixKit recovery authority
+
+[ADR 0040](objects/architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md) makes OrlixKit the public embeddable SDK and separates OrlixEngine, OrlixBootloader, OrlixOS, OrlixInstance, OrlixProcess, OrlixContainer, and internal OrlixDistribution resources. It amends conflicting SDK and lifecycle clauses while preserving Linux ownership, Make as the public command surface, upstream build-engine authority, iOS proof order, and mobile-first compatibility. The decision records four distinct identities, semantic-artifact-only downstream inputs, worktree-local mutable state, shared immutable content, local-first promoted reuse, runtime and device gates, the invalidation matrix, the sixteen developer-loop benchmarks, and independently verified recovery checkpoints. The source graph and runtime remain under migration.
+
+## [2026-09-10] build | Register the existing buildset signing key
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) registers the existing public-key fingerprint for GHCR verification. Reconstruction verifies the locked signatures before staging their component trees. The promoted IPA check verifies the embedded rootfs and buildset metadata. Runtime proof and cutover remain separate gates.
+
+## [2026-09-10] build | Include native app unit tests in Bazel
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds the existing `OrlixTestApp` host and `OrlixTests` suite to Bazel. Architecture tests use the workspace path supplied by both project generators. The [build routing task](objects/task/doing/implement-universal-apple-bazel-build-routing.md) preserves `make app-tests` as the public entry point and keeps Bazel authority opt-in.
+
+## [2026-09-10] build | Record component benchmark evidence
+
+The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) uses the existing cache-equivalence Make target for component benchmarks. Each build emits Bazel events and a timing profile alongside its execution log. The workflow retains those files and the full-tree comparison without uploading mutable build trees.
+
+## [2026-09-10] fix | Check Bazel policy for every product change
+
+The [protected automation task](objects/task/doing/implement-protected-bazel-automation.md) requires the Bazel matrix check on every pull request and `main` push. Removing build-file-only workflow filters includes app, kernel, libc, and userspace changes in that check.
+
+## [2026-09-10] fix | Restore local terminal keyboard access
+
+The [mobile terminal validation task](objects/task/doing/validate-mobile-terminal-simulator-product.md) requires the system keyboard without a local hardware-state override. Completed focus taps and the shared Keyboard control use the same explicit show action. The local screen exposes the remote control when the software keyboard is absent. Its existing UI test covers dismissal, reopening, and typing.
+
+## [2026-09-10] fix | Isolate native SSH sources by platform
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) copies native source contents instead of preserving Bazel's repository symlinks. The old copy could configure OpenSSL inside the repository input and carry iOS objects into the simulator build. Each platform now builds in its own copied source directory.
+
+## [2026-09-10] fix | Share the local and remote terminal surface
+
+The [mobile terminal validation task](objects/task/doing/validate-mobile-terminal-simulator-product.md) requires one iOS surface for local Orlix and remote sessions. The shared surface owns Ghostty creation, appearance, geometry, and rendering. Local input uses the existing surface registry and keyboard coordinator. Init sends its diagnostics through Linux's kernel log so console formatting does not alter raw PTY data. The focused Make gate covers local keyboard behavior and the existing remote SSH regression.
+
+## [2026-09-10] fix | Preserve required iOS bundle metadata and signing entitlements
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) preserves app and extension bundle names, package types, and plist versions. Both iOS signatures carry the team entitlement. The app's entitlements match Xcode's iOS signing output and exclude the macOS sandbox network keys. Make rejects missing bundle metadata and mismatched app or team signing identifiers before staging the IPA.
+
+## [2026-09-10] fix | Match Apple's registered application identity
+
+The [Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) uses `com.rudironsoni.Orlix` and the matching extension prefix. Xcode could obtain the full-capability Development profile with this registered spelling. Bazel resolves installed profiles for device builds, and the extension entitlement expands to its exact bundle identifier. Make checks both signatures before accepting the IPA. Release identity consumers use the same spelling; existing cloud, keychain, App Group, and widget identifiers remain unchanged. Device installation and runtime proof remain separate gates.
+
+## [2026-09-10] fix | Keep rootfs assembly inside its producing action
+
+[Rootfs promotion](objects/task/doing/implement-component-and-buildset-promotion.md) exposes the filesystem images and metadata consumed by OrlixOS. Temporary assembly trees remain inside the build action. Existing content checks now inspect the ext4 images, including executable modes, root ownership, the shell link, and required empty directories. The cache comparison continues to check every declared output.
+
+## [2026-09-10] fix | Require observed cache reuse and full output comparison
+
+The [shared-cache gate](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) uses separate seed, cached, and uncached output bases. It checks execution logs for the required cache behavior and compares complete UAPI, MLibC, and rootfs trees, including empty directories. Matching digest markers alone cannot pass the gate. This evidence does not authorize a release or change the signed lock.
+
+## [2026-09-10] fix | Preserve dry runs through GNU Make delegation
+
+[Make routing](objects/task/doing/implement-universal-apple-bazel-build-routing.md) excludes loaded makefiles from the delegation catch-all. The catch-all previously ran during makefile regeneration, so `make -n` could execute the requested target. Recursive delegation now preserves the caller's Make flags.
+
+## [2026-09-10] fix | Package the real MLX Metal library
+
+The [Apple feasibility experiment](objects/task/doing/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
+
+## [2026-09-10] record | Make full rootfs outputs reproducible
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now compares matching complete rootfs trees from independent builds. The producer fixes image timestamps, the ext4 hash seed, guest ownership, and manifest paths. The rootfs digest covers initramfs, base, and state images. Unsigned promotion disables remote action reuse and keeps the real signing-rejection check with signing inputs cleared for that check. The lock remains a signed-only output.
+
+## [2026-09-10] record | Prune excluded trees before documentation checks
+
+The legacy-path check now prunes its existing excluded directories before walking their contents. It also skips environment credential files before reading files. Source documentation still fails on retired paths. Generated build caches no longer add recursive traversal work to this check.
+
+## [2026-09-10] record | Preserve requested Apple configurations and archive metadata
+
+[Apple build routing](objects/task/doing/implement-universal-apple-bazel-build-routing.md) passes the requested profile, compilation mode, component mode, and iOS destination to the app build and its artifact query. The Xcode project declares Debug and Release. The archive recipe uses upstream `rules_apple` packaging and verifies metadata, debug symbols, team identity, and code signing before staging. Compatible device profiles and signed-buildset verification remain required.
+
+## [2026-09-10] record | Publish the sysroot dynamic loader consistently
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) now publishes the same stripped `ld.so` as the MLibC sysroot. The standalone loader previously retained temporary build paths in debug data. Full-tree comparison passes for the two independent MLibC builds. Signed publication remains gated on the existing trusted key.
+
+## [2026-09-10] record | Make the UAPI component archive reproducible
+
+[Component promotion](objects/task/doing/implement-component-and-buildset-promotion.md) compares the full UAPI trees from two independent builds. Kbuild uses a source-child output directory so its saved commands contain relative paths. Archive serialization fixes ownership and timestamps and omits macOS extended metadata while retaining file contents. MLibC full-tree comparison still fails. Signed publication requires the trusted signing key.
+
+## [2026-09-10] record | Connect the OrlixOS framework and test host to Bazel
+
+[The Apple product graph](objects/task/doing/implement-bazel-apple-product-graph.md) now declares the embedded OrlixOS framework, profile device trees, target-derived plist, and OrlixOSTestApp test suites. Its initramfs contains the existing OrlixOS root initializer. The task remains in progress. Build and packaging checks do not establish runtime conformance, signing, parity, or cutover.
+
+## [2026-09-10] record | Exclude generated Swift checkouts from the legacy-path scan
+
+The legacy documentation-path check excludes `third_party/swift/.build`, which contains generated dependency checkouts. References inside those checkouts belong to their upstream projects. Repository source and maintained documentation remain in the scan.
+
+## [2026-09-10] record | Bind lock proposals to signed promotion runs
+
+[Protected Bazel automation](objects/task/doing/implement-protected-bazel-automation.md) now requires successful promotion runs from the same main commit, signature verification, and full component-tree comparison during source reconstruction. The task remains in progress. These rules do not establish live signing, runtime proof, or cutover completion.
+
+## [2026-09-09] record | Promoted Apple inputs verify reconstructed uapi, mlibc, and rootfs
+
+`//bazel/promotion:promoted_apple_inputs` verifies reconstructed UAPI digest `666af9a6…`, mlibc `fc080e36…`, and rootfs `794e4da2…`. `OrlixOSFramework` takes those stamps as promoted resources plus the reconstructed rootfs payload. Dual-build SBOM, in-toto, and unsigned lock-proposal JSON for uapi, mlibc, and rootfs match the lock and stay unsigned. Full `OrlixOSFramework` link still needs `_arch_boot_entry` from the app-side macho archive.
+
+## [2026-09-09] record | Promoted payload consumes reconstructed GHCR rootfs
+
+`make __bazel-substitute-promoted` stages reconstructed OCI trees under `bazel/promotion/imported`. `bazel build //bazel/feasibility/rootfs:payload --config=promoted` verifies lock digest `794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3` and does not rebuild guest packages. Full promoted IPA still goes through `make __bazel-orlix-app`.
+
+## [2026-09-09] record | Signed uapi, mlibc, and rootfs published to GHCR
+
+`make __bazel-publish-{uapi,mlibc,rootfs}` pushed Cosign-signed packages to `ghcr.io/rudironsoni/orlix` with `org.opencontainers.image.source=https://github.com/rudironsoni/Orlix`. Those user packages now list `repository: rudironsoni/Orlix`. `make __bazel-lock-from-signed` wrote buildset `ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d`. The Orlix repo Packages tab was empty because the first push was not linked to the repo. Promoted Apple compile still does not substitute OCI trees. posix-shell TAP END is missing. Cutover is not done.
+
+## [2026-09-09] record | Bazel epic is not done without GHCR reuse
+
+[CORRECTION] `docs/objects/epic/done/adopt-bazel-product-graph.md` was wrong. The epic is in `doing/`. Incomplete stories now in `doing/`: feasibility, Apple product graph, routing, proof binding, signed promote, protected automation, parity/cutover, rollback retire. Incomplete tasks match those stories. Kept in `done/`: governance baseline, hermetic upstream rules, and the Apple matrix definition after the promoted row was set back to `gated`. `gh api user/packages?package_type=container` has no `orlix` packages. `artifacts.lock.json` names `localhost:5001`, and that registry is not running. `Build/AgentHarness/bazel-migration/apple-feasibility.json` is `partial`. posix-shell TAP END is missing. No benchmark workflow exists. HostAdapter composition remains `[UNVERIFIED]`.
+
+## [2026-09-09] record | ADR 0039 caches TCTI blocks as gadget programs
+
+Accepted [ADR 0039](objects/architecture-decision/0039-cache-tcti-basic-blocks-as-gadget-programs.md): product TCTI decodes a straight-line A64 block into a data-only C gadget program, caches it, and runs the list. It does not emit host machine code. The decision amends [ADR 0022](objects/architecture-decision/0022-use-hosted-linux-elf-execution.md). QEMU TCG native codegen, `MAP_JIT`, and RWX stay forbidden on the product path.
+
+## [2026-09-06] record | GitHub Actions iOS 15.5 job did not start
+
+[CORRECTION] Run `34035260568` failed in 6s with empty steps because GitHub did not start the job: recent account payments failed or the spending limit must increase. That is not an `ios15-runtime.yml` YAML defect. Local `make ios15-simulator-gate` remains the runtime proof.
+
+## [2026-09-06] record | Signed lock 259dc911 and local Cosign reconstruct close the Bazel epic
+
+`make __bazel-lock-from-signed` wrote `artifacts.lock.json` buildset `259dc911da5aad23ada0a07c5195424f638def27e703d6bbd0b64a7310a80672` from Cosign-signed localhost:5001 UAPI, mlibc, and rootfs. `make __bazel-reconstruct` pulled and verified those references. `make __bazel-reconstruct-source` rebuilt `//bazel/feasibility/kernel:uapi` cache-cold and matched unsigned digest `666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07`. [CORRECTION] iOS 15.5 runtime proof is local `make ios15-simulator-gate` (`GATE=0`), not GitHub Actions. GHCR write is denied on this token, so signed publish stayed on `localhost:5001`. `--config=promoted` still does not substitute OCI components.
+
+## [2026-09-06] record | //Orlix:Orlix links defined _arch_boot_entry from Mach-O OrlixKernel.a
+
+`kernel/async.c` and `lib/string.c` compile with `-fvisibility=hidden` so Linux `_memset` and `_async_init` do not collide with Ghostty and OpenSSL. `//Orlix:Orlix` no longer uses `-U _arch_boot_entry`. IPA `nm` shows `T _OrlixBoot` and `T _arch_boot_entry`. `make __bazel-kernel-boot`, `make __bazel-orlix-app`, `make __bazel-product-composition`, and `make __bazel-matrix-check` pass.
+
+## [2026-09-06] record | Bazel produces Mach-O OrlixKernel.a; Apple ld cannot consume the LLVM relocatable
+
+`//bazel/feasibility/kernel:macho` builds `OrlixKernel.a` from Kbuild product compile without `OrlixKernel/Makefile`. The archive defines `_arch_boot_entry` (`T`). Post-link `llvm-objcopy` localization of libc symbols corrupted relocs. Compile-time hidden visibility replaces that.
+
+## [2026-09-06] record | Unsigned rootfs dual-build promote matches; iOS 15.5 CI stays gated
+
+Unsigned dual-build promotion of `//bazel/feasibility/rootfs:rootfs` matched digest `1a789b43efb1b89bd5d9543dbc71192d82b7b2a6af7cdeae6d92c088ea2aa0df`. Cosign stayed fail-closed (`ORLIX_COSIGN_KEY` unset). `artifacts.lock.json` stayed `{ "schema": 1, "buildset": null, "components": {} }`. GitHub Actions run `33999322760` for `.github/workflows/ios15-runtime.yml` failed before steps with billing/spending-limit; the iOS 15.5 runtime row stays `gated`.
+
+## [2026-09-03] record | Record the Apple Bazel matrix and unsigned promotion helpers
+
+The canonical Apple matrix is `bazel/migration/apple-build-matrix.json`. iOS 15.5 CI runtime and promoted-buildset rows stay gated. Unsigned dual-build promotion remains fail-closed: Cosign and GHCR are not invented, and `artifacts.lock.json` is not mutated from unsigned JSON.
+
+## [2026-09-03] record | Deliver jq, curl, and zsh in the OrlixOS base rootfs
+
+ADR 0023 now names bash, coreutils, grep, findutils, e2fsprogs, jq, curl, and zsh as curated delivered base content. Product `OrlixOS/Sources/make/rootfs.mk` installs jq, curl, and zsh into the base tree. ADR 0017 proof order is unchanged.
 
 ## [2026-08-29] record | Strengthen SCALAR_FP exception proof
 
@@ -1008,3 +1164,82 @@ Orlix behavior. Each pane can suppress Ghostty mouse reporting through a
 customizable accessory action or `Cmd+Option+M`. The process-local state
 survives surface view reconstruction, remains isolated by pane, and clears when
 the pane closes. Native macOS command UI remains deferred.
+
+## [2026-09-01] decide | Adopt the Bazel product graph migration
+
+Added the Bazel migration concept, work hierarchy, and accepted decisions for
+repository product-graph ownership, signed promoted buildsets, parallel
+worktree isolation, local and Xcode Cloud project ownership, and the final
+authority cutover. [CORRECTION] Updated the stale README claim that normal
+`make build` first removes `Build/`; only `make rebuild` requests that clean.
+
+## [2026-09-01] decide | Support iOS and iPadOS 15
+
+Set iOS and iPadOS 15.0 as the minimum for the app and public OrlixOS SDK.
+Keep the optional Live Activity extension at iOS and iPadOS 16.1 because its
+ActivityKit surface is not available on iOS 15. Added iOS 15 to the Bazel
+feasibility gate and deployment-target proof. Defined the reduced iOS 15
+feature set and kept newer UI and MLX features behind version gates.
+
+## [2026-09-01] record | Pin the SwiftET iOS 15 compatibility fork
+
+Pinned SwiftET to `rudironsoni/swift-et` commit
+`47cb48446af6565b5103ddaa431388c1d5bce366`. The fork lowers the package floor
+to iOS 15 and replaces iOS 16-only `Duration` sleep APIs with an internal
+nanosecond duration. Its iOS 15 simulator compile and host unit suite pass.
+
+Pinned SwiftMosh to `rudironsoni/swift-mosh` commit
+`e476c1e8745cc1d1a353bc72b8ee1d73eb35e197`. This fork only lowers the package
+floor to iOS 15. Its complete package graph compiles for the iOS 15 simulator,
+and its host unit suite passes.
+
+Pinned SwiftCloudflared to `rudironsoni/swift-cloudflared` commit
+`80eb5b73e00effe78c8d6d44d8aab8ffdd63e976`. This fork only lowers the package
+floor to iOS 15. Its Cloudflared product compiles for the iOS 15 simulator,
+and its host unit suite passes.
+
+Pinned MLXSwift to `rudironsoni/mlx-swift` commit
+`7b6527f6eb6013c5221679ee08112c04aab6825e`. The fork lowers the package floor
+to iOS 15, uses the Metal compiler version macro for constant address-space
+selection, removes redundant Winograd constant declarations, and replaces
+iOS 16-only Swift APIs. Its complete package graph compiles for the iOS 15
+simulator, and its host test suite passes. MLX execution stays disabled on
+iOS 15 until runtime proof exists, so Apple Speech remains the fallback.
+
+## [2026-09-01] record | Complete the Bazel migration baseline
+
+Completed the migration plan, current-build inventory, worktree-safe cache
+model, lock-file bootstrap, and initial Bazel Apple smoke target. Moved the
+active migration work to the Xcode 26.6 feasibility experiment. The app now
+compiles with a 15.0 minimum, while the optional Live Activity extension keeps
+its 16.1 minimum. Added a GitHub CI lane that installs iOS 15.5 with pinned
+`xcodes`, creates a dedicated simulator, and runs the app launch smoke test.
+The CI runtime lane owns the minimum-version proof when a developer host does
+not have the old simulator runtime.
+
+## [2026-09-01] fix | Harden the iOS 15 runtime proof lane
+
+The GitHub macOS runner installed and booted the pinned iOS 15.5 runtime with
+`xcodes`. [CORRECTION] The first product test did not fail because of an iOS 15
+API. The Linux source fetch from kernel.org returned `fatal: protocol error:
+bad pack header` before XCTest started. The Kernel bootstrap now pins the exact
+Linux tag commit, retries transient fetch failures, and lets this CI lane use
+Greg Kroah-Hartman's stable Linux mirror. The gate also stores its test log and
+`.xcresult` under `Build/iOS15` for every run.
+
+## [2026-09-01] plan | Route every Apple build through Bazel
+
+Added the work sequence for the supported Apple build matrix, universal
+Make-to-Bazel routing, shared cache and signed buildset reuse, and runtime proof
+for each supported iOS, iPadOS, and macOS row. The iOS 15 row keeps its reduced
+feature set, and later-system features remain unavailable until their owning
+matrix row proves them.
+
+## [2026-09-11] contract | Version guest artifact content identity
+
+Defined the `artifact-identity-v2` serialization and namespace contract in the
+Bazel migration concept. Product content, provenance, and verification policy
+remain separate. Existing signed identities retain their original format;
+new-format promotion requires independent proof and a new signed proposal.
+Phase 5 source providers expose v2 identities while signed legacy promotion
+remains unchanged until format-aware verification exists.

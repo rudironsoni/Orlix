@@ -1,0 +1,53 @@
+name: Bazel nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: bazel-nightly
+  cancel-in-progress: true
+
+jobs:
+  reconstruct:
+    name: Verify source reconstruction
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+      - name: Install declared build tools
+        run: brew bundle --file Brewfile
+      - name: Export the selected Xcode to Make
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+      - name: Run Make-owned matrix check
+        run: make __bazel-matrix-check
+      - name: Reconstruct the signed buildset from source
+        env:
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$ORLIX_COSIGN_PUB" || { echo "ORLIX_COSIGN_PUB is required" >&2; exit 1; }
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
+          make __bazel-reconstruct-source
+      - name: Run Make-owned cache GC
+        run: make __bazel-gc

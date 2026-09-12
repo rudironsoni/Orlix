@@ -50,6 +50,7 @@ final class TerminalKeyboardInputSessionSpy: TerminalKeyboardInputSession {
 
     func forceSoftwareKeyboardInput() -> Bool {
         forceSoftwareKeyboardCount += 1
+        snapshot.isSoftwareKeyboardSuppressed = false
         let result = forceSoftwareKeyboardResults.isEmpty
             ? true
             : forceSoftwareKeyboardResults.removeFirst()
@@ -153,6 +154,14 @@ final class TerminalKeyboardCoordinatorEventSourceSpy: TerminalKeyboardEventSour
         )
     }
 }
+@MainActor
+func makeTerminalKeyboardCoordinator() -> TerminalKeyboardCoordinator {
+    TerminalKeyboardCoordinator(
+        keyboardEventSource: TerminalKeyboardCoordinatorEventSourceSpy(),
+        lifecycleLoggingEnabled: true
+    )
+}
+
 @MainActor
 func drainMainQueue() async {
     await withCheckedContinuation { continuation in

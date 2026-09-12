@@ -18,7 +18,7 @@
     "subtitle": "连接服务器、浏览远程文件、保持有序，并通过 Keychain 保护的凭据在你的 iPhone、iPad 和 Mac 之间保持同步。",
     "primaryCta": "免费试用 Orlix",
     "secondaryCta": "查看 GitHub",
-    "meta": "需要 iOS 16+ 或 macOS 13+（Apple Silicon）。永久免费，也可<span class=\"text-orange-500 font-medium\">购买终身版</span>。"
+    "meta": "需要 iOS 15+ 或 macOS 13+（Apple Silicon）。永久免费，也可<span class=\"text-orange-500 font-medium\">购买终身版</span>。"
   },
   "why": {
     "title": "为什么选择 Orlix",
@@ -182,7 +182,7 @@
     },
     "q9": {
       "question": "系统要求是什么？",
-      "answer": "需要 iPhone 或 iPad 上的 iOS 16+，或 Apple Silicon Mac 上的 macOS 13+ Ventura。不支持 Intel Mac。"
+      "answer": "需要 iPhone 或 iPad 上的 iOS 15+，或 Apple Silicon Mac 上的 macOS 13+ Ventura。不支持 Intel Mac。"
     },
     "q10": {
       "question": "Orlix 支持远程文件浏览吗？",

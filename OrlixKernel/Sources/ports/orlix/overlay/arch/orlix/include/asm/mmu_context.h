@@ -17,6 +17,7 @@ static inline int init_new_context(struct task_struct *tsk,
 #if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	if (mm) {
 		atomic64_set(&mm->context.orlix_tcti_mapping_sequence, 0);
+		atomic64_set(&mm->context.orlix_tcti_code_generation, 0);
 		rwlock_init(&mm->context.orlix_tcti_mapping_lock);
 		orlix_tcti_invalidate_mm(mm);
 	}

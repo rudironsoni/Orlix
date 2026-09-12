@@ -13,8 +13,15 @@ extension GhosttyTerminalView {
         guard !isShuttingDown else { return }
         dismissEditMenuIfNeeded()
         editMenuPresentation = .pointerContext
-        let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: location)
-        editMenuInteraction?.presentEditMenu(with: config)
+        if #available(iOS 16.0, *) {
+            let config = UIEditMenuConfiguration(identifier: nil, sourcePoint: location)
+            editMenuInteraction?.presentEditMenu(with: config)
+        } else {
+            UIMenuController.shared.showMenu(
+                from: self,
+                rect: CGRect(origin: location, size: CGSize(width: 1, height: 1))
+            )
+        }
     }
 
     @discardableResult

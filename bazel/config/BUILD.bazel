@@ -1,0 +1,80 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "toolchain-pin.json",
+    "toolchain_pin.py",
+])
+
+string_flag(
+    name = "profile",
+    build_setting_default = "release",
+    values = [
+        "development",
+        "release",
+    ],
+)
+
+string_flag(
+    name = "component_mode",
+    build_setting_default = "source",
+    values = [
+        "promoted",
+        "source",
+    ],
+)
+
+string_flag(
+    name = "apple_destination",
+    build_setting_default = "iphonesimulator",
+    values = [
+        "iphoneos",
+        "iphonesimulator",
+    ],
+)
+
+string_flag(
+    name = "signing_mode",
+    build_setting_default = "unsigned",
+    values = [
+        "development",
+        "distribution",
+        "unsigned",
+    ],
+)
+
+string_flag(
+    name = "proof_tier",
+    build_setting_default = "none",
+    values = [
+        "all",
+        "kernel-dependency",
+        "kselftest",
+        "libc",
+        "none",
+        "packages",
+        "product-integration",
+        "syscall-uapi",
+    ],
+)
+
+config_setting(
+    name = "profile_development",
+    flag_values = {":profile": "development"},
+)
+
+config_setting(
+    name = "profile_release",
+    flag_values = {":profile": "release"},
+)
+
+config_setting(
+    name = "component_source",
+    flag_values = {":component_mode": "source"},
+)
+
+config_setting(
+    name = "component_promoted",
+    flag_values = {":component_mode": "promoted"},
+)

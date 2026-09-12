@@ -91,7 +91,7 @@ private struct ServerFormCompactListSectionSpacingModifier: ViewModifier {
 private struct ServerFormTransparentNavigationBarModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
-            content.toolbarBackground(.hidden, for: .navigationBar)
+            content.orlixNavigationBarBackgroundHidden()
         } else {
             content
         }

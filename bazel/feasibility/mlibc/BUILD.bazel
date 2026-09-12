@@ -1,0 +1,31 @@
+load(":mlibc_sysroot.bzl", "orlix_mlibc_sysroot")
+
+package(default_visibility = ["//visibility:private"])
+
+orlix_mlibc_sysroot(
+    name = "sysroot",
+    toolchain_identity = "@orlix_kernel_toolchain//:mlibc-identity.json",
+    compiler_identity = "@orlix_kernel_toolchain//:guest-compiler-identity.json",
+    runtime_toolchain_identity = "@orlix_kernel_toolchain//:compiler-runtime-identity.json",
+    bragi = "@orlix_bragi_source//:Cargo.toml",
+    bragi_source = "@orlix_bragi_source//:source",
+    compiler_rt = "@orlix_compiler_rt_source//:compiler-rt/lib/builtins/addtf3.c",
+    compiler_rt_source = "@orlix_compiler_rt_source//:source",
+    freestnd_c = "@orlix_freestnd_c_source//:COPYING",
+    freestnd_c_source = "@orlix_freestnd_c_source//:source",
+    freestnd_cxx = "@orlix_freestnd_cxx_source//:COPYING",
+    freestnd_cxx_source = "@orlix_freestnd_cxx_source//:source",
+    frigg_meson = "@orlix_frigg_source//:meson.build",
+    frigg_source = "@orlix_frigg_source//:source",
+    libsmarter = "@orlix_libsmarter_source//:meson.build",
+    libsmarter_source = "@orlix_libsmarter_source//:source",
+    mlibc_meson = "@orlix_mlibc_source//:meson.build",
+    mlibc_source = "@orlix_mlibc_source//:source",
+    patches = "//OrlixMLibC/Sources/patches:files",
+    tags = ["manual"],
+    uapi = select({
+        "//bazel/config:component_promoted": "//bazel/promotion:promoted_uapi",
+        "//conditions:default": "//bazel/feasibility/kernel:uapi",
+    }),
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)

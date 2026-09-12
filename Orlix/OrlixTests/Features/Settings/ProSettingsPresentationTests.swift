@@ -18,7 +18,7 @@ final class ProSettingsPresentationTests: XCTestCase {
         XCTAssertEqual(state, .lifetime)
         XCTAssertNil(state.renewalDate)
         XCTAssertNil(state.primaryAction)
-        XCTAssertEqual(String(localized: state.title), "Pro Lifetime")
+        XCTAssertEqual(state.title, "Pro Lifetime")
     }
 
     func testYearlySubscriptionShowsRenewalAndManagement() {
@@ -37,7 +37,7 @@ final class ProSettingsPresentationTests: XCTestCase {
         XCTAssertEqual(state, .subscription(plan: .yearly, renewalDate: renewalDate))
         XCTAssertEqual(state.renewalDate, renewalDate)
         XCTAssertEqual(state.primaryAction, .manageSubscription)
-        XCTAssertEqual(String(localized: state.title), "Pro Yearly")
+        XCTAssertEqual(state.title, "Pro Yearly")
     }
 
     func testFreeTierOffersPlansWithoutProFeatures() {
@@ -46,7 +46,7 @@ final class ProSettingsPresentationTests: XCTestCase {
         XCTAssertEqual(state, .free)
         XCTAssertEqual(state.primaryAction, .viewPlans)
         XCTAssertFalse(state.hasProAccess)
-        XCTAssertEqual(String(localized: state.title), "Free Tier")
+        XCTAssertEqual(state.title, "Free Tier")
     }
 
     func testCheckingStateHasNoAction() {

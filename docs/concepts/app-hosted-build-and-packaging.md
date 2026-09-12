@@ -3,14 +3,14 @@ type: concept
 tags:
   - architecture
   - guidance
-updated: 2026-07-26
-summary: "OrlixOS is the sole public SDK over private static Mach-O-native implementation artifacts and private test hosts."
+updated: 2026-09-10
+summary: "OrlixKit is the public SDK over private Apple-native implementation and packaged Linux guest distribution resources."
 applies:
   - "[Orlix](../objects/product/orlix.md)"
 ---
 
 # App-hosted build and packaging
 
-The product exposes only `OrlixOS.xcframework`. It statically consumes private Mach-O-native `OrlixKernel.xcframework`, `OrlixMLibC.xcframework`, and `OrlixCoreUtils.xcframework` artifacts and private `OrlixHostAdapter` execution integration without redefining Linux semantics. Curated distribution resources belong directly to OrlixOS; there is no separate payload bundle.
+The product exposes `OrlixKit.xcframework`. Its Apple-native implementation contains OrlixEngine, OrlixBootloader, OrlixHostAdapter, and Kernel Mach-O integration. Its guest distribution resources contain the outputs of OrlixMLibC, OrlixCoreUtils, guest packages, and rootfs assembly. Guest resources may be packaged or referenced by OrlixKit, but they are not Apple-native link dependencies and do not redefine Linux semantics.
 
-`OrlixTestApp` hosts lower implementation-layer proof. `OrlixOSTestApp` hosts the public OrlixOS product-session path. Neither is a consumer SDK or product identity. [ADR 0030](../objects/architecture-decision/0030-use-one-public-orlixos-sdk-and-private-static-implementation-layers.md) owns these names and visibility boundaries.
+`OrlixTestApp` hosts lower implementation-layer proof. `OrlixOSTestApp` consumes OrlixKit while hosting the running OrlixOS product-session path. Neither is a consumer SDK or product identity. [ADR 0040](../objects/architecture-decision/0040-recover-orlixkit-product-boundaries-and-build-reuse.md) owns these names and visibility boundaries.

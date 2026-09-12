@@ -27,7 +27,7 @@ struct TerminalFontSettingsSection: View {
             .accessibilityIdentifier("orlix.settings.appearance.primaryFont")
 
             VStack(spacing: 10) {
-                LabeledContent("Size") {
+                OrlixLabeledContent("Size") {
                     Text(fontSizeLabel)
                         .foregroundStyle(.secondary)
                 }

@@ -274,7 +274,16 @@ final class OrlixOSSessionTests: XCTestCase {
             #"install -m 0755 "$(ORLIXOS_E2FSCK_BINARY)" "$$root_tree/bin/e2fsck""#
         ))
         XCTAssertTrue(contents.contains(
-			"base_packages=bash coreutils grep findutils e2fsprogs"
+            #"install -m 0755 "$(ORLIXOS_JQ_BINARY)" "$$root_tree/usr/bin/jq""#
+        ))
+        XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_CURL_BINARY)" "$$root_tree/usr/bin/curl""#
+        ))
+        XCTAssertTrue(contents.contains(
+            #"install -m 0755 "$(ORLIXOS_ZSH_BINARY)" "$$root_tree/usr/bin/zsh""#
+        ))
+        XCTAssertTrue(contents.contains(
+			"base_packages=bash coreutils grep findutils e2fsprogs jq curl zsh"
         ))
         XCTAssertTrue(
             contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4 debugfs e2fsck")
@@ -6710,6 +6719,24 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         withExtendedLifetime(output) {
             XCTAssertEqual(transport.sentInput, [Data("whoami\r".utf8)])
             XCTAssertEqual(receivedOutput.values, [Data("root\r\n".utf8)])
+        }
+    }
+
+    func testTerminalResendsGeometryWhenInitAwaitsResize() {
+        let transport = RecordingTerminalTransport()
+        let session = OrlixTerminalSession(transport: transport)
+        session.resize(rows: 31, columns: 101)
+        let output = session.attachOutput { _ in }
+
+        transport.emit(Data("NET: Registered PF_PACKET protocol family\n".utf8))
+        XCTAssertEqual(transport.sentInput, [Data([0, 31, 0, 101])])
+
+        transport.emit(Data("orlix-init: runtime filesystems mounted\n".utf8))
+        withExtendedLifetime(output) {
+            XCTAssertEqual(
+                transport.sentInput,
+                [Data([0, 31, 0, 101]), Data([0, 31, 0, 101])]
+            )
         }
     }
 

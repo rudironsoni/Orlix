@@ -90,7 +90,7 @@ struct NavigationStatsSettingsView: View {
         ) {
             StatsAppearanceSettingsSheet(store: statsPreferencesStore)
         }
-        .formStyle(.grouped)
+        .orlixGroupedFormStyle()
         .adaptiveSoftScrollEdges()
         .accessibilityIdentifier("orlix.settings.page.navigationAndStats")
     }

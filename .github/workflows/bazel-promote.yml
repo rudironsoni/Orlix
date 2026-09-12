@@ -1,0 +1,119 @@
+name: Bazel promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Private component to dual-build and compare
+        required: true
+        type: choice
+        options:
+          - uapi
+          - mlibc
+          - rootfs
+          - kernel-release-iphoneos
+          - kernel-release-iphonesimulator
+          - kernel-development-iphoneos
+          - kernel-development-iphonesimulator
+
+permissions:
+  contents: read
+  actions: write
+  packages: write
+
+concurrency:
+  group: bazel-promote-${{ inputs.component }}
+  cancel-in-progress: false
+
+jobs:
+  derail-watchdog:
+    name: Cancel if derailed
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel when macos-26 stays queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 20); do
+            job_status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq '.jobs[] | select(.name == "Dual-build promote") | .status' | head -n 1)"
+            case "$job_status" in
+              in_progress|completed)
+                echo "macos-26 job is $job_status"
+                exit 0
+                ;;
+            esac
+            sleep 30
+          done
+          gh run cancel "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}"
+          echo "cancelled: macos-26 job still queued after 10 minutes"
+          exit 1
+
+  promote:
+    name: Dual-build promote
+    if: github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
+    runs-on: macos-26
+    permissions:
+      contents: read
+      packages: write
+    environment: bazel-promotion
+    timeout-minutes: 360
+    steps:
+      - name: Check out the exact commit
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        timeout-minutes: 5
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: "26.6"
+      - name: Install declared build tools
+        run: brew bundle --file Brewfile
+      - name: Export the selected Xcode to Make
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+      - name: Dual-build without action cache
+        timeout-minutes: 350
+        run: make __bazel-promote-${{ inputs.component }}
+      - name: Sign and publish to GHCR
+        timeout-minutes: 20
+        env:
+          ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
+          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_COSIGN_KEY_PASSWORD: ${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ORLIX_COSIGN_KEY}" ]; then
+            echo "ORLIX_COSIGN_KEY is required; promotion failed"
+            exit 1
+          fi
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
+          key_path="${ORLIX_COSIGN_KEY#file://}"
+          if [ ! -f "$key_path" ]; then
+            key_path="${RUNNER_TEMP}/orlix-cosign.key"
+            printf '%s\n' "$ORLIX_COSIGN_KEY" > "$key_path"
+            chmod 600 "$key_path"
+          fi
+          export ORLIX_COSIGN_KEY="file://${key_path}"
+          export COSIGN_PASSWORD="${ORLIX_COSIGN_KEY_PASSWORD}"
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "${GITHUB_ACTOR}" --password-stdin
+          make __bazel-publish-${{ inputs.component }}
+      - name: Store the verified signed component proposal
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-${{ inputs.component }}-${{ github.sha }}
+          path: Build/Bazel/promote/${{ inputs.component }}/${{ inputs.component }}-signed.json
+          if-no-files-found: error
+          retention-days: 14

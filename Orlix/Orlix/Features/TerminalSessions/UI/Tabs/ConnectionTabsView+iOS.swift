@@ -45,7 +45,7 @@ extension ConnectionTerminalContainer {
                 onClose: closeFocusedPaneConfirmed
             )
             .sheet(item: $serverFormIntent) { intent in
-                NavigationStack {
+                NavigationView {
                     ServerFormSheet(
                         serverManager: serverManager,
                         workspace: intent.sourceServer.flatMap { sourceServer in

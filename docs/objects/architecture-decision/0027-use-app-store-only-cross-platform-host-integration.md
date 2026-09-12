@@ -3,12 +3,15 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-09-10
 status: accepted
 external_id: "ADR-0027"
 summary: "Durable Orlix architecture decision ADR 0027."
 part_of:
   - "[Orlix](../product/orlix.md)"
+amended_by:
+  - "[ADR 0038](0038-support-ios-and-ipados-15.md)"
+  - "[ADR 0040](0040-recover-orlixkit-product-boundaries-and-build-reuse.md)"
 ---
 
 # ADR 0027: Use App-Store-Only Cross-Platform Host Integration
@@ -25,9 +28,9 @@ ADR 0023 keeps release executable content conservative until an App Store-safe c
 
 ## Decision
 
-Use the App Store as the only distribution channel on every supported platform. Minimum versions are iOS and iPadOS 16.1 and, when Mac work begins, macOS 13.3. The future Mac target is a native macOS app and is Apple-silicon-only.
+Use the App Store as the only distribution channel on every supported platform. Minimum versions are iOS and iPadOS 15.0, as amended by ADR 0038, and macOS 13.3 when Mac work begins. The optional Live Activity extension requires iOS and iPadOS 16.1. The future Mac target is a native macOS app and is Apple-silicon-only.
 
-Publish the full terminal, remote transport, commercially approved Herdr surface, and OrlixMachine on iOS and iPadOS first. Publish the mobile `OrlixOS.Containers`, Docker, and Compose release second. Begin the native macOS product only after both mobile releases are in good shape and published to the App Store. There is no public remote-only Mac phase: the eventual Mac release follows the same terminal and container product contract.
+Publish the full terminal, remote transport, commercially approved Herdr surface, and OrlixInstance through OrlixKit on iOS and iPadOS first. Publish the mobile OrlixContainer, Docker, and Compose release second. Begin the native macOS product only after both mobile releases are in good shape and published to the App Store. There is no public remote-only Mac phase: the eventual Mac release follows the same terminal and container product contract.
 
 Mobile implementation must preserve the native application's macOS-compatible source, resources, package declarations, and conditional compilation and must avoid unnecessary UIKit-only assumptions in shared feature code. This is foundation work only. It does not authorize early implementation of the Mac target, Mac OrlixKernel slice, runtime service, helper tools, external Herdr CLI, or Docker contexts.
 

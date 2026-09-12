@@ -16,10 +16,11 @@ Use this skill before writing any repository knowledge or agent-harness surface.
 - Keep durable architecture, ownership, capabilities, outcomes, stories, and tasks in typed pages under `docs/objects/` and `docs/concepts/`.
 - Organize work as `epic -> story -> task`, and keep each work page in its matching `todo/`, `doing/`, or `done/` folder.
 - Keep current task selection, commands, evidence, failures, and readiness state in structured reports under `Build/AgentHarness/`.
-- Do not create plan journals, implementation logs, handoff archives, or copied status snapshots.
+- Record each independently verified PR #228 recovery checkpoint in `IMPLEMENT.md`, as required by the accepted plan. Link to raw structured evidence instead of duplicating it. Do not create parallel journals or status archives.
 - Update `docs/log.md`, regenerate `docs/index.md`, and repair every consumer when knowledge changes.
-- Keep OrlixOS as the Kit, upstream Linux as owner of Linux behavior, and OrlixHostAdapter limited to private Apple mechanics.
+- Keep OrlixKit as the public SDK and OrlixOS as the running OS. Preserve upstream Linux ownership and the separation between private native implementation and guest distribution artifacts.
 - Edit `.rulesync/` as the durable source for generated rules and subagents. Generate only the intended features so hand-maintained skills remain intact.
+- Preserve and identify user-owned generated-file deltas before regeneration. Reapply or incorporate their intent without loss and record the preserved delta and generated diff in the checkpoint.
 - Treat command wrappers identically to their underlying commands in hooks and rules.
 
 ## Verification

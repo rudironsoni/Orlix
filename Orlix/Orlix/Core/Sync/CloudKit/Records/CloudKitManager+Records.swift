@@ -93,7 +93,7 @@ extension CloudKitManager {
         }
         try await ensureCustomZone()
         let record = try await withZoneRetry {
-            try await database.record(for: recordID)
+            try await cloudDatabase().record(for: recordID)
         }
         try requireCurrentGeneration(generation)
         return record
@@ -110,7 +110,7 @@ extension CloudKitManager {
     func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws {
         let generation = cloudKitSyncGeneration
         _ = try await withZoneRetry {
-            try await database.modifyRecords(saving: [], deleting: [recordID])
+            try await cloudDatabase().modifyRecords(saving: [], deleting: [recordID])
         }
         try requireCurrentGeneration(generation)
     }
@@ -319,7 +319,11 @@ extension CloudKitManager {
                 }
 
                 completion.install(operation)
-                self.database.add(operation)
+                do {
+                    try self.cloudDatabase().add(operation)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         } onCancel: {
             completion.cancel()
@@ -386,7 +390,11 @@ extension CloudKitManager {
                 }
             }
 
-            database.add(operation)
+            do {
+                try cloudDatabase().add(operation)
+            } catch {
+                continuation.resume(throwing: error)
+            }
         }
     }
 

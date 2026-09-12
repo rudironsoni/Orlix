@@ -78,7 +78,7 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         }
         var kernelCommandLine: String?
 		if serialConsoleProof {
-			guard let bundledCommandLine = OrlixOSPayload.kernelCommandLine else {
+			guard let bundledCommandLine = OrlixOSResources.kernelCommandLine else {
 				throw OrlixPTYRuntimeProofError.missingKernelCommandLine
 			}
 			let remainder = bundledCommandLine
@@ -126,15 +126,15 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 					virtioRecorder.append(data)
 				}
 			}
-			OrlixTerminalTransportDiagnostics.setOutputFD(
-				source: OrlixTerminalTransportDiagnostics.virtioSource,
+			OrlixPaneTransportDiagnostics.setOutputFD(
+				source: OrlixPaneTransportDiagnostics.virtioSource,
 				fd: virtioOutput.fileHandleForWriting.fileDescriptor
 			)
 		}
 		defer {
 			if serialConsoleProof {
-				OrlixTerminalTransportDiagnostics.setOutputFD(
-					source: OrlixTerminalTransportDiagnostics.virtioSource,
+				OrlixPaneTransportDiagnostics.setOutputFD(
+					source: OrlixPaneTransportDiagnostics.virtioSource,
 					fd: -1
 				)
 				virtioOutput.fileHandleForReading.readabilityHandler = nil
@@ -251,11 +251,7 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
     }
 
     private static func productPayloadURL() throws -> URL {
-        guard let payloadURL = OrlixOSPayload.bundleURL else {
-            throw OrlixPTYRuntimeProofError.missingProductPayloadBundle
-        }
-
-        return payloadURL
+        OrlixOSResources.resourceRootURL
     }
 
     private static func validateProductPayloadStamp(in payloadURL: URL) throws {
@@ -292,14 +288,14 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 		let serialStale = Data("serial-stale".utf8)
 		let virtioStale = Data("virtio-stale".utf8)
 
-		let serial = OrlixTerminalTransportDiagnostics.serialSource
-		let virtio = OrlixTerminalTransportDiagnostics.virtioSource
-		OrlixTerminalTransportDiagnostics.clearInput(source: serial)
-		OrlixTerminalTransportDiagnostics.clearInput(source: virtio)
-		OrlixTerminalTransportDiagnostics.enqueueInput(
+		let serial = OrlixPaneTransportDiagnostics.serialSource
+		let virtio = OrlixPaneTransportDiagnostics.virtioSource
+		OrlixPaneTransportDiagnostics.clearInput(source: serial)
+		OrlixPaneTransportDiagnostics.clearInput(source: virtio)
+		OrlixPaneTransportDiagnostics.enqueueInput(
 			source: serial, data: serialStale
 		)
-		OrlixTerminalTransportDiagnostics.enqueueInput(
+		OrlixPaneTransportDiagnostics.enqueueInput(
 			source: virtio, data: virtioStale
 		)
 		guard session.configureInteractiveConsole() else {
@@ -311,23 +307,23 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 		) else {
 			throw OrlixPTYRuntimeProofError.initialResizeWasNotQueued
 		}
-		guard OrlixTerminalTransportDiagnostics.pendingInput(source: serial) ==
+		guard OrlixPaneTransportDiagnostics.pendingInput(source: serial) ==
 			UInt(resizeFrame.count) else {
 			throw OrlixPTYRuntimeProofError.selectedSerialInputNotCleared
 		}
-		guard OrlixTerminalTransportDiagnostics.pendingInput(source: virtio) ==
+		guard OrlixPaneTransportDiagnostics.pendingInput(source: virtio) ==
 			UInt(virtioStale.count) else {
 			throw OrlixPTYRuntimeProofError.unselectedVirtioInputWasCleared
 		}
-		OrlixTerminalTransportDiagnostics.clearInput(source: virtio)
+		OrlixPaneTransportDiagnostics.clearInput(source: virtio)
 	}
 
 	private static func enqueueVirtioInputLeakProbe() {
 		let payload = Data("printf '%s\\n' ORLIX_VIRTIO_INPUT_LEAK\r".utf8)
 		guard let frame = OrlixTerminalMuxEncoder.frame(type: 1, payload: payload)
 		else { return }
-		OrlixTerminalTransportDiagnostics.enqueueInput(
-			source: OrlixTerminalTransportDiagnostics.virtioSource,
+		OrlixPaneTransportDiagnostics.enqueueInput(
+			source: OrlixPaneTransportDiagnostics.virtioSource,
 			data: frame
 		)
 	}
