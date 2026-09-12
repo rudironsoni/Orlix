@@ -1,3 +1,5 @@
 # Use absolute paths. This file is optional and is not part of canonical identity.
 build --disk_cache=/Users/you/Library/Caches/Orlix/Bazel/disk-cache/bazel-9.2.0-xcode-17F113
 build --repository_cache=/Users/you/Library/Caches/Orlix/Bazel/repository-cache
+# Optional: add --config=buildbuddy-read or --config=buildbuddy-write plus your
+# private x-buildbuddy-api-key remote header in this untracked file.
