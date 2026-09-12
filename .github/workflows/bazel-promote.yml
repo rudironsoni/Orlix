@@ -88,7 +88,6 @@ jobs:
         timeout-minutes: 20
         env:
           ORLIX_COSIGN_KEY: ${{ secrets.ORLIX_COSIGN_KEY }}
-          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
           ORLIX_COSIGN_KEY_PASSWORD: ${{ secrets.ORLIX_COSIGN_KEY_PASSWORD }}
           ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,6 +107,8 @@ jobs:
           fi
           export ORLIX_COSIGN_KEY="file://${key_path}"
           export COSIGN_PASSWORD="${ORLIX_COSIGN_KEY_PASSWORD}"
+          cosign public-key --key "$key_path" > "$key_path.pub"
+          export ORLIX_COSIGN_PUB="$key_path.pub"
           printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "${GITHUB_ACTOR}" --password-stdin
           make __bazel-publish-${{ inputs.component }}
       - name: Store the verified signed component proposal

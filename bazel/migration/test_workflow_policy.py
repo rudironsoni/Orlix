@@ -110,6 +110,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("Dual-build without action cache", text)
         self.assertNotIn("actions/cache@", text)
         self.assertIn('export ORLIX_COSIGN_KEY="file://${key_path}"', text)
+        self.assertIn('cosign public-key --key "$key_path" > "$key_path.pub"', text)
+        self.assertIn('export ORLIX_COSIGN_PUB="$key_path.pub"', text)
         self.assertIn("ORLIX_COSIGN_KEY_PASSWORD", text)
         self.assertIn("oras login ghcr.io", text)
         self.assertIn("COSIGN_PASSWORD", text)
