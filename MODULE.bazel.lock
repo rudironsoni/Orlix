@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "s5yrB3aSK9f5zCl9boVvfUmOiwlRk5ho7XeGdjAeWMo=",
+        "bzlTransitiveDigest": "Bt00daAeZAR3P3nItNBFNChQ7uYjb9QVp5g8W1F0mpA=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -432,6 +432,9 @@
             "repoRuleId": "@@//bazel/extensions:native_sources.bzl%_archive_repository",
             "attributes": {
               "url": "https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz",
+              "mirror_urls": [
+                "https://download-mirror.savannah.gnu.org/releases/attr/attr-2.5.2.tar.xz"
+              ],
               "sha256": "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b",
               "strip_prefix": "attr-2.5.2",
               "marker": "configure"

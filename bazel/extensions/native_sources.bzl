@@ -313,6 +313,7 @@ def _native_sources_impl(_ctx):
     _archive_repository(
         name = "orlix_attr_source",
         url = "https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz",
+        mirror_urls = ["https://download-mirror.savannah.gnu.org/releases/attr/attr-2.5.2.tar.xz"],
         sha256 = "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b",
         strip_prefix = "attr-2.5.2",
         marker = "configure",
