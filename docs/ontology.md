@@ -3,7 +3,7 @@ type: meta
 tags:
   - documentation
   - ontology
-updated: 2026-07-15
+updated: 2026-09-13
 ---
 
 # Orlix Ontology
@@ -37,6 +37,8 @@ Each work type has `todo/`, `doing/`, and `done/` status folders. A page's `stat
 
 An epic owns the durable outcome and acceptance boundary. A story owns a coherent user-valued increment. A task owns a bounded executable unit. Exact commands, results, failures, evidence identities, and generated next-work selections remain in structured reports under `Build/AgentHarness/`.
 
+The ontology owns durable work decomposition. GitHub native sub-issues and issue dependencies are its operational projection for issue-backed work. Reconciliation reports disagreements and never mutates either graph.
+
 ## Properties
 
 Every non-meta page requires:
@@ -46,6 +48,8 @@ Every non-meta page requires:
 - `updated`: the last meaningful update date in `YYYY-MM-DD` form.
 
 Optional shared properties are `aliases`, `status`, `external_id`, `summary`, and `sources`. `summary` is the stable one-line catalog hook. `sources` contains durable external URLs.
+
+An issue-backed epic, story, or task uses a repository-qualified identifier such as `github:rudironsoni/Orlix#232`. ADR identifiers retain their existing `ADR-xxxx` form.
 
 ## Link Types
 

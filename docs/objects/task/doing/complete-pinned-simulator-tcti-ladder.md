@@ -3,8 +3,9 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-09-10
+updated: 2026-09-13
 status: doing
+external_id: "github:rudironsoni/Orlix#158"
 summary: "Complete the selected TCTI proof ladder through the pinned app-hosted simulator."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"

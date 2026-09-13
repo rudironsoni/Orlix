@@ -1243,3 +1243,10 @@ remain separate. Existing signed identities retain their original format;
 new-format promotion requires independent proof and a new signed proposal.
 Phase 5 source providers expose v2 identities while signed legacy promotion
 remains unchanged until format-aware verification exists.
+
+## [2026-09-13] contract | Project the ontology into GitHub issues
+
+Added repository-qualified GitHub identities to issue-backed TCTI work pages.
+The ontology remains the durable work graph, while native GitHub sub-issues
+and dependencies provide its operational projection. Added read-only checks
+for identity drift and a repository-wide agent leaf frontier.

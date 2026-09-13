@@ -3,8 +3,9 @@ type: story
 tags:
   - story
   - orlix-tcti
-updated: 2026-07-24
+updated: 2026-09-13
 status: doing
+external_id: "github:rudironsoni/Orlix#108"
 summary: "Prove safe TCTI execution through owning kernel, userspace, and app-hosted tests."
 story_of:
   - "[Orlix TCTI](../../epic/doing/orlix-tcti.md)"

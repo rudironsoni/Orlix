@@ -3,8 +3,9 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-24
+updated: 2026-09-13
 status: todo
+external_id: "github:rudironsoni/Orlix#171"
 summary: "Run TCTI product validation on an explicitly authorized physical device."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"

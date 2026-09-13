@@ -3,8 +3,9 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-24
+updated: 2026-09-13
 status: todo
+external_id: "github:rudironsoni/Orlix#172"
 summary: "Promote TCTI only after every owning suite proves the real app-hosted Linux product path."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"

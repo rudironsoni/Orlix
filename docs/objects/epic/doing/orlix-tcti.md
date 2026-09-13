@@ -3,8 +3,9 @@ type: epic
 tags:
   - epic
   - orlix-tcti
-updated: 2026-09-09
+updated: 2026-09-13
 status: doing
+external_id: "github:rudironsoni/Orlix#107"
 summary: "Complete safe, conformant hosted Linux ELF execution through OrlixTCTI."
 targets:
   - "[Orlix](../../product/orlix.md)"

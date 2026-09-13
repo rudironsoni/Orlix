@@ -29,6 +29,7 @@ STATUSES = {
     "product-capability": {"implemented", "partial", "proposed", "retired"},
     "source": {"current", "superseded"},
 }
+GITHUB_WORK_ID = re.compile(r"github:[^/\s]+/[^#\s]+#[1-9][0-9]*")
 INVERSES = {
     "has_story": "story_of",
     "story_of": "has_story",
@@ -47,6 +48,22 @@ HIERARCHY_LINK_TYPES = {
     "has_task": ("story", "task"),
     "task_of": ("task", "story"),
 }
+
+
+def external_id_problems(records: list[tuple[Path, str, str]], root: Path) -> list[str]:
+    problems = []
+    external_ids: dict[str, Path] = {}
+    for path, kind, external_id in records:
+        if external_id in external_ids:
+            problems.append(
+                f"duplicate-external-id {path.relative_to(root)} and "
+                f"{external_ids[external_id].relative_to(root)}: {external_id}"
+            )
+        else:
+            external_ids[external_id] = path
+        if kind in {"epic", "story", "task"} and not GITHUB_WORK_ID.fullmatch(external_id):
+            problems.append(f"bad-work-external-id {path.relative_to(root)}: {external_id!r}")
+    return problems
 
 
 def root_from_args() -> Path:
@@ -104,6 +121,7 @@ def main() -> int:
     page_relations: dict[Path, dict[str, set[Path]]] = {}
     inbound: set[Path] = set()
     slugs: dict[str, Path] = {}
+    external_id_records: list[tuple[Path, str, str]] = []
 
     for path, text in pages.items():
         rel = path.relative_to(root)
@@ -114,10 +132,13 @@ def main() -> int:
                 continue
             kind = scalar(fm, "type")
             status = scalar(fm, "status")
+            external_id = scalar(fm, "external_id")
             if not kind or not scalar(fm, "updated") or "tags" not in keys(fm):
                 problems.append(f"missing-required-property {rel}")
             if kind in STATUSES and status not in STATUSES[kind]:
                 problems.append(f"bad-status {rel}: {status!r}")
+            if external_id:
+                external_id_records.append((path, kind, external_id))
             unknown = keys(fm) - DATA_KEYS - LINK_KEYS
             for key in sorted(unknown):
                 problems.append(f"bad-key {rel}: {key}")
@@ -169,6 +190,8 @@ def main() -> int:
                 problems.append(f"broken-link {rel}: {target}")
             elif resolved in pages:
                 inbound.add(resolved)
+
+    problems.extend(external_id_problems(external_id_records, root))
 
     for path, rels in page_relations.items():
         source_fm = frontmatter(pages[path]) or ""

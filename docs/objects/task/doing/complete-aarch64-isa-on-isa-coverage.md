@@ -3,8 +3,9 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-08-29
+updated: 2026-09-13
 status: doing
+external_id: "github:rudironsoni/Orlix#109"
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"

@@ -3,7 +3,7 @@ type: meta
 tags:
   - documentation
   - agents
-updated: 2026-07-15
+updated: 2026-09-13
 ---
 # Orlix Knowledge Maintenance Protocol
 
@@ -41,6 +41,8 @@ Read this file and [the ontology](ontology.md) before changing Orlix knowledge. 
 - Keep `epic -> story -> task` relationships mirrored with `has_story`/`story_of` and `has_task`/`task_of`.
 - Keep every work page in the folder matching its `todo`, `doing`, or `done` status.
 - Put durable outcomes, acceptance boundaries, and work decomposition in epic, story, and task pages. Keep exact commands, results, failures, and selected next work in structured reports.
+- Keep durable work decomposition in the ontology and mirror issue-backed work through exact `external_id` values and GitHub native relationships. Issue bodies must not duplicate native `Parent`, `Blocked by`, or `Blocks` metadata. Non-gating related references may remain in prose.
+- Treat GitHub native sub-issues and issue dependencies as the operational agent graph. Reconciliation reports drift and must not repair either graph.
 - Update both ends of mirrored hierarchy, `supersedes`, and `amends` relationships.
 - Regenerate `index.md` after page changes and append a concise entry to `log.md` for meaningful knowledge changes.
 
