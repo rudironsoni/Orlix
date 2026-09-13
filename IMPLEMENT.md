@@ -452,9 +452,11 @@ GitHub refused the `github-actions` integration bypass for `main` ruleset `21800
 
 ## 2026-09-13 Agentic engineering system repair
 
-The output inventory now consumes bounded RuleSync 16.26.1 machine-readable generation results for each target and feature. The Orlix validator rejects output outside the four configured client destinations, binds each mixed-ownership `.github` destination to its exact RuleSync feature, and keeps workflows, actions, and issue templates outside generated protection. Source-validation CI uploads the inventory and capability reports as structured evidence.
+The output inventory now inspects isolated RuleSync 16.26.1 output for each target and feature. The Orlix validator rejects output outside the four configured client destinations, binds each mixed-ownership `.github` destination to its exact RuleSync feature, and keeps workflows, actions, and issue templates outside generated protection. Source-validation CI uploads the inventory and capability reports as structured evidence.
 
 The first real `origin/main...HEAD` guard run failed because `origin/main` predates `.rulesync/VERSION`; the temporary base snapshot had no version pin. Base and head snapshots now receive the current 16.26.1 pin before RuleSync derives ownership. The repeated real guard passed.
+
+GitHub source-validation runs `34769153172` and `34769445793` exposed malformed RuleSync 16.26.1 JSON generation output. The second run identified `cursor/skills` at byte `884730`. Inventory now uses RuleSync's isolated generated output tree instead of parsing that broken JSON surface.
 
 Lifecycle enforcement now rejects stale task envelopes before mutation, subagent launch, and completion proof. It recognizes the repository's required `git -C` command shape, blocks the banned history-changing Git operations, and applies the existing physical-device and signing gates to XcodeBuildMCP device tools. Post-tool state treats only explicit errors and failed exit statuses as failures.
 

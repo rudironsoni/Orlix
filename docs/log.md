@@ -1255,4 +1255,4 @@ for identity drift and a repository-wide agent leaf frontier.
 
 RuleSync owns portable coding-agent configuration and target generation. Orlix owns ontology-driven task context, semantic task scope, workflow state, proof requirements, and Orlix-specific hook behavior. GitHub CI owns generated-output enforcement and authoritative RuleSync regeneration.
 
-RuleSync's machine-readable generation results own the output inventory. Orlix validates them against the configured client destinations and the feature-specific `.github` boundary.
+RuleSync's isolated generated output owns the output inventory. Orlix validates it against the configured client destinations and the feature-specific `.github` boundary.

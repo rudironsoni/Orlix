@@ -127,7 +127,6 @@ def generate(root: Path, target: str) -> tuple[dict[str, dict[str, str]], list[s
             result = run(
                 [
                     "rulesync",
-                    "--json",
                     "generate",
                     "--config",
                     str(root / "rulesync.jsonc"),
@@ -142,21 +141,16 @@ def generate(root: Path, target: str) -> tuple[dict[str, dict[str, str]], list[s
                 ],
                 root,
             )
-            try:
-                document = json.loads(result.stdout)
-            except json.JSONDecodeError as error:
-                raise ValueError(f"invalid RuleSync JSON for {target}/{feature}: {error}") from None
-            if document.get("success") is not True or document.get("version") != pinned_version(root):
-                raise ValueError(f"invalid RuleSync generation result for {target}/{feature}")
-            generated = document.get("data", {}).get("features", {})
-            paths = generated.get(feature, {}).get("paths", [])
-            if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
-                raise ValueError(f"invalid RuleSync {feature} inventory for {target}")
             files[feature] = {
-                path: (output / path).read_text(encoding="utf-8", errors="replace")
-                for path in paths
+                path.relative_to(output).as_posix(): path.read_text(encoding="utf-8", errors="replace")
+                for path in output.rglob("*")
+                if path.is_file()
             }
-            warnings.extend(document.get("warnings", []))
+            warnings.extend(
+                line.strip()
+                for line in result.stderr.splitlines()
+                if "warn" in line.lower() or "skip" in line.lower()
+            )
     return files, warnings
 
 
