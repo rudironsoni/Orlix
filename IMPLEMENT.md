@@ -452,7 +452,7 @@ GitHub refused the `github-actions` integration bypass for `main` ruleset `21800
 
 ## 2026-09-13 Agentic engineering system repair
 
-The output inventory now consumes RuleSync 16.26.1's machine-readable generation result once per target. The Orlix validator rejects output outside the four configured client destinations, binds each mixed-ownership `.github` destination to its exact RuleSync feature, and keeps workflows, actions, and issue templates outside generated protection. Source-validation CI uploads the inventory and capability reports as structured evidence.
+The output inventory now consumes bounded RuleSync 16.26.1 machine-readable generation results for each target and feature. The Orlix validator rejects output outside the four configured client destinations, binds each mixed-ownership `.github` destination to its exact RuleSync feature, and keeps workflows, actions, and issue templates outside generated protection. Source-validation CI uploads the inventory and capability reports as structured evidence.
 
 The first real `origin/main...HEAD` guard run failed because `origin/main` predates `.rulesync/VERSION`; the temporary base snapshot had no version pin. Base and head snapshots now receive the current 16.26.1 pin before RuleSync derives ownership. The repeated real guard passed.
 

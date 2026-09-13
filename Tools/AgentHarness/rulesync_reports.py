@@ -119,30 +119,36 @@ def config(root: Path) -> dict:
 
 
 def generate(root: Path, target: str) -> tuple[dict[str, dict[str, str]], list[str]]:
-    with tempfile.TemporaryDirectory(prefix="orlix-rulesync-output-") as directory:
-        output = Path(directory)
-        result = run(
-            [
-                "rulesync",
-                "--json",
-                "generate",
-                "--config",
-                str(root / "rulesync.jsonc"),
-                "--input-roots",
-                str(root / ".rulesync"),
-                "--output-roots",
-                str(output),
-                "--targets",
-                target,
-            ],
-            root,
-        )
-        document = json.loads(result.stdout)
-        if document.get("success") is not True or document.get("version") != pinned_version(root):
-            raise ValueError(f"invalid RuleSync generation result for {target}")
-        generated = document.get("data", {}).get("features", {})
-        files: dict[str, dict[str, str]] = {}
-        for feature in FEATURES:
+    files: dict[str, dict[str, str]] = {}
+    warnings = []
+    for feature in FEATURES:
+        with tempfile.TemporaryDirectory(prefix="orlix-rulesync-output-") as directory:
+            output = Path(directory)
+            result = run(
+                [
+                    "rulesync",
+                    "--json",
+                    "generate",
+                    "--config",
+                    str(root / "rulesync.jsonc"),
+                    "--input-roots",
+                    str(root / ".rulesync"),
+                    "--output-roots",
+                    str(output),
+                    "--targets",
+                    target,
+                    "--features",
+                    feature,
+                ],
+                root,
+            )
+            try:
+                document = json.loads(result.stdout)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"invalid RuleSync JSON for {target}/{feature}: {error}") from None
+            if document.get("success") is not True or document.get("version") != pinned_version(root):
+                raise ValueError(f"invalid RuleSync generation result for {target}/{feature}")
+            generated = document.get("data", {}).get("features", {})
             paths = generated.get(feature, {}).get("paths", [])
             if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
                 raise ValueError(f"invalid RuleSync {feature} inventory for {target}")
@@ -150,7 +156,8 @@ def generate(root: Path, target: str) -> tuple[dict[str, dict[str, str]], list[s
                 path: (output / path).read_text(encoding="utf-8", errors="replace")
                 for path in paths
             }
-        return files, document.get("warnings", [])
+            warnings.extend(document.get("warnings", []))
+    return files, warnings
 
 
 def inventory(root: Path) -> tuple[list[dict], dict[tuple[str, str], dict[str, str]], list[str]]:
