@@ -23,9 +23,18 @@
     "sweetpad.build.xcodeWorkspacePath": "Orlix.xcodeproj/project.xcworkspace",
     "sweetpad.buildServer.provider": "xcode-build-server",
     "chat.tools.terminal.autoApprove": {
-        "xcodebuild": true,
-        "xcode-build-server": true,
-        "xcode-select": true,
-        "xcrun": true
+        "rm -rf *": false,
+        "git clean *": false,
+        "git reset --hard *": false,
+        "git restore *": false
+    },
+    "chat.tools.edits.autoApprove": {
+        ".env": false,
+        ".env.*": false,
+        "secrets.env": false,
+        ".agents/**": false,
+        ".claude/**": false,
+        ".codex/**": false,
+        ".cursor/**": false
     }
 }

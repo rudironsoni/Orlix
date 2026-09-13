@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(secrets.env)",
+      "Shell(git clean *)",
+      "Shell(git reset --hard *)",
+      "Shell(git restore *)",
+      "Shell(rm -rf *)",
+      "Write(.agents/**)",
+      "Write(.claude/**)",
+      "Write(.codex/**)",
+      "Write(.cursor/**)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Write(secrets.env)"
+    ]
+  }
+}

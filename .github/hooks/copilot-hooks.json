@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.pre_tool_use",
+        "timeoutSec": 30
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.post_tool_use",
+        "timeoutSec": 30
+      }
+    ],
+    "subagentStart": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.subagent_start",
+        "timeoutSec": 30
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.subagent_stop",
+        "timeoutSec": 30
+      }
+    ],
+    "preCompact": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.pre_compact",
+        "timeoutSec": 30
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "command": "python3 -m Tools.AgentHarness.hooks.stop",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

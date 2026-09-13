@@ -1,0 +1,3 @@
+dependencies:
+  subagents:
+    - .rulesync/subagents/tcti-llvm-inspector.md
