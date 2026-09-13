@@ -51,7 +51,7 @@ jobs:
           source_sha="$GITHUB_SHA"
           branch="automation/rulesync-${source_sha}"
           version="$(tr -d '[:space:]' < .rulesync/VERSION)"
-          existing="$(gh pr list --repo rudironsoni/Orlix --head "$branch" --base main --state all --json number,state --jq '.[0] | [.number, .state] | @tsv')"
+          existing="$(gh pr list --repo rudironsoni/Orlix --head "$branch" --base main --state all --json number,state --jq 'if length == 0 then empty else .[0] | [.number, .state] | @tsv end')"
           if [ -n "$existing" ]; then
             IFS=$'\t' read -r existing_pr existing_state <<< "$existing"
             if [ "$existing_state" = "MERGED" ]; then
