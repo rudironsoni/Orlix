@@ -19,6 +19,17 @@ LINK_KEYS = {
     "applies", "derived_from", "supersedes", "superseded_by", "amends", "amended_by", "relates_to",
 }
 DATA_KEYS = {"type", "tags", "aliases", "updated", "status", "external_id", "sources", "summary"}
+TASK_DATA_KEYS = {
+    "context_paths",
+    "owned_paths",
+    "read_only_paths",
+    "forbidden_paths",
+    "required_skills",
+    "required_role",
+    "required_proof",
+    "build_intents",
+    "verification_intents",
+}
 STATUSES = {
     "product": {"active", "retired"},
     "software-component": {"active", "retired"},
@@ -139,7 +150,7 @@ def main() -> int:
                 problems.append(f"bad-status {rel}: {status!r}")
             if external_id:
                 external_id_records.append((path, kind, external_id))
-            unknown = keys(fm) - DATA_KEYS - LINK_KEYS
+            unknown = keys(fm) - DATA_KEYS - LINK_KEYS - (TASK_DATA_KEYS if kind == "task" else set())
             for key in sorted(unknown):
                 problems.append(f"bad-key {rel}: {key}")
             expected_kind = rel.parts[1] if rel.parts[0] == "objects" and len(rel.parts) > 2 else rel.parts[0].removesuffix("s")

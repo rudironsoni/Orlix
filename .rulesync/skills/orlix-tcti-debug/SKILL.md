@@ -9,7 +9,7 @@ targets:
 codexcli:
   dependencies:
     subagents:
-      - .codex/subagents/tcti-llvm-inspector.md
+      - .rulesync/subagents/tcti-llvm-inspector.md
 mcp_servers:
   - lldb
   - context7

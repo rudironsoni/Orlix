@@ -1,0 +1,52 @@
+name: RuleSync source validation
+
+on:
+  pull_request:
+    paths:
+      - '.rulesync/**'
+      - 'rulesync.jsonc'
+      - 'Tools/AgentHarness/rulesync_reports.py'
+      - 'Makefile'
+      - '.github/workflows/rulesync-validate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.rulesync/**'
+      - 'rulesync.jsonc'
+      - 'Tools/AgentHarness/rulesync_reports.py'
+      - 'Makefile'
+      - '.github/workflows/rulesync-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned RuleSync
+        run: |
+          version="$(tr -d '[:space:]' < .rulesync/VERSION)"
+          curl -fsSL "https://github.com/dyoshikawa/rulesync/releases/download/v${version}/rulesync-linux-x64" -o "$RUNNER_TEMP/rulesync"
+          printf '%s  %s\n' a31f7861d70a1092748108a7b494c0f7c845166e7495b51b7e032a200bf07dea "$RUNNER_TEMP/rulesync" | sha256sum --check -
+          chmod +x "$RUNNER_TEMP/rulesync"
+          test "$("$RUNNER_TEMP/rulesync" --version)" = "$version"
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Validate canonical source
+        run: rulesync doctor
+      - name: Generate in isolated state
+        run: rulesync generate --output-roots "$RUNNER_TEMP/generated"
+      - name: Validate reports and source write set
+        run: |
+          make agent-rules-inventory agent-capabilities
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Upload RuleSync reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rulesync-reports-${{ github.sha }}
+          path: Build/AgentHarness/rulesync/
+          if-no-files-found: error

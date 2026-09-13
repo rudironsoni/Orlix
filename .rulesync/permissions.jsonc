@@ -1,0 +1,25 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/permissions-schema.json",
+  "permission": {
+    "bash": {
+      "rm -rf *": "deny",
+      "git clean *": "deny",
+      "git reset --hard *": "deny",
+      "git restore *": "deny"
+    },
+    "read": { ".env": "deny", ".env.*": "deny", "secrets.env": "deny" },
+    "edit": {
+      ".env": "deny", ".env.*": "deny", "secrets.env": "deny",
+      ".agents/**": "deny", ".claude/**": "deny", ".codex/**": "deny", ".cursor/**": "deny"
+    },
+    "write": {
+      ".env": "deny", ".env.*": "deny", "secrets.env": "deny",
+      ".agents/**": "deny", ".claude/**": "deny", ".codex/**": "deny", ".cursor/**": "deny"
+    }
+  },
+  "codexcli": {
+    "approval_policy": "on-request",
+    "approvals_reviewer": "auto_review",
+    "base_permission_profile": ":workspace"
+  }
+}
