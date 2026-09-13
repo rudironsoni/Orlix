@@ -50,8 +50,13 @@ def passed(records: object, requirement: str, current: str) -> bool:
 
 
 def validate_completion(root: Path, envelope: dict | None = None, evidence: dict | None = None) -> list[str]:
-    envelope = envelope or active_envelope(root)
-    evidence = evidence or proof_state(root)
+    if envelope is None:
+        envelope = active_envelope(root)
+        from .task_envelope import validate_envelope
+
+        validate_envelope(root, envelope, current_revision=True)
+    if evidence is None:
+        evidence = proof_state(root)
     current = revision(root)
     failures = [str(failure) for failure in evidence.get("known_failures", [])]
     resolved = set(evidence.get("resolved_failure_ids", []))

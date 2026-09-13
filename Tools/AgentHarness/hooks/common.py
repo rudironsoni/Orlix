@@ -36,14 +36,27 @@ GENERATED_FILES = {
     "CLAUDE.md",
 }
 PATCH_PATH = re.compile(r"^\*\*\* (?:Add|Delete|Update) File: (.+)$", re.MULTILINE)
+GIT = r"git(?:\s+-C\s+(?:\"[^\"]*\"|'[^']*'|\S+))*\s+"
 DESTRUCTIVE = re.compile(
-    r"(?:^|[;&|]\s*)(?:sudo\s+)?rm\s|git\s+(?:clean|reset\s+--hard|restore|checkout\s+--)\b"
+    r"(?:^|[;&|]\s*)(?:sudo\s+)?rm\s"
+    rf"|{GIT}(?:clean|reset\s+--hard|restore|checkout\s+--|revert|merge)\b"
+    rf"|{GIT}commit\b[^;&|]*\s--amend\b"
+    rf"|{GIT}push\b[^;&|]*(?:--force(?:-with-lease)?|-f\b|--delete\b)"
 )
-PHYSICAL = re.compile(r"\b(?:devicectl|ios-deploy|iphoneos)\b|generic/platform=iOS(?:[,\s]|$)")
-SIGNING = re.compile(r"\b(?:beta-(?:archive|export|upload)|app-store)\b|xcodebuild\s+archive\b|-exportArchive")
+PHYSICAL = re.compile(
+    r"\b(?:devicectl|ios-deploy|iphoneos)\b|generic/platform=iOS(?:[,\s]|$)|xcodebuildmcp\s+device\b"
+)
+PHYSICAL_TOOL = re.compile(r"(?:^|[_:/.-])device(?:[_:/.-]|$)")
+SIGNING = re.compile(
+    r"\b(?:beta-(?:archive|export|upload)|app-store)\b|xcodebuild\s+archive\b|-exportArchive"
+    r"|xcodebuildmcp\s+device\s+(?:build|build-and-run|install|launch|test)\b"
+)
+SIGNING_TOOL = re.compile(
+    r"(?:^|[_:/.-])device(?:[_:/.-])(?:build|build-and-run|install|launch|test)(?:[_:/.-]|$)"
+)
 MUTATING_SHELL = re.compile(
     r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:cp|install|mkdir|mv|rm|rmdir|sed\s+-i|touch|truncate)\b"
-    r"|(?:^|[;&|]\s*)git\s+(?:add|commit|merge|push|rebase|tag)\b"
+    rf"|(?:^|[;&|]\s*){GIT}(?:add|commit|merge|push|rebase|tag)\b"
     r"|(?:^|[;&|]\s*)(?:g?make|xcodebuild)\b"
     r"|(?:^|[;&|]\s*)bazel\s+(?:build|clean|run|test)\b|(?:^|[^<])>{1,2}(?!>)"
 )
@@ -148,6 +161,17 @@ def shell_write_paths(value: str, root: Path) -> set[str]:
         else:
             segments[-1].append(token)
     for segment in segments:
+        if segment and segment[0] == "git":
+            index = 1
+            while index < len(segment) and segment[index] == "-C":
+                index += 2
+            if index < len(segment) and segment[index] == "add":
+                found.update(
+                    repository_path(root, path)
+                    for path in segment[index + 1:]
+                    if not path.startswith("-") and "$" not in path
+                )
+            continue
         words = [token for token in segment if not token.startswith("-") and "$" not in token]
         if not words:
             continue
@@ -159,8 +183,6 @@ def shell_write_paths(value: str, root: Path) -> set[str]:
             found.add(repository_path(root, words[-1]))
         if words[0] in {"mkdir", "rm", "rmdir", "touch", "truncate"}:
             found.update(repository_path(root, path) for path in words[1:])
-        if words[:2] == ["git", "add"]:
-            found.update(repository_path(root, path) for path in words[2:])
     return found
 
 
@@ -196,7 +218,11 @@ def envelope_bootstrap(value: str) -> bool:
 
 def require_envelope(root: Path) -> dict:
     try:
-        return active_envelope(root)
+        envelope = active_envelope(root)
+        from ..task_envelope import validate_envelope
+
+        validate_envelope(root, envelope, current_revision=True)
+        return envelope
     except ValueError as error:
         raise HookBlocked(f"active task envelope required before mutation: {error}") from None
 
@@ -227,6 +253,14 @@ def enforce_command_prerequisites(root: Path, value: str) -> None:
     if PHYSICAL.search(value):
         gate(root, "physical_device_allowed")
     if SIGNING.search(value):
+        gate(root, "signing_allowed")
+
+
+def enforce_tool_prerequisites(root: Path, payload: dict) -> None:
+    name = tool_name(payload)
+    if PHYSICAL_TOOL.search(name):
+        gate(root, "physical_device_allowed")
+    if SIGNING_TOOL.search(name):
         gate(root, "signing_allowed")
 
 

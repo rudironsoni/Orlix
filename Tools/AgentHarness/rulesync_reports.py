@@ -16,7 +16,21 @@ from .state import write_json
 FEATURES = ("rules", "mcp", "subagents", "skills", "hooks", "permissions")
 PROTECTED_GITHUB_FEATURES = {"skills", "hooks", "subagents", "permissions", "mcp"}
 COMPLETE_DESTINATIONS = (".agents/", ".claude/", ".codex/", ".cursor/")
-SOURCE_FILES = {"rulesync.jsonc", ".rulesync/VERSION"}
+AUTHORIZED_GITHUB_ROOTS = {
+    ".github/agents/": "subagents",
+    ".github/hooks/": "hooks",
+    ".github/mcp/": "mcp",
+    ".github/permissions/": "permissions",
+    ".github/skills/": "skills",
+}
+AUTHORIZED_FILES = {
+    ".github/copilot-instructions.md": "rules",
+    ".mcp.json": "mcp",
+    ".vscode/mcp.json": "mcp",
+    ".vscode/settings.json": "permissions",
+    "AGENTS.md": "rules",
+    "CLAUDE.md": "rules",
+}
 LIFECYCLE = {
     "preToolUse": "Tools.AgentHarness.hooks.pre_tool_use",
     "permissionRequest": "Tools.AgentHarness.hooks.permission_request",
@@ -104,21 +118,13 @@ def config(root: Path) -> dict:
     return jsonc((root / "rulesync.jsonc").read_text(encoding="utf-8"))
 
 
-def configured_features(value: dict) -> list[str]:
-    features = value.get("features", [])
-    if isinstance(features, list):
-        return [feature for feature in features if feature in FEATURES]
-    if isinstance(features, dict):
-        return [feature for feature in FEATURES if any(feature in block for block in features.values() if isinstance(block, dict))]
-    raise ValueError("rulesync features must be a list or object")
-
-
-def generate(root: Path, target: str, feature: str) -> tuple[dict[str, str], list[str]]:
+def generate(root: Path, target: str) -> tuple[dict[str, dict[str, str]], list[str]]:
     with tempfile.TemporaryDirectory(prefix="orlix-rulesync-output-") as directory:
         output = Path(directory)
         result = run(
             [
                 "rulesync",
+                "--json",
                 "generate",
                 "--config",
                 str(root / "rulesync.jsonc"),
@@ -128,18 +134,23 @@ def generate(root: Path, target: str, feature: str) -> tuple[dict[str, str], lis
                 str(output),
                 "--targets",
                 target,
-                "--features",
-                feature,
             ],
             root,
         )
-        files = {
-            path.relative_to(output).as_posix(): path.read_text(encoding="utf-8", errors="replace")
-            for path in output.rglob("*")
-            if path.is_file()
-        }
-        warnings = [line.strip() for line in result.stderr.splitlines() if "warn" in line.lower() or "skip" in line.lower()]
-        return files, warnings
+        document = json.loads(result.stdout)
+        if document.get("success") is not True or document.get("version") != pinned_version(root):
+            raise ValueError(f"invalid RuleSync generation result for {target}")
+        generated = document.get("data", {}).get("features", {})
+        files: dict[str, dict[str, str]] = {}
+        for feature in FEATURES:
+            paths = generated.get(feature, {}).get("paths", [])
+            if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
+                raise ValueError(f"invalid RuleSync {feature} inventory for {target}")
+            files[feature] = {
+                path: (output / path).read_text(encoding="utf-8", errors="replace")
+                for path in paths
+            }
+        return files, document.get("warnings", [])
 
 
 def inventory(root: Path) -> tuple[list[dict], dict[tuple[str, str], dict[str, str]], list[str]]:
@@ -154,10 +165,10 @@ def inventory(root: Path) -> tuple[list[dict], dict[tuple[str, str], dict[str, s
     outputs: dict[tuple[str, str], dict[str, str]] = {}
     warnings = []
     for target in targets:
-        for feature in configured_features(settings):
-            files, pair_warnings = generate(root, target, feature)
+        generated, target_warnings = generate(root, target)
+        warnings.extend(f"{target}: {warning}" for warning in target_warnings)
+        for feature, files in generated.items():
             outputs[target, feature] = files
-            warnings.extend(f"{target}/{feature}: {warning}" for warning in pair_warnings)
             for path in sorted(files):
                 parts = Path(path).parts
                 destination = path
@@ -171,7 +182,23 @@ def inventory(root: Path) -> tuple[list[dict], dict[tuple[str, str], dict[str, s
                         "generated_destination_root": destination,
                     }
                 )
+    validate_inventory(records)
     return records, outputs, sorted(set(warnings))
+
+
+def validate_inventory(records: list[dict]) -> None:
+    invalid = sorted(
+        record["generated_path"]
+        for record in records
+        if AUTHORIZED_FILES.get(record["generated_path"]) != record["feature"]
+        and not any(record["generated_path"].startswith(root) for root in COMPLETE_DESTINATIONS)
+        and not any(
+            record["generated_path"].startswith(root) and record["feature"] == feature
+            for root, feature in AUTHORIZED_GITHUB_ROOTS.items()
+        )
+    )
+    if invalid:
+        raise ValueError("RuleSync generated outside authorized destinations:\n" + "\n".join(invalid))
 
 
 def inventory_report(root: Path) -> dict:
@@ -214,6 +241,7 @@ def capability_report(root: Path) -> dict:
             "role_specific_tool_restrictions": "native" if native_restriction else "instruction-only" if "subagents" in generated else "unsupported",
             "role_specific_write_restrictions": "native" if native_restriction else "instruction-only" if "subagents" in generated else "unsupported",
             "role_specific_MCP_restrictions": "instruction-only" if "subagents" in generated else "unsupported",
+            "subagent_concurrency": "instruction-only",
             "approval_policy": "native" if "approval_policy" in subagent_text or "permissionMode:" in subagent_text else "instruction-only",
             "sandbox_restrictions": "native" if "sandbox_mode" in subagent_text or "readonly: true" in subagent_text else "instruction-only",
             "lifecycle_events": {
@@ -227,7 +255,7 @@ def capability_report(root: Path) -> dict:
         "project_subagent_concurrency": {
             "classification": "instruction-only",
             "maximum": 4,
-            "reason": "RuleSync 16.26.1 skips the Codex max_concurrent_threads_per_session key",
+            "reason": "RuleSync 16.26.1 skips the Codex agents table",
         },
         "targets": targets,
         "warnings": warnings,
@@ -264,6 +292,9 @@ def revision_inventory(repo: Path, revision: str) -> list[dict]:
         extract_revision(repo, revision, source)
         if not (source / "rulesync.jsonc").is_file():
             return []
+        version = source / ".rulesync" / "VERSION"
+        version.parent.mkdir(parents=True, exist_ok=True)
+        version.write_text(pinned_version(repo) + "\n", encoding="utf-8")
         return inventory(source)[0]
 
 
@@ -308,6 +339,7 @@ def protected(records: list[dict]) -> tuple[set[str], set[str]]:
 
 
 def authorized(records: list[dict]) -> tuple[set[str], set[str]]:
+    validate_inventory(records)
     exact = {record["generated_path"] for record in records}
     roots = {root for root in COMPLETE_DESTINATIONS if any(path.startswith(root) for path in exact)}
     return exact, roots

@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from Tools.AgentHarness.rulesync_reports import paths_from_name_status, reject, validate_generated_write_paths
+from Tools.AgentHarness.rulesync_reports import (
+    paths_from_name_status,
+    reject,
+    revision_inventory,
+    validate_generated_write_paths,
+    validate_inventory,
+)
 
 
 def record(path: str, feature: str = "skills") -> dict:
@@ -11,6 +19,23 @@ def record(path: str, feature: str = "skills") -> dict:
 
 
 class RuleSyncGuardTests(unittest.TestCase):
+    def test_revision_inventory_uses_current_pin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def extract(_repo, _revision, destination):
+                (destination / ".rulesync").mkdir()
+                (destination / "rulesync.jsonc").write_text("{}\n", encoding="utf-8")
+
+            def inspect(source):
+                self.assertEqual((source / ".rulesync" / "VERSION").read_text(encoding="utf-8"), "16.26.1\n")
+                return ([record("AGENTS.md", "rules")], {}, [])
+
+            with patch("Tools.AgentHarness.rulesync_reports.extract_revision", side_effect=extract), patch(
+                "Tools.AgentHarness.rulesync_reports.pinned_version", return_value="16.26.1"
+            ), patch("Tools.AgentHarness.rulesync_reports.inventory", side_effect=inspect):
+                self.assertEqual(revision_inventory(root, "base"), [record("AGENTS.md", "rules")])
+
     def test_protected_destinations_and_github_exception(self):
         records = [
             record(".codex/config.toml", "permissions"),
@@ -55,6 +80,10 @@ class RuleSyncGuardTests(unittest.TestCase):
         validate_generated_write_paths({".codex/config.toml"}, [record(".codex/config.toml", "permissions")])
         with self.assertRaises(ValueError):
             validate_generated_write_paths({"unexpected.txt"}, [record(".codex/config.toml", "permissions")])
+        with self.assertRaisesRegex(ValueError, "outside authorized destinations"):
+            validate_inventory([record("unexpected.txt")])
+        with self.assertRaisesRegex(ValueError, "outside authorized destinations"):
+            validate_inventory([record(".github/skills/a/SKILL.md", "rules")])
 
     def test_workflow_contracts(self):
         root = Path(__file__).resolve().parents[3]
@@ -65,6 +94,7 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertIn('BASE="${{ github.event.pull_request.base.sha }}"', guard)
         self.assertIn('HEAD="${{ github.event.pull_request.head.sha }}"', guard)
         self.assertIn('rulesync generate --output-roots "$RUNNER_TEMP/generated"', validate)
+        self.assertIn("Build/AgentHarness/rulesync/", validate)
         self.assertIn("rulesync generate", generate)
         self.assertIn("make agent-rules-validate-write-set", generate)
         self.assertIn("git diff --cached --quiet", generate)

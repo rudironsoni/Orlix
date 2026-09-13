@@ -1254,3 +1254,5 @@ for identity drift and a repository-wide agent leaf frontier.
 ## [2026-09-13] contract | Implement the Orlix agentic engineering system
 
 RuleSync owns portable coding-agent configuration and target generation. Orlix owns ontology-driven task context, semantic task scope, workflow state, proof requirements, and Orlix-specific hook behavior. GitHub CI owns generated-output enforcement and authoritative RuleSync regeneration.
+
+RuleSync's machine-readable generation result owns the output inventory. Orlix validates that result against the configured client destinations and the feature-specific `.github` boundary.

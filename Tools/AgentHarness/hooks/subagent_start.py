@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from .common import read_payload, repository_root
-from ..state import active_envelope, agent_root, record_event, write_json
+from .common import read_payload, repository_root, require_envelope
+from ..state import agent_root, record_event, write_json
 
 
 def main() -> int:
     payload = read_payload()
     root = repository_root()
-    envelope = active_envelope(root)
+    envelope = require_envelope(root)
     packet = {
         "task": envelope["task"],
         "role": payload.get("role") or envelope["required_role"],

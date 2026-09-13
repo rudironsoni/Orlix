@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from Tools.AgentHarness import proof, state
-from Tools.AgentHarness.hooks import common, pre_tool_use
+from Tools.AgentHarness.hooks import common, post_tool_use, pre_tool_use
 
 
 class HooksStateProofTests(unittest.TestCase):
@@ -22,6 +22,17 @@ class HooksStateProofTests(unittest.TestCase):
         for path in ("other/main.py", "src/vendor/a.py", "src/private/a.py", ".codex/config.toml"):
             with self.assertRaises(common.HookBlocked):
                 common.enforce_paths({path}, envelope)
+        for command in (
+            "git merge main",
+            "git -C /tmp/repository merge main",
+            "git commit --amend",
+            "git push --force",
+            "git revert HEAD",
+        ):
+            with self.assertRaises(common.HookBlocked):
+                common.enforce_command_prerequisites(Path.cwd(), command)
+        self.assertTrue(common.mutation({"tool_name": "exec_command", "tool_input": {"cmd": "git -C /tmp/repository add file"}}))
+        self.assertIn("file", common.shell_write_paths("git -C . add file", Path.cwd()))
 
     def test_pre_tool_hook_requires_current_envelope(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -31,6 +42,14 @@ class HooksStateProofTests(unittest.TestCase):
                 pre_tool_use.run({"tool_name": "exec_command", "tool_input": {"cmd": "make agent-task-envelope TASK=a"}})
                 with self.assertRaises(common.HookBlocked):
                     pre_tool_use.run({"tool_name": "write", "tool_input": {"path": "src/a.py"}})
+
+    def test_post_tool_status_only_marks_real_failures(self):
+        self.assertFalse(post_tool_use.failed({"status": "completed"}))
+        self.assertFalse(post_tool_use.failed({"exit_code": 0}))
+        self.assertTrue(post_tool_use.failed({"exit_code": 1}))
+        self.assertTrue(post_tool_use.failed({"exit_code": "1"}))
+        for status in ("error", "failed", "failure", "cancelled", "timed_out"):
+            self.assertTrue(post_tool_use.failed({"status": status}))
 
     def test_continuation_and_proof(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -89,12 +108,25 @@ class HooksStateProofTests(unittest.TestCase):
                 with self.assertRaises(common.HookBlocked):
                     common.gate(root, "physical_device_allowed")
                 with self.assertRaises(common.HookBlocked):
+                    common.enforce_tool_prerequisites(root, {"tool_name": "mcp__xcodebuildmcp__device_build"})
+                with self.assertRaises(common.HookBlocked):
                     common.gate(root, "signing_allowed")
+                state.write_json(
+                    state.agent_root(root).parent / "orlix-tcti" / "status.json",
+                    {
+                        "git_sha": proof.revision(root),
+                        "physical_device_allowed": True,
+                        "simulator_ladder_current": True,
+                    },
+                )
+                with self.assertRaises(common.HookBlocked):
+                    common.enforce_tool_prerequisites(root, {"tool_name": "mcp__xcodebuildmcp__device_build"})
                 state.write_json(
                     state.agent_root(root) / "gates.json",
                     {"signing_allowed": True, "signing_allowed_revision": proof.revision(root)},
                 )
                 common.gate(root, "signing_allowed")
+                common.enforce_tool_prerequisites(root, {"tool_name": "mcp__xcodebuildmcp__device_build"})
 
 
 if __name__ == "__main__":

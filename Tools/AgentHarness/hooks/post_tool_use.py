@@ -17,11 +17,25 @@ def first(payload: dict, *keys: str):
     return None
 
 
+def failed(payload: dict) -> bool:
+    result = first(payload, "exit_code", "exitCode", "status")
+    explicit = first(payload, "is_error", "isError", "failed")
+    return explicit is True or (
+        isinstance(result, int) and result != 0
+    ) or (
+        isinstance(result, str)
+        and (
+            result.lower() in {"error", "failed", "failure", "cancelled", "timed_out"}
+            or result.lstrip("-").isdigit() and int(result) != 0
+        )
+    )
+
+
 def main() -> int:
     payload = read_payload()
     root = repository_root()
     result = first(payload, "exit_code", "exitCode", "status")
-    failure = bool(first(payload, "is_error", "isError", "failed")) or result not in (None, 0, "0", "success", "passed")
+    failure = failed(payload)
     details = {
         "task": active_envelope(root).get("task"),
         "tool": tool_name(payload),

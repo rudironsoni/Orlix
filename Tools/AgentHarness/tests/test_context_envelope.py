@@ -65,6 +65,10 @@ class ContextEnvelopeTests(unittest.TestCase):
             envelope["sandbox_mode"] = "read-only"
             with self.assertRaisesRegex(ValueError, "native client configuration"):
                 validate_envelope(root, envelope)
+            envelope.pop("sandbox_mode")
+            envelope["repository_revision"] = "stale"
+            with self.assertRaisesRegex(ValueError, "repository revision is stale"):
+                validate_envelope(root, envelope, current_revision=True)
 
 
 if __name__ == "__main__":

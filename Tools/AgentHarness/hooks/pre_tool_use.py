@@ -6,6 +6,7 @@ from .common import (
     command_identity,
     direct_paths,
     enforce_command_prerequisites,
+    enforce_tool_prerequisites,
     enforce_paths,
     envelope_bootstrap,
     exit_blocked,
@@ -24,6 +25,7 @@ def run(payload: dict) -> None:
     restore_continuation(root)
     value = command(payload)
     enforce_command_prerequisites(root, value)
+    enforce_tool_prerequisites(root, payload)
     mutates = mutation(payload)
     paths = direct_paths(payload, root) if mutates else set()
     if mutates and tool_name(payload) in SHELL_TOOLS:

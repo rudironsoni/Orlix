@@ -1,6 +1,6 @@
 # Apple procedure
 
-Use the task envelope's Make targets for simulator builds, simulator tests, XCTest, archives, exports, TestFlight, and App Store validation. Use Xcode IDE or XcodeBuildMCP only for interactive or stateful diagnosis. Use the XcodeBuildMCP CLI for `doctor`, project scaffolding, one-off discovery, package inspection, and utilities.
+Use the task envelope's Make targets for simulator builds, simulator tests, XCTest, archives, exports, TestFlight, and App Store validation. Use Xcode IDE or XcodeBuildMCP only for interactive or stateful diagnosis. Use the XcodeBuildMCP CLI for project scaffolding, one-off discovery, package inspection, and utilities. Use `doctor` only when the installed CLI lists it; otherwise report that operation as unavailable.
 
 Treat each result separately:
 
