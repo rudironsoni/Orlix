@@ -1,3 +1,0 @@
-dependencies:
-  subagents:
-    - .codex/subagents/tcti-llvm-inspector.md
