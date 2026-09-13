@@ -358,21 +358,13 @@ __bazel-lock-proposal: __bazel-version-check
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "lock proposal mutated artifacts.lock.json" >&2; exit 1; }
 
-__bazel-lock-from-signed: __bazel-lock-proposal
+__bazel-lock-from-signed: __bazel-version-check
 	@set -euo pipefail; \
 	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
 	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
-	public="$${ORLIX_COSIGN_PUB:-}"; test -n "$$public" || { echo "ORLIX_COSIGN_PUB is required to activate the buildset proposal" >&2; exit 1; }; \
-	cosign verify-blob --key "$${public#file://}" --bundle "$$bundle" --insecure-ignore-tlog "$$proposal"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
-		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json" \
+		--proposal "$$proposal" \
+		--bundle "$$bundle" \
 		--apply-lock "$(CURDIR)/artifacts.lock.json"; \
 	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("schema") == 2 and lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, lock' "$(CURDIR)/artifacts.lock.json"
 

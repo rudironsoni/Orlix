@@ -234,12 +234,21 @@ class MakeRoutingTests(unittest.TestCase):
             self.assertIn(label, output)
 
     def test_buildset_lock_requires_cosign_blob_verification(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         proposal = _dry_run("__bazel-lock-proposal")
         activation = _dry_run("__bazel-lock-from-signed")
+        activation_recipe = makefile.split("__bazel-lock-from-signed:", 1)[1].split(
+            "__bazel-reconstruct:", 1
+        )[0]
         self.assertIn("cosign sign-blob", proposal)
         self.assertIn("cosign verify-blob", proposal)
         self.assertIn("buildset-lock-proposal.sigstore.json", proposal)
-        self.assertIn("cosign verify-blob", activation)
+        self.assertIn("--proposal", activation)
+        self.assertIn("--bundle", activation)
+        self.assertIn("--apply-lock", activation)
+        self.assertNotIn("__bazel-lock-proposal", activation_recipe)
+        self.assertNotIn("ORLIX_COSIGN_KEY", activation_recipe)
+        self.assertNotIn("--signed", activation_recipe)
 
     def test_kernel_promotion_routes_use_exact_v2_component_boundaries(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
