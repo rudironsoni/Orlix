@@ -1250,3 +1250,7 @@ Added repository-qualified GitHub identities to issue-backed TCTI work pages.
 The ontology remains the durable work graph, while native GitHub sub-issues
 and dependencies provide its operational projection. Added read-only checks
 for identity drift and a repository-wide agent leaf frontier.
+
+## [2026-09-13] contract | Implement the Orlix agentic engineering system
+
+RuleSync owns portable coding-agent configuration and target generation. Orlix owns ontology-driven task context, semantic task scope, workflow state, proof requirements, and Orlix-specific hook behavior. GitHub CI owns generated-output enforcement and authoritative RuleSync regeneration.

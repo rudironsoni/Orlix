@@ -3,7 +3,7 @@ type: product
 tags:
   - orlix
   - linux
-updated: 2026-09-10
+updated: 2026-09-13
 status: active
 summary: "A curated upstream Linux system hosted by native Apple-platform applications."
 has_part:
@@ -19,6 +19,10 @@ has_part:
   - "[OrlixTCTI](../software-component/orlixtcti.md)"
   - "[Agent harness](../software-component/agent-harness.md)"
   - "[Release harness](../software-component/release-harness.md)"
+owns:
+  - "[Run unmodified Linux ARM64 distributions](../epic/doing/run-unmodified-linux-arm64-distributions.md)"
+  - "[Maximize ARM64 execution performance](../epic/doing/maximize-arm64-execution-performance.md)"
+  - "[Provide Linux graphics acceleration](../epic/doing/provide-linux-graphics-acceleration.md)"
 ---
 
 # Orlix

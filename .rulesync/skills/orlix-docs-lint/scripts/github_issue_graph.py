@@ -144,16 +144,23 @@ def graph_problems(objects: dict[Path, dict], issues: list[dict], root: Path) ->
         number = data["number"]
         if not number:
             continue
-        for relation in ("has_story", "has_task"):
-            for target in data["relations"].get(relation, set()):
-                target_number = objects.get(target, {}).get("number")
-                if target_number:
-                    expected_hierarchy.add((number, target_number))
-        for relation in ("story_of", "task_of"):
-            for target in data["relations"].get(relation, set()):
-                target_number = objects.get(target, {}).get("number")
-                if target_number:
-                    expected_hierarchy.add((target_number, number))
+        parents = set(data["relations"].get("story_of", set())) | set(
+            data["relations"].get("task_of", set())
+        )
+        seen: set[Path] = set()
+        while parents:
+            parent = parents.pop()
+            if parent in seen:
+                continue
+            seen.add(parent)
+            parent_data = objects.get(parent, {})
+            parent_number = parent_data.get("number")
+            if parent_number:
+                expected_hierarchy.add((parent_number, number))
+                break
+            parent_relations = parent_data.get("relations", {})
+            parents.update(parent_relations.get("story_of", set()))
+            parents.update(parent_relations.get("task_of", set()))
         for target in data["relations"].get("depends_on", set()):
             target_number = objects.get(target, {}).get("number")
             if target_number:

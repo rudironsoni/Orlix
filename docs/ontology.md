@@ -37,7 +37,7 @@ Each work type has `todo/`, `doing/`, and `done/` status folders. A page's `stat
 
 An epic owns the durable outcome and acceptance boundary. A story owns a coherent user-valued increment. A task owns a bounded executable unit. Exact commands, results, failures, evidence identities, and generated next-work selections remain in structured reports under `Build/AgentHarness/`.
 
-The ontology owns durable work decomposition. GitHub native sub-issues and issue dependencies are its operational projection for issue-backed work. Reconciliation reports disagreements and never mutates either graph.
+The ontology owns durable work decomposition. GitHub native sub-issues and issue dependencies are its operational projection for issue-backed work. Reconciliation reports disagreements and never mutates either graph. `.rulesync/` owns portable agent configuration. RuleSync translates that source into tool-native files. Generated destinations do not own portable knowledge.
 
 ## Properties
 
@@ -50,6 +50,8 @@ Every non-meta page requires:
 Optional shared properties are `aliases`, `status`, `external_id`, `summary`, and `sources`. `summary` is the stable one-line catalog hook. `sources` contains durable external URLs.
 
 An issue-backed epic, story, or task uses a repository-qualified identifier such as `github:rudironsoni/Orlix#232`. ADR identifiers retain their existing `ADR-xxxx` form.
+
+Tasks may define `context_paths`, `owned_paths`, `read_only_paths`, `forbidden_paths`, `required_skills`, `required_role`, `required_proof`, `build_intents`, and `verification_intents`. These properties describe durable Orlix task semantics. They do not configure client permissions, MCP servers, models, approval policy, or sandbox mode.
 
 ## Link Types
 

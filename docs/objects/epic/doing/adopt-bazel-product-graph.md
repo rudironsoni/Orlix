@@ -32,4 +32,4 @@ The epic is complete when the OrlixKit product boundary and OrlixEngine lifecycl
 
 [CORRECTION] 2026-09-09 historical observation: this epic was reopened because the then-current lock named `localhost:5001`, the local registry was not running, promoted mode did not substitute OCI components, and the required TAP END was missing. That observation is preserved as history; it is not the current lock or registry state.
 
-Current execution state belongs in the structured [checkpoint verification report](../../../../Build/AgentHarness/bazel-migration/recovery-checkpoint-1/verification.json). At checkpoint 1, authority documentation is being reconciled. Runtime proof, performance proof, TAP, physical-device validation, parity, cutover, and release remain open.
+Current execution state belongs in structured reports under `Build/AgentHarness/`. At checkpoint 1, authority documentation is being reconciled. Runtime proof, performance proof, TAP, physical-device validation, parity, cutover, and release remain open.

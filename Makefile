@@ -885,58 +885,90 @@ runtime-tests: xcodeproj
 		test
 
 docs-index:
-	@python3 .agents/skills/orlix-docs-lint/scripts/build_index.py docs
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/build_index.py docs
 
 docs-check:
-	@python3 .agents/skills/orlix-docs-lint/scripts/build_index.py --check docs
-	@python3 .agents/skills/orlix-docs-lint/scripts/wiki_link_check.py docs
-	@python3 .agents/skills/orlix-docs-lint/scripts/legacy_path_check.py
-	@python3 -m unittest discover -s .rulesync/skills/orlix-docs-lint/scripts -p 'test_*.py'
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/build_index.py --check docs
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/wiki_link_check.py docs
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/legacy_path_check.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .rulesync/skills/orlix-docs-lint/scripts -p 'test_*.py'
 
-ORLIX_AGENT_TARGETS ?= copilot,cursor,claudecode,codexcli
-ORLIX_AGENT_FEATURES ?= rules
+.PHONY: agent-context agent-task-envelope agent-harness-check agent-capabilities agent-rules-inventory agent-rules-pr-guard agent-rules-validate-write-set agent-permissions-check agent-rules-version-check
 
-agent-rules-generate:
-	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)"
+agent-rules-version-check:
+	@test "$$(rulesync --version)" = "$$(sed -n '1p' .rulesync/VERSION)"
 
-agent-rules-check:
-	@rulesync generate --targets "$(ORLIX_AGENT_TARGETS)" --features "$(ORLIX_AGENT_FEATURES)" --check
+agent-rules-generate: agent-rules-version-check
+	@rulesync generate
 
-agent-harness-check: docs-check
-	@.agents/tests/harness-check all
+agent-rules-check: agent-rules-version-check
+	@rulesync doctor
+	@rulesync generate --dry-run
 
-agent-hooks-generate:
+agent-harness-check:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -c 'from Tools.AgentHarness import context, proof, rulesync_reports, state, task_envelope; from Tools.AgentHarness.hooks import common, permission_request, post_tool_use, pre_compact, pre_tool_use, stop, subagent_start, subagent_stop'
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Tools/AgentHarness/tests -p 'test_*.py'
+
+agent-context:
+	@test -n "$(TASK)" || { echo "TASK=<ontology-task> required" >&2; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.context "$(TASK)"
+
+agent-task-envelope:
+	@test -n "$(TASK)" || { echo "TASK=<ontology-task> required" >&2; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.task_envelope generate "$(TASK)"
+
+agent-capabilities: agent-rules-version-check
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports capabilities
+
+agent-rules-inventory: agent-rules-version-check
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports inventory
+
+agent-rules-pr-guard:
+	@test -n "$(BASE)" -a -n "$(HEAD)" || { echo "BASE=<sha> and HEAD=<sha> required" >&2; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports pr-guard "$(BASE)" "$(HEAD)"
+
+agent-rules-validate-write-set:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports validate-write-set
+
+agent-hooks-generate: agent-rules-version-check
 	@rulesync generate --targets codexcli --features hooks
 
-agent-hooks-check:
-	@.agents/tests/harness-check hooks
+agent-hooks-check: agent-rules-version-check
+	@rulesync generate --features hooks --dry-run
 
-agent-skills-check:
-	@.agents/tests/harness-check skills
+agent-skills-check: agent-rules-version-check
+	@rulesync generate --features skills --dry-run
 
-agent-subagents-check:
-	@.agents/tests/harness-check subagents
+agent-subagents-check: agent-rules-version-check
+	@rulesync generate --features subagents --dry-run
 
-agent-mcp-check:
-	@.agents/tests/harness-check mcp
+agent-mcp-check: agent-rules-version-check
+	@rulesync generate --features mcp --dry-run
+
+agent-permissions-check: agent-rules-version-check
+	@rulesync generate --features permissions --dry-run
 
 agent-frontier:
-	@python3 .rulesync/skills/orlix-docs-lint/scripts/github_issue_graph.py frontier
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/github_issue_graph.py frontier
 
 agent-graph-check:
-	@python3 .rulesync/skills/orlix-docs-lint/scripts/github_issue_graph.py check docs
+	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/github_issue_graph.py check docs
 
 agent-status:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
-	@.agents/skills/orlix-tcti-next-step/scripts/status
+	@.rulesync/skills/orlix-tcti-next-step/scripts/status
 
 agent-next:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
-	@.agents/skills/orlix-tcti-next-step/scripts/next
+	@.rulesync/skills/orlix-tcti-next-step/scripts/next
 
 agent-task-envelope-check:
-	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
-	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
+	@if [ -n "$(AREA)" ]; then \
+		test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }; \
+		.rulesync/skills/orlix-tcti-next-step/scripts/task-envelope-check; \
+	else \
+		PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.task_envelope check; \
+	fi
 
 beta-archive: beta-resolve-build-number
 ifeq ($(ORLIX_BAZEL_AUTHORITY),1)

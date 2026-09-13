@@ -15,8 +15,8 @@ Use this skill only to route work to the owning test layer.
 - `docs/objects/task/doing/complete-aarch64-isa-on-isa-coverage.md`
 - `docs/objects/task/doing/complete-pinned-simulator-tcti-ladder.md`
 - `docs/objects/story/doing/prove-tcti-product-execution.md`
-- `.agents/skills/orlix-implementation-boundaries/SKILL.md`
-- `.agents/skills/orlix-runtime-claim-verification/SKILL.md`
+- `.rulesync/skills/orlix-implementation-boundaries/SKILL.md`
+- `.rulesync/skills/orlix-runtime-claim-verification/SKILL.md`
 
 ## Commands
 

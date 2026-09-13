@@ -441,3 +441,10 @@ Verification passed:
 Independent review returned PASS with no material finding after the schema-1 compatibility, schema-2 identity contract, Kernel product boundary, promoted shell arguments, workflow routing, and final integration proof were inspected. The reviewer did not rerun builds or tests.
 
 Protected signing, GHCR publication, signed schema-2 lock activation, promoted Kernel target execution against imported artifacts, and consumer cutover remain open. Phase 7 through Phase 10, runtime readiness, TAP, physical-device validation, authority cutover, and release remain separate gates. `third_party/swift/.build/` remains excluded.
+## 2026-09-13 Agentic engineering system checkpoint
+
+RuleSync 16.26.1 generated the configured rules, MCP, subagents, skills, hooks, and permissions in isolated output. The generated Codex, Claude Code, Cursor, and Copilot hook files invoke `Tools/AgentHarness/hooks/`. The generated Codex roles preserve high reasoning for planning, review, and TCTI inspection, medium reasoning for implementation and Bazel inspection, and read-only native restrictions for inspection roles.
+
+`make agent-harness-check`, `make docs-check`, `make agent-graph-check`, `make agent-frontier`, and the three `AREA=orlix-tcti` gates pass. The live ontology graph reports zero problems and the leaf frontier remains `#50`, `#232`, `#233`, `#242`, and `#261`. RuleSync reports that Copilot and Cursor do not support `permissionRequest`, Codex permissions do not support the shared `bash` category, and RuleSync 16.26.1 does not manage `max_concurrent_threads_per_session`; the capability report records those limits.
+
+GitHub `main` ruleset `21800281` remains disabled. Authoritative post-merge generation and direct-main write proof remain blocked until a repository-installed RuleSync CI identity can receive ruleset bypass. Normal contributors must not receive that bypass.

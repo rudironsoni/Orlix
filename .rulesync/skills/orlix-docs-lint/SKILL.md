@@ -13,9 +13,8 @@ Use this skill as the mechanical gate for every change to the Orlix knowledge gr
 
 ## Commands
 
-- Regenerate the index: `python3 .agents/skills/orlix-docs-lint/scripts/build_index.py docs`
-- Check index drift: `python3 .agents/skills/orlix-docs-lint/scripts/build_index.py --check docs`
-- Run the complete lint gate: `python3 .agents/skills/orlix-docs-lint/scripts/wiki_link_check.py docs`
+- Regenerate the index: `make docs-index`
+- Run the complete lint gate: `make docs-check`
 - List the current agent leaf frontier: `make agent-frontier`
 - Compare mapped ontology work with GitHub: `make agent-graph-check`
 

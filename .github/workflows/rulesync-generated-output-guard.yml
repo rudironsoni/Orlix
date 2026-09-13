@@ -1,0 +1,26 @@
+name: RuleSync generated output guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned RuleSync
+        run: |
+          version="$(tr -d '[:space:]' < .rulesync/VERSION)"
+          curl -fsSL "https://github.com/dyoshikawa/rulesync/releases/download/v${version}/rulesync-linux-x64" -o "$RUNNER_TEMP/rulesync"
+          printf '%s  %s\n' a31f7861d70a1092748108a7b494c0f7c845166e7495b51b7e032a200bf07dea "$RUNNER_TEMP/rulesync" | sha256sum --check -
+          chmod +x "$RUNNER_TEMP/rulesync"
+          test "$("$RUNNER_TEMP/rulesync" --version)" = "$version"
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Reject generated changes
+        run: make agent-rules-pr-guard BASE="${{ github.event.pull_request.base.sha }}" HEAD="${{ github.event.pull_request.head.sha }}"
