@@ -71,6 +71,8 @@ def _extract_component_tar(blob: Path, dest: Path) -> None:
                     dest,
                     set_attrs=not member.isdir(),
                 )
+                if member.isfile():
+                    archive.chmod(member, dest / member.name)
             for member in sorted(directories, key=lambda item: item.name, reverse=True):
                 directory = dest / member.name
                 archive.chown(member, directory, numeric_owner=False)
