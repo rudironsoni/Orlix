@@ -2,7 +2,7 @@
 
 def _archive_repository_impl(ctx):
     ctx.download_and_extract(
-        url = ctx.attr.url,
+        url = [ctx.attr.url] + ctx.attr.mirror_urls,
         sha256 = ctx.attr.sha256,
         strip_prefix = ctx.attr.strip_prefix,
     )
@@ -25,6 +25,7 @@ _archive_repository = repository_rule(
     implementation = _archive_repository_impl,
     attrs = {
         "url": attr.string(mandatory = True),
+        "mirror_urls": attr.string_list(),
         "sha256": attr.string(mandatory = True),
         "strip_prefix": attr.string(mandatory = True),
         "marker": attr.string(mandatory = True),
@@ -319,6 +320,7 @@ def _native_sources_impl(_ctx):
     _archive_repository(
         name = "orlix_acl_source",
         url = "https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz",
+        mirror_urls = ["https://download-mirror.savannah.gnu.org/releases/acl/acl-2.3.2.tar.xz"],
         sha256 = "97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd",
         strip_prefix = "acl-2.3.2",
         marker = "configure",
