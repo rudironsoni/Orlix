@@ -9,7 +9,9 @@ on:
       - 'rulesync.jsonc'
 
 permissions:
-  contents: read
+  actions: write
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: rulesync-main-generation
@@ -19,26 +21,9 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Create RuleSync App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          app-id: ${{ vars.ORLIX_RULESYNC_APP_ID }}
-          private-key: ${{ secrets.ORLIX_RULESYNC_APP_PRIVATE_KEY }}
-          owner: rudironsoni
-          repositories: Orlix
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 2
-          token: ${{ steps.app-token.outputs.token }}
-      - name: Verify RuleSync App identity
-        env:
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
-        run: |
-          test "$APP_SLUG" = "orlix-rulesync-generator"
-          test -n "$INSTALLATION_ID"
-          printf "Authenticated App: %s\nInstallation ID: %s\n" "$APP_SLUG" "$INSTALLATION_ID" >> "$GITHUB_STEP_SUMMARY"
       - name: Install pinned RuleSync
         run: |
           version="$(tr -d '[:space:]' < .rulesync/VERSION)"
@@ -53,14 +38,70 @@ jobs:
         run: rulesync generate
       - name: Validate generator write set
         run: make agent-rules-validate-write-set
-      - name: Commit generated output
+      - name: Prepare generated branch
+        id: generated
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git add -A
           if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          source_sha="$GITHUB_SHA"
+          branch="automation/rulesync-${source_sha}"
           version="$(tr -d '[:space:]' < .rulesync/VERSION)"
+          existing="$(gh pr list --repo rudironsoni/Orlix --head "$branch" --base main --state all --json number,state --jq '.[0] | [.number, .state] | @tsv')"
+          if [ -n "$existing" ]; then
+            IFS=$'\t' read -r existing_pr existing_state <<< "$existing"
+            if [ "$existing_state" = "MERGED" ]; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            test "$existing_state" = "OPEN"
+            echo "existing-pr=$existing_pr" >> "$GITHUB_OUTPUT"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null; then
+            git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}"
+            branch_sha="$(git rev-parse "refs/remotes/origin/${branch}")"
+            test "$(git rev-parse "${branch_sha}^")" = "$source_sha"
+            test "$(git rev-list --count "${source_sha}..${branch_sha}")" = "1"
+            git diff --quiet "$branch_sha" --
+            exit 0
+          fi
           git config user.name "RuleSync CI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: generate agent files" -m "source-revision: ${GITHUB_SHA}" -m "rulesync-version: ${version}"
-          git push origin HEAD:main
+          git commit -m "chore: generate agent files" -m "source-revision: ${source_sha}" -m "rulesync-version: ${version}"
+          git push origin "HEAD:refs/heads/${branch}"
+      - name: Create or reuse generated pull request
+        if: steps.generated.outputs.changed == 'true'
+        id: generated-pr
+        env:
+          BRANCH: ${{ steps.generated.outputs.branch }}
+          EXISTING_PR: ${{ steps.generated.outputs.existing-pr }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number="$EXISTING_PR"
+          if [ -z "$pr_number" ]; then
+            body="$RUNNER_TEMP/rulesync-generated-pr.md"
+            printf "rulesync-generated: true\nsource-revision: %s\nrulesync-version: 16.26.1\n" "$GITHUB_SHA" > "$body"
+            pr_url="$(gh pr create --repo rudironsoni/Orlix --base main --head "$BRANCH" --title "chore: generate RuleSync output" --body-file "$body")"
+            pr_number="$(gh pr view "$pr_url" --repo rudironsoni/Orlix --json number --jq .number)"
+          fi
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+      - name: Dispatch generated-output verification
+        if: steps.generated.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ steps.generated.outputs.branch }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
+        run: |
+          gh workflow run rulesync-generated-output-guard.yml --repo rudironsoni/Orlix --ref "$BRANCH" -f mode=generated -f pr_number="$PR_NUMBER" -f source_revision="$GITHUB_SHA"
+      - name: Enable generated pull request auto-merge
+        if: steps.generated.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
+        run: gh pr merge "$PR_NUMBER" --repo rudironsoni/Orlix --auto --squash

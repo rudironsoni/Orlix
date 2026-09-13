@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import Tools.AgentHarness.rulesync_reports as rulesync_reports
 from Tools.AgentHarness.rulesync_reports import (
+    generated_pr_guard,
     paths_from_name_status,
     reject,
     revision_inventory,
@@ -91,14 +95,79 @@ class RuleSyncGuardTests(unittest.TestCase):
         validate = (root / ".github/workflows/rulesync-validate.yml").read_text(encoding="utf-8")
         generate = (root / ".github/workflows/rulesync-generate.yml").read_text(encoding="utf-8")
         self.assertIn("pull_request:", guard)
+        self.assertIn("workflow_dispatch:", guard)
         self.assertIn('BASE="${{ github.event.pull_request.base.sha }}"', guard)
         self.assertIn('HEAD="${{ github.event.pull_request.head.sha }}"', guard)
+        self.assertIn("agent-rules-generated-pr-check", guard)
         self.assertIn('rulesync generate --output-roots "$RUNNER_TEMP/generated"', validate)
         self.assertIn("Build/AgentHarness/rulesync/", validate)
         self.assertIn("rulesync generate", generate)
         self.assertIn("make agent-rules-validate-write-set", generate)
         self.assertIn("git diff --cached --quiet", generate)
-        self.assertIn("git push origin HEAD:main", generate)
+        self.assertIn("automation/rulesync-${source_sha}", generate)
+        self.assertIn("gh workflow run rulesync-generated-output-guard.yml", generate)
+        self.assertIn('gh pr merge "$PR_NUMBER"', generate)
+        self.assertNotIn("git push origin HEAD:main", generate)
+        self.assertNotIn("create-github-app-token", generate)
+
+    def test_generated_pull_request_requires_exact_generated_tree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+            (root / ".rulesync").mkdir()
+            (root / ".rulesync" / "VERSION").write_text("16.26.1\n", encoding="utf-8")
+            (root / "rulesync.jsonc").write_text("{}\n", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "source"], cwd=root, check=True)
+            source = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True, capture_output=True
+            ).stdout.strip()
+            (root / "AGENTS.md").write_text("generated\n", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "commit",
+                    "-qm",
+                    "chore: generate agent files",
+                    "-m",
+                    f"source-revision: {source}",
+                    "-m",
+                    "rulesync-version: 16.26.1",
+                ],
+                cwd=root,
+                check=True,
+            )
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True, capture_output=True
+            ).stdout.strip()
+            details = {
+                "baseRefName": "main",
+                "body": f"rulesync-generated: true\nsource-revision: {source}\nrulesync-version: 16.26.1\n",
+                "headRefName": f"automation/rulesync-{source}",
+                "headRefOid": head,
+                "isCrossRepository": False,
+                "state": "OPEN",
+            }
+            original_run = rulesync_reports.run
+
+            def fake_run(command, cwd, check=True):
+                if command[:3] == ["gh", "pr", "view"]:
+                    return subprocess.CompletedProcess(command, 0, json.dumps(details), "")
+                if command == ["rulesync", "generate"]:
+                    (cwd / "AGENTS.md").write_text("generated\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                return original_run(command, cwd, check)
+
+            with patch("Tools.AgentHarness.rulesync_reports.run", side_effect=fake_run), patch(
+                "Tools.AgentHarness.rulesync_reports.validate_write_set"
+            ):
+                generated_pr_guard(root, "1", source)
+                details["body"] = "rulesync-generated: false\n"
+                with self.assertRaisesRegex(ValueError, "body metadata"):
+                    generated_pr_guard(root, "1", source)
 
 
 if __name__ == "__main__":

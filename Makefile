@@ -893,7 +893,7 @@ docs-check:
 	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/legacy_path_check.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .rulesync/skills/orlix-docs-lint/scripts -p 'test_*.py'
 
-.PHONY: agent-context agent-task-envelope agent-harness-check agent-capabilities agent-rules-inventory agent-rules-pr-guard agent-rules-validate-write-set agent-permissions-check agent-rules-version-check
+.PHONY: agent-context agent-task-envelope agent-harness-check agent-capabilities agent-rules-inventory agent-rules-pr-guard agent-rules-generated-pr-check agent-rules-validate-write-set agent-permissions-check agent-rules-version-check
 
 agent-rules-version-check:
 	@test "$$(rulesync --version)" = "$$(sed -n '1p' .rulesync/VERSION)"
@@ -926,6 +926,10 @@ agent-rules-inventory: agent-rules-version-check
 agent-rules-pr-guard:
 	@test -n "$(BASE)" -a -n "$(HEAD)" || { echo "BASE=<sha> and HEAD=<sha> required" >&2; exit 2; }
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports pr-guard "$(BASE)" "$(HEAD)"
+
+agent-rules-generated-pr-check:
+	@test -n "$(PR_NUMBER)" -a -n "$(SOURCE_REVISION)" || { echo "PR_NUMBER=<number> and SOURCE_REVISION=<sha> required" >&2; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports generated-pr-guard "$(PR_NUMBER)" "$(SOURCE_REVISION)"
 
 agent-rules-validate-write-set:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports validate-write-set

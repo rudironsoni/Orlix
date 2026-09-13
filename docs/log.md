@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 # Orlix Knowledge Log
+
+## [2026-09-13] fix | Protect RuleSync generated updates
+
+The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-authority.md) routes generated client output through a deterministic automation branch and generated pull request. The existing guard independently regenerates the output and requires an exact tree match before protected auto-merge. The main ruleset has no bypass actor.
 
 ## [2026-09-11] fix | Remove retired command wrapper integration
 

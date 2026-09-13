@@ -358,6 +358,67 @@ def pr_guard(root: Path, base: str, head: str) -> None:
     reject(changed_paths(root, base, head), records)
 
 
+def generated_pr_guard(root: Path, pr_number: str, source_revision: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
+        raise ValueError("source revision must be a complete lowercase SHA")
+    if not pr_number.isdigit() or int(pr_number) < 1:
+        raise ValueError("pull request number must be positive")
+    details = json.loads(
+        run(
+            [
+                "gh",
+                "pr",
+                "view",
+                pr_number,
+                "--repo",
+                "rudironsoni/Orlix",
+                "--json",
+                "baseRefName,body,headRefName,headRefOid,isCrossRepository,state",
+            ],
+            root,
+        ).stdout
+    )
+    branch = f"automation/rulesync-{source_revision}"
+    if details["state"] != "OPEN" or details["baseRefName"] != "main":
+        raise ValueError("generated pull request must be open against main")
+    if details["isCrossRepository"] or details["headRefName"] != branch:
+        raise ValueError(f"generated pull request head must be {branch}")
+    required_body = {
+        "rulesync-generated: true",
+        f"source-revision: {source_revision}",
+        f"rulesync-version: {pinned_version(root)}",
+    }
+    if not required_body.issubset(set(details["body"].splitlines())):
+        raise ValueError("generated pull request body metadata is invalid")
+    head = details["headRefOid"]
+    if run(["git", "rev-parse", "HEAD"], root).stdout.strip() != head:
+        raise ValueError("verification workflow is not running on the generated pull request head")
+    parents = run(["git", "rev-list", "--parents", "-n", "1", head], root).stdout.split()
+    if len(parents) != 2 or parents[1] != source_revision:
+        raise ValueError("generated commit must have the source revision as its only parent")
+    message = run(["git", "log", "-1", "--format=%s%n%b", head], root).stdout.splitlines()
+    required_message = {
+        "chore: generate agent files",
+        f"source-revision: {source_revision}",
+        f"rulesync-version: {pinned_version(root)}",
+    }
+    if not required_message.issubset(set(message)):
+        raise ValueError("generated commit metadata is invalid")
+    with tempfile.TemporaryDirectory(prefix="orlix-rulesync-verify-") as directory:
+        expected = Path(directory) / "source"
+        run(["git", "worktree", "add", "--detach", str(expected), source_revision], root)
+        try:
+            run(["rulesync", "generate"], expected)
+            validate_write_set(expected)
+            run(["git", "add", "-A"], expected)
+            expected_tree = run(["git", "write-tree"], expected).stdout.strip()
+        finally:
+            run(["git", "worktree", "remove", "--force", str(expected)], root, check=False)
+    actual_tree = run(["git", "rev-parse", f"{head}^{{tree}}"], root).stdout.strip()
+    if expected_tree != actual_tree:
+        raise ValueError("generated pull request does not exactly match independent RuleSync generation")
+
+
 def worktree_paths(root: Path) -> set[str]:
     result = subprocess.run(
         ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
@@ -401,6 +462,9 @@ def main() -> int:
     guard = commands.add_parser("pr-guard")
     guard.add_argument("base")
     guard.add_argument("head")
+    generated_guard = commands.add_parser("generated-pr-guard")
+    generated_guard.add_argument("pr_number")
+    generated_guard.add_argument("source_revision")
     commands.add_parser("validate-write-set")
     args = parser.parse_args()
     root = repository_root()
@@ -417,6 +481,10 @@ def main() -> int:
             verify_version(root)
             pr_guard(root, args.base, args.head)
             print("RuleSync generated-output guard passed")
+        elif args.command == "generated-pr-guard":
+            verify_version(root)
+            generated_pr_guard(root, args.pr_number, args.source_revision)
+            print("RuleSync generated pull request matches independent generation")
         else:
             verify_version(root)
             validate_write_set(root)

@@ -13,6 +13,8 @@ Upstream Linux owns Linux behavior. OrlixTCTI owns guest instruction execution. 
 
 Make is the repository interface. Bazel owns the product graph after cutover. Upstream build systems retain internal ownership. The ontology owns durable work meaning. `.rulesync/` owns portable agent configuration. RuleSync owns client serialization. GitHub CI owns generated-output enforcement. `Tools/AgentHarness/` owns Orlix task and lifecycle semantics. `Build/AgentHarness/` owns current state and evidence. Do not edit generated agent destinations.
 
+Canonical RuleSync source changes through normal pull requests. After merge, RuleSync CI generates client output on a dedicated automation branch and opens a generated-output pull request. The generated-output guard independently regenerates the expected output and requires an exact match. GitHub auto-merge merges the generated pull request after all required checks pass. No actor bypasses the main-branch ruleset.
+
 Use the skills named by the task envelope. Product proof follows ADR 0017: kernel dependency, kselftest, mlibc, OrlixMLibC syscall and UAPI, POSIX shell, then jq, curl, and zsh. One tier does not prove a later tier. Physical TCTI work requires the three `AREA=orlix-tcti` Make gates, current simulator-ladder evidence, and `physical_device_allowed=true`.
 
 Start at most four subagents in one session. Use high reasoning for planning, review, TCTI inspection, architecture, and hard proof. Use normal reasoning for implementation and mechanical inspection.

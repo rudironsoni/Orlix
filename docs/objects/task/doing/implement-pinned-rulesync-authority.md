@@ -37,9 +37,10 @@ required_role: "orlix-implementer"
 required_proof:
   - "RuleSync 16.26.1 source validation"
   - "base and head generated ownership guard"
-  - "validated main generator write set"
+  - "exact generated pull-request regeneration"
+  - "protected generated pull-request auto-merge"
 build_intents:
-  - "generate tool-native agent configuration on main"
+  - "generate tool-native agent configuration through a protected pull request"
 verification_intents:
   - "make agent-rules-check"
   - "make agent-rules-inventory"
@@ -48,4 +49,4 @@ verification_intents:
 
 # Implement pinned RuleSync authority
 
-Keep portable configuration in `.rulesync/`. Derive generated ownership with RuleSync for both pull-request revisions. Reject generated pull-request changes. Regenerate and validate the full write set on `main` before committing it.
+Keep portable configuration in `.rulesync/`. Derive generated ownership with RuleSync for both pull-request revisions. Reject generated changes in normal pull requests. After canonical source reaches `main`, generate on a deterministic automation branch, verify the exact output independently, and use protected auto-merge without a ruleset bypass.
