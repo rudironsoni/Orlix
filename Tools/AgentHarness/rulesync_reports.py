@@ -358,9 +358,11 @@ def pr_guard(root: Path, base: str, head: str) -> None:
     reject(changed_paths(root, base, head), records)
 
 
-def generated_pr_guard(root: Path, pr_number: str, source_revision: str) -> None:
+def generated_pr_guard(root: Path, pr_number: str, source_revision: str, head_revision: str) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
         raise ValueError("source revision must be a complete lowercase SHA")
+    if not re.fullmatch(r"[0-9a-f]{40}", head_revision):
+        raise ValueError("head revision must be a complete lowercase SHA")
     if not pr_number.isdigit() or int(pr_number) < 1:
         raise ValueError("pull request number must be positive")
     details = json.loads(
@@ -391,8 +393,8 @@ def generated_pr_guard(root: Path, pr_number: str, source_revision: str) -> None
     if not required_body.issubset(set(details["body"].splitlines())):
         raise ValueError("generated pull request body metadata is invalid")
     head = details["headRefOid"]
-    if run(["git", "rev-parse", "HEAD"], root).stdout.strip() != head:
-        raise ValueError("verification workflow is not running on the generated pull request head")
+    if head != head_revision:
+        raise ValueError("generated pull request head changed before verification")
     parents = run(["git", "rev-list", "--parents", "-n", "1", head], root).stdout.split()
     if len(parents) != 2 or parents[1] != source_revision:
         raise ValueError("generated commit must have the source revision as its only parent")
@@ -465,6 +467,7 @@ def main() -> int:
     generated_guard = commands.add_parser("generated-pr-guard")
     generated_guard.add_argument("pr_number")
     generated_guard.add_argument("source_revision")
+    generated_guard.add_argument("head_revision")
     commands.add_parser("validate-write-set")
     args = parser.parse_args()
     root = repository_root()
@@ -483,7 +486,7 @@ def main() -> int:
             print("RuleSync generated-output guard passed")
         elif args.command == "generated-pr-guard":
             verify_version(root)
-            generated_pr_guard(root, args.pr_number, args.source_revision)
+            generated_pr_guard(root, args.pr_number, args.source_revision, args.head_revision)
             print("RuleSync generated pull request matches independent generation")
         else:
             verify_version(root)

@@ -102,6 +102,7 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertIn("statuses: write", guard)
         self.assertIn('statuses/${HEAD_SHA}', guard)
         self.assertIn('-f context="RuleSync generated output guard"', guard)
+        self.assertIn('HEAD_REVISION="$head_sha"', guard)
         self.assertIn('rulesync generate --output-roots "$RUNNER_TEMP/generated"', validate)
         self.assertIn("Build/AgentHarness/rulesync/", validate)
         self.assertIn("rulesync generate", generate)
@@ -109,6 +110,7 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertIn("git diff --cached --quiet", generate)
         self.assertIn("automation/rulesync-${source_sha}", generate)
         self.assertIn("gh workflow run rulesync-generated-output-guard.yml", generate)
+        self.assertIn("--ref main", generate)
         self.assertIn('gh pr merge "$PR_NUMBER"', generate)
         self.assertNotIn("git push origin HEAD:main", generate)
         self.assertNotIn("create-github-app-token", generate)
@@ -167,10 +169,13 @@ class RuleSyncGuardTests(unittest.TestCase):
             with patch("Tools.AgentHarness.rulesync_reports.run", side_effect=fake_run), patch(
                 "Tools.AgentHarness.rulesync_reports.validate_write_set"
             ):
-                generated_pr_guard(root, "1", source)
+                generated_pr_guard(root, "1", source, head)
                 details["body"] = "rulesync-generated: false\n"
                 with self.assertRaisesRegex(ValueError, "body metadata"):
-                    generated_pr_guard(root, "1", source)
+                    generated_pr_guard(root, "1", source, head)
+                details["body"] = f"rulesync-generated: true\nsource-revision: {source}\nrulesync-version: 16.26.1\n"
+                with self.assertRaisesRegex(ValueError, "head changed"):
+                    generated_pr_guard(root, "1", source, "0" * 40)
 
 
 if __name__ == "__main__":
