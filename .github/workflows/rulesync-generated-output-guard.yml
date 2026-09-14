@@ -50,21 +50,14 @@ jobs:
         run: make agent-rules-pr-guard BASE="${{ github.event.pull_request.base.sha }}" HEAD="${{ github.event.pull_request.head.sha }}"
       - name: Verify generated pull request
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'generated'
-        id: verified
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          SOURCE_REVISION: ${{ inputs.source_revision }}
-        run: |
-          head_sha="$(gh pr view "$PR_NUMBER" --repo rudironsoni/Orlix --json headRefOid --jq .headRefOid)"
-          git fetch origin "$head_sha"
-          make agent-rules-generated-pr-check PR_NUMBER="$PR_NUMBER" SOURCE_REVISION="$SOURCE_REVISION" HEAD_REVISION="$head_sha"
-          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+        run: make agent-rules-generated-pr-check PR_NUMBER="${{ inputs.pr_number }}" SOURCE_REVISION="${{ inputs.source_revision }}"
       - name: Publish verified status
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'generated'
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=success \
