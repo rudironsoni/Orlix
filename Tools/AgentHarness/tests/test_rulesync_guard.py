@@ -14,6 +14,7 @@ from Tools.AgentHarness.rulesync_reports import (
     pr_guard,
     reject,
     revision_inventory,
+    trusted_generated_status,
     validate_generated_write_paths,
     validate_inventory,
 )
@@ -217,6 +218,10 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertNotIn("workflow_dispatch:", guard)
         self.assertIn('BASE="${{ github.event.pull_request.base.sha }}"', guard)
         self.assertIn('HEAD="${{ github.event.pull_request.head.sha }}"', guard)
+        self.assertIn("continue-on-error: true", guard)
+        self.assertIn("agent-rules-generated-status-check", guard)
+        self.assertIn("rulesync-main-generation", guard)
+        self.assertIn("statuses: read", guard)
         self.assertNotIn("agent-rules-generated-pr-check", guard)
         self.assertNotIn("statuses: write", guard)
         self.assertIn('rulesync generate --output-roots "$RUNNER_TEMP/generated"', validate)
@@ -300,6 +305,59 @@ class RuleSyncGuardTests(unittest.TestCase):
                     details,
                     validation_error=ValueError("RuleSync generation wrote outside authorized destinations"),
                 )
+
+    def test_trusted_generator_status_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".rulesync").mkdir()
+            (root / ".rulesync" / "VERSION").write_text("16.26.1\n", encoding="utf-8")
+            source = "1" * 40
+            head = "2" * 40
+            details = {
+                "baseRefName": "main",
+                "body": f"rulesync-generated: true\nsource-revision: {source}\nrulesync-version: 16.26.1\n",
+                "headRefName": f"automation/rulesync-{source}",
+                "headRefOid": head,
+                "isCrossRepository": False,
+                "state": "OPEN",
+            }
+            statuses = [
+                {
+                    "context": "RuleSync generated output guard",
+                    "state": "success",
+                    "description": "Exact RuleSync regeneration matched",
+                    "target_url": "https://github.com/rudironsoni/Orlix/actions/runs/123",
+                    "creator": {"login": "github-actions[bot]"},
+                }
+            ]
+            workflow = {
+                "workflowName": "RuleSync main generation",
+                "event": "push",
+                "headBranch": "main",
+                "headSha": source,
+                "status": "completed",
+                "conclusion": "success",
+            }
+
+            def fake_run(command, _cwd, check=True):
+                if command[:3] == ["gh", "pr", "view"]:
+                    value = details
+                elif command[:2] == ["gh", "api"]:
+                    value = statuses
+                else:
+                    value = workflow
+                return subprocess.CompletedProcess(command, 0, json.dumps(value), "")
+
+            with patch("Tools.AgentHarness.rulesync_reports.run", side_effect=fake_run), patch(
+                "Tools.AgentHarness.rulesync_reports.verify_current_main_source"
+            ):
+                trusted_generated_status(root, "1", head)
+                workflow["headSha"] = "3" * 40
+                with self.assertRaisesRegex(ValueError, "no trusted successful"):
+                    trusted_generated_status(root, "1", head)
+                details["body"] = f"rulesync-generated: true\n{source}\nrulesync-version: 16.26.1\n"
+                with self.assertRaisesRegex(ValueError, "no trusted generated metadata"):
+                    trusted_generated_status(root, "1", head)
 
 
 if __name__ == "__main__":
