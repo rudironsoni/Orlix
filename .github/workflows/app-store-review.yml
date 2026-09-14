@@ -39,9 +39,11 @@ jobs:
         id: beta
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          credential="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" fetch --no-tags origin main:refs/remotes/origin/main
           commit="$(git rev-list -n 1 "refs/tags/$ORLIX_RELEASE_TAG")"
           test -n "$commit"
           run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/testflight-beta.yml/runs?event=push&status=success&head_sha=$commit" --jq '.workflow_runs[0].id // empty')"
