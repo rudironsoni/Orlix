@@ -6,6 +6,11 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  statuses: read
+
+concurrency:
+  group: ${{ startsWith(github.head_ref, 'automation/rulesync-') && 'rulesync-main-generation' || format('rulesync-pr-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: false
 
 jobs:
   guard:
@@ -24,5 +29,12 @@ jobs:
           chmod +x "$RUNNER_TEMP/rulesync"
           test "$("$RUNNER_TEMP/rulesync" --version)" = "$version"
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Reject generated changes
+      - name: Check generated changes
+        id: generated-changes
+        continue-on-error: true
         run: make agent-rules-pr-guard BASE="${{ github.event.pull_request.base.sha }}" HEAD="${{ github.event.pull_request.head.sha }}"
+      - name: Accept trusted generated status
+        if: steps.generated-changes.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: make agent-rules-generated-status-check PR_NUMBER="${{ github.event.pull_request.number }}" HEAD_REVISION="${{ github.event.pull_request.head.sha }}"
