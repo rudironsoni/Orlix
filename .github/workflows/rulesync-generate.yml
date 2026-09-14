@@ -21,9 +21,18 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
+      - name: Create Orlix Automation token
+        id: automation-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ORLIX_AUTOMATION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ORLIX_AUTOMATION_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 2
+          token: ${{ steps.automation-token.outputs.token }}
       - name: Install pinned RuleSync
         run: |
           version="$(tr -d '[:space:]' < .rulesync/VERSION)"
@@ -41,7 +50,7 @@ jobs:
       - name: Prepare generated branch
         id: generated
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.automation-token.outputs.token }}
         run: |
           git add -A
           if git diff --cached --quiet; then
@@ -81,7 +90,7 @@ jobs:
         env:
           BRANCH: ${{ steps.generated.outputs.branch }}
           EXISTING_PR: ${{ steps.generated.outputs.existing-pr }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.automation-token.outputs.token }}
         run: |
           pr_number="$EXISTING_PR"
           if [ -z "$pr_number" ]; then
@@ -130,6 +139,6 @@ jobs:
       - name: Enable generated pull request auto-merge
         if: steps.generated.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.automation-token.outputs.token }}
           PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
         run: gh pr merge "$PR_NUMBER" --repo rudironsoni/Orlix --auto --squash --delete-branch
