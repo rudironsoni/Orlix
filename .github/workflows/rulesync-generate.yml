@@ -9,9 +9,9 @@ on:
       - 'rulesync.jsonc'
 
 permissions:
-  actions: write
   contents: write
   pull-requests: write
+  statuses: write
 
 concurrency:
   group: rulesync-main-generation
@@ -91,14 +91,27 @@ jobs:
             pr_number="$(gh pr view "$pr_url" --repo rudironsoni/Orlix --json number --jq .number)"
           fi
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
-      - name: Dispatch generated-output verification
+      - name: Verify generated pull request
         if: steps.generated.outputs.changed == 'true'
+        id: verified
         env:
-          BRANCH: ${{ steps.generated.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
         run: |
-          gh workflow run rulesync-generated-output-guard.yml --repo rudironsoni/Orlix --ref "$BRANCH" -f mode=generated -f pr_number="$PR_NUMBER" -f source_revision="$GITHUB_SHA"
+          head_sha="$(gh pr view "$PR_NUMBER" --repo rudironsoni/Orlix --json headRefOid --jq .headRefOid)"
+          make agent-rules-generated-pr-check PR_NUMBER="$PR_NUMBER" SOURCE_REVISION="$GITHUB_SHA" HEAD_REVISION="$head_sha"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+      - name: Publish verified status
+        if: steps.generated.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state=success \
+            -f context="RuleSync generated output guard" \
+            -f description="Exact RuleSync regeneration matched" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Enable generated pull request auto-merge
         if: steps.generated.outputs.changed == 'true'
         env:

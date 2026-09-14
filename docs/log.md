@@ -1263,7 +1263,8 @@ RuleSync's isolated generated output owns the output inventory. Orlix validates 
 
 ## [2026-09-14] contract | Verify generated RuleSync pull requests
 
-RuleSync CI dispatches the generated-output guard on the generated head. The
-guard publishes the required status only after independent generation matches
-the generated pull request exactly. GitHub auto-merge remains subject to the
-active ruleset with no bypass actors.
+The trusted main-triggered RuleSync workflow verifies the generated pull
+request directly. It requires a protected-main source with current canonical
+inputs and publishes the required status only after independent generation
+matches exactly. GitHub auto-merge remains subject to the active ruleset with
+no bypass actors.

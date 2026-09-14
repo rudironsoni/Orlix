@@ -2,22 +2,10 @@ name: RuleSync generated output guard
 
 on:
   pull_request:
-  workflow_dispatch:
-    inputs:
-      mode:
-        required: true
-        type: string
-      pr_number:
-        required: true
-        type: string
-      source_revision:
-        required: true
-        type: string
 
 permissions:
   contents: read
   pull-requests: read
-  statuses: write
 
 jobs:
   guard:
@@ -36,31 +24,5 @@ jobs:
           chmod +x "$RUNNER_TEMP/rulesync"
           test "$("$RUNNER_TEMP/rulesync" --version)" = "$version"
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Validate invocation
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          MODE: ${{ inputs.mode }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            exit 0
-          fi
-          test "$MODE" = "generated"
       - name: Reject generated changes
-        if: github.event_name == 'pull_request'
         run: make agent-rules-pr-guard BASE="${{ github.event.pull_request.base.sha }}" HEAD="${{ github.event.pull_request.head.sha }}"
-      - name: Verify generated pull request
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'generated'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: make agent-rules-generated-pr-check PR_NUMBER="${{ inputs.pr_number }}" SOURCE_REVISION="${{ inputs.source_revision }}"
-      - name: Publish verified status
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'generated'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
-            -f state=success \
-            -f context="RuleSync generated output guard" \
-            -f description="Exact RuleSync regeneration matched" \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
