@@ -58,10 +58,30 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn(f'- "{path}"', text)
         for path in IOS15_RELEVANT_PATHS:
             self.assertIn(f'- "{path}"', text)
-        self.assertIn(
-            "github.event_name == 'pull_request' && 'source' || 'promoted'",
-            text,
-        )
+
+    def test_canonical_workflow_keeps_promoted_inputs_off_pull_requests(self) -> None:
+        import json
+
+        lock = json.loads((ROOT / "artifacts.lock.json").read_text(encoding="utf-8"))
+        self.assertEqual(lock.get("schema", 1), 1)
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        select = workflow.split("Select the component mode", 1)[1].split(
+            "Prepare promoted-mode verification inputs", 1
+        )[0]
+        self.assertIn('json.load(open("artifacts.lock.json")).get("schema", 1)', select)
+        self.assertIn('GITHUB_EVENT_NAME" = "pull_request"', select)
+        self.assertIn('$schema" != "2"', select)
+        self.assertIn("ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}", workflow)
+        self.assertIn("packages: read", workflow)
+        self.assertIn("steps.component-mode.outputs.mode == 'promoted'", workflow)
+        self.assertIn("oras login ghcr.io", workflow)
+        promoted_block = workflow.split("Prepare promoted-mode verification inputs", 1)[1].split(
+            "Run the Make-owned Apple CI operation", 1
+        )[0]
+        self.assertIn("ORLIX_COSIGN_PUB_VALUE", promoted_block)
+        self.assertIn('printf \'%s\\n\' "$ORLIX_COSIGN_PUB_VALUE" > "$key_path"', promoted_block)
+        self.assertIn("ORLIX_COSIGN_PUB=$key_path", promoted_block)
+        self.assertNotIn("attest-build-provenance", workflow)
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
@@ -107,13 +127,15 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("--bes_backend=grpcs://remote.buildbuddy.io", rc)
         self.assertIn("--remote_upload_local_results=false", rc)
         self.assertNotIn("--remote_executor", rc)
+        self.assertNotIn("--remote_instance_name", rc)
         self.assertIn("ORLIX_BAZEL_CACHE_EPOCH ?= v1", makefile)
+        configure = makefile.split("__bazel-buildbuddy-configure:", 1)[1].split(
+            "__bazel-buildbuddy-cleanup:", 1
+        )[0]
         self.assertIn(
-            "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/v1", rc
+            "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/$(ORLIX_BAZEL_CACHE_EPOCH)",
+            configure,
         )
-        instance = next(line for line in rc.splitlines() if "--remote_instance_name" in line)
-        for forbidden in ("github.sha", "github.ref", "pull_request", "15.5", "26.5"):
-            self.assertNotIn(forbidden, instance)
 
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
@@ -149,6 +171,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("exit 0", missing_key)
         self.assertIn("github.event_name == 'workflow_dispatch'", text)
         self.assertIn("github.repository == 'rudironsoni/Orlix'", text)
+        guard = text.split("name: Dual-build promote", 1)[1].split("runs-on:", 1)[0]
+        for allowed_ref in ("refs/heads/main", "refs/heads/fix/build-optimizations"):
+            self.assertIn(allowed_ref, guard)
+        self.assertNotIn("id-token: write", text)
+        self.assertNotIn("attestations: write", text)
         self.assertIn("Cancel if derailed", text)
         self.assertIn("gh run cancel", text)
         self.assertIn("packages: write", text)

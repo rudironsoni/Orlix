@@ -169,6 +169,8 @@ class MakeRoutingTests(unittest.TestCase):
         )[0]
         self.assertIn("simctl install", runtime)
         self.assertIn("simctl launch", runtime)
+        self.assertIn('kill -0 "$$launch_pid"', runtime)
+        self.assertIn("DiagnosticReports", runtime)
         self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:

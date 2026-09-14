@@ -3,7 +3,7 @@
   "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
   "workflows": {
     ".github/workflows/app-store-review.yml": {
-      "source_sha256": "9021a6613a966d54b60ea476a4de1fc440d9a82dadb9d57cab8db978adba49b6",
+      "source_sha256": "56f824da54c7247b468dc0853f3bac4afa22a35a9c2f06e984c128c6c9fcdc97",
       "workflow": {
         "name": "Promote TestFlight beta to App Review",
         "on": {
@@ -50,9 +50,10 @@
                 "name": "Resolve the tag and successful beta run",
                 "id": "beta",
                 "env": {
-                  "GH_TOKEN": "${{ github.token }}"
+                  "GH_TOKEN": "${{ github.token }}",
+                  "GITHUB_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -euo pipefail\ngit fetch --no-tags origin main:refs/remotes/origin/main\ncommit=\"$(git rev-list -n 1 \"refs/tags/$ORLIX_RELEASE_TAG\")\"\ntest -n \"$commit\"\nrun_id=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/testflight-beta.yml/runs?event=push&status=success&head_sha=$commit\" --jq '.workflow_runs[0].id // empty')\"\ntest -n \"$run_id\" || { echo \"No successful beta workflow exists for $ORLIX_RELEASE_TAG at $commit\" >&2; exit 1; }\necho \"commit=$commit\" >> \"$GITHUB_OUTPUT\"\necho \"run_id=$run_id\" >> \"$GITHUB_OUTPUT\"\necho \"ORLIX_RELEASE_COMMIT=$commit\" >> \"$GITHUB_ENV\"\necho \"ORLIX_RELEASE_RUN_ID=$run_id\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\ncredential=\"$(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64 | tr -d '\\n')\"\ngit -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $credential\" fetch --no-tags origin main:refs/remotes/origin/main\ncommit=\"$(git rev-list -n 1 \"refs/tags/$ORLIX_RELEASE_TAG\")\"\ntest -n \"$commit\"\nrun_id=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/testflight-beta.yml/runs?event=push&status=success&head_sha=$commit\" --jq '.workflow_runs[0].id // empty')\"\ntest -n \"$run_id\" || { echo \"No successful beta workflow exists for $ORLIX_RELEASE_TAG at $commit\" >&2; exit 1; }\necho \"commit=$commit\" >> \"$GITHUB_OUTPUT\"\necho \"run_id=$run_id\" >> \"$GITHUB_OUTPUT\"\necho \"ORLIX_RELEASE_COMMIT=$commit\" >> \"$GITHUB_ENV\"\necho \"ORLIX_RELEASE_RUN_ID=$run_id\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Download exact beta evidence",
@@ -159,7 +160,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "8978deb71be8ebd4f622f8a47a09f7c3fe99d1bc1a9feb985aa454bb36f8b63c",
+      "source_sha256": "920943b23055f7bc9481defb2771ce8a522b3222f57870b9c698dd0e5b2b04bc",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -223,7 +224,8 @@
           }
         },
         "permissions": {
-          "contents": "read"
+          "contents": "read",
+          "packages": "read"
         },
         "concurrency": {
           "group": "${{ github.event_name == 'pull_request' && format('bazel-ci-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'bazel-ci-main' || format('bazel-ci-manual-{0}', github.ref_name)) }}",
@@ -306,11 +308,25 @@
                 "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"26.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
               },
               {
+                "name": "Select the component mode",
+                "id": "component-mode",
+                "run": "set -euo pipefail\nschema=\"$(python3 -c 'import json; print(json.load(open(\"artifacts.lock.json\")).get(\"schema\", 1))')\"\nif [ \"$GITHUB_EVENT_NAME\" = \"pull_request\" ] || [ \"$schema\" != \"2\" ]; then\n  echo \"mode=source\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"mode=promoted\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
+                "name": "Prepare promoted-mode verification inputs",
+                "if": "steps.component-mode.outputs.mode == 'promoted'",
+                "env": {
+                  "ORLIX_COSIGN_PUB_VALUE": "${{ vars.ORLIX_COSIGN_PUB }}",
+                  "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
+                  "GITHUB_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\ntest -n \"$ORLIX_COSIGN_PUB_VALUE\" || { echo \"ORLIX_COSIGN_PUB is required\" >&2; exit 1; }\nkey_path=\"${RUNNER_TEMP}/orlix-cosign-pub.pem\"\nprintf '%s\\n' \"$ORLIX_COSIGN_PUB_VALUE\" > \"$key_path\"\nchmod 600 \"$key_path\"\n{\n  echo \"ORLIX_COSIGN_PUB=$key_path\"\n  echo \"ORLIX_ORAS_REGISTRY_CONFIG=$ORLIX_ORAS_REGISTRY_CONFIG\"\n} >> \"$GITHUB_ENV\"\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"$GITHUB_ACTOR\" --password-stdin\n"
+              },
+              {
                 "name": "Run the Make-owned Apple CI operation",
                 "env": {
-                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ github.event_name == 'pull_request' && 'source' || 'promoted' }}",
-                  "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}",
-                  "ORLIX_COSIGN_PUB": "${{ vars.ORLIX_COSIGN_PUB }}"
+                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ steps.component-mode.outputs.mode }}",
+                  "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}"
                 },
                 "run": "make __bazel-apple-ci"
               },
@@ -336,6 +352,11 @@
                 "name": "Remove BuildBuddy credentials",
                 "if": "always()",
                 "run": "make __bazel-buildbuddy-cleanup"
+              },
+              {
+                "name": "Remove promoted-mode verification inputs",
+                "if": "always() && steps.component-mode.outputs.mode == 'promoted'",
+                "run": "set -euo pipefail\ntest -z \"${ORLIX_ORAS_REGISTRY_CONFIG:-}\" || rm -f \"$ORLIX_ORAS_REGISTRY_CONFIG\"\ntest -z \"${ORLIX_COSIGN_PUB:-}\" || rm -f \"$ORLIX_COSIGN_PUB\"\n"
               },
               {
                 "name": "Store Apple CI evidence",
@@ -480,7 +501,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "8355ee691c76d954cdec4163a41866a2e8540109c9780db208c04add0349ef75",
+      "source_sha256": "eace1c7063756f6f6def8789bb82131318c7e3267aa1d3dbc501e358de848e66",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -515,13 +536,11 @@
           },
           "promote": {
             "name": "Dual-build promote",
-            "if": "github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix'",
+            "if": "github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/build-optimizations')",
             "runs-on": "macos-26",
             "permissions": {
               "contents": "read",
-              "packages": "write",
-              "id-token": "write",
-              "attestations": "write"
+              "packages": "write"
             },
             "environment": "bazel-promotion",
             "timeout-minutes": 360,
@@ -585,13 +604,6 @@
                 }
               },
               {
-                "name": "Attest the signed buildset proposal",
-                "uses": "actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be",
-                "with": {
-                  "subject-path": "Build/Bazel/promote/buildset-lock-proposal.json"
-                }
-              },
-              {
                 "name": "Store the verified signed buildset proposal",
                 "if": "always()",
                 "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -608,7 +620,7 @@
       }
     },
     ".github/workflows/grok-pr-review.yml": {
-      "source_sha256": "34908ae7fdfd47e970f477678533c5a04c94f162cf8cd53f63842a1348ec6762",
+      "source_sha256": "44d84d3fa2dfd66a3e51870bf3a79280c0b7939057538351e2af01c52a1c8b9e",
       "workflow": {
         "name": "Grok PR Review",
         "on": {
@@ -647,9 +659,10 @@
                 "name": "Restore trusted reviewer policy from the base revision",
                 "if": "${{ env.HAS_GROK_AUTH == 'true' }}",
                 "env": {
-                  "BASE_SHA": "${{ github.event.pull_request.base.sha }}"
+                  "BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+                  "GITHUB_TOKEN": "${{ github.token }}"
                 },
-                "run": "git fetch --depth 1 origin \"$BASE_SHA\"\ngit checkout \"$BASE_SHA\" -- AGENTS.md CLAUDE.md\n"
+                "run": "set -euo pipefail\ncredential=\"$(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64 | tr -d '\\n')\"\ngit -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $credential\" fetch --depth 1 origin \"$BASE_SHA\"\ngit checkout \"$BASE_SHA\" -- AGENTS.md CLAUDE.md\n"
               },
               {
                 "uses": "0xr3ngar/grok-build-review-action@eded30018cdee4e83dfca14d18f292b860c30cdd",
@@ -906,7 +919,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "261c6fa3b7b4e262b6e20f4112274ddb477565a1ec6280e2aeb78bc559bb739d",
+      "source_sha256": "9909156c7adb18f35bed53777c9e00119979932b4003730f4a8d8105a287c760",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -955,7 +968,10 @@
               },
               {
                 "name": "Fetch the protected release base",
-                "run": "git fetch --no-tags origin main:refs/remotes/origin/main"
+                "env": {
+                  "GITHUB_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\ncredential=\"$(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64 | tr -d '\\n')\"\ngit -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $credential\" fetch --no-tags origin main:refs/remotes/origin/main\n"
               },
               {
                 "name": "Select Xcode 26.6",

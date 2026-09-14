@@ -102,7 +102,7 @@ __bazel-buildbuddy-configure:
 	rc="$$RUNNER_TEMP/orlix-buildbuddy.bazelrc"; \
 	test ! -e "$(CURDIR)/.bazelrc.local" && test ! -L "$(CURDIR)/.bazelrc.local" || { echo ".bazelrc.local already exists" >&2; exit 1; }; \
 	umask 077; \
-	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" > "$$rc"; \
+	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
 	chmod 600 "$$rc"; \
 	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"; \
 	if [ -n "$${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_RC=$$rc" >> "$$GITHUB_ENV"; fi
@@ -839,6 +839,12 @@ __bazel-simulator-runtime-proof:
 	installed_app="$$(xcrun simctl get_app_container "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix app)"; \
 	test -x "$$installed_app/Orlix" || { echo "installed Orlix app is missing" >&2; exit 1; }; \
 	xcrun simctl launch --terminate-running-process "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix | tee "$$evidence_dir/launch.log"; \
+	launch_pid="$$(/usr/bin/awk 'END {print $$NF}' "$$evidence_dir/launch.log")"; \
+	case "$$launch_pid" in ''|*[!0-9]*) echo "simctl launch did not report a process id" >&2; exit 1 ;; esac; \
+	/bin/sleep 5; \
+	/bin/kill -0 "$$launch_pid" 2>/dev/null || { echo "Orlix exited within 5 seconds of launch on $(ORLIX_SIMULATOR_LABEL); check DiagnosticReports" >&2; /usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print | /usr/bin/head -n 5 >&2 || true; exit 1; }; \
+	/usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print -quit | /usr/bin/grep -q . && { echo "Orlix crash report written during $(ORLIX_SIMULATOR_LABEL) launch; see DiagnosticReports" >&2; exit 1; } || true; \
+	/usr/bin/touch "$$evidence_dir/launch.alive"; \
 	xcrun simctl io "$(ORLIX_SIMULATOR_ID)" screenshot "$$evidence_dir/launch.png"
 
 __bazel-current-simulator-gate:

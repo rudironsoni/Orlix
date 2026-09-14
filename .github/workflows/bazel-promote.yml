@@ -41,13 +41,14 @@ jobs:
 
   promote:
     name: Dual-build promote
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'rudironsoni/Orlix' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/build-optimizations')
     runs-on: macos-26
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
     environment: bazel-promotion
     timeout-minutes: 360
     steps:
@@ -122,11 +123,6 @@ jobs:
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
-
-      - name: Attest the signed buildset proposal
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v3.0.0
-        with:
-          subject-path: Build/Bazel/promote/buildset-lock-proposal.json
 
       - name: Store the verified signed buildset proposal
         if: always()

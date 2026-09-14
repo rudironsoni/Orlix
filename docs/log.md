@@ -7,6 +7,10 @@ updated: 2026-09-14
 ---
 # Orlix Knowledge Log
 
+## [2026-09-14] fix | Correct PR 230 review findings
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) applies the nine open Codex review corrections: canonical CI gates promoted mode on the committed lock schema and materializes the Cosign public key plus GHCR authentication per run, promotion dispatches obey the trust-policy ref allowlist and drop the private-repository attestation, release and review workflows authenticate their protected Git fetches explicitly, the BuildBuddy epoch now derives the remote instance namespace, and simulator runtime proof requires the launched process to stay alive. The two already-fixed comments (pull-request source mode, separate lock activation) stay covered by their existing tests.
+
 ## [2026-09-14] fix | Order RuleSync generated merge
 
 The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-authority.md) requires the trusted generator to wait for the ordinary pull-request guard before auto-merge and to delete the merged generated branch.

@@ -56,6 +56,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('bazel-ci-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'bazel-ci-main' || format('bazel-ci-manual-{0}', github.ref_name)) }}
@@ -151,11 +152,41 @@ jobs:
             echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
           } >> "$GITHUB_ENV"
 
+      - name: Select the component mode
+        id: component-mode
+        run: |
+          set -euo pipefail
+          schema="$(python3 -c 'import json; print(json.load(open("artifacts.lock.json")).get("schema", 1))')"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$schema" != "2" ]; then
+            echo "mode=source" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=promoted" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare promoted-mode verification inputs
+        if: steps.component-mode.outputs.mode == 'promoted'
+        env:
+          ORLIX_COSIGN_PUB_VALUE: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$ORLIX_COSIGN_PUB_VALUE" || { echo "ORLIX_COSIGN_PUB is required" >&2; exit 1; }
+          key_path="${RUNNER_TEMP}/orlix-cosign-pub.pem"
+          printf '%s\n' "$ORLIX_COSIGN_PUB_VALUE" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "ORLIX_COSIGN_PUB=$key_path"
+            echo "ORLIX_ORAS_REGISTRY_CONFIG=$ORLIX_ORAS_REGISTRY_CONFIG"
+          } >> "$GITHUB_ENV"
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
+
       - name: Run the Make-owned Apple CI operation
         env:
-          ORLIX_BAZEL_COMPONENT_MODE: ${{ github.event_name == 'pull_request' && 'source' || 'promoted' }}
+          ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
-          ORLIX_COSIGN_PUB: ${{ vars.ORLIX_COSIGN_PUB }}
         run: make __bazel-apple-ci
 
       - name: Save Bazel repository cache
@@ -175,6 +206,13 @@ jobs:
       - name: Remove BuildBuddy credentials
         if: always()
         run: make __bazel-buildbuddy-cleanup
+
+      - name: Remove promoted-mode verification inputs
+        if: always() && steps.component-mode.outputs.mode == 'promoted'
+        run: |
+          set -euo pipefail
+          test -z "${ORLIX_ORAS_REGISTRY_CONFIG:-}" || rm -f "$ORLIX_ORAS_REGISTRY_CONFIG"
+          test -z "${ORLIX_COSIGN_PUB:-}" || rm -f "$ORLIX_COSIGN_PUB"
 
       - name: Store Apple CI evidence
         if: always()
