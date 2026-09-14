@@ -112,9 +112,24 @@ jobs:
             -f context="RuleSync generated output guard" \
             -f description="Exact RuleSync regeneration matched" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Wait for pull-request guard
+        if: steps.generated.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
+        run: |
+          for _ in $(seq 1 120); do
+            conclusion="$(gh pr view "$PR_NUMBER" --repo rudironsoni/Orlix --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.__typename == "CheckRun" and .name == "RuleSync generated output guard" and .workflowName == "RuleSync generated output guard")][-1].conclusion // ""')"
+            case "$conclusion" in
+              SUCCESS) exit 0 ;;
+              ACTION_REQUIRED|CANCELLED|FAILURE|STALE|STARTUP_FAILURE|TIMED_OUT) exit 1 ;;
+            esac
+            sleep 5
+          done
+          exit 1
       - name: Enable generated pull request auto-merge
         if: steps.generated.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
-        run: gh pr merge "$PR_NUMBER" --repo rudironsoni/Orlix --auto --squash
+        run: gh pr merge "$PR_NUMBER" --repo rudironsoni/Orlix --auto --squash --delete-branch

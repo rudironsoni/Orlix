@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 # Orlix Knowledge Log
+
+## [2026-09-14] fix | Order RuleSync generated merge
+
+The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-authority.md) requires the trusted generator to wait for the ordinary pull-request guard before auto-merge and to delete the merged generated branch.
 
 ## [2026-09-13] fix | Protect RuleSync generated updates
 
