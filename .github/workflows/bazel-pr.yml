@@ -2,6 +2,29 @@ name: Bazel pull request
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/bazel-*.yml"
+      - ".github/workflows/ios15-runtime.yml"
+
+      - ".bazelignore"
+      - ".bazelrc"
+      - ".bazelversion"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+
+      - "Brewfile"
+      - "Makefile"
+      - "make/bazel-migration.mk"
+      - "artifacts.lock.json"
+
+      - "bazel/**"
+      - "**/BUILD.bazel"
+      - "**/*.bzl"
+
+      - "Orlix/make/vendor.mk"
+      - "OrlixKernel/Sources/ports/orlix/**"
+      - "OrlixMLibC/**"
+      - "third_party/**"
 
 permissions:
   contents: read

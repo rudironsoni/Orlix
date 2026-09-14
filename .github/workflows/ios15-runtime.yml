@@ -15,6 +15,16 @@ on:
       - "project.yml"
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/ios15-runtime.yml"
+      - "Brewfile"
+      - "Makefile"
+      - "Orlix/**"
+      - "OrlixHostAdapter/**"
+      - "OrlixKernel/**"
+      - "OrlixMLibC/**"
+      - "OrlixOS/**"
+      - "project.yml"
 
 permissions:
   contents: read

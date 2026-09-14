@@ -5,14 +5,49 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 
+BAZEL_RELEVANT_PATHS = (
+    ".github/workflows/bazel-*.yml",
+    ".github/workflows/ios15-runtime.yml",
+    ".bazelignore",
+    ".bazelrc",
+    ".bazelversion",
+    "MODULE.bazel",
+    "MODULE.bazel.lock",
+    "Brewfile",
+    "Makefile",
+    "make/bazel-migration.mk",
+    "artifacts.lock.json",
+    "bazel/**",
+    "**/BUILD.bazel",
+    "**/*.bzl",
+    "Orlix/make/vendor.mk",
+    "OrlixKernel/Sources/ports/orlix/**",
+    "OrlixMLibC/**",
+    "third_party/**",
+)
+
+IOS15_RELEVANT_PATHS = (
+    ".github/workflows/ios15-runtime.yml",
+    "Brewfile",
+    "Makefile",
+    "Orlix/**",
+    "OrlixHostAdapter/**",
+    "OrlixKernel/**",
+    "OrlixMLibC/**",
+    "OrlixOS/**",
+    "project.yml",
+)
+
 
 class WorkflowPolicyTests(unittest.TestCase):
     def test_pr_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-pr.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-matrix-check", text)
         self.assertNotIn("bazelisk", text)
-        self.assertNotIn("paths:", text)
+        self.assertIn("paths:", text)
         self.assertNotIn("paths-ignore:", text)
+        for path in BAZEL_RELEVANT_PATHS:
+            self.assertIn(f'- "{path}"', text)
 
     def test_promote_workflow_is_dispatch_and_protected(self) -> None:
         text = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
@@ -50,8 +85,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("make __bazel-matrix-check", text)
         self.assertIn("branches: [main]", text)
         self.assertNotIn("bazelisk", text)
-        self.assertNotIn("paths:", text)
+        self.assertIn("paths:", text)
         self.assertNotIn("paths-ignore:", text)
+        for path in BAZEL_RELEVANT_PATHS:
+            self.assertIn(f'- "{path}"', text)
 
     def test_nightly_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-nightly.yml").read_text(encoding="utf-8")
@@ -98,6 +135,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("Build/OrlixKernel/orlix-tcti-isa", text)
         self.assertNotIn("AARCHMRS", text)
         self.assertNotIn("prepare type=tcti-isa", text)
+        self.assertGreaterEqual(text.count("paths:"), 2)
+        push_block = text.split("push:", 1)[1].split("permissions:", 1)[0]
+        self.assertIn("branches: [main]", push_block)
+        self.assertIn("paths:", push_block)
+        for path in IOS15_RELEVANT_PATHS:
+            self.assertIn(f'- "{path}"', text)
+            self.assertIn(f'- "{path}"', push_block)
 
     def test_vendor_ghostty_uses_git_cache(self) -> None:
         text = (ROOT / "Orlix/make/vendor.mk").read_text(encoding="utf-8")

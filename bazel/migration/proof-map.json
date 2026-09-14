@@ -504,21 +504,33 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "agent-rules-version-check",
+      "source": "Makefile",
+      "line": 898,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "agent-rules-check",
       "source": "Makefile",
-      "line": 901,
+      "line": 904,
       "classification": "command",
       "phony": true,
       "prerequisites": [
-
+        "agent-rules-version-check"
       ],
       "owner": "Build and release system",
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
-      "name": "agent-hooks-check",
+      "name": "agent-harness-check",
       "source": "Makefile",
-      "line": 910,
+      "line": 908,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -528,43 +540,7 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
-      "name": "agent-skills-check",
-      "source": "Makefile",
-      "line": 913,
-      "classification": "command",
-      "phony": true,
-      "prerequisites": [
-
-      ],
-      "owner": "Build and release system",
-      "artifact_digest_binding": "not-yet-implemented"
-    },
-    {
-      "name": "agent-subagents-check",
-      "source": "Makefile",
-      "line": 916,
-      "classification": "command",
-      "phony": true,
-      "prerequisites": [
-
-      ],
-      "owner": "Build and release system",
-      "artifact_digest_binding": "not-yet-implemented"
-    },
-    {
-      "name": "agent-mcp-check",
-      "source": "Makefile",
-      "line": 919,
-      "classification": "command",
-      "phony": true,
-      "prerequisites": [
-
-      ],
-      "owner": "Build and release system",
-      "artifact_digest_binding": "not-yet-implemented"
-    },
-    {
-      "name": "agent-task-envelope-check",
+      "name": "agent-rules-generated-pr-check",
       "source": "Makefile",
       "line": 930,
       "classification": "command",
@@ -576,9 +552,105 @@
       "artifact_digest_binding": "not-yet-implemented"
     },
     {
+      "name": "agent-rules-validate-write-set",
+      "source": "Makefile",
+      "line": 938,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-hooks-check",
+      "source": "Makefile",
+      "line": 944,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "agent-rules-version-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-skills-check",
+      "source": "Makefile",
+      "line": 947,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "agent-rules-version-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-subagents-check",
+      "source": "Makefile",
+      "line": 950,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "agent-rules-version-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-mcp-check",
+      "source": "Makefile",
+      "line": 953,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "agent-rules-version-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-permissions-check",
+      "source": "Makefile",
+      "line": 956,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+        "agent-rules-version-check"
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-graph-check",
+      "source": "Makefile",
+      "line": 962,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
+      "name": "agent-task-envelope-check",
+      "source": "Makefile",
+      "line": 973,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ],
+      "owner": "Build and release system",
+      "artifact_digest_binding": "not-yet-implemented"
+    },
+    {
       "name": "beta-validate-archive",
       "source": "Makefile",
-      "line": 981,
+      "line": 1028,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -590,7 +662,7 @@
     {
       "name": "beta-validate-export",
       "source": "Makefile",
-      "line": 1024,
+      "line": 1071,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -602,7 +674,7 @@
     {
       "name": "beta-upload-prerequisites",
       "source": "Makefile",
-      "line": 1034,
+      "line": 1081,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -614,7 +686,7 @@
     {
       "name": "app-store-release-report-check",
       "source": "Makefile",
-      "line": 1061,
+      "line": 1108,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -629,7 +701,7 @@
     {
       "name": "release-workflow-check",
       "source": "Makefile",
-      "line": 1074,
+      "line": 1121,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -641,7 +713,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1115,
+      "line": 1162,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -653,7 +725,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1115,
+      "line": 1162,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -665,7 +737,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1118,
+      "line": 1165,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -677,7 +749,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1149,
+      "line": 1196,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -689,7 +761,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1157,
+      "line": 1204,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -883,7 +955,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 49,
+      "line": 51,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -895,7 +967,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 390,
+      "line": 455,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -907,7 +979,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 403,
+      "line": 468,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -919,7 +991,7 @@
     {
       "name": "__bazel-proof-graph",
       "source": "make/bazel-migration.mk",
-      "line": 420,
+      "line": 485,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -932,7 +1004,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 470,
+      "line": 535,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -944,7 +1016,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 512,
+      "line": 583,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -957,7 +1029,7 @@
     {
       "name": "__bazel-test-app",
       "source": "make/bazel-migration.mk",
-      "line": 541,
+      "line": 613,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -969,7 +1041,7 @@
     {
       "name": "__bazel-test-app-architecture",
       "source": "make/bazel-migration.mk",
-      "line": 541,
+      "line": 613,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -981,7 +1053,7 @@
     {
       "name": "__bazel-test-native-smoke",
       "source": "make/bazel-migration.mk",
-      "line": 541,
+      "line": 613,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -993,7 +1065,7 @@
     {
       "name": "__bazel-test-output-parser",
       "source": "make/bazel-migration.mk",
-      "line": 541,
+      "line": 613,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1005,7 +1077,7 @@
     {
       "name": "__bazel-test-terminal-surface",
       "source": "make/bazel-migration.mk",
-      "line": 541,
+      "line": 613,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1017,7 +1089,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 626,
+      "line": 698,
       "classification": "private",
       "phony": true,
       "prerequisites": [
