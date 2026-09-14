@@ -928,8 +928,8 @@ agent-rules-pr-guard:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports pr-guard "$(BASE)" "$(HEAD)"
 
 agent-rules-generated-pr-check:
-	@test -n "$(PR_NUMBER)" -a -n "$(SOURCE_REVISION)" -a -n "$(HEAD_REVISION)" || { echo "PR_NUMBER=<number>, SOURCE_REVISION=<sha>, and HEAD_REVISION=<sha> required" >&2; exit 2; }
-	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports generated-pr-guard "$(PR_NUMBER)" "$(SOURCE_REVISION)" "$(HEAD_REVISION)"
+	@test -n "$(PR_NUMBER)" -a -n "$(SOURCE_REVISION)" || { echo "PR_NUMBER=<number> and SOURCE_REVISION=<sha> required" >&2; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports generated-pr-guard "$(PR_NUMBER)" "$(SOURCE_REVISION)"
 
 agent-rules-validate-write-set:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m Tools.AgentHarness.rulesync_reports validate-write-set

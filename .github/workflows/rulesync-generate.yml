@@ -94,10 +94,11 @@ jobs:
       - name: Dispatch generated-output verification
         if: steps.generated.outputs.changed == 'true'
         env:
+          BRANCH: ${{ steps.generated.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.generated-pr.outputs.number }}
         run: |
-          gh workflow run rulesync-generated-output-guard.yml --repo rudironsoni/Orlix --ref main -f mode=generated -f pr_number="$PR_NUMBER" -f source_revision="$GITHUB_SHA"
+          gh workflow run rulesync-generated-output-guard.yml --repo rudironsoni/Orlix --ref "$BRANCH" -f mode=generated -f pr_number="$PR_NUMBER" -f source_revision="$GITHUB_SHA"
       - name: Enable generated pull request auto-merge
         if: steps.generated.outputs.changed == 'true'
         env:
