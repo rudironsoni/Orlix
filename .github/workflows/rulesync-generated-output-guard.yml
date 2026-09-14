@@ -8,10 +8,6 @@ permissions:
   pull-requests: read
   statuses: read
 
-concurrency:
-  group: ${{ startsWith(github.head_ref, 'automation/rulesync-') && 'rulesync-main-generation' || format('rulesync-pr-{0}', github.event.pull_request.number) }}
-  cancel-in-progress: false
-
 jobs:
   guard:
     name: RuleSync generated output guard

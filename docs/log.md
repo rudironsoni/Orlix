@@ -1267,5 +1267,6 @@ The trusted main-triggered RuleSync workflow verifies the generated pull
 request directly. It requires a protected-main source with current canonical
 inputs and publishes the required status only after independent generation
 matches exactly. The normal pull-request guard accepts generated output only
-when that status names a successful trusted generator run for the same source.
-GitHub auto-merge remains subject to the active ruleset with no bypass actors.
+when that status names the trusted generator run for the same current main
+source. GitHub auto-merge remains subject to the active ruleset with no bypass
+actors.

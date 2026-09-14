@@ -7,6 +7,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 from .context import repository_root
@@ -463,7 +464,7 @@ def generated_pr_guard(root: Path, pr_number: str, source_revision: str, head_re
         raise ValueError("generated pull request does not exactly match independent RuleSync generation")
 
 
-def trusted_generated_status(root: Path, pr_number: str, head_revision: str) -> None:
+def trusted_generated_status(root: Path, pr_number: str, head_revision: str, attempts: int = 15) -> None:
     if not pr_number.isdigit() or int(pr_number) < 1:
         raise ValueError("pull request number must be positive")
     if not re.fullmatch(r"[0-9a-f]{40}", head_revision):
@@ -502,53 +503,56 @@ def trusted_generated_status(root: Path, pr_number: str, head_revision: str) -> 
         or version != pinned_version(root)
     ):
         raise ValueError("pull request has no trusted generated metadata")
-    run(["git", "fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"], root)
-    verify_current_main_source(root, source_revision)
-    statuses = json.loads(
-        run(
-            [
-                "gh",
-                "api",
-                f"repos/rudironsoni/Orlix/commits/{head_revision}/statuses?per_page=100",
-            ],
-            root,
-        ).stdout
-    )
-    for status in statuses:
-        target = status.get("target_url") or ""
-        match = re.fullmatch(r"https://github\.com/rudironsoni/Orlix/actions/runs/([1-9][0-9]*)", target)
-        if (
-            status.get("context") != "RuleSync generated output guard"
-            or status.get("state") != "success"
-            or status.get("description") != "Exact RuleSync regeneration matched"
-            or (status.get("creator") or {}).get("login") != "github-actions[bot]"
-            or match is None
-        ):
-            continue
-        workflow = json.loads(
+    for attempt in range(attempts):
+        statuses = json.loads(
             run(
                 [
                     "gh",
-                    "run",
-                    "view",
-                    match.group(1),
-                    "--repo",
-                    "rudironsoni/Orlix",
-                    "--json",
-                    "workflowName,event,headBranch,headSha,status,conclusion",
+                    "api",
+                    f"repos/rudironsoni/Orlix/commits/{head_revision}/statuses?per_page=100",
                 ],
                 root,
             ).stdout
         )
-        if workflow == {
-            "workflowName": "RuleSync main generation",
-            "event": "push",
-            "headBranch": "main",
-            "headSha": source_revision,
-            "status": "completed",
-            "conclusion": "success",
-        }:
-            return
+        for status in statuses:
+            target = status.get("target_url") or ""
+            match = re.fullmatch(r"https://github\.com/rudironsoni/Orlix/actions/runs/([1-9][0-9]*)", target)
+            if (
+                status.get("context") != "RuleSync generated output guard"
+                or status.get("state") != "success"
+                or status.get("description") != "Exact RuleSync regeneration matched"
+                or (status.get("creator") or {}).get("login") != "github-actions[bot]"
+                or match is None
+            ):
+                continue
+            workflow = json.loads(
+                run(
+                    [
+                        "gh",
+                        "run",
+                        "view",
+                        match.group(1),
+                        "--repo",
+                        "rudironsoni/Orlix",
+                        "--json",
+                        "workflowName,event,headBranch,headSha,status,conclusion",
+                    ],
+                    root,
+                ).stdout
+            )
+            identity = {key: workflow[key] for key in ("workflowName", "event", "headBranch", "headSha")}
+            completed = workflow["status"] == "completed" and workflow["conclusion"] == "success"
+            if identity == {
+                "workflowName": "RuleSync main generation",
+                "event": "push",
+                "headBranch": "main",
+                "headSha": source_revision,
+            } and (workflow["status"] == "in_progress" or completed):
+                run(["git", "fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"], root)
+                verify_current_main_source(root, source_revision)
+                return
+        if attempt + 1 < attempts:
+            time.sleep(2)
     raise ValueError("generated pull request has no trusted successful generator status")
 
 

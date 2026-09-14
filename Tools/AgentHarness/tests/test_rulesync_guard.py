@@ -220,7 +220,7 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertIn('HEAD="${{ github.event.pull_request.head.sha }}"', guard)
         self.assertIn("continue-on-error: true", guard)
         self.assertIn("agent-rules-generated-status-check", guard)
-        self.assertIn("rulesync-main-generation", guard)
+        self.assertNotIn("concurrency:", guard)
         self.assertIn("statuses: read", guard)
         self.assertNotIn("agent-rules-generated-pr-check", guard)
         self.assertNotIn("statuses: write", guard)
@@ -335,8 +335,8 @@ class RuleSyncGuardTests(unittest.TestCase):
                 "event": "push",
                 "headBranch": "main",
                 "headSha": source,
-                "status": "completed",
-                "conclusion": "success",
+                "status": "in_progress",
+                "conclusion": "",
             }
 
             def fake_run(command, _cwd, check=True):
@@ -351,13 +351,65 @@ class RuleSyncGuardTests(unittest.TestCase):
             with patch("Tools.AgentHarness.rulesync_reports.run", side_effect=fake_run), patch(
                 "Tools.AgentHarness.rulesync_reports.verify_current_main_source"
             ):
-                trusted_generated_status(root, "1", head)
+                trusted_generated_status(root, "1", head, attempts=1)
+                workflow["status"] = "completed"
+                workflow["conclusion"] = "success"
+                trusted_generated_status(root, "1", head, attempts=1)
                 workflow["headSha"] = "3" * 40
                 with self.assertRaisesRegex(ValueError, "no trusted successful"):
-                    trusted_generated_status(root, "1", head)
+                    trusted_generated_status(root, "1", head, attempts=1)
                 details["body"] = f"rulesync-generated: true\n{source}\nrulesync-version: 16.26.1\n"
                 with self.assertRaisesRegex(ValueError, "no trusted generated metadata"):
-                    trusted_generated_status(root, "1", head)
+                    trusted_generated_status(root, "1", head, attempts=1)
+
+    def test_trusted_generator_status_waits_for_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".rulesync").mkdir()
+            (root / ".rulesync" / "VERSION").write_text("16.26.1\n", encoding="utf-8")
+            source = "1" * 40
+            head = "2" * 40
+            details = {
+                "baseRefName": "main",
+                "body": f"rulesync-generated: true\nsource-revision: {source}\nrulesync-version: 16.26.1\n",
+                "headRefName": f"automation/rulesync-{source}",
+                "headRefOid": head,
+                "isCrossRepository": False,
+                "state": "OPEN",
+            }
+            status = {
+                "context": "RuleSync generated output guard",
+                "state": "success",
+                "description": "Exact RuleSync regeneration matched",
+                "target_url": "https://github.com/rudironsoni/Orlix/actions/runs/123",
+                "creator": {"login": "github-actions[bot]"},
+            }
+            workflow = {
+                "workflowName": "RuleSync main generation",
+                "event": "push",
+                "headBranch": "main",
+                "headSha": source,
+                "status": "in_progress",
+                "conclusion": "",
+            }
+            api_calls = 0
+
+            def fake_run(command, _cwd, check=True):
+                nonlocal api_calls
+                if command[:3] == ["gh", "pr", "view"]:
+                    value = details
+                elif command[:2] == ["gh", "api"]:
+                    api_calls += 1
+                    value = [] if api_calls == 1 else [status]
+                else:
+                    value = workflow
+                return subprocess.CompletedProcess(command, 0, json.dumps(value), "")
+
+            with patch("Tools.AgentHarness.rulesync_reports.run", side_effect=fake_run), patch(
+                "Tools.AgentHarness.rulesync_reports.verify_current_main_source"
+            ), patch("Tools.AgentHarness.rulesync_reports.time.sleep") as pause:
+                trusted_generated_status(root, "1", head, attempts=2)
+                pause.assert_called_once_with(2)
 
 
 if __name__ == "__main__":
