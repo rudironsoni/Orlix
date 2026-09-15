@@ -41,7 +41,7 @@ xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
 xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
 case "$xcode_name|$xcode_build" in
-  "Xcode 26.6|Build version 17F113"|"Xcode 27.0|Build version 27A5252f") ;;
+  "Xcode 27.0|Build version 27A266a"|"Xcode 26.6|Build version 17F113") ;;
   *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
 esac
 gmake="$(/usr/bin/command -v gmake)"

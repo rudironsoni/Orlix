@@ -6,6 +6,7 @@ ORLIX_PRODUCT_BOUNDARY_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-bou
 ORLIX_PRODUCT_KALLSYMS_OBJECT := $(ORLIX_PRODUCT_ADAPTER_ROOT)/orlix-product-kallsyms.o
 ORLIX_PRODUCT_BOUNDARY_OBJECTS := $(ORLIX_PRODUCT_PAYLOAD_OBJECT) $(ORLIX_PRODUCT_BOUNDARY_OBJECT) $(ORLIX_PRODUCT_KALLSYMS_OBJECT)
 ORLIX_KERNEL_PORT_ABS := $(abspath $(ORLIX_KERNEL_PORT_DIR))
+ORLIX_PRODUCT_ADAPTER_TOOL_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ORLIX_PRODUCT_ADAPTER_CFLAGS += -ffile-prefix-map="$(ORLIX_KERNEL_PORT_ABS)/=./" -ffile-prefix-map="$(ORLIX_KERNEL_BUILD_DIR)/=./.kbuild/" -ffile-prefix-map="$(abspath $(ORLIX_KERNEL_BUILD_DIR))/=./.kbuild/"
 ORLIX_KERNEL_PORT_REL := $(shell /usr/bin/python3 -c 'import os; print(os.path.relpath("$(ORLIX_KERNEL_PORT_ABS)", "$(CURDIR)"))')
 ORLIX_KERNEL_BUILD_REL := $(shell /usr/bin/python3 -c 'import os; print(os.path.relpath("$(ORLIX_KERNEL_BUILD_DIR)", "$(CURDIR)"))')
@@ -703,14 +704,6 @@ orlix_product_adapter_generate_boundaries() { \
 	}; \
 	initcall_symbols="$$(for obj in "$${product_objects[@]}"; do "$$nm_cmd" -m "$$obj" | awk '/\(__DATA,__initcall_e\)/ && $$NF ~ /^___initcall____/ { print "__initcall_e", $$NF; next } /\(__DATA,__initcall0\)/ && $$NF ~ /^___initcall____/ { print "__initcall0", $$NF; next } /\(__DATA,__initcall0s\)/ && $$NF ~ /^___initcall____/ { print "__initcall0s", $$NF; next } /\(__DATA,__initcall1\)/ && $$NF ~ /^___initcall____/ { print "__initcall1", $$NF; next } /\(__DATA,__initcall1s\)/ && $$NF ~ /^___initcall____/ { print "__initcall1s", $$NF; next } /\(__DATA,__initcall2\)/ && $$NF ~ /^___initcall____/ { print "__initcall2", $$NF; next } /\(__DATA,__initcall2s\)/ && $$NF ~ /^___initcall____/ { print "__initcall2s", $$NF; next } /\(__DATA,__initcall3\)/ && $$NF ~ /^___initcall____/ { print "__initcall3", $$NF; next } /\(__DATA,__initcall3s\)/ && $$NF ~ /^___initcall____/ { print "__initcall3s", $$NF; next } /\(__DATA,__initcall4\)/ && $$NF ~ /^___initcall____/ { print "__initcall4", $$NF; next } /\(__DATA,__initcall4s\)/ && $$NF ~ /^___initcall____/ { print "__initcall4s", $$NF; next } /\(__DATA,__initcall5\)/ && $$NF ~ /^___initcall____/ { print "__initcall5", $$NF; next } /\(__DATA,__initcall5s\)/ && $$NF ~ /^___initcall____/ { print "__initcall5s", $$NF; next } /\(__DATA,__initcallrf\)/ && $$NF ~ /^___initcall____/ { print "__initcallrf", $$NF; next } /\(__DATA,__initcallrfs\)/ && $$NF ~ /^___initcall____/ { print "__initcallrfs", $$NF; next } /\(__DATA,__initcall6\)/ && $$NF ~ /^___initcall____/ { print "__initcall6", $$NF; next } /\(__DATA,__initcall6s\)/ && $$NF ~ /^___initcall____/ { print "__initcall6s", $$NF; next } /\(__DATA,__initcall7\)/ && $$NF ~ /^___initcall____/ { print "__initcall7", $$NF; next } /\(__DATA,__initcall7s\)/ && $$NF ~ /^___initcall____/ { print "__initcall7s", $$NF; next }'; done)"; \
 	has_product_initcalls() { [ -n "$$initcall_symbols" ]; }; \
-	emit_initcall_start_boundary() { \
-		symbol="$$1"; section="$$2"; \
-		if has_product_initcalls || undefined_symbol_present "$$symbol"; then \
-			printf '.section __DATA,%s\n' "$$section"; \
-			printf '%s\n' '.p2align 3'; \
-			emit_label "$$symbol"; \
-		fi; \
-	}; \
 	emit_initcall_end_boundary() { \
 		symbol="$$1"; \
 		if has_product_initcalls; then emit_alias "$$symbol" "$$(section_label end __DATA __initcalls)"; else emit_label "$$symbol"; fi; \
@@ -738,15 +731,20 @@ orlix_product_adapter_generate_boundaries() { \
 		emit_empty_pair_if_needed ___init_begin ___init_end; \
 		emit_section_pair_if_needed ___setup_start ___setup_end __DATA __init_setup; \
 		if has_product_initcalls || undefined_symbol_present ___initcall_start || undefined_symbol_present ___initcall_end; then \
-			emit_initcall_start_boundary ___initcall_start __initcall_e; \
-			emit_initcall_start_boundary ___initcall0_start __initcall0; \
-			emit_initcall_start_boundary ___initcall1_start __initcall1; \
-			emit_initcall_start_boundary ___initcall2_start __initcall2; \
-			emit_initcall_start_boundary ___initcall3_start __initcall3; \
-			emit_initcall_start_boundary ___initcall4_start __initcall4; \
-			emit_initcall_start_boundary ___initcall5_start __initcall5; \
-			emit_initcall_start_boundary ___initcall6_start __initcall6; \
-			emit_initcall_start_boundary ___initcall7_start __initcall7; \
+			for stub_pair in "___initcall_start|__initcall_e" "___initcall0_start|__initcall0" "___initcall1_start|__initcall1" "___initcall2_start|__initcall2" "___initcall3_start|__initcall3" "___initcall4_start|__initcall4" "___initcall5_start|__initcall5" "___initcall6_start|__initcall6" "___initcall7_start|__initcall7"; do \
+				stub_symbol="$${stub_pair%%|*}"; stub_level="$${stub_pair##*|}"; \
+				if has_product_initcalls || undefined_symbol_present "$$stub_symbol"; then \
+					stub_src="$${boundary_obj%/*}/orlix-initcall-stub-$${stub_level}.S"; \
+					stub_obj="$${boundary_obj}.stub.$${stub_level}.o"; \
+					{ \
+						printf '%s\n' '/* generated Build-only initcall level start boundary stub */'; \
+						printf '.section __DATA,%s\n' "$$stub_level"; \
+						printf '%s\n' '.p2align 3'; \
+						emit_label "$$stub_symbol"; \
+					} > "$$stub_src"; \
+					/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler -c "$$stub_src" -o "$$stub_obj"; \
+				fi; \
+			done; \
 			emit_initcall_end_boundary ___initcall_end; \
 			printf '%s\n' '.section __DATA,__orlix_bnd'; \
 			printf '%s\n' '.p2align 3'; \
@@ -774,7 +772,11 @@ orlix_product_adapter_generate_boundaries() { \
 		emit_section_pair_if_needed ___start___bug_table ___stop___bug_table __DATA __bug_table; \
 	} > "$$boundary_src"; \
 	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler -c "$$boundary_src" -o "$$boundary_obj"; \
-	for symbol in _jiffies _init_stack _init_thread_union ___start_init_stack ___end_init_stack __sdata __edata ___init_begin ___init_end ___cpuidle_text_start ___cpuidle_text_end ___irqentry_text_start ___irqentry_text_end ___noinstr_text_start ___noinstr_text_end ___sched_text_start ___sched_text_end ___softirqentry_text_start ___softirqentry_text_end ___start_rodata ___end_rodata ___sched_class_highest ___sched_class_lowest ___setup_start ___setup_end ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end ___con_initcall_start ___con_initcall_end ___start_once ___end_once ___start_ro_after_init ___end_ro_after_init ___start_builtin_fw ___end_builtin_fw ___per_cpu_start ___per_cpu_end ___bss_start ___bss_stop ___start___param ___stop___param ___kunit_suites_start ___kunit_suites_end ___kunit_init_suites_start ___kunit_init_suites_end ___start_lsm_info ___end_lsm_info ___start_early_lsm_info ___end_early_lsm_info ___start___modver ___stop___modver ___start_notes ___stop_notes ___start___ksymtab ___stop___ksymtab ___start___kcrctab ___stop___kcrctab ___start___ex_table ___stop___ex_table ___start___jump_table ___stop___jump_table ___start___bug_table ___stop___bug_table; do if undefined_symbol_present "$$symbol"; then "$$nm_cmd" -m "$$boundary_obj" | grep -F -q "$$symbol" || { echo "product boundary object missing requested symbol: $$symbol" >&2; exit 1; }; fi; done; \
+	boundary_nm="$$(mktemp "$${TMPDIR:-/tmp}/orlix-boundary-nm.XXXXXX")"; \
+	"$$nm_cmd" -m "$$boundary_obj" > "$$boundary_nm"; \
+	for stub_obj in "$$boundary_obj".stub.*.o; do if [ -e "$$stub_obj" ]; then "$$nm_cmd" -m "$$stub_obj" >> "$$boundary_nm"; fi; done; \
+	trap 'rm -f "$$boundary_nm"' EXIT; \
+	for symbol in _jiffies _init_stack _init_thread_union ___start_init_stack ___end_init_stack __sdata __edata ___init_begin ___init_end ___cpuidle_text_start ___cpuidle_text_end ___irqentry_text_start ___irqentry_text_end ___noinstr_text_start ___noinstr_text_end ___sched_text_start ___sched_text_end ___softirqentry_text_start ___softirqentry_text_end ___start_rodata ___end_rodata ___sched_class_highest ___sched_class_lowest ___setup_start ___setup_end ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end ___con_initcall_start ___con_initcall_end ___start_once ___end_once ___start_ro_after_init ___end_ro_after_init ___start_builtin_fw ___end_builtin_fw ___per_cpu_start ___per_cpu_end ___bss_start ___bss_stop ___start___param ___stop___param ___kunit_suites_start ___kunit_suites_end ___kunit_init_suites_start ___kunit_init_suites_end ___start_lsm_info ___end_lsm_info ___start_early_lsm_info ___end_early_lsm_info ___start___modver ___stop___modver ___start_notes ___stop_notes ___start___ksymtab ___stop___ksymtab ___start___kcrctab ___stop___kcrctab ___start___ex_table ___stop___ex_table ___start___jump_table ___stop___jump_table ___start___bug_table ___stop___bug_table; do if undefined_symbol_present "$$symbol"; then grep -F -q "$$symbol" "$$boundary_nm" || { echo "product boundary object missing requested symbol: $$symbol" >&2; exit 1; }; fi; done; \
 	objs+=("$$boundary_obj"); \
 	echo "generated Orlix product boundary object: $$boundary_obj"; \
 };
@@ -829,8 +831,6 @@ orlix_product_adapter_finalize_archive() { \
 	class_symbol_present() { symbol="$$1"; for obj in "$${product_objects[@]}"; do case "$$obj" in *kernel_sched_*.o) "$$nm_cmd" "$$obj" | awk -v symbol="$$symbol" 'NF >= 3 && $$3 == symbol { found = 1 } END { exit found ? 0 : 1 }' && return 0 ;; esac; done; return 1; }; \
 	expected_sched_order="$$(for symbol in _stop_sched_class _dl_sched_class _rt_sched_class _fair_sched_class _ext_sched_class _idle_sched_class; do if class_symbol_present "$$symbol"; then printf '%s\n' "$$symbol"; fi; done)"; \
 	if [ -n "$$expected_sched_order" ]; then printf '%s\n' "$$expected_sched_order" >> "$$order_file"; fi; \
-	link_order_args=(); \
-	linker_select_args=(); \
 	link_rename_args=(); \
 	if [ -n "$$expected_initcall_order" ]; then \
 		for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
@@ -838,13 +838,11 @@ orlix_product_adapter_finalize_archive() { \
 		done; \
 	fi; \
 	if [ -s "$$order_file" ]; then \
-		classic_ld="$$(xcrun --find ld-classic 2>/dev/null || true)"; \
-		[ -x "$$classic_ld" ] || { echo "ordered Orlix product link requires ld-classic" >&2; exit 1; }; \
-		linker_select_args=(-fuse-ld="$$classic_ld"); \
-		link_order_args=(-Wl,-order_file,"$$order_file"); \
-	fi; \
-	partial_objects=(); \
-	chunk_index=0; \
+		partial_objects=("$${product_objects[@]}"); \
+		for stub_object in "$(ORLIX_PRODUCT_BOUNDARY_OBJECT)".stub.*.o; do \
+			if [ -e "$$stub_object" ]; then partial_objects=("$$stub_object" "$${partial_objects[@]}"); fi; \
+		done; \
+	else \
 	link_chunk() { \
 		[ "$$#" -gt 0 ] || return 0; \
 		chunk_obj="$${link_root}/chunks/orlix-product-kernel-chunk-$$(printf '%03d' "$$chunk_index").o"; \
@@ -859,9 +857,6 @@ orlix_product_adapter_finalize_archive() { \
 		partial_objects+=("$$chunk_obj"); \
 		chunk_index=$$((chunk_index + 1)); \
 	}; \
-	if [ -s "$$order_file" ]; then \
-		partial_objects=("$${product_objects[@]}"); \
-	else \
 		chunk_members=(); \
 		for product_object in "$${product_objects[@]}"; do \
 			chunk_members+=("$$product_object"); \
@@ -875,7 +870,10 @@ orlix_product_adapter_finalize_archive() { \
 	if [ ! -s "$$linked_obj" ]; then linked_needs_link=1; else for partial_object in "$${partial_objects[@]}"; do if [ "$$linked_obj" -ot "$$partial_object" ]; then linked_needs_link=1; break; fi; done; fi; \
 	if [ -s "$$order_file" ] && [ "$$linked_obj" -ot "$$order_file" ]; then linked_needs_link=1; fi; \
 	if [ "$$linked_needs_link" -eq 1 ]; then \
-		/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib "$${linker_select_args[@]}" -Wl,-r "$${link_rename_args[@]}" "$${link_order_args[@]}" -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
+		/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib -Wl,-r "$${link_rename_args[@]}" -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
+		if [ -s "$$order_file" ]; then \
+			PYTHONPATH="$(ORLIX_PRODUCT_ADAPTER_TOOL_DIR)" python3 "$(ORLIX_PRODUCT_ADAPTER_TOOL_DIR)/product_initcall_reorder.py" --object "$$linked_obj" --order "$$order_file"; \
+		fi; \
 		orlix_product_adapter_verify_object_contract "$$linked_obj"; \
 		: > "$$linked_verified"; \
 	elif [ ! -e "$$linked_verified" ] || [ "$$linked_verified" -ot "$$linked_obj" ]; then \
