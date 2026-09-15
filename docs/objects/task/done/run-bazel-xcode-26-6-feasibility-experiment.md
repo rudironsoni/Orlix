@@ -1,8 +1,8 @@
 ---
 type: task
 tags: [task, bazel, apple]
-updated: 2026-09-10
-status: doing
+updated: 2026-09-15
+status: done
 summary: "Run the bounded Bazel 9.2.0 and Xcode 26.6 compatibility experiment and record every supported or blocked behavior."
 task_of:
   - "[Prove the Bazel Apple feasibility gate](../../story/doing/prove-bazel-apple-feasibility-gate.md)"
@@ -27,3 +27,11 @@ kernel. This proves shader packaging and loading, not MLX model execution.
 The shared Make test runner requires executed tests with zero failures and skips.
 
 Fail the task when support requires a permanent fork of Bazel Apple rules.
+
+2026-09-15: the experiment completed. Canonical Apple CI proved the matrix at
+Xcode 26.6 build 17F113, and protected promotion verified the full
+seven-component buildset under the same pin. The local product pin then moved
+to Xcode 27.0 build 27A266a because the local Xcode 26.6 installation was
+removed; Xcode 26.6 remains an allowed local identity. Whether the Xcode 27.0
+pin reproduces this experiment's gate is the current feasibility gate, not
+settled proof.

@@ -69,12 +69,14 @@ class ReconstructTests(unittest.TestCase):
                 directory.mode = 0o555
                 archive.addfile(directory)
                 member = tarfile.TarInfo("include/a.h")
+                member.mode = 0o555
                 member.size = len(payload)
                 archive.addfile(member, io.BytesIO(payload))
             destination = Path(tmp) / "valid"
             reconstruct._extract_component_tar(valid, destination)
             self.assertEqual((destination / "include" / "a.h").read_bytes(), payload)
             self.assertEqual((destination / "include").stat().st_mode & 0o777, 0o555)
+            self.assertEqual((destination / "include" / "a.h").stat().st_mode & 0o777, 0o555)
 
     def test_empty_lock_cannot_reconstruct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -278,9 +280,10 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    @mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION)
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
     def test_schema2_buildset_applies_and_reuses_all_components(
-        self, public_key, verification
+        self, public_key, proposal_verification, verification
     ) -> None:
         calls: list[list[str]] = []
         with tempfile.TemporaryDirectory() as tmp:

@@ -2,27 +2,27 @@
   "schema": 1,
   "product_pin": {
     "bazel": "9.2.0",
-    "xcode_version": "26.6",
-    "xcode_build": "17F113",
-    "developer_dir": "/Applications/Xcode-26.6.0.app/Contents/Developer",
-    "iphoneos_sdk": "26.5",
-    "iphonesimulator_sdk": "26.5",
+    "xcode_version": "27.0",
+    "xcode_build": "27A266a",
+    "developer_dir": "/Applications/Xcode-27.0.0-Release.Candidate.app/Contents/Developer",
+    "iphoneos_sdk": "27.0",
+    "iphonesimulator_sdk": "27.0",
     "host_os": "macos",
     "host_arch": "arm64",
-    "disk_cache_namespace": "bazel-9.2.0-xcode-17F113"
+    "disk_cache_namespace": "bazel-9.2.0-xcode-27A266a"
   },
   "allowed_local": [
+    {
+      "xcode_version": "27.0",
+      "xcode_build": "27A266a",
+      "developer_dir": "/Applications/Xcode-27.0.0-Release.Candidate.app/Contents/Developer",
+      "disk_cache_namespace": "bazel-9.2.0-xcode-27A266a"
+    },
     {
       "xcode_version": "26.6",
       "xcode_build": "17F113",
       "developer_dir": "/Applications/Xcode-26.6.0.app/Contents/Developer",
-      "disk_cache_namespace": "bazel-9.2.0-xcode-17F113"
-    },
-    {
-      "xcode_version": "27.0",
-      "xcode_build": "27A5252f",
-      "developer_dir": "/Applications/Xcode-27.0.0-Beta.6.app/Contents/Developer",
-      "disk_cache_namespace": "bazel-9.2.0-xcode-27A5252f",
+      "disk_cache_namespace": "bazel-9.2.0-xcode-17F113",
       "product_pin": false
     }
   ]

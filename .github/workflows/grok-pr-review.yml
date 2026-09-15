@@ -35,13 +35,17 @@ jobs:
         if: ${{ env.HAS_GROK_AUTH == 'true' }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Restore trusted reviewer policy from the base revision
         if: ${{ env.HAS_GROK_AUTH == 'true' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          git fetch --depth 1 origin "$BASE_SHA"
+          set -euo pipefail
+          credential="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $credential" fetch --depth 1 origin "$BASE_SHA"
           git checkout "$BASE_SHA" -- AGENTS.md CLAUDE.md
 
       - uses: 0xr3ngar/grok-build-review-action@eded30018cdee4e83dfca14d18f292b860c30cdd # v1.0.2

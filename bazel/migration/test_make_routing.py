@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -31,6 +32,40 @@ def _dry_run(*args: str) -> str:
 
 
 class MakeRoutingTests(unittest.TestCase):
+    def test_buildbuddy_policy_modes(self) -> None:
+        expected = {
+            ("normal", "main"): "write",
+            ("normal", "pr"): "read",
+            ("normal", "fork"): "off",
+            ("conserve", "main"): "write",
+            ("conserve", "pr"): "off",
+            ("conserve", "fork"): "off",
+            ("off", "main"): "off",
+        }
+        for (mode, context), access in expected.items():
+            with self.subTest(mode=mode, context=context):
+                with tempfile.TemporaryDirectory() as temporary:
+                    output = Path(temporary) / "output"
+                    env = {**os.environ, "GITHUB_OUTPUT": str(output)}
+                    result = subprocess.run(
+                        [MAKE, "-C", str(ROOT), "__bazel-buildbuddy-policy",
+                         f"ORLIX_BUILDBUDDY_CACHE_MODE={mode}",
+                         f"ORLIX_BUILDBUDDY_CONTEXT={context}"],
+                        capture_output=True, text=True, timeout=30, env=env,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"access={access}", output.read_text())
+
+    def test_buildbuddy_policy_rejects_invalid_mode(self) -> None:
+        result = subprocess.run(
+            [MAKE, "-C", str(ROOT), "__bazel-buildbuddy-policy",
+             "ORLIX_BUILDBUDDY_CACHE_MODE=invalid",
+             "ORLIX_BUILDBUDDY_CONTEXT=main"],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid ORLIX_BUILDBUDDY_CACHE_MODE", result.stderr)
+
     def test_ios15_source_gate_separates_build_from_runtime(self) -> None:
         aggregate = _dry_run("ios15-simulator-gate", "ORLIX_BAZEL_AUTHORITY=0")
         self.assertLess(aggregate.index("__ios15-simulator-build"), aggregate.index("__ios15-simulator-test"))
@@ -116,21 +151,27 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("rebuild")
         self.assertIn("__bazel-orlix-app", output)
 
-    def test_ios15_gate_keeps_pinned_isa_inputs(self) -> None:
-        output = _dry_run(
-            "ios15-simulator-gate",
-            "ORLIX_IOS15_SIMULATOR_ID=00000000-0000-0000-0000-000000000000",
-        )
-        self.assertIn("__bazel-ios15-simulator-gate", output)
+    def test_apple_ci_builds_one_app_for_both_runtime_gates(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        self.assertEqual(apple_ci.count("__bazel-orlix-app"), 1)
+        self.assertIn('ORLIX_BAZEL_APP_TARGETS="//Orlix:Orlix //Orlix:OrlixUITests"', apple_ci)
+        self.assertIn("__bazel-current-simulator-gate", apple_ci)
+        self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
+        self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
         self.assertNotIn("__tcti-isa-restore", makefile)
         self.assertNotIn("ORLIX_TCTI_ISA_PREPARED", makefile)
         self.assertNotIn("ORLIX_TCTI_ISA_ARTIFACTS", makefile)
-        self.assertIn("deviceTypeIdentifier", makefile)
-        self.assertIn("devicetypes", makefile)
-        self.assertIn("--ios_simulator_device=", makefile)
-        self.assertIn("build //Orlix:Orlix", makefile)
-        self.assertIn("missing //Orlix:Orlix ipa after iOS 15 UI tests", makefile)
+        runtime = makefile.split("__bazel-simulator-runtime-proof:", 1)[1].split(
+            "__bazel-current-simulator-gate:", 1
+        )[0]
+        self.assertIn("simctl install", runtime)
+        self.assertIn("simctl launch", runtime)
+        self.assertIn('kill -0 "$$launch_pid"', runtime)
+        self.assertIn("DiagnosticReports", runtime)
+        self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
@@ -175,6 +216,41 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn('"signed": false', mk)
         self.assertIn("unsigned promote mutated artifacts.lock.json", mk)
         self.assertIn("unsigned promote must not Cosign-sign", mk)
+
+    def test_buildset_promotion_builds_all_components_twice(self) -> None:
+        output = _dry_run("__bazel-promote-buildset")
+        self.assertEqual(output.count(" build \"${labels[@]}\""), 1)
+        self.assertIn("for side in a b", output)
+        self.assertIn("--nouse_action_cache", output)
+        self.assertIn("--disk_cache= --repository_cache=", output)
+        self.assertIn("--remote_cache= --remote_executor=", output)
+        for label in (
+            "//bazel/feasibility/kernel:uapi",
+            "//bazel/feasibility/mlibc:sysroot",
+            "//bazel/feasibility/rootfs:rootfs",
+            "//bazel/feasibility/kernel:kernel-release-iphoneos",
+            "//bazel/feasibility/kernel:kernel-release-iphonesimulator",
+            "//bazel/feasibility/kernel:kernel-development-iphoneos",
+            "//bazel/feasibility/kernel:kernel-development-iphonesimulator",
+        ):
+            self.assertIn(label, output)
+
+    def test_buildset_lock_requires_cosign_blob_verification(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        proposal = _dry_run("__bazel-lock-proposal")
+        activation = _dry_run("__bazel-lock-from-signed")
+        activation_recipe = makefile.split("__bazel-lock-from-signed:", 1)[1].split(
+            "__bazel-reconstruct:", 1
+        )[0]
+        self.assertIn("cosign sign-blob", proposal)
+        self.assertIn("cosign verify-blob", proposal)
+        self.assertIn("buildset-lock-proposal.sigstore.json", proposal)
+        self.assertIn("--proposal", activation)
+        self.assertIn("--bundle", activation)
+        self.assertIn("--apply-lock", activation)
+        self.assertNotIn("__bazel-lock-proposal", activation_recipe)
+        self.assertNotIn("ORLIX_COSIGN_KEY", activation_recipe)
+        self.assertNotIn("--signed", activation_recipe)
 
     def test_kernel_promotion_routes_use_exact_v2_component_boundaries(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

@@ -284,7 +284,7 @@ Local development uses a `rules_xcodeproj` generated project. Xcode Cloud uses a
 
 ## Feasibility Stop Gate
 
-Broad migration work stops unless the pinned stable Bazel and Apple rule matrix works with Xcode 26.6 without a permanent rules fork. The gate proves:
+Broad migration work stops unless the pinned stable Bazel and Apple rule matrix works with the pinned product Xcode without a permanent rules fork. The gate proves:
 
 ```text
 Bazel 9.2.0
@@ -362,7 +362,7 @@ The private GitHub Pro repository must not rely on GitHub private-repository art
 ## Implementation Sequence
 
 1. Create the migration work hierarchy and task envelope. Capture current targets, proof, outputs, timing, Xcode, and release behavior. Correct stale documentation.
-2. Run the Xcode 26.6 feasibility stop gate.
+2. Run the pinned-product-Xcode feasibility stop gate.
 3. Add Bzlmod bootstrap, independent settings, platforms, toolchain manifests, narrow providers, and policy tests.
 4. Add verified upstream source rules and source mirrors.
 5. Wrap Kbuild, installed UAPI, mlibc, Coreutils, packages, rootfs, initramfs, and ext4 without replacing upstream internal build definitions.

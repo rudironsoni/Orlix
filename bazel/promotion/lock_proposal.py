@@ -5,11 +5,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
 from compare import require_sha256
 from locked_buildset import (
+    KERNEL_COMPONENTS,
     LEGACY_IDENTITY_FORMAT,
     SCHEMA1,
     SCHEMA2,
@@ -19,7 +23,7 @@ from locked_buildset import (
     required_components,
     validate_artifact_identity,
 )
-from publish import verify_component
+from publish import trusted_public_key, verification_context, verify_component
 
 EMPTY_LOCK = {"schema": 1, "buildset": None, "components": {}}
 
@@ -148,6 +152,72 @@ def apply_lock_proposal(proposal_path: str, lock_path: str) -> None:
             pending.unlink(missing_ok=True)
 
 
+def activate_signed_lock_proposal(
+    proposal_path: str,
+    bundle_path: str,
+    lock_path: str,
+    run=subprocess.run,
+) -> dict:
+    public_value = os.environ.get("ORLIX_COSIGN_PUB", "")
+    if not public_value:
+        raise ValueError("ORLIX_COSIGN_PUB is required to activate the buildset proposal")
+    if shutil.which("cosign") is None:
+        raise ValueError("cosign is required to activate the buildset proposal")
+    bundle = Path(bundle_path)
+    if not bundle.is_file():
+        raise ValueError(f"signed buildset proposal bundle is missing: {bundle_path}")
+    try:
+        proposal_bytes = Path(proposal_path).read_bytes()
+    except OSError as error:
+        raise ValueError(f"signed buildset proposal is missing: {proposal_path}") from error
+    public = trusted_public_key()
+    with tempfile.TemporaryDirectory(prefix="orlix-lock-activate-") as temporary:
+        verified = Path(temporary) / "buildset-lock-proposal.json"
+        verified.write_bytes(proposal_bytes)
+        try:
+            run(
+                [
+                    "cosign",
+                    "verify-blob",
+                    "--key",
+                    public,
+                    "--bundle",
+                    str(bundle),
+                    "--insecure-ignore-tlog",
+                    str(verified),
+                ],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.CalledProcessError as error:
+            raise ValueError(f"signed buildset proposal verification failed: {error.stdout or ''}") from error
+        try:
+            proposal = json.loads(proposal_bytes)
+        except (UnicodeError, ValueError) as error:
+            raise ValueError("signed buildset proposal is invalid JSON") from error
+        if proposal.get("schema") != SCHEMA2:
+            raise ValueError("signed buildset proposal requires schema 2")
+        if proposal.get("kind") != "lock-proposal" or proposal.get("signed") is not True:
+            raise ValueError("signed buildset proposal metadata is invalid")
+        expected = set(required_components(SCHEMA2))
+        components = proposal.get("components")
+        if not isinstance(components, dict) or set(components) != expected:
+            raise ValueError("signed buildset proposal requires exactly seven components")
+        component_types = {
+            name: "kernel-apple-product" if name in KERNEL_COMPONENTS else name
+            for name in sorted(expected)
+        }
+        if proposal.get("component_types") != component_types:
+            raise ValueError("signed buildset proposal component types are invalid")
+        if proposal.get("verification") != verification_context():
+            raise ValueError("signed buildset proposal verification context is invalid")
+        load_locked_buildset(str(verified))
+        apply_lock_proposal(str(verified), lock_path)
+    return read_lock(lock_path)
+
+
 def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
     if not signed_paths:
         raise ValueError("signed lock proposal requires at least one signed component")
@@ -189,7 +259,12 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
         "kind": "lock-proposal",
         "signed": True,
         "buildset": buildset,
+        "component_types": {
+            name: "kernel-apple-product" if name in KERNEL_COMPONENTS else name
+            for name in sorted(components)
+        },
         "components": components,
+        "verification": verification_context(),
     }
     Path(path).write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     return proposal
@@ -197,13 +272,24 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--out")
     parser.add_argument("--signed", action="append", default=[])
+    parser.add_argument("--proposal")
+    parser.add_argument("--bundle")
     parser.add_argument("--apply-lock")
     args = parser.parse_args(argv)
-    proposal = write_signed_lock_proposal(args.out, args.signed)
     if args.apply_lock:
-        apply_lock_proposal(args.out, args.apply_lock)
+        if not args.proposal or not args.bundle or args.out or args.signed:
+            parser.error("activation requires --proposal, --bundle, and --apply-lock only")
+        proposal = activate_signed_lock_proposal(
+            args.proposal,
+            args.bundle,
+            args.apply_lock,
+        )
+    else:
+        if not args.out or not args.signed or args.proposal or args.bundle:
+            parser.error("proposal generation requires --out and --signed only")
+        proposal = write_signed_lock_proposal(args.out, args.signed)
     print(proposal["buildset"])
     return 0
 

@@ -74,6 +74,22 @@ def _valid_timestamp(value: object) -> bool:
     )
 
 
+def _rmtree_force(path: Path, *, ignore_errors: bool = False) -> None:
+    """Delete a tree whose archived entries may carry read-only modes."""
+    if path.is_dir() and not path.is_symlink():
+        for current, dirnames, _files in os.walk(path):
+            for name in dirnames:
+                try:
+                    os.chmod(os.path.join(current, name), 0o700)
+                except OSError:
+                    pass
+        try:
+            path.chmod(0o700)
+        except OSError:
+            pass
+    shutil.rmtree(path, ignore_errors=ignore_errors)
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     pending = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -127,7 +143,7 @@ class ArtifactStore:
             if path.is_symlink() or path.is_file():
                 path.unlink()
             elif path.is_dir():
-                shutil.rmtree(path)
+                _rmtree_force(path)
 
     def _object_dir(self, entry: dict) -> Path:
         return self.root / "objects" / "oci" / "sha256" / _oci_digest_hex(entry["oci_digest"])
@@ -388,12 +404,12 @@ class ArtifactStore:
                     except OSError:
                         os.replace(replaced, destination)
                         raise
-                    shutil.rmtree(replaced, ignore_errors=True)
+                    _rmtree_force(replaced, ignore_errors=True)
                 else:
                     os.replace(staged_object, destination)
                 return self._validate(component, entry)
             finally:
-                shutil.rmtree(staging, ignore_errors=True)
+                _rmtree_force(staging, ignore_errors=True)
 
     def write_lease(self, buildset: str, entries: list[dict], consumer: str | Path) -> Path:
         if len(buildset) != 64 or any(char not in "0123456789abcdef" for char in buildset):
@@ -454,7 +470,7 @@ class ArtifactStore:
                         path.unlink(missing_ok=True)
                 except (OSError, ValueError, KeyError, TypeError, AttributeError, ArtifactStoreError):
                     if path.is_dir() and not path.is_symlink():
-                        shutil.rmtree(path)
+                        _rmtree_force(path)
                     else:
                         path.unlink(missing_ok=True)
         return pinned
@@ -515,7 +531,7 @@ class ArtifactStore:
 
             for size, path in stale:
                 if path.is_dir() and not path.is_symlink():
-                    shutil.rmtree(path)
+                    _rmtree_force(path)
                 else:
                     path.unlink(missing_ok=True)
                 removed += 1
@@ -527,7 +543,7 @@ class ArtifactStore:
             for last_used, size, digest, object_dir in candidates:
                 del last_used, digest
                 if retained > max_bytes:
-                    shutil.rmtree(object_dir)
+                    _rmtree_force(object_dir)
                     removed += 1
                     bytes_removed += size
                     retained -= size

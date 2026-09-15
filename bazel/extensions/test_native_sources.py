@@ -56,6 +56,27 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn("bash-5.3", text)
         self.assertIn("https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz", text)
 
+    def test_savannah_archives_have_checksum_preserving_mirrors(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        attr = re.search(
+            r'name = "orlix_attr_source",.*?sha256 = "([0-9a-f]{64})"',
+            text,
+            re.S,
+        )
+        acl = re.search(
+            r'name = "orlix_acl_source",.*?sha256 = "([0-9a-f]{64})"',
+            text,
+            re.S,
+        )
+        self.assertIsNotNone(attr)
+        self.assertEqual(attr.group(1), "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b")
+        self.assertIsNotNone(acl)
+        self.assertEqual(acl.group(1), "97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd")
+        self.assertIn("https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz", text)
+        self.assertIn("https://download-mirror.savannah.gnu.org/releases/acl/acl-2.3.2.tar.xz", text)
+        self.assertIn("https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz", text)
+        self.assertIn("https://download-mirror.savannah.gnu.org/releases/attr/attr-2.5.2.tar.xz", text)
+
     def test_rootfs_package_archives_have_sha256(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")
         pins = (

@@ -1,7 +1,11 @@
 ORLIX_BAZEL_CACHE_ROOT ?= $(HOME)/Library/Caches/Orlix/Bazel
 ORLIX_BAZEL_VERSION ?= 9.2.0
-ORLIX_XCODE_VERSION ?= 26.6
-ORLIX_XCODE_BUILD ?= 17F113
+ORLIX_XCODE_VERSION ?= 27.0
+ORLIX_XCODE_BUILD ?= 27A266a
+ORLIX_BAZEL_CACHE_EPOCH ?= v1
+ORLIX_BUILDBUDDY_CACHE_MODE ?= normal
+ORLIX_BUILDBUDDY_CONTEXT ?= local
+ORLIX_BUILDBUDDY_ACCESS ?=
 ORLIX_BAZEL_DISK_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/disk-cache/bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)
 ORLIX_BAZEL_REPOSITORY_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/repository-cache
 ORLIX_PROMOTED_ARTIFACT_STORE ?= $(HOME)/Library/Caches/Orlix/Artifacts
@@ -9,12 +13,17 @@ ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_BAZEL_DESTINATION ?= iphonesimulator
 ORLIX_BAZEL_COMPILATION_MODE ?= dbg
 ORLIX_BAZEL_COMPONENT_MODE ?= promoted
+ORLIX_BAZEL_BUILD_FLAGS ?=
+ORLIX_BAZEL_APP_PATH ?=
+ORLIX_BAZEL_APP_TARGETS ?= //Orlix:Orlix
+ORLIX_CURRENT_SIMULATOR_ID ?=
+ORLIX_CURRENT_SIMULATOR_VERSION ?=
 ORLIX_BAZEL_IOS_CPU = $(if $(filter iphoneos,$(ORLIX_BAZEL_DESTINATION)),arm64,sim_arm64)
 ORLIX_BAZEL_KERNEL_FLAGS = --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=source --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --platforms=@build_bazel_apple_support//platforms:ios_$(ORLIX_BAZEL_IOS_CPU)
 ORLIX_BAZEL_TOOL_ROOT ?= $(HOME)/Library/Caches/Orlix/Tools/bazel
 ORLIX_BAZEL ?= $(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION)/bazel
 ORLIX_RUBY ?= /usr/bin/ruby
-ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-26.6.0.app/Contents/Developer
+ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-27.0.0-Release.Candidate.app/Contents/Developer
 CCACHE_BASEDIR ?= $(CURDIR)
 CCACHE_DIR ?= $(HOME)/Library/Caches/Orlix/ccache
 CCACHE_MAXSIZE ?= 20G
@@ -24,6 +33,7 @@ export ORLIX_BAZEL_CACHE_ROOT
 export ORLIX_BAZEL_VERSION
 export ORLIX_XCODE_VERSION
 export ORLIX_XCODE_BUILD
+export ORLIX_BAZEL_CACHE_EPOCH
 export ORLIX_BAZEL_DISK_CACHE
 export ORLIX_BAZEL_REPOSITORY_CACHE
 export ORLIX_PROMOTED_ARTIFACT_STORE
@@ -34,11 +44,11 @@ export CCACHE_DIR
 export CCACHE_MAXSIZE
 export CCACHE_COMPILERCHECK
 
-.PHONY: __bazel-bootstrap __bazel-version-check __bazel-server-restart __bazel-module-lock-update __bazel-feasibility-bootstrap __bazel-apple-smoke
+.PHONY: __bazel-bootstrap __bazel-version-check __bazel-server-restart __bazel-module-lock-update __bazel-feasibility-bootstrap __bazel-apple-smoke __bazel-buildbuddy-policy __bazel-buildbuddy-configure __bazel-buildbuddy-cleanup __bazel-cache-observation
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-buildset __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-apple-ci __bazel-simulator-runtime-proof __bazel-current-simulator-gate __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs __bazel-attr __bazel-acl __bazel-pcre2 __bazel-musl-fts __bazel-libsepol __bazel-libcap __bazel-libselinux
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
@@ -70,6 +80,42 @@ __bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory
 	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=error --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/config:all --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+
+__bazel-buildbuddy-policy:
+	@set -euo pipefail; \
+	mode="$(ORLIX_BUILDBUDDY_CACHE_MODE)"; context="$(ORLIX_BUILDBUDDY_CONTEXT)"; \
+	case "$$mode" in normal|conserve|off) ;; *) echo "invalid ORLIX_BUILDBUDDY_CACHE_MODE: $$mode" >&2; exit 1 ;; esac; \
+	case "$$context" in main|pr|fork|local|promotion|nightly|testflight) ;; *) echo "invalid ORLIX_BUILDBUDDY_CONTEXT: $$context" >&2; exit 1 ;; esac; \
+	access=off; \
+	if [ "$$mode" = normal ] && [ "$$context" = main ]; then access=write; fi; \
+	if [ "$$mode" = normal ] && [ "$$context" = pr ]; then access=read; fi; \
+	if [ "$$mode" = conserve ] && [ "$$context" = main ]; then access=write; fi; \
+	printf '%s\n' "mode=$$mode" "access=$$access"; \
+	if [ -n "$${GITHUB_OUTPUT:-}" ]; then printf '%s\n' "mode=$$mode" "access=$$access" >> "$$GITHUB_OUTPUT"; fi; \
+	if [ -n "$${GITHUB_STEP_SUMMARY:-}" ]; then printf 'BuildBuddy cache mode: `%s`, access: `%s`\n' "$$mode" "$$access" >> "$$GITHUB_STEP_SUMMARY"; fi
+
+__bazel-buildbuddy-configure:
+	@set -euo pipefail; \
+	case "$(ORLIX_BUILDBUDDY_ACCESS)" in read|write) ;; *) echo "ORLIX_BUILDBUDDY_ACCESS must be read or write" >&2; exit 1 ;; esac; \
+	test -n "$${RUNNER_TEMP:-}" || { echo "RUNNER_TEMP is required" >&2; exit 1; }; \
+	test -n "$${BUILDBUDDY_API_KEY:-}" || { echo "the selected BuildBuddy credential is required" >&2; exit 1; }; \
+	rc="$$RUNNER_TEMP/orlix-buildbuddy.bazelrc"; \
+	test ! -e "$(CURDIR)/.bazelrc.local" && test ! -L "$(CURDIR)/.bazelrc.local" || { echo ".bazelrc.local already exists" >&2; exit 1; }; \
+	umask 077; \
+	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
+	chmod 600 "$$rc"; \
+	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"; \
+	if [ -n "$${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_RC=$$rc" >> "$$GITHUB_ENV"; fi
+
+__bazel-buildbuddy-cleanup:
+	@set -euo pipefail; \
+	if [ -n "$${ORLIX_BUILDBUDDY_RC:-}" ] && [ -L "$(CURDIR)/.bazelrc.local" ] && [ "$$(readlink "$(CURDIR)/.bazelrc.local")" = "$$ORLIX_BUILDBUDDY_RC" ]; then unlink "$(CURDIR)/.bazelrc.local"; fi; \
+	if [ -n "$${ORLIX_BUILDBUDDY_RC:-}" ] && [ -f "$$ORLIX_BUILDBUDDY_RC" ]; then unlink "$$ORLIX_BUILDBUDDY_RC"; fi
+
+__bazel-cache-observation:
+	@mkdir -p "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m cache_observation --execution "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/execution.json" --bep "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/build-events.json" --access "$(or $(ORLIX_BUILDBUDDY_ACCESS),off)" --out "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json"
+	@if [ -n "$${GITHUB_STEP_SUMMARY:-}" ]; then printf '\nCache observation:\n```json\n' >> "$$GITHUB_STEP_SUMMARY"; cat "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json" >> "$$GITHUB_STEP_SUMMARY"; printf '```\n' >> "$$GITHUB_STEP_SUMMARY"; fi
 
 __bazel-apple-smoke: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/apple:SmokeApp --compilation_mode=dbg --config=release --config=source --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -203,6 +249,61 @@ $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-release-iphonesimulator,//bazel/
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphoneos,//bazel/feasibility/kernel:kernel-development-iphoneos,development,iphoneos))
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//bazel/feasibility/kernel:kernel-development-iphonesimulator,development,iphonesimulator))
 
+__bazel-promote-buildset: __bazel-version-check
+	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
+	@set -euo pipefail; \
+	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
+	for side in a b; do \
+		if [ -d "$$promote/buildset/$$side/output-base" ]; then \
+			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
+		fi; \
+	done; \
+	/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
+	python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
+	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+		/bin/chmod -R u+w "$$promote/$$component" 2>/dev/null || true; \
+		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/$$component"; \
+	done; \
+	mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
+	labels=(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs //bazel/feasibility/kernel:kernel-release-iphoneos //bazel/feasibility/kernel:kernel-release-iphonesimulator //bazel/feasibility/kernel:kernel-development-iphoneos //bazel/feasibility/kernel:kernel-development-iphonesimulator); \
+	for side in a b; do \
+		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
+		for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+			stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
+			case "$$component" in \
+				uapi) relative='bazel/feasibility/kernel/uapi/uapi.sha256' ;; \
+				mlibc) relative='bazel/feasibility/mlibc/sysroot/sysroot.sha256' ;; \
+				rootfs) relative='bazel/feasibility/rootfs/rootfs/source-input.sha256' ;; \
+				*) relative="bazel/feasibility/kernel/$$component/kernel.artifact-identity-v2.sha256" ;; \
+			esac; \
+			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$relative" -type f -print | /usr/bin/head -n 1)"; \
+			test -n "$$digest_file" || { echo "missing $$relative for promote buildset $$side" >&2; exit 1; }; \
+			if [[ "$$component" == kernel-* ]]; then \
+				product_tree="$$(/usr/bin/dirname "$$digest_file")/product"; \
+				manifest_file="$$(/usr/bin/dirname "$$digest_file")/kernel.artifact-identity-v2.json"; \
+				test -d "$$product_tree" && test -s "$$manifest_file" || { echo "incomplete Kernel product for $$component $$side" >&2; exit 1; }; \
+				mkdir -p "$$stage/product"; /bin/cp -pR "$$product_tree"/. "$$stage/product"/; \
+				/bin/cp "$$manifest_file" "$$stage/artifact-identity-v2.json"; \
+				/bin/cp "$$digest_file" "$$stage/artifact-identity-v2.sha256"; \
+			else \
+				/bin/cp -pR "$$(/usr/bin/dirname "$$digest_file")"/. "$$stage"/; \
+			fi; \
+			mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
+		done; \
+	done; \
+	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+		format=artifact-identity-v2; marker=; \
+		case "$$component" in uapi) format=legacy-marker-sha256; marker=uapi.sha256 ;; mlibc) format=legacy-marker-sha256; marker=sysroot.sha256 ;; rootfs) format=legacy-marker-sha256; marker=source-input.sha256 ;; esac; \
+		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format "$$format" --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
+		if [ -n "$$marker" ]; then args+=(--artifact-identity-marker "$$marker"); fi; \
+		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
+		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
+		python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is False and p.get("oci_digest") is None, p' "$$promote/$$component/$$component-proposal.json"; \
+	done; \
+	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	test "$$lock_before" = "$$lock_after" || { echo "unsigned buildset promotion mutated artifacts.lock.json" >&2; exit 1; }
+
 define ORLIX_BAZEL_PUBLISH
 __bazel-publish-$(1): __bazel-version-check
 	@set -euo pipefail; \
@@ -212,7 +313,7 @@ __bazel-publish-$(1): __bazel-version-check
 	digest_file="$$$$promote/a/digest.sha256"; \
 	test -s "$$$$digest_file" || { echo "missing unsigned digest $$$$digest_file; run make __bazel-promote-$(1) first" >&2; exit 1; }; \
 	digest="$$$$(tr -d '[:space:]' < "$$$$digest_file")"; \
-	if [ "$(3)" = "artifact-identity-v2" ]; then \
+	if [ -d "$$$$promote/a/staged" ]; then \
 		artifact="$$$$promote/a/staged"; \
 	else \
 		tree="$$$$(/usr/bin/find "$$$$promote/a/output-base" -path '*/$(2)' -print | /usr/bin/head -n 1)"; \
@@ -247,20 +348,23 @@ __bazel-lock-proposal: __bazel-version-check
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is True and p.get("buildset") and set(p["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, p' "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
+	key="$${ORLIX_COSIGN_KEY:-}"; public="$${ORLIX_COSIGN_PUB:-}"; \
+	test -n "$$key" && test -n "$$public" || { echo "ORLIX_COSIGN_KEY and ORLIX_COSIGN_PUB are required to sign the buildset proposal" >&2; exit 1; }; \
+	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
+	cosign sign-blob --key "$${key#file://}" --yes --use-signing-config=false --bundle "$$bundle" "$$proposal" >/dev/null; \
+	cosign verify-blob --key "$${public#file://}" --bundle "$$bundle" --insecure-ignore-tlog "$$proposal"; \
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "lock proposal mutated artifacts.lock.json" >&2; exit 1; }
 
-__bazel-lock-from-signed: __bazel-lock-proposal
+__bazel-lock-from-signed: __bazel-version-check
 	@set -euo pipefail; \
+	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
-		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json" \
-		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json" \
+		--proposal "$$proposal" \
+		--bundle "$$bundle" \
 		--apply-lock "$(CURDIR)/artifacts.lock.json"; \
 	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("schema") == 2 and lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, lock' "$(CURDIR)/artifacts.lock.json"
 
@@ -583,6 +687,7 @@ __bazel-gc: __bazel-version-check
 __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_toolchain_pin
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_cache_gc
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_cache_observation
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_apple_build_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_prove_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
@@ -637,7 +742,7 @@ __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surfa
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["result"] == "Passed" and p["passedTests"] > 0 and p["totalTestCount"] == p["passedTests"] and p["failedTests"] == p["skippedTests"] == p["expectedFailures"] == 0, p' "$$result_dir/summary.json"
 
 __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build $(ORLIX_BAZEL_APP_TARGETS) --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(ORLIX_BAZEL_BUILD_FLAGS)
 	@set -euo pipefail; \
 	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
 	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
@@ -695,28 +800,60 @@ __bazel-orlix-archive: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	if [ -e "$(ORLIX_BETA_ARCHIVE_PATH)" ]; then previous="$$(mktemp -d "$(ORLIX_BETA_ARCHIVE_DIR)/previous-archive.XXXXXX")"; mv "$(ORLIX_BETA_ARCHIVE_PATH)" "$$previous/Orlix.xcarchive"; fi; \
 	/usr/bin/ditto "$$archive" "$(ORLIX_BETA_ARCHIVE_PATH)"
 
-__bazel-ios15-simulator-gate: __bazel-feasibility-bootstrap
+__bazel-apple-ci: __bazel-matrix-check
+	@set -euo pipefail; \
+	test -n "$(ORLIX_CURRENT_SIMULATOR_ID)" || { echo "ORLIX_CURRENT_SIMULATOR_ID is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_CURRENT_SIMULATOR_VERSION)" || { echo "ORLIX_CURRENT_SIMULATOR_VERSION is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"; \
+	mkdir -p "$$evidence_dir"; \
+	echo "apple-ci: profile=$(PROFILE) component_mode=$(ORLIX_BAZEL_COMPONENT_MODE) current_runtime=$(ORLIX_CURRENT_SIMULATOR_VERSION) current_simulator=$(ORLIX_CURRENT_SIMULATOR_ID) ios15_simulator=$(ORLIX_IOS15_SIMULATOR_ID)"; \
+	$(MAKE) __bazel-orlix-app ORLIX_BAZEL_DESTINATION=iphonesimulator ORLIX_BAZEL_COMPILATION_MODE=dbg ORLIX_BAZEL_APP_TARGETS="//Orlix:Orlix //Orlix:OrlixUITests" ORLIX_BAZEL_BUILD_FLAGS="--remote_download_outputs=toplevel --execution_log_json_file=$$evidence_dir/execution.json --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --experimental_remote_grpc_log=$$evidence_dir/remote-grpc.log"; \
+	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
+	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
+	app_root="$$(mktemp -d "$$evidence_dir/app.XXXXXX")"; \
+	/usr/bin/ditto -x -k "$$ipa" "$$app_root"; \
+	app="$$app_root/Payload/Orlix.app"; \
+	test -x "$$app/Orlix" || { echo "canonical simulator app is missing" >&2; exit 1; }; \
+	$(MAKE) __bazel-current-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
+	$(MAKE) __bazel-ios15-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
+	python3 -c 'import json,sys; from pathlib import Path; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":{"version":"15.5","result":"PASS"},"same_application_path":sys.argv[3]},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app"; \
+	$(MAKE) __bazel-cache-observation
+
+__bazel-simulator-runtime-proof:
+	@set -euo pipefail; \
+	test -n "$(ORLIX_SIMULATOR_ID)" || { echo "ORLIX_SIMULATOR_ID is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_SIMULATOR_VERSION)" || { echo "ORLIX_SIMULATOR_VERSION is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_SIMULATOR_LABEL)" || { echo "ORLIX_SIMULATOR_LABEL is required" >&2; exit 1; }; \
+	test -x "$(ORLIX_BAZEL_APP_PATH)/Orlix" || { echo "ORLIX_BAZEL_APP_PATH must name the built Orlix.app" >&2; exit 1; }; \
+	runtime_key="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_SIMULATOR_ID)" '.devices | to_entries[] | select(any(.value[]; .udid == $$id and .isAvailable == true)) | .key')"; \
+	expected="iOS-$(subst .,-,$(ORLIX_SIMULATOR_VERSION))"; \
+	case "$$runtime_key" in *"$$expected") ;; *) echo "simulator $(ORLIX_SIMULATOR_ID) is not an available $(ORLIX_SIMULATOR_VERSION) device" >&2; exit 1 ;; esac; \
+	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
+	mkdir -p "$$evidence_dir"; \
+	echo "runtime-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_SIMULATOR_VERSION) simulator=$(ORLIX_SIMULATOR_ID) app=$(ORLIX_BAZEL_APP_PATH)" | tee "$$evidence_dir/input.log"; \
+	xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
+	xcrun simctl terminate "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
+	xcrun simctl uninstall "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
+	xcrun simctl install "$(ORLIX_SIMULATOR_ID)" "$(ORLIX_BAZEL_APP_PATH)"; \
+	installed_app="$$(xcrun simctl get_app_container "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix app)"; \
+	test -x "$$installed_app/Orlix" || { echo "installed Orlix app is missing" >&2; exit 1; }; \
+	xcrun simctl launch --terminate-running-process "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix | tee "$$evidence_dir/launch.log"; \
+	launch_pid="$$(/usr/bin/awk 'END {print $$NF}' "$$evidence_dir/launch.log")"; \
+	case "$$launch_pid" in ''|*[!0-9]*) echo "simctl launch did not report a process id" >&2; exit 1 ;; esac; \
+	/bin/sleep 5; \
+	/bin/kill -0 "$$launch_pid" 2>/dev/null || { echo "Orlix exited within 5 seconds of launch on $(ORLIX_SIMULATOR_LABEL); check DiagnosticReports" >&2; /usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print | /usr/bin/head -n 5 >&2 || true; exit 1; }; \
+	/usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print -quit | /usr/bin/grep -q . && { echo "Orlix crash report written during $(ORLIX_SIMULATOR_LABEL) launch; see DiagnosticReports" >&2; exit 1; } || true; \
+	/usr/bin/touch "$$evidence_dir/launch.alive"; \
+	xcrun simctl io "$(ORLIX_SIMULATOR_ID)" screenshot "$$evidence_dir/launch.png"
+
+__bazel-current-simulator-gate:
+	@$(MAKE) __bazel-simulator-runtime-proof ORLIX_SIMULATOR_ID="$(ORLIX_CURRENT_SIMULATOR_ID)" ORLIX_SIMULATOR_VERSION="$(ORLIX_CURRENT_SIMULATOR_VERSION)" ORLIX_SIMULATOR_LABEL=current
+
+__bazel-ios15-simulator-gate:
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
-	runtime="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id and .isAvailable == true) | .udid')"; \
-	test "$$runtime" = "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "the selected simulator is not an available iOS 15.5 device" >&2; exit 1; }; \
-	type_id="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_IOS15_SIMULATOR_ID)" '.devices | to_entries[] | select(.key | contains("iOS-15-5")) | .value[] | select(.udid == $$id) | .deviceTypeIdentifier')"; \
-	test -n "$$type_id" || { echo "missing iOS 15.5 simulator deviceTypeIdentifier for $(ORLIX_IOS15_SIMULATOR_ID)" >&2; exit 1; }; \
-	device_name="$$(xcrun simctl list devicetypes -j | jq -r --arg id "$$type_id" '.devicetypes[] | select(.identifier == $$id) | .name')"; \
-	test -n "$$device_name" || { echo "missing iOS 15.5 simulator device type name for $$type_id" >&2; exit 1; }; \
-	xcrun simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)" -b; \
-	PYTHONPATH="$(CURDIR)/make" python3 -m unittest test_ios15_simulator_gate; \
-	result_dir="$(ORLIX_BUILD_ROOT)/iOS15"; \
-	result_log="$$result_dir/Orlix-iOS15.log"; \
-	mkdir -p "$$result_dir"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" test //Orlix:OrlixUITests --compilation_mode=dbg --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --ios_simulator_version=15.5 --ios_simulator_device="$$device_name" --test_filter=AppLaunchSmokeUITests/testLaunchCapturesScreenshot --test_output=errors --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" 2>&1 | tee "$$result_log"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=dbg --config=release --config=promoted --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --ios_simulator_version=15.5 --ios_simulator_device="$$device_name" --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" 2>&1 | tee -a "$$result_log"; \
-	ipa="$$(/usr/bin/find "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/bazel-out" -path '*/bin/Orlix/Orlix.ipa' ! -path '*/runfiles/*' -print | /usr/bin/head -n 1)"; \
-	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa after iOS 15 UI tests" >&2; exit 1; }; \
-	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ios15.XXXXXX")"; \
-	/usr/bin/unzip -q "$$ipa" -d "$$ipa_work"; \
-	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$ipa_work/Payload/Orlix.app')); print('pass: iOS 15 app does not required-load AppIntents or ActivityKit')"; \
-	rm -rf "$$ipa_work"
+	$(MAKE) __bazel-simulator-runtime-proof ORLIX_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_VERSION=15.5 ORLIX_SIMULATOR_LABEL=ios15
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixHostAdapter/Sources:OrlixHostAdapter --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"

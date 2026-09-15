@@ -3,9 +3,17 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-14
+updated: 2026-09-15
 ---
 # Orlix Knowledge Log
+
+## [2026-09-15] build | Move the product pin to Xcode 27.0
+
+The [feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) completed at Xcode 26.6 and the [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves the product pin to Xcode 27.0 build 27A266a with SDKs 27.0 because the local Xcode 26.6 installation was removed. `bazel/config/toolchain-pin.json` selects the new pin, Xcode 26.6 remains an allowed local identity, Make defaults, `.bazelrc`, the BuildBuddy instance namespace, and the release, promotion, benchmark, nightly, GC, canonical-CI, and TestFlight workflows follow the pin. The current simulator-runtime gate selects iOS 27.0 while iOS 15.5 proof is unchanged. Whether the 27.0 pin reproduces the 26.6 gate is open; the activated schema-2 buildset was built under Xcode 26.6 and remains authorized.
+
+## [2026-09-14] fix | Correct PR 230 review findings
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) applies the nine open Codex review corrections: canonical CI gates promoted mode on the committed lock schema and materializes the Cosign public key plus GHCR authentication per run, promotion dispatches obey the trust-policy ref allowlist and drop the private-repository attestation, release and review workflows authenticate their protected Git fetches explicitly, the BuildBuddy epoch now derives the remote instance namespace, and simulator runtime proof requires the launched process to stay alive. The two already-fixed comments (pull-request source mode, separate lock activation) stay covered by their existing tests.
 
 ## [2026-09-14] fix | Order RuleSync generated merge
 
@@ -14,6 +22,14 @@ The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-autho
 ## [2026-09-13] fix | Protect RuleSync generated updates
 
 The [RuleSync authority task](objects/task/doing/implement-pinned-rulesync-authority.md) routes generated client output through a deterministic automation branch and generated pull request. The existing guard independently regenerates the output and requires an exact tree match before protected auto-merge. The main ruleset has no bypass actor.
+
+## [2026-09-12] build | Promote one verified component buildset
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) builds all seven components twice in two clean shared graphs, compares each complete product, and keeps the current lock unchanged. Protected manual automation publishes the verified components, signs and verifies one complete proposal, and permits atomic activation only after all component signatures and identities pass. Per-component builds remain diagnostic operations, and protected publication remains unverified until its workflow succeeds.
+
+## [2026-09-12] build | Define canonical Apple CI and BuildBuddy policy
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) defines one Make-owned simulator build for current and iOS 15.5 runtime proof. BuildBuddy is the optional shared Bazel action cache with distinct main, same-repository pull-request, fork, promotion, nightly, and release policy. The manual transfer circuit breaker protects the 80 GB monthly operating ceiling. Runtime, transfer, and account-state proof remain separate checks.
 
 ## [2026-09-11] fix | Remove retired command wrapper integration
 
@@ -89,7 +105,7 @@ The [shared-cache gate](objects/task/doing/implement-shared-bazel-cache-and-buil
 
 ## [2026-09-10] fix | Package the real MLX Metal library
 
-The [Apple feasibility experiment](objects/task/doing/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
+The [Apple feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
 
 ## [2026-09-10] record | Make full rootfs outputs reproducible
 
