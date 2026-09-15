@@ -582,3 +582,23 @@ The eleven Codex review comments on PR [rudironsoni/Orlix#230](https://github.co
 `.bazelrc` no longer hardcodes the BuildBuddy remote instance namespace tail; `__bazel-buildbuddy-configure` derives it from `ORLIX_BAZEL_CACHE_EPOCH`, making the epoch knob effective for every BuildBuddy-enabled CI build, and `.bazelrc.local.example` documents the local equivalent. `__bazel-simulator-runtime-proof` now validates the launched process pid after five seconds, fails on new `Orlix-*.ips` crash reports, and records `launch.alive`; a screenshot alone no longer counts as runtime proof. `publish.trusted_public_key()` materializes an inline PEM `ORLIX_COSIGN_PUB` value to a temporary file and still enforces the `trust-policy.json` fingerprint, which also repairs the nightly reconstruction key path.
 
 Verification: the complete 56-test migration, 71-test promotion, and 8-test config suites exit 0; `make __bazel-migration-inventory-check`, `make docs-check`, and `actionlint .github/workflows/bazel-ci.yml .github/workflows/bazel-promote.yml .github/workflows/testflight-beta.yml .github/workflows/app-store-review.yml .github/workflows/grok-pr-review.yml` exit 0. `artifacts.lock.json` remains byte-unchanged. The promoted GHCR path, BuildBuddy epoch rotation, and simulator liveness gate remain `UNVERIFIED` until a trusted workflow run exercises them.
+
+## 2026-09-15 complete protected seven-component promotion at current branch head
+
+Protected promotion run `34927558114`, job `Dual-build promote`, exercised `.github/workflows/bazel-promote.yml` at exact head `334afabac5ded3572504de84c68028b6b3f80760` on `refs/heads/fix/build-optimizations` under the `bazel-promotion` environment, within the `trust-policy.json` `allowed_refs`. The mode-preserving extraction fix `f54bec0` now has its complete protected proof.
+
+Both clean source builds passed with the promotion target's disabled action cache, remote cache, remote executor, disk cache, and no reusable local state: build A executed 88 actions in 1761.013 seconds with an 881.37-second critical path; build B executed 88 actions in 1339.800 seconds with a 655.94-second critical path. The recipe staged each side's seven component trees, compared every digest with `bazel/promotion/compare.py`, asserted `artifacts.lock.json` remained byte-identical across the unsigned promotion, and asserted no unsigned record was Cosign-signed. The dual-build step exited 0.
+
+`oras` authenticated to GHCR with the job token (`Login Succeeded`). All seven components passed push, Cosign verification against the published reference, `oras` pull-back, and v2 artifact-identity validation inside `bazel/promotion/publish.py` (`__bazel-publish-*` exited 0 for each). Recorded OCI digests at this head:
+
+- `uapi`: `sha256:be360e682efe452f9e90cdc064e85fecb24374c817f3cf44aec86e9069887b76`
+- `mlibc`: `sha256:e38e05439ed21f0dbc4feb3e05a405c51f38787f1dc381101d501e7756d9e1a4`
+- `rootfs`: `sha256:01b2dbcfebe59f031aa3cabc9c2f73ec8a1dcaa0094c1eaec61fde86782207c1`
+- `kernel-release-iphoneos`: `sha256:7b12757dfc975ae2d62b5ff8158398c69a5564de90d8b9c903e06b7d1711cc24`
+- `kernel-release-iphonesimulator`: `sha256:885dcf22269d13f784bb2593e83cce4a8fd7ca4dff5e2024d97a25f5b71a7ef6`
+- `kernel-development-iphoneos`: `sha256:d07dee5b98568ba7838c4062cdf7f924ae4ea55fa1132c689f3eb7d5f4a8d01e`
+- `kernel-development-iphonesimulator`: `sha256:8aa6e5a53edf8911bc883bfa65cf22e5c195d15c040216c54cbbcfd0cb65cb5f`
+
+`make __bazel-lock-proposal` created the exact seven-component schema-2 proposal (buildset digest `570bd6425e4f22b9818149b53c882e7782648a4714c53bdec67b7be71031d8a8`), signed it with Cosign into `buildset-lock-proposal.sigstore.json`, verified the bundle with the public key, and asserted `artifacts.lock.json` stayed byte-identical. The workflow uploaded the artifact `signed-buildset-334afabac5ded3572504de84c68028b6b3f80760` (artifact ID `10381488403`, nine files: seven signed component records plus the proposal and Sigstore bundle, 6661 bytes, SHA-256 `f8aef49f553b1eb8d85b164248f1fdba2e59044fdd1119bdda49c628343066e0`).
+
+Publication completed without mutating `artifacts.lock.json`; it still has schema 1 and no seven-component activation. Phase 6B gates now: 6B2 complete protected publication VERIFIED at this head. 6B3 signed schema-2 activation, 6B4 promoted consumer cutover, the four promoted Kernel variants, cold reconstruction, and the zero-download warm reconstruction remain PENDING, and require the activation path `__bazel-lock-from-signed` with `ORLIX_COSIGN_PUB` present and `ORLIX_COSIGN_KEY` absent against the run's uploaded proposal and bundle. TAP remains stopped. The user-owned `third_party/swift/.build/` remains untouched.
