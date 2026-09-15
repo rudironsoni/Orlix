@@ -58,11 +58,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select Xcode 26.6
+      - name: Select Xcode 27.0
         timeout-minutes: 5
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: "26.6"
+          xcode-version: "27.0"
 
       - name: Restore verified source downloads
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -80,8 +80,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
-          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          test "$(xcodebuild -version | sed -n '2p')" = "Build version 27A266a"
 
       - name: Dual-build without action cache
         timeout-minutes: 350

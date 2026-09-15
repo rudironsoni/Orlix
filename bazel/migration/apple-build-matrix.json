@@ -4,9 +4,9 @@
   "authority": "Bazel is product-compile authority after the ADR 0037 cutover. Make remains the public interface.",
   "toolchain_pin": {
     "bazel": "9.2.0",
-    "xcode": "26.6",
-    "xcode_build": "17F113",
-    "apple_sdk": "26.5",
+    "xcode": "27.0",
+    "xcode_build": "27A266a",
+    "apple_sdk": "27.0",
     "rules_apple": "4.5.3",
     "rules_swift": "3.6.1",
     "rules_xcodeproj": "4.1.0"
@@ -126,7 +126,7 @@
       "destination": "iphonesimulator",
       "result": "gated",
       "gate": "local cache identity Xcode 27.0 / 27A5252f; not the product pin",
-      "proof": "make __bazel-apple-smoke with ORLIX_XCODE_VERSION=27.0 writes bazel-9.2.0-xcode-27A5252f. Product pin remains 26.6 / 17F113."
+      "proof": "make __bazel-apple-smoke with ORLIX_XCODE_VERSION=27.0 writes bazel-9.2.0-xcode-27A5252f. [CORRECTION 2026-09-15] The product pin is now Xcode 27.0 / 27A266a."
     },
     {
       "id": "unknown-xcode",
@@ -134,7 +134,7 @@
       "deployment": "unspecified",
       "destination": "unspecified",
       "result": "unsupported",
-      "proof": "Make bootstrap rejects any Xcode identity that is not 26.6/17F113 or 27.0/27A5252f before disk-cache write."
+      "proof": "Make bootstrap rejects any Xcode identity that is not 27.0/27A266a or 26.6/17F113 before disk-cache write."
     }
   ],
   "feature_gates": [
