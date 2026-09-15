@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-14
+updated: 2026-09-15
 ---
 # Orlix Knowledge Log
+
+## [2026-09-15] build | Move the product pin to Xcode 27.0
+
+The [feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) completed at Xcode 26.6 and the [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves the product pin to Xcode 27.0 build 27A266a with SDKs 27.0 because the local Xcode 26.6 installation was removed. `bazel/config/toolchain-pin.json` selects the new pin, Xcode 26.6 remains an allowed local identity, Make defaults, `.bazelrc`, the BuildBuddy instance namespace, and the release, promotion, benchmark, nightly, GC, canonical-CI, and TestFlight workflows follow the pin. The current simulator-runtime gate selects iOS 27.0 while iOS 15.5 proof is unchanged. Whether the 27.0 pin reproduces the 26.6 gate is open; the activated schema-2 buildset was built under Xcode 26.6 and remains authorized.
 
 ## [2026-09-14] fix | Correct PR 230 review findings
 
@@ -101,7 +105,7 @@ The [shared-cache gate](objects/task/doing/implement-shared-bazel-cache-and-buil
 
 ## [2026-09-10] fix | Package the real MLX Metal library
 
-The [Apple feasibility experiment](objects/task/doing/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
+The [Apple feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) now compiles and bundles MLX's pinned Metal shaders. Compiler-only bridging headers no longer enter app resource processing, and the placeholder shader is removed. The native smoke test checks Metal library loading and upstream kernel lookup. Make rejects empty, failed, or skipped XCTest runs. These checks do not establish model execution or complete the feasibility gate.
 
 ## [2026-09-10] record | Make full rootfs outputs reproducible
 

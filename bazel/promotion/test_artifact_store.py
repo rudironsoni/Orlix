@@ -139,6 +139,18 @@ class ArtifactStoreTests(unittest.TestCase):
             stored_blob.write_bytes(b"corrupt")
             self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
 
+    def test_stale_staging_with_read_only_modes_is_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = artifact_store.ArtifactStore(Path(tmp) / "store")
+            stale = store.root / ".staging" / "artifact-stale" / "replaced" / "tree"
+            (stale / "product").mkdir(parents=True)
+            (stale / "product" / "vmlinux").write_bytes(b"kernel")
+            (stale / "product").chmod(0o555)
+            stale.chmod(0o555)
+            with store._locked():
+                pass
+            self.assertFalse((store.root / ".staging" / "artifact-stale").exists())
+
     def test_gc_keeps_locked_and_live_leased_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

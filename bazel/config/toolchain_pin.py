@@ -22,10 +22,7 @@ def load_pin(path: Path = PIN_PATH) -> dict:
 
 
 def product_pin(data: dict | None = None) -> dict:
-    pin = (data or load_pin())["product_pin"]
-    if pin["xcode_version"] == "27.0":
-        raise PinError("Xcode 27.0 is not the product pin")
-    return pin
+    return (data or load_pin())["product_pin"]
 
 
 def allowed_identities(data: dict | None = None) -> tuple[tuple[str, str], ...]:
@@ -45,9 +42,6 @@ def namespace_for(version: str, build: str, data: dict | None = None) -> str:
 
 def require_identity(version: str, build: str, disk_cache: str, data: dict | None = None) -> None:
     payload = data or load_pin()
-    pin = product_pin(payload)
-    if version == "27.0" and pin["xcode_version"] != "26.6":
-        raise PinError("Xcode 27.0 is not the product pin")
     try:
         expected = namespace_for(version, build, payload)
     except PinError:

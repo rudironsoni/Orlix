@@ -1,7 +1,7 @@
 ORLIX_BAZEL_CACHE_ROOT ?= $(HOME)/Library/Caches/Orlix/Bazel
 ORLIX_BAZEL_VERSION ?= 9.2.0
-ORLIX_XCODE_VERSION ?= 26.6
-ORLIX_XCODE_BUILD ?= 17F113
+ORLIX_XCODE_VERSION ?= 27.0
+ORLIX_XCODE_BUILD ?= 27A266a
 ORLIX_BAZEL_CACHE_EPOCH ?= v1
 ORLIX_BUILDBUDDY_CACHE_MODE ?= normal
 ORLIX_BUILDBUDDY_CONTEXT ?= local
@@ -23,7 +23,7 @@ ORLIX_BAZEL_KERNEL_FLAGS = --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --
 ORLIX_BAZEL_TOOL_ROOT ?= $(HOME)/Library/Caches/Orlix/Tools/bazel
 ORLIX_BAZEL ?= $(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION)/bazel
 ORLIX_RUBY ?= /usr/bin/ruby
-ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-26.6.0.app/Contents/Developer
+ORLIX_PINNED_DEVELOPER_DIR ?= /Applications/Xcode-27.0.0-Release.Candidate.app/Contents/Developer
 CCACHE_BASEDIR ?= $(CURDIR)
 CCACHE_DIR ?= $(HOME)/Library/Caches/Orlix/ccache
 CCACHE_MAXSIZE ?= 20G
@@ -102,7 +102,7 @@ __bazel-buildbuddy-configure:
 	rc="$$RUNNER_TEMP/orlix-buildbuddy.bazelrc"; \
 	test ! -e "$(CURDIR)/.bazelrc.local" && test ! -L "$(CURDIR)/.bazelrc.local" || { echo ".bazelrc.local already exists" >&2; exit 1; }; \
 	umask 077; \
-	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
+	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
 	chmod 600 "$$rc"; \
 	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"; \
 	if [ -n "$${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_RC=$$rc" >> "$$GITHUB_ENV"; fi

@@ -14,10 +14,10 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.pin = json.loads(PIN.read_text(encoding="utf-8"))
         self.rows = {row["id"]: row for row in self.matrix["rows"]}
 
-    def test_product_pin_is_xcode_26_6(self) -> None:
-        self.assertEqual(self.matrix["toolchain_pin"]["xcode"], "26.6")
-        self.assertEqual(self.matrix["toolchain_pin"]["xcode_build"], "17F113")
-        self.assertEqual(self.pin["product_pin"]["xcode_version"], "26.6")
+    def test_product_pin_is_xcode_27_0(self) -> None:
+        self.assertEqual(self.matrix["toolchain_pin"]["xcode"], "27.0")
+        self.assertEqual(self.matrix["toolchain_pin"]["xcode_build"], "27A266a")
+        self.assertEqual(self.pin["product_pin"]["xcode_version"], "27.0")
 
     def test_ios_15_5_runtime_is_supported_locally(self) -> None:
         row = self.rows["ios-15.5-ci-runtime"]

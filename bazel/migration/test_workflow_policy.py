@@ -63,7 +63,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         import json
 
         lock = json.loads((ROOT / "artifacts.lock.json").read_text(encoding="utf-8"))
-        self.assertEqual(lock.get("schema", 1), 1)
+        self.assertIn(lock.get("schema", 1), (1, 2))
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         select = workflow.split("Select the component mode", 1)[1].split(
             "Prepare promoted-mode verification inputs", 1
@@ -133,7 +133,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             "__bazel-buildbuddy-cleanup:", 1
         )[0]
         self.assertIn(
-            "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-17F113/$(ORLIX_BAZEL_CACHE_EPOCH)",
+            "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)",
             configure,
         )
 
