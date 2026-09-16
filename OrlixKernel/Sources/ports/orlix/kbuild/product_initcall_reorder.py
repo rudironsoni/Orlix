@@ -83,6 +83,7 @@ def _load_symbols(data: bytes, symtab: dict):
 
 def reorder(object_path: str, order_path: str) -> dict:
     data = bytearray(Path(object_path).read_bytes())
+    original = bytes(data)
     sections, symtab = _mach_o_sections_and_symtab(bytes(data))
     wanted = [line.strip() for line in Path(order_path).read_text(encoding="utf-8").splitlines() if line.strip()]
     if not wanted:
@@ -124,6 +125,15 @@ def reorder(object_path: str, order_path: str) -> dict:
         if name.startswith("___initcall") and not name.startswith("___initcall____")
     ]
     sched_wanted = [name for name in wanted if not name.startswith("___initcall")]
+    if target:
+        valid_offsets = {s["value"] - target["addr"] for s in entries_now}
+        for i in range(target["nreloc"]):
+            base = target["reloff"] + i * 8
+            r_address, _r_info = struct.unpack_from("<iI", data, base)
+            if r_address < 0 or r_address >= target["size"] or r_address % 8:
+                raise ReorderError(f"__initcalls relocation at {r_address} is not an 8-byte entry offset")
+            if r_address not in valid_offsets:
+                raise ReorderError(f"unexpected __initcalls relocation at {r_address}")
     if [s["name"] for s in entries_now] == entries_wanted and not sched_wanted:
         return {"changed": False, "entries": entry_count, "stubs": len(stubs_now)}
 
@@ -196,10 +206,15 @@ def reorder(object_path: str, order_path: str) -> dict:
         sched_section = next((s for s in sections if (s["segment"], s["section"]) == ("__DATA", "__sched_class")), None)
         if sched_section is not None:
             sched_symbols = _load_symbols(bytes(data), symtab)
+            sched_index = next(
+                index for index, section in enumerate(sections, start=1)
+                if (section["segment"], section["section"]) == ("__DATA", "__sched_class")
+            )
             sched_inside = [
                 s for s in sched_symbols
                 if (s["type"] & 0x0E) == N_SECT
                 and s["name"].endswith("_sched_class")
+                and s["sect"] == sched_index
                 and sched_section["addr"] <= s["value"] < sched_section["addr"] + sched_section["size"]
             ]
             if sched_inside:
@@ -208,6 +223,8 @@ def reorder(object_path: str, order_path: str) -> dict:
                     f"{sorted(s['name'] for s in sched_inside)[:4]}"
                 )
 
+    if bytes(data) == original:
+        return {"changed": False, "entries": entry_count, "stubs": len(stub_targets), "sched": sched_payload}
     with tempfile.NamedTemporaryFile(delete=False, dir=os.path.dirname(os.path.abspath(object_path))) as handle:
         handle.write(bytes(data))
         temp_path = handle.name
@@ -219,12 +236,17 @@ def _reorder_sched_class(data: bytearray, sections: dict, symtab: dict, sched_wa
     sched_section = next((s for s in sections if (s["segment"], s["section"]) == ("__DATA", "__sched_class")), None)
     if sched_section is None:
         raise ReorderError("expected sched class order but the object has no __DATA,__sched_class section")
+    sched_index = next(
+        index for index, section in enumerate(sections, start=1)
+        if (section["segment"], section["section"]) == ("__DATA", "__sched_class")
+    )
     symbols = _load_symbols(bytes(data), symtab)
     classes_now = [
         s for s in symbols
         if (s["type"] & 0x0E) == N_SECT
         and s["type"] & N_EXT
         and s["name"].endswith("_sched_class")
+        and s["sect"] == sched_index
         and sched_section["addr"] <= s["value"] < sched_section["addr"] + sched_section["size"]
     ]
     classes_now.sort(key=lambda s: s["value"])
@@ -234,15 +256,22 @@ def _reorder_sched_class(data: bytearray, sections: dict, symtab: dict, sched_wa
             f"object {sorted(s['name'] for s in classes_now)} expected {sorted(sched_wanted)}"
         )
     by_name = {s["name"]: s for s in classes_now}
-    if [s["name"] for s in classes_now] == sched_wanted:
-        return {"changed": False, "classes": len(classes_now)}
-
     boundaries = [s["value"] for s in classes_now] + [sched_section["addr"] + sched_section["size"]]
     ranges = []
     for position, symbol in enumerate(classes_now):
         start = symbol["value"] - sched_section["addr"]
         end = boundaries[position + 1] - sched_section["addr"]
         ranges.append((symbol["name"], start, end))
+    for i in range(sched_section["nreloc"]):
+        base = sched_section["reloff"] + i * 8
+        r_address, _r_info = struct.unpack_from("<iI", data, base)
+        if r_address < 0 or r_address >= sched_section["size"]:
+            raise ReorderError(f"__sched_class relocation at {r_address} escapes the section")
+        if not any(start <= r_address < end for _, start, end in ranges):
+            raise ReorderError(f"__sched_class relocation at {r_address} belongs to no sched class range")
+    if [s["name"] for s in classes_now] == sched_wanted:
+        return {"changed": False, "classes": len(classes_now)}
+
     old_to_new = {}
     new_cursor = 0
     for name in sched_wanted:
@@ -274,6 +303,8 @@ def _reorder_sched_class(data: bytearray, sections: dict, symtab: dict, sched_wa
 
     for symbol in symbols:
         if (symbol["type"] & 0x0E) != N_SECT:
+            continue
+        if symbol["sect"] != sched_index:
             continue
         offset = symbol["value"] - sched_section["addr"]
         for (start, end), (new_start, _new_end) in old_to_new.items():
