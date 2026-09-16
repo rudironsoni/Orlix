@@ -68,9 +68,12 @@ class WorkflowPolicyTests(unittest.TestCase):
         select = workflow.split("Select the component mode", 1)[1].split(
             "Prepare promoted-mode verification inputs", 1
         )[0]
-        self.assertIn('json.load(open("artifacts.lock.json")).get("schema", 1)', select)
+        self.assertIn("json.load(open('artifacts.lock.json')).get('schema', 1)", select)
         self.assertIn('GITHUB_EVENT_NAME" = "pull_request"', select)
-        self.assertIn('$schema" != "2"', select)
+        self.assertIn("bazel/migration/select_component_mode.py", select)
+        self.assertIn("--changed-paths", select)
+        self.assertIn("selecting source mode conservatively", select)
+        self.assertIn("Component mode selection", select)
         self.assertIn("ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}", workflow)
         self.assertIn("packages: read", workflow)
         self.assertIn("steps.component-mode.outputs.mode == 'promoted'", workflow)
