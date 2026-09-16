@@ -5,18 +5,18 @@ Promoted mode embeds the activated, signed buildset from artifacts.lock.json.
 A change is eligible for promoted mode only when every changed path is proven
 to be outside the promoted foundations: the component sources, the packaging
 and promotion machinery, and the build toolchain. Anything that cannot be
-proven app-only selects source mode.
+proven app-only selects source mode. The caller supplies the changed paths
+for every event type; there is no event-name shortcut. An empty, missing, or
+untrustworthy path set always selects source mode.
 
 Promoted foundations:
-- component sources: OrlixKernel/, OrlixMLibc/, OrlixCoreUtils/; OrlixOS/Sources/make
-  feeds a promoted rootfs package;
+- component sources: OrlixKernel/, OrlixMLibc/, OrlixCoreUtils/; OrlixOS/Sources/make,
+  OrlixOS/Sources/init, OrlixOS/Sources/patches, and OrlixOS/Sources/distribution
+  feed promoted rootfs packages;
 - packaging and promotion: bazel/feasibility/, bazel/promotion/, bazel/config/,
   bazel/extensions/, bazel/migration/, artifacts.lock.json, upstreams.lock.json;
 - build and CI machinery: make/, Makefile, .bazelrc*, MODULE.bazel*,
   .github/workflows/, project.yml, xcode/, Gemfile*, Brewfile, Tools/.
-
-Everything else is treated as app-only. Promotion eligibility never overrides
-a source requirement, and an empty or unknown path set always selects source.
 """
 
 from __future__ import annotations
@@ -61,13 +61,7 @@ SOURCE_MODE = "source"
 PROMOTED_MODE = "promoted"
 
 
-def select_component_mode(
-    changed_paths,
-    lock_schema,
-    event_name="pull_request",
-):
-    if event_name != "pull_request":
-        return PROMOTED_MODE if lock_schema == 2 else SOURCE_MODE
+def select_component_mode(changed_paths, lock_schema):
     if lock_schema != 2:
         return SOURCE_MODE
     paths = [str(path).strip() for path in changed_paths if str(path).strip()]

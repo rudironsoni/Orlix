@@ -26,7 +26,7 @@ def main(argv=None):
     ] if args.changed_paths != "-" else [
         line.strip() for line in sys.stdin.read().splitlines() if line.strip()
     ]
-    mode = select_component_mode(paths, args.lock_schema, event_name=args.event)
+    mode = select_component_mode(paths, args.lock_schema)
     payload = {
         "schema": 1,
         "kind": "component-mode-selection",

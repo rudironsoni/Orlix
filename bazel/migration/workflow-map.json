@@ -160,7 +160,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "fc01b9ab4b4bda74c1ac6164ea4024fe5ddbfeeb2266a9b2d852f5aa1aa88483",
+      "source_sha256": "497d2697d854437769f2a59f33bcf82cea1b54c8a025052c978a0e00008a665f",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -241,7 +241,8 @@
                 "name": "Check out the exact commit",
                 "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "with": {
-                  "persist-credentials": false
+                  "persist-credentials": false,
+                  "ref": "${{ github.event.pull_request.head.sha || github.sha }}"
                 }
               },
               {
@@ -313,7 +314,7 @@
                 "env": {
                   "GITHUB_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -euo pipefail\nschema=\"$(python3 -c \"import json; print(json.load(open('artifacts.lock.json')).get('schema', 1))\")\"\nif [ \"$GITHUB_EVENT_NAME\" = \"pull_request\" ]; then\n  paths_file=\"$RUNNER_TEMP/orlix-changed-paths.txt\"\n  if gh api \"repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files\" --paginate --jq '.[].filename' > \"$paths_file\" 2>/dev/null; then\n    printf 'selected changed paths from the pull request API\\n'\n  else\n    : > \"$paths_file\"\n    echo \"changed-path query failed; selecting source mode conservatively\" >&2\n  fi\nelse\n  : > \"$RUNNER_TEMP/orlix-changed-paths.txt\"\nfi\nmode=\"$(PYTHONPATH=bazel/migration python3 bazel/migration/select_component_mode.py --lock-schema \"$schema\" --event \"$GITHUB_EVENT_NAME\" --changed-paths \"$RUNNER_TEMP/orlix-changed-paths.txt\" --out \"$RUNNER_TEMP/orlix-component-mode.json\")\"\necho \"mode=$mode\" >> \"$GITHUB_OUTPUT\"\nif [ -n \"${GITHUB_STEP_SUMMARY:-}\" ]; then\n  {\n    printf 'Component mode selection: %s\\n\\n' \"$mode\"\n    printf '```json\\n'\n    cat \"$RUNNER_TEMP/orlix-component-mode.json\"\n    printf '\\n```\\n'\n  } >> \"$GITHUB_STEP_SUMMARY\"\nfi\nrm -f \"$RUNNER_TEMP/orlix-changed-paths.txt\" \"$RUNNER_TEMP/orlix-component-mode.json\"\n"
+                "run": "set -euo pipefail\nschema=\"$(python3 -c \"import json; print(json.load(open('artifacts.lock.json')).get('schema', 1))\")\"\npaths_file=\"$RUNNER_TEMP/orlix-changed-paths.txt\"\n: > \"$paths_file\"\nif [ \"$GITHUB_EVENT_NAME\" = \"pull_request\" ]; then\n  expected=\"${{ github.event.pull_request.changed_files }}\"\n  if gh api \"repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files\" --paginate --jq '.[].filename' > \"$paths_file\" 2>/dev/null \\\n    && [ \"$(grep -c . \"$paths_file\" || true)\" = \"$expected\" ]; then\n    printf 'selected changed paths from the pull request API\\n'\n  else\n    : > \"$paths_file\"\n    echo \"changed-path query failed or truncated; selecting source mode conservatively\" >&2\n  fi\nelif [ \"$GITHUB_EVENT_NAME\" = \"push\" ]; then\n  before=\"${{ github.event.before }}\"\n  after=\"${{ github.event.after }}\"\n  case \"$before\" in\n    0000000000000000000000000000000000000000|\"\") echo \"no push base; selecting source mode conservatively\" >&2 ;;\n    *)\n      if git -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64)\" fetch --no-tags --depth=1 origin \"$before\" \"$after\" 2>/dev/null \\\n        && git diff --name-only \"$before\" \"$after\" > \"$paths_file\" 2>/dev/null; then\n        printf 'selected changed paths from the push range\\n'\n      else\n        : > \"$paths_file\"\n        echo \"push range unavailable; selecting source mode conservatively\" >&2\n      fi\n      ;;\n  esac\nelse\n  echo \"no trustworthy change set for $GITHUB_EVENT_NAME; selecting source mode conservatively\" >&2\nfi\nmode=\"$(PYTHONPATH=bazel/migration python3 bazel/migration/select_component_mode.py --lock-schema \"$schema\" --event \"$GITHUB_EVENT_NAME\" --changed-paths \"$RUNNER_TEMP/orlix-changed-paths.txt\" --out \"$RUNNER_TEMP/orlix-component-mode.json\")\"\necho \"mode=$mode\" >> \"$GITHUB_OUTPUT\"\nif [ -n \"${GITHUB_STEP_SUMMARY:-}\" ]; then\n  {\n    printf 'Component mode selection: %s\\n\\n' \"$mode\"\n    printf '```json\\n'\n    cat \"$RUNNER_TEMP/orlix-component-mode.json\"\n    printf '\\n```\\n'\n  } >> \"$GITHUB_STEP_SUMMARY\"\nfi\nrm -f \"$RUNNER_TEMP/orlix-changed-paths.txt\" \"$RUNNER_TEMP/orlix-component-mode.json\"\n"
               },
               {
                 "name": "Prepare promoted-mode verification inputs",
@@ -366,7 +367,7 @@
                 "if": "always()",
                 "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
                 "with": {
-                  "name": "bazel-apple-ci-${{ github.sha }}",
+                  "name": "bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}",
                   "path": "Build/AgentHarness/bazel-ci\nBuild/**/*.xcresult\nBuild/**/*.log\n~/Library/Logs/DiagnosticReports\n",
                   "if-no-files-found": "warn",
                   "retention-days": 14
