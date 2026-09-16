@@ -667,3 +667,26 @@ Independent Standards and Spec review findings and their dispositions:
 - Spec-review scope-cream findings (kernel-link rework, credential rework in release workflows) were forced by the Xcode 27 toolchain move and the PR review corrections, respectively, and are recorded in their own checkpoints above.
 
 Phase 6B gate status after this checkpoint: 6B2 complete protected publication VERIFIED (run `34927558114`); 6B3 schema-2 activation VERIFIED and committed; promoted-consumer consumption, cold reconstruction (7 downloads), and warm reconstruction (0 downloads) VERIFIED; semantic PR selection VERIFIED in source; exact-head canonical Apple CI VERIFIED (`35066386463` at `22aa0216`). Independent Standards and Spec review complete with the dispositions above. The remaining unproven set is post-merge only: trusted-main BuildBuddy writes, useful remote hits, transfer-byte accounting, and the monthly usage projection. TAP remains stopped.
+
+## 2026-09-16 [CORRECTION] activated buildset is stale; Phase 6B reopens
+
+[CORRECTION]: the committed schema-2 buildset `570bd6425e4f22b9818149b53c882e7782648a4714c53bdec67b7be71031d8a8` (promoted at `334afaba`, activated in `154c99d2`) predates commit `418f2d43`, which changed Kbuild-owned Kernel product construction (per-level boundary stubs, input-ordered link inputs, post-link section reorder). The earlier checkpoint claim that the buildset "remains authorized" holds only for app-side Xcode changes, not for component-producing build-system changes. The four signed Kernel OCI artifacts in `artifacts.lock.json` were produced before the current Kernel build algorithm existed, so the current promoted Kernel products are STALE RELATIVE TO CURRENT KERNEL BUILD MECHANICS. Independent review also found: PR #230 is merge-BLOCKED on three unresolved non-outdated review threads (runtime liveness, TestFlight base-fetch auth, Grok base-fetch auth); canonical CI checks out the PR merge result, not the exact head; and the previous "merge-ready" claim is withdrawn.
+
+Corrected status:
+
+```text
+Phase 6B infrastructure: IMPLEMENTED
+original 7-component promotion: VERIFIED @ 334afaba
+schema-2 activation: VERIFIED (superseded buildset, retained as evidence only)
+cold/warm reuse: VERIFIED for buildset 570bd642... (superseded buildset)
+Kernel-link rework: IMPLEMENTED + SOURCE-MODE CI VERIFIED
+current promoted Kernel products: STALE RELATIVE TO CURRENT KERNEL BUILD MECHANICS
+current-head promoted buildset: NOT YET VERIFIED
+canonical Apple CI: GREEN but merge-result proof, not literal head checkout
+review implementation findings: apparently fixed
+review-thread resolution: INCOMPLETE
+trusted-main BuildBuddy proof: CORRECTLY POST-MERGE
+PR #230: NOT READY TO MERGE
+```
+
+Recovery order (promotion last): correct status -> fix producers/selectors/verifiers (PR-head checkout pin; source-safe selector on PR + main push; Mach-O rewriter section-ownership fix + regression suite; seven artifact-identity-v2 + payload boundaries; restored XCTest under one canonical app; real CycloneDX 1.6 SBOM + SLSA provenance + toolchain/proof-index binding with byte-verifying activation; measured combined GC; canonical component registry) -> make evidence truthful -> freeze component-affecting code -> promote exact frozen HEAD -> activate exact signed evidence -> prove promoted consumption -> exact-head canonical CI -> resolve review threads with owning evidence -> stop before merge. TAP remains stopped. No Phase 7 work.
