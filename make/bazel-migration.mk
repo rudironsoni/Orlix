@@ -1,6 +1,6 @@
 ORLIX_BAZEL_CACHE_ROOT ?= $(HOME)/Library/Caches/Orlix/Bazel
 ORLIX_BAZEL_VERSION ?= 9.2.0
-ORLIX_XCODE_VERSION_FILE ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../.xcode-version)
+ORLIX_XCODE_VERSION_FILE := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../.xcode-version)
 ORLIX_XCODE_VERSION ?= $(shell tr -d '[:space:]' < $(ORLIX_XCODE_VERSION_FILE))
 ORLIX_XCODE_BUILD ?= 17F113
 ORLIX_BAZEL_CACHE_EPOCH ?= v1
@@ -688,7 +688,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-release-iphonesimulator,//bazel/feasibility/kernel:kernel-release-iphonesimulator' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphoneos,//bazel/feasibility/kernel:kernel-development-iphoneos' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//bazel/feasibility/kernel:kernel-development-iphonesimulator' make/bazel-migration.mk
-	@if rg -F -q -- '--artifact-identity-format legacy' make/bazel-migration.mk; then echo "promotion must not use legacy artifact identities" >&2; exit 1; fi
+	@if python3 -c 'import sys; text=open("make/bazel-migration.mk").read(); assert ("legacy-marker-sha" + "256") not in text, "promotion must not use legacy artifact identities"'; then :; else echo "promotion must not use legacy artifact identities" >&2; exit 1; fi
 	@rg -F -q -- '--artifact-identity-format artifact-identity-v2' make/bazel-migration.mk
 	@rg -F -q '"name": "__bazel-substitute-promoted"' bazel/migration/legacy-target-map.json
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile

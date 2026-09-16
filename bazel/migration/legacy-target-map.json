@@ -9,9 +9,9 @@
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "97e9c0e6ab14a119b47a8a83a7e046b5efaab47fe61d4ceb833ba22a77fd96b5",
     "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
-    "make/bazel-migration.mk": "f29c437a10881fc259f0e4b9e002aeaa02542a0cff325b8207aac93140084a2e",
+    "make/bazel-migration.mk": "c986c426579c3e330d04528ad7704f4d8ce18a3c21119915ccd6a8241d2cea77",
     "make/gnu-make-contract.mk": "33975f64db094c955695e2f03759edc308ed324face23147f84d58c0e7447a06",
-    "make/release.mk": "31cfc7c6e76a1816d8fdcfa34c31e5b898c53572820aa9c572e99d564cd16d1e",
+    "make/release.mk": "e14c32ac92025a3b6fbeb00f4b89dbc4e931a01f015163c09c10bcae27c22646",
     "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
     "make/tcti-proof-registry-provenance.mk": "6033141ec62802ab315cc4f04f0732ba820c8896158f6642b5ec6b92742b154a"
   },
@@ -6305,7 +6305,7 @@
     {
       "name": "__release-manifest-check",
       "source": "make/release.mk",
-      "line": 23,
+      "line": 24,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6315,7 +6315,7 @@
     {
       "name": "__exported-app-check",
       "source": "make/release.mk",
-      "line": 29,
+      "line": 30,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6325,7 +6325,7 @@
     {
       "name": "__release-public-approval-check",
       "source": "make/release.mk",
-      "line": 37,
+      "line": 38,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6335,7 +6335,7 @@
     {
       "name": "__release-tag-check",
       "source": "make/release.mk",
-      "line": 42,
+      "line": 43,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6345,7 +6345,7 @@
     {
       "name": "__release-metadata-check",
       "source": "make/release.mk",
-      "line": 53,
+      "line": 54,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6355,7 +6355,7 @@
     {
       "name": "__release-report-write",
       "source": "make/release.mk",
-      "line": 58,
+      "line": 59,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6365,7 +6365,7 @@
     {
       "name": "__release-report-check",
       "source": "make/release.mk",
-      "line": 77,
+      "line": 78,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6375,7 +6375,7 @@
     {
       "name": "__release-inputs-check",
       "source": "make/release.mk",
-      "line": 83,
+      "line": 84,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6385,7 +6385,7 @@
     {
       "name": "__release-tests",
       "source": "make/release.mk",
-      "line": 128,
+      "line": 129,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6395,7 +6395,7 @@
     {
       "name": "__release-workflow-tests",
       "source": "make/release.mk",
-      "line": 145,
+      "line": 146,
       "classification": "private",
       "phony": true,
       "prerequisites": [

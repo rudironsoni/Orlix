@@ -1125,7 +1125,7 @@
     {
       "name": "__release-manifest-check",
       "source": "make/release.mk",
-      "line": 23,
+      "line": 24,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1137,7 +1137,7 @@
     {
       "name": "__exported-app-check",
       "source": "make/release.mk",
-      "line": 29,
+      "line": 30,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1149,7 +1149,7 @@
     {
       "name": "__release-public-approval-check",
       "source": "make/release.mk",
-      "line": 37,
+      "line": 38,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1161,7 +1161,7 @@
     {
       "name": "__release-tag-check",
       "source": "make/release.mk",
-      "line": 42,
+      "line": 43,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1173,7 +1173,7 @@
     {
       "name": "__release-metadata-check",
       "source": "make/release.mk",
-      "line": 53,
+      "line": 54,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1185,7 +1185,7 @@
     {
       "name": "__release-report-check",
       "source": "make/release.mk",
-      "line": 77,
+      "line": 78,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1197,7 +1197,7 @@
     {
       "name": "__release-inputs-check",
       "source": "make/release.mk",
-      "line": 83,
+      "line": 84,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1209,7 +1209,7 @@
     {
       "name": "__release-tests",
       "source": "make/release.mk",
-      "line": 128,
+      "line": 129,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1221,7 +1221,7 @@
     {
       "name": "__release-workflow-tests",
       "source": "make/release.mk",
-      "line": 145,
+      "line": 146,
       "classification": "private",
       "phony": true,
       "prerequisites": [
