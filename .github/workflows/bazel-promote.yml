@@ -113,7 +113,7 @@ jobs:
           cosign public-key --key "$key_path" > "$key_path.pub"
           export ORLIX_COSIGN_PUB="$key_path.pub"
           printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "${GITHUB_ACTOR}" --password-stdin
-          for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do
+          for component in $(python3 bazel/promotion/components.py --names); do
             make "__bazel-publish-${component}"
           done
           make __bazel-lock-proposal

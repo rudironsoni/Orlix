@@ -173,12 +173,14 @@ __bazel-promote-$(1): __bazel-version-check
 	mkdir -p "$$$$promote/a/disk" "$$$$promote/b/disk" "$$$$promote/a/output-base" "$$$$promote/b/output-base"; \
 	for side in a b; do \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$$$promote/$$$$side/output-base" build $(2) --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$$$$promote/$$$$side/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
-		manifest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path '*/$(3)' -print | /usr/bin/head -n 1)"; \
-		test -n "$$$$manifest_file" || { echo "missing $(3) for promote $(1) $$$$side" >&2; exit 1; }; \
+		eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell $(1))"; \
+		manifest_rel="$$(/usr/bin/dirname "$$digest_path")/$$manifest_stem.artifact-identity-v2.json"; \
+		manifest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path "*/$$manifest_rel" -print | /usr/bin/head -n 1)"; \
+		test -n "$$$$manifest_file" || { echo "missing $$manifest_rel for promote $(1) $$$$side" >&2; exit 1; }; \
 		digest_file="$$$${manifest_file%.json}.sha256"; \
 		test -s "$$$$digest_file" || { echo "missing artifact identity digest for promote $(1) $$$$side" >&2; exit 1; }; \
 		product_dir="$$$$(/usr/bin/dirname "$$$$manifest_file")"; \
-		if [ -n "$(4)" ]; then product_src="$$$$product_dir/$(4)"; else product_src="$$$$product_dir"; fi; \
+		if [ "$$product_kind" = tree ] && [ -n "$$product_subdir" ]; then product_src="$$$$product_dir/$$product_subdir"; else product_src="$$$$product_dir"; fi; \
 		test -d "$$$$product_src" || { echo "missing $(1) product source for promote $$$$side" >&2; exit 1; }; \
 		stage="$$$$promote/$$$$side/staged"; \
 		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$$$manifest_file" --product-src "$$$$product_src" --stage "$$$$stage"; \
@@ -209,9 +211,9 @@ __bazel-promote-$(1): __bazel-version-check
 	if env -u ORLIX_COSIGN_KEY -u ORLIX_PROMOTE_ARTIFACT PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact-identity-format artifact-identity-v2 --proposal "$$$$promote/$(1)-signed.json"; then echo "unsigned promote must not Cosign-sign" >&2; exit 1; fi; \
 	test ! -e "$$$$promote/$(1)-signed.json"
 endef
-$(eval $(call ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.artifact-identity-v2.json,uapi))
-$(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json,sysroot))
-$(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json,))
+$(eval $(call ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi))
+$(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot))
+$(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs))
 
 define ORLIX_BAZEL_PROMOTE_KERNEL
 __bazel-promote-$(1): __bazel-version-check
@@ -277,43 +279,28 @@ __bazel-promote-buildset: __bazel-version-check
 	done; \
 	/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
 	python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
-	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+	for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
 		/bin/chmod -R u+w "$$promote/$$component" 2>/dev/null || true; \
 		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/$$component"; \
 	done; \
 	mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
-	labels=(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs //bazel/feasibility/kernel:kernel-release-iphoneos //bazel/feasibility/kernel:kernel-release-iphonesimulator //bazel/feasibility/kernel:kernel-development-iphoneos //bazel/feasibility/kernel:kernel-development-iphonesimulator); \
+	labels=($$(python3 "$(CURDIR)/bazel/promotion/components.py" --labels)); \
 	for side in a b; do \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
-		for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+		for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
 			stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
-			case "$$component" in \
-				uapi) relative='bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256' ;; \
-				mlibc) relative='bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256' ;; \
-				rootfs) relative='bazel/feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.sha256' ;; \
-				*) relative="bazel/feasibility/kernel/$$component/kernel.artifact-identity-v2.sha256" ;; \
-			esac; \
-			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$relative" -type f -print | /usr/bin/head -n 1)"; \
-			test -n "$$digest_file" || { echo "missing $$relative for promote buildset $$side" >&2; exit 1; }; \
-			if [[ "$$component" == kernel-* ]]; then \
-				product_tree="$$(/usr/bin/dirname "$$digest_file")/product"; \
-				manifest_file="$$(/usr/bin/dirname "$$digest_file")/kernel.artifact-identity-v2.json"; \
-				test -d "$$product_tree" && test -s "$$manifest_file" || { echo "incomplete Kernel product for $$component $$side" >&2; exit 1; }; \
-				mkdir -p "$$stage/product"; /bin/cp -pR "$$product_tree"/. "$$stage/product"/; \
-				/bin/cp "$$manifest_file" "$$stage/artifact-identity-v2.json"; \
-				/bin/cp "$$digest_file" "$$stage/artifact-identity-v2.sha256"; \
+			eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
+			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$digest_path" -type f -print | /usr/bin/head -n 1)"; \
+			test -n "$$digest_file" || { echo "missing $$digest_path for promote buildset $$side" >&2; exit 1; }; \
+			if [ "$$product_kind" = tree ] && [ -n "$$product_subdir" ]; then \
+				product_src="$$(/usr/bin/dirname "$$digest_file")/$$product_subdir"; \
 			else \
-				product_dir="$$(/usr/bin/dirname "$$digest_file")"; \
-				case "$$component" in \
-					uapi) product_src="$$product_dir/uapi"; manifest_base="uapi" ;; \
-					mlibc) product_src="$$product_dir/sysroot"; manifest_base="sysroot" ;; \
-					rootfs) product_src="$$product_dir"; manifest_base="rootfs" ;; \
-				esac; \
-				test -d "$$product_src" || { echo "missing $$component product source for $$side" >&2; exit 1; }; \
-				manifest_src="$$product_dir/$$manifest_base.artifact-identity-v2.json"; \
-				test -s "$$manifest_src" || { echo "missing $$component artifact identity manifest for $$side" >&2; exit 1; }; \
-				PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$manifest_src" --product-src "$$product_src" --stage "$$stage"; \
+				product_src="$$(/usr/bin/dirname "$$digest_file")"; \
 			fi; \
+			test -d "$$product_src" || { echo "missing $$component product source for $$side" >&2; exit 1; }; \
+			manifest_src="$$(/usr/bin/dirname "$$digest_file")/$$manifest_stem.artifact-identity-v2.json"; \
+			test -s "$$manifest_src" || { echo "missing $$component artifact identity manifest for $$side" >&2; exit 1; }; \
+			PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$manifest_src" --product-src "$$product_src" --stage "$$stage"; \
 			mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
 		done; \
 	done; \
@@ -322,7 +309,7 @@ __bazel-promote-buildset: __bazel-version-check
 	provenance_builder="local"; provenance_run="local"; \
 	if [ -n "$${GITHUB_REPOSITORY:-}" ]; then provenance_builder="https://github.com/$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; provenance_run="$${GITHUB_RUN_ID:-local}"; fi; \
 	provenance_toolchain="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
-	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
+	for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
 		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format artifact-identity-v2 --source-sha "$$provenance_source" --builder-id "$$provenance_builder" --invocation-id "$$provenance_run" --toolchain-digest "$$provenance_toolchain" --build-config release,promotion --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
 		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
 		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
@@ -343,23 +330,21 @@ __bazel-publish-$(1): __bazel-version-check
 	if [ -d "$$$$promote/a/staged" ]; then \
 		artifact="$$$$promote/a/staged"; \
 	else \
-		tree="$$$$(/usr/bin/find "$$$$promote/a/output-base" -path '*/$(2)' -print | /usr/bin/head -n 1)"; \
-		test -n "$$$$tree" || { echo "missing $(2) tree for publish $(1)" >&2; exit 1; }; \
-		artifact="$$$$(dirname "$$$$tree")"; \
+		echo "missing staged product $$$$promote/a/staged; run make __bazel-promote-$(1) first" >&2; exit 1; \
 	fi; \
 	test -d "$$$$artifact" || { echo "missing component directory $$$$artifact" >&2; exit 1; }; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import json,sys; from pathlib import Path; import compare; from locked_buildset import validate_artifact_identity, validate_v2_product; p=json.load(open(sys.argv[1])); assert p["signed"] is False and p["component"] == sys.argv[3] and p["unsigned_digest"] == sys.argv[4]; identity=validate_artifact_identity(p["artifact_identity"]) if p.get("artifact_identity") is not None else None; assert identity is None or (identity["format"] == sys.argv[5] and identity["digest"] == sys.argv[4]); assert (p["output_tree_digest"] == compare.tree_digest(Path(sys.argv[2])) if identity is None else (validate_v2_product(Path(sys.argv[2]), identity, sys.argv[3]) if identity["format"] == "artifact-identity-v2" else p["output_tree_digest"] == compare.tree_digest(Path(sys.argv[2])))), "component changed after dual-build comparison"' "$$$$promote/$(1)-proposal.json" "$$$$artifact" "$(1)" "$$$$digest" "$(3)"; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$artifact" --artifact-identity-format $(3) $(if $(4),--artifact-identity-marker $(4),) --proposal "$$$$promote/$(1)-signed.json"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import json,sys; from pathlib import Path; from locked_buildset import validate_artifact_identity, validate_v2_product; p=json.load(open(sys.argv[1])); assert p["signed"] is False and p["component"] == sys.argv[3] and p["unsigned_digest"] == sys.argv[4]; identity=validate_artifact_identity(p["artifact_identity"]) if p.get("artifact_identity") is not None else None; assert identity is not None and identity["format"] == "artifact-identity-v2" and identity["digest"] == sys.argv[4]; validate_v2_product(Path(sys.argv[2]), identity, sys.argv[3])' "$$$$promote/$(1)-proposal.json" "$$$$artifact" "$(1)" "$$$$digest"; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact "$$$$artifact" --artifact-identity-format artifact-identity-v2 --proposal "$$$$promote/$(1)-signed.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("oci_digest","").startswith("sha256:"), p' "$$$$promote/$(1)-signed.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/publish.py" --proposal "$$$$promote/$(1)-signed.json"
 endef
-$(eval $(call ORLIX_BAZEL_PUBLISH,uapi,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphoneos,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphonesimulator,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-development-iphoneos,,artifact-identity-v2,))
-$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-development-iphonesimulator,,artifact-identity-v2,))
+$(eval $(call ORLIX_BAZEL_PUBLISH,uapi))
+$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc))
+$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs))
+$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphoneos))
+$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphonesimulator))
+$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-development-iphoneos))
+$(eval $(call ORLIX_BAZEL_PUBLISH,kernel-development-iphonesimulator))
 
 __bazel-lock-proposal: __bazel-version-check
 	@set -euo pipefail; \
@@ -439,11 +424,9 @@ __bazel-reconstruct-source: __bazel-feasibility-bootstrap __bazel-reconstruct
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build //bazel/feasibility/rootfs:rootfs --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --disk_cache= --remote_cache= --remote_executor= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildset"])' "$(CURDIR)/artifacts.lock.json")"; \
 	for component in uapi mlibc rootfs; do \
-		case "$$component" in \
-			uapi) label=//bazel/feasibility/kernel:uapi; marker=uapi.sha256 ;; \
-			mlibc) label=//bazel/feasibility/mlibc:sysroot; marker=sysroot.sha256 ;; \
-			rootfs) label=//bazel/feasibility/rootfs:rootfs; marker=source-input.sha256 ;; \
-		esac; \
+		label="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" label)"; \
+		digest_path="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" digest_path)"; \
+		marker="$$(/usr/bin/basename "$$digest_path")"; \
 		rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" cquery "$$label" --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --output=files | awk -v marker="$$marker" 'substr($$0,length($$0)-length(marker)) == "/" marker {path=$$0; count++} END {if(count != 1) exit 1; print path}')"; \
 		tree="$$(/usr/bin/dirname "$$cold/output-base/execroot/_main/$$rel")"; \
 		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import compare,sys; print(sys.argv[1], compare.compare_trees(sys.argv[2], sys.argv[3]))' "$$component" "$$tree" "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct/$$buildset/$$component"; \

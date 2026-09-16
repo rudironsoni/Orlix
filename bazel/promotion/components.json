@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "kind": "promotion-components",
+  "components": [
+    {
+      "name": "uapi",
+      "label": "//bazel/feasibility/kernel:uapi",
+      "digest_path": "bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256",
+      "manifest_stem": "uapi",
+      "product": {"kind": "tree", "subdir": "uapi"},
+      "type": "uapi"
+    },
+    {
+      "name": "mlibc",
+      "label": "//bazel/feasibility/mlibc:sysroot",
+      "digest_path": "bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256",
+      "manifest_stem": "sysroot",
+      "product": {"kind": "tree", "subdir": "sysroot"},
+      "type": "mlibc"
+    },
+    {
+      "name": "rootfs",
+      "label": "//bazel/feasibility/rootfs:rootfs",
+      "digest_path": "bazel/feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.sha256",
+      "manifest_stem": "rootfs",
+      "product": {"kind": "manifest-files"},
+      "type": "rootfs"
+    },
+    {
+      "name": "kernel-release-iphoneos",
+      "label": "//bazel/feasibility/kernel:kernel-release-iphoneos",
+      "digest_path": "bazel/feasibility/kernel/kernel-release-iphoneos/kernel.artifact-identity-v2.sha256",
+      "manifest_stem": "kernel",
+      "product": {"kind": "tree", "subdir": "product"},
+      "type": "kernel-apple-product"
+    },
+    {
+      "name": "kernel-release-iphonesimulator",
+      "label": "//bazel/feasibility/kernel:kernel-release-iphonesimulator",
+      "digest_path": "bazel/feasibility/kernel/kernel-release-iphonesimulator/kernel.artifact-identity-v2.sha256",
+      "manifest_stem": "kernel",
+      "product": {"kind": "tree", "subdir": "product"},
+      "type": "kernel-apple-product"
+    },
+    {
+      "name": "kernel-development-iphoneos",
+      "label": "//bazel/feasibility/kernel:kernel-development-iphoneos",
+      "digest_path": "bazel/feasibility/kernel/kernel-development-iphoneos/kernel.artifact-identity-v2.sha256",
+      "manifest_stem": "kernel",
+      "product": {"kind": "tree", "subdir": "product"},
+      "type": "kernel-apple-product"
+    },
+    {
+      "name": "kernel-development-iphonesimulator",
+      "label": "//bazel/feasibility/kernel:kernel-development-iphonesimulator",
+      "digest_path": "bazel/feasibility/kernel/kernel-development-iphonesimulator/kernel.artifact-identity-v2.sha256",
+      "manifest_stem": "kernel",
+      "product": {"kind": "tree", "subdir": "product"},
+      "type": "kernel-apple-product"
+    }
+  ]
+}

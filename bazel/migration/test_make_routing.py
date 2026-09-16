@@ -218,22 +218,30 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("unsigned promote must not Cosign-sign", mk)
 
     def test_buildset_promotion_builds_all_components_twice(self) -> None:
+        import json
+
         output = _dry_run("__bazel-promote-buildset")
         self.assertEqual(output.count(" build \"${labels[@]}\""), 1)
         self.assertIn("for side in a b", output)
         self.assertIn("--nouse_action_cache", output)
         self.assertIn("--disk_cache= --repository_cache=", output)
         self.assertIn("--remote_cache= --remote_executor=", output)
-        for label in (
-            "//bazel/feasibility/kernel:uapi",
-            "//bazel/feasibility/mlibc:sysroot",
-            "//bazel/feasibility/rootfs:rootfs",
-            "//bazel/feasibility/kernel:kernel-release-iphoneos",
-            "//bazel/feasibility/kernel:kernel-release-iphonesimulator",
-            "//bazel/feasibility/kernel:kernel-development-iphoneos",
-            "//bazel/feasibility/kernel:kernel-development-iphonesimulator",
-        ):
-            self.assertIn(label, output)
+        self.assertIn("components.py\" --labels", output)
+        registry = json.loads(
+            (ROOT / "bazel" / "promotion" / "components.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [entry["label"] for entry in registry["components"]],
+            [
+                "//bazel/feasibility/kernel:uapi",
+                "//bazel/feasibility/mlibc:sysroot",
+                "//bazel/feasibility/rootfs:rootfs",
+                "//bazel/feasibility/kernel:kernel-release-iphoneos",
+                "//bazel/feasibility/kernel:kernel-release-iphonesimulator",
+                "//bazel/feasibility/kernel:kernel-development-iphoneos",
+                "//bazel/feasibility/kernel:kernel-development-iphonesimulator",
+            ],
+        )
 
     def test_buildset_lock_requires_cosign_blob_verification(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
@@ -302,18 +310,6 @@ class MakeRoutingTests(unittest.TestCase):
         )
         self.assertIn(
             "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs", mk
-        )
-        self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.artifact-identity-v2.json,uapi",
-            mk,
-        )
-        self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json,sysroot",
-            mk,
-        )
-        self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json,",
-            mk,
         )
         self.assertNotIn("legacy-marker-sha256", mk)
         for component in (

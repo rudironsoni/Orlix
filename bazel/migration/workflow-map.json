@@ -505,7 +505,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "672aa227a97f5a49fd994fb58250836f5c253e40f22e317e123412149222b31d",
+      "source_sha256": "0e156502cb9b91a49a4bf749be65d9ef76c62698d0a68409f5ef6841c66c0be5",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -597,7 +597,7 @@
                   "ORLIX_ORAS_REGISTRY_CONFIG": "${{ runner.temp }}/orlix-registry.json",
                   "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 },
-                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is required; promotion failed\"\n  exit 1\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\ncosign public-key --key \"$key_path\" > \"$key_path.pub\"\nexport ORLIX_COSIGN_PUB=\"$key_path.pub\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"${GITHUB_ACTOR}\" --password-stdin\nfor component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do\n  make \"__bazel-publish-${component}\"\ndone\nmake __bazel-lock-proposal\n"
+                "run": "set -euo pipefail\nif [ -z \"${ORLIX_COSIGN_KEY}\" ]; then\n  echo \"ORLIX_COSIGN_KEY is required; promotion failed\"\n  exit 1\nfi\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nkey_path=\"${ORLIX_COSIGN_KEY#file://}\"\nif [ ! -f \"$key_path\" ]; then\n  key_path=\"${RUNNER_TEMP}/orlix-cosign.key\"\n  printf '%s\\n' \"$ORLIX_COSIGN_KEY\" > \"$key_path\"\n  chmod 600 \"$key_path\"\nfi\nexport ORLIX_COSIGN_KEY=\"file://${key_path}\"\nexport COSIGN_PASSWORD=\"${ORLIX_COSIGN_KEY_PASSWORD}\"\ncosign public-key --key \"$key_path\" > \"$key_path.pub\"\nexport ORLIX_COSIGN_PUB=\"$key_path.pub\"\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"${GITHUB_ACTOR}\" --password-stdin\nfor component in $(python3 bazel/promotion/components.py --names); do\n  make \"__bazel-publish-${component}\"\ndone\nmake __bazel-lock-proposal\n"
               },
               {
                 "name": "Save verified source downloads",
