@@ -39,19 +39,19 @@ class ToolchainPinTests(unittest.TestCase):
                     pin.capture_manifest(tmp, str(binary), str(output))
             self.assertEqual(output.read_bytes(), before)
 
-    def test_product_pin_is_xcode_27_0(self) -> None:
+    def test_product_pin_is_xcode_26_6(self) -> None:
         product = pin.product_pin()
-        self.assertEqual(product["xcode_version"], "27.0")
-        self.assertEqual(product["xcode_build"], "27A266a")
-        self.assertEqual(product["disk_cache_namespace"], "bazel-9.2.0-xcode-27A266a")
+        self.assertEqual(product["xcode_version"], "26.6")
+        self.assertEqual(product["xcode_build"], "17F113")
+        self.assertEqual(product["disk_cache_namespace"], "bazel-9.2.0-xcode-17F113")
 
-    def test_xcode_26_6_is_allowed_and_not_the_pin(self) -> None:
-        self.assertIn(("26.6", "17F113"), pin.allowed_identities())
+    def test_xcode_27_0_is_allowed_and_not_the_pin(self) -> None:
+        self.assertIn(("27.0", "27A266a"), pin.allowed_identities())
         self.assertEqual(
-            pin.namespace_for("26.6", "17F113"),
-            "bazel-9.2.0-xcode-17F113",
+            pin.namespace_for("27.0", "27A266a"),
+            "bazel-9.2.0-xcode-27A266a",
         )
-        self.assertNotEqual(pin.product_pin()["xcode_build"], "17F113")
+        self.assertNotEqual(pin.product_pin()["xcode_build"], "27A266a")
 
     def test_unknown_xcode_is_rejected(self) -> None:
         with self.assertRaises(pin.PinError):

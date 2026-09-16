@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "6407441fa1e8f89caa1c3f0a4c58ddcbf5f9953145053763faa6b50ad815e0c0",
+      "source_sha256": "0075acdfe1def5575897c472a98b049c5407349cf93de5d8b397e64a8f50eb0d",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -125,15 +125,15 @@
                 }
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Install build tools",
@@ -160,7 +160,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "2ccee3d62fd573762396272c2e123615235eaf29c01680e41536a0bcc63bb955",
+      "source_sha256": "920943b23055f7bc9481defb2771ce8a522b3222f57870b9c698dd0e5b2b04bc",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -245,10 +245,10 @@
                 }
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
@@ -274,7 +274,7 @@
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Resolve BuildBuddy cache policy",
@@ -305,7 +305,7 @@
               },
               {
                 "name": "Prepare both simulator runtimes",
-                "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"27.0\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=27.0\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nmkdir -p \"$HOME/Library/Caches/Orlix/ios15-runtime\"\nsudo xcodes runtimes install \"iOS 15.5\" --architecture arm64 --directory \"$HOME/Library/Caches/Orlix/ios15-runtime\" --keep-archive --no-color\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"26.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Select the component mode",
@@ -375,7 +375,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "e16eca7df3703ecd60d086eba4e8a60f3806f1f180bf716d4997e4d6b0f746f1",
+      "source_sha256": "0d9d1f9a60bde2b321b55896d87118b29f7901176adb22d0a7503ff53322cb89",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -407,10 +407,10 @@
                 }
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
@@ -419,7 +419,7 @@
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Run Make-owned cache GC",
@@ -431,7 +431,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "20a1719036cd9df81570e83ea2b5674ee83aaabe1a83bcea20320ca183a9f6cd",
+      "source_sha256": "d46ee2d951c12ec6084234274dcc6b7bc7808b6ed37834111cde0ae7f1d86283",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -464,10 +464,10 @@
                 }
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
@@ -476,7 +476,7 @@
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Run Make-owned matrix check",
@@ -501,7 +501,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "f14b9bacf22f5fde898595f91b10e53a217da74385e11a82db93eae682182187",
+      "source_sha256": "eace1c7063756f6f6def8789bb82131318c7e3267aa1d3dbc501e358de848e66",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -554,11 +554,11 @@
                 }
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "timeout-minutes": 5,
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
@@ -577,7 +577,7 @@
               {
                 "name": "Export the selected Xcode to Make",
                 "timeout-minutes": 1,
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Dual-build without action cache",
@@ -919,7 +919,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "78547ad92ca87e04b9cf5e882f60923cfbaec215d943794645f421e272f10f17",
+      "source_sha256": "9909156c7adb18f35bed53777c9e00119979932b4003730f4a8d8105a287c760",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -947,7 +947,7 @@
               "ORLIX_RELEASE_TAG": "${{ github.ref_name }}",
               "ORLIX_RELEASE_COMMIT": "${{ github.sha }}",
               "ORLIX_RELEASE_RUN_ID": "${{ github.run_id }}",
-              "ORLIX_RELEASE_XCODE_VERSION": "27.0",
+              "ORLIX_RELEASE_XCODE_VERSION": "26.6",
               "ORLIX_RELEASE_UPLOAD_BACKEND": "appstore-api",
               "ORLIX_DEVELOPMENT_TEAM": "${{ vars.APPLE_TEAM_ID }}",
               "ORLIX_ASC_API_KEY_ID": "${{ vars.APPSTORE_API_KEY_ID }}",
@@ -974,15 +974,15 @@
                 "run": "set -euo pipefail\ncredential=\"$(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64 | tr -d '\\n')\"\ngit -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $credential\" fetch --no-tags origin main:refs/remotes/origin/main\n"
               },
               {
-                "name": "Select Xcode 27.0",
+                "name": "Select Xcode 26.6",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "27.0"
+                  "xcode-version": "26.6"
                 }
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 27.0\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 27A266a\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
               },
               {
                 "name": "Install the Metal toolchain",

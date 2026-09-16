@@ -89,7 +89,7 @@ class ReleaseCITests(unittest.TestCase):
             build_number="43",
             ipa_path=ipa,
             tester_group="Internal Testers",
-            xcode_version="27.0",
+            xcode_version="26.6",
             upload_backend="appstore-api",
         )
         path = self.temp / "release.json"

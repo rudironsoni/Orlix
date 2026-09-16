@@ -30,8 +30,9 @@ Fail the task when support requires a permanent fork of Bazel Apple rules.
 
 2026-09-15: the experiment completed. Canonical Apple CI proved the matrix at
 Xcode 26.6 build 17F113, and protected promotion verified the full
-seven-component buildset under the same pin. The local product pin then moved
-to Xcode 27.0 build 27A266a because the local Xcode 26.6 installation was
-removed; Xcode 26.6 remains an allowed local identity. Whether the Xcode 27.0
-pin reproduces this experiment's gate is the current feasibility gate, not
-settled proof.
+seven-component buildset under the same pin. The product pin then briefly
+moved to Xcode 27.0 build 27A266a, which required reworking the kernel product
+link to survive the removed `ld-classic`; the GitHub runner image cannot
+select Xcode 27.0, so the product pin returned to Xcode 26.6 and Xcode 27.0
+stays an allowed local identity. The linker-agnostic kernel ordering works
+under both toolchains.

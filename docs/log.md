@@ -7,9 +7,9 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
-## [2026-09-15] build | Move the product pin to Xcode 27.0
+## [2026-09-15] build | Rework the ordered kernel link for the Xcode 27 linker
 
-The [feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) completed at Xcode 26.6 and the [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves the product pin to Xcode 27.0 build 27A266a with SDKs 27.0 because the local Xcode 26.6 installation was removed. `bazel/config/toolchain-pin.json` selects the new pin, Xcode 26.6 remains an allowed local identity, Make defaults, `.bazelrc`, the BuildBuddy instance namespace, and the release, promotion, benchmark, nightly, GC, canonical-CI, and TestFlight workflows follow the pin. The current simulator-runtime gate selects iOS 27.0 while iOS 15.5 proof is unchanged. Whether the 27.0 pin reproduces the 26.6 gate is open; the activated schema-2 buildset was built under Xcode 26.6 and remains authorized.
+The [feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) stays the completed 26.6 gate. Xcode 27.0 removed `ld-classic` and ignores `-order_file`, so the kernel product link `OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk` now emits per-level start-boundary stub objects and a post-link reordering tool that permutes the merged `__initcalls` entries, their relocations, and the `__sched_class` struct ranges into the expected upstream order. The product pin returned to Xcode 26.6 because the GitHub runner image cannot select Xcode 27.0; Xcode 27.0 stays an allowed local identity and the kernel ordering works under both toolchains. The promoted consumer build proved the schema-2 lock consumption under Xcode 27.0 locally.
 
 ## [2026-09-14] fix | Correct PR 230 review findings
 
