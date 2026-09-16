@@ -9,7 +9,7 @@
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "97e9c0e6ab14a119b47a8a83a7e046b5efaab47fe61d4ceb833ba22a77fd96b5",
     "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
-    "make/bazel-migration.mk": "318e9678d2da2c47dd3131dec12075cd4acf7d1854fef4d116d3020a935c9daf",
+    "make/bazel-migration.mk": "bd52038ee2000bb217bf012fdb62b209f247d2b88d173063fe4ede1e8a1af0e1",
     "make/gnu-make-contract.mk": "33975f64db094c955695e2f03759edc308ed324face23147f84d58c0e7447a06",
     "make/release.mk": "e14c32ac92025a3b6fbeb00f4b89dbc4e931a01f015163c09c10bcae27c22646",
     "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
@@ -6166,7 +6166,7 @@
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 905,
+      "line": 906,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6176,7 +6176,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 908,
+      "line": 909,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6187,7 +6187,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 919,
+      "line": 920,
       "classification": "private",
       "phony": true,
       "prerequisites": [
