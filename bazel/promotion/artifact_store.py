@@ -476,20 +476,37 @@ class ArtifactStore:
         return pinned
 
     @staticmethod
-    def _entry_size(path: Path) -> int:
+    def _split_size(path: Path) -> tuple[int, int]:
+        """Measure (promoted, prepared) bytes under an object directory.
+
+        The extracted tree/ subtree is the prepared usable form; the blob and
+        verification records are the promoted artifacts. Both share one
+        combined budget, so both must be measured.
+        """
+        promoted = 0
+        prepared = 0
         if not path.is_dir() or path.is_symlink():
             try:
-                return path.stat().st_size if path.exists() and not path.is_symlink() else 0
+                size = path.stat().st_size if path.exists() and not path.is_symlink() else 0
             except OSError:
-                return 0
-        total = 0
+                return 0, 0
+            return size, 0
         for child in path.rglob("*"):
-            if child.is_file() and not child.is_symlink():
-                try:
-                    total += child.stat().st_size
-                except OSError:
-                    pass
-        return total
+            if not child.is_file() or child.is_symlink():
+                continue
+            try:
+                size = child.stat().st_size
+            except OSError:
+                continue
+            try:
+                top = child.relative_to(path).parts[0]
+            except (ValueError, IndexError):
+                continue
+            if top == "tree":
+                prepared += size
+            else:
+                promoted += size
+        return promoted, prepared
 
     def gc(
         self,
@@ -503,9 +520,11 @@ class ArtifactStore:
         with self._locked():
             pinned = self._pinned_digests(lock_path)
             objects_root = self.root / "objects" / "oci" / "sha256"
-            candidates: list[tuple[float, int, str, Path]] = []
-            stale: list[tuple[int, Path]] = []
+            candidates: list[tuple[float, int, int, str, Path]] = []
+            stale: list[tuple[int, int, Path]] = []
             retained = 0
+            retained_promoted = 0
+            retained_prepared = 0
             removed = 0
             bytes_removed = 0
 
@@ -514,7 +533,8 @@ class ArtifactStore:
                     if object_dir.is_symlink() or not object_dir.is_dir():
                         continue
                     digest = "sha256:" + object_dir.name
-                    size = self._entry_size(object_dir)
+                    promoted, prepared = self._split_size(object_dir)
+                    size = promoted + prepared
                     try:
                         record = json.loads(
                             (object_dir / "verification.json").read_text(encoding="utf-8")
@@ -524,29 +544,35 @@ class ArtifactStore:
                         last_used = object_dir.stat().st_mtime
                     if digest in pinned:
                         retained += size
+                        retained_promoted += promoted
+                        retained_prepared += prepared
                     elif clock - last_used > max_age_seconds:
-                        stale.append((size, object_dir))
+                        stale.append((promoted, prepared, object_dir))
                     else:
-                        candidates.append((last_used, size, digest, object_dir))
+                        candidates.append((last_used, promoted, prepared, digest, object_dir))
 
-            for size, path in stale:
+            for promoted, prepared, path in stale:
                 if path.is_dir() and not path.is_symlink():
                     _rmtree_force(path)
                 else:
                     path.unlink(missing_ok=True)
                 removed += 1
-                bytes_removed += size
+                bytes_removed += promoted + prepared
 
-            retained += sum(item[1] for item in candidates)
+            retained += sum(item[1] + item[2] for item in candidates)
+            retained_promoted += sum(item[1] for item in candidates)
+            retained_prepared += sum(item[2] for item in candidates)
 
             candidates.sort(key=lambda item: item[0])
-            for last_used, size, digest, object_dir in candidates:
+            for last_used, promoted, prepared, digest, object_dir in candidates:
                 del last_used, digest
                 if retained > max_bytes:
                     _rmtree_force(object_dir)
                     removed += 1
-                    bytes_removed += size
-                    retained -= size
+                    bytes_removed += promoted + prepared
+                    retained -= promoted + prepared
+                    retained_promoted -= promoted
+                    retained_prepared -= prepared
 
             if retained > max_bytes:
                 required = retained - max_bytes
@@ -561,7 +587,8 @@ class ArtifactStore:
                 "bytes_removed": bytes_removed,
                 "bytes_retained": retained,
                 "pinned_objects": len(pinned),
-                "prepared_bytes": 0,
+                "prepared_bytes": retained_prepared,
+                "promoted_bytes": retained_promoted,
                 "combined_bytes": retained,
                 "max_combined_bytes": max_bytes,
             }

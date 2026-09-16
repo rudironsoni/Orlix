@@ -173,6 +173,34 @@ class ArtifactStoreTests(unittest.TestCase):
             with self.assertRaises(artifact_store.ArtifactStoreError):
                 store.gc(lock, now=100, max_bytes=64)
 
+    def test_gc_measures_combined_budget_and_evicts_on_overflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = artifact_store.ArtifactStore(root / "store")
+            for digest in ("ab" * 32, "cd" * 32):
+                object_dir = store.root / "objects" / "oci" / "sha256" / digest
+                tree = object_dir / "tree"
+                tree.mkdir(parents=True)
+                (tree / "payload.txt").write_bytes(b"x" * 40)
+                (object_dir / "component.tar").write_bytes(b"y" * 20)
+                (object_dir / "verification.json").write_text(
+                    json.dumps({"last_used_at": 50.0}), encoding="utf-8"
+                )
+            payload = store.gc(lock_path=None, now=100, max_age_seconds=1000, max_bytes=10**9)
+            self.assertEqual(payload["removed_objects"], 0)
+            self.assertGreater(payload["prepared_bytes"], 0)
+            self.assertGreater(payload["promoted_bytes"], 0)
+            self.assertEqual(
+                payload["combined_bytes"],
+                payload["prepared_bytes"] + payload["promoted_bytes"],
+            )
+            self.assertEqual(payload["bytes_retained"], payload["combined_bytes"])
+            overflowed = store.gc(lock_path=None, now=100, max_age_seconds=1000, max_bytes=1)
+            self.assertEqual(overflowed["removed_objects"], 2)
+            self.assertEqual(overflowed["combined_bytes"], 0)
+            self.assertEqual(overflowed["prepared_bytes"], 0)
+            self.assertEqual(overflowed["promoted_bytes"], 0)
+
     def test_concurrent_reader_and_gc_synchronization(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
