@@ -186,7 +186,11 @@ __bazel-promote-$(1): __bazel-version-check
 		if [ "$$$$side" = a ]; then first_tree="$$$$stage"; else second_tree="$$$$stage"; fi; \
 	done; \
 	lock_before="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
-	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --artifact-identity-format artifact-identity-v2 --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
+	provenance_source="$$$$(git rev-parse HEAD)"; \
+	provenance_builder="local"; provenance_run="local"; \
+	if [ -n "$$$${GITHUB_REPOSITORY:-}" ]; then provenance_builder="https://github.com/$$$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; provenance_run="$$$${GITHUB_RUN_ID:-local}"; fi; \
+	provenance_toolchain="$$$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$$$1}')"; \
+	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --artifact-identity-format artifact-identity-v2 --source-sha "$$$$provenance_source" --builder-id "$$$$provenance_builder" --invocation-id "$$$$provenance_run" --toolchain-digest "$$$$provenance_toolchain" --build-config release,promotion --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
 	rg -q '"signed": false' "$$$$promote/$(1)-proposal.json"; \
 	rg -q '"oci_digest": null' "$$$$promote/$(1)-proposal.json"; \
@@ -213,6 +217,7 @@ define ORLIX_BAZEL_PROMOTE_KERNEL
 __bazel-promote-$(1): __bazel-version-check
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
+	PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
 	for side in a b; do \
 		if [ -d "$$$${promote}/$$$${side}/output-base" ]; then \
@@ -239,7 +244,11 @@ __bazel-promote-$(1): __bazel-version-check
 		if [ "$$$${side}" = a ]; then first_tree="$$$${stage}"; else second_tree="$$$${stage}"; fi; \
 	done; \
 	lock_before="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
-	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$${promote}/a/digest.sha256" "$$$${promote}/b/digest.sha256" --first-tree "$$$${first_tree}" --second-tree "$$$${second_tree}" --component $(1) --artifact-identity-format artifact-identity-v2 --proposal "$$$${promote}/$(1)-proposal.json" --sbom "$$$${promote}/$(1)-sbom.json" --in-toto "$$$${promote}/$(1)-in-toto.json" --lock-proposal "$$$${promote}/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
+	provenance_source="$$$$(git rev-parse HEAD)"; \
+	provenance_builder="local"; provenance_run="local"; \
+	if [ -n "$$$${GITHUB_REPOSITORY:-}" ]; then provenance_builder="https://github.com/$$$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; provenance_run="$$$${GITHUB_RUN_ID:-local}"; fi; \
+	provenance_toolchain="$$$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$$$1}')"; \
+	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --artifact-identity-format artifact-identity-v2 --source-sha "$$$$provenance_source" --builder-id "$$$$provenance_builder" --invocation-id "$$$$provenance_run" --toolchain-digest "$$$$provenance_toolchain" --build-config release,promotion --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("artifact_identity",{}).get("format") == "artifact-identity-v2" and p.get("artifact_identity",{}).get("digest") == sys.argv[2], p' "$$$${promote}/$(1)-proposal.json" "$$$${digest}"; \
 	rg -F "$$$${digest}" "$$$${promote}/$(1)-sbom.json"; \
@@ -259,6 +268,7 @@ $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//ba
 __bazel-promote-buildset: __bazel-version-check
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
+	PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
 	for side in a b; do \
 		if [ -d "$$promote/buildset/$$side/output-base" ]; then \
@@ -308,8 +318,12 @@ __bazel-promote-buildset: __bazel-version-check
 		done; \
 	done; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	provenance_source="$$(git rev-parse HEAD)"; \
+	provenance_builder="local"; provenance_run="local"; \
+	if [ -n "$${GITHUB_REPOSITORY:-}" ]; then provenance_builder="https://github.com/$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; provenance_run="$${GITHUB_RUN_ID:-local}"; fi; \
+	provenance_toolchain="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
 	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
-		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format artifact-identity-v2 --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
+		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format artifact-identity-v2 --source-sha "$$provenance_source" --builder-id "$$provenance_builder" --invocation-id "$$provenance_run" --toolchain-digest "$$provenance_toolchain" --build-config release,promotion --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
 		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
 		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
 		python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is False and p.get("oci_digest") is None, p' "$$promote/$$component/$$component-proposal.json"; \
@@ -351,8 +365,24 @@ __bazel-lock-proposal: __bazel-version-check
 	@set -euo pipefail; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
+	/bin/cp "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" "$(ORLIX_BUILD_ROOT)/Bazel/promote/toolchain-manifest.json"; \
+	proposal_builder="local"; proposal_run="local"; proposal_workflow="local"; \
+	if [ -n "$${GITHUB_REPOSITORY:-}" ]; then proposal_builder="https://github.com/$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; proposal_workflow="bazel-promote.yml"; proposal_run="$${GITHUB_RUN_ID:-local}"; fi; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/proof_index.py" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/promotion-proof-index.json" \
+		--promote-root "$(ORLIX_BUILD_ROOT)/Bazel/promote" \
+		--source-sha "$$(git rev-parse HEAD)" \
+		--toolchain-manifest "$(ORLIX_BUILD_ROOT)/Bazel/promote/toolchain-manifest.json" \
+		--trust-policy "$(CURDIR)/bazel/promotion/trust-policy.json" \
+		--builder-id "$$proposal_builder" \
+		--workflow "$$proposal_workflow" \
+		--run-id "$$proposal_run"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json" \
+		--toolchain-manifest "$(ORLIX_BUILD_ROOT)/Bazel/promote/toolchain-manifest.json" \
+		--proof-index "$(ORLIX_BUILD_ROOT)/Bazel/promote/promotion-proof-index.json" \
+		--promote-root "$(ORLIX_BUILD_ROOT)/Bazel/promote" \
+		--source-sha "$$(git rev-parse HEAD)" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/uapi/uapi-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/mlibc/mlibc-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/rootfs/rootfs-signed.json" \
@@ -360,7 +390,7 @@ __bazel-lock-proposal: __bazel-version-check
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json" \
 		--signed "$(ORLIX_BUILD_ROOT)/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json"; \
-	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is True and p.get("buildset") and set(p["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, p' "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is True and p.get("buildset") and set(p["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"} and p.get("source_sha") and p.get("evidence",{}).get("toolchain_manifest_sha256") and p.get("evidence",{}).get("promotion_proof_index_sha256") and set(p["evidence"].get("components",{}))==set(p["components"]), p' "$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
 	proposal="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.json"; \
 	bundle="$(ORLIX_BUILD_ROOT)/Bazel/promote/buildset-lock-proposal.sigstore.json"; \
 	key="$${ORLIX_COSIGN_KEY:-}"; public="$${ORLIX_COSIGN_PUB:-}"; \
@@ -378,6 +408,7 @@ __bazel-lock-from-signed: __bazel-version-check
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/lock_proposal.py" \
 		--proposal "$$proposal" \
 		--bundle "$$bundle" \
+		--evidence-dir "$(ORLIX_BUILD_ROOT)/Bazel/promote" \
 		--apply-lock "$(CURDIR)/artifacts.lock.json"; \
 	python3 -c 'import json,sys; lock=json.load(open(sys.argv[1])); assert lock.get("schema") == 2 and lock.get("buildset"); assert set(lock["components"])=={"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}, lock' "$(CURDIR)/artifacts.lock.json"
 

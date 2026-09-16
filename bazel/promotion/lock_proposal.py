@@ -157,6 +157,8 @@ def activate_signed_lock_proposal(
     bundle_path: str,
     lock_path: str,
     run=subprocess.run,
+    *,
+    evidence_dir: str | None = None,
 ) -> dict:
     public_value = os.environ.get("ORLIX_COSIGN_PUB", "")
     if not public_value:
@@ -213,12 +215,81 @@ def activate_signed_lock_proposal(
             raise ValueError("signed buildset proposal component types are invalid")
         if proposal.get("verification") != verification_context():
             raise ValueError("signed buildset proposal verification context is invalid")
+        _verify_proposal_evidence(proposal, evidence_dir)
         load_locked_buildset(str(verified))
         apply_lock_proposal(str(verified), lock_path)
     return read_lock(lock_path)
 
 
-def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
+def _verify_proposal_evidence(proposal: dict, evidence_dir: str | None) -> None:
+    import hashlib
+
+    evidence = proposal.get("evidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("signed buildset proposal is missing evidence bindings")
+    if not evidence_dir:
+        raise ValueError("activation requires the downloaded evidence directory")
+    root = Path(evidence_dir)
+    expected_components = set(required_components(SCHEMA2))
+
+    def read_evidence(relative: str) -> tuple[bytes, dict]:
+        path = root / relative
+        try:
+            content = path.read_bytes()
+        except OSError:
+            raise ValueError(f"activation is missing evidence file: {relative}")
+        try:
+            document = json.loads(content.decode("utf-8"))
+        except (UnicodeError, ValueError) as error:
+            raise ValueError(f"activation evidence is invalid JSON: {relative}") from error
+        if not isinstance(document, dict):
+            raise ValueError(f"activation evidence is not an object: {relative}")
+        return content, document
+
+    manifest_bytes, manifest = read_evidence("toolchain-manifest.json")
+    if manifest.get("kind") != "observed-toolchain":
+        raise ValueError("activation toolchain manifest has the wrong kind")
+    if hashlib.sha256(manifest_bytes).hexdigest() != evidence.get("toolchain_manifest_sha256"):
+        raise ValueError("activation toolchain manifest digest differs from the signed proposal")
+    index_bytes, index = read_evidence("promotion-proof-index.json")
+    if index.get("schema") != 1 or index.get("kind") != "promotion-proof-index":
+        raise ValueError("activation proof index has the wrong schema or kind")
+    if hashlib.sha256(index_bytes).hexdigest() != evidence.get("promotion_proof_index_sha256"):
+        raise ValueError("activation proof index digest differs from the signed proposal")
+    if index.get("source_sha") != evidence.get("source_sha"):
+        raise ValueError("activation proof index names the wrong source")
+    if index.get("source_sha") != proposal.get("source_sha"):
+        raise ValueError("activation proof index source differs from the signed proposal")
+    if set(index.get("components", {})) != expected_components:
+        raise ValueError("activation proof index names the wrong components")
+    bound = evidence.get("components")
+    if not isinstance(bound, dict) or set(bound) != expected_components:
+        raise ValueError("signed buildset proposal evidence names the wrong components")
+    for name in sorted(expected_components):
+        entry = bound.get(name)
+        if not isinstance(entry, dict):
+            raise ValueError(f"signed buildset proposal evidence is missing component: {name}")
+        sbom_bytes, sbom = read_evidence(str(Path(name) / f"{name}-sbom.json"))
+        if sbom.get("bomFormat") != "CycloneDX":
+            raise ValueError(f"activation {name} SBOM has the wrong format")
+        if hashlib.sha256(sbom_bytes).hexdigest() != entry.get("sbom_sha256"):
+            raise ValueError(f"activation {name} SBOM digest differs from the signed proposal")
+        provenance_bytes, provenance = read_evidence(str(Path(name) / f"{name}-in-toto.json"))
+        if provenance.get("kind") != "in-toto":
+            raise ValueError(f"activation {name} provenance has the wrong kind")
+        if hashlib.sha256(provenance_bytes).hexdigest() != entry.get("provenance_sha256"):
+            raise ValueError(f"activation {name} provenance digest differs from the signed proposal")
+
+
+def write_signed_lock_proposal(
+    path: str,
+    signed_paths: list[str],
+    *,
+    toolchain_manifest: str | None = None,
+    proof_index: str | None = None,
+    promote_root: str | None = None,
+    source_sha: str | None = None,
+) -> dict:
     if not signed_paths:
         raise ValueError("signed lock proposal requires at least one signed component")
     components: dict[str, dict] = {}
@@ -253,6 +324,14 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
     if missing:
         raise ValueError(f"signed lock proposal missing required components: {missing}")
     buildset = buildset_digest(components, schema=schema)
+    evidence = _bind_proposal_evidence(
+        components,
+        schema=schema,
+        toolchain_manifest=toolchain_manifest,
+        proof_index=proof_index,
+        promote_root=promote_root,
+        source_sha=source_sha,
+    )
     proposal = {
         "schema": schema,
         "kind": "lock-proposal",
@@ -264,9 +343,86 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
         },
         "components": components,
         "verification": verification_context(),
+        "evidence": evidence,
     }
     Path(path).write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     return proposal
+
+
+def _digest_evidence_file(path: Path) -> str:
+    import hashlib
+
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise ValueError(f"signed lock proposal is missing evidence file: {path}") from error
+
+
+def _bind_proposal_evidence(
+    components: dict,
+    *,
+    schema: int,
+    toolchain_manifest: str | None,
+    proof_index: str | None,
+    promote_root: str | None,
+    source_sha: str | None,
+) -> dict:
+    if schema != SCHEMA2:
+        return {}
+    missing = [
+        name
+        for name, value in (
+            ("toolchain_manifest", toolchain_manifest),
+            ("proof_index", proof_index),
+            ("promote_root", promote_root),
+            ("source_sha", source_sha),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            f"signed schema-2 lock proposal requires evidence inputs: {', '.join(missing)}"
+        )
+    manifest_path = Path(str(toolchain_manifest))
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"signed lock proposal toolchain manifest is invalid: {manifest_path}") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("signed lock proposal toolchain manifest is not an object")
+    index_path = Path(str(proof_index))
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"signed lock proposal proof index is invalid: {index_path}") from error
+    if not isinstance(index, dict) or index.get("schema") != 1 or index.get("kind") != "promotion-proof-index":
+        raise ValueError("signed lock proposal proof index has the wrong schema or kind")
+    if not isinstance(index.get("components"), dict) or set(index["components"]) != set(components):
+        raise ValueError("signed lock proposal proof index names the wrong components")
+    if index.get("source_sha") != str(source_sha):
+        raise ValueError("signed lock proposal proof index names the wrong source")
+    root = Path(str(promote_root))
+    evidence_components = {}
+    for name in sorted(components):
+        sbom_path = root / name / f"{name}-sbom.json"
+        provenance_path = root / name / f"{name}-in-toto.json"
+        for evidence_path in (sbom_path, provenance_path):
+            try:
+                document = json.loads(evidence_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as error:
+                raise ValueError(f"signed lock proposal evidence is invalid: {evidence_path}") from error
+            if not isinstance(document, dict):
+                raise ValueError(f"signed lock proposal evidence is not an object: {evidence_path}")
+        evidence_components[name] = {
+            "sbom_sha256": _digest_evidence_file(sbom_path),
+            "provenance_sha256": _digest_evidence_file(provenance_path),
+        }
+    return {
+        "source_sha": str(source_sha),
+        "toolchain_manifest_sha256": _digest_evidence_file(manifest_path),
+        "promotion_proof_index_sha256": _digest_evidence_file(index_path),
+        "components": evidence_components,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,19 +432,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--proposal")
     parser.add_argument("--bundle")
     parser.add_argument("--apply-lock")
+    parser.add_argument("--toolchain-manifest")
+    parser.add_argument("--proof-index")
+    parser.add_argument("--promote-root")
+    parser.add_argument("--source-sha")
+    parser.add_argument("--evidence-dir")
     args = parser.parse_args(argv)
     if args.apply_lock:
         if not args.proposal or not args.bundle or args.out or args.signed:
             parser.error("activation requires --proposal, --bundle, and --apply-lock only")
+        if not args.evidence_dir:
+            parser.error("activation requires --evidence-dir")
         proposal = activate_signed_lock_proposal(
             args.proposal,
             args.bundle,
             args.apply_lock,
+            evidence_dir=args.evidence_dir,
         )
     else:
         if not args.out or not args.signed or args.proposal or args.bundle:
             parser.error("proposal generation requires --out and --signed only")
-        proposal = write_signed_lock_proposal(args.out, args.signed)
+        proposal = write_signed_lock_proposal(
+            args.out,
+            args.signed,
+            toolchain_manifest=args.toolchain_manifest,
+            proof_index=args.proof_index,
+            promote_root=args.promote_root,
+            source_sha=args.source_sha,
+        )
     print(proposal["buildset"])
     return 0
 

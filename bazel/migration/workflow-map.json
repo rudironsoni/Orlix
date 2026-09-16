@@ -505,7 +505,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "eace1c7063756f6f6def8789bb82131318c7e3267aa1d3dbc501e358de848e66",
+      "source_sha256": "672aa227a97f5a49fd994fb58250836f5c253e40f22e317e123412149222b31d",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -613,7 +613,7 @@
                 "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
                 "with": {
                   "name": "signed-buildset-${{ github.sha }}",
-                  "path": "Build/Bazel/promote/uapi/uapi-signed.json\nBuild/Bazel/promote/mlibc/mlibc-signed.json\nBuild/Bazel/promote/rootfs/rootfs-signed.json\nBuild/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json\nBuild/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json\nBuild/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json\nBuild/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json\nBuild/Bazel/promote/buildset-lock-proposal.json\nBuild/Bazel/promote/buildset-lock-proposal.sigstore.json\n",
+                  "path": "Build/Bazel/promote/uapi/uapi-signed.json\nBuild/Bazel/promote/uapi/uapi-sbom.json\nBuild/Bazel/promote/uapi/uapi-in-toto.json\nBuild/Bazel/promote/mlibc/mlibc-signed.json\nBuild/Bazel/promote/mlibc/mlibc-sbom.json\nBuild/Bazel/promote/mlibc/mlibc-in-toto.json\nBuild/Bazel/promote/rootfs/rootfs-signed.json\nBuild/Bazel/promote/rootfs/rootfs-sbom.json\nBuild/Bazel/promote/rootfs/rootfs-in-toto.json\nBuild/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json\nBuild/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-sbom.json\nBuild/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-in-toto.json\nBuild/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json\nBuild/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-sbom.json\nBuild/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-in-toto.json\nBuild/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json\nBuild/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-sbom.json\nBuild/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-in-toto.json\nBuild/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json\nBuild/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-sbom.json\nBuild/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-in-toto.json\nBuild/Bazel/promote/toolchain-manifest.json\nBuild/Bazel/promote/promotion-proof-index.json\nBuild/Bazel/promote/buildset-lock-proposal.json\nBuild/Bazel/promote/buildset-lock-proposal.sigstore.json\n",
                   "if-no-files-found": "error",
                   "retention-days": 14
                 }

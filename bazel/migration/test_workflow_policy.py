@@ -205,6 +205,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("packages: write", text)
         self.assertIn("signed-buildset-${{ github.sha }}", text)
         self.assertIn("buildset-lock-proposal.json", text)
+        self.assertIn("toolchain-manifest.json", text)
+        self.assertIn("promotion-proof-index.json", text)
+        self.assertIn("-sbom.json", text)
+        self.assertIn("-in-toto.json", text)
         self.assertIn('--registry-config "$ORLIX_ORAS_REGISTRY_CONFIG"', text)
         for component in (
             "kernel-release-iphoneos",

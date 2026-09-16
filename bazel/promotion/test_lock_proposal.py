@@ -38,11 +38,66 @@ def _schema2_proposal() -> dict:
 
 
 class LockProposalTests(unittest.TestCase):
+    def _evidence(self, root: Path, payload: dict) -> dict:
+        source_sha = "ab" * 20
+        payload["source_sha"] = source_sha
+        toolchain = {"kind": "observed-toolchain", "schema": 1}
+        (root / "toolchain-manifest.json").write_text(json.dumps(toolchain) + "\n", encoding="utf-8")
+        index = {
+            "schema": 1,
+            "kind": "promotion-proof-index",
+            "source_sha": source_sha,
+            "components": {name: {} for name in payload["components"]},
+        }
+        (root / "promotion-proof-index.json").write_text(json.dumps(index) + "\n", encoding="utf-8")
+        bound = {}
+        for name in sorted(payload["components"]):
+            component_dir = root / name
+            component_dir.mkdir(parents=True, exist_ok=True)
+            sbom = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "serialNumber": f"urn:uuid:{name}",
+                "version": 1,
+                "metadata": {"component": {"name": name}},
+                "components": [],
+            }
+            provenance = {
+                "schema": 1,
+                "kind": "in-toto",
+                "_type": "https://in-toto.io/Statement/v1",
+                "subject": [{"name": name, "digest": {"sha256": "ab" * 32}}],
+                "predicateType": "https://slsa.dev/provenance/v1",
+                "predicate": {},
+            }
+            sbom_path = component_dir / f"{name}-sbom.json"
+            provenance_path = component_dir / f"{name}-in-toto.json"
+            sbom_path.write_text(json.dumps(sbom) + "\n", encoding="utf-8")
+            provenance_path.write_text(json.dumps(provenance) + "\n", encoding="utf-8")
+            bound[name] = {
+                "sbom_sha256": hashlib.sha256(sbom_path.read_bytes()).hexdigest(),
+                "provenance_sha256": hashlib.sha256(provenance_path.read_bytes()).hexdigest(),
+            }
+        evidence = {
+            "source_sha": source_sha,
+            "toolchain_manifest_sha256": hashlib.sha256(
+                (root / "toolchain-manifest.json").read_bytes()
+            ).hexdigest(),
+            "promotion_proof_index_sha256": hashlib.sha256(
+                (root / "promotion-proof-index.json").read_bytes()
+            ).hexdigest(),
+            "components": bound,
+        }
+        payload["evidence"] = evidence
+        return evidence
+
     def _activate(self, payload: dict, run: mock.Mock) -> dict:
         with tempfile.TemporaryDirectory() as tmp:
-            proposal = Path(tmp) / "proposal.json"
-            bundle = Path(tmp) / "proposal.sigstore.json"
-            lock = Path(tmp) / "artifacts.lock.json"
+            root = Path(tmp)
+            proposal = root / "proposal.json"
+            bundle = root / "proposal.sigstore.json"
+            lock = root / "artifacts.lock.json"
+            self._evidence(root, payload)
             proposal.write_text(json.dumps(payload) + "\n", encoding="utf-8")
             bundle.write_text("{}\n", encoding="utf-8")
             lock.write_text(json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8")
@@ -57,7 +112,7 @@ class LockProposalTests(unittest.TestCase):
                      mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION), \
                      mock.patch("lock_proposal.verify_component", side_effect=verify):
                     result = lock_proposal.activate_signed_lock_proposal(
-                        str(proposal), str(bundle), str(lock), run=run
+                        str(proposal), str(bundle), str(lock), run=run, evidence_dir=str(root)
                     )
                     self.assertNotIn("ORLIX_COSIGN_KEY", os.environ)
             except ValueError:
@@ -99,6 +154,50 @@ class LockProposalTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ValueError, output):
                     self._activate(_schema2_proposal(), run)
+
+    def test_activation_rejects_evidence_mismatch_without_changing_lock(self) -> None:
+        cases = {
+            "absent file": lambda root, payload: (root / "uapi" / "uapi-sbom.json").unlink(),
+            "digest mismatch": lambda root, payload: (
+                root / "mlibc" / "mlibc-in-toto.json"
+            ).write_text("{}\n", encoding="utf-8"),
+            "wrong schema": lambda root, payload: (
+                root / "promotion-proof-index.json"
+            ).write_text(
+                json.dumps({"schema": 2, "kind": "promotion-proof-index"}) + "\n", encoding="utf-8"
+            ),
+            "wrong names": lambda root, payload: payload["evidence"]["components"].pop("rootfs"),
+        }
+        for name, break_evidence in cases.items():
+            with self.subTest(name=name):
+                payload = _schema2_proposal()
+                run = mock.Mock(return_value=subprocess.CompletedProcess([], 0, ""))
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    self._evidence(root, payload)
+                    break_evidence(root, payload)
+                    (root / "proposal.json").write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                    (root / "proposal.sigstore.json").write_text("{}\n", encoding="utf-8")
+                    lock = root / "artifacts.lock.json"
+                    lock.write_text(json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8")
+                    before = lock.read_bytes()
+                    verify = lambda item: locked_buildset.validate_component(
+                        item["component"], item, schema=item["schema"]
+                    )
+                    with mock.patch.dict(os.environ, {"ORLIX_COSIGN_PUB": "/public.pub"}, clear=True), \
+                         mock.patch("lock_proposal.shutil.which", return_value="/usr/bin/cosign"), \
+                         mock.patch("lock_proposal.trusted_public_key", return_value="/public.pub"), \
+                         mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION), \
+                         mock.patch("lock_proposal.verify_component", side_effect=verify):
+                        with self.assertRaises(ValueError):
+                            lock_proposal.activate_signed_lock_proposal(
+                                str(root / "proposal.json"),
+                                str(root / "proposal.sigstore.json"),
+                                str(lock),
+                                run=run,
+                                evidence_dir=str(root),
+                            )
+                    self.assertEqual(lock.read_bytes(), before)
 
     def test_forged_signed_flag_cannot_change_lock(self) -> None:
         component = {

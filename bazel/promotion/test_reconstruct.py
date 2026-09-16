@@ -359,9 +359,42 @@ class ReconstructTests(unittest.TestCase):
             lock_path.write_text(
                 json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8"
             )
+            evidence_root = root / "evidence"
+            (evidence_root / "toolchain-manifest.json").parent.mkdir(parents=True, exist_ok=True)
+            (evidence_root / "toolchain-manifest.json").write_text(
+                json.dumps({"schema": 1, "kind": "observed-toolchain"}) + "\n", encoding="utf-8"
+            )
+            index_components = {}
+            for name in locked_buildset.required_components(locked_buildset.SCHEMA2):
+                component_dir = evidence_root / name
+                component_dir.mkdir(parents=True, exist_ok=True)
+                (component_dir / f"{name}-sbom.json").write_text(
+                    json.dumps({"bomFormat": "CycloneDX"}) + "\n", encoding="utf-8"
+                )
+                (component_dir / f"{name}-in-toto.json").write_text(
+                    json.dumps({"kind": "in-toto"}) + "\n", encoding="utf-8"
+                )
+                index_components[name] = {}
+            (evidence_root / "promotion-proof-index.json").write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "kind": "promotion-proof-index",
+                        "source_sha": "ab" * 20,
+                        "components": index_components,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             with mock.patch("lock_proposal.verify_component", side_effect=validate):
                 proposal = lock_proposal.write_signed_lock_proposal(
-                    str(proposal_path), signed_paths
+                    str(proposal_path),
+                    signed_paths,
+                    toolchain_manifest=str(evidence_root / "toolchain-manifest.json"),
+                    proof_index=str(evidence_root / "promotion-proof-index.json"),
+                    promote_root=str(evidence_root),
+                    source_sha="ab" * 20,
                 )
                 lock_proposal.apply_lock_proposal(str(proposal_path), str(lock_path))
             expected = set(locked_buildset.required_components(locked_buildset.SCHEMA2))

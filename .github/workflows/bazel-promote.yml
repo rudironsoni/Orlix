@@ -131,12 +131,28 @@ jobs:
           name: signed-buildset-${{ github.sha }}
           path: |
             Build/Bazel/promote/uapi/uapi-signed.json
+            Build/Bazel/promote/uapi/uapi-sbom.json
+            Build/Bazel/promote/uapi/uapi-in-toto.json
             Build/Bazel/promote/mlibc/mlibc-signed.json
+            Build/Bazel/promote/mlibc/mlibc-sbom.json
+            Build/Bazel/promote/mlibc/mlibc-in-toto.json
             Build/Bazel/promote/rootfs/rootfs-signed.json
+            Build/Bazel/promote/rootfs/rootfs-sbom.json
+            Build/Bazel/promote/rootfs/rootfs-in-toto.json
             Build/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-signed.json
+            Build/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-sbom.json
+            Build/Bazel/promote/kernel-release-iphoneos/kernel-release-iphoneos-in-toto.json
             Build/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-signed.json
+            Build/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-sbom.json
+            Build/Bazel/promote/kernel-release-iphonesimulator/kernel-release-iphonesimulator-in-toto.json
             Build/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-signed.json
+            Build/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-sbom.json
+            Build/Bazel/promote/kernel-development-iphoneos/kernel-development-iphoneos-in-toto.json
             Build/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-signed.json
+            Build/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-sbom.json
+            Build/Bazel/promote/kernel-development-iphonesimulator/kernel-development-iphonesimulator-in-toto.json
+            Build/Bazel/promote/toolchain-manifest.json
+            Build/Bazel/promote/promotion-proof-index.json
             Build/Bazel/promote/buildset-lock-proposal.json
             Build/Bazel/promote/buildset-lock-proposal.sigstore.json
           if-no-files-found: error
