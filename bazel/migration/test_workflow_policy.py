@@ -70,6 +70,28 @@ class WorkflowPolicyTests(unittest.TestCase):
             workflow,
         )
 
+    def test_xcode_version_comes_from_file_and_selection_is_verified(self) -> None:
+        for name in (
+            "bazel-ci.yml",
+            "bazel-promote.yml",
+            "bazel-benchmark.yml",
+            "bazel-nightly.yml",
+            "bazel-gc.yml",
+            "testflight-beta.yml",
+        ):
+            text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+            self.assertIn("tr -d '[:space:]' < .xcode-version", text, name)
+            self.assertIn("xcode-version: ${{ steps.xcode-version.outputs.version }}", text, name)
+            self.assertIn(
+                'python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" '
+                '--build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"',
+                text,
+                name,
+            )
+            self.assertNotIn('xcode-version: "26.6"', text, name)
+            self.assertNotIn('= "Xcode 26.6"', text, name)
+            self.assertNotIn("/Applications/Xcode", text, name)
+
     def test_canonical_workflow_keeps_promoted_inputs_off_pull_requests(self) -> None:
         import json
 

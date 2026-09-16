@@ -74,10 +74,17 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Select Xcode 26.6
+      - name: Read requested Xcode version
+        id: xcode-version
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: "26.6"
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
 
       - name: Restore Bazel repository cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -100,12 +107,15 @@ jobs:
           brew bundle --file Brewfile
           test "$(xcodes version)" = "2.0.3"
 
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
       - name: Export the selected Xcode to Make
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
-          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
 
       - name: Resolve BuildBuddy cache policy
         id: buildbuddy

@@ -217,6 +217,20 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("unsigned promote mutated artifacts.lock.json", mk)
         self.assertIn("unsigned promote must not Cosign-sign", mk)
 
+    def test_xcode_identity_comes_from_version_file_and_selection(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("ORLIX_XCODE_VERSION_FILE", mk)
+        self.assertIn(".xcode-version", mk)
+        self.assertNotIn("ORLIX_XCODE_VERSION ?= 26.6", mk)
+        self.assertNotIn("/Applications/Xcode", mk)
+        self.assertIn("ORLIX_PINNED_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)", mk)
+        self.assertIn("__xcode-select:", mk)
+        self.assertIn("xcode_select.py\" --repo \"$(CURDIR)\" --build \"$(ORLIX_XCODE_BUILD)\" --select", mk)
+        bootstrap = mk.split("__bazel-feasibility-bootstrap:", 1)[1].split(
+            "__bazel-module-lock-update:", 1
+        )[0]
+        self.assertIn("xcode_select.py\" --repo \"$(CURDIR)\" --build \"$(ORLIX_XCODE_BUILD)\"", bootstrap)
+
     def test_buildset_promotion_builds_all_components_twice(self) -> None:
         import json
 

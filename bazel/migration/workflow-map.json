@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "0075acdfe1def5575897c472a98b049c5407349cf93de5d8b397e64a8f50eb0d",
+      "source_sha256": "6b77432e5512cee3a1899d59ccc7fe41ec22d064df69b02ea96c02aaa16bf173",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -125,19 +125,28 @@
                 }
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Install build tools",
                 "run": "brew bundle --file Brewfile"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Measure and compare component builds through Make",
@@ -160,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "497d2697d854437769f2a59f33bcf82cea1b54c8a025052c978a0e00008a665f",
+      "source_sha256": "16254a0792774aa99d1364907f3013c1b60dab5289ad243474d6db7f367700db",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -246,10 +255,15 @@
                 }
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
@@ -274,8 +288,12 @@
                 "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\n"
               },
               {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+              },
+              {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Resolve BuildBuddy cache policy",
@@ -379,7 +397,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "0d9d1f9a60bde2b321b55896d87118b29f7901176adb22d0a7503ff53322cb89",
+      "source_sha256": "7f70724539002ed46476de36b2e176c913cee53a9243b40c49cdf83d9d11b597",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -411,10 +429,15 @@
                 }
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
@@ -422,8 +445,12 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+              },
+              {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Run Make-owned cache GC",
@@ -435,7 +462,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "d46ee2d951c12ec6084234274dcc6b7bc7808b6ed37834111cde0ae7f1d86283",
+      "source_sha256": "2d7813ae71fa08ada74906cc1924e4767afeb0f586f4b2968aad7937b4f84c8c",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -468,10 +495,15 @@
                 }
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
@@ -479,8 +511,12 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+              },
+              {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Run Make-owned matrix check",
@@ -505,7 +541,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "0e156502cb9b91a49a4bf749be65d9ef76c62698d0a68409f5ef6841c66c0be5",
+      "source_sha256": "4df54655de02d6cf6b0a0a0820a491d0421b19fc22d00b57b7218361ba4e4b55",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -558,11 +594,16 @@
                 }
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "timeout-minutes": 5,
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
@@ -579,9 +620,13 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+              },
+              {
                 "name": "Export the selected Xcode to Make",
                 "timeout-minutes": 1,
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Dual-build without action cache",
@@ -923,7 +968,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "9909156c7adb18f35bed53777c9e00119979932b4003730f4a8d8105a287c760",
+      "source_sha256": "f23fff066d2e986dc14a84773382f6182cdfd79aa96a2acf16a31efb1f0c6031",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -951,7 +996,6 @@
               "ORLIX_RELEASE_TAG": "${{ github.ref_name }}",
               "ORLIX_RELEASE_COMMIT": "${{ github.sha }}",
               "ORLIX_RELEASE_RUN_ID": "${{ github.run_id }}",
-              "ORLIX_RELEASE_XCODE_VERSION": "26.6",
               "ORLIX_RELEASE_UPLOAD_BACKEND": "appstore-api",
               "ORLIX_DEVELOPMENT_TEAM": "${{ vars.APPLE_TEAM_ID }}",
               "ORLIX_ASC_API_KEY_ID": "${{ vars.APPSTORE_API_KEY_ID }}",
@@ -978,15 +1022,20 @@
                 "run": "set -euo pipefail\ncredential=\"$(printf 'x-access-token:%s' \"$GITHUB_TOKEN\" | base64 | tr -d '\\n')\"\ngit -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic $credential\" fetch --no-tags origin main:refs/remotes/origin/main\n"
               },
               {
-                "name": "Select Xcode 26.6",
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select Xcode",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
-                  "xcode-version": "26.6"
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
                 }
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\ntest \"$(xcodebuild -version | head -n 1)\" = \"Xcode 26.6\"\ntest \"$(xcodebuild -version | sed -n '2p')\" = \"Build version 17F113\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Install the Metal toolchain",
@@ -1007,6 +1056,10 @@
               {
                 "name": "Install build tools",
                 "run": "brew bundle --file Brewfile"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Check runner capacity",
