@@ -830,7 +830,9 @@ __bazel-apple-ci: __bazel-matrix-check
 	test -x "$$app/Orlix" || { echo "canonical simulator app is missing" >&2; exit 1; }; \
 	$(MAKE) __bazel-current-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
 	$(MAKE) __bazel-ios15-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
-	python3 -c 'import json,sys; from pathlib import Path; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":{"version":"15.5","result":"PASS"},"same_application_path":sys.argv[3]},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app"; \
+	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION="$(ORLIX_CURRENT_SIMULATOR_VERSION)" ORLIX_XCTEST_DEVICE_NAME="iPhone 13" ORLIX_SIMULATOR_LABEL=current ORLIX_CANONICAL_IPA_REL="$$ipa_rel"; \
+	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION=15.5 ORLIX_XCTEST_DEVICE_NAME="iPhone 13" ORLIX_SIMULATOR_LABEL=ios15 ORLIX_CANONICAL_IPA_REL="$$ipa_rel"; \
+	python3 -c 'import json,sys; from pathlib import Path; root=Path(sys.argv[1]); [None if ((root/label/"xctest-passed.log").is_file() and (root/label/"xctest-app-identity.txt").read_text().strip() == sys.argv[4]) else (_ for _ in ()).throw(AssertionError("xctest evidence mismatch for "+label)) for label in ("current","ios15")]; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":{"version":"15.5","result":"PASS"},"same_application_path":sys.argv[3],"xctest_current_runtime":{"version":sys.argv[2],"result":"PASS"},"xctest_ios_15_5_runtime":{"version":"15.5","result":"PASS"},"xctest_app_ipa":sys.argv[3]},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app" "$$ipa_rel"; \
 	$(MAKE) __bazel-cache-observation
 
 __bazel-simulator-runtime-proof:
@@ -867,6 +869,21 @@ __bazel-ios15-simulator-gate:
 	@set -euo pipefail; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	$(MAKE) __bazel-simulator-runtime-proof ORLIX_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_VERSION=15.5 ORLIX_SIMULATOR_LABEL=ios15
+
+__bazel-xctest-runtime-proof:
+	@test -n "$(ORLIX_XCTEST_SIMULATOR_VERSION)" || { echo "ORLIX_XCTEST_SIMULATOR_VERSION is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_XCTEST_DEVICE_NAME)" || { echo "ORLIX_XCTEST_DEVICE_NAME is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_SIMULATOR_LABEL)" || { echo "ORLIX_SIMULATOR_LABEL is required" >&2; exit 1; }; \
+	test -n "$(ORLIX_CANONICAL_IPA_REL)" || { echo "ORLIX_CANONICAL_IPA_REL is required" >&2; exit 1; }; \
+	set -euo pipefail; \
+	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
+	mkdir -p "$$evidence_dir"; \
+	echo "xctest-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_XCTEST_SIMULATOR_VERSION) device=$(ORLIX_XCTEST_DEVICE_NAME)" | tee "$$evidence_dir/xctest-input.log"; \
+	app_test_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --ios_simulator_version=$(ORLIX_XCTEST_SIMULATOR_VERSION) --ios_simulator_device="$(ORLIX_XCTEST_DEVICE_NAME)" --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
+	test "$$app_test_rel" = "$(ORLIX_CANONICAL_IPA_REL)" || { echo "XCTest run resolves a different app build ($$app_test_rel) than the canonical product ($(ORLIX_CANONICAL_IPA_REL))" >&2; exit 1; }; \
+	echo "$$app_test_rel" > "$$evidence_dir/xctest-app-identity.txt"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" test //Orlix:OrlixUITests --test_filter=AppLaunchSmokeUITests/testLaunchCapturesScreenshot --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --ios_simulator_version=$(ORLIX_XCTEST_SIMULATOR_VERSION) --ios_simulator_device="$(ORLIX_XCTEST_DEVICE_NAME)" --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --test_output=errors --experimental_build_event_json_file="$$evidence_dir/test-events.json" 2>&1 | tee "$$evidence_dir/test.log"; test "$${PIPESTATUS[0]}" -eq 0; \
+	python3 -c 'import json,sys; statuses=[]; [statuses.append(e.get("testResult",{}).get("status")) for line in open(sys.argv[1]) if (e:=json.loads(line)) and e.get("testResult",{}).get("status")]; assert statuses, "no test results in BEP"; bad=[s for s in statuses if s != "PASSED"]; assert not bad, bad; print("xctest smoke PASSED:", len(statuses))' "$$evidence_dir/test-events.json" | tee "$$evidence_dir/xctest-passed.log"
 
 __bazel-hostadapter: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixHostAdapter/Sources:OrlixHostAdapter --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"

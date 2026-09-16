@@ -109,12 +109,17 @@ class WorkflowPolicyTests(unittest.TestCase):
             "__bazel-simulator-runtime-proof:", 1
         )[0]
         ios15 = makefile.split("__bazel-ios15-simulator-gate:", 1)[1].split(
-            "__bazel-hostadapter:", 1
+            "__bazel-xctest-runtime-proof:", 1
         )[0]
         self.assertEqual(apple_ci.count("__bazel-orlix-app"), 1)
         self.assertIn('ORLIX_BAZEL_APP_TARGETS="//Orlix:Orlix //Orlix:OrlixUITests"', apple_ci)
         self.assertIn("__bazel-current-simulator-gate", apple_ci)
         self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
+        self.assertIn("__bazel-xctest-runtime-proof", apple_ci)
+        self.assertIn("AppLaunchSmokeUITests/testLaunchCapturesScreenshot", makefile)
+        self.assertIn("ORLIX_CANONICAL_IPA_REL", apple_ci)
+        self.assertIn("xctest-app-identity.txt", apple_ci)
+        self.assertIn("xctest_current_runtime", apple_ci)
         self.assertIn('ORLIX_BAZEL_APP_PATH="$$app"', apple_ci)
         self.assertNotIn('"$(ORLIX_BAZEL)"', ios15)
         self.assertNotIn("__ios15-simulator-build", workflow)
