@@ -690,3 +690,21 @@ PR #230: NOT READY TO MERGE
 ```
 
 Recovery order (promotion last): correct status -> fix producers/selectors/verifiers (PR-head checkout pin; source-safe selector on PR + main push; Mach-O rewriter section-ownership fix + regression suite; seven artifact-identity-v2 + payload boundaries; restored XCTest under one canonical app; real CycloneDX 1.6 SBOM + SLSA provenance + toolchain/proof-index binding with byte-verifying activation; measured combined GC; canonical component registry) -> make evidence truthful -> freeze component-affecting code -> promote exact frozen HEAD -> activate exact signed evidence -> prove promoted consumption -> exact-head canonical CI -> resolve review threads with owning evidence -> stop before merge. TAP remains stopped. No Phase 7 work.
+
+## 2026-09-16 recovery Steps 0-8 implemented, promotion frozen pending
+
+Steps 0 through 8 are committed at `88e7ee13` (nine commits from `60ed374b`). No protected promotion has been dispatched; the committed lock remains the superseded schema-2 buildset `570bd642…` and must not be treated as authorizing the current tree.
+
+- Step 0 (`60ed374b`): `[CORRECTION]` marking buildset `570bd642…` stale relative to `418f2d43`; Phase 6B reopened with corrected status labels.
+- Step 1 (`028986af`): PR checkout and evidence artifact pinned to `${{ github.event.pull_request.head.sha || github.sha }}` with policy tests.
+- Step 2 (`2efaae32`): selector state machine has no event-name shortcut. PRs use the files API only when the count matches `changed_files`; pushes use the `before..after` git range; dispatch, empty, unknown, or failed discovery select source. Eight-case suite green.
+- Step 3 (`c5a0face`): Mach-O rewriter requires owning `n_sect` for scheduler-class rewrites (initcall path already section-indexed; relocations validated on fast paths too); 10-test synthetic-Mach-O regression suite green.
+- Step 4 (`a791bbae`): all seven components promote through `artifact-identity-v2` with exact-manifest payload staging (`stage_v2_product.py`); zero `legacy-marker-sha256` references in Make promotion paths and workflows; schema-2 validation rejects legacy everywhere.
+- Step 5 (`ce398f0c`): XCTest smoke executes on both runtimes against the one canonical app (cquery identity equality gate + BEP pass assertion + proof-record identity check). Runtime execution itself is proven only by canonical CI (Step 11), not locally.
+- Step 6 (`abf769ce`): deterministic CycloneDX 1.6 SBOM (software only, serial from component identity) and SLSA v1 in-toto provenance (source, builder, invocation, materials, toolchain); `promotion-proof-index.json` binds source, toolchain, seven v2 identities, A/B evidence, executed gates, workflow/run/policy identity; proposal binds toolchain/proof/SBOM/provenance digests; activation recomputes and rejects on absent/mismatch/wrong-schema/wrong-names.
+- Step 7 (`5b68764f`): GC measures prepared (`tree/`) and promoted (blob+records) bytes with combined accounting and an overflow-eviction regression test.
+- Step 8 (`88e7ee13`): `bazel/promotion/components.json` is canonical; Make loops/labels/facts and the workflow publish loop derive from it; eval lines, YAML artifact list, and Python tuples are parity-tested; eighth-component flow-through proven.
+
+Verification at this head: 89 promotion + 70 migration + 7 config + 10 Mach-O + 7 release tests green; `actionlint`, `docs-check`, `agent-harness-check`, `__bazel-migration-inventory-check` green. Local Xcode remains 27.0-only, so Xcode-26.6-gated Make targets were not executed locally; their proof comes from canonical CI.
+
+UNPROVED: exact-head promotion at the frozen head, activation of its proposal, cold/warm/consumer proof against the new buildset, exact-head canonical CI, and review-thread resolution. The freeze rule is in effect: any component-, identity-, registry-, toolchain-, proof-, or promotion-affecting change restarts Step 9 from a new head.
