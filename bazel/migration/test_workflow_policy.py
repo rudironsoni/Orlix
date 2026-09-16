@@ -59,6 +59,17 @@ class WorkflowPolicyTests(unittest.TestCase):
         for path in IOS15_RELEVANT_PATHS:
             self.assertIn(f'- "{path}"', text)
 
+    def test_canonical_workflow_checks_out_and_names_evidence_by_head_sha(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        checkout = workflow.split("Check out the exact commit", 1)[1].split(
+            "Select Xcode", 1
+        )[0]
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha || github.sha }}", checkout)
+        self.assertIn(
+            "name: bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+        )
+
     def test_canonical_workflow_keeps_promoted_inputs_off_pull_requests(self) -> None:
         import json
 
