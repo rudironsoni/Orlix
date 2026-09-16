@@ -101,7 +101,6 @@ def _is_proven_app_only(path: str) -> bool:
         "docs/",
         "Resources/",
         "fastlane/",
-        "Tools/",
     )
     for prefix in app_only_prefixes:
         if path.startswith(prefix):

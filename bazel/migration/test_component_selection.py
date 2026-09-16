@@ -18,6 +18,12 @@ class ComponentSelectionTests(unittest.TestCase):
         paths = ["Orlix/Sources/Terminal/Pane.swift", "OrlixHostAdapter/Sources/Host.swift", "docs/index.md"]
         self.assertEqual(PROMOTED_MODE, select_component_mode(paths, 2, event_name="pull_request"))
 
+    def test_agent_harness_changes_select_source_mode(self) -> None:
+        self.assertEqual(
+            SOURCE_MODE,
+            select_component_mode(["Tools/AgentHarness/tests/policy.py"], 2, event_name="pull_request"),
+        )
+
     def test_component_sources_select_source_mode(self) -> None:
         for path in (
             "OrlixKernel/Sources/ports/orlix/overlay/kernel/sched/core.c",
