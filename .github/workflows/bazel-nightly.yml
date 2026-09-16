@@ -37,14 +37,15 @@ jobs:
       - name: Install declared build tools
         run: brew bundle --file Brewfile
 
-      - name: Verify selected Xcode
-        run: |
-          set -euo pipefail
-          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
       - name: Export the selected Xcode to Make
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
       - name: Run Make-owned matrix check
         run: make __bazel-matrix-check
       - name: Reconstruct the signed buildset from source

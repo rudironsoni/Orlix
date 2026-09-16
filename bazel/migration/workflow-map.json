@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "6b77432e5512cee3a1899d59ccc7fe41ec22d064df69b02ea96c02aaa16bf173",
+      "source_sha256": "4d1b65c3fb93b6a84d88a29178f4c7acbd9eab39f159c332a7e805855871144f",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -169,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "16254a0792774aa99d1364907f3013c1b60dab5289ad243474d6db7f367700db",
+      "source_sha256": "1d1b5a55bf5c1988325c90d5967c1a83524f28b34dc73addb8180c89dbb0521a",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -288,12 +288,12 @@
                 "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\ntest \"$(xcodes version)\" = \"2.0.3\"\n"
               },
               {
-                "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
-              },
-              {
                 "name": "Export the selected Xcode to Make",
                 "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Resolve BuildBuddy cache policy",
@@ -397,7 +397,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "7f70724539002ed46476de36b2e176c913cee53a9243b40c49cdf83d9d11b597",
+      "source_sha256": "feabb601730febc362ccad501017bbb07a4fc6796009339618693a1afc541982",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -445,12 +445,12 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
-                "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
-              },
-              {
                 "name": "Export the selected Xcode to Make",
                 "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Run Make-owned cache GC",
@@ -462,7 +462,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "2d7813ae71fa08ada74906cc1924e4767afeb0f586f4b2968aad7937b4f84c8c",
+      "source_sha256": "e3657331a0e3df3fe1708291c639b01228dec74a490dcb2317efa994cc60e4db",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -511,12 +511,12 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
-                "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
-              },
-              {
                 "name": "Export the selected Xcode to Make",
                 "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Run Make-owned matrix check",
@@ -541,7 +541,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "4df54655de02d6cf6b0a0a0820a491d0421b19fc22d00b57b7218361ba4e4b55",
+      "source_sha256": "4a0e9ec9deed8d0d7c5b2a121863a12d96a154af5bd62ae175d32ce205500b03",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -620,13 +620,13 @@
                 "run": "brew bundle --file Brewfile"
               },
               {
-                "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
-              },
-              {
                 "name": "Export the selected Xcode to Make",
                 "timeout-minutes": 1,
                 "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Verify selected Xcode",
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Dual-build without action cache",
@@ -968,7 +968,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "f23fff066d2e986dc14a84773382f6182cdfd79aa96a2acf16a31efb1f0c6031",
+      "source_sha256": "612542d19c1017761d49b2ed86ba1de89efb92af33337da3bfe946f3f7c88798",
       "workflow": {
         "name": "TestFlight beta",
         "on": {

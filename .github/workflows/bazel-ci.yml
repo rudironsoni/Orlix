@@ -107,15 +107,16 @@ jobs:
           brew bundle --file Brewfile
           test "$(xcodes version)" = "2.0.3"
 
-      - name: Verify selected Xcode
-        run: |
-          set -euo pipefail
-          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
 
       - name: Export the selected Xcode to Make
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
 
       - name: Resolve BuildBuddy cache policy
         id: buildbuddy
