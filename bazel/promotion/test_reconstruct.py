@@ -313,14 +313,20 @@ class ReconstructTests(unittest.TestCase):
                         "digest": digest,
                     }
                 else:
-                    digest = hashlib.sha256(name.encode("ascii")).hexdigest()
-                    marker = f"{name}.sha256"
-                    (tree / marker).write_text(digest + "\n", encoding="ascii")
+                    product = tree / locked_buildset.V2_PRODUCT_DIRECTORY
+                    source = product / f"{name}.txt"
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(f"{name}:product\n", encoding="utf-8")
+                    manifest = artifact_manifest_v2(artifacts={f"{name}.txt": source})
+                    digest = hashlib.sha256(manifest).hexdigest()
+                    (tree / locked_buildset.V2_MANIFEST_FILENAME).write_bytes(manifest)
+                    (tree / locked_buildset.V2_DIGEST_FILENAME).write_text(
+                        digest + "\n", encoding="ascii"
+                    )
                     identity = {
-                        "format": locked_buildset.LEGACY_IDENTITY_FORMAT,
-                        "version": locked_buildset.LEGACY_IDENTITY_VERSION,
+                        "format": locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT,
+                        "version": locked_buildset.ARTIFACT_IDENTITY_V2_VERSION,
                         "digest": digest,
-                        "marker": marker,
                     }
                 blob = root / "fixtures" / f"{name}.tar"
                 with tarfile.open(blob, "w") as archive:

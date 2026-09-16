@@ -297,17 +297,18 @@ class MakeRoutingTests(unittest.TestCase):
             "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs", mk
         )
         self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.sha256,legacy-marker-sha256,uapi.sha256",
+            "ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.artifact-identity-v2.json,uapi",
             mk,
         )
         self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.sha256,legacy-marker-sha256,sysroot.sha256",
+            "ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json,sysroot",
             mk,
         )
         self.assertIn(
-            "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/source-input.sha256,legacy-marker-sha256,source-input.sha256",
+            "ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json,",
             mk,
         )
+        self.assertNotIn("legacy-marker-sha256", mk)
         for component in (
             "kernel-release-iphoneos",
             "kernel-release-iphonesimulator",

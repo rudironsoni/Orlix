@@ -14,17 +14,13 @@ from pathlib import Path
 import lock_proposal
 
 _VERIFICATION = {"signing_key_fingerprint": "11" * 32, "trust_policy_sha256": "22" * 32, "verification_policy_version": 1}
-_MARKERS = {"uapi": "uapi.sha256", "mlibc": "sysroot.sha256", "rootfs": "source-input.sha256"}
 
 def _schema2_proposal() -> dict:
     components = {}
     for name in locked_buildset.required_components(locked_buildset.SCHEMA2):
         artifact_digest = hashlib.sha256(f"{name}:artifact".encode()).hexdigest()
         oci_digest = "sha256:" + hashlib.sha256(f"{name}:oci".encode()).hexdigest()
-        legacy = name in _MARKERS
-        identity = {"format": "legacy-marker-sha256" if legacy else "artifact-identity-v2", "version": 1 if legacy else 2, "digest": artifact_digest}
-        if legacy:
-            identity["marker"] = _MARKERS[name]
+        identity = {"format": "artifact-identity-v2", "version": 2, "digest": artifact_digest}
         components[name] = {
             "artifact_identity": identity,
             "oci_digest": oci_digest,
@@ -82,6 +78,10 @@ class LockProposalTests(unittest.TestCase):
             "component set": lambda payload: payload["components"].pop("rootfs"),
             "OCI digest": lambda payload: payload["components"]["uapi"].__setitem__("oci_digest", "sha256:short"),
             "artifact identity": lambda payload: payload["components"]["kernel-release-iphoneos"]["artifact_identity"].__setitem__("digest", "short"),
+            "legacy identity": lambda payload: payload["components"]["uapi"].__setitem__(
+                "artifact_identity",
+                {"format": "legacy-marker-sha256", "version": 1, "digest": "ab" * 32, "marker": "uapi.sha256"},
+            ),
         }
         for name, mutate in mutations.items():
             with self.subTest(name=name):

@@ -342,8 +342,9 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("ORLIX_BAZEL_PROMOTE,uapi,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,mlibc,", body)
         self.assertIn("ORLIX_BAZEL_PROMOTE,rootfs,", body)
-        self.assertIn("feasibility/rootfs/rootfs/source-input.sha256", body)
-        self.assertIn("ORLIX_BAZEL_PUBLISH,uapi,feasibility/kernel/uapi/uapi.sha256", body)
+        self.assertIn("feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json", body)
+        self.assertIn("ORLIX_BAZEL_PUBLISH,uapi,,artifact-identity-v2,", body)
+        self.assertNotIn("legacy-marker-sha256", body)
         self.assertIn("--out-dir", body)
         self.assertNotIn("ORLIX_GHCR_REPOSITORY", body.split("ORLIX_BAZEL_PROMOTE")[1].split("endef")[0])
 

@@ -173,13 +173,20 @@ __bazel-promote-$(1): __bazel-version-check
 	mkdir -p "$$$$promote/a/disk" "$$$$promote/b/disk" "$$$$promote/a/output-base" "$$$$promote/b/output-base"; \
 	for side in a b; do \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$$$promote/$$$$side/output-base" build $(2) --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$$$$promote/$$$$side/disk" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
-		digest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path '*/$(3)' -print | /usr/bin/head -n 1)"; \
-		test -n "$$$$digest_file" || { echo "missing $(3) for promote $(1) $$$$side" >&2; exit 1; }; \
+		manifest_file="$$$$(/usr/bin/find "$$$$promote/$$$$side/output-base" -path '*/$(3)' -print | /usr/bin/head -n 1)"; \
+		test -n "$$$$manifest_file" || { echo "missing $(3) for promote $(1) $$$$side" >&2; exit 1; }; \
+		digest_file="$$$${manifest_file%.json}.sha256"; \
+		test -s "$$$$digest_file" || { echo "missing artifact identity digest for promote $(1) $$$$side" >&2; exit 1; }; \
+		product_dir="$$$$(/usr/bin/dirname "$$$$manifest_file")"; \
+		if [ -n "$(4)" ]; then product_src="$$$$product_dir/$(4)"; else product_src="$$$$product_dir"; fi; \
+		test -d "$$$$product_src" || { echo "missing $(1) product source for promote $$$$side" >&2; exit 1; }; \
+		stage="$$$$promote/$$$$side/staged"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$$$manifest_file" --product-src "$$$$product_src" --stage "$$$$stage"; \
 		/bin/cp "$$$$digest_file" "$$$$promote/$$$$side/digest.sha256"; \
-		if [ "$$$$side" = a ]; then first_tree="$$$$(/usr/bin/dirname "$$$$digest_file")"; else second_tree="$$$$(/usr/bin/dirname "$$$$digest_file")"; fi; \
+		if [ "$$$$side" = a ]; then first_tree="$$$$stage"; else second_tree="$$$$stage"; fi; \
 	done; \
 	lock_before="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
-	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --artifact-identity-format $(4) --artifact-identity-marker $(5) --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
+	digest="$$$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$$$$promote/a/digest.sha256" "$$$$promote/b/digest.sha256" --first-tree "$$$$first_tree" --second-tree "$$$$second_tree" --component $(1) --artifact-identity-format artifact-identity-v2 --proposal "$$$$promote/$(1)-proposal.json" --sbom "$$$$promote/$(1)-sbom.json" --in-toto "$$$$promote/$(1)-in-toto.json" --lock-proposal "$$$$promote/$(1)-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$$${#digest}" -eq 64 || { echo "promote compare did not print a 64-hex digest" >&2; exit 1; }; \
 	rg -q '"signed": false' "$$$$promote/$(1)-proposal.json"; \
 	rg -q '"oci_digest": null' "$$$$promote/$(1)-proposal.json"; \
@@ -192,15 +199,15 @@ __bazel-promote-$(1): __bazel-version-check
 	rg -q '"signed": false' "$$$$promote/$(1)-lock-proposal.json"; \
 	rg -q '"buildset": null' "$$$$promote/$(1)-lock-proposal.json"; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is False and p.get("oci_digest") is None, p' "$$$$promote/$(1)-proposal.json"; \
-	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); identity=p.get("artifact_identity") or {}; assert p.get("schema") == 2 and identity.get("format") == sys.argv[2] and identity.get("marker") == sys.argv[3], p' "$$$$promote/$(1)-proposal.json" "$(4)" "$(5)"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); identity=p.get("artifact_identity") or {}; assert p.get("schema") == 2 and identity.get("format") == "artifact-identity-v2" and "marker" not in identity, p' "$$$$promote/$(1)-proposal.json"; \
 	lock_after="$$$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
-	test "$$$$lock_before" = "$$$$lock_after" || { echo "unsigned promote mutated artifacts.lock.json" >&2; exit 1; }; \
-	if env -u ORLIX_COSIGN_KEY -u ORLIX_PROMOTE_ARTIFACT PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact-identity-format $(4) --artifact-identity-marker $(5) --proposal "$$$$promote/$(1)-signed.json"; then echo "unsigned promote must not Cosign-sign" >&2; exit 1; fi; \
+	test "$$$$lock_before" = "$$$${lock_after}" || { echo "unsigned promote mutated artifacts.lock.json" >&2; exit 1; }; \
+	if env -u ORLIX_COSIGN_KEY -u ORLIX_PROMOTE_ARTIFACT PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/sign.py" --component $(1) --digest "$$$$digest" --artifact-identity-format artifact-identity-v2 --proposal "$$$$promote/$(1)-signed.json"; then echo "unsigned promote must not Cosign-sign" >&2; exit 1; fi; \
 	test ! -e "$$$$promote/$(1)-signed.json"
 endef
-$(eval $(call ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.sha256,legacy-marker-sha256,uapi.sha256))
-$(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.sha256,legacy-marker-sha256,sysroot.sha256))
-$(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/source-input.sha256,legacy-marker-sha256,source-input.sha256))
+$(eval $(call ORLIX_BAZEL_PROMOTE,uapi,//bazel/feasibility/kernel:uapi,feasibility/kernel/uapi/uapi.artifact-identity-v2.json,uapi))
+$(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot,feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json,sysroot))
+$(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs,feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.json,))
 
 define ORLIX_BAZEL_PROMOTE_KERNEL
 __bazel-promote-$(1): __bazel-version-check
@@ -271,9 +278,9 @@ __bazel-promote-buildset: __bazel-version-check
 		for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
 			stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
 			case "$$component" in \
-				uapi) relative='bazel/feasibility/kernel/uapi/uapi.sha256' ;; \
-				mlibc) relative='bazel/feasibility/mlibc/sysroot/sysroot.sha256' ;; \
-				rootfs) relative='bazel/feasibility/rootfs/rootfs/source-input.sha256' ;; \
+				uapi) relative='bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256' ;; \
+				mlibc) relative='bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256' ;; \
+				rootfs) relative='bazel/feasibility/rootfs/rootfs/rootfs.artifact-identity-v2.sha256' ;; \
 				*) relative="bazel/feasibility/kernel/$$component/kernel.artifact-identity-v2.sha256" ;; \
 			esac; \
 			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$relative" -type f -print | /usr/bin/head -n 1)"; \
@@ -286,17 +293,23 @@ __bazel-promote-buildset: __bazel-version-check
 				/bin/cp "$$manifest_file" "$$stage/artifact-identity-v2.json"; \
 				/bin/cp "$$digest_file" "$$stage/artifact-identity-v2.sha256"; \
 			else \
-				/bin/cp -pR "$$(/usr/bin/dirname "$$digest_file")"/. "$$stage"/; \
+				product_dir="$$(/usr/bin/dirname "$$digest_file")"; \
+				case "$$component" in \
+					uapi) product_src="$$product_dir/uapi"; manifest_base="uapi" ;; \
+					mlibc) product_src="$$product_dir/sysroot"; manifest_base="sysroot" ;; \
+					rootfs) product_src="$$product_dir"; manifest_base="rootfs" ;; \
+				esac; \
+				test -d "$$product_src" || { echo "missing $$component product source for $$side" >&2; exit 1; }; \
+				manifest_src="$$product_dir/$$manifest_base.artifact-identity-v2.json"; \
+				test -s "$$manifest_src" || { echo "missing $$component artifact identity manifest for $$side" >&2; exit 1; }; \
+				PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$manifest_src" --product-src "$$product_src" --stage "$$stage"; \
 			fi; \
 			mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
 		done; \
 	done; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	for component in uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator; do \
-		format=artifact-identity-v2; marker=; \
-		case "$$component" in uapi) format=legacy-marker-sha256; marker=uapi.sha256 ;; mlibc) format=legacy-marker-sha256; marker=sysroot.sha256 ;; rootfs) format=legacy-marker-sha256; marker=source-input.sha256 ;; esac; \
-		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format "$$format" --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
-		if [ -n "$$marker" ]; then args+=(--artifact-identity-marker "$$marker"); fi; \
+		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format artifact-identity-v2 --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
 		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
 		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
 		python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("schema") == 2 and p.get("signed") is False and p.get("oci_digest") is None, p' "$$promote/$$component/$$component-proposal.json"; \
@@ -326,9 +339,9 @@ __bazel-publish-$(1): __bazel-version-check
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p.get("signed") is True and p.get("oci_digest","").startswith("sha256:"), p' "$$$$promote/$(1)-signed.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/publish.py" --proposal "$$$$promote/$(1)-signed.json"
 endef
-$(eval $(call ORLIX_BAZEL_PUBLISH,uapi,feasibility/kernel/uapi/uapi.sha256,legacy-marker-sha256,uapi.sha256))
-$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc,feasibility/mlibc/sysroot/sysroot.sha256,legacy-marker-sha256,sysroot.sha256))
-$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs,feasibility/rootfs/rootfs/source-input.sha256,legacy-marker-sha256,source-input.sha256))
+$(eval $(call ORLIX_BAZEL_PUBLISH,uapi,,artifact-identity-v2,))
+$(eval $(call ORLIX_BAZEL_PUBLISH,mlibc,,artifact-identity-v2,))
+$(eval $(call ORLIX_BAZEL_PUBLISH,rootfs,,artifact-identity-v2,))
 $(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphoneos,,artifact-identity-v2,))
 $(eval $(call ORLIX_BAZEL_PUBLISH,kernel-release-iphonesimulator,,artifact-identity-v2,))
 $(eval $(call ORLIX_BAZEL_PUBLISH,kernel-development-iphoneos,,artifact-identity-v2,))
@@ -658,7 +671,7 @@ __bazel-apple-routing-check:
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-release-iphonesimulator,//bazel/feasibility/kernel:kernel-release-iphonesimulator' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphoneos,//bazel/feasibility/kernel:kernel-development-iphoneos' make/bazel-migration.mk
 	@rg -F -q 'ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//bazel/feasibility/kernel:kernel-development-iphonesimulator' make/bazel-migration.mk
-	@rg -F -q -- '--artifact-identity-format legacy-marker-sha256 --artifact-identity-marker uapi.sha256' make/bazel-migration.mk
+	@if rg -F -q -- '--artifact-identity-format legacy' make/bazel-migration.mk; then echo "promotion must not use legacy artifact identities" >&2; exit 1; fi
 	@rg -F -q -- '--artifact-identity-format artifact-identity-v2' make/bazel-migration.mk
 	@rg -F -q '"name": "__bazel-substitute-promoted"' bazel/migration/legacy-target-map.json
 	@rg -F -q 'ORLIX_DEVELOPMENT_TEAM ?= ZQ3L7M567L' Makefile

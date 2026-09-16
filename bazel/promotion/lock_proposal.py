@@ -240,16 +240,15 @@ def write_signed_lock_proposal(path: str, signed_paths: list[str]) -> dict:
     schema = SCHEMA2 if SCHEMA2 in schemas else SCHEMA1
     if schema == SCHEMA2:
         for payload in payloads:
-            if payload.get("schema", SCHEMA1) == SCHEMA1:
-                identity = payload.get("artifact_identity")
-                if not isinstance(identity, dict) or identity.get("format") != "legacy-marker-sha256":
-                    raise ValueError(
-                        "schema-2 lock requires explicit legacy artifact identities"
-                    )
-                name = payload["component"]
-                components[name] = verify_component(
-                    {**payload, "schema": SCHEMA2}
+            identity = payload.get("artifact_identity")
+            if not isinstance(identity, dict) or identity.get("format") != "artifact-identity-v2":
+                raise ValueError(
+                    "schema-2 lock requires artifact-identity-v2 for every component"
                 )
+            name = payload["component"]
+            components[name] = verify_component(
+                {**payload, "schema": SCHEMA2}
+            )
     missing = [name for name in required_components(schema) if name not in components]
     if missing:
         raise ValueError(f"signed lock proposal missing required components: {missing}")

@@ -88,9 +88,9 @@ class LockedBuildsetTests(unittest.TestCase):
 
     def test_schema2_binds_typed_identities_and_all_kernel_variants(self) -> None:
         components = {
-            "uapi": _schema2_entry("uapi", "11" * 32, "ab" * 32, marker="uapi.sha256"),
-            "mlibc": _schema2_entry("mlibc", "22" * 32, "ac" * 32, marker="sysroot.sha256"),
-            "rootfs": _schema2_entry("rootfs", "33" * 32, "ad" * 32, marker="source-input.sha256"),
+            "uapi": _schema2_entry("uapi", "11" * 32, "ab" * 32),
+            "mlibc": _schema2_entry("mlibc", "22" * 32, "ac" * 32),
+            "rootfs": _schema2_entry("rootfs", "33" * 32, "ad" * 32),
         }
         for index, name in enumerate(locked_buildset.KERNEL_COMPONENTS, start=1):
             components[name] = _schema2_entry(name, f"{index:02x}" * 32, f"{index + 10:02x}" * 32)
@@ -140,6 +140,14 @@ class LockedBuildsetTests(unittest.TestCase):
             locked_buildset.validate_component(
                 "kernel-release-ios",
                 _schema2_entry("kernel-release-ios", "11" * 32, "ab" * 32),
+                schema=2,
+            )
+
+    def test_schema2_rejects_legacy_identities(self) -> None:
+        with self.assertRaisesRegex(locked_buildset.LockedBuildsetError, "requires artifact-identity-v2"):
+            locked_buildset.validate_component(
+                "uapi",
+                _schema2_entry("uapi", "11" * 32, "ab" * 32, marker="uapi.sha256"),
                 schema=2,
             )
 
