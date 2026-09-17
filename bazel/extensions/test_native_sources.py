@@ -9,6 +9,11 @@ SOURCE = Path(__file__).with_name("native_sources.bzl")
 
 
 class NativeSourceHashTests(unittest.TestCase):
+    def test_kernel_toolchain_refuses_to_guess_an_xcode_path(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("/Applications/Xcode", text)
+        self.assertIn('ctx.getenv("DEVELOPER_DIR", "")', text)
+
     def test_linux_and_mlibc_archives_have_sha256(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")
         linux = re.search(

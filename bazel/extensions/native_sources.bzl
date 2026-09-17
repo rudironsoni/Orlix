@@ -184,7 +184,9 @@ _cmake_repository = repository_rule(
 )
 
 def _kernel_toolchain_repository_impl(ctx):
-    developer = ctx.getenv("DEVELOPER_DIR", "/Applications/Xcode-26.6.0.app/Contents/Developer")
+    developer = ctx.getenv("DEVELOPER_DIR", "")
+    if not developer:
+        fail("Kernel toolchain identity requires DEVELOPER_DIR from the xcodes-selected Xcode; refusing to guess an Xcode path")
     observer = ctx.path(ctx.attr.observer)
     result = ctx.execute([
         "/usr/bin/python3", "-B", "-c",

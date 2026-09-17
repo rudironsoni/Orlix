@@ -42,7 +42,7 @@ def _runner(installed=INSTALLED_BOTH, developer_dir=DIR_26, version="26.6", buil
 
 class XcodeSelectTests(unittest.TestCase):
     def test_no_build_script_constructs_xcode_application_paths(self) -> None:
-        roots = [REPO / "Makefile", REPO / "make", REPO / "bazel" / "config", REPO / ".github" / "workflows"]
+        roots = [REPO / "Makefile", REPO / "make", REPO / "bazel" / "config", REPO / "bazel" / "extensions", REPO / ".github" / "workflows"]
         candidates = [REPO / ".bazelrc", REPO / ".bazelrc.local.example"]
         for root in roots:
             if root.is_file():
@@ -53,7 +53,7 @@ class XcodeSelectTests(unittest.TestCase):
             path for path in candidates
             if path.is_file()
             and not path.name.startswith("test_")
-            and path.suffix in {".mk", ".yml", ".py", "", ".example", ".bazelrc"}
+            and path.suffix in {".mk", ".yml", ".py", "", ".example", ".bazelrc", ".bzl"}
             and "/Applications/Xcode" in path.read_text(encoding="utf-8", errors="replace")
         ]
         self.assertEqual(offenders, [])
