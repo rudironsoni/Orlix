@@ -1,6 +1,26 @@
 name: iOS Build
 run-name: iOS Build ${{ inputs.build_id || github.ref_name }}
 
+# ORLIX-ADAPTED (MobAI ios-builder contract preserved): the `orlix` project
+# type builds the application through Make/Bazel, never by compiling an Xcode
+# project directly. Re-running `builder init` overwrites this file with the
+# generic template and silently returns to direct-Xcode builds; the
+# repository's workflow-policy tests fail when this marker or the orlix
+# routing below is absent, so re-apply the adaptation instead.
+#
+# Orlix authority preserved here:
+# - Xcode selection comes from the repository .xcode-version, never
+#   latest-stable, and the run-bound toolchain manifest is captured before
+#   the build (same Make-owned operation canonical CI uses).
+# - Product compilation is Make __bazel-product-app / __builder-package-ipa;
+#   no xcodebuild build/archive recompiles the product graph.
+# - Component mode comes from the repository snapshot classifier
+#   (app-only snapshots may consume the locked promoted buildset;
+#   component-changing snapshots build from source).
+# - The ios `scheme` input is outer-tool configuration and owns nothing.
+# - Signed Orlix builds stay on the Orlix-owned release path; the generic
+#   IOS_* signing sets do not exist in this repository.
+
 on:
   # Pushing a tag named ios-build/<build-id> starts the same job without the
   # GitHub API, for environments where only git access is available. A push
@@ -66,14 +86,19 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: write # deletes the trigger tag
-    timeout-minutes: 90 # a cold React Native/Expo build on the free runner takes 30-60 minutes
+    timeout-minutes: 150 # a cold React Native/Expo build on the free runner takes 30-60 minutes; a cold Orlix Bazel device build can take longer
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Snapshot builds execute untrusted working-tree code below; no
+          # credential may persist in the clone. Snapshot and tag operations
+          # authenticate explicitly per command instead.
+          persist-credentials: false
 
       # The dispatch always runs the workflow from the default branch, so the
       # sources come from a snapshot ref pushed by the CLI instead.
@@ -81,9 +106,12 @@ jobs:
         if: inputs.snapshot_ref != ''
         env:
           SNAPSHOT_REF: ${{ inputs.snapshot_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          git fetch --depth=1 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
+          # Depth 2 keeps the snapshot's parent: the Orlix component-mode
+          # classifier diffs the snapshot against it.
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" fetch --depth=2 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
           git checkout --force snapshot
           echo "Building $(git rev-parse --short HEAD)"
 
@@ -191,24 +219,12 @@ jobs:
             echo "env: $name"
           done < <(jq -r '.env // {} | to_entries[] | "\(.key | @base64) \(.value | tostring | @base64)"' <<< "$PROFILE_JSON")
 
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Restore DerivedData cache
-        uses: actions/cache/restore@v6
-        id: cache-deriveddata
-        with:
-          path: DerivedData
-          key: deriveddata-${{ github.run_id }}
-          restore-keys: |
-            deriveddata-
-
       - name: Detect project type
         id: detect
         run: |
-          if [ -f "pubspec.yaml" ]; then
+          if [ -f "Makefile" ] && [ -f "make/bazel-migration.mk" ] && [ -f ".xcode-version" ] && [ -f "MODULE.bazel" ]; then
+            echo "type=orlix" >> $GITHUB_OUTPUT
+          elif [ -f "pubspec.yaml" ]; then
             echo "type=flutter" >> $GITHUB_OUTPUT
           elif [ -f "package.json" ] && grep -q '"expo"' package.json; then
             echo "type=expo" >> $GITHUB_OUTPUT
@@ -220,11 +236,56 @@ jobs:
             echo "type=native" >> $GITHUB_OUTPUT
           fi
 
+      - name: Setup Xcode
+        if: steps.detect.outputs.type != 'orlix'
+        uses: maxim-lobanov/setup-xcode@1242409711ff5721add51979e9e11e23ebb7e5a4 # v1
+        with:
+          xcode-version: latest-stable
+
+      # Orlix selects the Xcode version declared by the repository, never
+      # latest-stable, then installs the declared build tools and exports the
+      # selection for Make. The run-bound toolchain manifest is captured in a
+      # later step, before any simulator or product work.
+      - name: Read requested Xcode version
+        id: xcode-version
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Select repository Xcode
+        if: steps.detect.outputs.type == 'orlix'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Setup Orlix Xcode and build tools
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
+          brew bundle --file Brewfile
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$(xcode-select -p)"
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      - name: Restore DerivedData cache
+        if: steps.detect.outputs.type != 'orlix'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: cache-deriveddata
+        with:
+          path: DerivedData
+          key: deriveddata-${{ github.run_id }}
+          restore-keys: |
+            deriveddata-
+
       # A gitignored *.xcconfig next to a committed template is a common iOS
       # convention. The snapshot then carries the template but not the config,
       # and xcodebuild fails with "Unable to open base configuration reference
       # file", which says nothing about which file is missing.
       - name: Materialize missing xcconfig files
+        if: steps.detect.outputs.type != 'orlix'
         run: |
           set -e
           find . -path ./DerivedData -prune -o -type f \
@@ -243,6 +304,7 @@ jobs:
             done
 
       - name: Generate Xcode project (XcodeGen)
+        if: steps.detect.outputs.type != 'orlix'
         env:
           IOS_PATH: ${{ steps.params.outputs.ios_path }}
         run: |
@@ -278,6 +340,7 @@ jobs:
       # Whatever the previous step could not fill in is named here, instead of
       # surfacing as xcodebuild's "Unable to open base configuration reference".
       - name: Check base configuration files
+        if: steps.detect.outputs.type != 'orlix'
         env:
           IOS_PATH: ${{ steps.params.outputs.ios_path }}
         run: |
@@ -310,7 +373,7 @@ jobs:
 
       - name: Setup Flutter
         if: steps.detect.outputs.type == 'flutter'
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: ${{ steps.params.outputs.flutter_version || '' }}
           channel: stable
@@ -448,7 +511,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ steps.js.outputs.node_version }}
           node-version-file: ${{ steps.js.outputs.node_version_file }}
@@ -458,7 +521,7 @@ jobs:
       # because the same lockfiles can be installed by different ones.
       - name: Restore node_modules cache
         if: steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         id: node-modules-cache
         with:
           path: node_modules
@@ -618,21 +681,21 @@ jobs:
 
       - name: Setup JDK
         if: steps.detect.outputs.type == 'kmp'
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: ${{ steps.params.outputs.jdk_version || '17' }}
 
       - name: Setup Gradle
         if: steps.detect.outputs.type == 'kmp'
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
 
       # A managed Expo project has no Podfile.lock before the prebuild above, so
       # hashFiles returns an empty string and the key degrades to the prefix.
       # That still restores and saves a Pods directory, and the `pod install` in
       # the build step syncs it, so an empty hash is not an error here.
       - name: Restore Pods cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         id: pods-cache
         with:
           path: |
@@ -645,7 +708,7 @@ jobs:
       # One set of secrets per distribution, IOS_*_<SET>; the unsuffixed names
       # serve builds without a profile. A secret that does not exist arrives empty.
       - name: Install certificate and provisioning profile
-        if: steps.params.outputs.use_signing == 'true'
+        if: steps.params.outputs.use_signing == 'true' && steps.detect.outputs.type != 'orlix'
         env:
           SIGNING_SET: ${{ steps.params.outputs.signing_set }}
           DISTRIBUTION: ${{ steps.params.outputs.distribution }}
@@ -858,6 +921,25 @@ jobs:
           echo "  identity: $CODE_SIGN_IDENTITY"
           echo "The build writes these into the app target's build settings; its PRODUCT_BUNDLE_IDENTIFIER must match the app id above. Extension targets get the profiles listed above by bundle id."
 
+      # The Orlix product graph is Bazel-owned: capture the run-bound
+      # toolchain manifest before the build, then resolve the snapshot's
+      # component mode (app-only snapshots may consume the locked promoted
+      # buildset; anything else builds from source).
+      - name: Capture Orlix toolchain manifest
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          make __bazel-toolchain-manifest
+
+      - name: Select Orlix component mode for the snapshot
+        id: orlix-component-mode
+        if: steps.detect.outputs.type == 'orlix'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          make __builder-component-mode >> "$GITHUB_OUTPUT"
+
       - name: Build IPA
         env:
           BUILD_ID: ${{ steps.params.outputs.build_id }}
@@ -868,6 +950,7 @@ jobs:
           CONFIGURATION: ${{ steps.params.outputs.configuration }}
           BUILD_NUMBER: ${{ steps.params.outputs.build_number }}
           DISTRIBUTION: ${{ steps.params.outputs.distribution }}
+          ORLIX_COMPONENT_MODE: ${{ steps.orlix-component-mode.outputs.ORLIX_BAZEL_COMPONENT_MODE }}
         run: |
           set -e
           fail() { echo "::error::$*" >&2; exit 1; }
@@ -1168,6 +1251,26 @@ jobs:
 
             echo "Running: $BUILD_CMD"
             eval $BUILD_CMD
+          elif [ "$PROJECT_TYPE" = "orlix" ]; then
+            # Orlix builds through Make/Bazel; Xcode never compiles the
+            # product graph here. Signed Orlix builds stay on the Orlix-owned
+            # release path: the generic IOS_* signing sets do not exist in
+            # this repository.
+            if [ "$USE_SIGNING" = "true" ]; then
+              fail "signed Orlix builds are produced by the Orlix-owned release flow (testflight-beta.yml), not ios-builder signing"
+            fi
+            case "$CONFIGURATION" in
+              Debug) ORLIX_COMPILATION_MODE=dbg ;;
+              Release) ORLIX_COMPILATION_MODE=opt ;;
+              *) fail "Orlix configuration must be Debug or Release, got '$CONFIGURATION'" ;;
+            esac
+            test -n "$ORLIX_COMPONENT_MODE" || fail "Orlix component mode was not resolved"
+            make __builder-package-ipa \
+              ORLIX_BAZEL_DESTINATION=iphoneos \
+              ORLIX_BAZEL_COMPILATION_MODE="$ORLIX_COMPILATION_MODE" \
+              ORLIX_BAZEL_COMPONENT_MODE="$ORLIX_COMPONENT_MODE" \
+              ORLIX_BUILDER_BUILD_ID="$BUILD_ID" \
+              ORLIX_BUILDER_BUILD_NUMBER="$BUILD_NUMBER"
           else
             BUILD_CMD="xcodebuild"
             if [ -n "$WORKSPACE" ]; then
@@ -1272,7 +1375,7 @@ jobs:
           fi
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ipa
           path: build/*.ipa
@@ -1288,7 +1391,7 @@ jobs:
           if [ -d DerivedData ]; then echo "exists=yes" >> $GITHUB_OUTPUT; fi
 
       - name: Save DerivedData cache
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         if: always() && steps.dd.outputs.exists == 'yes'
         with:
           path: DerivedData
@@ -1328,8 +1431,8 @@ jobs:
           else
             echo "- **Signing:** Unsigned (sign locally with AltStore/Sideloadly)" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f build/*.ipa ]; then
-            IPA_PATH=$(find build -name "*.ipa" -type f | head -1)
+          IPA_PATH=$(find build -name "*.ipa" -type f | head -1)
+          if [ -n "$IPA_PATH" ]; then
             echo "- **IPA Size:** $(ls -lh "$IPA_PATH" | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -1337,4 +1440,7 @@ jobs:
       # a tag fires no push event, so this cannot start another run.
       - name: Delete trigger tag
         if: always() && github.ref_type == 'tag'
-        run: git push origin ":refs/tags/$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" push origin ":refs/tags/$GITHUB_REF_NAME"

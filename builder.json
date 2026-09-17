@@ -9,6 +9,7 @@
   "codemagic": {},
   "bitrise": {},
   "ios": {
+    "bundleId": "com.rudironsoni.Orlix",
     "extensions": [
       "com.rudironsoni.orlix.live-activity"
     ]

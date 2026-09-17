@@ -283,6 +283,28 @@ class MakeRoutingTests(unittest.TestCase):
             self.assertIn('"same_application_path": "/the/canonical/app"', proof)
             self.assertIn('"canonical_simulator_product_compile_count": 1', proof)
 
+    def test_builder_product_targets(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("__bazel-product-app: __bazel-feasibility-bootstrap", mk)
+        self.assertIn("__bazel-substitute-promoted", mk.split("__bazel-product-app:", 1)[1].split("__builder-component-mode:", 1)[0])
+        product = mk.split("__bazel-product-app:", 1)[1].split("__builder-component-mode:", 1)[0]
+        self.assertIn("build //Orlix:Orlix", product)
+        self.assertIn("ORLIX_PRODUCT_APP=", product)
+        self.assertIn("CFBundleSupportedPlatforms", product)
+        self.assertIn("locked-buildset.json", product)
+        self.assertNotIn("ORLIX_DEVELOPMENT_TEAM", product)
+        mode = mk.split("__builder-component-mode:", 1)[1].split("ORLIX_BUILDER_BUILD_ID", 1)[0]
+        self.assertIn("select_component_mode.py", mode)
+        self.assertIn("HEAD~1 HEAD", mode)
+        self.assertIn("ORLIX_BAZEL_COMPONENT_MODE=", mode)
+        package = mk.split("__builder-package-ipa:", 1)[1].split("__bazel-orlix-archive:", 1)[0]
+        self.assertIn("ORLIX_BUILDER_BUILD_ID", package)
+        self.assertIn("iphoneos", package)
+        self.assertIn("CFBundleVersion", package)
+        self.assertIn(".ipa", package)
+        self.assertNotIn("xcodebuild", package)
+        self.assertNotIn("xcodebuild", product)
+
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)

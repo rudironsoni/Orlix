@@ -143,6 +143,69 @@ class WorkflowPolicyTests(unittest.TestCase):
         )
         self.assertIn("__bazel-promote-buildset", promote)
 
+    def test_ios_builder_workflows_keep_cli_contract(self) -> None:
+        build = (ROOT / ".github/workflows/ios-build.yml").read_text(encoding="utf-8")
+        share = (ROOT / ".github/workflows/ios-share.yml").read_text(encoding="utf-8")
+        for name in (
+            "build_id", "snapshot_ref", "ios_path", "scheme", "use_signing",
+            "configuration", "flutter_version", "jdk_version", "profile", "build_number",
+        ):
+            self.assertIn(f"{name}:", build)
+        for name in ("build_id", "snapshot_ref", "ios_path", "scheme", "duration"):
+            self.assertIn(f"{name}:", share)
+        for text, name in ((build, "ios-build.yml"), (share, "ios-share.yml")):
+            self.assertIn("SNAPSHOT_REF", text, name)
+            self.assertIn("push:\n    tags:", text, name)
+            self.assertIn("Delete trigger tag", text, name)
+        self.assertIn('name: ipa', build)
+        self.assertIn("build/*.ipa", build)
+        self.assertIn("mobai-ci share", share)
+        self.assertIn("--device", share)
+        self.assertIn("ios-build/*", build)
+        self.assertIn("ios-share/*", share)
+
+    def test_ios_builder_orlix_routing(self) -> None:
+        build = (ROOT / ".github/workflows/ios-build.yml").read_text(encoding="utf-8")
+        share = (ROOT / ".github/workflows/ios-share.yml").read_text(encoding="utf-8")
+        for text, name in ((build, "ios-build.yml"), (share, "ios-share.yml")):
+            self.assertIn("ORLIX-ADAPTED", text, name)
+            self.assertIn("builder init", text, name)
+            self.assertIn('type=orlix', text, name)
+            self.assertIn("make/bazel-migration.mk", text, name)
+            self.assertIn("make __bazel-toolchain-manifest", text, name)
+            self.assertIn("make __builder-component-mode", text, name)
+            self.assertIn("steps.xcode-version.outputs.version", text, name)
+            self.assertIn("ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}", text, name)
+        self.assertIn("make __builder-package-ipa", build)
+        self.assertIn("make __bazel-product-app", share)
+        self.assertIn("signed Orlix builds are produced by the Orlix-owned release flow", build)
+        self.assertIn('elif [ "$PROJECT_TYPE" = "orlix" ]', build)
+        block = build.split('elif [ "$PROJECT_TYPE" = "orlix" ]', 1)[1]
+        end = min(
+            (block.index(line) for line in ("\n          elif ", "\n          else", "\n          fi") if line in block),
+            default=len(block),
+        )
+        self.assertNotIn("xcodebuild", block[:end])
+        share_block = share.split('if [ "$PROJECT_TYPE" = "orlix" ]', 1)[1]
+        share_end = min(
+            (share_block.index(line) for line in ("\n          elif ", "\n          else") if line in share_block),
+            default=len(share_block),
+        )
+        self.assertNotIn("xcodebuild", share_block[:share_end])
+
+    def test_ios_builder_security_posture(self) -> None:
+        import re
+
+        for name in ("ios-build.yml", "ios-share.yml"):
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            for used in re.findall(r"(?m)^\s+uses:\s*(\S+)", text):
+                self.assertRegex(used, r"@[0-9a-f]{40}(?:\s*#|$)", f"{name}: {used}")
+                self.assertNotRegex(used, r"@v\d+\s*(?:#|$)", f"{name}: {used}")
+            self.assertNotIn("pull_request:", text, name)
+            self.assertIn("persist-credentials: false", text, name)
+            self.assertIn("contents: write", text, name)
+            self.assertIn('fetch --depth=2 origin "+$SNAPSHOT_REF', text, name)
+
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")

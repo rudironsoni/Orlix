@@ -55,8 +55,9 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
-.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-buildset __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-orlix-archive __bazel-apple-ci __bazel-simulator-runtime-proof __bazel-current-simulator-gate __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
+.PHONY: __bazel-kernel-uapi __bazel-kernel-uapi-variants __bazel-mlibc-from-uapi __bazel-live-activity-smoke __bazel-promote-buildset __bazel-promote-uapi __bazel-promote-mlibc __bazel-promote-rootfs __bazel-promote-kernel-release-iphoneos __bazel-promote-kernel-release-iphonesimulator __bazel-promote-kernel-development-iphoneos __bazel-promote-kernel-development-iphonesimulator __bazel-publish-uapi __bazel-publish-mlibc __bazel-publish-rootfs __bazel-publish-kernel-release-iphoneos __bazel-publish-kernel-release-iphonesimulator __bazel-publish-kernel-development-iphoneos __bazel-publish-kernel-development-iphonesimulator __bazel-lock-proposal __bazel-lock-from-signed __bazel-reconstruct __bazel-reconstruct-source __bazel-substitute-promoted __bazel-hostadapter __bazel-orlixos __bazel-orlix-app __bazel-product-app __bazel-orlix-archive __bazel-apple-ci __bazel-simulator-runtime-proof __bazel-current-simulator-gate __bazel-ios15-simulator-gate __bazel-product-composition __bazel-cache-equivalence __bazel-kernel-boot __bazel-proof-graph __bazel-apple-routing-check __bazel-prove-matrix __bazel-gc
 .PHONY: __bazel-guest-package __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __bazel-e2fsprogs __bazel-attr __bazel-acl __bazel-pcre2 __bazel-musl-fts __bazel-libsepol __bazel-libcap __bazel-libselinux
+.PHONY: __builder-component-mode __builder-package-ipa
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
@@ -828,6 +829,79 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	/usr/bin/nm -gU "$$os_binary" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot|[[:space:]]T[[:space:]]+_arch_boot_entry' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log"; \
 	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log" || { echo "missing kernel link evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rm -rf "$$ipa_work"
+
+__bazel-product-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)
+	@case "$(ORLIX_BAZEL_DESTINATION)" in iphoneos|iphonesimulator) ;; *) echo "unsupported Bazel destination: $(ORLIX_BAZEL_DESTINATION)" >&2; exit 1 ;; esac
+	@case "$(ORLIX_BAZEL_COMPONENT_MODE)" in source|promoted) ;; *) echo "unsupported Bazel component mode: $(ORLIX_BAZEL_COMPONENT_MODE)" >&2; exit 1 ;; esac
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@set -euo pipefail; \
+	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if(count != 1) exit 1; print path}')"; \
+	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
+	test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	product_dir="$(ORLIX_BUILD_ROOT)/Bazel/product/Orlix-$(ORLIX_BAZEL_DESTINATION)"; \
+	rm -rf "$$product_dir"; mkdir -p "$$product_dir"; \
+	/usr/bin/ditto -x -k "$$ipa" "$$product_dir"; \
+	app="$$product_dir/Payload/Orlix.app"; \
+	test -x "$$app/Orlix" || { echo "missing staged canonical Orlix.app" >&2; exit 1; }; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; app=Path(sys.argv[1]); assert all(info.get("CFBundleName") and info.get("CFBundlePackageType") == kind and info.get("CFBundleInfoDictionaryVersion") == "6.0" for bundle,kind in [(app,"APPL"),*((p,"XPC!") for p in app.glob("PlugIns/*.appex"))] for info in [plistlib.loads((bundle/"Info.plist").read_bytes())]), "app or extension is missing required bundle metadata"' "$$app"; \
+	python3 -c 'import plistlib,sys; info=plistlib.loads(open(sys.argv[1],"rb").read()); assert info["MinimumOSVersion"] == "15.0"; assert info["CFBundleSupportedPlatforms"] == [sys.argv[2]]' "$$app/Info.plist" "$(if $(filter iphoneos,$(ORLIX_BAZEL_DESTINATION)),iPhoneOS,iPhoneSimulator)"; \
+	os_binary="$$app/Frameworks/OrlixOS.framework/OrlixOS"; \
+	test -x "$$os_binary" || { echo "missing embedded OrlixOS.framework" >&2; exit 1; }; \
+	test -s "$$app/mlx-swift_Cmlx.bundle/default.metallib" || { echo "missing compiled MLX shader library" >&2; exit 1; }; \
+	python3 -c 'import plistlib,sys; from pathlib import Path; root=Path(sys.argv[1]); info=plistlib.loads((root/"Info.plist").read_bytes()); assert info["OrlixSelectedProfile"] == sys.argv[2]' "$${os_binary%/*}" "$(PROFILE)"; \
+	if [ "$(ORLIX_BAZEL_COMPONENT_MODE)" = promoted ]; then \
+	lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; \
+	test "$${#lock_buildset}" -eq 64 || { echo "artifacts.lock.json missing buildset" >&2; exit 1; }; \
+	stamp="$$(/usr/bin/find "$$app" -name 'locked-buildset.json' -print | /usr/bin/head -n 1)"; \
+	test -s "$$stamp" || { echo "promoted product app must embed locked-buildset.json" >&2; exit 1; }; \
+	rg -F -q "$$lock_buildset" "$$stamp" || { echo "product app lock stamp does not match artifacts.lock.json" >&2; exit 1; }; \
+	fi; \
+	if [ "$(ORLIX_BAZEL_DESTINATION)" != iphoneos ]; then \
+	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$app'))"; \
+	fi; \
+	@echo "ORLIX_PRODUCT_APP=$$app"
+
+__builder-component-mode:
+	@set -euo pipefail; \
+	paths_file="$$(mktemp)"; \
+	git status --porcelain | /usr/bin/awk '{print $$2}' >> "$$paths_file" 2>/dev/null || true; \
+	git diff --name-only HEAD >> "$$paths_file" 2>/dev/null || true; \
+	git diff --name-only HEAD~1 HEAD >> "$$paths_file" 2>/dev/null || true; \
+	git_origin_fetch() { if [ -n "$${GH_TOKEN:-}" ]; then git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $${GH_TOKEN}" "$$@"; else git "$$@"; fi; }; \
+	if git_origin_fetch fetch --no-tags --depth=25 origin main >/dev/null 2>&1 && base="$$(git merge-base HEAD FETCH_HEAD 2>/dev/null)" && test -n "$$base"; then \
+	git diff --name-only "$$base" HEAD >> "$$paths_file" 2>/dev/null || true; \
+	else \
+	: > "$$paths_file"; \
+	fi; \
+	sort -u -o "$$paths_file" "$$paths_file"; \
+	schema="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json")).get("schema", 1))')"; \
+	mode="$$(PYTHONPATH="$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/migration/select_component_mode.py" --lock-schema "$$schema" --event builder-snapshot --changed-paths "$$paths_file")"; \
+	rm -f "$$paths_file"; \
+	echo "ORLIX_BAZEL_COMPONENT_MODE=$$mode"
+
+ORLIX_BUILDER_BUILD_ID ?=
+ORLIX_BUILDER_BUILD_NUMBER ?=
+__builder-package-ipa: __bazel-product-app
+	@test -n "$(ORLIX_BUILDER_BUILD_ID)" || { echo "ORLIX_BUILDER_BUILD_ID is required" >&2; exit 1; }
+	@test "$(ORLIX_BAZEL_DESTINATION)" = iphoneos || { echo "builder IPA requires the iphoneos destination" >&2; exit 1; }
+	@set -euo pipefail; \
+	app="$(ORLIX_BUILD_ROOT)/Bazel/product/Orlix-$(ORLIX_BAZEL_DESTINATION).app"; \
+	test -x "$$app/Orlix" || { echo "missing staged canonical Orlix.app; run make __bazel-product-app first" >&2; exit 1; }; \
+	if [ -n "$(ORLIX_BUILDER_BUILD_NUMBER)" ]; then \
+	if ! [[ "$(ORLIX_BUILDER_BUILD_NUMBER)" =~ ^([0-9]+(\.[0-9]+)*\+)?[0-9]+(\.[0-9]+)*$$ ]]; then echo "ORLIX_BUILDER_BUILD_NUMBER must be N or X.Y.Z+N" >&2; exit 1; fi; \
+	build_number="$(ORLIX_BUILDER_BUILD_NUMBER)"; build_name=""; \
+	case "$$build_number" in *+*) build_name="$${build_number%+*}"; build_number="$${build_number##*+}"; ;; esac; \
+	/usr/bin/plutil -replace CFBundleVersion -string "$$build_number" "$$app/Info.plist"; \
+	if [ -n "$$build_name" ]; then /usr/bin/plutil -replace CFBundleShortVersionString -string "$$build_name" "$$app/Info.plist"; fi; \
+	echo "stamped CFBundleVersion $$build_number$${build_name:+ ($$build_name)}"; \
+	fi; \
+	pkg="$$(mktemp -d)"; mkdir -p "$$pkg/Payload"; \
+	/usr/bin/ditto "$$app" "$$pkg/Payload/Orlix.app"; \
+	mkdir -p "$(CURDIR)/build"; rm -f "$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa"; \
+	(cd "$$pkg" && /usr/bin/zip -rq "$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa" Payload); \
+	rm -rf "$$pkg"; \
+	test -s "$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa" || { echo "missing packaged IPA" >&2; exit 1; }; \
+	echo "ORLIX_BUILDER_IPA=$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa"
 
 __bazel-orlix-archive: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	@test -n "$(ORLIX_DEVELOPMENT_TEAM)" || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }

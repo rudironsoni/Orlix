@@ -1,6 +1,15 @@
 name: iOS Simulator
 run-name: iOS Simulator ${{ inputs.build_id || github.ref_name }}
 
+# ORLIX-ADAPTED (MobAI ios-builder contract preserved): the `orlix` project
+# type builds the simulator application through Make/Bazel, never by
+# compiling an Xcode project directly, and hands that Bazel-produced .app to
+# `mobai-ci share`. Re-running `builder init` overwrites this file with the
+# generic template; the repository's workflow-policy tests fail when this
+# marker or the orlix routing below is absent, so re-apply the adaptation
+# instead. The ios `scheme` input is outer-tool configuration and owns
+# nothing of the Orlix product graph.
+
 # Builds the app for the simulator and then makes that simulator usable from
 # the MobAI app, so the build can be tried by hand from a machine that is not a
 # Mac. The job stays alive while the simulator is in use and ends when it is
@@ -56,7 +65,7 @@ on:
 
 jobs:
   simulator:
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: write # deletes the trigger tag
     # Bounds the session: a simulator nobody released must not hold a runner
@@ -65,7 +74,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Snapshot builds execute untrusted working-tree code below; no
+          # credential may persist in the clone. Snapshot and tag operations
+          # authenticate explicitly per command instead.
+          persist-credentials: false
 
       # The dispatch always runs the workflow from the default branch, so the
       # sources come from a snapshot ref pushed by the CLI instead.
@@ -73,9 +87,12 @@ jobs:
         if: inputs.snapshot_ref != ''
         env:
           SNAPSHOT_REF: ${{ inputs.snapshot_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          git fetch --depth=1 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
+          # Depth 2 keeps the snapshot's parent: the Orlix component-mode
+          # classifier diffs the snapshot against it.
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" fetch --depth=2 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
           git checkout --force snapshot
           echo "Building $(git rev-parse --short HEAD)"
 
@@ -114,27 +131,16 @@ jobs:
       # Starts the simulator booting in the background (cached, so later runs
       # boot fast) while the app builds.
       - name: Install mobai-ci + boot simulator
-        uses: MobAI-App/mobai-ci@v1
+        uses: MobAI-App/mobai-ci@7cac484883bccde46bb5253e9c1335fd88c5a8d4 # v1
         with:
           boot-sim: true # UDID lands in $MOBAI_SIM_UDID
-
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Restore DerivedData cache
-        uses: actions/cache/restore@v6
-        with:
-          path: DerivedData
-          key: deriveddata-sim-${{ github.run_id }}
-          restore-keys: |
-            deriveddata-sim-
 
       - name: Detect project type
         id: detect
         run: |
-          if [ -f "pubspec.yaml" ]; then
+          if [ -f "Makefile" ] && [ -f "make/bazel-migration.mk" ] && [ -f ".xcode-version" ] && [ -f "MODULE.bazel" ]; then
+            echo "type=orlix" >> $GITHUB_OUTPUT
+          elif [ -f "pubspec.yaml" ]; then
             echo "type=flutter" >> $GITHUB_OUTPUT
           elif [ -f "package.json" ] && grep -q '"expo"' package.json; then
             echo "type=expo" >> $GITHUB_OUTPUT
@@ -146,11 +152,50 @@ jobs:
             echo "type=native" >> $GITHUB_OUTPUT
           fi
 
-      # A gitignored *.xcconfig next to a committed template is a common iOS
-      # convention. The snapshot then carries the template but not the config,
-      # and xcodebuild fails with "Unable to open base configuration reference
-      # file", which says nothing about which file is missing.
+      - name: Setup Xcode
+        if: steps.detect.outputs.type != 'orlix'
+        uses: maxim-lobanov/setup-xcode@1242409711ff5721add51979e9e11e23ebb7e5a4 # v1
+        with:
+          xcode-version: latest-stable
+
+      # Orlix selects the Xcode version declared by the repository, never
+      # latest-stable, then installs the declared build tools and exports the
+      # selection for Make.
+      - name: Read requested Xcode version
+        id: xcode-version
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Select repository Xcode
+        if: steps.detect.outputs.type == 'orlix'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Setup Orlix Xcode and build tools
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
+          brew bundle --file Brewfile
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$(xcode-select -p)"
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      - name: Restore DerivedData cache
+        if: steps.detect.outputs.type != 'orlix'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: DerivedData
+          key: deriveddata-sim-${{ github.run_id }}
+          restore-keys: |
+            deriveddata-sim-
+
       - name: Materialize missing xcconfig files
+        if: steps.detect.outputs.type != 'orlix'
         run: |
           set -e
           find . -path ./DerivedData -prune -o -type f \
@@ -169,6 +214,7 @@ jobs:
             done
 
       - name: Generate Xcode project (XcodeGen)
+        if: steps.detect.outputs.type != 'orlix'
         env:
           IOS_PATH: ${{ steps.params.outputs.ios_path }}
         run: |
@@ -202,6 +248,7 @@ jobs:
       # Whatever the previous step could not fill in is named here, instead of
       # surfacing as xcodebuild's "Unable to open base configuration reference".
       - name: Check base configuration files
+        if: steps.detect.outputs.type != 'orlix'
         env:
           IOS_PATH: ${{ steps.params.outputs.ios_path }}
         run: |
@@ -234,7 +281,7 @@ jobs:
 
       - name: Setup Flutter
         if: steps.detect.outputs.type == 'flutter'
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: ${{ steps.params.outputs.flutter_version || '' }}
           channel: stable
@@ -372,7 +419,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ steps.js.outputs.node_version }}
           node-version-file: ${{ steps.js.outputs.node_version_file }}
@@ -529,14 +576,33 @@ jobs:
       # script phase shells out to Gradle, which needs a JDK on PATH.
       - name: Setup JDK
         if: steps.detect.outputs.type == 'kmp'
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: ${{ steps.params.outputs.jdk_version || '17' }}
 
       - name: Setup Gradle
         if: steps.detect.outputs.type == 'kmp'
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+
+      # The Orlix product graph is Bazel-owned: capture the run-bound
+      # toolchain manifest before the build, then resolve the snapshot's
+      # component mode (app-only snapshots may consume the locked promoted
+      # buildset; anything else builds from source).
+      - name: Capture Orlix toolchain manifest
+        if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          make __bazel-toolchain-manifest
+
+      - name: Select Orlix component mode for the snapshot
+        id: orlix-component-mode
+        if: steps.detect.outputs.type == 'orlix'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          make __builder-component-mode >> "$GITHUB_OUTPUT"
 
       - name: Build for the simulator
         id: build
@@ -544,10 +610,23 @@ jobs:
           IOS_PATH: ${{ steps.params.outputs.ios_path }}
           SCHEME: ${{ steps.params.outputs.scheme }}
           PROJECT_TYPE: ${{ steps.detect.outputs.type }}
+          ORLIX_COMPONENT_MODE: ${{ steps.orlix-component-mode.outputs.ORLIX_BAZEL_COMPONENT_MODE }}
         run: |
           set -e
 
-          if [ "$PROJECT_TYPE" = "flutter" ]; then
+          if [ "$PROJECT_TYPE" = "orlix" ]; then
+            # Orlix builds through Make/Bazel; Xcode never compiles the
+            # product graph here. The .app handed to `mobai-ci share` below
+            # is the Bazel-produced canonical simulator application.
+            test -n "$ORLIX_COMPONENT_MODE" || { echo "::error::Orlix component mode was not resolved"; exit 1; }
+            APP_PATH=$(make __bazel-product-app \
+              ORLIX_BAZEL_DESTINATION=iphonesimulator \
+              ORLIX_BAZEL_COMPILATION_MODE=dbg \
+              ORLIX_BAZEL_COMPONENT_MODE="$ORLIX_COMPONENT_MODE" \
+              | sed -n 's/^ORLIX_PRODUCT_APP=//p' | tail -n 1)
+            test -n "$APP_PATH" || { echo "::error::Make produced no canonical simulator app"; exit 1; }
+            test -x "$APP_PATH/Orlix" || { echo "::error::$APP_PATH is not the canonical Orlix.app"; exit 1; }
+          elif [ "$PROJECT_TYPE" = "flutter" ]; then
             # Flutter drives xcodebuild itself and puts the bundle in a known
             # place, so there is nothing to detect here.
             flutter build ios --simulator --debug
@@ -666,7 +745,7 @@ jobs:
       # leave the next run with a cold DerivedData.
       - name: Save DerivedData cache
         if: always() && steps.dd.outputs.exists == 'yes'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: DerivedData
           key: deriveddata-sim-${{ github.run_id }}
@@ -689,4 +768,7 @@ jobs:
       # a tag fires no push event, so this cannot start another run.
       - name: Delete trigger tag
         if: always() && github.ref_type == 'tag'
-        run: git push origin ":refs/tags/$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" push origin ":refs/tags/$GITHUB_REF_NAME"

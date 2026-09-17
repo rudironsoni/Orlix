@@ -731,6 +731,668 @@
         }
       }
     },
+    ".github/workflows/ios-build.yml": {
+      "source_sha256": "b88a3900f12d2a1ef5417030f0c4db33693ebdb02099c174b02cb7aeef92eadb",
+      "workflow": {
+        "name": "iOS Build",
+        "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
+        "on": {
+          "push": {
+            "tags": [
+              "ios-build/*"
+            ]
+          },
+          "workflow_dispatch": {
+            "inputs": {
+              "build_id": {
+                "description": "Unique build identifier",
+                "required": true,
+                "type": "string"
+              },
+              "snapshot_ref": {
+                "description": "Ref holding the working-tree snapshot to build (empty builds this branch)",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "ios_path": {
+                "description": "Path to iOS project (e.g., \"ios\" for React Native)",
+                "required": false,
+                "type": "string",
+                "default": "."
+              },
+              "scheme": {
+                "description": "Xcode scheme to build (auto-detected if empty)",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "use_signing": {
+                "description": "Enable code signing (requires secrets to be configured)",
+                "required": false,
+                "type": "boolean",
+                "default": false
+              },
+              "configuration": {
+                "description": "Build configuration (Debug is faster, Release for production)",
+                "required": false,
+                "type": "string",
+                "default": "Debug"
+              },
+              "flutter_version": {
+                "description": "Flutter version to use (e.g., 3.24.0). Empty means latest stable.",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "jdk_version": {
+                "description": "JDK version for Kotlin Multiplatform Gradle builds (e.g., 17).",
+                "required": false,
+                "type": "string",
+                "default": "17"
+              },
+              "profile": {
+                "description": "Selected builder.json profile as JSON: {\"name\": \"...\", \"env\": {...}, \"distribution\": \"...\"}",
+                "required": false,
+                "type": "string",
+                "default": "{}"
+              },
+              "build_number": {
+                "description": "CFBundleVersion to stamp on the build: N, or X.Y.Z+N to set the marketing version too. Empty leaves the project as is.",
+                "required": false,
+                "type": "string",
+                "default": ""
+              }
+            }
+          }
+        },
+        "jobs": {
+          "build": {
+            "runs-on": "macos-26",
+            "permissions": {
+              "contents": "write"
+            },
+            "timeout-minutes": 150,
+            "steps": [
+              {
+                "name": "Checkout repository",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Checkout working-tree snapshot",
+                "if": "inputs.snapshot_ref != ''",
+                "env": {
+                  "SNAPSHOT_REF": "${{ inputs.snapshot_ref }}",
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -e\n# Depth 2 keeps the snapshot's parent: the Orlix component-mode\n# classifier diffs the snapshot against it.\ngit -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
+              },
+              {
+                "name": "Resolve parameters",
+                "id": "params",
+                "env": {
+                  "IN_BUILD_ID": "${{ inputs.build_id }}",
+                  "IN_IOS_PATH": "${{ inputs.ios_path }}",
+                  "IN_SCHEME": "${{ inputs.scheme }}",
+                  "IN_USE_SIGNING": "${{ inputs.use_signing }}",
+                  "IN_CONFIGURATION": "${{ inputs.configuration }}",
+                  "IN_FLUTTER_VERSION": "${{ inputs.flutter_version }}",
+                  "IN_JDK_VERSION": "${{ inputs.jdk_version }}",
+                  "IN_PROFILE": "${{ inputs.profile }}",
+                  "IN_BUILD_NUMBER": "${{ inputs.build_number }}"
+                },
+                "run": "set -e\nPROFILE=\"\"\nif [ \"$GITHUB_EVENT_NAME\" != \"workflow_dispatch\" ] && [ -f builder.json ]; then\n  PROFILE=$(jq -r '.defaultProfile // empty' builder.json)\n  if [ -n \"$PROFILE\" ] && [ \"$(jq -r --arg p \"$PROFILE\" '.profiles[$p] != null' builder.json)\" != \"true\" ]; then\n    echo \"::error::defaultProfile \\\"$PROFILE\\\" is not defined under profiles in builder.json\"\n    exit 1\n  fi\nfi\nparam() { # name dispatch-value jq-path default\n  local v=\"\"\n  if [ \"$GITHUB_EVENT_NAME\" = \"workflow_dispatch\" ]; then\n    v=\"$2\"\n  elif [ -f builder.json ]; then\n    v=$(jq -r --arg p \"$PROFILE\" \"$3 // empty\" builder.json)\n  fi\n  v=\"${v:-$4}\"\n  echo \"$1=$v\" >> \"$GITHUB_OUTPUT\"\n  echo \"$1=$v\"\n}\n# Profile fields override ios.*. A selected profile signs exactly\n# when it has a distribution (ios.signing is the no-profile path),\n# and its configuration defaults to Debug for development and\n# Release for every other distribution.\nparam build_id         \"$IN_BUILD_ID\" '\"\"' \"${GITHUB_REF_NAME##*/}\"\nparam ios_path         \"$IN_IOS_PATH\" '.ios.path' '.'\nparam scheme           \"$IN_SCHEME\" '(.profiles[$p].scheme // .ios.scheme)' ''\nparam use_signing      \"$IN_USE_SIGNING\" '(if $p != \"\" then ((.profiles[$p].distribution // \"\") != \"\") else .ios.signing end)' 'false'\nparam configuration    \"$IN_CONFIGURATION\" '(.profiles[$p].configuration // (if $p != \"\" and (.profiles[$p].distribution // \"\") != \"\" then (if .profiles[$p].distribution == \"development\" then \"Debug\" else \"Release\" end) else .ios.configuration end))' 'Debug'\nparam flutter_version  \"$IN_FLUTTER_VERSION\" '.flutter.version' ''\nparam jdk_version      \"$IN_JDK_VERSION\" '.kmp.jdkVersion' '17'\n# A build number only comes from `builder ios release`, never builder.json.\nparam build_number     \"$IN_BUILD_NUMBER\" '\"\"' ''\n\n# The rest of the profile: name, distribution (selects the signing\n# set) and env, exported from here on so dependency installs see it.\nif [ \"$GITHUB_EVENT_NAME\" = \"workflow_dispatch\" ]; then\n  PROFILE_JSON=\"$IN_PROFILE\"\nelif [ -f builder.json ]; then\n  PROFILE_JSON=$(jq -c --arg p \"$PROFILE\" '{name: $p, env: (.profiles[$p].env // {}), distribution: (.profiles[$p].distribution // \"\")}' builder.json)\nfi\n[ -n \"${PROFILE_JSON:-}\" ] || PROFILE_JSON='{}'\nPROFILE=$(jq -r '.name // \"\"' <<< \"$PROFILE_JSON\")\nDISTRIBUTION=$(jq -r '.distribution // \"\"' <<< \"$PROFILE_JSON\")\n# The CLI sends the canonical name; a tag build reads whatever builder.json says.\ncase \"$DISTRIBUTION\" in internal) DISTRIBUTION=ad-hoc ;; esac\n# The suffix of the IOS_* secrets a distribution is signed with; no\n# distribution means the legacy unsuffixed secrets. Same table in runner.sh.\nsigning_set() {\n  case \"$1\" in\n    '') echo '' ;;\n    development) echo DEVELOPMENT ;;\n    ad-hoc|internal) echo AD_HOC ;;\n    store) echo STORE ;;\n    enterprise) echo ENTERPRISE ;;\n    *) return 1 ;;\n  esac\n}\nif ! SIGNING_SET=$(signing_set \"$DISTRIBUTION\"); then\n  echo \"::error::distribution \\\"$DISTRIBUTION\\\" must be development, ad-hoc (or internal), store or enterprise\"; exit 1\nfi\necho \"profile=$PROFILE\" >> \"$GITHUB_OUTPUT\"\necho \"distribution=$DISTRIBUTION\" >> \"$GITHUB_OUTPUT\"\necho \"signing_set=$SIGNING_SET\" >> \"$GITHUB_OUTPUT\"\necho \"profile=${PROFILE:-(none)}\"\necho \"distribution=$DISTRIBUTION\"\necho \"signing_set=$SIGNING_SET\"\n# Values are base64 per entry so newlines and quotes survive, and the\n# GITHUB_ENV heredoc gets a random delimiter so no value line can end\n# it early. Names are checked so a value cannot smuggle in a second variable.\nif [ \"$(jq -r '.env // {} | type' <<< \"$PROFILE_JSON\")\" != \"object\" ]; then\n  echo \"::error::the profile's env must be a JSON object of variable names to string values\"; exit 1\nfi\nwhile IFS=' ' read -r key encoded; do\n  name=$(printf '%s' \"$key\" | base64 --decode)\n  if ! [[ \"$name\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then\n    echo \"::error::env name \\\"$name\\\" is not a valid environment variable name\"; exit 1\n  fi\n  delim=\"BUILDER_ENV_${RANDOM}${RANDOM}${RANDOM}\"\n  {\n    echo \"$name<<$delim\"\n    printf '%s' \"$encoded\" | base64 --decode\n    echo\n    echo \"$delim\"\n  } >> \"$GITHUB_ENV\"\n  echo \"env: $name\"\ndone < <(jq -r '.env // {} | to_entries[] | \"\\(.key | @base64) \\(.value | tostring | @base64)\"' <<< \"$PROFILE_JSON\")\n"
+              },
+              {
+                "name": "Detect project type",
+                "id": "detect",
+                "run": "if [ -f \"Makefile\" ] && [ -f \"make/bazel-migration.mk\" ] && [ -f \".xcode-version\" ] && [ -f \"MODULE.bazel\" ]; then\n  echo \"type=orlix\" >> $GITHUB_OUTPUT\nelif [ -f \"pubspec.yaml\" ]; then\n  echo \"type=flutter\" >> $GITHUB_OUTPUT\nelif [ -f \"package.json\" ] && grep -q '\"expo\"' package.json; then\n  echo \"type=expo\" >> $GITHUB_OUTPUT\nelif [ -f \"package.json\" ] && grep -q '\"react-native\"' package.json; then\n  echo \"type=reactnative\" >> $GITHUB_OUTPUT\nelif grep -rqlE 'kotlin\\(\"multiplatform\"\\)|org\\.jetbrains\\.kotlin\\.multiplatform|id\\(\"org.jetbrains.kotlin.multiplatform\"\\)' --include='*.gradle.kts' --include='*.gradle' --include='libs.versions.toml' . 2>/dev/null; then\n  echo \"type=kmp\" >> $GITHUB_OUTPUT\nelse\n  echo \"type=native\" >> $GITHUB_OUTPUT\nfi\n"
+              },
+              {
+                "name": "Setup Xcode",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "uses": "maxim-lobanov/setup-xcode@1242409711ff5721add51979e9e11e23ebb7e5a4",
+                "with": {
+                  "xcode-version": "latest-stable"
+                }
+              },
+              {
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Setup Orlix Xcode and build tools",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Restore DerivedData cache",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "id": "cache-deriveddata",
+                "with": {
+                  "path": "DerivedData",
+                  "key": "deriveddata-${{ github.run_id }}",
+                  "restore-keys": "deriveddata-\n"
+                }
+              },
+              {
+                "name": "Materialize missing xcconfig files",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "run": "set -e\nfind . -path ./DerivedData -prune -o -type f \\\n  \\( -name '*.xcconfig.template' -o -name '*.xcconfig.example' \\\n     -o -name '*.xcconfig.sample' -o -name '*.template.xcconfig' \\\n     -o -name '*.example.xcconfig' -o -name '*.sample.xcconfig' \\) -print \\\n| while IFS= read -r template; do\n    case \"$template\" in\n      *.xcconfig.template|*.xcconfig.example|*.xcconfig.sample) target=\"${template%.*}\" ;;\n      *) target=\"$(dirname \"$template\")/$(basename \"$template\" | sed -E 's/\\.(template|example|sample)\\.xcconfig$/.xcconfig/')\" ;;\n    esac\n    if [ ! -f \"$target\" ]; then\n      cp \"$template\" \"$target\"\n      echo \"::warning::$target was missing (gitignored?); copied $template over it. Any placeholder values in it are what the build sees.\"\n    fi\n  done\n"
+              },
+              {
+                "name": "Generate Xcode project (XcodeGen)",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}"
+                },
+                "run": "set -e\n# A managed Expo project has no iOS directory at all until the\n# prebuild step below creates it.\nif [ ! -d \"$IOS_PATH\" ]; then\n  echo \"No '$IOS_PATH' directory yet — skipping.\"\n  exit 0\nfi\ncd \"$IOS_PATH\"\n\n# Projects generated by XcodeGen usually keep the .xcodeproj out of git,\n# so the checkout has a project.yml manifest but nothing to build.\nMANIFEST=\"\"\nfor f in project.yml project.yaml; do\n  if [ -f \"$f\" ] && grep -qE '^targets:' \"$f\"; then\n    MANIFEST=\"$f\"\n    break\n  fi\ndone\n\nif [ -z \"$MANIFEST\" ]; then\n  echo \"No XcodeGen manifest — skipping.\"\nelif [ -n \"$(find . -maxdepth 1 -name '*.xcodeproj' -print -quit)\" ]; then\n  echo \"Found a committed .xcodeproj — skipping generation.\"\nelse\n  echo \"Found $MANIFEST and no .xcodeproj — generating with XcodeGen.\"\n  brew install xcodegen\n  xcodegen generate\nfi\n"
+              },
+              {
+                "name": "Check base configuration files",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}"
+                },
+                "run": "set -e\nif [ ! -d \"$IOS_PATH\" ]; then\n  echo \"No '$IOS_PATH' directory yet — skipping.\"\n  exit 0\nfi\nMISSING=\"\"\nfor pbx in $(find \"$IOS_PATH\" -maxdepth 2 -name project.pbxproj -not -path '*/Pods.xcodeproj/*'); do\n  for id in $(grep -o 'baseConfigurationReference = [A-Za-z0-9]*' \"$pbx\" | awk '{print $3}' | sort -u); do\n    ref=$(grep -m1 \"^[[:space:]]*$id .*isa = PBXFileReference\" \"$pbx\" || true)\n    name=$(printf '%s' \"$ref\" | sed -n 's/.*[ \\t]path = \"\\{0,1\\}\\([^\";]*\\)\"\\{0,1\\};.*/\\1/p')\n    [ -n \"$name\" ] || continue\n    base=$(basename \"$name\")\n    # CocoaPods writes its xcconfigs during pod install and Flutter\n    # writes Generated.xcconfig during pub get — both happen later in\n    # this job, so they are legitimately absent right now.\n    case \"$name\" in *Pods/*|*\"Target Support Files\"*) continue ;; esac\n    case \"$base\" in Pods-*|Generated.xcconfig) continue ;; esac\n    if [ -z \"$(find . -name \"$base\" -print -quit)\" ]; then\n      MISSING=\"$MISSING $base\"\n    fi\n  done\ndone\nif [ -n \"$MISSING\" ]; then\n  echo \"::error::The project has base configuration files that are not in the repository:$MISSING. They are probably gitignored — commit them, or commit a <name>.xcconfig.template next to each so the build can fill them in.\"\n  exit 1\nfi\n"
+              },
+              {
+                "name": "Setup Flutter",
+                "if": "steps.detect.outputs.type == 'flutter'",
+                "uses": "subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2",
+                "with": {
+                  "flutter-version": "${{ steps.params.outputs.flutter_version || '' }}",
+                  "channel": "stable",
+                  "cache": true
+                }
+              },
+              {
+                "name": "Flutter pub get",
+                "if": "steps.detect.outputs.type == 'flutter'",
+                "run": "flutter pub get"
+              },
+              {
+                "name": "Resolve JS toolchain",
+                "id": "js",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "run": "set -e\n# >>> js toolchain (keep identical across ios-build.yml, ios-share.yml, runner.sh)\n# The package manager the project actually uses: the packageManager field\n# first, then the lockfile, then npm. Guessing npm is not safe — `npm install`\n# in a pnpm or yarn workspace fails with\n# 'EUNSUPPORTEDPROTOCOL Unsupported URL Type \"workspace:\"'.\njs_detect_manager() {\n  if [ -z \"${JS_MANAGER:-}\" ]; then\n    case \"$(jq -r '.packageManager // empty' package.json 2>/dev/null || true)\" in\n      pnpm|pnpm@*) JS_MANAGER=pnpm ;;\n      yarn|yarn@*) JS_MANAGER=yarn ;;\n      bun|bun@*) JS_MANAGER=bun ;;\n      npm|npm@*) JS_MANAGER=npm ;;\n      *)\n        if [ -f pnpm-lock.yaml ]; then JS_MANAGER=pnpm\n        elif [ -f yarn.lock ]; then JS_MANAGER=yarn\n        elif [ -f bun.lock ] || [ -f bun.lockb ]; then JS_MANAGER=bun\n        else JS_MANAGER=npm # package-lock.json, or no lockfile at all\n        fi\n        ;;\n    esac\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm) JS_EXEC='pnpm exec' ;;\n    yarn) JS_EXEC=yarn ;;\n    bun) JS_EXEC=bunx ;;\n    *) JS_EXEC=npx ;;\n  esac\n  export JS_MANAGER JS_EXEC\n  echo \"Package manager: $JS_MANAGER\"\n}\n\n# The Node version the project asks for: .nvmrc or .node-version, else the\n# first comparator of engines.node, else 22. A leading \"v\" or range prefix\n# is dropped: nvm, n and setup-node all take \"20.11.1\" and \"24.x\" as they are.\njs_node_version() {\n  js_version=\"\"\n  for js_file in .nvmrc .node-version; do\n    if [ -f \"$js_file\" ]; then\n      js_version=$(tr -d ' \\t\\r' < \"$js_file\" | head -n1)\n      break\n    fi\n  done\n  if [ -z \"$js_version\" ]; then\n    js_version=$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)\n    js_version=$(printf '%s' \"${js_version%%|*}\" | awk '{print $1}')\n  fi\n  js_version=$(printf '%s' \"$js_version\" | sed -E 's/^(>=|<=|>|<|=|\\^|~|v)+//')\n  case \"$js_version\" in\n    [0-9]*|lts/*) ;;\n    *) js_version=22 ;;\n  esac\n  printf '%s\\n' \"$js_version\"\n}\n\n# Put the manager on PATH first, then install — unless a cache already restored\n# node_modules, in which case the manager is still wanted for `expo prebuild`\n# and for the React Native build phases that shell out to it.\njs_install() {\n  js_detect_manager\n  case \"$JS_MANAGER\" in\n    pnpm|yarn)\n      # corepack installs the version packageManager pins. Node 16.10-24\n      # bundle it; Node 25+ and some provider images do not.\n      command -v corepack >/dev/null 2>&1 || npm install -g corepack || true\n      corepack enable || true\n      command -v \"$JS_MANAGER\" >/dev/null 2>&1 || npm install -g \"$JS_MANAGER\"\n      ;;\n    bun)\n      if ! command -v bun >/dev/null 2>&1; then\n        curl -fsSL https://bun.sh/install | bash\n        export BUN_INSTALL=\"${BUN_INSTALL:-$HOME/.bun}\"\n        export PATH=\"$BUN_INSTALL/bin:$PATH\"\n        # A step's PATH does not survive into the next GitHub Actions step.\n        if [ -n \"${GITHUB_PATH:-}\" ]; then echo \"$BUN_INSTALL/bin\" >> \"$GITHUB_PATH\"; fi\n      fi\n      ;;\n  esac\n  if [ \"${JS_DEPS_CACHED:-}\" = \"true\" ]; then\n    echo \"node_modules restored from cache; skipping install\"\n    return 0\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm)\n      if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi\n      ;;\n    yarn)\n      if [ -f .yarnrc.yml ]; then yarn install --immutable\n      elif [ -f yarn.lock ]; then yarn install --frozen-lockfile\n      else yarn install\n      fi\n      ;;\n    bun)\n      if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install; fi\n      ;;\n    *)\n      if [ -f package-lock.json ]; then npm ci; else npm install; fi\n      ;;\n  esac\n}\n# <<< js toolchain\njs_detect_manager\nNODE_VERSION_FILE=\"\"\nfor f in .nvmrc .node-version; do\n  if [ -f \"$f\" ]; then NODE_VERSION_FILE=\"$f\"; break; fi\ndone\nNODE_VERSION=\"\"\nif [ -n \"$NODE_VERSION_FILE\" ]; then\n  echo \"Node version: from $NODE_VERSION_FILE\"\nelse\n  NODE_VERSION=$(js_node_version)\n  echo \"Node version: $NODE_VERSION\"\nfi\n{\n  echo \"manager=$JS_MANAGER\"\n  echo \"exec=$JS_EXEC\"\n  echo \"node_version=$NODE_VERSION\"\n  echo \"node_version_file=$NODE_VERSION_FILE\"\n} >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Setup Node.js",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "uses": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+                "with": {
+                  "node-version": "${{ steps.js.outputs.node_version }}",
+                  "node-version-file": "${{ steps.js.outputs.node_version_file }}"
+                }
+              },
+              {
+                "name": "Restore node_modules cache",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "id": "node-modules-cache",
+                "with": {
+                  "path": "node_modules",
+                  "key": "node-modules-${{ runner.os }}-${{ steps.js.outputs.manager }}-${{ hashFiles('package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb') }}",
+                  "restore-keys": "node-modules-${{ runner.os }}-${{ steps.js.outputs.manager }}-\n"
+                }
+              },
+              {
+                "name": "Install JS dependencies",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "env": {
+                  "JS_MANAGER": "${{ steps.js.outputs.manager }}",
+                  "JS_DEPS_CACHED": "${{ steps.node-modules-cache.outputs.cache-hit }}"
+                },
+                "run": "set -e\n# >>> js toolchain (keep identical across ios-build.yml, ios-share.yml, runner.sh)\n# The package manager the project actually uses: the packageManager field\n# first, then the lockfile, then npm. Guessing npm is not safe — `npm install`\n# in a pnpm or yarn workspace fails with\n# 'EUNSUPPORTEDPROTOCOL Unsupported URL Type \"workspace:\"'.\njs_detect_manager() {\n  if [ -z \"${JS_MANAGER:-}\" ]; then\n    case \"$(jq -r '.packageManager // empty' package.json 2>/dev/null || true)\" in\n      pnpm|pnpm@*) JS_MANAGER=pnpm ;;\n      yarn|yarn@*) JS_MANAGER=yarn ;;\n      bun|bun@*) JS_MANAGER=bun ;;\n      npm|npm@*) JS_MANAGER=npm ;;\n      *)\n        if [ -f pnpm-lock.yaml ]; then JS_MANAGER=pnpm\n        elif [ -f yarn.lock ]; then JS_MANAGER=yarn\n        elif [ -f bun.lock ] || [ -f bun.lockb ]; then JS_MANAGER=bun\n        else JS_MANAGER=npm # package-lock.json, or no lockfile at all\n        fi\n        ;;\n    esac\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm) JS_EXEC='pnpm exec' ;;\n    yarn) JS_EXEC=yarn ;;\n    bun) JS_EXEC=bunx ;;\n    *) JS_EXEC=npx ;;\n  esac\n  export JS_MANAGER JS_EXEC\n  echo \"Package manager: $JS_MANAGER\"\n}\n\n# The Node version the project asks for: .nvmrc or .node-version, else the\n# first comparator of engines.node, else 22. A leading \"v\" or range prefix\n# is dropped: nvm, n and setup-node all take \"20.11.1\" and \"24.x\" as they are.\njs_node_version() {\n  js_version=\"\"\n  for js_file in .nvmrc .node-version; do\n    if [ -f \"$js_file\" ]; then\n      js_version=$(tr -d ' \\t\\r' < \"$js_file\" | head -n1)\n      break\n    fi\n  done\n  if [ -z \"$js_version\" ]; then\n    js_version=$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)\n    js_version=$(printf '%s' \"${js_version%%|*}\" | awk '{print $1}')\n  fi\n  js_version=$(printf '%s' \"$js_version\" | sed -E 's/^(>=|<=|>|<|=|\\^|~|v)+//')\n  case \"$js_version\" in\n    [0-9]*|lts/*) ;;\n    *) js_version=22 ;;\n  esac\n  printf '%s\\n' \"$js_version\"\n}\n\n# Put the manager on PATH first, then install — unless a cache already restored\n# node_modules, in which case the manager is still wanted for `expo prebuild`\n# and for the React Native build phases that shell out to it.\njs_install() {\n  js_detect_manager\n  case \"$JS_MANAGER\" in\n    pnpm|yarn)\n      # corepack installs the version packageManager pins. Node 16.10-24\n      # bundle it; Node 25+ and some provider images do not.\n      command -v corepack >/dev/null 2>&1 || npm install -g corepack || true\n      corepack enable || true\n      command -v \"$JS_MANAGER\" >/dev/null 2>&1 || npm install -g \"$JS_MANAGER\"\n      ;;\n    bun)\n      if ! command -v bun >/dev/null 2>&1; then\n        curl -fsSL https://bun.sh/install | bash\n        export BUN_INSTALL=\"${BUN_INSTALL:-$HOME/.bun}\"\n        export PATH=\"$BUN_INSTALL/bin:$PATH\"\n        # A step's PATH does not survive into the next GitHub Actions step.\n        if [ -n \"${GITHUB_PATH:-}\" ]; then echo \"$BUN_INSTALL/bin\" >> \"$GITHUB_PATH\"; fi\n      fi\n      ;;\n  esac\n  if [ \"${JS_DEPS_CACHED:-}\" = \"true\" ]; then\n    echo \"node_modules restored from cache; skipping install\"\n    return 0\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm)\n      if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi\n      ;;\n    yarn)\n      if [ -f .yarnrc.yml ]; then yarn install --immutable\n      elif [ -f yarn.lock ]; then yarn install --frozen-lockfile\n      else yarn install\n      fi\n      ;;\n    bun)\n      if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install; fi\n      ;;\n    *)\n      if [ -f package-lock.json ]; then npm ci; else npm install; fi\n      ;;\n  esac\n}\n# <<< js toolchain\njs_install\n"
+              },
+              {
+                "name": "Expo prebuild",
+                "if": "steps.detect.outputs.type == 'expo'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}",
+                  "JS_EXEC": "${{ steps.js.outputs.exec }}",
+                  "CI": "1"
+                },
+                "run": "set -e\nif [ -n \"$(find \"$IOS_PATH\" -maxdepth 1 \\( -name '*.xcodeproj' -o -name '*.xcworkspace' \\) -print -quit 2>/dev/null)\" ]; then\n  echo \"'$IOS_PATH' already holds an Xcode project (ejected Expo) — skipping prebuild.\"\n  exit 0\nfi\n\n# Without a bundle identifier prebuild asks for one interactively,\n# which on a runner means waiting for the job timeout.\nBUNDLE_ID=$(${JS_EXEC:-npx} expo config --type public --json 2>/dev/null | jq -r '.ios.bundleIdentifier // empty' 2>/dev/null || true)\nif [ -z \"$BUNDLE_ID\" ]; then\n  for f in app.json app.config.json; do\n    [ -f \"$f\" ] || continue\n    BUNDLE_ID=$(jq -r '(.expo.ios.bundleIdentifier // .ios.bundleIdentifier) // empty' \"$f\" 2>/dev/null || true)\n    if [ -n \"$BUNDLE_ID\" ]; then break; fi\n  done\nfi\nif [ -z \"$BUNDLE_ID\" ]; then\n  echo \"::error::This managed Expo project has no ios.bundleIdentifier. Set it in app.json (expo.ios.bundleIdentifier) or app.config.js, commit that, and build again — 'expo prebuild' cannot run unattended without it.\"\n  exit 1\nfi\necho \"Prebuilding $BUNDLE_ID into '$IOS_PATH'...\"\n\n${JS_EXEC:-npx} expo prebuild --platform ios --no-install\nif [ -z \"$(find \"$IOS_PATH\" -maxdepth 1 -name '*.xcodeproj' -print -quit 2>/dev/null)\" ]; then\n  echo \"::error::'expo prebuild' produced no Xcode project in '$IOS_PATH'. If the project generates it elsewhere, set ios.path in builder.json.\"\n  exit 1\nfi\n"
+              },
+              {
+                "name": "Setup JDK",
+                "if": "steps.detect.outputs.type == 'kmp'",
+                "uses": "actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6",
+                "with": {
+                  "distribution": "temurin",
+                  "java-version": "${{ steps.params.outputs.jdk_version || '17' }}"
+                }
+              },
+              {
+                "name": "Setup Gradle",
+                "if": "steps.detect.outputs.type == 'kmp'",
+                "uses": "gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb"
+              },
+              {
+                "name": "Restore Pods cache",
+                "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "id": "pods-cache",
+                "with": {
+                  "path": "${{ steps.params.outputs.ios_path }}/Pods\n~/.cocoapods/repos\n",
+                  "key": "pods-${{ runner.os }}-${{ hashFiles(format('{0}/Podfile.lock', steps.params.outputs.ios_path)) }}",
+                  "restore-keys": "pods-${{ runner.os }}-\n"
+                }
+              },
+              {
+                "name": "Install certificate and provisioning profile",
+                "if": "steps.params.outputs.use_signing == 'true' && steps.detect.outputs.type != 'orlix'",
+                "env": {
+                  "SIGNING_SET": "${{ steps.params.outputs.signing_set }}",
+                  "DISTRIBUTION": "${{ steps.params.outputs.distribution }}",
+                  "CONFIGURATION": "${{ steps.params.outputs.configuration }}",
+                  "IOS_CERTIFICATE": "${{ secrets.IOS_CERTIFICATE }}",
+                  "IOS_CERTIFICATE_PASSWORD": "${{ secrets.IOS_CERTIFICATE_PASSWORD }}",
+                  "IOS_PROVISIONING_PROFILE": "${{ secrets.IOS_PROVISIONING_PROFILE }}",
+                  "IOS_EXTENSION_PROFILES": "${{ secrets.IOS_EXTENSION_PROFILES }}",
+                  "IOS_CERTIFICATE_DEVELOPMENT": "${{ secrets.IOS_CERTIFICATE_DEVELOPMENT }}",
+                  "IOS_CERTIFICATE_PASSWORD_DEVELOPMENT": "${{ secrets.IOS_CERTIFICATE_PASSWORD_DEVELOPMENT }}",
+                  "IOS_PROVISIONING_PROFILE_DEVELOPMENT": "${{ secrets.IOS_PROVISIONING_PROFILE_DEVELOPMENT }}",
+                  "IOS_EXTENSION_PROFILES_DEVELOPMENT": "${{ secrets.IOS_EXTENSION_PROFILES_DEVELOPMENT }}",
+                  "IOS_CERTIFICATE_AD_HOC": "${{ secrets.IOS_CERTIFICATE_AD_HOC }}",
+                  "IOS_CERTIFICATE_PASSWORD_AD_HOC": "${{ secrets.IOS_CERTIFICATE_PASSWORD_AD_HOC }}",
+                  "IOS_PROVISIONING_PROFILE_AD_HOC": "${{ secrets.IOS_PROVISIONING_PROFILE_AD_HOC }}",
+                  "IOS_EXTENSION_PROFILES_AD_HOC": "${{ secrets.IOS_EXTENSION_PROFILES_AD_HOC }}",
+                  "IOS_CERTIFICATE_STORE": "${{ secrets.IOS_CERTIFICATE_STORE }}",
+                  "IOS_CERTIFICATE_PASSWORD_STORE": "${{ secrets.IOS_CERTIFICATE_PASSWORD_STORE }}",
+                  "IOS_PROVISIONING_PROFILE_STORE": "${{ secrets.IOS_PROVISIONING_PROFILE_STORE }}",
+                  "IOS_EXTENSION_PROFILES_STORE": "${{ secrets.IOS_EXTENSION_PROFILES_STORE }}",
+                  "IOS_CERTIFICATE_ENTERPRISE": "${{ secrets.IOS_CERTIFICATE_ENTERPRISE }}",
+                  "IOS_CERTIFICATE_PASSWORD_ENTERPRISE": "${{ secrets.IOS_CERTIFICATE_PASSWORD_ENTERPRISE }}",
+                  "IOS_PROVISIONING_PROFILE_ENTERPRISE": "${{ secrets.IOS_PROVISIONING_PROFILE_ENTERPRISE }}",
+                  "IOS_EXTENSION_PROFILES_ENTERPRISE": "${{ secrets.IOS_EXTENSION_PROFILES_ENTERPRISE }}"
+                },
+                "run": "set -e\nfail() { echo \"::error::$*\" >&2; exit 1; }\n\n# Picks the set's IOS_*_<SET> secrets into the unsuffixed names, or with\n# no distribution takes the unsuffixed ones as they are (password\n# optional). A suffixed set needs all three, since builder signing setup\n# always writes a password.\nselect_signing_set() {\n  if [ -z \"$SIGNING_SET\" ]; then\n    if [ -z \"${IOS_CERTIFICATE:-}\" ] || [ -z \"${IOS_PROVISIONING_PROFILE:-}\" ]; then\n      fail \"No signing secrets: ios.signing needs IOS_CERTIFICATE, IOS_CERTIFICATE_PASSWORD and IOS_PROVISIONING_PROFILE; a build profile with a distribution reads its own IOS_*_<SET> secrets instead (builder signing setup --distribution <d> writes them).\"\n    fi\n    IOS_CERTIFICATE_PASSWORD=\"${IOS_CERTIFICATE_PASSWORD:-}\"\n    IOS_EXTENSION_PROFILES=\"${IOS_EXTENSION_PROFILES:-}\"\n    SIGNING_SET_USED=legacy\n  else\n    local cert=\"IOS_CERTIFICATE_$SIGNING_SET\" pass=\"IOS_CERTIFICATE_PASSWORD_$SIGNING_SET\" prof=\"IOS_PROVISIONING_PROFILE_$SIGNING_SET\" ext=\"IOS_EXTENSION_PROFILES_$SIGNING_SET\"\n    local missing=\"\" name\n    for name in \"$cert\" \"$pass\" \"$prof\"; do\n      [ -n \"${!name:-}\" ] || missing=\"${missing:+$missing, }$name\"\n    done\n    [ -z \"$missing\" ] || fail \"Signing set $SIGNING_SET for distribution $DISTRIBUTION is missing $missing. Run builder signing setup --distribution $DISTRIBUTION (builder ios build does it too when an App Store Connect key is configured).\"\n    IOS_CERTIFICATE=\"${!cert}\"\n    IOS_CERTIFICATE_PASSWORD=\"${!pass}\"\n    IOS_PROVISIONING_PROFILE=\"${!prof}\"\n    IOS_EXTENSION_PROFILES=\"${!ext:-}\"\n    SIGNING_SET_USED=\"$SIGNING_SET\"\n  fi\n  echo \"Signing set: $SIGNING_SET_USED\"\n}\n\n# Decodes the set's extension profiles (IOS_EXTENSION_PROFILES, a JSON object\n# of extension bundle id to base64 .mobileprovision) into $1, installs them\n# next to the app's, and prints a JSON object of bundle id to profile name\n# for apply_signing_to_app_target and write_export_options.\ninstall_extension_profiles() {\n  local dir=\"$1\" json=\"${IOS_EXTENSION_PROFILES:-}\" i=0 id encoded path uuid name map='{}'\n  [ -n \"$json\" ] || json='{}'\n  if [ \"$(jq -r 'type' <<< \"$json\" 2>/dev/null)\" != \"object\" ]; then\n    fail \"IOS_EXTENSION_PROFILES${SIGNING_SET:+_$SIGNING_SET} must be a JSON object of extension bundle id to base64 .mobileprovision, as builder signing setup writes it.\"\n  fi\n  mkdir -p \"$dir\" \"$HOME/Library/MobileDevice/Provisioning Profiles\"\n  while IFS=' ' read -r id encoded; do\n    id=$(printf '%s' \"$id\" | base64 --decode)\n    i=$((i + 1))\n    path=\"$dir/extension-$i.mobileprovision\"\n    printf '%s' \"$encoded\" | base64 --decode > \"$path\"\n    security cms -D -i \"$path\" > \"$path.plist\"\n    uuid=$(plutil -extract UUID raw -o - \"$path.plist\")\n    name=$(plutil -extract Name raw -o - \"$path.plist\")\n    cp \"$path\" \"$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision\"\n    echo \"$uuid\" >> \"$dir/installed\"\n    map=$(jq -c --arg id \"$id\" --arg name \"$name\" '. + {($id): $name}' <<< \"$map\")\n    echo \"  extension: $id -> '$name' ($uuid)\" >&2\n  done < <(jq -r 'to_entries[] | \"\\(.key | @base64) \\(.value)\"' <<< \"$json\")\n  printf '%s' \"$map\"\n}\n\n# The profile in the set must be the type the build profile asked for,\n# or the IPA would not be what the profile promised. Compared\n# canonically: the export method says app-store for store, and a tag\n# build may say internal for ad-hoc.\ncheck_signing_set() {\n  [ \"$SIGNING_SET_USED\" != legacy ] || return 0\n  local have=\"$1\" want=\"$DISTRIBUTION\"\n  case \"$have\" in app-store) have=store ;; esac\n  case \"$want\" in internal) want=ad-hoc ;; esac\n  if [ \"$have\" != \"$want\" ]; then\n    fail \"IOS_PROVISIONING_PROFILE_$SIGNING_SET holds a $1 provisioning profile, but the build profile asks for distribution $want. Run builder signing setup --distribution $want, or set the profile's distribution to $have.\"\n  fi\n}\n\n# The export method has to match the profile, or -exportArchive fails\n# and App Store Connect rejects the IPA. These legacy names are the only\n# ones older Xcodes (pinned or self-hosted runners) understand, and\n# Xcode 16 still takes them.\ndetect_export_method() {\n  if [ \"$(plutil -extract ProvisionsAllDevices raw -o - \"$1\" 2>/dev/null)\" = \"true\" ]; then\n    echo enterprise\n  elif plutil -extract ProvisionedDevices xml1 -o /dev/null \"$1\" >/dev/null 2>&1; then\n    if [ \"$(plutil -extract Entitlements.get-task-allow raw -o - \"$1\" 2>/dev/null)\" = \"true\" ]; then\n      echo development\n    else\n      echo ad-hoc\n    fi\n  else\n    echo app-store\n  fi\n}\n\n# The certificate names that can sign for a profile of this type, the\n# current one first: keychains still hold pre-2021 iPhone Developer /\n# iPhone Distribution certificates that sign the same profiles.\nsigning_identities() {\n  case \"$1\" in\n    development) printf '%s\\n' \"Apple Development\" \"iPhone Developer\" ;;\n    ad-hoc|app-store|enterprise) printf '%s\\n' \"Apple Distribution\" \"iPhone Distribution\" ;;\n    *) return 1 ;;\n  esac\n}\n\n# The identity to archive with: the first of those names in security\n# find-identity's output ($2). Without an explicit CODE_SIGN_IDENTITY the\n# archive keeps the project's default, which Xcode refuses to pair with a\n# distribution profile (\"No signing certificate iOS Development found\").\nsigning_identity() {\n  local names name\n  names=$(signing_identities \"$1\") || return 1\n  while IFS= read -r name; do\n    case \"$2\" in *\"$name: \"*) echo \"$name\"; return 0 ;; esac\n  done <<< \"$names\"\n  return 2\n}\n\nselect_signing_set\n\n# Read the profile first: its type is checked against the build\n# profile before any keychain exists or the certificate is imported.\nPROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision\necho \"$IOS_PROVISIONING_PROFILE\" | base64 --decode > \"$PROFILE_PATH\"\nPROFILE_PLIST=$RUNNER_TEMP/profile.plist\nsecurity cms -D -i \"$PROFILE_PATH\" > \"$PROFILE_PLIST\"\nPROFILE_UUID=$(plutil -extract UUID raw -o - \"$PROFILE_PLIST\")\n\n# xcodebuild will not pick a team on its own on a CI machine, so read\n# the team and profile name out of the profile and pass them to the\n# build as manual signing settings.\nTEAM_ID=$(plutil -extract TeamIdentifier.0 raw -o - \"$PROFILE_PLIST\")\nPROFILE_NAME=$(plutil -extract Name raw -o - \"$PROFILE_PLIST\")\nAPP_ID=$(plutil -extract Entitlements.application-identifier raw -o - \"$PROFILE_PLIST\")\nPROFILE_BUNDLE_ID=${APP_ID#\"$TEAM_ID\".}\n\nEXPORT_METHOD=$(detect_export_method \"$PROFILE_PLIST\")\ncheck_signing_set \"$EXPORT_METHOD\"\n\n# A Debug archive carries get-task-allow=true, which no distribution\n# profile grants: the export fails, or an IPA that App Store Connect\n# rejects comes out. Say so now instead of after the whole build.\nif [ \"$EXPORT_METHOD\" != \"development\" ] && [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  echo \"::error::The provisioning profile is an $EXPORT_METHOD profile, but the build configuration is Debug. A Debug build is signed with get-task-allow, which distribution profiles do not allow and App Store Connect rejects. Drop the profile's \\\"configuration\\\" (a distribution build defaults to Release) or set \\\"configuration\\\": \\\"Release\\\", or build with a development profile.\"\n  exit 1\nfi\n\n# Create temporary keychain\nKEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db\nKEYCHAIN_PASSWORD=$(openssl rand -base64 32)\n\nsecurity create-keychain -p \"$KEYCHAIN_PASSWORD\" \"$KEYCHAIN_PATH\"\nsecurity set-keychain-settings -lut 21600 \"$KEYCHAIN_PATH\"\nsecurity unlock-keychain -p \"$KEYCHAIN_PASSWORD\" \"$KEYCHAIN_PATH\"\n\n# Import certificate\nCERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12\necho \"$IOS_CERTIFICATE\" | base64 --decode > \"$CERTIFICATE_PATH\"\nsecurity import \"$CERTIFICATE_PATH\" -P \"$IOS_CERTIFICATE_PASSWORD\" -A -t cert -f pkcs12 -k \"$KEYCHAIN_PATH\"\nsecurity set-key-partition-list -S apple-tool:,apple: -k \"$KEYCHAIN_PASSWORD\" \"$KEYCHAIN_PATH\"\nsecurity list-keychain -d user -s \"$KEYCHAIN_PATH\"\n\n# The certificate has to be the kind the profile asks for, under\n# whichever of its names it carries. Say so here instead of letting\n# xcodebuild discover it after the whole archive.\nIDENTITIES=$(security find-identity -v -p codesigning \"$KEYCHAIN_PATH\")\necho \"$IDENTITIES\"\nCODE_SIGN_IDENTITY=$(signing_identity \"$EXPORT_METHOD\" \"$IDENTITIES\") || fail \"IOS_CERTIFICATE${SIGNING_SET:+_$SIGNING_SET} holds no $(signing_identities \"$EXPORT_METHOD\" | paste -sd '/' -) certificate, which an $EXPORT_METHOD profile must be signed with. Run builder signing setup --distribution ${DISTRIBUTION:-<distribution>} to issue the right one.\"\n\n# Install the provisioning profiles: the app's, then its extensions'\nmkdir -p ~/Library/MobileDevice/Provisioning\\ Profiles\ncp \"$PROFILE_PATH\" ~/Library/MobileDevice/Provisioning\\ Profiles/\"$PROFILE_UUID\".mobileprovision\nEXTENSION_PROFILES=$(install_extension_profiles \"$RUNNER_TEMP/extensions\")\n\necho \"KEYCHAIN_PATH=$KEYCHAIN_PATH\" >> $GITHUB_ENV\necho \"DEVELOPMENT_TEAM=$TEAM_ID\" >> $GITHUB_ENV\necho \"PROVISIONING_PROFILE_NAME=$PROFILE_NAME\" >> $GITHUB_ENV\necho \"PROFILE_BUNDLE_ID=$PROFILE_BUNDLE_ID\" >> $GITHUB_ENV\necho \"EXTENSION_PROFILES=$EXTENSION_PROFILES\" >> $GITHUB_ENV\necho \"EXPORT_METHOD=$EXPORT_METHOD\" >> $GITHUB_ENV\necho \"CODE_SIGN_IDENTITY=$CODE_SIGN_IDENTITY\" >> $GITHUB_ENV\necho \"SIGNING_SET_USED=$SIGNING_SET_USED\" >> $GITHUB_ENV\necho \"Certificate and provisioning profile installed\"\necho \"  team:    $TEAM_ID\"\necho \"  profile: $PROFILE_NAME ($PROFILE_UUID)\"\necho \"  app id:  $PROFILE_BUNDLE_ID\"\necho \"  set:     $SIGNING_SET_USED\"\necho \"  export:  $EXPORT_METHOD\"\necho \"  identity: $CODE_SIGN_IDENTITY\"\necho \"The build writes these into the app target's build settings; its PRODUCT_BUNDLE_IDENTIFIER must match the app id above. Extension targets get the profiles listed above by bundle id.\"\n"
+              },
+              {
+                "name": "Capture Orlix toolchain manifest",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nmake __bazel-toolchain-manifest\n"
+              },
+              {
+                "name": "Select Orlix component mode for the snapshot",
+                "id": "orlix-component-mode",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nmake __builder-component-mode >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Build IPA",
+                "env": {
+                  "BUILD_ID": "${{ steps.params.outputs.build_id }}",
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}",
+                  "SCHEME": "${{ steps.params.outputs.scheme }}",
+                  "PROJECT_TYPE": "${{ steps.detect.outputs.type }}",
+                  "USE_SIGNING": "${{ steps.params.outputs.use_signing }}",
+                  "CONFIGURATION": "${{ steps.params.outputs.configuration }}",
+                  "BUILD_NUMBER": "${{ steps.params.outputs.build_number }}",
+                  "DISTRIBUTION": "${{ steps.params.outputs.distribution }}",
+                  "ORLIX_COMPONENT_MODE": "${{ steps.orlix-component-mode.outputs.ORLIX_BAZEL_COMPONENT_MODE }}"
+                },
+                "run": "set -e\nfail() { echo \"::error::$*\" >&2; exit 1; }\n\n# Writes the manual signing settings (team, profile and identity from the\n# environment) into the application targets of ./*.xcodeproj that the\n# profile's app id ($1, \"*\" wildcards) covers, and into every extension target\n# with the EXTENSION_PROFILES entry (bundle id to name) covering its bundle\n# id, as an XML plist Xcode reads. On the xcodebuild command line they would\n# apply to every target, and a CocoaPods framework target refuses a profile.\napply_signing_to_app_target() {\n  local projects=(*.xcodeproj) out\n  [ -d \"${projects[0]}\" ] || fail \"No .xcodeproj in $PWD to apply the signing settings to\"\n  out=$(python3 - \"$1\" \"${projects[@]}\" 2>&1 <<'PY'\nimport json, os, subprocess, sys\napp_id, projects = sys.argv[1], sys.argv[2:]\nsettings = {'CODE_SIGN_STYLE': 'Manual', 'DEVELOPMENT_TEAM': os.environ['DEVELOPMENT_TEAM'],\n            'PROVISIONING_PROFILE_SPECIFIER': os.environ['PROVISIONING_PROFILE_NAME'],\n            'CODE_SIGN_IDENTITY': os.environ['CODE_SIGN_IDENTITY']}\nextension_profiles = json.loads(os.environ.get('EXTENSION_PROFILES') or '{}')\n# The same list as ExtensionProductTypes in internal/xcodeproj.\nextension_types = {'com.apple.product-type.app-extension', 'com.apple.product-type.app-extension.messages',\n                   'com.apple.product-type.extensionkit-extension', 'com.apple.product-type.application.watchapp2',\n                   'com.apple.product-type.watchkit2-extension', 'com.apple.product-type.application.on-demand-install-capable'}\n\ndef covers(pattern, bundle_id):\n    if pattern.endswith('*'):\n        return bundle_id.startswith(pattern[:-1])\n    return bundle_id == pattern\n\napps, extensions, plists = [], [], {}\nfor project in projects:\n    path = os.path.join(project, 'project.pbxproj')\n    plists[project] = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', path]))\n    objects = plists[project]['objects']\n    for target in objects.values():\n        kind = target.get('productType')\n        if target.get('isa') != 'PBXNativeTarget' or (kind != 'com.apple.product-type.application' and kind not in extension_types):\n            continue\n        configs = [objects[c] for c in objects[target['buildConfigurationList']]['buildConfigurations']]\n        ids = sorted({c.setdefault('buildSettings', {}).get('PRODUCT_BUNDLE_IDENTIFIER', '') for c in configs})\n        (apps if kind == 'com.apple.product-type.application' else extensions).append((project, target['name'], configs, ids))\nif not apps:\n    sys.exit('No application target in %s to apply the signing settings to' % ', '.join(projects))\nchosen = apps if len(apps) == 1 else [a for a in apps if any(covers(app_id, i) for i in a[3])]\nif not chosen:\n    found = '; '.join('%s in %s (%s)' % (name, project, ', '.join(i or '?' for i in ids)) for project, name, _, ids in apps)\n    sys.exit('No application target has the PRODUCT_BUNDLE_IDENTIFIER the provisioning profile covers (%s): %s' % (app_id, found))\nchosen = [a + (settings['PROVISIONING_PROFILE_SPECIFIER'],) for a in chosen]\n# An extension is signed with the most specific profile covering it; the app's never does.\nmissing = []\nfor project, name, configs, ids in extensions:\n    names = [extension_profiles[p] for p in sorted(extension_profiles, key=len, reverse=True) if any(covers(p, i) for i in ids)]\n    if names:\n        chosen.append((project, name, configs, ids, names[0]))\n    else:\n        missing.append('%s in %s (%s)' % (name, project, ', '.join(i or '?' for i in ids)))\nif missing:\n    sys.exit('No provisioning profile for extension target %s. Add each bundle id to ios.extensions in builder.json and run builder signing setup --distribution %s.' % ('; '.join(missing), os.environ.get('DISTRIBUTION') or '<distribution>'))\nfor project, name, configs, _, profile in chosen:\n    for config in configs:\n        build = config['buildSettings']\n        # A conditional setting (CODE_SIGN_IDENTITY[sdk=iphoneos*]) would win over the plain one.\n        for key in [k for k in build if k.split('[')[0] in settings]:\n            del build[key]\n        build.update(settings)\n        build['PROVISIONING_PROFILE_SPECIFIER'] = profile\n    print('Signing settings applied to target %s in %s: %s (profile %s)' % (name, project, ', '.join(c['name'] for c in configs), profile))\nfor project in sorted({a[0] for a in chosen}):\n    subprocess.run(['plutil', '-convert', 'xml1', '-o', os.path.join(project, 'project.pbxproj'), '-'],\n                   input=json.dumps(plists[project]).encode(), check=True)\nPY\n  ) || fail \"$out\"\n  echo \"$out\"\n}\n\n# BUILD_NUMBER is \"N\" or \"X.Y.Z+N\" (pubspec convention); sets build_number,\n# build_name and version_settings for xcodebuild. Given a target and scheme\n# it also rewrites an Info.plist that hardcodes CFBundleVersion, which\n# CURRENT_PROJECT_VERSION never reaches; identical in ios-build.yml and runner.sh.\napply_build_number() {\n  build_number=\"\" build_name=\"\" version_settings=\"\"\n  [ -n \"${BUILD_NUMBER:-}\" ] || return 0\n  if ! [[ \"$BUILD_NUMBER\" =~ ^([0-9]+(\\.[0-9]+)*\\+)?[0-9]+(\\.[0-9]+)*$ ]]; then\n    echo \"BUILD_NUMBER must be N or X.Y.Z+N, got '$BUILD_NUMBER'\" >&2\n    return 1\n  fi\n  build_number=\"${BUILD_NUMBER##*+}\"\n  case \"$BUILD_NUMBER\" in *+*) build_name=\"${BUILD_NUMBER%+*}\" ;; esac\n  version_settings=\"CURRENT_PROJECT_VERSION=$build_number${build_name:+ MARKETING_VERSION=$build_name}\"\n  echo \"Build number: $build_number${build_name:+ (version $build_name)}\"\n  [ $# -gt 0 ] || return 0\n  plist=$(xcodebuild \"$@\" -showBuildSettings -json 2>/dev/null \\\n    | jq -r 'map(.buildSettings)\n             | map(select(.PRODUCT_TYPE == \"com.apple.product-type.application\" and .INFOPLIST_FILE != null and .INFOPLIST_FILE != \"\"))\n             | map(.SRCROOT + \"/\" + .INFOPLIST_FILE) | first // empty' || true)\n  if [ -z \"$plist\" ] || [ ! -f \"$plist\" ]; then\n    echo \"No Info.plist file in the app target; CFBundleVersion comes from CURRENT_PROJECT_VERSION\"\n    return 0\n  fi\n  current=$(plutil -extract CFBundleVersion raw -o - \"$plist\" 2>/dev/null || true)\n  case \"$current\" in\n    '$(CURRENT_PROJECT_VERSION)'|'${CURRENT_PROJECT_VERSION}'|'$(FLUTTER_BUILD_NUMBER)'|'${FLUTTER_BUILD_NUMBER}')\n      echo \"$plist reads CFBundleVersion from $current\" ;;\n    *)\n      echo \"$plist hardcodes CFBundleVersion '$current'; setting $build_number in the plist\"\n      plutil -replace CFBundleVersion -string \"$build_number\" \"$plist\" ;;\n  esac\n  [ -n \"$build_name\" ] || return 0\n  current=$(plutil -extract CFBundleShortVersionString raw -o - \"$plist\" 2>/dev/null || true)\n  case \"$current\" in\n    '$(MARKETING_VERSION)'|'${MARKETING_VERSION}'|'$(FLUTTER_BUILD_NAME)'|'${FLUTTER_BUILD_NAME}') ;;\n    *)\n      echo \"$plist hardcodes CFBundleShortVersionString '$current'; setting $build_name in the plist\"\n      plutil -replace CFBundleShortVersionString -string \"$build_name\" \"$plist\" ;;\n  esac\n}\n\n# Writes the export options ($1) with the same manual signing as the archive:\n# the app's real bundle id (APP_BUNDLE_ID) maps to its profile and every\n# extension keeps its own from EXTENSION_PROFILES.\nwrite_export_options() {\n  python3 - \"$1\" <<'PY'\nimport json, os, plistlib, sys\noptions = {'method': os.environ['EXPORT_METHOD'], 'signingStyle': 'manual',\n           'teamID': os.environ['DEVELOPMENT_TEAM'],\n           'provisioningProfiles': {os.environ['APP_BUNDLE_ID']: os.environ['PROVISIONING_PROFILE_NAME']}}\noptions['provisioningProfiles'].update(json.loads(os.environ.get('EXTENSION_PROFILES') or '{}'))\n# Distribution exports keep the version numbers the archive was built with;\n# Xcode would otherwise renumber the build on export.\nif options['method'] != 'development':\n    options['manageAppVersionAndBuildNumber'] = False\nwith open(sys.argv[1], 'wb') as out:\n    plistlib.dump(options, out)\nPY\n}\n\n# Navigate to iOS project\ncd \"$IOS_PATH\"\n\n# Find workspace or project\nWORKSPACE=$(find . -maxdepth 1 -name \"*.xcworkspace\" | head -1)\nPROJECT=$(find . -maxdepth 1 -name \"*.xcodeproj\" | head -1)\n\n# Install pods if Podfile exists (always run to ensure sync with Podfile.lock)\nif [ -f \"Podfile\" ]; then\n  echo \"Running pod install...\"\n  pod install\n  WORKSPACE=$(find . -maxdepth 1 -name \"*.xcworkspace\" | head -1)\nfi\n\nif [ -n \"$WORKSPACE\" ]; then\n  TARGET_FLAG=-workspace\n  TARGET_PATH=$WORKSPACE\nelse\n  TARGET_FLAG=-project\n  TARGET_PATH=$PROJECT\nfi\n\n# Determine scheme (only needed for native projects)\nif [ -z \"$SCHEME\" ] && [ \"$PROJECT_TYPE\" = \"native\" ]; then\n  if [ -n \"$WORKSPACE\" ]; then\n    BASE=$(basename \"$WORKSPACE\" .xcworkspace)\n  else\n    BASE=$(basename \"$PROJECT\" .xcodeproj)\n  fi\n\n  SCHEMES=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" -list -json 2>/dev/null | jq -r '(.workspace // .project).schemes[]?' || true)\n  if [ -z \"$SCHEMES\" ]; then\n    SCHEMES=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" -list 2>/dev/null | sed -n '/Schemes:/,$p' | tail -n +2 | sed 's/^[[:space:]]*//' | sed '/^$/d' || true)\n  fi\n  echo \"Schemes:\"\n  printf '%s\\n' \"$SCHEMES\" | sed 's/^/  /'\n\n  # In a workspace, the scheme list also holds package and pod\n  # schemes, and they sort ahead of the app as often as not. The\n  # scheme named after the project is the app in nearly every repo.\n  SCHEME=$(printf '%s\\n' \"$SCHEMES\" | grep -Fx \"$BASE\" | head -1 || true)\n  if [ -z \"$SCHEME\" ]; then\n    SCHEME=$(printf '%s\\n' \"$SCHEMES\" | grep -v '^Pods-' | while IFS= read -r s; do\n      [ -n \"$s\" ] || continue\n      # A scheme that belongs to a local Swift package is not the app.\n      [ -z \"$(find . -maxdepth 4 -path \"*/$s/Package.swift\" -print -quit)\" ] || continue\n      printf '%s\\n' \"$s\"\n      break\n    done)\n  fi\n  echo \"Building with scheme: $SCHEME (configuration: $CONFIGURATION)\"\nfi\n\nif [ \"$PROJECT_TYPE\" = \"native\" ]; then\n  if [ -z \"$WORKSPACE\" ] && [ -z \"$PROJECT\" ]; then\n    echo \"::error::No .xcworkspace or .xcodeproj found in '$IOS_PATH'. If the project is generated (XcodeGen/Tuist), commit it or add a generation step.\"\n    exit 1\n  fi\n  if [ -z \"$SCHEME\" ]; then\n    echo \"::error::Could not determine a scheme. Pass one via the 'scheme' input, or make sure the project has a shared scheme.\"\n    exit 1\n  fi\nfi\n\n# Use custom DerivedData path for caching\nDERIVED_DATA_PATH=\"${GITHUB_WORKSPACE}/DerivedData\"\n\nif [ \"$PROJECT_TYPE\" = \"flutter\" ]; then\n  cd \"$GITHUB_WORKSPACE\"\n  apply_build_number\n  FLUTTER_VERSION_FLAGS=\"\"\n  if [ -n \"$build_number\" ]; then\n    FLUTTER_VERSION_FLAGS=\"--build-number=$build_number${build_name:+ --build-name=$build_name}\"\n  fi\n  if [ \"$CONFIGURATION\" = \"Debug\" ]; then\n    echo \"Building Flutter iOS Debug...\"\n    flutter build ios --debug --no-codesign $FLUTTER_VERSION_FLAGS\n  else\n    echo \"Building Flutter iOS Release...\"\n    flutter build ios --release --no-codesign $FLUTTER_VERSION_FLAGS\n  fi\n  cd \"$IOS_PATH\"\n\n  if [ \"$USE_SIGNING\" = \"true\" ]; then\n    # 'flutter build ios' never signs, so archive the Runner project it\n    # generated. The IPA step below exports build/App.xcarchive\n    # whenever signing is on.\n    ARCHIVE_CMD=\"xcodebuild\"\n    if [ -n \"$WORKSPACE\" ]; then\n      ARCHIVE_CMD=\"$ARCHIVE_CMD -workspace '$WORKSPACE'\"\n    elif [ -n \"$PROJECT\" ]; then\n      ARCHIVE_CMD=\"$ARCHIVE_CMD -project '$PROJECT'\"\n    else\n      echo \"::error::Signing requested but no Runner workspace/project found in '$IOS_PATH'.\"\n      exit 1\n    fi\n\n    # Flutter wrote the build number into Generated.xcconfig; this\n    # only catches a Runner Info.plist that hardcodes it.\n    apply_build_number \"$TARGET_FLAG\" \"$TARGET_PATH\" -scheme \"${SCHEME:-Runner}\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -scheme '${SCHEME:-Runner}'\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -configuration '$CONFIGURATION'\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -destination 'generic/platform=iOS'\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -derivedDataPath '$DERIVED_DATA_PATH'\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD COMPILER_INDEX_STORE_ENABLE=NO $version_settings\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -quiet\"\n    ARCHIVE_CMD=\"$ARCHIVE_CMD -archivePath '$GITHUB_WORKSPACE/build/App.xcarchive' archive\"\n\n    # The manual signing settings go on the Runner target, after\n    # flutter build ios has regenerated the project.\n    apply_signing_to_app_target \"$PROFILE_BUNDLE_ID\"\n    echo \"Running: $ARCHIVE_CMD\"\n    eval $ARCHIVE_CMD\n  fi\nelif [ \"$PROJECT_TYPE\" = \"reactnative\" ] || [ \"$PROJECT_TYPE\" = \"expo\" ] || [ \"$PROJECT_TYPE\" = \"kmp\" ]; then\n  # Use xcodebuild directly for React Native/Expo and Kotlin Multiplatform.\n  # For KMP, the Xcode build phase (or CocoaPods) invokes Gradle to\n  # compile the shared Kotlin framework, so the JDK must be on PATH.\n  if [ \"$PROJECT_TYPE\" = \"kmp\" ]; then\n    echo \"Building Kotlin Multiplatform iOS ($CONFIGURATION)...\"\n    if [ -f \"${GITHUB_WORKSPACE}/gradlew\" ]; then\n      chmod +x \"${GITHUB_WORKSPACE}/gradlew\"\n    fi\n  else\n    echo \"Building React Native iOS ($CONFIGURATION)...\"\n  fi\n  BUILD_CMD=\"xcodebuild\"\n  if [ -n \"$WORKSPACE\" ]; then\n    BUILD_CMD=\"$BUILD_CMD -workspace $WORKSPACE\"\n  elif [ -n \"$PROJECT\" ]; then\n    BUILD_CMD=\"$BUILD_CMD -project $PROJECT\"\n  fi\n\n  # Auto-detect scheme from workspace/project name (e.g., MyApp.xcworkspace -> MyApp)\n  # unless an explicit scheme was provided.\n  if [ -z \"$SCHEME\" ]; then\n    if [ -n \"$WORKSPACE\" ]; then\n      SCHEME=$(basename \"$WORKSPACE\" .xcworkspace)\n    elif [ -n \"$PROJECT\" ]; then\n      SCHEME=$(basename \"$PROJECT\" .xcodeproj)\n    fi\n  fi\n\n  apply_build_number \"$TARGET_FLAG\" \"$TARGET_PATH\" -scheme \"$SCHEME\"\n  BUILD_CMD=\"$BUILD_CMD -scheme '$SCHEME'\"\n  BUILD_CMD=\"$BUILD_CMD -configuration '$CONFIGURATION'\"\n  BUILD_CMD=\"$BUILD_CMD -destination 'generic/platform=iOS'\"\n  BUILD_CMD=\"$BUILD_CMD -derivedDataPath '$DERIVED_DATA_PATH'\"\n  BUILD_CMD=\"$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO $version_settings\"\n  BUILD_CMD=\"$BUILD_CMD -quiet\"\n\n  if [ \"$USE_SIGNING\" = \"true\" ]; then\n    # Must archive, not build: the IPA step below exports\n    # build/App.xcarchive whenever signing is on. The signing settings\n    # go on the app target now that pod install has generated the project.\n    apply_signing_to_app_target \"$PROFILE_BUNDLE_ID\"\n    BUILD_CMD=\"$BUILD_CMD -archivePath '$GITHUB_WORKSPACE/build/App.xcarchive' archive\"\n  else\n    BUILD_CMD=\"$BUILD_CMD CODE_SIGNING_ALLOWED=NO build\"\n  fi\n\n  echo \"Running: $BUILD_CMD\"\n  eval $BUILD_CMD\nelif [ \"$PROJECT_TYPE\" = \"orlix\" ]; then\n  # Orlix builds through Make/Bazel; Xcode never compiles the\n  # product graph here. Signed Orlix builds stay on the Orlix-owned\n  # release path: the generic IOS_* signing sets do not exist in\n  # this repository.\n  if [ \"$USE_SIGNING\" = \"true\" ]; then\n    fail \"signed Orlix builds are produced by the Orlix-owned release flow (testflight-beta.yml), not ios-builder signing\"\n  fi\n  case \"$CONFIGURATION\" in\n    Debug) ORLIX_COMPILATION_MODE=dbg ;;\n    Release) ORLIX_COMPILATION_MODE=opt ;;\n    *) fail \"Orlix configuration must be Debug or Release, got '$CONFIGURATION'\" ;;\n  esac\n  test -n \"$ORLIX_COMPONENT_MODE\" || fail \"Orlix component mode was not resolved\"\n  make __builder-package-ipa \\\n    ORLIX_BAZEL_DESTINATION=iphoneos \\\n    ORLIX_BAZEL_COMPILATION_MODE=\"$ORLIX_COMPILATION_MODE\" \\\n    ORLIX_BAZEL_COMPONENT_MODE=\"$ORLIX_COMPONENT_MODE\" \\\n    ORLIX_BUILDER_BUILD_ID=\"$BUILD_ID\" \\\n    ORLIX_BUILDER_BUILD_NUMBER=\"$BUILD_NUMBER\"\nelse\n  BUILD_CMD=\"xcodebuild\"\n  if [ -n \"$WORKSPACE\" ]; then\n    BUILD_CMD=\"$BUILD_CMD -workspace $WORKSPACE\"\n  elif [ -n \"$PROJECT\" ]; then\n    BUILD_CMD=\"$BUILD_CMD -project $PROJECT\"\n  fi\n\n  apply_build_number \"$TARGET_FLAG\" \"$TARGET_PATH\" -scheme \"$SCHEME\"\n  BUILD_CMD=\"$BUILD_CMD -scheme '$SCHEME'\"\n  BUILD_CMD=\"$BUILD_CMD -configuration '$CONFIGURATION'\"\n  BUILD_CMD=\"$BUILD_CMD -destination 'generic/platform=iOS'\"\n  BUILD_CMD=\"$BUILD_CMD -derivedDataPath '$DERIVED_DATA_PATH'\"\n  BUILD_CMD=\"$BUILD_CMD $version_settings\"\n\n  # Speed optimization flags\n  BUILD_CMD=\"$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO\"\n  BUILD_CMD=\"$BUILD_CMD DEBUG_INFORMATION_FORMAT=dwarf\"\n  BUILD_CMD=\"$BUILD_CMD ONLY_ACTIVE_ARCH=YES\"\n  BUILD_CMD=\"$BUILD_CMD -quiet\"\n\n  # Xcode 16+ native compilation caching\n  BUILD_CMD=\"$BUILD_CMD SWIFT_ENABLE_COMPILE_CACHE=YES\"\n  BUILD_CMD=\"$BUILD_CMD CLANG_ENABLE_COMPILE_CACHE=YES\"\n\n  if [ \"$USE_SIGNING\" = \"true\" ]; then\n    # For signed builds, use archive. Automatic signing cannot resolve a\n    # team on a runner (no Xcode account), so sign the app target\n    # manually against the profile installed above.\n    apply_signing_to_app_target \"$PROFILE_BUNDLE_ID\"\n    BUILD_CMD=\"$BUILD_CMD -archivePath '$GITHUB_WORKSPACE/build/App.xcarchive' archive\"\n  else\n    # For unsigned builds, use faster 'build' action\n    BUILD_CMD=\"$BUILD_CMD CODE_SIGNING_ALLOWED=NO build\"\n  fi\n\n  echo \"Running: $BUILD_CMD\"\n  eval $BUILD_CMD\nfi\n\n# Create IPA\nif [ \"$USE_SIGNING\" = \"true\" ]; then\n  # For signed builds, use xcodebuild -exportArchive.\n  # Everything below is relative to the repo root, which is also what\n  # the upload-artifact step (\"build/*.ipa\") resolves against — do not\n  # use \"cd ..\" here, it breaks when ios_path is \".\" (native at root).\n  cd \"$GITHUB_WORKSPACE\"\n\n  # The export has to use the same manual signing as the archive, and\n  # it needs the app's real bundle id to map it to the profile.\n  APP_BUNDLE_ID=$(plutil -extract ApplicationProperties.CFBundleIdentifier raw -o - build/App.xcarchive/Info.plist)\n  echo \"Exporting $APP_BUNDLE_ID with profile '$PROVISIONING_PROFILE_NAME' (team $DEVELOPMENT_TEAM), method $EXPORT_METHOD\"\n  export APP_BUNDLE_ID\n  write_export_options ExportOptions.plist\n\n  xcodebuild -exportArchive \\\n    -archivePath build/App.xcarchive \\\n    -exportOptionsPlist ExportOptions.plist \\\n    -exportPath build/export\n\n  # Move IPA to expected location\n  mv build/export/*.ipa \"build/$BUILD_ID.ipa\"\n  echo \"Created signed IPA: build/$BUILD_ID.ipa\"\nelse\n  # For unsigned builds, find .app and create IPA\n  if [ \"$PROJECT_TYPE\" = \"flutter\" ]; then\n    # Flutter outputs to build/ios/iphoneos/\n    APP_PATH=$(find \"${GITHUB_WORKSPACE}/build/ios/iphoneos\" -name \"*.app\" -type d | head -1)\n  else\n    # Native and React Native/Expo use DerivedData. Ask the project\n    # which bundle this scheme produces: the first .app under\n    # Build/Products is the wrong one whenever the repo has more than\n    # one app target.\n    APP_PATH=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" \\\n      -scheme \"$SCHEME\" \\\n      -configuration \"$CONFIGURATION\" \\\n      -destination 'generic/platform=iOS' \\\n      -derivedDataPath \"$DERIVED_DATA_PATH\" \\\n      -showBuildSettings -json 2>/dev/null \\\n      | jq -r 'map(.buildSettings)\n               | map(select(.PRODUCT_TYPE == \"com.apple.product-type.application\"\n                            and (.TARGET_BUILD_DIR | contains(\"-iphoneos\"))))\n               | map(.TARGET_BUILD_DIR + \"/\" + .FULL_PRODUCT_NAME)\n               | first // empty' || true)\n    if [ ! -d \"$APP_PATH\" ]; then\n      APP_PATH=$(find \"$DERIVED_DATA_PATH/Build/Products/${CONFIGURATION}-iphoneos\" -maxdepth 1 -name \"*.app\" -type d -print -quit 2>/dev/null || true)\n    fi\n  fi\n\n  if [ -z \"$APP_PATH\" ]; then\n    echo \"Error: Could not find .app\"\n    exit 1\n  fi\n  echo \"Found app at: $APP_PATH\"\n  cd \"$GITHUB_WORKSPACE\"\n  mkdir -p build/Payload\n  cp -R \"$APP_PATH\" build/Payload/\n  cd build\n  zip -rq \"$BUILD_ID.ipa\" Payload\n  rm -rf Payload\n  echo \"Created unsigned IPA: build/$BUILD_ID.ipa\"\nfi\n"
+              },
+              {
+                "name": "Upload IPA artifact",
+                "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+                "with": {
+                  "name": "ipa",
+                  "path": "build/*.ipa",
+                  "retention-days": 7,
+                  "if-no-files-found": "error"
+                }
+              },
+              {
+                "name": "Check for DerivedData",
+                "id": "dd",
+                "if": "always()",
+                "run": "if [ -d DerivedData ]; then echo \"exists=yes\" >> $GITHUB_OUTPUT; fi\n"
+              },
+              {
+                "name": "Save DerivedData cache",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "if": "always() && steps.dd.outputs.exists == 'yes'",
+                "with": {
+                  "path": "DerivedData",
+                  "key": "deriveddata-${{ github.run_id }}"
+                }
+              },
+              {
+                "name": "Cleanup signing",
+                "if": "always() && steps.params.outputs.use_signing == 'true'",
+                "run": "if [ -n \"$KEYCHAIN_PATH\" ] && [ -f \"$KEYCHAIN_PATH\" ]; then\n  security delete-keychain \"$KEYCHAIN_PATH\" || true\nfi\n"
+              },
+              {
+                "name": "Build summary",
+                "if": "always()",
+                "env": {
+                  "USE_SIGNING": "${{ steps.params.outputs.use_signing }}",
+                  "CONFIGURATION": "${{ steps.params.outputs.configuration }}",
+                  "PROFILE": "${{ steps.params.outputs.profile }}",
+                  "BUILD_NUMBER": "${{ steps.params.outputs.build_number }}"
+                },
+                "run": "echo \"## Build Summary\" >> $GITHUB_STEP_SUMMARY\necho \"\" >> $GITHUB_STEP_SUMMARY\necho \"- **Build ID:** ${{ steps.params.outputs.build_id }}\" >> $GITHUB_STEP_SUMMARY\necho \"- **Status:** ${{ job.status }}\" >> $GITHUB_STEP_SUMMARY\nif [ -n \"$PROFILE\" ]; then\n  echo \"- **Profile:** $PROFILE\" >> $GITHUB_STEP_SUMMARY\nfi\necho \"- **Configuration:** $CONFIGURATION\" >> $GITHUB_STEP_SUMMARY\nif [ -n \"$BUILD_NUMBER\" ]; then\n  echo \"- **Build number:** $BUILD_NUMBER\" >> $GITHUB_STEP_SUMMARY\nfi\necho \"- **DerivedData Cache:** ${{ steps.cache-deriveddata.outputs.cache-hit == 'true' && 'Hit' || 'Miss' }}\" >> $GITHUB_STEP_SUMMARY\necho \"- **Pods Cache:** ${{ steps.pods-cache.outputs.cache-hit == 'true' && 'Hit' || 'Miss' }}\" >> $GITHUB_STEP_SUMMARY\necho \"- **Node Modules Cache:** ${{ steps.node-modules-cache.outputs.cache-hit == 'true' && 'Hit' || 'N/A' }}\" >> $GITHUB_STEP_SUMMARY\nif [ \"$USE_SIGNING\" = \"true\" ]; then\n  echo \"- **Signing:** Signed (${EXPORT_METHOD:-unknown}, set ${SIGNING_SET_USED:-unknown})\" >> $GITHUB_STEP_SUMMARY\nelse\n  echo \"- **Signing:** Unsigned (sign locally with AltStore/Sideloadly)\" >> $GITHUB_STEP_SUMMARY\nfi\nIPA_PATH=$(find build -name \"*.ipa\" -type f | head -1)\nif [ -n \"$IPA_PATH\" ]; then\n  echo \"- **IPA Size:** $(ls -lh \"$IPA_PATH\" | awk '{print $5}')\" >> $GITHUB_STEP_SUMMARY\nfi\n"
+              },
+              {
+                "name": "Delete trigger tag",
+                "if": "always() && github.ref_type == 'tag'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "git -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" push origin \":refs/tags/$GITHUB_REF_NAME\"\n"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/ios-share.yml": {
+      "source_sha256": "8c8b1143694d58ff3b7721375bab4dab2ebe83d14f68721891e89b26e7129582",
+      "workflow": {
+        "name": "iOS Simulator",
+        "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
+        "on": {
+          "push": {
+            "tags": [
+              "ios-share/*"
+            ]
+          },
+          "workflow_dispatch": {
+            "inputs": {
+              "build_id": {
+                "description": "Unique build identifier",
+                "required": true,
+                "type": "string"
+              },
+              "snapshot_ref": {
+                "description": "Ref holding the working-tree snapshot to build (empty builds this branch)",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "ios_path": {
+                "description": "Path to iOS project (e.g., \"ios\" for React Native)",
+                "required": false,
+                "type": "string",
+                "default": "."
+              },
+              "scheme": {
+                "description": "Xcode scheme to build (auto-detected if empty)",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "duration": {
+                "description": "How long the simulator stays available while unused (e.g. 30m)",
+                "required": false,
+                "type": "string",
+                "default": "30m"
+              },
+              "flutter_version": {
+                "description": "Flutter version to use (e.g., 3.24.0). Empty means latest stable.",
+                "required": false,
+                "type": "string",
+                "default": ""
+              },
+              "jdk_version": {
+                "description": "JDK version for Kotlin Multiplatform Gradle builds (e.g., 17).",
+                "required": false,
+                "type": "string",
+                "default": "17"
+              }
+            }
+          }
+        },
+        "jobs": {
+          "simulator": {
+            "runs-on": "macos-26",
+            "permissions": {
+              "contents": "write"
+            },
+            "timeout-minutes": 90,
+            "steps": [
+              {
+                "name": "Checkout repository",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Checkout working-tree snapshot",
+                "if": "inputs.snapshot_ref != ''",
+                "env": {
+                  "SNAPSHOT_REF": "${{ inputs.snapshot_ref }}",
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -e\n# Depth 2 keeps the snapshot's parent: the Orlix component-mode\n# classifier diffs the snapshot against it.\ngit -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
+              },
+              {
+                "name": "Resolve parameters",
+                "id": "params",
+                "env": {
+                  "IN_BUILD_ID": "${{ inputs.build_id }}",
+                  "IN_IOS_PATH": "${{ inputs.ios_path }}",
+                  "IN_SCHEME": "${{ inputs.scheme }}",
+                  "IN_DURATION": "${{ inputs.duration }}",
+                  "IN_FLUTTER_VERSION": "${{ inputs.flutter_version }}",
+                  "IN_JDK_VERSION": "${{ inputs.jdk_version }}"
+                },
+                "run": "set -e\nparam() { # name dispatch-value jq-path default\n  local v=\"\"\n  if [ \"$GITHUB_EVENT_NAME\" = \"workflow_dispatch\" ]; then\n    v=\"$2\"\n  elif [ -f builder.json ]; then\n    v=$(jq -r \"$3 // empty\" builder.json)\n  fi\n  v=\"${v:-$4}\"\n  echo \"$1=$v\" >> \"$GITHUB_OUTPUT\"\n  echo \"$1=$v\"\n}\nparam build_id         \"$IN_BUILD_ID\" '\"\"' \"${GITHUB_REF_NAME##*/}\"\nparam ios_path         \"$IN_IOS_PATH\" '.ios.path' '.'\nparam scheme           \"$IN_SCHEME\" '.ios.scheme' ''\nparam duration         \"$IN_DURATION\" '\"\"' '30m'\nparam flutter_version  \"$IN_FLUTTER_VERSION\" '.flutter.version' ''\nparam jdk_version      \"$IN_JDK_VERSION\" '.kmp.jdkVersion' '17'\n"
+              },
+              {
+                "name": "Install mobai-ci + boot simulator",
+                "uses": "MobAI-App/mobai-ci@7cac484883bccde46bb5253e9c1335fd88c5a8d4",
+                "with": {
+                  "boot-sim": true
+                }
+              },
+              {
+                "name": "Detect project type",
+                "id": "detect",
+                "run": "if [ -f \"Makefile\" ] && [ -f \"make/bazel-migration.mk\" ] && [ -f \".xcode-version\" ] && [ -f \"MODULE.bazel\" ]; then\n  echo \"type=orlix\" >> $GITHUB_OUTPUT\nelif [ -f \"pubspec.yaml\" ]; then\n  echo \"type=flutter\" >> $GITHUB_OUTPUT\nelif [ -f \"package.json\" ] && grep -q '\"expo\"' package.json; then\n  echo \"type=expo\" >> $GITHUB_OUTPUT\nelif [ -f \"package.json\" ] && grep -q '\"react-native\"' package.json; then\n  echo \"type=reactnative\" >> $GITHUB_OUTPUT\nelif grep -rqlE 'kotlin\\(\"multiplatform\"\\)|org\\.jetbrains\\.kotlin\\.multiplatform|id\\(\"org.jetbrains.kotlin.multiplatform\"\\)' --include='*.gradle.kts' --include='*.gradle' --include='libs.versions.toml' . 2>/dev/null; then\n  echo \"type=kmp\" >> $GITHUB_OUTPUT\nelse\n  echo \"type=native\" >> $GITHUB_OUTPUT\nfi\n"
+              },
+              {
+                "name": "Setup Xcode",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "uses": "maxim-lobanov/setup-xcode@1242409711ff5721add51979e9e11e23ebb7e5a4",
+                "with": {
+                  "xcode-version": "latest-stable"
+                }
+              },
+              {
+                "name": "Read requested Xcode version",
+                "id": "xcode-version",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Select repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Setup Orlix Xcode and build tools",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+              },
+              {
+                "name": "Restore DerivedData cache",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "DerivedData",
+                  "key": "deriveddata-sim-${{ github.run_id }}",
+                  "restore-keys": "deriveddata-sim-\n"
+                }
+              },
+              {
+                "name": "Materialize missing xcconfig files",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "run": "set -e\nfind . -path ./DerivedData -prune -o -type f \\\n  \\( -name '*.xcconfig.template' -o -name '*.xcconfig.example' \\\n     -o -name '*.xcconfig.sample' -o -name '*.template.xcconfig' \\\n     -o -name '*.example.xcconfig' -o -name '*.sample.xcconfig' \\) -print \\\n| while IFS= read -r template; do\n    case \"$template\" in\n      *.xcconfig.template|*.xcconfig.example|*.xcconfig.sample) target=\"${template%.*}\" ;;\n      *) target=\"$(dirname \"$template\")/$(basename \"$template\" | sed -E 's/\\.(template|example|sample)\\.xcconfig$/.xcconfig/')\" ;;\n    esac\n    if [ ! -f \"$target\" ]; then\n      cp \"$template\" \"$target\"\n      echo \"::warning::$target was missing (gitignored?); copied $template over it. Any placeholder values in it are what the build sees.\"\n    fi\n  done\n"
+              },
+              {
+                "name": "Generate Xcode project (XcodeGen)",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}"
+                },
+                "run": "set -e\n# A managed Expo project has no iOS directory at all until the\n# prebuild step below creates it.\nif [ ! -d \"$IOS_PATH\" ]; then\n  echo \"No '$IOS_PATH' directory yet — skipping.\"\n  exit 0\nfi\ncd \"$IOS_PATH\"\n\nMANIFEST=\"\"\nfor f in project.yml project.yaml; do\n  if [ -f \"$f\" ] && grep -qE '^targets:' \"$f\"; then\n    MANIFEST=\"$f\"\n    break\n  fi\ndone\n\nif [ -z \"$MANIFEST\" ]; then\n  echo \"No XcodeGen manifest — skipping.\"\nelif [ -n \"$(find . -maxdepth 1 -name '*.xcodeproj' -print -quit)\" ]; then\n  echo \"Found a committed .xcodeproj — skipping generation.\"\nelse\n  echo \"Found $MANIFEST and no .xcodeproj — generating with XcodeGen.\"\n  brew install xcodegen\n  xcodegen generate\nfi\n"
+              },
+              {
+                "name": "Check base configuration files",
+                "if": "steps.detect.outputs.type != 'orlix'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}"
+                },
+                "run": "set -e\nif [ ! -d \"$IOS_PATH\" ]; then\n  echo \"No '$IOS_PATH' directory yet — skipping.\"\n  exit 0\nfi\nMISSING=\"\"\nfor pbx in $(find \"$IOS_PATH\" -maxdepth 2 -name project.pbxproj -not -path '*/Pods.xcodeproj/*'); do\n  for id in $(grep -o 'baseConfigurationReference = [A-Za-z0-9]*' \"$pbx\" | awk '{print $3}' | sort -u); do\n    ref=$(grep -m1 \"^[[:space:]]*$id .*isa = PBXFileReference\" \"$pbx\" || true)\n    name=$(printf '%s' \"$ref\" | sed -n 's/.*[ \\t]path = \"\\{0,1\\}\\([^\";]*\\)\"\\{0,1\\};.*/\\1/p')\n    [ -n \"$name\" ] || continue\n    base=$(basename \"$name\")\n    # CocoaPods writes its xcconfigs during pod install and Flutter\n    # writes Generated.xcconfig during pub get — both happen later in\n    # this job, so they are legitimately absent right now.\n    case \"$name\" in *Pods/*|*\"Target Support Files\"*) continue ;; esac\n    case \"$base\" in Pods-*|Generated.xcconfig) continue ;; esac\n    if [ -z \"$(find . -name \"$base\" -print -quit)\" ]; then\n      MISSING=\"$MISSING $base\"\n    fi\n  done\ndone\nif [ -n \"$MISSING\" ]; then\n  echo \"::error::The project has base configuration files that are not in the repository:$MISSING. They are probably gitignored — commit them, or commit a <name>.xcconfig.template next to each so the build can fill them in.\"\n  exit 1\nfi\n"
+              },
+              {
+                "name": "Setup Flutter",
+                "if": "steps.detect.outputs.type == 'flutter'",
+                "uses": "subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2",
+                "with": {
+                  "flutter-version": "${{ steps.params.outputs.flutter_version || '' }}",
+                  "channel": "stable",
+                  "cache": true
+                }
+              },
+              {
+                "name": "Flutter pub get",
+                "if": "steps.detect.outputs.type == 'flutter'",
+                "run": "flutter pub get"
+              },
+              {
+                "name": "Resolve JS toolchain",
+                "id": "js",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "run": "set -e\n# >>> js toolchain (keep identical across ios-build.yml, ios-share.yml, runner.sh)\n# The package manager the project actually uses: the packageManager field\n# first, then the lockfile, then npm. Guessing npm is not safe — `npm install`\n# in a pnpm or yarn workspace fails with\n# 'EUNSUPPORTEDPROTOCOL Unsupported URL Type \"workspace:\"'.\njs_detect_manager() {\n  if [ -z \"${JS_MANAGER:-}\" ]; then\n    case \"$(jq -r '.packageManager // empty' package.json 2>/dev/null || true)\" in\n      pnpm|pnpm@*) JS_MANAGER=pnpm ;;\n      yarn|yarn@*) JS_MANAGER=yarn ;;\n      bun|bun@*) JS_MANAGER=bun ;;\n      npm|npm@*) JS_MANAGER=npm ;;\n      *)\n        if [ -f pnpm-lock.yaml ]; then JS_MANAGER=pnpm\n        elif [ -f yarn.lock ]; then JS_MANAGER=yarn\n        elif [ -f bun.lock ] || [ -f bun.lockb ]; then JS_MANAGER=bun\n        else JS_MANAGER=npm # package-lock.json, or no lockfile at all\n        fi\n        ;;\n    esac\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm) JS_EXEC='pnpm exec' ;;\n    yarn) JS_EXEC=yarn ;;\n    bun) JS_EXEC=bunx ;;\n    *) JS_EXEC=npx ;;\n  esac\n  export JS_MANAGER JS_EXEC\n  echo \"Package manager: $JS_MANAGER\"\n}\n\n# The Node version the project asks for: .nvmrc or .node-version, else the\n# first comparator of engines.node, else 22. A leading \"v\" or range prefix\n# is dropped: nvm, n and setup-node all take \"20.11.1\" and \"24.x\" as they are.\njs_node_version() {\n  js_version=\"\"\n  for js_file in .nvmrc .node-version; do\n    if [ -f \"$js_file\" ]; then\n      js_version=$(tr -d ' \\t\\r' < \"$js_file\" | head -n1)\n      break\n    fi\n  done\n  if [ -z \"$js_version\" ]; then\n    js_version=$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)\n    js_version=$(printf '%s' \"${js_version%%|*}\" | awk '{print $1}')\n  fi\n  js_version=$(printf '%s' \"$js_version\" | sed -E 's/^(>=|<=|>|<|=|\\^|~|v)+//')\n  case \"$js_version\" in\n    [0-9]*|lts/*) ;;\n    *) js_version=22 ;;\n  esac\n  printf '%s\\n' \"$js_version\"\n}\n\n# Put the manager on PATH first, then install — unless a cache already restored\n# node_modules, in which case the manager is still wanted for `expo prebuild`\n# and for the React Native build phases that shell out to it.\njs_install() {\n  js_detect_manager\n  case \"$JS_MANAGER\" in\n    pnpm|yarn)\n      # corepack installs the version packageManager pins. Node 16.10-24\n      # bundle it; Node 25+ and some provider images do not.\n      command -v corepack >/dev/null 2>&1 || npm install -g corepack || true\n      corepack enable || true\n      command -v \"$JS_MANAGER\" >/dev/null 2>&1 || npm install -g \"$JS_MANAGER\"\n      ;;\n    bun)\n      if ! command -v bun >/dev/null 2>&1; then\n        curl -fsSL https://bun.sh/install | bash\n        export BUN_INSTALL=\"${BUN_INSTALL:-$HOME/.bun}\"\n        export PATH=\"$BUN_INSTALL/bin:$PATH\"\n        # A step's PATH does not survive into the next GitHub Actions step.\n        if [ -n \"${GITHUB_PATH:-}\" ]; then echo \"$BUN_INSTALL/bin\" >> \"$GITHUB_PATH\"; fi\n      fi\n      ;;\n  esac\n  if [ \"${JS_DEPS_CACHED:-}\" = \"true\" ]; then\n    echo \"node_modules restored from cache; skipping install\"\n    return 0\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm)\n      if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi\n      ;;\n    yarn)\n      if [ -f .yarnrc.yml ]; then yarn install --immutable\n      elif [ -f yarn.lock ]; then yarn install --frozen-lockfile\n      else yarn install\n      fi\n      ;;\n    bun)\n      if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install; fi\n      ;;\n    *)\n      if [ -f package-lock.json ]; then npm ci; else npm install; fi\n      ;;\n  esac\n}\n# <<< js toolchain\njs_detect_manager\nNODE_VERSION_FILE=\"\"\nfor f in .nvmrc .node-version; do\n  if [ -f \"$f\" ]; then NODE_VERSION_FILE=\"$f\"; break; fi\ndone\nNODE_VERSION=\"\"\nif [ -n \"$NODE_VERSION_FILE\" ]; then\n  echo \"Node version: from $NODE_VERSION_FILE\"\nelse\n  NODE_VERSION=$(js_node_version)\n  echo \"Node version: $NODE_VERSION\"\nfi\n{\n  echo \"manager=$JS_MANAGER\"\n  echo \"exec=$JS_EXEC\"\n  echo \"node_version=$NODE_VERSION\"\n  echo \"node_version_file=$NODE_VERSION_FILE\"\n} >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Setup Node.js",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "uses": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+                "with": {
+                  "node-version": "${{ steps.js.outputs.node_version }}",
+                  "node-version-file": "${{ steps.js.outputs.node_version_file }}"
+                }
+              },
+              {
+                "name": "Install JS dependencies",
+                "if": "steps.detect.outputs.type == 'reactnative' || steps.detect.outputs.type == 'expo'",
+                "env": {
+                  "JS_MANAGER": "${{ steps.js.outputs.manager }}"
+                },
+                "run": "set -e\n# >>> js toolchain (keep identical across ios-build.yml, ios-share.yml, runner.sh)\n# The package manager the project actually uses: the packageManager field\n# first, then the lockfile, then npm. Guessing npm is not safe — `npm install`\n# in a pnpm or yarn workspace fails with\n# 'EUNSUPPORTEDPROTOCOL Unsupported URL Type \"workspace:\"'.\njs_detect_manager() {\n  if [ -z \"${JS_MANAGER:-}\" ]; then\n    case \"$(jq -r '.packageManager // empty' package.json 2>/dev/null || true)\" in\n      pnpm|pnpm@*) JS_MANAGER=pnpm ;;\n      yarn|yarn@*) JS_MANAGER=yarn ;;\n      bun|bun@*) JS_MANAGER=bun ;;\n      npm|npm@*) JS_MANAGER=npm ;;\n      *)\n        if [ -f pnpm-lock.yaml ]; then JS_MANAGER=pnpm\n        elif [ -f yarn.lock ]; then JS_MANAGER=yarn\n        elif [ -f bun.lock ] || [ -f bun.lockb ]; then JS_MANAGER=bun\n        else JS_MANAGER=npm # package-lock.json, or no lockfile at all\n        fi\n        ;;\n    esac\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm) JS_EXEC='pnpm exec' ;;\n    yarn) JS_EXEC=yarn ;;\n    bun) JS_EXEC=bunx ;;\n    *) JS_EXEC=npx ;;\n  esac\n  export JS_MANAGER JS_EXEC\n  echo \"Package manager: $JS_MANAGER\"\n}\n\n# The Node version the project asks for: .nvmrc or .node-version, else the\n# first comparator of engines.node, else 22. A leading \"v\" or range prefix\n# is dropped: nvm, n and setup-node all take \"20.11.1\" and \"24.x\" as they are.\njs_node_version() {\n  js_version=\"\"\n  for js_file in .nvmrc .node-version; do\n    if [ -f \"$js_file\" ]; then\n      js_version=$(tr -d ' \\t\\r' < \"$js_file\" | head -n1)\n      break\n    fi\n  done\n  if [ -z \"$js_version\" ]; then\n    js_version=$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)\n    js_version=$(printf '%s' \"${js_version%%|*}\" | awk '{print $1}')\n  fi\n  js_version=$(printf '%s' \"$js_version\" | sed -E 's/^(>=|<=|>|<|=|\\^|~|v)+//')\n  case \"$js_version\" in\n    [0-9]*|lts/*) ;;\n    *) js_version=22 ;;\n  esac\n  printf '%s\\n' \"$js_version\"\n}\n\n# Put the manager on PATH first, then install — unless a cache already restored\n# node_modules, in which case the manager is still wanted for `expo prebuild`\n# and for the React Native build phases that shell out to it.\njs_install() {\n  js_detect_manager\n  case \"$JS_MANAGER\" in\n    pnpm|yarn)\n      # corepack installs the version packageManager pins. Node 16.10-24\n      # bundle it; Node 25+ and some provider images do not.\n      command -v corepack >/dev/null 2>&1 || npm install -g corepack || true\n      corepack enable || true\n      command -v \"$JS_MANAGER\" >/dev/null 2>&1 || npm install -g \"$JS_MANAGER\"\n      ;;\n    bun)\n      if ! command -v bun >/dev/null 2>&1; then\n        curl -fsSL https://bun.sh/install | bash\n        export BUN_INSTALL=\"${BUN_INSTALL:-$HOME/.bun}\"\n        export PATH=\"$BUN_INSTALL/bin:$PATH\"\n        # A step's PATH does not survive into the next GitHub Actions step.\n        if [ -n \"${GITHUB_PATH:-}\" ]; then echo \"$BUN_INSTALL/bin\" >> \"$GITHUB_PATH\"; fi\n      fi\n      ;;\n  esac\n  if [ \"${JS_DEPS_CACHED:-}\" = \"true\" ]; then\n    echo \"node_modules restored from cache; skipping install\"\n    return 0\n  fi\n  case \"$JS_MANAGER\" in\n    pnpm)\n      if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi\n      ;;\n    yarn)\n      if [ -f .yarnrc.yml ]; then yarn install --immutable\n      elif [ -f yarn.lock ]; then yarn install --frozen-lockfile\n      else yarn install\n      fi\n      ;;\n    bun)\n      if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install; fi\n      ;;\n    *)\n      if [ -f package-lock.json ]; then npm ci; else npm install; fi\n      ;;\n  esac\n}\n# <<< js toolchain\njs_install\n"
+              },
+              {
+                "name": "Expo prebuild",
+                "if": "steps.detect.outputs.type == 'expo'",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}",
+                  "JS_EXEC": "${{ steps.js.outputs.exec }}",
+                  "CI": "1"
+                },
+                "run": "set -e\nif [ -n \"$(find \"$IOS_PATH\" -maxdepth 1 \\( -name '*.xcodeproj' -o -name '*.xcworkspace' \\) -print -quit 2>/dev/null)\" ]; then\n  echo \"'$IOS_PATH' already holds an Xcode project (ejected Expo) — skipping prebuild.\"\n  exit 0\nfi\n\n# Without a bundle identifier prebuild asks for one interactively,\n# which on a runner means waiting for the job timeout.\nBUNDLE_ID=$(${JS_EXEC:-npx} expo config --type public --json 2>/dev/null | jq -r '.ios.bundleIdentifier // empty' 2>/dev/null || true)\nif [ -z \"$BUNDLE_ID\" ]; then\n  for f in app.json app.config.json; do\n    [ -f \"$f\" ] || continue\n    BUNDLE_ID=$(jq -r '(.expo.ios.bundleIdentifier // .ios.bundleIdentifier) // empty' \"$f\" 2>/dev/null || true)\n    if [ -n \"$BUNDLE_ID\" ]; then break; fi\n  done\nfi\nif [ -z \"$BUNDLE_ID\" ]; then\n  echo \"::error::This managed Expo project has no ios.bundleIdentifier. Set it in app.json (expo.ios.bundleIdentifier) or app.config.js, commit that, and share again — 'expo prebuild' cannot run unattended without it.\"\n  exit 1\nfi\necho \"Prebuilding $BUNDLE_ID into '$IOS_PATH'...\"\n\n${JS_EXEC:-npx} expo prebuild --platform ios --no-install\nif [ -z \"$(find \"$IOS_PATH\" -maxdepth 1 -name '*.xcodeproj' -print -quit 2>/dev/null)\" ]; then\n  echo \"::error::'expo prebuild' produced no Xcode project in '$IOS_PATH'. If the project generates it elsewhere, set ios.path in builder.json.\"\n  exit 1\nfi\n"
+              },
+              {
+                "name": "Setup JDK",
+                "if": "steps.detect.outputs.type == 'kmp'",
+                "uses": "actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6",
+                "with": {
+                  "distribution": "temurin",
+                  "java-version": "${{ steps.params.outputs.jdk_version || '17' }}"
+                }
+              },
+              {
+                "name": "Setup Gradle",
+                "if": "steps.detect.outputs.type == 'kmp'",
+                "uses": "gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb"
+              },
+              {
+                "name": "Capture Orlix toolchain manifest",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nmake __bazel-toolchain-manifest\n"
+              },
+              {
+                "name": "Select Orlix component mode for the snapshot",
+                "id": "orlix-component-mode",
+                "if": "steps.detect.outputs.type == 'orlix'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nmake __builder-component-mode >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Build for the simulator",
+                "id": "build",
+                "env": {
+                  "IOS_PATH": "${{ steps.params.outputs.ios_path }}",
+                  "SCHEME": "${{ steps.params.outputs.scheme }}",
+                  "PROJECT_TYPE": "${{ steps.detect.outputs.type }}",
+                  "ORLIX_COMPONENT_MODE": "${{ steps.orlix-component-mode.outputs.ORLIX_BAZEL_COMPONENT_MODE }}"
+                },
+                "run": "set -e\n\nif [ \"$PROJECT_TYPE\" = \"orlix\" ]; then\n  # Orlix builds through Make/Bazel; Xcode never compiles the\n  # product graph here. The .app handed to `mobai-ci share` below\n  # is the Bazel-produced canonical simulator application.\n  test -n \"$ORLIX_COMPONENT_MODE\" || { echo \"::error::Orlix component mode was not resolved\"; exit 1; }\n  APP_PATH=$(make __bazel-product-app \\\n    ORLIX_BAZEL_DESTINATION=iphonesimulator \\\n    ORLIX_BAZEL_COMPILATION_MODE=dbg \\\n    ORLIX_BAZEL_COMPONENT_MODE=\"$ORLIX_COMPONENT_MODE\" \\\n    | sed -n 's/^ORLIX_PRODUCT_APP=//p' | tail -n 1)\n  test -n \"$APP_PATH\" || { echo \"::error::Make produced no canonical simulator app\"; exit 1; }\n  test -x \"$APP_PATH/Orlix\" || { echo \"::error::$APP_PATH is not the canonical Orlix.app\"; exit 1; }\nelif [ \"$PROJECT_TYPE\" = \"flutter\" ]; then\n  # Flutter drives xcodebuild itself and puts the bundle in a known\n  # place, so there is nothing to detect here.\n  flutter build ios --simulator --debug\n  APP_PATH=$(find build/ios/iphonesimulator -maxdepth 1 -name '*.app' -print -quit)\nelse\n  cd \"$IOS_PATH\"\n\n  # CocoaPods generates the .xcworkspace and many repos gitignore it,\n  # so install before looking for one.\n  if [ -f Podfile ]; then\n    command -v pod >/dev/null 2>&1 || gem install cocoapods --no-document\n    pod install\n  fi\n\n  WORKSPACE=$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)\n  PROJECT=$(find . -maxdepth 1 -name '*.xcodeproj' -print -quit)\n\n  if [ -n \"$WORKSPACE\" ]; then\n    TARGET_FLAG=-workspace\n    TARGET_PATH=$WORKSPACE\n    BASE=$(basename \"$WORKSPACE\" .xcworkspace)\n  elif [ -n \"$PROJECT\" ]; then\n    TARGET_FLAG=-project\n    TARGET_PATH=$PROJECT\n    BASE=$(basename \"$PROJECT\" .xcodeproj)\n  else\n    echo \"::error::No .xcworkspace or .xcodeproj found in $IOS_PATH\"\n    exit 1\n  fi\n\n  if [ -z \"$SCHEME\" ]; then\n    SCHEMES=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" -list -json 2>/dev/null | jq -r '(.workspace // .project).schemes[]?' || true)\n    if [ -z \"$SCHEMES\" ]; then\n      SCHEMES=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" -list 2>/dev/null | sed -n '/Schemes:/,$p' | tail -n +2 | sed 's/^[[:space:]]*//' | sed '/^$/d' || true)\n    fi\n    echo \"Schemes:\"\n    printf '%s\\n' \"$SCHEMES\" | sed 's/^/  /'\n\n    # In a workspace, the scheme list also holds package and pod\n    # schemes, and they sort ahead of the app as often as not. The\n    # scheme named after the project is the app in nearly every repo.\n    SCHEME=$(printf '%s\\n' \"$SCHEMES\" | grep -Fx \"$BASE\" | head -1 || true)\n    if [ -z \"$SCHEME\" ]; then\n      SCHEME=$(printf '%s\\n' \"$SCHEMES\" | grep -v '^Pods-' | while IFS= read -r s; do\n        [ -n \"$s\" ] || continue\n        # A scheme that belongs to a local Swift package is not the app.\n        [ -z \"$(find . -maxdepth 4 -path \"*/$s/Package.swift\" -print -quit)\" ] || continue\n        printf '%s\\n' \"$s\"\n        break\n      done)\n    fi\n  fi\n\n  if [ -z \"$SCHEME\" ]; then\n    echo \"::error::Could not determine a scheme in $IOS_PATH. Pass one with the 'scheme' input.\"\n    exit 1\n  fi\n  echo \"Scheme: $SCHEME\"\n\n  # Build for the simulator this job is about to install on, rather\n  # than letting xcodebuild pick the first of several matches.\n  if [ -n \"$MOBAI_SIM_UDID\" ]; then\n    DEST_FLAG=-destination\n    DEST_VALUE=\"id=$MOBAI_SIM_UDID\"\n  else\n    DEST_FLAG=-sdk\n    DEST_VALUE=iphonesimulator\n  fi\n\n  xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" \\\n    -scheme \"$SCHEME\" \\\n    -configuration Debug \\\n    \"$DEST_FLAG\" \"$DEST_VALUE\" \\\n    -derivedDataPath \"$GITHUB_WORKSPACE/DerivedData\" \\\n    COMPILER_INDEX_STORE_ENABLE=NO \\\n    CODE_SIGNING_ALLOWED=NO \\\n    build\n\n  # Ask the project which bundle this scheme produces: the first .app\n  # under Build/Products is the wrong one whenever the repo has more\n  # than one app target.\n  APP_PATH=$(xcodebuild \"$TARGET_FLAG\" \"$TARGET_PATH\" \\\n    -scheme \"$SCHEME\" \\\n    -configuration Debug \\\n    \"$DEST_FLAG\" \"$DEST_VALUE\" \\\n    -derivedDataPath \"$GITHUB_WORKSPACE/DerivedData\" \\\n    -showBuildSettings -json 2>/dev/null \\\n    | jq -r 'map(.buildSettings)\n             | map(select(.PRODUCT_TYPE == \"com.apple.product-type.application\"\n                          and (.TARGET_BUILD_DIR | contains(\"-iphonesimulator\"))))\n             | map(.TARGET_BUILD_DIR + \"/\" + .FULL_PRODUCT_NAME)\n             | first // empty' || true)\n  if [ ! -d \"$APP_PATH\" ]; then\n    APP_PATH=$(find \"$GITHUB_WORKSPACE/DerivedData/Build/Products/Debug-iphonesimulator\" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)\n  fi\n  cd \"$GITHUB_WORKSPACE\"\nfi\n\nif [ -z \"$APP_PATH\" ]; then\n  echo \"::error::Build produced no .app\"\n  exit 1\nfi\necho \"Built $APP_PATH\"\necho \"app_path=$APP_PATH\" >> $GITHUB_OUTPUT\n"
+              },
+              {
+                "name": "Check for DerivedData",
+                "id": "dd",
+                "if": "always()",
+                "run": "if [ -d DerivedData ]; then echo \"exists=yes\" >> $GITHUB_OUTPUT; fi\n"
+              },
+              {
+                "name": "Save DerivedData cache",
+                "if": "always() && steps.dd.outputs.exists == 'yes'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "DerivedData",
+                  "key": "deriveddata-sim-${{ github.run_id }}"
+                }
+              },
+              {
+                "name": "Share the simulator",
+                "env": {
+                  "MOBAI_API_KEY": "${{ secrets.MOBAI_API_KEY }}"
+                },
+                "run": "mobai-ci share \\\n  --device \"$MOBAI_SIM_UDID\" \\\n  --app \"${{ steps.build.outputs.app_path }}\" \\\n  --duration \"${{ steps.params.outputs.duration }}\" \\\n  --label \"${{ github.repository }} · ${{ steps.params.outputs.build_id }}\" \\\n  --wait-device 4m --startup-timeout 5m\n"
+              },
+              {
+                "name": "Delete trigger tag",
+                "if": "always() && github.ref_type == 'tag'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "git -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" push origin \":refs/tags/$GITHUB_REF_NAME\"\n"
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/rulesync-generate.yml": {
       "source_sha256": "f6b5407207180c2ea1df7a9f1ff2404f5811e0890e61a2c6c8ab6f313ecc2249",
       "workflow": {

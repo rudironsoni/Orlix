@@ -955,7 +955,7 @@
     {
       "name": "__bazel-version-check",
       "source": "make/bazel-migration.mk",
-      "line": 68,
+      "line": 69,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -967,7 +967,7 @@
     {
       "name": "__bazel-xcode-cloud-project-check",
       "source": "make/bazel-migration.mk",
-      "line": 601,
+      "line": 602,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -979,7 +979,7 @@
     {
       "name": "__bazel-migration-inventory-check",
       "source": "make/bazel-migration.mk",
-      "line": 614,
+      "line": 615,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -991,7 +991,7 @@
     {
       "name": "__bazel-proof-graph",
       "source": "make/bazel-migration.mk",
-      "line": 631,
+      "line": 632,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1004,7 +1004,7 @@
     {
       "name": "__bazel-apple-routing-check",
       "source": "make/bazel-migration.mk",
-      "line": 681,
+      "line": 682,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1016,7 +1016,7 @@
     {
       "name": "__bazel-matrix-check",
       "source": "make/bazel-migration.mk",
-      "line": 729,
+      "line": 730,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1029,7 +1029,7 @@
     {
       "name": "__bazel-test-app",
       "source": "make/bazel-migration.mk",
-      "line": 762,
+      "line": 763,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1041,7 +1041,7 @@
     {
       "name": "__bazel-test-app-architecture",
       "source": "make/bazel-migration.mk",
-      "line": 762,
+      "line": 763,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1053,7 +1053,7 @@
     {
       "name": "__bazel-test-native-smoke",
       "source": "make/bazel-migration.mk",
-      "line": 762,
+      "line": 763,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1065,7 +1065,7 @@
     {
       "name": "__bazel-test-output-parser",
       "source": "make/bazel-migration.mk",
-      "line": 762,
+      "line": 763,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1077,7 +1077,7 @@
     {
       "name": "__bazel-test-terminal-surface",
       "source": "make/bazel-migration.mk",
-      "line": 762,
+      "line": 763,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1089,7 +1089,7 @@
     {
       "name": "__bazel-simulator-runtime-proof",
       "source": "make/bazel-migration.mk",
-      "line": 869,
+      "line": 943,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1101,7 +1101,7 @@
     {
       "name": "__bazel-current-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 896,
+      "line": 970,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1113,7 +1113,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 973,
       "classification": "private",
       "phony": true,
       "prerequisites": [
