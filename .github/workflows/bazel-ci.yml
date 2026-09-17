@@ -112,11 +112,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
 
       - name: Verify selected Xcode
         run: |
           set -euo pipefail
           python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
+      - name: Capture the toolchain manifest before simulator preparation
+        run: |
+          set -euo pipefail
+          make __bazel-toolchain-manifest
 
       - name: Resolve BuildBuddy cache policy
         id: buildbuddy

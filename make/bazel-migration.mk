@@ -10,6 +10,11 @@ ORLIX_BUILDBUDDY_ACCESS ?=
 ORLIX_BAZEL_DISK_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/disk-cache/bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)
 ORLIX_BAZEL_REPOSITORY_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/repository-cache
 ORLIX_PROMOTED_ARTIFACT_STORE ?= $(HOME)/Library/Caches/Orlix/Artifacts
+ifdef GITHUB_RUN_ID
+ORLIX_BAZEL_RUN_ID ?= $(GITHUB_RUN_ID)-$(GITHUB_RUN_ATTEMPT)
+else
+ORLIX_BAZEL_RUN_ID ?= $(shell uuidgen 2>/dev/null || date +%s)
+endif
 ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_BAZEL_DESTINATION ?= iphonesimulator
 ORLIX_BAZEL_COMPILATION_MODE ?= dbg
@@ -34,6 +39,7 @@ export ORLIX_BAZEL_CACHE_ROOT
 export ORLIX_BAZEL_VERSION
 export ORLIX_XCODE_VERSION
 export ORLIX_XCODE_BUILD
+export ORLIX_BAZEL_RUN_ID
 export ORLIX_BAZEL_CACHE_EPOCH
 export ORLIX_BAZEL_DISK_CACHE
 export ORLIX_BAZEL_REPOSITORY_CACHE
@@ -45,7 +51,7 @@ export CCACHE_DIR
 export CCACHE_MAXSIZE
 export CCACHE_COMPILERCHECK
 
-.PHONY: __bazel-bootstrap __bazel-version-check __xcode-select __bazel-server-restart __bazel-module-lock-update __bazel-feasibility-bootstrap __bazel-apple-smoke __bazel-buildbuddy-policy __bazel-buildbuddy-configure __bazel-buildbuddy-cleanup __bazel-cache-observation
+.PHONY: __bazel-bootstrap __bazel-version-check __xcode-select __bazel-toolchain-manifest __bazel-server-restart __bazel-module-lock-update __bazel-feasibility-bootstrap __bazel-apple-smoke __bazel-buildbuddy-policy __bazel-buildbuddy-configure __bazel-buildbuddy-cleanup __bazel-cache-observation
 .PHONY: __bazel-apple-dependency-smoke __bazel-native-archives
 .PHONY: __bazel-ghostty-archives __bazel-ssh-archives
 .PHONY: __bazel-native-dependency-smoke __bazel-feasibility-xcodeproj
@@ -65,6 +71,14 @@ __bazel-version-check: __bazel-bootstrap
 __xcode-select:
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)" --select
 
+__bazel-toolchain-manifest: __bazel-version-check
+	@test -n "$(ORLIX_BAZEL_RUN_ID)" || { echo "ORLIX_BAZEL_RUN_ID is required" >&2; exit 1; }
+	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" >/dev/null
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.ensure_current_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json", "$(ORLIX_BAZEL_RUN_ID)", "$(ORLIX_BAZEL_DISK_CACHE)")'
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; payload = toolchain_pin.validate_manifest("$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json", "$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL_RUN_ID)", "$(ORLIX_BAZEL_DISK_CACHE)"); print("toolchain manifest:", payload["xcode_version"], payload["xcode_build"], payload["bazel_version"])'
+	@test -s "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json"
+
 __bazel-server-restart: __bazel-version-check
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" shutdown
 
@@ -72,14 +86,14 @@ __bazel-module-lock-update: __bazel-version-check
 	@mkdir -p "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=update --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
-__bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory-check
+__bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest
 	@case "$(ORLIX_BAZEL_DESTINATION)" in iphoneos|iphonesimulator) ;; *) echo "unsupported Bazel destination: $(ORLIX_BAZEL_DESTINATION)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPONENT_MODE)" in source|promoted) ;; *) echo "unsupported Bazel component mode: $(ORLIX_BAZEL_COMPONENT_MODE)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPILATION_MODE)" in dbg|opt) ;; *) echo "unsupported Bazel compilation mode: $(ORLIX_BAZEL_COMPILATION_MODE)" >&2; exit 1 ;; esac
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"])'
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" >/dev/null
-	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.validate_manifest("$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json", "$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL_RUN_ID)", "$(ORLIX_BAZEL_DISK_CACHE)") >/dev/null'
 	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=error --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/config:all --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
@@ -162,7 +176,7 @@ __bazel-kernel-uapi-variants: __bazel-kernel-uapi
 	@test -s bazel-bin/bazel/feasibility/kernel/uapi_iphoneos_development/manifest.json
 
 define ORLIX_BAZEL_PROMOTE
-__bazel-promote-$(1): __bazel-version-check
+__bazel-promote-$(1): __bazel-version-check __bazel-toolchain-manifest
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
@@ -219,10 +233,9 @@ $(eval $(call ORLIX_BAZEL_PROMOTE,mlibc,//bazel/feasibility/mlibc:sysroot))
 $(eval $(call ORLIX_BAZEL_PROMOTE,rootfs,//bazel/feasibility/rootfs:rootfs))
 
 define ORLIX_BAZEL_PROMOTE_KERNEL
-__bazel-promote-$(1): __bazel-version-check
+__bazel-promote-$(1): __bazel-version-check __bazel-toolchain-manifest
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
-	PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote/$(1)"; \
 	for side in a b; do \
 		if [ -d "$$$${promote}/$$$${side}/output-base" ]; then \
@@ -270,10 +283,9 @@ $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-release-iphonesimulator,//bazel/
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphoneos,//bazel/feasibility/kernel:kernel-development-iphoneos,development,iphoneos))
 $(eval $(call ORLIX_BAZEL_PROMOTE_KERNEL,kernel-development-iphonesimulator,//bazel/feasibility/kernel:kernel-development-iphonesimulator,development,iphonesimulator))
 
-__bazel-promote-buildset: __bazel-version-check
+__bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
-	PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.capture_manifest("$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL)", "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json")'; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
 	for side in a b; do \
 		if [ -d "$$promote/buildset/$$side/output-base" ]; then \
@@ -903,10 +915,10 @@ __bazel-xctest-runtime-proof:
 	test_bundle="$$(PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --resolve-test-bundle --exec-root "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main" --outputs-file "$$evidence_dir/cquery-outputs.txt" --work-dir "$$evidence_dir/xctest-bundle")"; \
 	echo "$$test_bundle" > "$$evidence_dir/xctest-bundle.txt"; \
 	app_bundle_id="$$(python3 -c 'import plistlib,sys; print(plistlib.loads(open(sys.argv[1],"rb").read())["CFBundleIdentifier"])' "$(ORLIX_CANONICAL_APP_PATH)/Info.plist")"; \
-	PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --test-bundle "$$test_bundle" --app "$(ORLIX_CANONICAL_APP_PATH)" --app-bundle-id "$$app_bundle_id" --product-module OrlixUITests --out "$$evidence_dir/test.xctestrun"; \
-	python3 -c 'import plistlib,sys; entry=plistlib.load(open(sys.argv[1],"rb"))["OrlixUITests"]; assert entry["TestHostPath"] == sys.argv[2] and entry["UITargetAppPath"] == sys.argv[2], entry' "$$evidence_dir/test.xctestrun" "$(ORLIX_CANONICAL_APP_PATH)"; \
+	PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" --test-bundle "$$test_bundle" --app "$(ORLIX_CANONICAL_APP_PATH)" --app-bundle-id "$$app_bundle_id" --product-module OrlixUITests --only "AppLaunchSmokeUITests/testLaunchCapturesScreenshot" --out "$$evidence_dir/test.xctestrun"; \
+	python3 -c 'import plistlib,sys; entry=plistlib.load(open(sys.argv[1],"rb"))["OrlixUITests"]; assert entry["TestHostPath"] == "__TESTROOT__/OrlixUITests-Runner.app", entry; assert entry["TestBundlePath"] == "__TESTHOST__/PlugIns/OrlixUITests.xctest", entry; assert entry["UITargetAppPath"] == sys.argv[2], entry; assert entry["IsXCTRunnerHostedTestBundle"] is True, entry; assert entry["OnlyTestIdentifiers"] == ["AppLaunchSmokeUITests/testLaunchCapturesScreenshot"], entry' "$$evidence_dir/test.xctestrun" "$(ORLIX_CANONICAL_APP_PATH)"; \
 	echo "$(ORLIX_CANONICAL_APP_PATH)" > "$$evidence_dir/xctest-app-identity.txt"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild test-without-building -xctestrun "$$evidence_dir/test.xctestrun" -destination "id=$(ORLIX_XCTEST_SIMULATOR_ID)" -only-testing:AppLaunchSmokeUITests/testLaunchCapturesScreenshot -resultBundlePath "$$evidence_dir/test.xcresult" 2>&1 | tee "$$evidence_dir/test.log"; test "$${PIPESTATUS[0]}" -eq 0; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild test-without-building -xctestrun "$$evidence_dir/test.xctestrun" -destination "id=$(ORLIX_XCTEST_SIMULATOR_ID)" -resultBundlePath "$$evidence_dir/test.xcresult" -derivedDataPath "$$evidence_dir/derived_data" 2>&1 | tee "$$evidence_dir/test.log"; test "$${PIPESTATUS[0]}" -eq 0; \
 	test -d "$$evidence_dir/test.xcresult" || { echo "missing result bundle for $(ORLIX_SIMULATOR_LABEL)" >&2; exit 1; }; \
 	/usr/bin/touch "$$evidence_dir/xctest-passed.log"
 

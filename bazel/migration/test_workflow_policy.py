@@ -124,6 +124,25 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("ORLIX_COSIGN_PUB=$key_path", promoted_block)
         self.assertNotIn("attest-build-provenance", workflow)
 
+    def test_toolchain_manifest_precedes_simulator_preparation(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        manifest_at = workflow.index("Capture the toolchain manifest before simulator preparation")
+        runtimes_at = workflow.index("Prepare both simulator runtimes")
+        apple_ci_at = workflow.index("Run the Make-owned Apple CI operation")
+        self.assertLess(manifest_at, runtimes_at)
+        self.assertLess(runtimes_at, apple_ci_at)
+        self.assertIn("make __bazel-toolchain-manifest", workflow)
+        self.assertIn(
+            'echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"',
+            workflow,
+        )
+        promote = (ROOT / ".github/workflows/bazel-promote.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            'echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"',
+            promote,
+        )
+        self.assertIn("__bazel-promote-buildset", promote)
+
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")

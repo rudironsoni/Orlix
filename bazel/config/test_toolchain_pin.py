@@ -147,3 +147,65 @@ class ToolchainPinTests(unittest.TestCase):
                     pin.capture_manifest(tmp, str(binary), str(output))
             finds = [call for call in calls if "--find" in call]
             self.assertEqual(len(finds), 1)
+
+    def _capture_payload(self, root: Path, run_id="run-1"):
+        binary, output = self._manifest_fixture(root)
+        with mock.patch(
+            "toolchain_pin.subprocess.run", side_effect=self._success_observe(binary)
+        ):
+            return pin.capture_manifest(str(root), str(binary), str(output), run_id), binary, output
+
+    def test_validate_accepts_the_current_run_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload, _, output = self._capture_payload(root)
+            checked = pin.validate_manifest(
+                str(output), str(root), "run-1", "cache/bazel-9.2.0-xcode-17F113"
+            )
+            self.assertEqual(checked["run_id"], "run-1")
+            self.assertEqual(checked["developer_dir"], payload["developer_dir"])
+
+    def test_validate_rejects_stale_run_id_and_moved_developer_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, _, output = self._capture_payload(root)
+            with self.assertRaisesRegex(pin.PinError, "stale toolchain manifest"):
+                pin.validate_manifest(str(output), str(root), "run-2", "cache/bazel-9.2.0-xcode-17F113")
+            elsewhere = root / "elsewhere"
+            elsewhere.mkdir()
+            with self.assertRaisesRegex(pin.PinError, "stale toolchain manifest"):
+                pin.validate_manifest(str(output), str(elsewhere), "run-1", "cache/bazel-9.2.0-xcode-17F113")
+            with self.assertRaisesRegex(pin.PinError, "missing"):
+                pin.validate_manifest(str(root / "absent.json"), str(root), "run-1", "cache/bazel-9.2.0-xcode-17F113")
+
+    def test_ensure_reuses_current_manifest_without_observing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, _, output = self._capture_payload(root)
+            with mock.patch(
+                "toolchain_pin.subprocess.run",
+                side_effect=AssertionError("must not re-observe a current manifest"),
+            ):
+                payload = pin.ensure_current_manifest(
+                    str(root), "/nonexistent/bazel", str(output), "run-1",
+                    "cache/bazel-9.2.0-xcode-17F113",
+                )
+            self.assertEqual(payload["run_id"], "run-1")
+
+    def test_ensure_recaptures_a_stale_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, binary, output = self._capture_payload(root, run_id="run-1")
+            calls = []
+
+            def observe(command, **kwargs):
+                calls.append(tuple(command))
+                return self._success_observe(binary)(command, **kwargs)
+
+            with mock.patch("toolchain_pin.subprocess.run", side_effect=observe):
+                payload = pin.ensure_current_manifest(
+                    str(root), str(binary), str(output), "run-2",
+                    "cache/bazel-9.2.0-xcode-17F113",
+                )
+            self.assertEqual(payload["run_id"], "run-2")
+            self.assertTrue(calls)

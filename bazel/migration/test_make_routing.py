@@ -181,13 +181,42 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn('test -d "$(ORLIX_CANONICAL_APP_PATH)"', proof)
         self.assertIn('xctestrun.py" --resolve-test-bundle', proof)
         self.assertIn("cquery-outputs.txt", proof)
-        self.assertIn('xctestrun.py" --test-bundle "$$test_bundle"', proof)
+        self.assertIn('xctestrun.py" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)"', proof)
+        self.assertIn('--only "AppLaunchSmokeUITests/testLaunchCapturesScreenshot"', proof)
         self.assertIn("test.xctestrun", proof)
+        self.assertIn("OrlixUITests-Runner.app", proof)
+        self.assertIn("IsXCTRunnerHostedTestBundle", proof)
+        self.assertIn("OnlyTestIdentifiers", proof)
         self.assertIn("test-without-building", proof)
+        self.assertIn("-derivedDataPath", proof)
         self.assertIn("xctest-app-identity.txt", proof)
         self.assertIn("xctest-passed.log", proof)
+        self.assertNotIn("-only-testing:", proof)
         self.assertNotIn("ZipFile", proof)
         self.assertNotIn("rglob", proof)
+
+    def test_toolchain_manifest_lifecycle(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn("__bazel-toolchain-manifest: __bazel-version-check", mk)
+        self.assertIn(
+            "__bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest",
+            mk,
+        )
+        self.assertIn("__bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest", mk)
+        self.assertIn("__bazel-promote-$(1): __bazel-version-check __bazel-toolchain-manifest", mk)
+        manifest = mk.split("__bazel-toolchain-manifest:", 1)[1].split(
+            "__bazel-server-restart:", 1
+        )[0]
+        self.assertIn('xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)"', manifest)
+        self.assertIn("ensure_current_manifest", manifest)
+        self.assertIn("validate_manifest", manifest)
+        self.assertIn("ORLIX_BAZEL_RUN_ID", manifest)
+        bootstrap = mk.split("__bazel-feasibility-bootstrap:", 1)[1].split(
+            "__bazel-module-lock-update:", 1
+        )[0]
+        self.assertIn("validate_manifest", bootstrap)
+        self.assertNotIn("capture_manifest(", bootstrap)
+        self.assertNotIn("toolchain_pin.capture_manifest(", mk)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")

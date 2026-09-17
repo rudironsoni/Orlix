@@ -169,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "1d1b5a55bf5c1988325c90d5967c1a83524f28b34dc73addb8180c89dbb0521a",
+      "source_sha256": "94efe8ac918fe7c78e9f382a51547df1db81e60e8aa8e0acfb7488a1bc8be9b4",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -289,11 +289,15 @@
               },
               {
                 "name": "Export the selected Xcode to Make",
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Verify selected Xcode",
                 "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+              },
+              {
+                "name": "Capture the toolchain manifest before simulator preparation",
+                "run": "set -euo pipefail\nmake __bazel-toolchain-manifest\n"
               },
               {
                 "name": "Resolve BuildBuddy cache policy",
@@ -541,7 +545,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "4a0e9ec9deed8d0d7c5b2a121863a12d96a154af5bd62ae175d32ce205500b03",
+      "source_sha256": "e0c5eb79955ddfaa02f507e9f9348d714e3e5056b724ca041825d1aea0a15eb7",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -622,7 +626,7 @@
               {
                 "name": "Export the selected Xcode to Make",
                 "timeout-minutes": 1,
-                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Verify selected Xcode",

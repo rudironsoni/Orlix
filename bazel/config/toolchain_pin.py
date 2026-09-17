@@ -65,7 +65,7 @@ def _observe_failure(command: tuple[str, ...], context: dict, reason: str, elaps
     return PinError(f"toolchain discovery {reason}: {' '.join(command)} ({', '.join(detail)})")
 
 
-def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
+def capture_manifest(developer_dir: str, bazel: str, output: str, run_id: str | None = None) -> dict:
     developer = str(Path(developer_dir).resolve(strict=True))
     env = {**os.environ, "DEVELOPER_DIR": developer}
     context = {"xcode": "unknown", "build": "unknown"}
@@ -109,6 +109,7 @@ def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
         "schema": 1,
         "kind": "observed-toolchain",
         "developer_dir": developer,
+        "run_id": run_id,
         "xcode_version": version,
         "xcode_build": build,
         "bazel_version": observe(bazel, "--version"),
@@ -128,8 +129,54 @@ def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
         raise PinError("observed Bazel does not match the product pin")
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    staging = destination.with_name(f"{destination.name}.tmp-{os.getpid()}")
+    staging.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(staging, destination)
     return payload
+
+
+def validate_manifest(path: str, developer_dir: str, run_id: str | None, disk_cache: str) -> dict:
+    """Establish that an existing manifest belongs to the current run.
+
+    Rejects missing files, stale run ids, a changed developer directory, and
+    any Xcode/Bazel identity outside the accepted pin. Never captures.
+    """
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as error:
+        raise PinError(f"toolchain manifest is missing: {path}") from error
+    except ValueError as error:
+        raise PinError(f"toolchain manifest is not valid JSON: {path}") from error
+    developer = str(Path(developer_dir).resolve(strict=True))
+    if payload.get("developer_dir") != developer:
+        raise PinError(
+            f"stale toolchain manifest: {payload.get('developer_dir')} is not the selected {developer}"
+        )
+    if payload.get("run_id") != run_id:
+        raise PinError(
+            f"stale toolchain manifest: run {payload.get('run_id')!r} is not the current run {run_id!r}"
+        )
+    try:
+        require_identity(payload["xcode_version"], payload["xcode_build"], disk_cache)
+    except (PinError, KeyError) as error:
+        raise PinError(f"stale toolchain manifest: unsupported identity in {path}") from error
+    if payload.get("bazel_version") != f"bazel {product_pin()['bazel']}":
+        raise PinError(f"stale toolchain manifest: Bazel {payload.get('bazel_version')} is not the pinned Bazel")
+    return payload
+
+
+def ensure_current_manifest(
+    developer_dir: str, bazel: str, output: str, run_id: str | None, disk_cache: str
+) -> dict:
+    """Reuse the current run's manifest, or capture it once when absent or stale.
+
+    Capture itself re-observes the toolchain and enforces the accepted
+    identity, so a stale manifest is replaced, never reused.
+    """
+    try:
+        return validate_manifest(output, developer_dir, run_id, disk_cache)
+    except PinError:
+        return capture_manifest(developer_dir, bazel, output, run_id)
 
 
 def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
