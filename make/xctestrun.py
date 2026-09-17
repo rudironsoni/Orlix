@@ -190,6 +190,7 @@ def build_xctestrun(
     runner_bundle_id: str,
     developer_dir: Path,
     only: list[str],
+    coverage_dir: Path,
 ) -> dict:
     for label, path in (("test bundle", test_bundle), ("app", app)):
         if not path.exists():
@@ -232,6 +233,7 @@ def build_xctestrun(
         "TestingEnvironmentVariables": testing_env,
         "OnlyTestIdentifiers": legacy_only,
         "OnlyTestingIdentifiers": modern_only,
+        "ClangProfileDataDirectoryPath": str(coverage_dir),
     }
     metadata = {
         "CodeCoverageBuildableInfos": [
@@ -305,6 +307,8 @@ def main(argv=None):
     only = [item for value in args.only for item in value.split(",") if item]
     out = Path(args.out)
     work_dir = out.parent
+    coverage_dir = work_dir / "coverage"
+    coverage_dir.mkdir(parents=True, exist_ok=True)
     runner = assemble_xctrunner(
         Path(args.developer_dir), Path(args.test_bundle), args.product_module, work_dir
     )
@@ -317,6 +321,7 @@ def main(argv=None):
         runner["runner_bundle_id"],
         Path(args.developer_dir),
         only,
+        coverage_dir,
     )
     write_xctestrun(out, content)
     print(str(out))

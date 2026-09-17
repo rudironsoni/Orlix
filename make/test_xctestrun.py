@@ -54,6 +54,8 @@ def _content(root: Path):
     developer = _developer_dir(root)
     bundle, app = _layout(root / "src")
     work = root / "work"
+    coverage = work / "coverage"
+    coverage.mkdir(parents=True, exist_ok=True)
     runner = assemble_xctrunner(developer, bundle, "OrlixUITests", work)
     content = build_xctestrun(
         runner["runner_app"] / "PlugIns" / runner["bundle_name"],
@@ -64,6 +66,7 @@ def _content(root: Path):
         runner["runner_bundle_id"],
         developer,
         ["AppLaunchSmokeUITests/testLaunchCapturesScreenshot"],
+        coverage,
     )
     return content, runner, app
 
@@ -99,6 +102,13 @@ class XctestrunTests(unittest.TestCase):
             self.assertEqual(infos[0]["Architecture"], "arm64")
             self.assertEqual(infos[0]["Name"], "OrlixUITests.xctest")
 
+    def test_profile_data_directory_is_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            content, _, _ = _content(Path(tmp))
+            coverage = Path(tmp) / "work" / "coverage"
+            self.assertEqual(content["OrlixUITests"]["ClangProfileDataDirectoryPath"], str(coverage))
+            self.assertTrue(coverage.is_dir())
+
     def test_missing_products_fail_loud(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -107,11 +117,11 @@ class XctestrunTests(unittest.TestCase):
             runner = assemble_xctrunner(developer, bundle, "OrlixUITests", root / "work")
             staged = runner["runner_app"] / "PlugIns" / runner["bundle_name"]
             with self.assertRaises(ValueError):
-                build_xctestrun(root / "absent.xctest", app, "com.rudironsoni.Orlix", "OrlixUITests", "R", "com.apple.test.R", developer, ["C/m"])
+                build_xctestrun(root / "absent.xctest", app, "com.rudironsoni.Orlix", "OrlixUITests", "R", "com.apple.test.R", developer, ["C/m"], root / "coverage")
             with self.assertRaises(ValueError):
-                build_xctestrun(staged, app, "not-a-bundle-id", "OrlixUITests", "R", "com.apple.test.R", developer, ["C/m"])
+                build_xctestrun(staged, app, "not-a-bundle-id", "OrlixUITests", "R", "com.apple.test.R", developer, ["C/m"], root / "coverage")
             with self.assertRaises(ValueError):
-                build_xctestrun(staged, app, "com.rudironsoni.Orlix", "OrlixUITests", "R", "com.apple.test.R", developer, [])
+                build_xctestrun(staged, app, "com.rudironsoni.Orlix", "OrlixUITests", "R", "com.apple.test.R", developer, [], root / "coverage")
 
     def test_written_file_round_trips_as_xml_plist(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
