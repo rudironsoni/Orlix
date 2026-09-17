@@ -255,6 +255,34 @@ class MakeRoutingTests(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 20)
 
+    def test_xctest_proof_writer_resolves_labels_beside_the_proof_file(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        lines = [line for line in apple_ci.splitlines() if "xctest evidence mismatch" in line]
+        self.assertEqual(len(lines), 1)
+        recipe = lines[0].strip().lstrip("@").rstrip("\\").rstrip().rstrip(";")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = "/the/canonical/app"
+            for label in ("current", "ios15"):
+                (root / label).mkdir()
+                (root / label / "xctest-passed.log").touch()
+                (root / label / "xctest-app-identity.txt").write_text(app + "\n", encoding="utf-8")
+            command = (
+                recipe.replace("$$evidence_dir", str(root))
+                .replace("$(ORLIX_CURRENT_SIMULATOR_VERSION)", "26.5")
+                .replace("$$app", app)
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command], capture_output=True, text=True, timeout=60
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
+            proof = (root / "runtime-proof.json").read_text(encoding="utf-8")
+            self.assertIn('"same_application_path": "/the/canonical/app"', proof)
+            self.assertIn('"canonical_simulator_product_compile_count": 1', proof)
+
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)
