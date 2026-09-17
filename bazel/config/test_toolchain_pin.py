@@ -11,6 +11,9 @@ from unittest import mock
 import toolchain_pin as pin
 
 
+REPO = Path(__file__).resolve().parents[2]
+
+
 class ToolchainPinTests(unittest.TestCase):
     def test_manifest_records_observed_tools_and_rejects_unknown_xcode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -39,6 +42,37 @@ class ToolchainPinTests(unittest.TestCase):
                 with self.assertRaises(pin.PinError):
                     pin.capture_manifest(tmp, str(binary), str(output))
             self.assertEqual(output.read_bytes(), before)
+
+    def test_bootstrap_validate_recipe_executes_against_fixture(self) -> None:
+        mk = (REPO / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        bootstrap = mk.split("__bazel-feasibility-bootstrap:", 1)[1].split(
+            "__bazel-module-lock-update:", 1
+        )[0]
+        lines = [line for line in bootstrap.splitlines() if "validate_manifest(" in line]
+        self.assertEqual(len(lines), 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            developer = root / "developer"
+            developer.mkdir()
+            build_root = root / "Build"
+            binary, output = self._manifest_fixture(root)
+            manifest = build_root / "Bazel" / "toolchain.json"
+            with mock.patch(
+                "toolchain_pin.subprocess.run", side_effect=self._success_observe(binary)
+            ):
+                pin.capture_manifest(str(developer), str(binary), str(manifest), "run-9")
+            recipe = lines[0].strip().lstrip("@")
+            recipe = (
+                recipe.replace("$(CURDIR)", str(REPO))
+                .replace("$(ORLIX_BUILD_ROOT)", str(build_root))
+                .replace("$(ORLIX_PINNED_DEVELOPER_DIR)", str(developer))
+                .replace("$(ORLIX_BAZEL_RUN_ID)", "run-9")
+                .replace("$(ORLIX_BAZEL_DISK_CACHE)", str(root / "bazel-9.2.0-xcode-17F113"))
+            )
+            completed = subprocess.run(
+                ["bash", "-c", recipe], capture_output=True, text=True, timeout=60
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
 
     def test_product_pin_is_xcode_26_6(self) -> None:
         product = pin.product_pin()

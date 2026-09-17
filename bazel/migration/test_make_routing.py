@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -217,6 +218,40 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("validate_manifest", bootstrap)
         self.assertNotIn("capture_manifest(", bootstrap)
         self.assertNotIn("toolchain_pin.capture_manifest(", mk)
+
+    def test_python3_c_payloads_compile_without_shell_operators(self) -> None:
+        # Payloads must avoid single quotes inside (double quotes only), so the
+        # first closing quote always ends the Python source.
+        sources = [ROOT / "Makefile"] + sorted((ROOT / "make").glob("*.mk"))
+        self.assertTrue(sources)
+        checked = 0
+        for source in sources:
+            logical = []
+            pending = ""
+            for physical in source.read_text(encoding="utf-8").splitlines():
+                if physical.endswith("\\"):
+                    pending += physical[:-1] + "\n"
+                else:
+                    logical.append(pending + physical)
+                    pending = ""
+            for line in logical:
+                if "python3 -c" not in line:
+                    continue
+                match = re.search(r"python3 -c '(.*?)'", line)
+                self.assertIsNotNone(match, f"unparseable python3 -c in {source.name}: {line[:120]}")
+                payload = match.group(1)
+                code = payload.replace("$$", "__DOLLAR__")
+                code = re.sub(r"\$\([\w_]+\)", "__MAKEVAR__", code)
+                code = re.sub(r"\$\{[\w_]+(?::-[^}]*)?\}", "__MAKEVAR__", code)
+                try:
+                    compile(code, f"{source.name}:python3 -c", "exec")
+                except SyntaxError as error:
+                    self.fail(f"unexecutable python3 -c payload in {source.name}: {error}: {payload[:120]}")
+                stripped = re.sub(r'"[^"]*"', '""', code)
+                for operator in ("&&", "||", ">>", "<<"):
+                    self.assertNotIn(operator, stripped, f"shell operator in {source.name}: {payload[:120]}")
+                checked += 1
+        self.assertGreater(checked, 20)
 
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
