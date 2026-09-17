@@ -95,10 +95,29 @@ def _copy_frameworks(developer_dir: Path, runner_app: Path) -> bool:
 
 def _patch_runner_info(runner_app: Path, runner_bundle_id: str) -> None:
     info = runner_app / "Info.plist"
+    if info.is_symlink():
+        target = info.resolve(strict=True)
+        info.unlink()
+        shutil.copy2(target, info)
     raw = info.read_bytes()
     raw = raw.replace(b"$(WRAPPEDPRODUCTNAME)", b"XCTRunner").replace(b"WRAPPEDPRODUCTNAME", b"XCTRunner")
     raw = raw.replace(b"$(WRAPPEDPRODUCTBUNDLEIDENTIFIER)", runner_bundle_id.encode())
     raw = raw.replace(b"WRAPPEDPRODUCTBUNDLEIDENTIFIER", runner_bundle_id.encode())
+    try:
+        data = plistlib.loads(raw)
+    except Exception:
+        data = None
+    if not isinstance(data, dict) or data.get("CFBundleIdentifier") != runner_bundle_id:
+        # The shipped Info.plist did not carry settable identifier variables
+        # (XML versus binary, or a different variable form): set the identity
+        # explicitly instead of installing an unidentifiable runner.
+        if not isinstance(data, dict):
+            data = {}
+        data["CFBundleIdentifier"] = runner_bundle_id
+        data.setdefault("CFBundleName", "XCTRunner")
+        data.setdefault("CFBundleExecutable", "XCTRunner")
+        data.setdefault("CFBundlePackageType", "APPL")
+        raw = plistlib.dumps(data, fmt=plistlib.FMT_XML)
     info.write_bytes(raw)
 
 

@@ -11,16 +11,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from xctestrun import assemble_xctrunner, build_xctestrun, resolve_test_bundle, write_xctestrun
 
 
-def _developer_dir(root: Path) -> Path:
+def _developer_dir(root: Path, placeholders: bool = True) -> Path:
     developer = root / "Xcode.app" / "Contents" / "Developer"
     agents = developer / "Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents"
     (agents / "XCTRunner.app").mkdir(parents=True)
     info = agents / "XCTRunner.app" / "Info.plist"
-    info.write_bytes(
-        b"<?xml version=\"1.0\"?>"
-        b"<dict><key>CFBundleName</key><string>$(WRAPPEDPRODUCTNAME)</string>"
-        b"<key>CFBundleIdentifier</key><string>$(WRAPPEDPRODUCTBUNDLEIDENTIFIER)</string></dict>"
-    )
+    if placeholders:
+        info.write_bytes(
+            b"<?xml version=\"1.0\"?>"
+            b"<dict><key>CFBundleName</key><string>$(WRAPPEDPRODUCTNAME)</string>"
+            b"<key>CFBundleIdentifier</key><string>$(WRAPPEDPRODUCTBUNDLEIDENTIFIER)</string></dict>"
+        )
+    else:
+        info.write_bytes(
+            b"<?xml version=\"1.0\"?>"
+            b"<dict><key>CFBundleName</key><string>Runner</string></dict>"
+        )
     (agents / "XCTRunner.app" / "XCTRunner").write_bytes(b"runner")
     libs = developer / "Platforms/iPhoneSimulator.platform/Developer/Library"
     for framework in (
@@ -85,6 +91,19 @@ class XctestrunTests(unittest.TestCase):
             self.assertTrue(entry["IsXCTRunnerHostedTestBundle"])
             self.assertTrue((runner["runner_app"] / "PlugIns" / "OrlixUITests.xctest").is_dir())
             self.assertTrue((runner["runner_app"] / "Frameworks" / "XCTest.framework").is_dir())
+            with (runner["runner_app"] / "Info.plist").open("rb") as stream:
+                info = plistlib.load(stream)
+            self.assertEqual(info["CFBundleIdentifier"], "com.apple.test.OrlixUITests-Runner")
+
+    def test_runner_identity_is_set_without_shipped_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            developer = _developer_dir(root, placeholders=False)
+            bundle, _ = _layout(root / "src")
+            runner = assemble_xctrunner(developer, bundle, "OrlixUITests", root / "work")
+            with (runner["runner_app"] / "Info.plist").open("rb") as stream:
+                info = plistlib.load(stream)
+            self.assertEqual(info["CFBundleIdentifier"], "com.apple.test.OrlixUITests-Runner")
 
     def test_selection_travels_inside_the_xctestrun(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

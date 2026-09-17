@@ -188,6 +188,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("OrlixUITests-Runner.app", proof)
         self.assertIn("IsXCTRunnerHostedTestBundle", proof)
         self.assertIn("OnlyTestIdentifiers", proof)
+        self.assertIn("OrlixUITests-Runner.app/Info.plist", proof)
+        self.assertIn("com.apple.test.OrlixUITests-Runner", proof)
         self.assertIn("test-without-building", proof)
         self.assertIn("-derivedDataPath", proof)
         self.assertIn("xctest-app-identity.txt", proof)
