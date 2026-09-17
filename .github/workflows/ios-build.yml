@@ -1259,6 +1259,16 @@ jobs:
             if [ "$USE_SIGNING" = "true" ]; then
               fail "signed Orlix builds are produced by the Orlix-owned release flow (testflight-beta.yml), not ios-builder signing"
             fi
+            # An unsigned device IPA still needs Apple Development signing
+            # material on the runner to link the Bazel device product (the
+            # signatures are stripped below for sideload distribution).
+            # Fail here, before the long build, when it is absent.
+            if ! security find-identity -v -p codesigning 2>/dev/null | grep -Eq "Apple Development|iPhone Developer"; then
+              fail "builder ios build for Orlix needs an Apple Development codesigning identity in the runner keychain (import a development certificate, e.g. with Apple-Actions/import-codesign-certs as testflight-beta.yml does for distribution)"
+            fi
+            if ! grep -rl "com.rudironsoni.Orlix" "$HOME/Library/MobileDevice/Provisioning Profiles" 2>/dev/null | head -1 | grep -q .; then
+              fail "builder ios build for Orlix needs the team development provisioning profile installed (see the download-provisioning-profiles steps in testflight-beta.yml)"
+            fi
             case "$CONFIGURATION" in
               Debug) ORLIX_COMPILATION_MODE=dbg ;;
               Release) ORLIX_COMPILATION_MODE=opt ;;

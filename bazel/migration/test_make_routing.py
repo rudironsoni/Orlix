@@ -302,6 +302,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("iphoneos", package)
         self.assertIn("CFBundleVersion", package)
         self.assertIn(".ipa", package)
+        self.assertIn("codesign --remove-signature", package)
+        self.assertIn("staged app is still signed", package)
         self.assertNotIn("xcodebuild", package)
         self.assertNotIn("xcodebuild", product)
 

@@ -897,6 +897,13 @@ __builder-package-ipa: __bazel-product-app
 	fi; \
 	pkg="$$(mktemp -d)"; mkdir -p "$$pkg/Payload"; \
 	/usr/bin/ditto "$$app" "$$pkg/Payload/Orlix.app"; \
+	staged="$$pkg/Payload/Orlix.app"; \
+	/bin/chmod -R u+w "$$staged"; \
+	for bundle in "$$staged" "$$staged"/PlugIns/*.appex "$$staged"/Frameworks/*.framework; do \
+	[ -e "$$bundle" ] || continue; \
+	/usr/bin/codesign --remove-signature "$$bundle" || { echo "cannot strip signature from $$bundle" >&2; exit 1; }; \
+	done; \
+	if /usr/bin/codesign --verify "$$staged" >/dev/null 2>&1; then echo "staged app is still signed" >&2; exit 1; fi; \
 	mkdir -p "$(CURDIR)/build"; rm -f "$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa"; \
 	(cd "$$pkg" && /usr/bin/zip -rq "$(CURDIR)/build/$(ORLIX_BUILDER_BUILD_ID).ipa" Payload); \
 	rm -rf "$$pkg"; \

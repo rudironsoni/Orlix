@@ -179,6 +179,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("make __builder-package-ipa", build)
         self.assertIn("make __bazel-product-app", share)
         self.assertIn("signed Orlix builds are produced by the Orlix-owned release flow", build)
+        self.assertIn("Apple Development codesigning identity", build)
+        self.assertIn("team development provisioning profile", build)
         self.assertIn('elif [ "$PROJECT_TYPE" = "orlix" ]', build)
         block = build.split('elif [ "$PROJECT_TYPE" = "orlix" ]', 1)[1]
         end = min(
