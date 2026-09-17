@@ -8,9 +8,12 @@ import os
 import platform
 import subprocess
 import shutil
+import time
 from pathlib import Path
 
 PIN_PATH = Path(__file__).with_name("toolchain-pin.json")
+OBSERVE_TIMEOUT_SECONDS = 30
+OBSERVE_MAX_ATTEMPTS = 2
 
 
 class PinError(RuntimeError):
@@ -52,18 +55,49 @@ def require_identity(version: str, build: str, disk_cache: str, data: dict | Non
         )
 
 
+def _observe_failure(command: tuple[str, ...], context: dict, reason: str, elapsed: list[float]) -> PinError:
+    total = sum(elapsed)
+    detail = [f"Xcode {context['xcode']} build {context['build']}"]
+    if "--sdk" in command:
+        detail.append(f"sdk {command[command.index('--sdk') + 1]}")
+    detail.append(f"timeout {OBSERVE_TIMEOUT_SECONDS}s")
+    detail.append(f"elapsed {total:.1f}s over {len(elapsed)} attempt(s)")
+    return PinError(f"toolchain discovery {reason}: {' '.join(command)} ({', '.join(detail)})")
+
+
 def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
     developer = str(Path(developer_dir).resolve(strict=True))
     env = {**os.environ, "DEVELOPER_DIR": developer}
+    context = {"xcode": "unknown", "build": "unknown"}
 
     def observe(*command: str) -> str:
-        return subprocess.run(
-            command, env=env, check=True, capture_output=True, text=True, timeout=30,
-        ).stdout.strip()
+        elapsed: list[float] = []
+        for _ in range(OBSERVE_MAX_ATTEMPTS):
+            start = time.monotonic()
+            try:
+                return subprocess.run(
+                    command, env=env, check=True, capture_output=True, text=True,
+                    timeout=OBSERVE_TIMEOUT_SECONDS,
+                ).stdout.strip()
+            except subprocess.TimeoutExpired as error:
+                elapsed.append(time.monotonic() - start)
+                if len(elapsed) >= OBSERVE_MAX_ATTEMPTS:
+                    # from None: the PinError message already carries command,
+                    # SDK, Xcode identity, timeout, and elapsed time.
+                    raise _observe_failure(command, context, "timed out", elapsed) from None
+            except subprocess.CalledProcessError as error:
+                elapsed.append(time.monotonic() - start)
+                reason = f"failed (exit {error.returncode})"
+                stderr = (error.stderr or "").strip().splitlines()
+                if stderr:
+                    reason += f": {stderr[-1].strip()[:200]}"
+                raise _observe_failure(command, context, reason, elapsed) from None
+        raise AssertionError("unreachable: observe attempts exhausted without verdict")
 
     xcode = observe("/usr/bin/xcodebuild", "-version").splitlines()
     version = xcode[0].removeprefix("Xcode ")
     build = xcode[1].removeprefix("Build version ")
+    context.update({"xcode": version, "build": build})
     namespace_for(version, build)
     tools = {}
     for name in ("clang", "ld", "swift", "metal", "bazel"):
