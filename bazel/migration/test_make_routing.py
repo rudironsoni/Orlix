@@ -173,6 +173,22 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("DiagnosticReports", runtime)
         self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
 
+    def test_xctest_proof_uses_helper_and_canonical_app(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        proof = makefile.split("__bazel-xctest-runtime-proof:", 1)[1].split(
+            "__bazel-hostadapter:", 1
+        )[0]
+        self.assertIn('test -d "$(ORLIX_CANONICAL_APP_PATH)"', proof)
+        self.assertIn('xctestrun.py" --resolve-test-bundle', proof)
+        self.assertIn("cquery-outputs.txt", proof)
+        self.assertIn('xctestrun.py" --test-bundle "$$test_bundle"', proof)
+        self.assertIn("test.xctestrun", proof)
+        self.assertIn("test-without-building", proof)
+        self.assertIn("xctest-app-identity.txt", proof)
+        self.assertIn("xctest-passed.log", proof)
+        self.assertNotIn("ZipFile", proof)
+        self.assertNotIn("rglob", proof)
+
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)

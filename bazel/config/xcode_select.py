@@ -2,10 +2,15 @@
 """Select and verify the product Xcode through xcodes, never guessed paths.
 
 The requested Xcode release comes from the repository-root .xcode-version
-file. `xcodes` is the authority for which Xcodes are installed and which one
-is selected. The selected developer directory is always observed from
-`xcode-select -p`, and acceptance requires the exact product version and
-build. Nothing here constructs an /Applications path.
+file. `xcodes` is the sole authority for resolving that version: selection
+runs `xcodes select --print-path` in the repository root so xcodes consumes
+`.xcode-version` itself, and the read-only preflight uses xcodes' direct
+lookup form `xcodes installed <version>`. Nothing here parses the
+human-readable `xcodes installed` listing, normalizes Xcode versions, or
+constructs an /Applications path. The selected developer directory is always
+observed from `xcode-select -p`, and acceptance requires the exact product
+version and build. The ambient XCODES_DIRECTORY / --directory contract is
+honored by inheriting the environment and never passing --directory.
 """
 
 from __future__ import annotations
@@ -49,42 +54,55 @@ def require_xcodes() -> str:
     return path
 
 
-def installed_versions() -> list[tuple[str, str]]:
-    """Return (version, build) pairs reported by `xcodes installed`."""
+def _resolution_failure(version: str, detail: str) -> XcodeSelectError:
+    message = f"xcodes could not resolve Xcode {version} in its configured Xcode directory"
+    if detail:
+        message += f": {detail}"
+    return XcodeSelectError(f"{message}; install with: xcodes install {version}")
+
+
+def resolve_requested(version: str) -> str:
+    """Return xcodes' own resolved application path for the requested version.
+
+    Uses xcodes' direct lookup form so xcodes performs the resolution. The
+    configured Xcode directory (XCODES_DIRECTORY, --directory, or the
+    /Applications default) is honored by inheriting the environment.
+    """
     require_xcodes()
     try:
         observed = subprocess.run(
-            ["xcodes", "installed"], check=True, capture_output=True, text=True, timeout=60
-        ).stdout
-    except (subprocess.CalledProcessError, OSError) as error:
-        raise XcodeSelectError(f"xcodes installed failed: {error}") from error
-    entries = []
-    for line in observed.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        first = stripped.split()[0]
-        build_match = re.search(r"\(([^)]*)\)", stripped)
-        build = build_match.group(1).strip() if build_match else ""
-        entries.append((first, build))
-    return entries
+            ["xcodes", "installed", version], check=True, capture_output=True, text=True, timeout=60
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        detail = ((error.stderr or "") + " " + (error.stdout or "")).strip()
+        raise _resolution_failure(version, detail) from error
+    except OSError as error:
+        raise _resolution_failure(version, str(error)) from error
+    if not observed:
+        raise _resolution_failure(version, "xcodes reported no path")
+    return observed
 
 
-def require_installed(version: str) -> None:
-    versions = [entry_version for entry_version, _ in installed_versions()]
-    if version not in versions:
-        raise XcodeSelectError(f"Xcode {version} is not installed; install with: xcodes install {version}")
+def select_requested(repo_root: str | Path, version: str) -> str:
+    """Run `xcodes select` in the repository root so xcodes reads .xcode-version.
 
-
-def select_version(version: str) -> None:
+    No version argument is passed: `.xcode-version` drives the selection.
+    Returns xcodes' reported selected path verbatim.
+    """
     require_xcodes()
     try:
-        subprocess.run(
-            ["xcodes", "select", version], check=True, capture_output=True, text=True, timeout=300
-        )
-    except (subprocess.CalledProcessError, OSError) as error:
-        detail = getattr(error, "stderr", "") or str(error)
-        raise XcodeSelectError(f"xcodes select {version} failed: {detail.strip()}") from error
+        observed = subprocess.run(
+            ["xcodes", "select", "--print-path"],
+            check=True, capture_output=True, text=True, timeout=300, cwd=str(repo_root),
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        detail = ((error.stderr or "") + " " + (error.stdout or "")).strip()
+        raise _resolution_failure(version, detail) from error
+    except OSError as error:
+        raise _resolution_failure(version, str(error)) from error
+    if not observed:
+        raise _resolution_failure(version, "xcodes reported no selected path")
+    return observed
 
 
 def selected_developer_dir() -> str:
@@ -120,19 +138,18 @@ def observed_toolchain(developer_dir: str) -> tuple[str, str]:
 def verify(repo_root: str | Path, build: str, developer_dir: str | None = None) -> dict:
     """Verify the selected Xcode without changing machine state."""
     version = read_requested_version(repo_root)
-    require_xcodes()
+    resolved = resolve_requested(version)
     selected = selected_developer_dir()
     if developer_dir is not None and developer_dir != selected:
         raise XcodeSelectError(
             f"configured developer directory {developer_dir} does not match "
-            f"the selected Xcode {selected}; unset it or run: xcodes select {version}"
+            f"the selected Xcode {selected}; unset it or run xcodes select from {repo_root}"
         )
-    require_installed(version)
     observed_version, observed_build = observed_toolchain(selected)
     if observed_version != version:
         raise XcodeSelectError(
             f"selected Xcode is Xcode {observed_version} (expected Xcode {version}); "
-            f"run: xcodes select {version}"
+            f"run xcodes select from {repo_root}"
         )
     if observed_build != build:
         raise XcodeSelectError(
@@ -145,14 +162,17 @@ def verify(repo_root: str | Path, build: str, developer_dir: str | None = None) 
         "version": observed_version,
         "build": observed_build,
         "developer_dir": selected,
+        "xcodes_resolved_path": resolved,
     }
 
 
 def select(repo_root: str | Path, build: str) -> dict:
-    """Select the requested Xcode, then verify it. May prompt for sudo."""
+    """Select the requested Xcode via .xcode-version, then verify it. May prompt for sudo."""
     version = read_requested_version(repo_root)
-    select_version(version)
-    return verify(repo_root, build)
+    selected_path = select_requested(repo_root, version)
+    payload = verify(repo_root, build)
+    payload["xcodes_selected_path"] = selected_path
+    return payload
 
 
 def main(argv=None):
