@@ -234,7 +234,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("local_store_hits", workflow)
         self.assertIn("component_actions.py", workflow)
         self.assertIn("orlix-promoted-store", workflow)
-        self.assertIn("ORLIX_BAZEL_OUTPUT_BASE=\"$root/Bazel/output-base\"", workflow)
+        self.assertIn("Build/Bazel/output-base", workflow)
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
