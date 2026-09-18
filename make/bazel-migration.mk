@@ -456,8 +456,15 @@ __bazel-reconstruct: __bazel-version-check
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); schema=p.get("schema",1); expected={"uapi","mlibc","rootfs"} if schema == 1 else {"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}; assert schema in (1,2) and set(p.get("components",{})) == expected, p' "$(CURDIR)/artifacts.lock.json"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json"
 
-__bazel-substitute-promoted: __bazel-reconstruct
+__bazel-substitute-promoted: $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json
+
+# Stamped so reconstruction and staging run exactly once per lock. The store
+# writes an unsigned marker into its own copy, so a second reconstruct of the
+# same buildset in one worktree would compare a marked store tree against the
+# unmarked network tree and fail; the stamp keeps it to a single pass.
+$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lock.json
 	@set -euo pipefail; \
+	$(MAKE) __bazel-reconstruct; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
