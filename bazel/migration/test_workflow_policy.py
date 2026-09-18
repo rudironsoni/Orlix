@@ -173,7 +173,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn('type=orlix', text, name)
             self.assertIn("make/bazel-migration.mk", text, name)
             self.assertIn("make __bazel-toolchain-manifest", text, name)
-            self.assertIn("make __builder-component-mode", text, name)
+            self.assertIn("ORLIX_BAZEL_COMPONENT_MODE=$mode", text, name)
             self.assertIn("steps.xcode-version.outputs.version", text, name)
             self.assertIn("ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}", text, name)
         self.assertIn("make __builder-package-ipa", build)
@@ -207,6 +207,9 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn("persist-credentials: false", text, name)
             self.assertIn("contents: write", text, name)
             self.assertIn('fetch --depth=2 origin "+$SNAPSHOT_REF', text, name)
+            self.assertIn("gh auth git-credential", text, name)
+            self.assertIn('gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}"', text, name)
+            self.assertNotIn('push origin ":refs/tags/', text, name)
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")

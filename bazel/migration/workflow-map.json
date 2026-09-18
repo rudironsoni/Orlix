@@ -732,7 +732,7 @@
       }
     },
     ".github/workflows/ios-build.yml": {
-      "source_sha256": "4db802c3d9b12beb3ab0c59b6d6593e3bcbe19308fed42750812f2fa7597ae89",
+      "source_sha256": "4d00de6334a469aeaad4d67fc425b447b5a53e635c77b14a8c82d783cd8fda39",
       "workflow": {
         "name": "iOS Build",
         "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
@@ -828,7 +828,7 @@
                   "SNAPSHOT_REF": "${{ inputs.snapshot_ref }}",
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -e\n# Depth 2 keeps the snapshot's parent: the Orlix component-mode\n# classifier diffs the snapshot against it.\ngit -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
+                "run": "set -e\n# Authenticate this fetch only: no credential persists in the clone\n# for snapshot-executed code to reuse. Depth 2 keeps the snapshot's\n# parent: the Orlix component-mode classifier diffs against it.\ngit config credential.https://github.com.helper '!gh auth git-credential'\ngit fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit config --unset credential.https://github.com.helper\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
               },
               {
                 "name": "Resolve parameters",
@@ -1036,7 +1036,7 @@
                 "env": {
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -euo pipefail\nmake __builder-component-mode >> \"$GITHUB_OUTPUT\"\n"
+                "run": "set -euo pipefail\ngit config credential.https://github.com.helper '!gh auth git-credential'\ntrap 'git config --unset credential.https://github.com.helper' EXIT\nmode=\"$(make __builder-component-mode | sed -n 's/^ORLIX_BAZEL_COMPONENT_MODE=//p' | tail -n 1)\"\ntest -n \"$mode\" || { echo \"::error::Orlix component mode was not resolved\"; exit 1; }\necho \"ORLIX_BAZEL_COMPONENT_MODE=$mode\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
                 "name": "Build IPA",
@@ -1100,7 +1100,7 @@
                 "env": {
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "git -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" push origin \":refs/tags/$GITHUB_REF_NAME\"\n"
+                "run": "gh api -X DELETE \"repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}\"\n"
               }
             ]
           }
@@ -1108,7 +1108,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "8c8b1143694d58ff3b7721375bab4dab2ebe83d14f68721891e89b26e7129582",
+      "source_sha256": "73d7bea15327ccf00fb639082a74ccbfeb29000619a7ed76d4fd0fd2b8e9eaa1",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1186,7 +1186,7 @@
                   "SNAPSHOT_REF": "${{ inputs.snapshot_ref }}",
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -e\n# Depth 2 keeps the snapshot's parent: the Orlix component-mode\n# classifier diffs the snapshot against it.\ngit -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
+                "run": "set -e\n# Authenticate this fetch only: no credential persists in the clone\n# for snapshot-executed code to reuse. Depth 2 keeps the snapshot's\n# parent: the Orlix component-mode classifier diffs against it.\ngit config credential.https://github.com.helper '!gh auth git-credential'\ngit fetch --depth=2 origin \"+$SNAPSHOT_REF:refs/heads/snapshot\"\ngit config --unset credential.https://github.com.helper\ngit checkout --force snapshot\necho \"Building $(git rev-parse --short HEAD)\"\n"
               },
               {
                 "name": "Resolve parameters",
@@ -1345,7 +1345,7 @@
                 "env": {
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "set -euo pipefail\nmake __builder-component-mode >> \"$GITHUB_OUTPUT\"\n"
+                "run": "set -euo pipefail\ngit config credential.https://github.com.helper '!gh auth git-credential'\ntrap 'git config --unset credential.https://github.com.helper' EXIT\nmode=\"$(make __builder-component-mode | sed -n 's/^ORLIX_BAZEL_COMPONENT_MODE=//p' | tail -n 1)\"\ntest -n \"$mode\" || { echo \"::error::Orlix component mode was not resolved\"; exit 1; }\necho \"ORLIX_BAZEL_COMPONENT_MODE=$mode\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
                 "name": "Build for the simulator",
@@ -1386,7 +1386,7 @@
                 "env": {
                   "GH_TOKEN": "${{ github.token }}"
                 },
-                "run": "git -c http.https://github.com/.extraheader=\"AUTHORIZATION: bearer $GH_TOKEN\" push origin \":refs/tags/$GITHUB_REF_NAME\"\n"
+                "run": "gh api -X DELETE \"repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}\"\n"
               }
             ]
           }

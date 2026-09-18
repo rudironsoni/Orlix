@@ -90,9 +90,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          # Depth 2 keeps the snapshot's parent: the Orlix component-mode
-          # classifier diffs the snapshot against it.
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" fetch --depth=2 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
+          # Authenticate this fetch only: no credential persists in the clone
+          # for snapshot-executed code to reuse. Depth 2 keeps the snapshot's
+          # parent: the Orlix component-mode classifier diffs against it.
+          git config credential.https://github.com.helper '!gh auth git-credential'
+          git fetch --depth=2 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
+          git config --unset credential.https://github.com.helper
           git checkout --force snapshot
           echo "Building $(git rev-parse --short HEAD)"
 
@@ -602,7 +605,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          make __builder-component-mode >> "$GITHUB_OUTPUT"
+          git config credential.https://github.com.helper '!gh auth git-credential'
+          trap 'git config --unset credential.https://github.com.helper' EXIT
+          mode="$(make __builder-component-mode | sed -n 's/^ORLIX_BAZEL_COMPONENT_MODE=//p' | tail -n 1)"
+          test -n "$mode" || { echo "::error::Orlix component mode was not resolved"; exit 1; }
+          echo "ORLIX_BAZEL_COMPONENT_MODE=$mode" >> "$GITHUB_OUTPUT"
 
       - name: Build for the simulator
         id: build
@@ -771,4 +778,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer $GH_TOKEN" push origin ":refs/tags/$GITHUB_REF_NAME"
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}"
