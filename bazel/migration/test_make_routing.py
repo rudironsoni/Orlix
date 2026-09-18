@@ -255,6 +255,25 @@ class MakeRoutingTests(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 20)
 
+    def test_silent_prefix_only_starts_or_continues_recipes(self) -> None:
+        # Proven with gmake 4.x: a leading @ is honored on a recipe's first
+        # physical line and on lines ending with a backslash continuation,
+        # but reaches the shell literally on a final line, failing as
+        # "@cmd: command not found". Catch that shape statically. A TAB line
+        # whose predecessor lacks a trailing backslash starts its own recipe
+        # (separate shell) and may carry @.
+        sources = [ROOT / "Makefile"] + sorted((ROOT / "make").glob("*.mk"))
+        for source in sources:
+            physical = source.read_text(encoding="utf-8").splitlines()
+            for index, line in enumerate(physical):
+                if not line.startswith("\t@"):
+                    continue
+                predecessor_continues = index > 0 and physical[index - 1].rstrip().endswith("\\")
+                self.assertTrue(
+                    not predecessor_continues or line.rstrip().endswith("\\"),
+                    f"literal @ reaches the shell in {source.name}:{index + 1}: {line.strip()[:80]}",
+                )
+
     def test_xctest_proof_writer_resolves_labels_beside_the_proof_file(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(

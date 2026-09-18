@@ -859,7 +859,7 @@ __bazel-product-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLI
 	if [ "$(ORLIX_BAZEL_DESTINATION)" != iphoneos ]; then \
 	PYTHONPATH="$(CURDIR)/make" python3 -c "from pathlib import Path; import ios15_simulator_gate as gate; gate.validate_simulator_app(Path('$$app'))"; \
 	fi; \
-	@echo "ORLIX_PRODUCT_APP=$$app"
+	echo "ORLIX_PRODUCT_APP=$$app"
 
 __builder-component-mode:
 	@set -euo pipefail; \
