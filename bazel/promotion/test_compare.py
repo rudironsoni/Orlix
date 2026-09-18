@@ -126,6 +126,26 @@ class PromotionCompareTests(unittest.TestCase):
             (first / "bin" / "tool").write_bytes(b"large" * (1024 * 1024))
             self.assertNotEqual(selected_digest, artifact_identity_v2(artifacts=selected))
 
+    def test_files_only_manifest_drops_directories_and_rejects_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tree"
+            nested = root / "usr" / "include"
+            nested.mkdir(parents=True)
+            (nested / "foo.h").write_bytes(b"foo")
+            (root / "top.txt").write_bytes(b"top")
+            full = json.loads(artifact_manifest_v2(root))
+            self.assertTrue(any(entry.get("type") == "directory" for entry in full["entries"]))
+            slim = json.loads(artifact_manifest_v2(root, files_only=True))
+            self.assertTrue(slim["entries"])
+            self.assertTrue(all(entry.get("type") == "file" for entry in slim["entries"]))
+            self.assertEqual(
+                sorted(entry["path"] for entry in slim["entries"]),
+                ["top.txt", "usr/include/foo.h"],
+            )
+            (root / "link").symlink_to("top.txt")
+            with self.assertRaisesRegex(ValueError, "cannot contain symlinks"):
+                artifact_manifest_v2(root, files_only=True)
+
     def test_artifact_identity_v2_rejects_unknown_formats_invalid_paths_and_types(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

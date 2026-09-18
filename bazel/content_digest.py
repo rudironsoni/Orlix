@@ -79,7 +79,7 @@ def _entry(path: Path, relative: str, *, allow_directory: bool) -> dict:
     raise ValueError(f"unsupported artifact entry: {path}")
 
 
-def _tree_entries(root: Path) -> list[dict]:
+def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
     try:
         root_metadata = root.lstat()
     except OSError as error:
@@ -102,6 +102,14 @@ def _tree_entries(root: Path) -> list[dict]:
             entries.append(entry)
             if entry["type"] == "directory":
                 pending.append(child)
+    if files_only:
+        # Promotion manifests name files only: directories are implicit in
+        # file paths, and the promotion validator rejects anything else.
+        # Symlinks fail loudly here instead of vanishing from the payload.
+        symlinks = sorted(entry["path"] for entry in entries if entry["type"] == "symlink")
+        if symlinks:
+            raise ValueError(f"promotion manifests cannot contain symlinks: {symlinks}")
+        entries = [entry for entry in entries if entry["type"] == "file"]
     return sorted(entries, key=lambda entry: entry["path"])
 
 
@@ -142,13 +150,17 @@ def artifact_manifest_v2(
     *,
     artifacts: Optional[ArtifactSelection] = None,
     format: str = ARTIFACT_IDENTITY_V2_FORMAT,
+    files_only: bool = False,
 ) -> bytes:
     """Serialize one explicitly selected product boundary canonically."""
     if format != ARTIFACT_IDENTITY_V2_FORMAT:
         raise ValueError(f"unknown artifact identity format: {format!r}")
     if (root is None) == (artifacts is None):
         raise ValueError("provide exactly one of root or artifacts")
-    entries = _tree_entries(Path(root)) if root is not None else _selected_entries(artifacts)
+    if root is not None:
+        entries = _tree_entries(Path(root), files_only=files_only)
+    else:
+        entries = _selected_entries(artifacts)
     payload = {
         "domain": ARTIFACT_IDENTITY_V2_DOMAIN,
         "entries": entries,
