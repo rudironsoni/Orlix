@@ -288,44 +288,62 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	@test -d "$(ORLIX_PINNED_DEVELOPER_DIR)" || { echo "missing pinned Xcode developer directory: $(ORLIX_PINNED_DEVELOPER_DIR)" >&2; exit 1; }
 	@set -euo pipefail; \
 	promote="$(ORLIX_BUILD_ROOT)/Bazel/promote"; \
-	for side in a b; do \
-		if [ -d "$$promote/buildset/$$side/output-base" ]; then \
-			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
-		fi; \
-	done; \
-	/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
-	python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
-	for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
-		/bin/chmod -R u+w "$$promote/$$component" 2>/dev/null || true; \
-		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/$$component"; \
-	done; \
-	mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
-	labels=($$(python3 "$(CURDIR)/bazel/promotion/components.py" --labels)); \
-	for side in a b; do \
-		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
-		for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
-			stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
-			eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
-			digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$digest_path" -type f -print | /usr/bin/head -n 1)"; \
-			test -n "$$digest_file" || { echo "missing $$digest_path for promote buildset $$side" >&2; exit 1; }; \
-			if [ "$$product_kind" = tree ] && [ -n "$$product_subdir" ]; then \
-				product_src="$$(/usr/bin/dirname "$$digest_file")/$$product_subdir"; \
-			else \
-				product_src="$$(/usr/bin/dirname "$$digest_file")"; \
-			fi; \
-			test -d "$$product_src" || { echo "missing $$component product source for $$side" >&2; exit 1; }; \
-			manifest_src="$$(/usr/bin/dirname "$$digest_file")/$$manifest_stem.artifact-identity-v2.json"; \
-			test -s "$$manifest_src" || { echo "missing $$component artifact identity manifest for $$side" >&2; exit 1; }; \
-			PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$manifest_src" --product-src "$$product_src" --stage "$$stage"; \
-			mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
-		done; \
-	done; \
-	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	mkdir -p "$$promote"; \
 	provenance_source="$$(git rev-parse HEAD)"; \
 	provenance_builder="local"; provenance_run="local"; \
 	if [ -n "$${GITHUB_REPOSITORY:-}" ]; then provenance_builder="https://github.com/$${GITHUB_REPOSITORY}/.github/workflows/bazel-promote.yml"; provenance_run="$${GITHUB_RUN_ID:-local}"; fi; \
 	provenance_toolchain="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
-	for component in $$(python3 "$(CURDIR)/bazel/promotion/components.py" --names); do \
+	components="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --names)"; \
+	component_arg="$$(printf '%s\n' "$$components" | /usr/bin/tr ' ' '\n')"; \
+	resume=0; \
+	if PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --check --promote-root "$$promote" --source-sha "$$provenance_source" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg" 2>/dev/null; then \
+		echo "promotion checkpoint hit: reusing verified A/B component proof for $$provenance_source"; \
+		resume=1; \
+	fi; \
+	if [ "$$resume" = 0 ]; then \
+		for side in a b; do \
+			if [ -d "$$promote/buildset/$$side/output-base" ]; then \
+				DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
+			fi; \
+		done; \
+		/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
+		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
+		for component in $$components; do \
+			/bin/chmod -R u+w "$$promote/$$component" 2>/dev/null || true; \
+			python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/$$component"; \
+		done; \
+		mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
+		labels=($$(python3 "$(CURDIR)/bazel/promotion/components.py" --labels)); \
+		for side in a b; do \
+			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
+			for component in $$components; do \
+				stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
+				eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
+				digest_file="$$(/usr/bin/find "$$promote/buildset/$$side/output-base" -path "*/$$digest_path" -type f -print | /usr/bin/head -n 1)"; \
+				test -n "$$digest_file" || { echo "missing $$digest_path for promote buildset $$side" >&2; exit 1; }; \
+				if [ "$$product_kind" = tree ] && [ -n "$$product_subdir" ]; then \
+					product_src="$$(/usr/bin/dirname "$$digest_file")/$$product_subdir"; \
+				else \
+					product_src="$$(/usr/bin/dirname "$$digest_file")"; \
+				fi; \
+				test -d "$$product_src" || { echo "missing $$component product source for $$side" >&2; exit 1; }; \
+				manifest_src="$$(/usr/bin/dirname "$$digest_file")/$$manifest_stem.artifact-identity-v2.json"; \
+				test -s "$$manifest_src" || { echo "missing $$component artifact identity manifest for $$side" >&2; exit 1; }; \
+				PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --manifest "$$manifest_src" --product-src "$$product_src" --stage "$$stage"; \
+				mkdir -p "$$promote/$$component/$$side"; /bin/cp "$$digest_file" "$$promote/$$component/$$side/digest.sha256"; \
+			done; \
+		done; \
+		for side in a b; do \
+			if [ -d "$$promote/buildset/$$side/output-base" ]; then \
+				DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/$$side/output-base" shutdown >/dev/null 2>&1 || true; \
+			fi; \
+		done; \
+		/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
+		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --write --promote-root "$$promote" --source-sha "$$provenance_source" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg"; \
+	fi; \
+	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	for component in $$components; do \
 		args=("$$promote/$$component/a/digest.sha256" "$$promote/$$component/b/digest.sha256" --first-tree "$$promote/$$component/a/staged" --second-tree "$$promote/$$component/b/staged" --component "$$component" --artifact-identity-format artifact-identity-v2 --source-sha "$$provenance_source" --builder-id "$$provenance_builder" --invocation-id "$$provenance_run" --toolchain-digest "$$provenance_toolchain" --build-config release,promotion --proposal "$$promote/$$component/$$component-proposal.json" --sbom "$$promote/$$component/$$component-sbom.json" --in-toto "$$promote/$$component/$$component-in-toto.json" --lock-proposal "$$promote/$$component/$$component-lock-proposal.json" --lock "$(CURDIR)/artifacts.lock.json"); \
 		digest="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/compare.py" "$${args[@]}")"; \
 		test "$${#digest}" -eq 64 || { echo "buildset compare did not print a 64-hex digest for $$component" >&2; exit 1; }; \
@@ -744,6 +762,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_in_toto
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_lock_proposal
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_checkpoint
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_artifact_store

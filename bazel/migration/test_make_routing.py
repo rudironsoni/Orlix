@@ -410,6 +410,28 @@ class MakeRoutingTests(unittest.TestCase):
             ],
         )
 
+    def test_buildset_promotion_resumes_from_verified_checkpoint(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        buildset = mk.split("__bazel-promote-buildset:", 1)[1].split(
+            "define ORLIX_BAZEL_PUBLISH", 1
+        )[0]
+        self.assertIn("checkpoint.py\" --check", buildset)
+        self.assertIn("checkpoint.py\" --write", buildset)
+        # The expensive build lives behind the resume guard, after the check.
+        self.assertLess(buildset.index("--check"), buildset.index("--batch"))
+        self.assertLess(buildset.index("--batch"), buildset.index("--write"))
+        self.assertIn("promotion checkpoint hit", buildset)
+        workflow = (ROOT / ".github" / "workflows" / "bazel-promote.yml").read_text(encoding="utf-8")
+        self.assertIn("Restore verified promotion checkpoint", workflow)
+        self.assertIn("Save verified promotion checkpoint", workflow)
+        self.assertIn("path: Build/Bazel/promote", workflow)
+        self.assertIn("orlix-promote-${{ github.sha }}-", workflow)
+        # The save precedes the stages that can still fail.
+        self.assertLess(
+            workflow.index("Save verified promotion checkpoint"),
+            workflow.index("Sign and publish the buildset to GHCR"),
+        )
+
     def test_buildset_lock_requires_cosign_blob_verification(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         proposal = _dry_run("__bazel-lock-proposal")

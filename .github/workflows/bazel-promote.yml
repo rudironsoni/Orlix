@@ -79,6 +79,20 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
+      # The dual clean build plus staging is the expensive proof. Its verified
+      # result is checkpointed by content (source SHA, toolchain digest,
+      # component set) and restored here so a later-stage failure — proposal,
+      # signing, publication — reruns only the cheap stages. A checkpoint from
+      # a different source SHA is rejected by checkpoint.py and forces a fresh
+      # build; compare.py still re-validates every reused tree.
+      - name: Restore verified promotion checkpoint
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Build/Bazel/promote
+          key: orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-promote-${{ github.sha }}-
+
       - name: Install declared build tools
         run: brew bundle --file Brewfile
 
@@ -98,6 +112,15 @@ jobs:
       - name: Dual-build without action cache
         timeout-minutes: 350
         run: make __bazel-promote-buildset
+
+      # Save the verified A/B proof as soon as it exists, before the stages
+      # that can still fail. A retry of this exact source SHA then skips the
+      # builds and reruns only signing, publication, and the proposal.
+      - name: Save verified promotion checkpoint
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Build/Bazel/promote
+          key: orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
 
       - name: Sign and publish the buildset to GHCR
         timeout-minutes: 40

@@ -545,7 +545,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "e0c5eb79955ddfaa02f507e9f9348d714e3e5056b724ca041825d1aea0a15eb7",
+      "source_sha256": "2f467cdf40a1c745f947b65398f33a3ec0ff43182ac933edf9694cd185a2d6ef",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -620,6 +620,15 @@
                 }
               },
               {
+                "name": "Restore verified promotion checkpoint",
+                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "Build/Bazel/promote",
+                  "key": "orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
+                  "restore-keys": "orlix-promote-${{ github.sha }}-\n"
+                }
+              },
+              {
                 "name": "Install declared build tools",
                 "run": "brew bundle --file Brewfile"
               },
@@ -636,6 +645,14 @@
                 "name": "Dual-build without action cache",
                 "timeout-minutes": 350,
                 "run": "make __bazel-promote-buildset"
+              },
+              {
+                "name": "Save verified promotion checkpoint",
+                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "with": {
+                  "path": "Build/Bazel/promote",
+                  "key": "orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
+                }
               },
               {
                 "name": "Sign and publish the buildset to GHCR",
