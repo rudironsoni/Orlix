@@ -345,6 +345,10 @@ def write_signed_lock_proposal(
         "verification": verification_context(),
         "evidence": evidence,
     }
+    if source_sha is not None:
+        # Schema-2 evidence construction above already requires it; the Make
+        # gate and activation both read the top-level value.
+        proposal["source_sha"] = str(source_sha)
     Path(path).write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     return proposal
 

@@ -353,6 +353,70 @@ class LockProposalTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 lock_proposal.write_signed_lock_proposal(str(Path(tmp) / "out.json"), [str(signed_path)])
 
+    def test_signed_schema2_proposal_carries_top_level_source_sha(self) -> None:
+        source_sha = "ab" * 20
+        names = locked_buildset.required_components(locked_buildset.SCHEMA2)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            signed_paths = []
+            for name in names:
+                artifact_digest = hashlib.sha256(f"{name}:artifact".encode()).hexdigest()
+                oci_digest = "sha256:" + hashlib.sha256(f"{name}:oci".encode()).hexdigest()
+                payload = {
+                    "schema": 2,
+                    "component": name,
+                    "unsigned_digest": artifact_digest,
+                    "signed": True,
+                    "artifact_identity": {
+                        "format": "artifact-identity-v2",
+                        "version": 2,
+                        "digest": artifact_digest,
+                    },
+                    "oci_digest": oci_digest,
+                    "oci_reference": f"ghcr.io/rudironsoni/orlix/{name}@{oci_digest}",
+                }
+                path = root / f"{name}-signed.json"
+                path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                signed_paths.append(str(path))
+                component_dir = root / name
+                component_dir.mkdir()
+                (component_dir / f"{name}-sbom.json").write_text(
+                    '{"bomFormat":"CycloneDX"}\n', encoding="utf-8"
+                )
+                (component_dir / f"{name}-in-toto.json").write_text(
+                    '{"kind":"in-toto"}\n', encoding="utf-8"
+                )
+            (root / "toolchain-manifest.json").write_text(
+                '{"kind":"observed-toolchain","schema":1}\n', encoding="utf-8"
+            )
+            (root / "promotion-proof-index.json").write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "kind": "promotion-proof-index",
+                        "source_sha": source_sha,
+                        "components": {name: {} for name in names},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            out = root / "proposal.json"
+            with mock.patch("lock_proposal.verify_component", side_effect=lambda payload: payload), \
+                mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION):
+                proposal = lock_proposal.write_signed_lock_proposal(
+                    str(out),
+                    signed_paths,
+                    toolchain_manifest=str(root / "toolchain-manifest.json"),
+                    proof_index=str(root / "promotion-proof-index.json"),
+                    promote_root=str(root),
+                    source_sha=source_sha,
+                )
+            self.assertEqual(proposal["source_sha"], source_sha)
+            self.assertEqual(proposal["evidence"]["source_sha"], source_sha)
+            written = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(written["source_sha"], source_sha)
+
 
 if __name__ == "__main__":
     unittest.main()
