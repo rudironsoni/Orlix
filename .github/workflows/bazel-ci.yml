@@ -318,24 +318,36 @@ jobs:
           rm -rf "$results"; mkdir -p "$results"
           for pass in cold warm; do
             echo "=== promoted $pass pass ==="
-            DEVELOPER_DIR="$(xcode-select -p)" bazel --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
             chmod -R u+w Build/Bazel 2>/dev/null || true
             rm -rf Build/Bazel/output-base Build/Bazel/reconstruct Build/Bazel/proof bazel/promotion/imported Build/AgentHarness/bazel-ci Build/AgentHarness/bazel-promotion
+            mkdir -p Build/Bazel
+            # Stage the reconstructed components first: the //bazel/promotion
+            # package globs the imported tree, so it must exist before any Bazel
+            # analysis. The acquisition evidence is captured here, before the
+            # second reconstruction inside Apple CI (which is a store hit).
+            ORLIX_PROMOTED_ARTIFACT_STORE="$store" make __bazel-substitute-promoted
+            cp Build/AgentHarness/bazel-promotion/acquisition.json "$results/$pass-acquisition.json"
+            # Fresh output base so the package glob is re-evaluated against the
+            # freshly staged tree and no first-pass Bazel result is reused.
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
+            chmod -R u+w Build/Bazel 2>/dev/null || true
+            rm -rf Build/Bazel/output-base Build/AgentHarness/bazel-ci
             mkdir -p Build/Bazel
             start="$(date +%s)"
             ORLIX_PROMOTED_ARTIFACT_STORE="$store" \
             make __bazel-apple-ci
             end="$(date +%s)"
             echo "$((end - start))" > "$results/$pass.seconds"
-            acquisition="Build/AgentHarness/bazel-promotion/acquisition.json"
-            test -f "$acquisition" || { echo "::error::$pass pass produced no acquisition evidence"; exit 1; }
-            cp "$acquisition" "$results/$pass-acquisition.json"
+            test -f "Build/AgentHarness/bazel-ci/execution.json" || { echo "::error::$pass pass produced no execution log"; exit 1; }
             PYTHONPATH=bazel/promotion python3 bazel/promotion/component_actions.py \
               --execution-log "Build/AgentHarness/bazel-ci/execution.json" \
               --registry bazel/promotion/components.json \
               --out "Build/AgentHarness/bazel-promotion/component-actions.json"
             cp "Build/AgentHarness/bazel-promotion/component-actions.json" "$results/$pass-component-actions.json"
-            python3 - "$acquisition" "$results/$pass-component-actions.json" "$pass" <<'PY'
+            python3 - "$results/$pass-acquisition.json" "$results/$pass-component-actions.json" "$pass" <<'PY'
           import json
           import sys
           acquisition = json.load(open(sys.argv[1]))
