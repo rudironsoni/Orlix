@@ -301,11 +301,15 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	identity_file="$$promote/component-input-identity.txt"; \
 	input_identity=""; \
 	rm -f "$$inputs_file" "$$identity_file"; \
-	if "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels)))" --config=release --config=promotion --output=location --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" 2>/dev/null \
-		| /usr/bin/sed -E 's/:[0-9]+:[0-9]+$$//' | /usr/bin/grep -v '^/' | /usr/bin/sort -u > "$$inputs_file" \
-		&& test -s "$$inputs_file"; then \
+	if "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels))) union buildfiles(deps(set($$labels))) union loadfiles(deps(set($$labels)))" --output=label --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" 2>/dev/null \
+		| /usr/bin/grep '^//' | /usr/bin/sed -E 's#^//([^:]+):#\1/#; s#^//:##' | /usr/bin/sort -u > "$$promote/query-labels-paths.txt"; \
+		printf '%s\n' MODULE.bazel MODULE.bazel.lock >> "$$promote/query-labels-paths.txt"; \
+		/usr/bin/sort -u "$$promote/query-labels-paths.txt" \
+			| /usr/bin/awk -v root="$(CURDIR)" '{ if (system("test -f " root "/" $0) == 0) print }' > "$$inputs_file"; \
+		test -s "$$inputs_file"; then \
 		input_identity="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --compute-identity --repo-root "$(CURDIR)" --inputs-file "$$inputs_file" --registry "$(CURDIR)/bazel/promotion/components.json" --build-config "$$build_config")"; \
 	fi; \
+	rm -f "$$promote/query-labels-paths.txt"; \
 	resume=0; \
 	if [ -n "$$input_identity" ] && PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --check --promote-root "$$promote" --component-input-identity "$$input_identity" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg" 2>/dev/null; then \
 		echo "promotion checkpoint hit: reusing verified A/B component proof (component inputs $$input_identity)"; \
@@ -450,7 +454,7 @@ __bazel-reconstruct: __bazel-version-check
 	test -n "$${ORLIX_COSIGN_PUB:-}$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_PUB is required to reconstruct" >&2; exit 1; }; \
 	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); schema=p.get("schema",1); expected={"uapi","mlibc","rootfs"} if schema == 1 else {"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}; assert schema in (1,2) and set(p.get("components",{})) == expected, p' "$(CURDIR)/artifacts.lock.json"; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)"
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json"
 
 __bazel-substitute-promoted: __bazel-reconstruct
 	@set -euo pipefail; \
@@ -777,6 +781,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_in_toto
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_lock_proposal
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_checkpoint
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_component_actions
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_artifact_store

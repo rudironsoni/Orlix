@@ -1,7 +1,20 @@
 name: Bazel CI
 
 on:
+  # Manual dispatch may explicitly request a diagnostic component mode. `auto`
+  # (default) keeps the normal changed-path selection; `promoted` is a
+  # proof/debug operation only and never release authorization.
   workflow_dispatch:
+    inputs:
+      component_mode:
+        description: 'Diagnostic component mode: auto, source, or promoted (proof/debug only)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - source
+          - promoted
+        default: auto
   pull_request:
     paths:
       - ".github/workflows/bazel-*.yml"
@@ -174,45 +187,82 @@ jobs:
         id: component-mode
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REQUESTED_COMPONENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.component_mode || 'auto' }}
         run: |
           set -euo pipefail
           schema="$(python3 -c "import json; print(json.load(open('artifacts.lock.json')).get('schema', 1))")"
-          paths_file="$RUNNER_TEMP/orlix-changed-paths.txt"
-          : > "$paths_file"
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            expected="${{ github.event.pull_request.changed_files }}"
-            if gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename' > "$paths_file" 2>/dev/null \
-              && [ "$(grep -c . "$paths_file" || true)" = "$expected" ]; then
-              printf 'selected changed paths from the pull request API\n'
-            else
-              : > "$paths_file"
-              echo "changed-path query failed or truncated; selecting source mode conservatively" >&2
-            fi
-          elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            before="${{ github.event.before }}"
-            after="${{ github.event.after }}"
-            case "$before" in
-              0000000000000000000000000000000000000000|"") echo "no push base; selecting source mode conservatively" >&2 ;;
-              *)
-                if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)" fetch --no-tags --depth=1 origin "$before" "$after" 2>/dev/null \
-                  && git diff --name-only "$before" "$after" > "$paths_file" 2>/dev/null; then
-                  printf 'selected changed paths from the push range\n'
-                else
-                  : > "$paths_file"
-                  echo "push range unavailable; selecting source mode conservatively" >&2
-                fi
-                ;;
-            esac
+          if [ "$REQUESTED_COMPONENT_MODE" = "promoted" ]; then
+            # Manual promoted proof: a signed schema-2 seven-component lock with
+            # immutable OCI references and artifact-identity-v2 is mandatory,
+            # and reconstruction still verifies every signature.
+            python3 - <<'PY'
+          import json
+          import sys
+          lock = json.load(open("artifacts.lock.json"))
+          expected = {
+              "uapi", "mlibc", "rootfs",
+              "kernel-release-iphoneos", "kernel-release-iphonesimulator",
+              "kernel-development-iphoneos", "kernel-development-iphonesimulator",
+          }
+          def fail(message):
+              print(f"::error::manual promoted mode rejected: {message}", file=sys.stderr)
+              raise SystemExit(1)
+          if lock.get("schema") != 2:
+              fail("lock schema is not 2")
+          components = lock.get("components")
+          if not isinstance(components, dict) or set(components) != expected:
+              fail("lock does not contain exactly the seven required components")
+          if not lock.get("buildset"):
+              fail("lock buildset is empty")
+          for name, entry in sorted(components.items()):
+              identity = entry.get("artifact_identity") or {}
+              if identity.get("format") != "artifact-identity-v2":
+                  fail(f"{name} is not artifact-identity-v2")
+              digest = entry.get("oci_digest") or ""
+              if not digest.startswith("sha256:"):
+                  fail(f"{name} has no immutable sha256 OCI digest")
+          PY
+            mode="promoted"
+          elif [ "$REQUESTED_COMPONENT_MODE" = "source" ]; then
+            mode="source"
           else
-            echo "no trustworthy change set for $GITHUB_EVENT_NAME; selecting source mode conservatively" >&2
+            paths_file="$RUNNER_TEMP/orlix-changed-paths.txt"
+            : > "$paths_file"
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              expected="${{ github.event.pull_request.changed_files }}"
+              if gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename' > "$paths_file" 2>/dev/null \
+                && [ "$(grep -c . "$paths_file" || true)" = "$expected" ]; then
+                printf 'selected changed paths from the pull request API\n'
+              else
+                : > "$paths_file"
+                echo "changed-path query failed or truncated; selecting source mode conservatively" >&2
+              fi
+            elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              before="${{ github.event.before }}"
+              after="${{ github.event.after }}"
+              case "$before" in
+                0000000000000000000000000000000000000000|"") echo "no push base; selecting source mode conservatively" >&2 ;;
+                *)
+                  if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)" fetch --no-tags --depth=1 origin "$before" "$after" 2>/dev/null \
+                    && git diff --name-only "$before" "$after" > "$paths_file" 2>/dev/null; then
+                    printf 'selected changed paths from the push range\n'
+                  else
+                    : > "$paths_file"
+                    echo "push range unavailable; selecting source mode conservatively" >&2
+                  fi
+                  ;;
+              esac
+            else
+              echo "no trustworthy change set for $GITHUB_EVENT_NAME; selecting source mode conservatively" >&2
+            fi
+            mode="$(PYTHONPATH=bazel/migration python3 bazel/migration/select_component_mode.py --lock-schema "$schema" --event "$GITHUB_EVENT_NAME" --changed-paths "$RUNNER_TEMP/orlix-changed-paths.txt" --out "$RUNNER_TEMP/orlix-component-mode.json")"
           fi
-          mode="$(PYTHONPATH=bazel/migration python3 bazel/migration/select_component_mode.py --lock-schema "$schema" --event "$GITHUB_EVENT_NAME" --changed-paths "$RUNNER_TEMP/orlix-changed-paths.txt" --out "$RUNNER_TEMP/orlix-component-mode.json")"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
             {
               printf 'Component mode selection: %s\n\n' "$mode"
               printf '```json\n'
-              cat "$RUNNER_TEMP/orlix-component-mode.json"
+              cat "$RUNNER_TEMP/orlix-component-mode.json" 2>/dev/null || printf '{"mode": "%s", "request": "%s"}\n' "$mode" "$REQUESTED_COMPONENT_MODE"
               printf '\n```\n'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -239,10 +289,102 @@ jobs:
           printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Run the Make-owned Apple CI operation
+        if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'
         env:
           ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
         run: make __bazel-apple-ci
+
+      # Manual promoted proof: two passes in one job. The cold pass starts with
+      # an empty promoted-artifact store and a fresh build root and Bazel output
+      # base, so the seven components must come from GHCR. The warm pass keeps
+      # only the populated store and uses a second fresh build root and output
+      # base, so a hit can only come from the store, never from the first pass's
+      # Bazel output tree. Reconstruction verifies every signature in both
+      # passes, and component-producing actions are counted from the executed
+      # Bazel execution log.
+      - name: Promoted-consumer proof (cold then warm)
+        if: github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        env:
+          ORLIX_BAZEL_COMPONENT_MODE: promoted
+          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
+        run: |
+          set -euo pipefail
+          store="$RUNNER_TEMP/orlix-promoted-store"
+          rm -rf "$store"; mkdir -p "$store"
+          results="$RUNNER_TEMP/orlix-promoted-proof"
+          rm -rf "$results"; mkdir -p "$results"
+          for pass in cold warm; do
+            root="$RUNNER_TEMP/orlix-promoted-$pass"
+            rm -rf "$root"; mkdir -p "$root"
+            echo "=== promoted $pass pass ==="
+            start="$(date +%s)"
+            ORLIX_PROMOTED_ARTIFACT_STORE="$store" \
+            ORLIX_BUILD_ROOT="$root" \
+            ORLIX_BAZEL_OUTPUT_BASE="$root/Bazel/output-base" \
+            make __bazel-apple-ci
+            end="$(date +%s)"
+            echo "$((end - start))" > "$results/$pass.seconds"
+            acquisition="$root/AgentHarness/bazel-promotion/acquisition.json"
+            test -f "$acquisition" || { echo "::error::$pass pass produced no acquisition evidence"; exit 1; }
+            cp "$acquisition" "$results/$pass-acquisition.json"
+            PYTHONPATH=bazel/promotion python3 bazel/promotion/component_actions.py \
+              --execution-log "$root/AgentHarness/bazel-ci/execution.json" \
+              --registry bazel/promotion/components.json \
+              --out "$root/AgentHarness/bazel-promotion/component-actions.json"
+            cp "$root/AgentHarness/bazel-promotion/component-actions.json" "$results/$pass-component-actions.json"
+            python3 - "$acquisition" "$results/$pass-component-actions.json" "$pass" <<'PY'
+          import json
+          import sys
+          acquisition = json.load(open(sys.argv[1]))
+          actions = json.load(open(sys.argv[2]))
+          label = sys.argv[3]
+          expected = 0 if label == "warm" else 7
+          if label == "cold" and acquisition["network_downloads"] != 7:
+              raise SystemExit(f"cold pass expected 7 network downloads, got {acquisition['network_downloads']}")
+          if label == "warm" and (acquisition["network_downloads"] != 0 or acquisition["local_store_hits"] != 7):
+              raise SystemExit(f"warm pass expected 0 downloads / 7 store hits, got {acquisition['network_downloads']}/{acquisition['local_store_hits']}")
+          if acquisition["components_total"] != 7:
+              raise SystemExit("expected seven locked components")
+          for name, entry in sorted(acquisition["components"].items()):
+              if entry.get("source") not in ("network", "local-store"):
+                  raise SystemExit(f"{name} has no acquisition source")
+              if entry.get("signature_verified") is not True:
+                  raise SystemExit(f"{name} signature was not verified")
+          if actions["component_actions"] != 0:
+              raise SystemExit(f"{label} pass executed {actions['component_actions']} component-producing actions")
+          PY
+          done
+          python3 - "$results" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          results = Path(sys.argv[1])
+          summary = {
+              "schema": 1,
+              "kind": "promoted-consumer-proof",
+              "cold": json.load(open(results / "cold-acquisition.json")),
+              "warm": json.load(open(results / "warm-acquisition.json")),
+              "cold_seconds": int((results / "cold.seconds").read_text().strip()),
+              "warm_seconds": int((results / "warm.seconds").read_text().strip()),
+          }
+          (results / "proof.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(summary, sort_keys=True))
+          PY
+
+      - name: Store promoted-consumer proof evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: promoted-consumer-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/orlix-promoted-proof/proof.json
+            ${{ runner.temp }}/orlix-promoted-proof/cold-acquisition.json
+            ${{ runner.temp }}/orlix-promoted-proof/warm-acquisition.json
+            ${{ runner.temp }}/orlix-promoted-proof/cold-component-actions.json
+            ${{ runner.temp }}/orlix-promoted-proof/warm-component-actions.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Save Bazel repository cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

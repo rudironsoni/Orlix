@@ -211,6 +211,30 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn('gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}"', text, name)
             self.assertNotIn('push origin ":refs/tags/', text, name)
 
+    def test_manual_promoted_proof_is_explicit_and_guarded(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        self.assertIn("component_mode:", workflow)
+        for option in ("auto", "source", "promoted"):
+            self.assertIn(f"- {option}", workflow)
+        self.assertIn("default: auto", workflow)
+        # Promoted is only reachable through an explicit manual request, and the
+        # normal Apple CI step is skipped in that case.
+        self.assertIn("REQUESTED_COMPONENT_MODE", workflow)
+        self.assertIn("manual promoted mode rejected", workflow)
+        self.assertIn("lock schema is not 2", workflow)
+        self.assertIn("artifact-identity-v2", workflow)
+        self.assertIn("no immutable sha256 OCI digest", workflow)
+        self.assertIn("manual promoted mode rejected", workflow)
+        self.assertIn("if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'", workflow)
+        # Cold then warm proof in one job with acquisition and action evidence.
+        self.assertIn("Promoted-consumer proof (cold then warm)", workflow)
+        self.assertIn("for pass in cold warm", workflow)
+        self.assertIn("network_downloads", workflow)
+        self.assertIn("local_store_hits", workflow)
+        self.assertIn("component_actions.py", workflow)
+        self.assertIn("orlix-promoted-store", workflow)
+        self.assertIn("ORLIX_BAZEL_OUTPUT_BASE=\"$root/Bazel/output-base\"", workflow)
+
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
