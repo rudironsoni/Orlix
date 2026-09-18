@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -71,6 +72,14 @@ def substitute(lock_path: str, reconstruct_dir: str, out_path: str) -> dict:
 
 
 def stage_imported(payload: dict, stage_dir: str) -> None:
+    """Project reconstructed components into a package-visible real directory.
+
+    Bazel glob() discovers package source files, not opaque whole-directory
+    symlinks, so each component becomes a real directory. Files are hard-linked
+    when the store and the worktree share a filesystem, and copied otherwise;
+    the projection is read-only and disposable, the reconstructed store stays
+    authoritative. Stale entries from an earlier staging never survive.
+    """
     root = Path(stage_dir)
     root.mkdir(parents=True, exist_ok=True)
     for name, entry in payload["components"].items():
@@ -82,7 +91,14 @@ def stage_imported(payload: dict, stage_dir: str) -> None:
             dest.unlink()
         elif dest.is_dir():
             shutil.rmtree(dest)
-        dest.symlink_to(tree, target_is_directory=True)
+        try:
+            shutil.copytree(tree, dest, symlinks=True, copy_function=os.link)
+        except OSError:
+            shutil.rmtree(dest, ignore_errors=True)
+            try:
+                shutil.copytree(tree, dest, symlinks=True)
+            except OSError as error:
+                raise SubstituteError(f"cannot project {name} into the package: {error}") from error
 
 
 def main(argv: list[str] | None = None) -> int:

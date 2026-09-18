@@ -47,32 +47,37 @@ orlix_locked_buildset(
 
 filegroup(
     name = "imported_rootfs_initramfs",
-    srcs = glob(["imported/rootfs/initramfs.cpio.gz"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/initramfs.cpio.gz"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_rootfs_base_ext4",
-    srcs = glob(["imported/rootfs/base.ext4"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/base.ext4"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_rootfs_state_ext4",
-    srcs = glob(["imported/rootfs/state.ext4"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/state.ext4"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_rootfs_digest",
-    srcs = glob(["imported/rootfs/source-input.sha256"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/source-input.sha256"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_rootfs_payload_metadata",
-    srcs = glob(["imported/rootfs/payload-metadata.txt"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/payload-metadata.txt"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_rootfs_file_manifest",
-    srcs = glob(["imported/rootfs/file-manifest.txt"], allow_empty = True),
+    srcs = glob(["imported/rootfs/product/file-manifest.txt"], allow_empty = True),
+)
+
+filegroup(
+    name = "imported_rootfs_identity_digest",
+    srcs = glob(["imported/rootfs/artifact-identity-v2.sha256"], allow_empty = True),
 )
 
 orlix_promoted_rootfs(
@@ -80,6 +85,7 @@ orlix_promoted_rootfs(
     base_ext4 = ":imported_rootfs_base_ext4",
     digest = ":imported_rootfs_digest",
     file_manifest = ":imported_rootfs_file_manifest",
+    identity_digest = ":imported_rootfs_identity_digest",
     initramfs = ":imported_rootfs_initramfs",
     lock = "//:artifacts.lock.json",
     payload_metadata = ":imported_rootfs_payload_metadata",
@@ -88,23 +94,28 @@ orlix_promoted_rootfs(
 )
 
 filegroup(
+    name = "imported_uapi_identity_digest",
+    srcs = glob(["imported/uapi/artifact-identity-v2.sha256"], allow_empty = True),
+)
+
+filegroup(
     name = "imported_uapi_digest",
-    srcs = glob(["imported/uapi/uapi.sha256"], allow_empty = True),
+    srcs = glob(["imported/uapi/product/uapi.sha256"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_uapi_headers",
-    srcs = glob(["imported/uapi/uapi/**"], allow_empty = True),
+    srcs = glob(["imported/uapi/product/include/**"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_uapi_archive",
-    srcs = glob(["imported/uapi/kbuild-archive.tar"], allow_empty = True),
+    srcs = glob(["imported/uapi/product/kbuild-archive.tar"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_uapi_manifest",
-    srcs = glob(["imported/uapi/manifest.json"], allow_empty = True),
+    srcs = glob(["imported/uapi/product/manifest.json"], allow_empty = True),
 )
 
 orlix_promoted_uapi(
@@ -112,39 +123,45 @@ orlix_promoted_uapi(
     archive = ":imported_uapi_archive",
     digest = ":imported_uapi_digest",
     headers = ":imported_uapi_headers",
+    identity_digest = ":imported_uapi_identity_digest",
     lock = "//:artifacts.lock.json",
     manifest = ":imported_uapi_manifest",
     tags = ["manual"],
 )
 
 filegroup(
+    name = "imported_mlibc_identity_digest",
+    srcs = glob(["imported/mlibc/artifact-identity-v2.sha256"], allow_empty = True),
+)
+
+filegroup(
     name = "imported_mlibc_digest",
-    srcs = glob(["imported/mlibc/sysroot.sha256"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/sysroot.sha256"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_mlibc_headers",
-    srcs = glob(["imported/mlibc/headers/**"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/usr/include/**"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_mlibc_libraries",
-    srcs = glob(["imported/mlibc/libraries/**"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/usr/lib/**"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_mlibc_abi",
-    srcs = glob(["imported/mlibc/abi.txt"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/abi.txt"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_mlibc_loader",
-    srcs = glob(["imported/mlibc/ld.so"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/usr/lib/ld.so"], allow_empty = True),
 )
 
 filegroup(
     name = "imported_mlibc_runtime",
-    srcs = glob(["imported/mlibc/libcompiler_rt.a"], allow_empty = True),
+    srcs = glob(["imported/mlibc/product/libcompiler_rt.a"], allow_empty = True),
 )
 
 orlix_promoted_sysroot(
@@ -152,6 +169,7 @@ orlix_promoted_sysroot(
     abi = ":imported_mlibc_abi",
     digest = ":imported_mlibc_digest",
     headers = ":imported_mlibc_headers",
+    identity_digest = ":imported_mlibc_identity_digest",
     libraries = ":imported_mlibc_libraries",
     loader = ":imported_mlibc_loader",
     lock = "//:artifacts.lock.json",

@@ -23,6 +23,7 @@ def _kernel_uapi_impl(ctx):
     archive = ctx.actions.declare_file(ctx.label.name + "/kbuild-archive.tar")
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
     digest = ctx.actions.declare_file(ctx.label.name + "/uapi.sha256")
+    product = ctx.actions.declare_directory(ctx.label.name + "/product")
     ctx.actions.run_shell(
         mnemonic = "OrlixLinuxHeadersInstall",
         progress_message = "Installing upstream Linux arm64 UAPI headers",
@@ -107,11 +108,39 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
+    ctx.actions.run_shell(
+        mnemonic = "OrlixPromotedUapiProduct",
+        progress_message = "Assembling the canonical UAPI promotion product",
+        command = r"""
+set -euo pipefail
+exec_root="$PWD"
+out="$exec_root/$1"
+headers="$exec_root/$2"
+archive="$exec_root/$3"
+manifest="$exec_root/$4"
+digest="$exec_root/$5"
+test -d "$headers/include"
+test -s "$archive"
+test -s "$manifest"
+test -s "$digest"
+/bin/mkdir -p "$out/include"
+/bin/cp -R "$headers/include/." "$out/include/"
+/bin/cp "$archive" "$out/kbuild-archive.tar"
+/bin/cp "$manifest" "$out/manifest.json"
+/bin/cp "$digest" "$out/uapi.sha256"
+test -s "$out/include/linux/unistd.h"
+""",
+        arguments = [product.path, headers.path, archive.path, manifest.path, digest.path],
+        inputs = [headers, archive, manifest, digest],
+        outputs = [product],
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+    )
     artifact_identity = declare_artifact_identity(
         ctx,
         "uapi",
         ctx.file.digest_tool,
-        root = headers,
+        root = product,
     )
     return [
         DefaultInfo(files = depset([
@@ -119,6 +148,7 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
             archive,
             manifest,
             digest,
+            product,
             artifact_identity.manifest,
             artifact_identity.digest,
         ])),

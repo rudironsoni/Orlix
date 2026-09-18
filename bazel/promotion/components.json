@@ -7,7 +7,7 @@
       "label": "//bazel/feasibility/kernel:uapi",
       "digest_path": "bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256",
       "manifest_stem": "uapi",
-      "product": {"kind": "tree", "subdir": "uapi"},
+      "product": {"kind": "tree", "subdir": "product"},
       "type": "uapi"
     },
     {
@@ -15,7 +15,7 @@
       "label": "//bazel/feasibility/mlibc:sysroot",
       "digest_path": "bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256",
       "manifest_stem": "sysroot",
-      "product": {"kind": "tree", "subdir": "sysroot"},
+      "product": {"kind": "tree", "subdir": "product"},
       "type": "mlibc"
     },
     {

@@ -795,6 +795,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_reconstruct
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_locked_buildset
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_substitute
+	@PYTHONPATH="$(CURDIR)/bazel/promotion:$(CURDIR)/bazel" python3 -m unittest test_promoted_contract
 	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_bind
 	@PYTHONPATH="$(CURDIR)/bazel/proof" python3 -m unittest test_graph
 	@PYTHONPATH="$(CURDIR)/bazel/config" ORLIX_XCODE_VERSION="$(ORLIX_XCODE_VERSION)" ORLIX_XCODE_BUILD="$(ORLIX_XCODE_BUILD)" ORLIX_BAZEL_DISK_CACHE="$(ORLIX_BAZEL_DISK_CACHE)" python3 -c 'import os, toolchain_pin as pin; pin.require_identity(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"], os.environ["ORLIX_BAZEL_DISK_CACHE"]); print("pass: disk-cache namespace", pin.namespace_for(os.environ["ORLIX_XCODE_VERSION"], os.environ["ORLIX_XCODE_BUILD"]))'
