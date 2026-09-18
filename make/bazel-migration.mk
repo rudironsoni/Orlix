@@ -295,9 +295,20 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	provenance_toolchain="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
 	components="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --names)"; \
 	component_arg="$$(printf '%s\n' "$$components" | /usr/bin/tr ' ' '\n')"; \
+	labels="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --labels)"; \
+	build_config="release,promotion,$(ORLIX_XCODE_VERSION),$(ORLIX_BAZEL_DESTINATION),$(ORLIX_BAZEL_COMPILATION_MODE)"; \
+	inputs_file="$$promote/component-inputs.txt"; \
+	identity_file="$$promote/component-input-identity.txt"; \
+	input_identity=""; \
+	rm -f "$$inputs_file" "$$identity_file"; \
+	if "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels)))" --config=release --config=promotion --output=location --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" 2>/dev/null \
+		| /usr/bin/sed -E 's/:[0-9]+:[0-9]+$$//' | /usr/bin/grep -v '^/' | /usr/bin/sort -u > "$$inputs_file" \
+		&& test -s "$$inputs_file"; then \
+		input_identity="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --compute-identity --repo-root "$(CURDIR)" --inputs-file "$$inputs_file" --registry "$(CURDIR)/bazel/promotion/components.json" --build-config "$$build_config")"; \
+	fi; \
 	resume=0; \
-	if PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --check --promote-root "$$promote" --source-sha "$$provenance_source" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg" 2>/dev/null; then \
-		echo "promotion checkpoint hit: reusing verified A/B component proof for $$provenance_source"; \
+	if [ -n "$$input_identity" ] && PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --check --promote-root "$$promote" --component-input-identity "$$input_identity" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg" 2>/dev/null; then \
+		echo "promotion checkpoint hit: reusing verified A/B component proof (component inputs $$input_identity)"; \
 		resume=1; \
 	fi; \
 	if [ "$$resume" = 0 ]; then \
@@ -340,7 +351,10 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 		done; \
 		/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
 		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
-		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --write --promote-root "$$promote" --source-sha "$$provenance_source" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg"; \
+		if [ -n "$$input_identity" ]; then \
+			PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --write --promote-root "$$promote" --proof-source-sha "$$provenance_source" --component-input-identity "$$input_identity" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg"; \
+			echo "$$input_identity" > "$$identity_file"; \
+		fi; \
 	fi; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	for component in $$components; do \

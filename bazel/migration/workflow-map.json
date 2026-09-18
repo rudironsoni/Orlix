@@ -545,7 +545,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "2f467cdf40a1c745f947b65398f33a3ec0ff43182ac933edf9694cd185a2d6ef",
+      "source_sha256": "631879a84363d3b863cf7bf91bf865c99f7b41a2c5a04079df5a52524a552b63",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -624,8 +624,8 @@
                 "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
                 "with": {
                   "path": "Build/Bazel/promote",
-                  "key": "orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
-                  "restore-keys": "orlix-promote-${{ github.sha }}-\n"
+                  "key": "orlix-promote-v2-${{ hashFiles('MODULE.bazel.lock') }}",
+                  "restore-keys": "orlix-promote-v2-\n"
                 }
               },
               {
@@ -647,11 +647,18 @@
                 "run": "make __bazel-promote-buildset"
               },
               {
+                "name": "Resolve promotion component-input identity",
+                "id": "promote-identity",
+                "if": "always()",
+                "run": "set -euo pipefail\nidentity_file=\"Build/Bazel/promote/component-input-identity.txt\"\nif [ -f \"$identity_file\" ]; then\n  echo \"identity=$(tr -d '[:space:]' < \"$identity_file\")\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
                 "name": "Save verified promotion checkpoint",
+                "if": "always() && steps.promote-identity.outputs.identity != ''",
                 "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
                 "with": {
                   "path": "Build/Bazel/promote",
-                  "key": "orlix-promote-${{ github.sha }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
+                  "key": "orlix-promote-v2-${{ steps.promote-identity.outputs.identity }}"
                 }
               },
               {

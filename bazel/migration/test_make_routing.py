@@ -410,23 +410,32 @@ class MakeRoutingTests(unittest.TestCase):
             ],
         )
 
-    def test_buildset_promotion_resumes_from_verified_checkpoint(self) -> None:
+    def test_buildset_promotion_resumes_by_component_input_identity(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         buildset = mk.split("__bazel-promote-buildset:", 1)[1].split(
             "define ORLIX_BAZEL_PUBLISH", 1
         )[0]
-        self.assertIn("checkpoint.py\" --check", buildset)
-        self.assertIn("checkpoint.py\" --write", buildset)
+        # Identity comes from the component producing inputs enumerated by
+        # Bazel, not from the commit SHA.
+        self.assertIn("--compute-identity", buildset)
+        self.assertIn("kind('source file', deps(set(", buildset)
+        self.assertIn("components.py\" --labels", buildset)
+        self.assertIn("--component-input-identity", buildset)
+        self.assertIn("--proof-source-sha", buildset)
+        self.assertNotIn("--check --promote-root \"$$promote\" --source-sha", buildset)
         # The expensive build lives behind the resume guard, after the check.
-        self.assertLess(buildset.index("--check"), buildset.index("--batch"))
-        self.assertLess(buildset.index("--batch"), buildset.index("--write"))
+        self.assertLess(buildset.index("--compute-identity"), buildset.index("--batch"))
+        self.assertLess(buildset.index("--batch"), buildset.index("--proof-source-sha"))
         self.assertIn("promotion checkpoint hit", buildset)
+        self.assertIn("component-input-identity.txt", buildset)
         workflow = (ROOT / ".github" / "workflows" / "bazel-promote.yml").read_text(encoding="utf-8")
         self.assertIn("Restore verified promotion checkpoint", workflow)
         self.assertIn("Save verified promotion checkpoint", workflow)
         self.assertIn("path: Build/Bazel/promote", workflow)
-        self.assertIn("orlix-promote-${{ github.sha }}-", workflow)
-        # The save precedes the stages that can still fail.
+        self.assertIn("orlix-promote-v2-", workflow)
+        # The cache key is the computed identity, never the commit SHA.
+        self.assertIn("orlix-promote-v2-${{ steps.promote-identity.outputs.identity }}", workflow)
+        self.assertNotIn("orlix-promote-${{ github.sha }}", workflow)
         self.assertLess(
             workflow.index("Save verified promotion checkpoint"),
             workflow.index("Sign and publish the buildset to GHCR"),
