@@ -301,13 +301,19 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	identity_file="$$promote/component-input-identity.txt"; \
 	input_identity=""; \
 	rm -f "$$inputs_file" "$$identity_file"; \
-	if "$(ORLIX_BAZEL)" --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels))) union buildfiles(deps(set($$labels))) union loadfiles(deps(set($$labels)))" --output=label --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" 2>/dev/null \
+	if "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels))) union buildfiles(deps(set($$labels))) union loadfiles(deps(set($$labels)))" --output=label --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" 2> "$$promote/checkpoint-query.log" \
 		| /usr/bin/grep '^//' | /usr/bin/sed -E 's#^//([^:]+):#\1/#; s#^//:##' | /usr/bin/sort -u > "$$promote/query-labels-paths.txt"; \
 		printf '%s\n' MODULE.bazel MODULE.bazel.lock >> "$$promote/query-labels-paths.txt"; \
 		/usr/bin/sort -u "$$promote/query-labels-paths.txt" \
 			| /usr/bin/awk -v root="$(CURDIR)" '{ if (system("test -f " root "/" $0) == 0) print }' > "$$inputs_file"; \
 		test -s "$$inputs_file"; then \
 		input_identity="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --compute-identity --repo-root "$(CURDIR)" --inputs-file "$$inputs_file" --registry "$(CURDIR)/bazel/promotion/components.json" --build-config "$$build_config")"; \
+	fi; \
+	if [ -z "$$input_identity" ]; then \
+		echo "promotion checkpoint identity unavailable: the component-input query failed or returned no inputs" >&2; \
+		if [ -f "$$promote/checkpoint-query.log" ]; then /bin/cat "$$promote/checkpoint-query.log" >&2; fi; \
+		if [ -f "$$promote/query-labels-paths.txt" ]; then /usr/bin/wc -l "$$promote/query-labels-paths.txt" >&2; fi; \
+		exit 1; \
 	fi; \
 	rm -f "$$promote/query-labels-paths.txt"; \
 	resume=0; \
@@ -354,7 +360,7 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 			fi; \
 		done; \
 		/bin/chmod -R u+w "$$promote/buildset" 2>/dev/null || true; \
-		python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' "$$promote/buildset"; \
+		for side in a b; do /bin/rm -rf "$$promote/buildset/$$side/output-base"; done; \
 		if [ -n "$$input_identity" ]; then \
 			PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --write --promote-root "$$promote" --proof-source-sha "$$provenance_source" --component-input-identity "$$input_identity" --toolchain-sha256 "$$provenance_toolchain" --components "$$component_arg"; \
 			echo "$$input_identity" > "$$identity_file"; \

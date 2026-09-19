@@ -539,6 +539,15 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("imported/rootfs/product/initramfs.cpio.gz", promoted)
         self.assertIn("imported/uapi/product/uapi.sha256", promoted)
         self.assertIn("imported/mlibc/product/sysroot.sha256", promoted)
+        # The proof index binds buildset/<side>/execution.json and
+        # build-events.json. After the A/B build the recipe must reclaim only
+        # the huge output bases and keep those evidence files, and the whole
+        # buildset directory must be removed only by the pre-build cleanup.
+        self.assertIn('rm -rf "$$promote/buildset/$$side/output-base"', mk)
+        self.assertEqual(
+            mk.count("shutil.rmtree(sys.argv[1], ignore_errors=True)' \"$$promote/buildset\""),
+            1,
+        )
         self.assertIn("//bazel/promotion:promoted_apple_inputs", app)
         self.assertIn("orlix_promoted_apple_inputs", promoted)
         for position in (11, 12, 13):
