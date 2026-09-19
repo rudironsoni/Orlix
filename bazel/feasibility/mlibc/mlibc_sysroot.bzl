@@ -121,6 +121,7 @@ def _mlibc_sysroot_impl(ctx):
     loader = ctx.actions.declare_file(ctx.label.name + "/ld.so")
     runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
     digest = ctx.actions.declare_file(ctx.label.name + "/sysroot.sha256")
+    product = ctx.actions.declare_directory(ctx.label.name + "/product")
     runtime_identity = _compiler_runtime(ctx, runtime)
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(script, r"""
@@ -147,7 +148,7 @@ xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
 xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
 case "$xcode_name|$xcode_build" in
-  "Xcode 26.6|Build version 17F113"|"Xcode 27.0|Build version 27A5252f") ;;
+  "Xcode 27.0|Build version 27A266a"|"Xcode 26.6|Build version 17F113") ;;
   *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
 esac
 meson_bin="$(/usr/bin/command -v meson)"
@@ -302,11 +303,42 @@ test "${#sysroot_digest}" -eq 64
         use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
+    ctx.actions.run_shell(
+        mnemonic = "OrlixPromotedMlibcProduct",
+        progress_message = "Assembling the canonical OrlixMLibC promotion product",
+        command = r"""
+set -euo pipefail
+exec_root="$PWD"
+out="$exec_root/$1"
+sysroot="$exec_root/$2"
+runtime="$exec_root/$3"
+abi="$exec_root/$4"
+manifest="$exec_root/$5"
+digest="$exec_root/$6"
+test -d "$sysroot/usr/include"
+test -d "$sysroot/usr/lib"
+test -s "$runtime"
+test -s "$abi"
+test -s "$manifest"
+test -s "$digest"
+/bin/mkdir -p "$out"
+/bin/cp -R "$sysroot/." "$out/"
+/bin/cp "$runtime" "$out/libcompiler_rt.a"
+/bin/cp "$abi" "$out/abi.txt"
+/bin/cp "$manifest" "$out/manifest.json"
+/bin/cp "$digest" "$out/sysroot.sha256"
+""",
+        arguments = [product.path, sysroot.path, runtime.path, abi.path, manifest.path, digest.path],
+        inputs = [sysroot, runtime, abi, manifest, digest],
+        outputs = [product],
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+    )
     artifact_identity = declare_artifact_identity(
         ctx,
         "sysroot",
         ctx.file._artifact_identity_serializer,
-        root = sysroot,
+        root = product,
     )
     return [
         DefaultInfo(files = depset([
@@ -318,6 +350,7 @@ test "${#sysroot_digest}" -eq 64
             loader,
             runtime,
             digest,
+            product,
             artifact_identity.manifest,
             artifact_identity.digest,
             runtime_identity.manifest,

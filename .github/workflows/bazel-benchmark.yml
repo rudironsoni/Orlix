@@ -23,18 +23,30 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Select Xcode 26.6
+      - name: Read requested Xcode version
+        id: xcode-version
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
         with:
-          xcode-version: "26.6"
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
       - name: Export the selected Xcode to Make
         run: |
           set -euo pipefail
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
-          test "$(xcodebuild -version | sed -n '2p')" = "Build version 17F113"
+
       - name: Install build tools
         run: brew bundle --file Brewfile
+
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
       - name: Measure and compare component builds through Make
         run: |
           set -euo pipefail

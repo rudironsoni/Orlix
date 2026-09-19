@@ -11,7 +11,7 @@ summary: "Define every supported Apple build row, stable Make entry point, and B
 task_of:
   - "[Route every Apple build through Bazel](../../story/doing/route-every-apple-build-through-bazel.md)"
 depends_on:
-  - "[Run the Bazel Xcode 26.6 feasibility experiment](../doing/run-bazel-xcode-26-6-feasibility-experiment.md)"
+  - "[Run the Bazel Xcode 26.6 feasibility experiment](../done/run-bazel-xcode-26-6-feasibility-experiment.md)"
 blocks:
   - "[Implement universal Apple Bazel build routing](../doing/implement-universal-apple-bazel-build-routing.md)"
   - "[Implement shared Bazel cache and buildset reuse](../doing/implement-shared-bazel-cache-and-buildset-reuse.md)"

@@ -1,0 +1,440 @@
+name: Bazel CI
+
+on:
+  # Manual dispatch may explicitly request a diagnostic component mode. `auto`
+  # (default) keeps the normal changed-path selection; `promoted` is a
+  # proof/debug operation only and never release authorization.
+  workflow_dispatch:
+    inputs:
+      component_mode:
+        description: 'Diagnostic component mode: auto, source, or promoted (proof/debug only)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - source
+          - promoted
+        default: auto
+  pull_request:
+    paths:
+      - ".github/workflows/bazel-*.yml"
+      - ".github/workflows/ios15-runtime.yml"
+      - ".bazelignore"
+      - ".bazelrc"
+      - ".bazelversion"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "Brewfile"
+      - "Makefile"
+      - "make/bazel-migration.mk"
+      - "artifacts.lock.json"
+      - "bazel/**"
+      - "**/BUILD.bazel"
+      - "**/*.bzl"
+      - "Orlix/make/vendor.mk"
+      - "OrlixKernel/Sources/ports/orlix/**"
+      - "OrlixMLibC/**"
+      - "third_party/**"
+      - "Orlix/**"
+      - "OrlixHostAdapter/**"
+      - "OrlixKernel/**"
+      - "OrlixOS/**"
+      - "project.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bazel-*.yml"
+      - ".github/workflows/ios15-runtime.yml"
+      - ".bazelignore"
+      - ".bazelrc"
+      - ".bazelversion"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "Brewfile"
+      - "Makefile"
+      - "make/bazel-migration.mk"
+      - "artifacts.lock.json"
+      - "bazel/**"
+      - "**/BUILD.bazel"
+      - "**/*.bzl"
+      - "Orlix/make/vendor.mk"
+      - "OrlixKernel/Sources/ports/orlix/**"
+      - "OrlixMLibC/**"
+      - "third_party/**"
+      - "Orlix/**"
+      - "OrlixHostAdapter/**"
+      - "OrlixKernel/**"
+      - "OrlixOS/**"
+      - "project.yml"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('bazel-ci-pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && 'bazel-ci-main' || format('bazel-ci-manual-{0}', github.ref_name)) }}
+  cancel-in-progress: true
+
+jobs:
+  apple-ci:
+    name: Bazel matrix check
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Read requested Xcode version
+        id: xcode-version
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Restore Bazel repository cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
+      - name: Restore iOS 15.5 runtime archive
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Install declared build tools
+        run: |
+          set -euo pipefail
+          brew trust --formula xcodesorg/made/xcodes
+          brew bundle --file Brewfile
+          test "$(xcodes version)" = "2.0.3"
+
+
+      - name: Export the selected Xcode to Make
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
+      - name: Capture the toolchain manifest before simulator preparation
+        run: |
+          set -euo pipefail
+          make __bazel-toolchain-manifest
+
+      - name: Resolve BuildBuddy cache policy
+        id: buildbuddy
+        env:
+          ORLIX_BUILDBUDDY_CACHE_MODE: ${{ vars.ORLIX_BUILDBUDDY_CACHE_MODE || 'normal' }}
+          ORLIX_BUILDBUDDY_CONTEXT: ${{ github.event_name == 'push' && 'main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && 'pr' || 'fork') }}
+        run: make __bazel-buildbuddy-policy
+
+      - name: Configure trusted BuildBuddy writes
+        if: steps.buildbuddy.outputs.access == 'write'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY }}
+          ORLIX_BUILDBUDDY_ACCESS: write
+        run: make __bazel-buildbuddy-configure
+
+      - name: Configure read-only BuildBuddy access
+        if: steps.buildbuddy.outputs.access == 'read'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
+          ORLIX_BUILDBUDDY_ACCESS: read
+        run: make __bazel-buildbuddy-configure
+
+      - name: Prepare both simulator runtimes
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Caches/Orlix/ios15-runtime"
+          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --directory "$HOME/Library/Caches/Orlix/ios15-runtime" --keep-archive --no-color
+          current_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "26.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          ios15_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          test -n "$current_runtime_id"
+          test -n "$ios15_runtime_id"
+          device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"
+          xcrun simctl list devicetypes -j | jq -e --arg identifier "$device_type" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null
+          current_id="$(xcrun simctl create "Orlix current CI" "$device_type" "$current_runtime_id")"
+          ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
+          test -n "$current_id"
+          test -n "$ios15_id"
+          xcrun simctl boot "$current_id"
+          xcrun simctl boot "$ios15_id"
+          xcrun simctl bootstatus "$current_id" -b
+          xcrun simctl bootstatus "$ios15_id" -b
+          {
+            echo "ORLIX_CURRENT_SIMULATOR_ID=$current_id"
+            echo "ORLIX_CURRENT_SIMULATOR_VERSION=26.5"
+            echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
+          } >> "$GITHUB_ENV"
+
+      - name: Select the component mode
+        id: component-mode
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUESTED_COMPONENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.component_mode || 'auto' }}
+        run: |
+          set -euo pipefail
+          schema="$(python3 -c "import json; print(json.load(open('artifacts.lock.json')).get('schema', 1))")"
+          if [ "$REQUESTED_COMPONENT_MODE" = "promoted" ]; then
+            # Manual promoted proof: a signed schema-2 seven-component lock with
+            # immutable OCI references and artifact-identity-v2 is mandatory,
+            # and reconstruction still verifies every signature.
+            python3 - <<'PY'
+          import json
+          import sys
+          lock = json.load(open("artifacts.lock.json"))
+          expected = {
+              "uapi", "mlibc", "rootfs",
+              "kernel-release-iphoneos", "kernel-release-iphonesimulator",
+              "kernel-development-iphoneos", "kernel-development-iphonesimulator",
+          }
+          def fail(message):
+              print(f"::error::manual promoted mode rejected: {message}", file=sys.stderr)
+              raise SystemExit(1)
+          if lock.get("schema") != 2:
+              fail("lock schema is not 2")
+          components = lock.get("components")
+          if not isinstance(components, dict) or set(components) != expected:
+              fail("lock does not contain exactly the seven required components")
+          if not lock.get("buildset"):
+              fail("lock buildset is empty")
+          for name, entry in sorted(components.items()):
+              identity = entry.get("artifact_identity") or {}
+              if identity.get("format") != "artifact-identity-v2":
+                  fail(f"{name} is not artifact-identity-v2")
+              digest = entry.get("oci_digest") or ""
+              if not digest.startswith("sha256:"):
+                  fail(f"{name} has no immutable sha256 OCI digest")
+          PY
+            mode="promoted"
+          elif [ "$REQUESTED_COMPONENT_MODE" = "source" ]; then
+            mode="source"
+          else
+            paths_file="$RUNNER_TEMP/orlix-changed-paths.txt"
+            : > "$paths_file"
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              expected="${{ github.event.pull_request.changed_files }}"
+              if gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename' > "$paths_file" 2>/dev/null \
+                && [ "$(grep -c . "$paths_file" || true)" = "$expected" ]; then
+                printf 'selected changed paths from the pull request API\n'
+              else
+                : > "$paths_file"
+                echo "changed-path query failed or truncated; selecting source mode conservatively" >&2
+              fi
+            elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              before="${{ github.event.before }}"
+              after="${{ github.event.after }}"
+              case "$before" in
+                0000000000000000000000000000000000000000|"") echo "no push base; selecting source mode conservatively" >&2 ;;
+                *)
+                  if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64)" fetch --no-tags --depth=1 origin "$before" "$after" 2>/dev/null \
+                    && git diff --name-only "$before" "$after" > "$paths_file" 2>/dev/null; then
+                    printf 'selected changed paths from the push range\n'
+                  else
+                    : > "$paths_file"
+                    echo "push range unavailable; selecting source mode conservatively" >&2
+                  fi
+                  ;;
+              esac
+            else
+              echo "no trustworthy change set for $GITHUB_EVENT_NAME; selecting source mode conservatively" >&2
+            fi
+            mode="$(PYTHONPATH=bazel/migration python3 bazel/migration/select_component_mode.py --lock-schema "$schema" --event "$GITHUB_EVENT_NAME" --changed-paths "$RUNNER_TEMP/orlix-changed-paths.txt" --out "$RUNNER_TEMP/orlix-component-mode.json")"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              printf 'Component mode selection: %s\n\n' "$mode"
+              printf '```json\n'
+              cat "$RUNNER_TEMP/orlix-component-mode.json" 2>/dev/null || printf '{"mode": "%s", "request": "%s"}\n' "$mode" "$REQUESTED_COMPONENT_MODE"
+              printf '\n```\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          rm -f "$RUNNER_TEMP/orlix-changed-paths.txt" "$RUNNER_TEMP/orlix-component-mode.json"
+
+      - name: Prepare promoted-mode verification inputs
+        if: steps.component-mode.outputs.mode == 'promoted'
+        env:
+          ORLIX_COSIGN_PUB_VALUE: ${{ vars.ORLIX_COSIGN_PUB }}
+          ORLIX_ORAS_REGISTRY_CONFIG: ${{ runner.temp }}/orlix-registry.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$ORLIX_COSIGN_PUB_VALUE" || { echo "ORLIX_COSIGN_PUB is required" >&2; exit 1; }
+          key_path="${RUNNER_TEMP}/orlix-cosign-pub.pem"
+          printf '%s\n' "$ORLIX_COSIGN_PUB_VALUE" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "ORLIX_COSIGN_PUB=$key_path"
+            echo "ORLIX_ORAS_REGISTRY_CONFIG=$ORLIX_ORAS_REGISTRY_CONFIG"
+          } >> "$GITHUB_ENV"
+          brew list cosign >/dev/null 2>&1 || brew install cosign
+          brew list oras >/dev/null 2>&1 || brew install oras
+          printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Run the Make-owned Apple CI operation
+        if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'
+        env:
+          ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}
+          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
+        run: make __bazel-apple-ci
+
+      # Manual promoted proof: two passes in one job. Each pass starts with a
+      # cleared Bazel output base, reconstruction tree, proof output, promotion
+      # staging, and Apple CI evidence, so nothing is reused from the previous
+      # pass except the promoted-artifact store. The Bazel output base path
+      # stays repository-relative because MODULE.bazel.lock records that path;
+      # freshness comes from deleting its contents. The cold pass starts with
+      # an empty store, so the seven components must come from GHCR; the warm
+      # pass keeps only the populated store, so a hit can only come from it.
+      # Reconstruction verifies every signature in both passes, and
+      # component-producing actions are counted from the executed execution log.
+      - name: Promoted-consumer proof (cold then warm)
+        if: github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        env:
+          ORLIX_BAZEL_COMPONENT_MODE: promoted
+          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
+        run: |
+          set -euo pipefail
+          store="$RUNNER_TEMP/orlix-promoted-store"
+          rm -rf "$store"; mkdir -p "$store"
+          results="$RUNNER_TEMP/orlix-promoted-proof"
+          rm -rf "$results"; mkdir -p "$results"
+          for pass in cold warm; do
+            echo "=== promoted $pass pass ==="
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
+            chmod -R u+w Build/Bazel 2>/dev/null || true
+            rm -rf Build/Bazel/output-base Build/Bazel/reconstruct Build/Bazel/proof bazel/promotion/imported Build/AgentHarness/bazel-ci Build/AgentHarness/bazel-promotion
+            mkdir -p Build/Bazel
+            # Stage the reconstructed components first: the //bazel/promotion
+            # package globs the imported tree, so it must exist before any Bazel
+            # analysis. The acquisition evidence is captured here, before the
+            # second reconstruction inside Apple CI (which is a store hit).
+            ORLIX_PROMOTED_ARTIFACT_STORE="$store" make __bazel-substitute-promoted
+            cp Build/AgentHarness/bazel-promotion/acquisition.json "$results/$pass-acquisition.json"
+            # Fresh output base so the package glob is re-evaluated against the
+            # freshly staged tree and no first-pass Bazel result is reused.
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
+            chmod -R u+w Build/Bazel 2>/dev/null || true
+            rm -rf Build/Bazel/output-base Build/AgentHarness/bazel-ci
+            mkdir -p Build/Bazel
+            start="$(date +%s)"
+            ORLIX_PROMOTED_ARTIFACT_STORE="$store" \
+            make __bazel-apple-ci
+            end="$(date +%s)"
+            echo "$((end - start))" > "$results/$pass.seconds"
+            test -f "Build/AgentHarness/bazel-ci/execution.json" || { echo "::error::$pass pass produced no execution log"; exit 1; }
+            PYTHONPATH=bazel/promotion python3 bazel/promotion/component_actions.py \
+              --execution-log "Build/AgentHarness/bazel-ci/execution.json" \
+              --registry bazel/promotion/components.json \
+              --out "Build/AgentHarness/bazel-promotion/component-actions.json"
+            cp "Build/AgentHarness/bazel-promotion/component-actions.json" "$results/$pass-component-actions.json"
+            python3 - "$results/$pass-acquisition.json" "$results/$pass-component-actions.json" "$pass" <<'PY'
+          import json
+          import sys
+          acquisition = json.load(open(sys.argv[1]))
+          actions = json.load(open(sys.argv[2]))
+          label = sys.argv[3]
+          if label == "cold" and acquisition["network_downloads"] != 7:
+              raise SystemExit(f"cold pass expected 7 network downloads, got {acquisition['network_downloads']}")
+          if label == "warm" and (acquisition["network_downloads"] != 0 or acquisition["local_store_hits"] != 7):
+              raise SystemExit(f"warm pass expected 0 downloads / 7 store hits, got {acquisition['network_downloads']}/{acquisition['local_store_hits']}")
+          if acquisition["components_total"] != 7:
+              raise SystemExit("expected seven locked components")
+          for name, entry in sorted(acquisition["components"].items()):
+              if entry.get("source") not in ("network", "local-store"):
+                  raise SystemExit(f"{name} has no acquisition source")
+              if entry.get("signature_verified") is not True:
+                  raise SystemExit(f"{name} signature was not verified")
+          if actions["component_actions"] != 0:
+              raise SystemExit(f"{label} pass executed {actions['component_actions']} component-producing actions")
+          PY
+          done
+          python3 - "$results" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          results = Path(sys.argv[1])
+          summary = {
+              "schema": 1,
+              "kind": "promoted-consumer-proof",
+              "cold": json.load(open(results / "cold-acquisition.json")),
+              "warm": json.load(open(results / "warm-acquisition.json")),
+              "cold_actions": json.load(open(results / "cold-component-actions.json")),
+              "warm_actions": json.load(open(results / "warm-component-actions.json")),
+              "cold_seconds": int((results / "cold.seconds").read_text().strip()),
+              "warm_seconds": int((results / "warm.seconds").read_text().strip()),
+          }
+          (results / "proof.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(summary, sort_keys=True))
+          PY
+
+      - name: Store promoted-consumer proof evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: promoted-consumer-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/orlix-promoted-proof/proof.json
+            ${{ runner.temp }}/orlix-promoted-proof/cold-acquisition.json
+            ${{ runner.temp }}/orlix-promoted-proof/warm-acquisition.json
+            ${{ runner.temp }}/orlix-promoted-proof/cold-component-actions.json
+            ${{ runner.temp }}/orlix-promoted-proof/warm-component-actions.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Save Bazel repository cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+
+      - name: Save iOS 15.5 runtime archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: make __bazel-buildbuddy-cleanup
+
+      - name: Remove promoted-mode verification inputs
+        if: always() && steps.component-mode.outputs.mode == 'promoted'
+        run: |
+          set -euo pipefail
+          test -z "${ORLIX_ORAS_REGISTRY_CONFIG:-}" || rm -f "$ORLIX_ORAS_REGISTRY_CONFIG"
+          test -z "${ORLIX_COSIGN_PUB:-}" || rm -f "$ORLIX_COSIGN_PUB"
+
+      - name: Store Apple CI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            Build/AgentHarness/bazel-ci
+            Build/**/*.xcresult
+            Build/**/*.log
+            ~/Library/Logs/DiagnosticReports
+          if-no-files-found: warn
+          retention-days: 14

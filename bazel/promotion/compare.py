@@ -117,6 +117,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--in-toto")
     parser.add_argument("--lock-proposal")
     parser.add_argument("--lock", default="artifacts.lock.json")
+    parser.add_argument("--source-sha", default=None)
+    parser.add_argument("--builder-id", default=None)
+    parser.add_argument("--invocation-id", default=None)
+    parser.add_argument("--toolchain-digest", default=None)
+    parser.add_argument("--build-config", default=None)
     args = parser.parse_args(argv)
     digest = compare_digests(args.first, args.second)
     content_digest = None
@@ -172,12 +177,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.sbom:
         from sbom import write_sbom
 
+        manifest_entries = None
+        if args.artifact_identity_format == ARTIFACT_IDENTITY_V2_FORMAT:
+            manifest_entries = json.loads(
+                Path(args.first_tree, "artifact-identity-v2.json").read_text(encoding="utf-8")
+            ).get("entries")
         write_sbom(
             args.sbom,
             args.component,
             digest,
             actual_digest=digest,
             artifact_identity=artifact_identity,
+            manifest_entries=manifest_entries,
         )
     if args.in_toto:
         from in_toto import write_provenance
@@ -187,6 +198,15 @@ def main(argv: list[str] | None = None) -> int:
             args.component,
             digest,
             artifact_identity=artifact_identity,
+            source_sha=args.source_sha or "",
+            builder_id=args.builder_id or "",
+            invocation_id=args.invocation_id or "",
+            build_config=(args.build_config or "").split(","),
+            toolchain_digest=args.toolchain_digest or "",
+            materials=[
+                {"uri": "orlix:promotion:build-tree:a", "digest": {"sha256": digest}},
+                {"uri": "orlix:promotion:build-tree:b", "digest": {"sha256": digest}},
+            ],
         )
     if args.lock_proposal:
         from lock_proposal import apply_lock_proposal, write_lock_proposal

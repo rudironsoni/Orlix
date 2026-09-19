@@ -54,33 +54,14 @@ def _promoted_rootfs_impl(ctx):
     base_ext4 = _require_one(ctx.files.base_ext4, "rootfs base.ext4")
     state_ext4 = _require_one(ctx.files.state_ext4, "rootfs state.ext4")
     digest = _require_one(ctx.files.digest, "rootfs digest")
+    identity_digest = _require_one(ctx.files.identity_digest, "rootfs identity digest")
     metadata = _require_one(ctx.files.payload_metadata, "rootfs payload metadata")
     manifest = _require_one(ctx.files.file_manifest, "rootfs file manifest")
-    stamp = ctx.actions.declare_file(ctx.label.name + "/rootfs.verified.sha256")
-    ctx.actions.run_shell(
-        mnemonic = "OrlixPromotedRootfs",
-        progress_message = "Verifying reconstructed rootfs against artifacts.lock.json",
-        command = r"""
-set -euo pipefail
-exec_root="$PWD"
-lock="$exec_root/$1"
-digest_file="$exec_root/$2"
-stamp="$exec_root/$3"
-got="$(/usr/bin/tr -d '[:space:]' < "$digest_file")"
-want="$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["components"]["rootfs"]["unsigned_digest"])' "$lock")"
-test "$got" = "$want" || { echo "promoted rootfs digest $got does not match lock $want" >&2; exit 1; }
-/bin/cp "$digest_file" "$stamp"
-""",
-        arguments = [ctx.file.lock.path, digest.path, stamp.path],
-        inputs = [ctx.file.lock, digest],
-        outputs = [stamp],
-        use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
-    )
+    stamp = _verify_component(ctx, "rootfs", identity_digest)
     return [
-        DefaultInfo(files = depset([initramfs, base_ext4, state_ext4, digest, stamp])),
+        DefaultInfo(files = depset([initramfs, base_ext4, state_ext4, digest, identity_digest, stamp])),
         OrlixRootfsInfo(
-            artifact_identity_digest = None,
+            artifact_identity_digest = identity_digest,
             artifact_identity_manifest = None,
             base_ext4 = base_ext4,
             file_manifest = manifest,
@@ -139,18 +120,19 @@ test -d "$src" || { echo "missing reconstructed tree $src" >&2; exit 1; }
 
 def _promoted_uapi_impl(ctx):
     digest = _require_one(ctx.files.digest, "uapi digest")
+    identity_digest = _require_one(ctx.files.identity_digest, "uapi identity digest")
     archive = _require_one(ctx.files.archive, "uapi archive")
     manifest = _require_one(ctx.files.manifest, "uapi manifest")
     if not ctx.files.headers:
         fail("promoted uapi missing reconstructed headers; run make __bazel-substitute-promoted")
-    stamp = _verify_component(ctx, "uapi", digest)
+    stamp = _verify_component(ctx, "uapi", identity_digest)
     headers = ctx.actions.declare_directory(ctx.label.name + "/headers")
-    _copy_sibling_tree(ctx, digest, "uapi", ctx.files.headers, headers, "OrlixPromotedUapiHeaders")
+    _copy_sibling_tree(ctx, identity_digest, "product/include", ctx.files.headers, headers, "OrlixPromotedUapiHeaders")
     return [
-        DefaultInfo(files = depset([digest, archive, manifest, stamp, headers])),
+        DefaultInfo(files = depset([digest, identity_digest, archive, manifest, stamp, headers])),
         OrlixInstalledUapiInfo(
             arch = "arm64",
-            artifact_identity_digest = None,
+            artifact_identity_digest = identity_digest,
             artifact_identity_manifest = None,
             headers = headers,
             linux_revision = "6.12.105",
@@ -171,6 +153,7 @@ orlix_promoted_uapi = rule(
     attrs = {
         "lock": attr.label(allow_single_file = True, mandatory = True),
         "digest": attr.label(allow_files = True, mandatory = True),
+        "identity_digest": attr.label(allow_files = True, mandatory = True),
         "headers": attr.label(allow_files = True, mandatory = True),
         "archive": attr.label(allow_files = True, mandatory = True),
         "manifest": attr.label(allow_files = True, mandatory = True),
@@ -179,22 +162,23 @@ orlix_promoted_uapi = rule(
 
 def _promoted_sysroot_impl(ctx):
     digest = _require_one(ctx.files.digest, "mlibc digest")
+    identity_digest = _require_one(ctx.files.identity_digest, "mlibc identity digest")
     uapi_digest = _require_one(ctx.files.uapi_digest, "mlibc consumed uapi digest")
     abi = _require_one(ctx.files.abi, "mlibc abi")
     loader = _require_one(ctx.files.loader, "mlibc loader")
     runtime = _require_one(ctx.files.runtime, "mlibc runtime")
     if not ctx.files.headers or not ctx.files.libraries:
         fail("promoted mlibc missing reconstructed sysroot; run make __bazel-substitute-promoted")
-    stamp = _verify_component(ctx, "mlibc", digest)
+    stamp = _verify_component(ctx, "mlibc", identity_digest)
     headers = ctx.actions.declare_directory(ctx.label.name + "/headers")
     libraries = ctx.actions.declare_directory(ctx.label.name + "/libraries")
-    _copy_sibling_tree(ctx, digest, "headers", ctx.files.headers, headers, "OrlixPromotedMlibcHeaders")
-    _copy_sibling_tree(ctx, digest, "libraries", ctx.files.libraries, libraries, "OrlixPromotedMlibcLibraries")
+    _copy_sibling_tree(ctx, identity_digest, "product/usr/include", ctx.files.headers, headers, "OrlixPromotedMlibcHeaders")
+    _copy_sibling_tree(ctx, identity_digest, "product/usr/lib", ctx.files.libraries, libraries, "OrlixPromotedMlibcLibraries")
     return [
-        DefaultInfo(files = depset([digest, abi, loader, runtime, stamp, headers, libraries])),
+        DefaultInfo(files = depset([digest, identity_digest, abi, loader, runtime, stamp, headers, libraries])),
         OrlixLibcSysrootInfo(
             abi_manifest = abi,
-            artifact_identity_digest = None,
+            artifact_identity_digest = identity_digest,
             artifact_identity_manifest = None,
             compiler_runtime = runtime,
             compiler_runtime_identity_digest = None,
@@ -213,6 +197,7 @@ orlix_promoted_sysroot = rule(
     attrs = {
         "lock": attr.label(allow_single_file = True, mandatory = True),
         "digest": attr.label(allow_files = True, mandatory = True),
+        "identity_digest": attr.label(allow_files = True, mandatory = True),
         "uapi_digest": attr.label(allow_files = True, mandatory = True),
         "headers": attr.label(allow_files = True, mandatory = True),
         "libraries": attr.label(allow_files = True, mandatory = True),
@@ -392,6 +377,7 @@ orlix_promoted_rootfs = rule(
         "base_ext4": attr.label(allow_files = True, mandatory = True),
         "state_ext4": attr.label(allow_files = True, mandatory = True),
         "digest": attr.label(allow_files = True, mandatory = True),
+        "identity_digest": attr.label(allow_files = True, mandatory = True),
         "payload_metadata": attr.label(allow_files = True, mandatory = True),
         "file_manifest": attr.label(allow_files = True, mandatory = True),
     },

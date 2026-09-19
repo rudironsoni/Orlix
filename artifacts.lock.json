@@ -1,21 +1,76 @@
 {
-  "schema": 1,
-  "buildset": "ce931c2561ba324daccb854c2aa5cfa875238956156ae91d304a46807731c05d",
+  "schema": 2,
+  "buildset": "15114da1cbb9b97eb73669e7d3bd9a095c2a5f6aa25d94f2f04595732260cc51",
   "components": {
     "uapi": {
-      "unsigned_digest": "666af9a63409b54230ef14c4b418b6064ac8a9a9ae77ee1d999f6af5fe134e07",
-      "oci_digest": "sha256:ca8480cd8d60048bd275bf16a91d0663508322f5312d7898db93851eea1419a4",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:ca8480cd8d60048bd275bf16a91d0663508322f5312d7898db93851eea1419a4"
+      "unsigned_digest": "dc5b0a464a23c8b60fe2f2b74fe0f21dba70ccac44af844bba2d4eaeb651b736",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "dc5b0a464a23c8b60fe2f2b74fe0f21dba70ccac44af844bba2d4eaeb651b736"
+      },
+      "oci_digest": "sha256:768c4bb92a67e8db7e45672d4c5fbb02d55e34e4c969d08c23125ebcbf85c3d5",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:768c4bb92a67e8db7e45672d4c5fbb02d55e34e4c969d08c23125ebcbf85c3d5"
     },
     "mlibc": {
-      "unsigned_digest": "fc080e3617519e91626335997c270910c691a1ea760cc82d6d36a6f0238448a8",
-      "oci_digest": "sha256:9a8840d280a3e40194b5b84d135070b27f1bb17aa97ff5e568ec0f5258bd0c32",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:9a8840d280a3e40194b5b84d135070b27f1bb17aa97ff5e568ec0f5258bd0c32"
+      "unsigned_digest": "a2828cbac6b01951560d6b09cadda80ee6bd0e118f0f918134d5c78be340d7a8",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "a2828cbac6b01951560d6b09cadda80ee6bd0e118f0f918134d5c78be340d7a8"
+      },
+      "oci_digest": "sha256:dcb70d42d8042c5de5e2586464465e3a485b45a6693aca3d223a635ad54ae47c",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:dcb70d42d8042c5de5e2586464465e3a485b45a6693aca3d223a635ad54ae47c"
     },
     "rootfs": {
-      "unsigned_digest": "794e4da2cf89360b95ad6db11d5be671c741d74015ba1e3bdf1188b67704bcf3",
-      "oci_digest": "sha256:4aa031b629e496e9c27fa1a00a6024e7262c61f90e9b71d7b9e779782a564822",
-      "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:4aa031b629e496e9c27fa1a00a6024e7262c61f90e9b71d7b9e779782a564822"
+      "unsigned_digest": "f963fecfe44435d6dc46956040c256c7e1c72a26404ed5a07dbdb21117a861cb",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "f963fecfe44435d6dc46956040c256c7e1c72a26404ed5a07dbdb21117a861cb"
+      },
+      "oci_digest": "sha256:01fb1b8d32f4e339c05b4a4aa02ba7372cbbc923289ce727c12e29e2cfce0162",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/rootfs@sha256:01fb1b8d32f4e339c05b4a4aa02ba7372cbbc923289ce727c12e29e2cfce0162"
+    },
+    "kernel-release-iphoneos": {
+      "unsigned_digest": "79ee8b855966a701e2e5e85110ffa6d4ab85c9117d693490e2816aa9743fb578",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "79ee8b855966a701e2e5e85110ffa6d4ab85c9117d693490e2816aa9743fb578"
+      },
+      "oci_digest": "sha256:40adf4d467754b09cbad16fb1a0791f45db2458cccb38eb0f47fc205986d3f3b",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/kernel-release-iphoneos@sha256:40adf4d467754b09cbad16fb1a0791f45db2458cccb38eb0f47fc205986d3f3b"
+    },
+    "kernel-release-iphonesimulator": {
+      "unsigned_digest": "54b4d948575853e704b3227178b0a6d8b17df8e047780ca37873d8e413b8c781",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "54b4d948575853e704b3227178b0a6d8b17df8e047780ca37873d8e413b8c781"
+      },
+      "oci_digest": "sha256:6722ef6e8c2494c66543c2776e72c3db9b6f9344930df0d5f6ac8198666cf0ca",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/kernel-release-iphonesimulator@sha256:6722ef6e8c2494c66543c2776e72c3db9b6f9344930df0d5f6ac8198666cf0ca"
+    },
+    "kernel-development-iphoneos": {
+      "unsigned_digest": "64c3f8871a7f945a497253336a5033f18b694bb83ede5cb51874dd5b178689e7",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "64c3f8871a7f945a497253336a5033f18b694bb83ede5cb51874dd5b178689e7"
+      },
+      "oci_digest": "sha256:2b1182ca773319186b2f069f47e9cff8824419a5351d56c144f3a7239e77c07b",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/kernel-development-iphoneos@sha256:2b1182ca773319186b2f069f47e9cff8824419a5351d56c144f3a7239e77c07b"
+    },
+    "kernel-development-iphonesimulator": {
+      "unsigned_digest": "e8e6be52acc4903873a500e36cff6d0749484bdb7f65dce5225c78153be411c9",
+      "artifact_identity": {
+        "format": "artifact-identity-v2",
+        "version": 2,
+        "digest": "e8e6be52acc4903873a500e36cff6d0749484bdb7f65dce5225c78153be411c9"
+      },
+      "oci_digest": "sha256:a86bf109313bc6ade517c654d33379559adbe787533fee3c55e10351dd0e97f6",
+      "oci_reference": "ghcr.io/rudironsoni/orlix/kernel-development-iphonesimulator@sha256:a86bf109313bc6ade517c654d33379559adbe787533fee3c55e10351dd0e97f6"
     }
   }
 }

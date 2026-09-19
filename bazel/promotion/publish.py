@@ -68,6 +68,11 @@ def trusted_public_key() -> str:
     if not public:
         raise PublishError("ORLIX_COSIGN_PUB is required to verify signatures")
     path = Path(public.removeprefix("file://"))
+    if not path.is_file():
+        handle, materialized = tempfile.mkstemp(prefix="orlix-cosign-pub-", suffix=".pem")
+        with os.fdopen(handle, "w", encoding="utf-8") as blob:
+            blob.write(public if public.endswith("\n") else public + "\n")
+        path = Path(materialized)
     fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
     policy = json.loads(Path(__file__).with_name("trust-policy.json").read_text())
     if fingerprint not in policy["accepted_key_ids"]:

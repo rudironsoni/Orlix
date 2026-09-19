@@ -9,6 +9,11 @@ SOURCE = Path(__file__).with_name("native_sources.bzl")
 
 
 class NativeSourceHashTests(unittest.TestCase):
+    def test_kernel_toolchain_refuses_to_guess_an_xcode_path(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("/Applications/Xcode", text)
+        self.assertIn('ctx.getenv("DEVELOPER_DIR", "")', text)
+
     def test_linux_and_mlibc_archives_have_sha256(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")
         linux = re.search(
@@ -55,6 +60,27 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertEqual(bash.group(1), "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba")
         self.assertIn("bash-5.3", text)
         self.assertIn("https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz", text)
+
+    def test_savannah_archives_have_checksum_preserving_mirrors(self) -> None:
+        text = SOURCE.read_text(encoding="utf-8")
+        attr = re.search(
+            r'name = "orlix_attr_source",.*?sha256 = "([0-9a-f]{64})"',
+            text,
+            re.S,
+        )
+        acl = re.search(
+            r'name = "orlix_acl_source",.*?sha256 = "([0-9a-f]{64})"',
+            text,
+            re.S,
+        )
+        self.assertIsNotNone(attr)
+        self.assertEqual(attr.group(1), "f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b")
+        self.assertIsNotNone(acl)
+        self.assertEqual(acl.group(1), "97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd")
+        self.assertIn("https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz", text)
+        self.assertIn("https://download-mirror.savannah.gnu.org/releases/acl/acl-2.3.2.tar.xz", text)
+        self.assertIn("https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz", text)
+        self.assertIn("https://download-mirror.savannah.gnu.org/releases/attr/attr-2.5.2.tar.xz", text)
 
     def test_rootfs_package_archives_have_sha256(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")

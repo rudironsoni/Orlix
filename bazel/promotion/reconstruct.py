@@ -71,6 +71,8 @@ def _extract_component_tar(blob: Path, dest: Path) -> None:
                     dest,
                     set_attrs=not member.isdir(),
                 )
+                if member.isfile():
+                    archive.chmod(member, dest / member.name)
             for member in sorted(directories, key=lambda item: item.name, reverse=True):
                 directory = dest / member.name
                 archive.chown(member, directory, numeric_owner=False)
@@ -87,6 +89,7 @@ def reconstruct(
     out_dir: str,
     run=_run,
     store_root: str | Path | None = None,
+    evidence_path: str | None = None,
 ) -> dict:
     lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     buildset = lock.get("buildset")
@@ -109,6 +112,9 @@ def reconstruct(
     components = lock["components"]
     acquired = False
     pulled = {}
+    acquisition: dict[str, dict] = {}
+    network_downloads = 0
+    local_store_hits = 0
     root = Path(out_dir) / buildset
     root.parent.mkdir(parents=True, exist_ok=True)
     if root.is_symlink():
@@ -144,6 +150,8 @@ def reconstruct(
             if materialized is not None:
                 marker = materialized["marker"]
                 identity = materialized.get("artifact_identity")
+                local_store_hits += 1
+                acquisition[name] = {"source": "local-store", "signature_verified": True}
             else:
                 if shutil.which("cosign") is None:
                     raise ReconstructError("cosign is required to reconstruct")
@@ -177,6 +185,8 @@ def reconstruct(
                 marker = stored["marker"]
                 identity = stored.get("artifact_identity")
                 acquired = True
+                network_downloads += 1
+                acquisition[name] = {"source": "network", "signature_verified": True}
             pulled[name] = {
                 "oci_digest": digest,
                 "oci_reference": reference,
@@ -185,6 +195,9 @@ def reconstruct(
             }
             if identity is not None:
                 pulled[name]["artifact_identity"] = identity
+            acquisition[name]["oci_digest"] = digest
+            if isinstance(identity, dict):
+                acquisition[name]["artifact_identity"] = identity
             if marker is not None:
                 pulled[name]["unsigned_digest_path"] = str(root / name / marker)
         if acquired:
@@ -201,7 +214,20 @@ def reconstruct(
         store.write_lease(buildset, list(components.values()), root)
     except (ArtifactStoreError, OSError) as error:
         raise ReconstructError(str(error)) from error
-    return {"buildset": buildset, "components": pulled}
+    evidence = {
+        "schema": 1,
+        "kind": "promoted-acquisition",
+        "buildset": buildset,
+        "components_total": len(components),
+        "network_downloads": network_downloads,
+        "local_store_hits": local_store_hits,
+        "components": acquisition,
+    }
+    if evidence_path:
+        destination = Path(evidence_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"buildset": buildset, "components": pulled, "acquisition": evidence}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -209,8 +235,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lock", default="artifacts.lock.json")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--store")
+    parser.add_argument("--evidence")
     args = parser.parse_args(argv)
-    payload = reconstruct(args.lock, args.out_dir, store_root=args.store)
+    payload = reconstruct(args.lock, args.out_dir, store_root=args.store, evidence_path=args.evidence)
     print(payload["buildset"])
     return 0
 
