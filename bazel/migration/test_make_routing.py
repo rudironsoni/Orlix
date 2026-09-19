@@ -424,8 +424,10 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("--proof-source-sha", buildset)
         self.assertNotIn("--check --promote-root \"$$promote\" --source-sha", buildset)
         # The expensive build lives behind the resume guard, after the check.
-        self.assertLess(buildset.index("--compute-identity"), buildset.index("--batch"))
-        self.assertLess(buildset.index("--batch"), buildset.index("--proof-source-sha"))
+        # Use the A/B build marker (--nouse_action_cache); the checkpoint query
+        # also runs with --batch, so --batch is not a unique build marker.
+        self.assertLess(buildset.index("--compute-identity"), buildset.index("--nouse_action_cache"))
+        self.assertLess(buildset.index("--nouse_action_cache"), buildset.index("--proof-source-sha"))
         self.assertIn("promotion checkpoint hit", buildset)
         self.assertIn("component-input-identity.txt", buildset)
         workflow = (ROOT / ".github" / "workflows" / "bazel-promote.yml").read_text(encoding="utf-8")
