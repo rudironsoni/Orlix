@@ -8,9 +8,12 @@ import os
 import platform
 import subprocess
 import shutil
+import time
 from pathlib import Path
 
 PIN_PATH = Path(__file__).with_name("toolchain-pin.json")
+OBSERVE_TIMEOUT_SECONDS = 30
+OBSERVE_MAX_ATTEMPTS = 2
 
 
 class PinError(RuntimeError):
@@ -22,10 +25,7 @@ def load_pin(path: Path = PIN_PATH) -> dict:
 
 
 def product_pin(data: dict | None = None) -> dict:
-    pin = (data or load_pin())["product_pin"]
-    if pin["xcode_version"] == "27.0":
-        raise PinError("Xcode 27.0 is not the product pin")
-    return pin
+    return (data or load_pin())["product_pin"]
 
 
 def allowed_identities(data: dict | None = None) -> tuple[tuple[str, str], ...]:
@@ -45,9 +45,6 @@ def namespace_for(version: str, build: str, data: dict | None = None) -> str:
 
 def require_identity(version: str, build: str, disk_cache: str, data: dict | None = None) -> None:
     payload = data or load_pin()
-    pin = product_pin(payload)
-    if version == "27.0" and pin["xcode_version"] != "26.6":
-        raise PinError("Xcode 27.0 is not the product pin")
     try:
         expected = namespace_for(version, build, payload)
     except PinError:
@@ -58,18 +55,49 @@ def require_identity(version: str, build: str, disk_cache: str, data: dict | Non
         )
 
 
-def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
+def _observe_failure(command: tuple[str, ...], context: dict, reason: str, elapsed: list[float]) -> PinError:
+    total = sum(elapsed)
+    detail = [f"Xcode {context['xcode']} build {context['build']}"]
+    if "--sdk" in command:
+        detail.append(f"sdk {command[command.index('--sdk') + 1]}")
+    detail.append(f"timeout {OBSERVE_TIMEOUT_SECONDS}s")
+    detail.append(f"elapsed {total:.1f}s over {len(elapsed)} attempt(s)")
+    return PinError(f"toolchain discovery {reason}: {' '.join(command)} ({', '.join(detail)})")
+
+
+def capture_manifest(developer_dir: str, bazel: str, output: str, run_id: str | None = None) -> dict:
     developer = str(Path(developer_dir).resolve(strict=True))
     env = {**os.environ, "DEVELOPER_DIR": developer}
+    context = {"xcode": "unknown", "build": "unknown"}
 
     def observe(*command: str) -> str:
-        return subprocess.run(
-            command, env=env, check=True, capture_output=True, text=True, timeout=30,
-        ).stdout.strip()
+        elapsed: list[float] = []
+        for _ in range(OBSERVE_MAX_ATTEMPTS):
+            start = time.monotonic()
+            try:
+                return subprocess.run(
+                    command, env=env, check=True, capture_output=True, text=True,
+                    timeout=OBSERVE_TIMEOUT_SECONDS,
+                ).stdout.strip()
+            except subprocess.TimeoutExpired as error:
+                elapsed.append(time.monotonic() - start)
+                if len(elapsed) >= OBSERVE_MAX_ATTEMPTS:
+                    # from None: the PinError message already carries command,
+                    # SDK, Xcode identity, timeout, and elapsed time.
+                    raise _observe_failure(command, context, "timed out", elapsed) from None
+            except subprocess.CalledProcessError as error:
+                elapsed.append(time.monotonic() - start)
+                reason = f"failed (exit {error.returncode})"
+                stderr = (error.stderr or "").strip().splitlines()
+                if stderr:
+                    reason += f": {stderr[-1].strip()[:200]}"
+                raise _observe_failure(command, context, reason, elapsed) from None
+        raise AssertionError("unreachable: observe attempts exhausted without verdict")
 
     xcode = observe("/usr/bin/xcodebuild", "-version").splitlines()
     version = xcode[0].removeprefix("Xcode ")
     build = xcode[1].removeprefix("Build version ")
+    context.update({"xcode": version, "build": build})
     namespace_for(version, build)
     tools = {}
     for name in ("clang", "ld", "swift", "metal", "bazel"):
@@ -81,6 +109,7 @@ def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
         "schema": 1,
         "kind": "observed-toolchain",
         "developer_dir": developer,
+        "run_id": run_id,
         "xcode_version": version,
         "xcode_build": build,
         "bazel_version": observe(bazel, "--version"),
@@ -100,8 +129,54 @@ def capture_manifest(developer_dir: str, bazel: str, output: str) -> dict:
         raise PinError("observed Bazel does not match the product pin")
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    staging = destination.with_name(f"{destination.name}.tmp-{os.getpid()}")
+    staging.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(staging, destination)
     return payload
+
+
+def validate_manifest(path: str, developer_dir: str, run_id: str | None, disk_cache: str) -> dict:
+    """Establish that an existing manifest belongs to the current run.
+
+    Rejects missing files, stale run ids, a changed developer directory, and
+    any Xcode/Bazel identity outside the accepted pin. Never captures.
+    """
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as error:
+        raise PinError(f"toolchain manifest is missing: {path}") from error
+    except ValueError as error:
+        raise PinError(f"toolchain manifest is not valid JSON: {path}") from error
+    developer = str(Path(developer_dir).resolve(strict=True))
+    if payload.get("developer_dir") != developer:
+        raise PinError(
+            f"stale toolchain manifest: {payload.get('developer_dir')} is not the selected {developer}"
+        )
+    if payload.get("run_id") != run_id:
+        raise PinError(
+            f"stale toolchain manifest: run {payload.get('run_id')!r} is not the current run {run_id!r}"
+        )
+    try:
+        require_identity(payload["xcode_version"], payload["xcode_build"], disk_cache)
+    except (PinError, KeyError) as error:
+        raise PinError(f"stale toolchain manifest: unsupported identity in {path}") from error
+    if payload.get("bazel_version") != f"bazel {product_pin()['bazel']}":
+        raise PinError(f"stale toolchain manifest: Bazel {payload.get('bazel_version')} is not the pinned Bazel")
+    return payload
+
+
+def ensure_current_manifest(
+    developer_dir: str, bazel: str, output: str, run_id: str | None, disk_cache: str
+) -> dict:
+    """Reuse the current run's manifest, or capture it once when absent or stale.
+
+    Capture itself re-observes the toolchain and enforces the accepted
+    identity, so a stale manifest is replaced, never reused.
+    """
+    try:
+        return validate_manifest(output, developer_dir, run_id, disk_cache)
+    except PinError:
+        return capture_manifest(developer_dir, bazel, output, run_id)
 
 
 def capture_kernel_manifest(developer_dir: str, output: str) -> dict:

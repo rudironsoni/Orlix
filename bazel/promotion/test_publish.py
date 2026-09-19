@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -11,6 +12,24 @@ import publish
 
 
 class PublishTests(unittest.TestCase):
+    def test_inline_public_key_materializes_to_a_file(self) -> None:
+        pem = "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n"
+        fingerprint = hashlib.sha256(pem.encode("utf-8")).hexdigest()
+        with mock.patch.dict(os.environ, {"ORLIX_COSIGN_PUB": pem}), \
+             mock.patch("publish.json.loads", return_value={"accepted_key_ids": [fingerprint]}):
+            materialized = publish.trusted_public_key()
+            self.assertTrue(Path(materialized).is_file())
+            self.assertEqual(Path(materialized).read_text(encoding="utf-8"), pem)
+
+    def test_existing_public_key_path_is_returned_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            key = Path(tmp) / "trusted.pub"
+            key.write_text("key-bytes\n", encoding="utf-8")
+            fingerprint = hashlib.sha256(key.read_bytes()).hexdigest()
+            with mock.patch.dict(os.environ, {"ORLIX_COSIGN_PUB": str(key)}), \
+                 mock.patch("publish.json.loads", return_value={"accepted_key_ids": [fingerprint]}):
+                self.assertEqual(publish.trusted_public_key(), str(key))
+
     def test_unsigned_proposal_must_not_publish(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "proposal.json"

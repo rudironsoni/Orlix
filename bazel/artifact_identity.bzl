@@ -52,7 +52,7 @@ from content_digest import artifact_manifest_v2
 
 mode, manifest_path, digest_path, format = sys.argv[1:5]
 if mode == "tree":
-    manifest = artifact_manifest_v2(Path(sys.argv[5]), format=format)
+    manifest = artifact_manifest_v2(Path(sys.argv[5]), format=format, files_only=True)
 elif mode == "artifacts":
     values = sys.argv[5:]
     if len(values) % 2:

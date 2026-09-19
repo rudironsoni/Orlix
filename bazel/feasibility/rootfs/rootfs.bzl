@@ -180,7 +180,10 @@ digest="$( (
         ctx.file._artifact_identity_serializer,
         artifacts = {
             "base.ext4": base_ext4,
+            "file-manifest.txt": file_manifest,
             "initramfs.cpio.gz": initramfs,
+            "payload-metadata.txt": payload_metadata,
+            "source-input.sha256": digest,
             "state.ext4": state_ext4,
         },
     )

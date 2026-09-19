@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import locked_buildset
+
+
+def _content_digest():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from content_digest import artifact_manifest_v2
+
+    return artifact_manifest_v2
 
 
 def _signed_lock() -> dict:
@@ -88,9 +96,9 @@ class LockedBuildsetTests(unittest.TestCase):
 
     def test_schema2_binds_typed_identities_and_all_kernel_variants(self) -> None:
         components = {
-            "uapi": _schema2_entry("uapi", "11" * 32, "ab" * 32, marker="uapi.sha256"),
-            "mlibc": _schema2_entry("mlibc", "22" * 32, "ac" * 32, marker="sysroot.sha256"),
-            "rootfs": _schema2_entry("rootfs", "33" * 32, "ad" * 32, marker="source-input.sha256"),
+            "uapi": _schema2_entry("uapi", "11" * 32, "ab" * 32),
+            "mlibc": _schema2_entry("mlibc", "22" * 32, "ac" * 32),
+            "rootfs": _schema2_entry("rootfs", "33" * 32, "ad" * 32),
         }
         for index, name in enumerate(locked_buildset.KERNEL_COMPONENTS, start=1):
             components[name] = _schema2_entry(name, f"{index:02x}" * 32, f"{index + 10:02x}" * 32)
@@ -142,6 +150,78 @@ class LockedBuildsetTests(unittest.TestCase):
                 _schema2_entry("kernel-release-ios", "11" * 32, "ab" * 32),
                 schema=2,
             )
+
+    def test_schema2_rejects_legacy_identities(self) -> None:
+        with self.assertRaisesRegex(locked_buildset.LockedBuildsetError, "requires artifact-identity-v2"):
+            locked_buildset.validate_component(
+                "uapi",
+                _schema2_entry("uapi", "11" * 32, "ab" * 32, marker="uapi.sha256"),
+                schema=2,
+            )
+
+    def _v2_staged_tree(self, root: Path, *, manifest_bytes: bytes | None = None, files_only: bool = True):
+        artifact_manifest_v2 = _content_digest()
+        product_src = root / "src"
+        nested = product_src / "usr" / "include" / "linux"
+        nested.mkdir(parents=True)
+        (nested / "foo.h").write_bytes(b"foo")
+        (product_src / "top.txt").write_bytes(b"top")
+        if manifest_bytes is None:
+            manifest_bytes = artifact_manifest_v2(product_src, files_only=files_only)
+        digest = __import__("hashlib").sha256(manifest_bytes).hexdigest()
+        staged = root / "staged"
+        product = staged / "product"
+        for relative in ("usr/include/linux/foo.h", "top.txt"):
+            target = product / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((product_src / relative).read_bytes())
+        (staged / "artifact-identity-v2.json").write_bytes(manifest_bytes)
+        (staged / "artifact-identity-v2.sha256").write_text(digest + "\n", encoding="ascii")
+        identity = {"format": "artifact-identity-v2", "version": 2, "digest": digest}
+        return staged, identity
+
+    def test_validate_v2_product_accepts_files_only_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            staged, identity = self._v2_staged_tree(Path(tmp))
+            manifest = json.loads((staged / "artifact-identity-v2.json").read_text(encoding="utf-8"))
+            self.assertTrue(manifest["entries"])
+            self.assertTrue(all(entry.get("type") == "file" for entry in manifest["entries"]))
+            product = locked_buildset.validate_v2_product(staged, identity, "uapi")
+            self.assertEqual(product["product"], staged / "product")
+
+    def test_validate_v2_product_rejects_tree_manifest_with_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            staged, identity = self._v2_staged_tree(Path(tmp), files_only=False)
+            manifest = json.loads((staged / "artifact-identity-v2.json").read_text(encoding="utf-8"))
+            self.assertTrue(any(entry.get("type") == "directory" for entry in manifest["entries"]))
+            with self.assertRaises(locked_buildset.LockedBuildsetError):
+                locked_buildset.validate_v2_product(staged, identity, "uapi")
+
+    def test_validate_v2_product_rejects_manifest_without_files(self) -> None:
+        artifact_manifest_v2 = _content_digest()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            empty = root / "src" / "empty-dir"
+            empty.mkdir(parents=True)
+            manifest_bytes = artifact_manifest_v2(root / "src")
+            staged, identity = self._v2_staged_tree(root / "other", manifest_bytes=manifest_bytes)
+            with self.assertRaisesRegex(locked_buildset.LockedBuildsetError, "must contain file entries"):
+                locked_buildset.validate_v2_product(staged, identity, "uapi")
+
+    def test_validate_v2_product_rejects_non_file_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            staged, identity = self._v2_staged_tree(Path(tmp))
+            manifest_path = staged / "artifact-identity-v2.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["entries"].append({"type": "device", "path": "null"})
+            manifest_bytes = (json.dumps(manifest, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+            manifest_path.write_bytes(manifest_bytes)
+            import hashlib as _hashlib
+
+            (staged / "artifact-identity-v2.sha256").write_text(_hashlib.sha256(manifest_bytes).hexdigest() + "\n", encoding="ascii")
+            identity["digest"] = _hashlib.sha256(manifest_bytes).hexdigest()
+            with self.assertRaisesRegex(locked_buildset.LockedBuildsetError, "must contain file entries"):
+                locked_buildset.validate_v2_product(staged, identity, "uapi")
 
 
 if __name__ == "__main__":

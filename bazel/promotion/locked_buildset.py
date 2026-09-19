@@ -131,7 +131,7 @@ def validate_component(name: str, entry: dict, schema: int | None = None) -> dic
         unsigned = require_sha256(entry["unsigned_digest"])
     else:
         identity = validate_artifact_identity(entry.get("artifact_identity"))
-        if name in KERNEL_COMPONENTS and identity["format"] != ARTIFACT_IDENTITY_V2_FORMAT:
+        if identity["format"] != ARTIFACT_IDENTITY_V2_FORMAT:
             raise LockedBuildsetError(f"{name} requires artifact-identity-v2")
         unsigned_value = entry.get("unsigned_digest", identity["digest"])
         unsigned = require_sha256(unsigned_value)

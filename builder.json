@@ -1,0 +1,23 @@
+{
+  "project": "Orlix",
+  "platform": "ios",
+  "github": {
+    "owner": "rudironsoni",
+    "repo": "Orlix"
+  },
+  "provider": "github",
+  "codemagic": {},
+  "bitrise": {},
+  "ios": {
+    "bundleId": "com.rudironsoni.Orlix",
+    "extensions": [
+      "com.rudironsoni.orlix.live-activity"
+    ]
+  },
+  "flutter": {
+    "watch": {}
+  },
+  "reactNative": {},
+  "kmp": {},
+  "mobai": {}
+}

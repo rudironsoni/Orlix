@@ -248,7 +248,10 @@ class RuleSyncGuardTests(unittest.TestCase):
         self.assertIn('gh pr merge "$PR_NUMBER"', generate)
         self.assertIn("--auto --squash --delete-branch", generate)
         self.assertNotIn("git push origin HEAD:main", generate)
-        self.assertNotIn("create-github-app-token", generate)
+        self.assertIn("actions/create-github-app-token@", generate)
+        self.assertIn("client-id: ${{ vars.ORLIX_AUTOMATION_APP_CLIENT_ID }}", generate)
+        self.assertIn("private-key: ${{ secrets.ORLIX_AUTOMATION_APP_PRIVATE_KEY }}", generate)
+        self.assertIn("token: ${{ steps.automation-token.outputs.token }}", generate)
 
     def test_non_main_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

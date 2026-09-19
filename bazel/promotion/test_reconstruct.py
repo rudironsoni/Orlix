@@ -69,12 +69,14 @@ class ReconstructTests(unittest.TestCase):
                 directory.mode = 0o555
                 archive.addfile(directory)
                 member = tarfile.TarInfo("include/a.h")
+                member.mode = 0o555
                 member.size = len(payload)
                 archive.addfile(member, io.BytesIO(payload))
             destination = Path(tmp) / "valid"
             reconstruct._extract_component_tar(valid, destination)
             self.assertEqual((destination / "include" / "a.h").read_bytes(), payload)
             self.assertEqual((destination / "include").stat().st_mode & 0o777, 0o555)
+            self.assertEqual((destination / "include" / "a.h").stat().st_mode & 0o777, 0o555)
 
     def test_empty_lock_cannot_reconstruct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -278,9 +280,10 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    @mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION)
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
     def test_schema2_buildset_applies_and_reuses_all_components(
-        self, public_key, verification
+        self, public_key, proposal_verification, verification
     ) -> None:
         calls: list[list[str]] = []
         with tempfile.TemporaryDirectory() as tmp:
@@ -310,14 +313,20 @@ class ReconstructTests(unittest.TestCase):
                         "digest": digest,
                     }
                 else:
-                    digest = hashlib.sha256(name.encode("ascii")).hexdigest()
-                    marker = f"{name}.sha256"
-                    (tree / marker).write_text(digest + "\n", encoding="ascii")
+                    product = tree / locked_buildset.V2_PRODUCT_DIRECTORY
+                    source = product / f"{name}.txt"
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(f"{name}:product\n", encoding="utf-8")
+                    manifest = artifact_manifest_v2(artifacts={f"{name}.txt": source})
+                    digest = hashlib.sha256(manifest).hexdigest()
+                    (tree / locked_buildset.V2_MANIFEST_FILENAME).write_bytes(manifest)
+                    (tree / locked_buildset.V2_DIGEST_FILENAME).write_text(
+                        digest + "\n", encoding="ascii"
+                    )
                     identity = {
-                        "format": locked_buildset.LEGACY_IDENTITY_FORMAT,
-                        "version": locked_buildset.LEGACY_IDENTITY_VERSION,
+                        "format": locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT,
+                        "version": locked_buildset.ARTIFACT_IDENTITY_V2_VERSION,
                         "digest": digest,
-                        "marker": marker,
                     }
                 blob = root / "fixtures" / f"{name}.tar"
                 with tarfile.open(blob, "w") as archive:
@@ -350,9 +359,42 @@ class ReconstructTests(unittest.TestCase):
             lock_path.write_text(
                 json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8"
             )
+            evidence_root = root / "evidence"
+            (evidence_root / "toolchain-manifest.json").parent.mkdir(parents=True, exist_ok=True)
+            (evidence_root / "toolchain-manifest.json").write_text(
+                json.dumps({"schema": 1, "kind": "observed-toolchain"}) + "\n", encoding="utf-8"
+            )
+            index_components = {}
+            for name in locked_buildset.required_components(locked_buildset.SCHEMA2):
+                component_dir = evidence_root / name
+                component_dir.mkdir(parents=True, exist_ok=True)
+                (component_dir / f"{name}-sbom.json").write_text(
+                    json.dumps({"bomFormat": "CycloneDX"}) + "\n", encoding="utf-8"
+                )
+                (component_dir / f"{name}-in-toto.json").write_text(
+                    json.dumps({"kind": "in-toto"}) + "\n", encoding="utf-8"
+                )
+                index_components[name] = {}
+            (evidence_root / "promotion-proof-index.json").write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "kind": "promotion-proof-index",
+                        "source_sha": "ab" * 20,
+                        "components": index_components,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             with mock.patch("lock_proposal.verify_component", side_effect=validate):
                 proposal = lock_proposal.write_signed_lock_proposal(
-                    str(proposal_path), signed_paths
+                    str(proposal_path),
+                    signed_paths,
+                    toolchain_manifest=str(evidence_root / "toolchain-manifest.json"),
+                    proof_index=str(evidence_root / "promotion-proof-index.json"),
+                    promote_root=str(evidence_root),
+                    source_sha="ab" * 20,
                 )
                 lock_proposal.apply_lock_proposal(str(proposal_path), str(lock_path))
             expected = set(locked_buildset.required_components(locked_buildset.SCHEMA2))
