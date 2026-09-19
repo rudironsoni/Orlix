@@ -536,9 +536,9 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("orlix_promoted_rootfs", promoted)
         self.assertIn("orlix_promoted_uapi", promoted)
         self.assertIn("orlix_promoted_sysroot", promoted)
-        self.assertIn("imported/rootfs/initramfs.cpio.gz", promoted)
-        self.assertIn("imported/uapi/uapi.sha256", promoted)
-        self.assertIn("imported/mlibc/sysroot.sha256", promoted)
+        self.assertIn("imported/rootfs/product/initramfs.cpio.gz", promoted)
+        self.assertIn("imported/uapi/product/uapi.sha256", promoted)
+        self.assertIn("imported/mlibc/product/sysroot.sha256", promoted)
         self.assertIn("//bazel/promotion:promoted_apple_inputs", app)
         self.assertIn("orlix_promoted_apple_inputs", promoted)
         for position in (11, 12, 13):
