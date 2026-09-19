@@ -304,15 +304,15 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 	if "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/query-output-base" query "kind('source file', deps(set($$labels))) union buildfiles(deps(set($$labels))) union loadfiles(deps(set($$labels)))" --output=label --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" 2> "$$promote/checkpoint-query.log" \
 		| /usr/bin/grep '^//' | /usr/bin/sed -E 's#^//([^:]+):#\1/#; s#^//:##' | /usr/bin/sort -u > "$$promote/query-labels-paths.txt"; \
 		printf '%s\n' MODULE.bazel MODULE.bazel.lock >> "$$promote/query-labels-paths.txt"; \
-		/usr/bin/sort -u "$$promote/query-labels-paths.txt" \
-			| /usr/bin/awk -v root="$(CURDIR)" '{ if (system("test -f " root "/" $0) == 0) print }' > "$$inputs_file"; \
+		/usr/bin/sort -u "$$promote/query-labels-paths.txt" > "$$inputs_file"; \
 		test -s "$$inputs_file"; then \
 		input_identity="$$(PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/checkpoint.py" --compute-identity --repo-root "$(CURDIR)" --inputs-file "$$inputs_file" --registry "$(CURDIR)/bazel/promotion/components.json" --build-config "$$build_config")"; \
 	fi; \
 	if [ -z "$$input_identity" ]; then \
 		echo "promotion checkpoint identity unavailable: the component-input query failed or returned no inputs" >&2; \
 		if [ -f "$$promote/checkpoint-query.log" ]; then /bin/cat "$$promote/checkpoint-query.log" >&2; fi; \
-		if [ -f "$$promote/query-labels-paths.txt" ]; then /usr/bin/wc -l "$$promote/query-labels-paths.txt" >&2; fi; \
+		if [ -f "$$promote/query-labels-paths.txt" ]; then /usr/bin/wc -l "$$promote/query-labels-paths.txt" >&2; /usr/bin/head -n 5 "$$promote/query-labels-paths.txt" >&2; fi; \
+		if [ -f "$$inputs_file" ]; then /usr/bin/wc -l "$$inputs_file" >&2; fi; \
 		exit 1; \
 	fi; \
 	rm -f "$$promote/query-labels-paths.txt"; \
