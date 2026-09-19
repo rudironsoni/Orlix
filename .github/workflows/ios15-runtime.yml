@@ -89,7 +89,7 @@ jobs:
 
       - name: Restore Homebrew cache
         timeout-minutes: 10
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Homebrew
           key: orlix-brew-${{ runner.os }}-${{ hashFiles('Brewfile') }}
@@ -98,14 +98,14 @@ jobs:
 
       - name: Restore iOS 15.5 runtime archive
         timeout-minutes: 15
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios15-runtime-15.5-arm64-v1
 
       - name: Restore Bazel repository cache
         timeout-minutes: 15
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
@@ -114,7 +114,7 @@ jobs:
 
       - name: Restore Bazel disk cache
         timeout-minutes: 20
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/disk-cache
           key: orlix-bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json', 'OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
@@ -123,7 +123,7 @@ jobs:
 
       - name: Restore ccache
         timeout-minutes: 10
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache
           key: orlix-ccache-${{ runner.os }}-${{ hashFiles('OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**/*.c') }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Restore git clones
         timeout-minutes: 15
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/Library/Caches/Orlix/git
