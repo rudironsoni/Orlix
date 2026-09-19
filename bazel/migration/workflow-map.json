@@ -3,7 +3,7 @@
   "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
   "workflows": {
     ".github/workflows/app-store-review.yml": {
-      "source_sha256": "56f824da54c7247b468dc0853f3bac4afa22a35a9c2f06e984c128c6c9fcdc97",
+      "source_sha256": "e5898f79e6ae32b9d6bef296e1790329960ebd9a3680dda2f9fc9aeed7d9ae71",
       "workflow": {
         "name": "Promote TestFlight beta to App Review",
         "on": {
@@ -67,7 +67,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
+                "uses": "ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": true
@@ -169,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "0771f4535ffe90cf7b2b1f5f4daa13f7acb8b15bd85217a954914103c12bb9f5",
+      "source_sha256": "50076606a3721a76f638fde8dfe03a66a6071eae51920de1b7f975d105fa02ba",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -282,7 +282,7 @@
               },
               {
                 "name": "Restore Bazel repository cache",
-                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
                   "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
@@ -291,7 +291,7 @@
               },
               {
                 "name": "Restore iOS 15.5 runtime archive",
-                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios15-runtime",
                   "key": "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
@@ -395,7 +395,7 @@
               {
                 "name": "Save Bazel repository cache",
                 "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
                   "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
@@ -404,7 +404,7 @@
               {
                 "name": "Save iOS 15.5 runtime archive",
                 "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios15-runtime",
                   "key": "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
@@ -581,7 +581,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "631879a84363d3b863cf7bf91bf865c99f7b41a2c5a04079df5a52524a552b63",
+      "source_sha256": "3a2399b67d0ab10ad5425f1f2820db02805cf0ff00da7f7bd1693ac8e03831b6",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -648,7 +648,7 @@
               },
               {
                 "name": "Restore verified source downloads",
-                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
                   "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}",
@@ -657,7 +657,7 @@
               },
               {
                 "name": "Restore verified promotion checkpoint",
-                "uses": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "Build/Bazel/promote",
                   "key": "orlix-promote-v2-${{ hashFiles('MODULE.bazel.lock') }}",
@@ -691,7 +691,7 @@
               {
                 "name": "Save verified promotion checkpoint",
                 "if": "always() && steps.promote-identity.outputs.identity != ''",
-                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "Build/Bazel/promote",
                   "key": "orlix-promote-v2-${{ steps.promote-identity.outputs.identity }}"
@@ -710,7 +710,7 @@
               },
               {
                 "name": "Save verified source downloads",
-                "uses": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
                   "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
@@ -1694,7 +1694,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "612542d19c1017761d49b2ed86ba1de89efb92af33337da3bfe946f3f7c88798",
+      "source_sha256": "7a26f5c92a698e2a275bf00110df3ea57f6c1be9d0b899bce8a4add92cdd5414",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -1769,7 +1769,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
+                "uses": "ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": false
@@ -1854,7 +1854,7 @@
               },
               {
                 "name": "Upload and wait for TestFlight processing",
-                "uses": "Apple-Actions/upload-testflight-build@5e75ff58276689011512ba87a381d93dc67dbcf8",
+                "uses": "Apple-Actions/upload-testflight-build@1fc69ca369a60b813eaaa2d936eda22794b52e17",
                 "with": {
                   "app-path": "Build/Release/Export/Orlix.ipa",
                   "app-type": "ios",

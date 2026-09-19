@@ -72,7 +72,7 @@ jobs:
           xcode-version: ${{ steps.xcode-version.outputs.version }}
 
       - name: Restore verified source downloads
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
@@ -89,7 +89,7 @@ jobs:
       # compare.py re-validates every reused tree. A stale restore fails
       # validation and forces a fresh build.
       - name: Restore verified promotion checkpoint
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Build/Bazel/promote
           key: orlix-promote-v2-${{ hashFiles('MODULE.bazel.lock') }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Save verified promotion checkpoint
         if: always() && steps.promote-identity.outputs.identity != ''
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Build/Bazel/promote
           key: orlix-promote-v2-${{ steps.promote-identity.outputs.identity }}
@@ -169,7 +169,7 @@ jobs:
           make __bazel-lock-proposal
 
       - name: Save verified source downloads
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
