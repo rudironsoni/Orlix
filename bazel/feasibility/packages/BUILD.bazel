@@ -4,8 +4,8 @@ load(":coreutils.bzl", "COREUTILS_PROGRAMS", "orlix_coreutils_package")
 load(":local.bzl", "orlix_local_c_package")
 load(":package.bzl", "orlix_guest_package")
 
-_SYSROOT = "//bazel/feasibility/mlibc:sysroot"
-_UAPI = "//bazel/feasibility/kernel:uapi"
+_SYSROOT = "//bazel/feasibility/mlibc:selected_sysroot"
+_UAPI = "//bazel/feasibility/kernel:selected_uapi"
 
 package(default_visibility = ["//visibility:private"])
 
@@ -20,7 +20,7 @@ orlix_guest_package(
     package_name = "true",
     package_version = "0.1",
     source = "true/true.c",
-    sysroot = "//bazel/feasibility/mlibc:sysroot",
+    sysroot = _SYSROOT,
     tags = ["manual"],
     visibility = ["//bazel/feasibility:__subpackages__"],
 )
@@ -42,8 +42,8 @@ orlix_coreutils_package(
     package_version = "9.11",
     programs = COREUTILS_PROGRAMS,
     sources = "@orlix_coreutils_source//:source",
-    sysroot = "//bazel/feasibility/mlibc:sysroot",
-    uapi = "//bazel/feasibility/kernel:uapi",
+    sysroot = _SYSROOT,
+    uapi = _UAPI,
     tags = ["manual"],
     visibility = ["//bazel/feasibility:__subpackages__"],
 )

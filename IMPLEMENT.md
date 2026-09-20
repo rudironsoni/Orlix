@@ -787,3 +787,32 @@ Local proof, release + iphonesimulator, `--config=promoted`, Xcode 27.0 / 27A266
 | `bazel build //Orlix:Orlix` | exit 0; `bazel-bin/Orlix/Orlix.ipa`; invocation `6cbde1cd-58ed-4339-a537-afd5b5a4cee0` |
 
 This checkpoint does not claim Contract 3 artifact-coordinate equivalence.
+
+## Checkpoint 0.1B-routing: selected UAPI, sysroot, and rootfs
+
+Status: verified locally on `fix/ci-cd-cleanup`. Not Contract 3. Not demand-driven GHCR.
+
+Packages consume `selected_uapi` / `selected_sysroot`. Rootfs payload consumes `selected_rootfs`. Source producers remain for explicit source and promote targets.
+
+Cheap `cquery` only. No Orlix rebuild.
+
+Promoted (`--config=promoted`):
+
+| Path | Result |
+| --- | --- |
+| `coreutils` → `promoted_sysroot` / `promoted_uapi` | through `selected_*` |
+| `coreutils` → source `:sysroot` / `:uapi` | empty |
+| `//Orlix:Orlix` → `selected_rootfs` | present |
+| `//Orlix:Orlix` → source `:rootfs` | empty |
+| `//bazel/feasibility/analysis:all` | 36/36 pass |
+
+Source (`--config=source`):
+
+| Path | Result |
+| --- | --- |
+| `coreutils` → `selected_sysroot` → `:sysroot` | present |
+| `coreutils` → `promoted_sysroot` | empty |
+| `coreutils` → `selected_uapi` → `:uapi` | present |
+| `coreutils` → `promoted_uapi` | empty |
+| `//Orlix:Orlix` → `selected_rootfs` → `:rootfs` | present |
+| `//Orlix:Orlix` → `promoted_rootfs` | empty |

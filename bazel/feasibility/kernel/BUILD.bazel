@@ -16,6 +16,20 @@ orlix_kernel_uapi(
     ],
 )
 
+alias(
+    name = "selected_uapi",
+    actual = select({
+        "//bazel/config:component_promoted": "//bazel/promotion:promoted_uapi",
+        "//conditions:default": ":uapi",
+    }),
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+        "//bazel/promotion:__pkg__",
+    ],
+)
+
 [
     orlix_kernel_uapi_variant(
         name = "uapi_%s_%s" % (destination, profile),
