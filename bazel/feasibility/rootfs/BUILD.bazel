@@ -1,5 +1,6 @@
 load(":rootfs.bzl", "orlix_rootfs", "orlix_rootfs_payload")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("//bazel/selection:boundary.bzl", "orlix_selected_rootfs")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -38,9 +39,9 @@ orlix_rootfs(
     ],
 )
 
-alias(
+orlix_selected_rootfs(
     name = "selected_rootfs",
-    actual = select({
+    origin = select({
         "//bazel/config:component_promoted": "//bazel/promotion:promoted_rootfs",
         "//conditions:default": ":rootfs",
     }),

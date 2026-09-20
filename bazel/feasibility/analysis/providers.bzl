@@ -380,3 +380,32 @@ def _kernel_composition_test_impl(ctx):
     return analysistest.end(env)
 
 kernel_composition_test = analysistest.make(_kernel_composition_test_impl)
+
+def _selected_uapi_boundary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixInstalledUapiInfo in target)
+    uapi = target[OrlixInstalledUapiInfo]
+    asserts.equals(env, None, uapi.artifact_identity_digest)
+    asserts.equals(env, None, uapi.artifact_identity_manifest)
+    asserts.true(env, uapi.headers.path.endswith("/selected_uapi/headers"))
+    asserts.true(env, uapi.uapi_digest.path.endswith("/selected_uapi/uapi.sha256"))
+    joined = " ".join([f.path for f in target[DefaultInfo].files.to_list()])
+    asserts.false(env, "kbuild-archive.tar" in joined)
+    return analysistest.end(env)
+
+selected_uapi_boundary_test = analysistest.make(_selected_uapi_boundary_test_impl)
+
+def _selected_macho_boundary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixLinuxArchiveInfo in target)
+    archive = target[OrlixLinuxArchiveInfo]
+    asserts.equals(env, None, archive.artifact_identity_digest)
+    asserts.equals(env, None, archive.build_manifest)
+    asserts.equals(env, None, archive.product)
+    asserts.true(env, archive.archive.path.endswith("/selected_macho/OrlixKernel.a"))
+    asserts.true(env, archive.source_input_digest.path.endswith("/selected_macho/archive.sha256"))
+    return analysistest.end(env)
+
+selected_macho_boundary_test = analysistest.make(_selected_macho_boundary_test_impl)

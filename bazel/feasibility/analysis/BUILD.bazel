@@ -12,6 +12,8 @@ load(
     "kernel_composition_test",
     "sysroot_uapi_only_test",
     "uapi_providers_test",
+    "selected_uapi_boundary_test",
+    "selected_macho_boundary_test",
     "variant_stamp_test",
 )
 
@@ -25,6 +27,16 @@ macho_device_development_test(
 uapi_providers_test(
     name = "uapi_providers_test",
     target_under_test = "//bazel/feasibility/kernel:uapi",
+)
+
+selected_uapi_boundary_test(
+    name = "selected_uapi_boundary_test",
+    target_under_test = "//bazel/feasibility/kernel:selected_uapi",
+)
+
+selected_macho_boundary_test(
+    name = "selected_macho_boundary_test",
+    target_under_test = "//bazel/feasibility/kernel:selected_macho",
 )
 
 sysroot_uapi_only_test(
