@@ -97,6 +97,8 @@ def stage_imported(payload: dict, stage_dir: str) -> None:
     root.mkdir(parents=True, exist_ok=True)
     keep = set(payload["components"])
     for child in list(root.iterdir()) if root.exists() else []:
+        if child.name.startswith(".") or child.name == "BUILD.bazel":
+            continue
         if child.name not in keep:
             if child.is_symlink() or child.is_file():
                 child.unlink()
