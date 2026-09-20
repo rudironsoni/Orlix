@@ -180,7 +180,7 @@ alias(
 
 filegroup(
     name = "macho_boot_resources",
-    srcs = [":macho"],
+    srcs = [":selected_macho"],
     output_group = "boot_resources",
     tags = ["manual"],
     visibility = ["//Orlix:__pkg__"],
@@ -188,7 +188,7 @@ filegroup(
 
 filegroup(
     name = "macho_archive",
-    srcs = [":macho"],
+    srcs = [":selected_macho"],
     output_group = "archive",
     tags = ["manual"],
     visibility = [

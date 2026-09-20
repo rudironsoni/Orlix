@@ -62,7 +62,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         session = (root / "OrlixOS/Sources/Session/BUILD.bazel").read_text(encoding="utf-8")
         mk = (root / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn('name = "kernel_composition"', product)
-        self.assertIn("linux_archive = \"//bazel/feasibility/kernel:macho\"", product)
+        self.assertIn("linux_archive = \"//bazel/feasibility/kernel:selected_macho\"", product)
         self.assertIn("hostadapter = \"//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs\"", product)
         self.assertIn('name = "OrlixOS"', session)
         self.assertIn('name = "OrlixOSFramework"', app)

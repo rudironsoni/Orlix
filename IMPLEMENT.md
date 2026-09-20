@@ -770,3 +770,20 @@ Fixes in this change:
 - New fast gate `bazel/promotion/promoted_contract_check.py` plus `test_promoted_contract.py`: synthesizes schema-2 fixtures for all seven components, stages them through the real `stage_imported()` path, and analyzes every promoted provider. It was RED (`promoted rootfs initramfs missing reconstructed OCI tree`) before this change and is GREEN after, in about 2 seconds.
 
 REPROMOTION REQUIRED for uapi, mlibc, and rootfs. The semantic product selection for those three widened, so their `artifact-identity-v2` digests change and the signed buildset `15114da1...` no longer covers what the corrected promoted providers require. The four kernel components are unchanged. No promotion was dispatched; the full clean A/B promotion happens only after the fast gate is green and its exact-head canonical CI passes.
+
+## Checkpoint 0.1A: promoted Kernel product routing
+
+Status: verified locally on `fix/ci-cd-cleanup`. Not on GitHub `main` (`f7c05965c3bd7b0b969f31fc3aad24812ef96e70`). Canonical Xcode 26.6 product-pin proof was not rerun.
+
+Product Kernel consumption now goes through `//bazel/feasibility/kernel:selected_macho`. Direct source `:macho` edges were removed from `macho_boot_resources`, `macho_archive`, and `kernel_composition`. The source producer `//bazel/feasibility/kernel:macho` remains for explicit source and feasibility targets.
+
+Local proof, release + iphonesimulator, `--config=promoted`, Xcode 27.0 / 27A266a (26.6 is not installed on this machine):
+
+| Check | Result |
+| --- | --- |
+| `cquery somepath(//Orlix:Orlix, //bazel/promotion:promoted_kernel_release_iphonesimulator)` | path through `selected_macho` |
+| `cquery somepath(//Orlix:Orlix, //bazel/feasibility/kernel:macho)` | empty |
+| execution log `Build/Bazel/proof/0.1A-execution.json` | no `OrlixKernelMachOArchive`; no `targetLabel` `:macho`; `promoted_kernel_release_iphonesimulator` present |
+| `bazel build //Orlix:Orlix` | exit 0; `bazel-bin/Orlix/Orlix.ipa`; invocation `6cbde1cd-58ed-4339-a537-afd5b5a4cee0` |
+
+This checkpoint does not claim Contract 3 artifact-coordinate equivalence.
