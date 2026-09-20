@@ -863,3 +863,39 @@ Not acquired: `kernel-release-iphoneos`, `kernel-development-iphoneos`, `kernel-
 Imported tree after both runs contains only those four names. `cquery somepath(//Orlix:Orlix, //bazel/promotion:promoted_kernel_release_iphonesimulator)` still holds.
 
 Nightly `__bazel-reconstruct` without `ORLIX_PROMOTED_ACQUIRE` still reconstructs the full lock.
+
+## Checkpoint 0.1B-closure: downstream identity and empty-store acquire
+
+Status: verified locally on `fix/ci-cd-cleanup`. Profile `release`, destination `iphonesimulator`. Isolated store only. Shared `~/Library/Caches/Orlix/Artifacts` was not used. Xcode 27.0 / 27A266a for aquery.
+
+### Downstream consumer identity
+
+Targeted `aquery` of the first consumer after `selected_*`. Projection ActionKeys may differ by origin. These consumer actions do not.
+
+| Consumer | Modes | ActionKey | Consumer-visible paths |
+| --- | --- | --- | --- |
+| `OrlixMLibCSysroot` `//bazel/feasibility/mlibc:sysroot` | source and promoted | `a65b3f1089b434a392c8857c61c47e4a07eadb394af4e8fe857c7f06406ef540` identical. aquery bodies equal after dropping the configuration comment. | `selected_uapi/headers`, `selected_uapi/uapi.sha256`. No `promoted_uapi` and no `kernel/uapi/uapi` origin tree. |
+| `OrlixGuestPackage` `//bazel/feasibility/packages:coreutils` | source and promoted | `1a0aae570f0b9715e85cb603a8f64db953d1480c722147432b2acac63a2cfc6b` identical. aquery bodies equal after dropping the configuration comment. | `selected_sysroot/headers`, `selected_sysroot/libraries`, `selected_sysroot/libcompiler_rt.a`, `selected_uapi/headers`. No promoted origin paths. |
+
+Evidence: `Build/Bazel/proof/aquery-mlibc-{source,promoted}.txt`, `Build/Bazel/proof/aquery-coreutils-{source,promoted}.txt`.
+
+This proves declared action identity, argv, and consumer-visible coordinates. It does **not** prove current source-built UAPI/mlibc/rootfs **bytes** equal lock `2a4697e1928f...`. No digest compare. No clean A/B rebuild.
+
+### Empty isolated store
+
+`reconstruct.py --store Build/Bazel/proof/empty-store-cold/store --out-dir Build/Bazel/proof/empty-store-cold/reconstruct --components uapi,mlibc,rootfs,kernel-release-iphonesimulator`
+
+Cosign verification stayed on. `ORLIX_COSIGN_PUB=Build/Bazel/orlix-cosign-pub.txt`. `DOCKER_CONFIG=Build/Bazel/docker-config`.
+
+| Run | network_downloads | local_store_hits | names |
+| --- | --- | --- | --- |
+| cold empty store | 4 | 0 | uapi, mlibc, rootfs, kernel-release-iphonesimulator |
+| warm same store | 0 | 4 | same four |
+
+Not acquired: `kernel-release-iphoneos`, `kernel-development-iphoneos`, `kernel-development-iphonesimulator` (absent from the isolated store tree).
+
+Evidence: `Build/AgentHarness/bazel-promotion/empty-store-cold.json`, `Build/AgentHarness/bazel-promotion/empty-store-warm.json`.
+
+`bazel/selection/pin.bzl` was unused abandoned work. It is not in the tree.
+
+`//bazel/feasibility/analysis:all` remains 38/38.
