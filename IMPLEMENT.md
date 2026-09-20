@@ -816,3 +816,50 @@ Source (`--config=source`):
 | `coreutils` → `promoted_uapi` | empty |
 | `//Orlix:Orlix` → `selected_rootfs` → `:rootfs` | present |
 | `//Orlix:Orlix` → `promoted_rootfs` | empty |
+
+## Checkpoint 0.1B-normalize: selected_* semantic coordinates
+
+Status: verified locally. Profile `release`, destination `iphonesimulator`, Xcode 27.0 / 27A266a. No Apple IPA rebuild.
+
+`selected_*` are projection rules. Consumer-visible files are always:
+
+```text
+.../selected_uapi/headers
+.../selected_uapi/uapi.sha256
+.../selected_sysroot/headers
+.../selected_macho/OrlixKernel.a
+.../selected_rootfs/{initramfs.cpio.gz,base.ext4,state.ext4}
+```
+
+Proof/identity files are not in `selected_*` `DefaultInfo`. Kernel composition no longer takes `locked_buildset` as a compile input.
+
+| Consumer | Evidence |
+| --- | --- |
+| SwiftCompile `//Orlix:OrlixAppLibrary` | ActionKey `925307cfe297de29fbb702eb9bfbea3385b3198bb86fb510b066ed02dd778244` identical source vs promoted. Inputs equal. No Kernel/UAPI/rootfs paths. |
+| `OrlixKernelComposition` via `//Orlix:OrlixOSFramework` | ActionKey `612bc74bc732e2283e324774c925bb762e93bb61b93b94d02b079a42bac90255` identical. Archive path `.../selected_macho/OrlixKernel.a` both modes. |
+| `OrlixRootfsPayload` | ActionKey `4bcebad96cef9804e34abd6659ac396144efa46f0a82bd02b0e5ffe747e9a0d8` identical. Inputs are `selected_rootfs` images. |
+| `OrlixSelectUapiHeaders` | Outputs `.../selected_uapi/headers` both modes. Inputs remain origin trees (projection only). |
+| `//bazel/feasibility/analysis:all` | 38/38 pass |
+
+Unproved: source-built UAPI/mlibc/rootfs **byte** equality vs lock `2a4697e1928f...`. No clean A/B rebuild.
+
+## Checkpoint 0.1B-acquire: demand-driven GHCR
+
+App substitute (`release` + `iphonesimulator`) acquires only:
+
+```text
+uapi, mlibc, rootfs, kernel-release-iphonesimulator
+```
+
+from lock `2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c`.
+
+Not acquired: `kernel-release-iphoneos`, `kernel-development-iphoneos`, `kernel-development-iphonesimulator`.
+
+| Run | network_downloads | local_store_hits | names |
+| --- | --- | --- | --- |
+| first after stamp drop | 0 | 4 | the four above |
+| second (warm store) | 0 | 4 | the four above |
+
+Imported tree after both runs contains only those four names. `cquery somepath(//Orlix:Orlix, //bazel/promotion:promoted_kernel_release_iphonesimulator)` still holds.
+
+Nightly `__bazel-reconstruct` without `ORLIX_PROMOTED_ACQUIRE` still reconstructs the full lock.

@@ -16,13 +16,26 @@ class SubstituteError(ValueError):
     pass
 
 
-def substitute(lock_path: str, reconstruct_dir: str, out_path: str) -> dict:
+def substitute(
+    lock_path: str,
+    reconstruct_dir: str,
+    out_path: str,
+    component_names: list[str] | None = None,
+) -> dict:
     lock_file = Path(lock_path)
     before = lock_file.read_bytes()
     locked = locked_buildset.load_locked_buildset(lock_path)
     root = Path(reconstruct_dir) / locked["buildset"]
+    available = locked["components"]
+    if component_names:
+        unknown = [name for name in component_names if name not in available]
+        if unknown:
+            raise SubstituteError(f"unknown promoted components: {', '.join(unknown)}")
+        selected = {name: available[name] for name in component_names}
+    else:
+        selected = available
     components: dict[str, dict] = {}
-    for name, entry in locked["components"].items():
+    for name, entry in selected.items():
         tree = root / name
         if not tree.is_dir():
             raise SubstituteError(f"missing reconstructed {name} tree: {tree}")
@@ -82,6 +95,13 @@ def stage_imported(payload: dict, stage_dir: str) -> None:
     """
     root = Path(stage_dir)
     root.mkdir(parents=True, exist_ok=True)
+    keep = set(payload["components"])
+    for child in list(root.iterdir()) if root.exists() else []:
+        if child.name not in keep:
+            if child.is_symlink() or child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                shutil.rmtree(child)
     for name, entry in payload["components"].items():
         tree = Path(entry["tree"]).resolve()
         if not tree.is_dir():
@@ -107,8 +127,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reconstruct-dir", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--stage")
+    parser.add_argument(
+        "--components",
+        help="comma-separated lock component names to stage; default is the full lock",
+    )
     args = parser.parse_args(argv)
-    payload = substitute(args.lock, args.reconstruct_dir, args.out)
+    names = [part.strip() for part in args.components.split(",") if part.strip()] if args.components else None
+    payload = substitute(args.lock, args.reconstruct_dir, args.out, component_names=names)
     if args.stage:
         stage_imported(payload, args.stage)
     print(payload["buildset"])

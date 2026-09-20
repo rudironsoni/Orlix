@@ -90,6 +90,7 @@ def reconstruct(
     run=_run,
     store_root: str | Path | None = None,
     evidence_path: str | None = None,
+    component_names: list[str] | None = None,
 ) -> dict:
     lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     buildset = lock.get("buildset")
@@ -103,13 +104,20 @@ def reconstruct(
         lock = load_locked_buildset(lock_path, required=required)
     except (KeyError, ValueError) as error:
         raise ReconstructError(str(error)) from error
+    available = lock["components"]
+    if component_names:
+        unknown = [name for name in component_names if name not in available]
+        if unknown:
+            raise ReconstructError(f"unknown promoted components: {', '.join(unknown)}")
+        components = {name: available[name] for name in component_names}
+    else:
+        components = available
     try:
         verification = verification_context()
     except (OSError, PublishError, ValueError, KeyError) as error:
         raise ReconstructError(str(error)) from error
     store = ArtifactStore(store_root) if store_root is not None else store_from_environment()
     buildset = lock["buildset"]
-    components = lock["components"]
     acquired = False
     pulled = {}
     acquisition: dict[str, dict] = {}
@@ -206,7 +214,10 @@ def reconstruct(
             except (ArtifactStoreError, OSError) as error:
                 raise ReconstructError(str(error)) from error
         if root.exists():
-            if tree_digest(root) != tree_digest(staged):
+            if component_names:
+                shutil.rmtree(root)
+                staged.rename(root)
+            elif tree_digest(root) != tree_digest(staged):
                 raise ReconstructError("existing reconstructed contents differ from signed artifacts")
         else:
             staged.rename(root)
@@ -236,8 +247,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--store")
     parser.add_argument("--evidence")
+    parser.add_argument(
+        "--components",
+        help="comma-separated lock component names to acquire; default is the full lock",
+    )
     args = parser.parse_args(argv)
-    payload = reconstruct(args.lock, args.out_dir, store_root=args.store, evidence_path=args.evidence)
+    names = [part.strip() for part in args.components.split(",") if part.strip()] if args.components else None
+    payload = reconstruct(
+        args.lock,
+        args.out_dir,
+        store_root=args.store,
+        evidence_path=args.evidence,
+        component_names=names,
+    )
     print(payload["buildset"])
     return 0
 

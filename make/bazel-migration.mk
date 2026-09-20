@@ -19,6 +19,7 @@ ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_BAZEL_DESTINATION ?= iphonesimulator
 ORLIX_BAZEL_COMPILATION_MODE ?= dbg
 ORLIX_BAZEL_COMPONENT_MODE ?= promoted
+ORLIX_PROMOTED_ACQUIRE ?=
 ORLIX_BAZEL_BUILD_FLAGS ?=
 ORLIX_BAZEL_APP_PATH ?=
 ORLIX_BAZEL_APP_TARGETS ?= //Orlix:Orlix
@@ -460,7 +461,10 @@ __bazel-reconstruct: __bazel-version-check
 	test -n "$${ORLIX_COSIGN_PUB:-}$${ORLIX_COSIGN_KEY:-}" || { echo "ORLIX_COSIGN_PUB is required to reconstruct" >&2; exit 1; }; \
 	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); schema=p.get("schema",1); expected={"uapi","mlibc","rootfs"} if schema == 1 else {"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}; assert schema in (1,2) and set(p.get("components",{})) == expected, p' "$(CURDIR)/artifacts.lock.json"; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json"
+	acquire="$(strip $(ORLIX_PROMOTED_ACQUIRE))"; \
+	extra=(); \
+	if [ -n "$$acquire" ]; then extra+=(--components "$$(printf '%s,' $$acquire | sed 's/,$$//')"); fi; \
+	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json" "$${extra[@]}"
 
 __bazel-substitute-promoted: $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json
 
@@ -470,15 +474,18 @@ __bazel-substitute-promoted: $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components
 # unmarked network tree and fail; the stamp keeps it to a single pass.
 $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lock.json
 	@set -euo pipefail; \
-	$(MAKE) __bazel-reconstruct; \
+	acquire="uapi mlibc rootfs kernel-$(PROFILE)-$(ORLIX_BAZEL_DESTINATION)"; \
+	$(MAKE) __bazel-reconstruct ORLIX_PROMOTED_ACQUIRE="$$acquire"; \
 	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
+	csv="$$(printf '%s,' $$acquire | sed 's/,$$//')"; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
 		--reconstruct-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" \
-		--stage "$(CURDIR)/bazel/promotion/imported"; \
-	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); schema=p.get("schema",1); expected={"uapi","mlibc","rootfs"} if schema == 1 else {"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}; assert p.get("kind")=="promoted-components" and schema in (1,2) and set(p.get("components",{})) == expected, p' "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json"; \
+		--stage "$(CURDIR)/bazel/promotion/imported" \
+		--components "$$csv"; \
+	python3 -c 'import json,os,sys; p=json.load(open(sys.argv[1])); expected=set(sys.argv[2].split(",")); assert p.get("kind")=="promoted-components" and set(p.get("components",{}))==expected, (p, expected)' "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" "$$csv"; \
 	if rg -q ':latest' "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json"; then echo "promoted-components.json must not use mutable latest" >&2; exit 1; fi; \
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "promoted substitute mutated artifacts.lock.json" >&2; exit 1; }

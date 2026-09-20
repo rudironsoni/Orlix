@@ -78,6 +78,14 @@ class ReconstructTests(unittest.TestCase):
             self.assertEqual((destination / "include").stat().st_mode & 0o777, 0o555)
             self.assertEqual((destination / "include" / "a.h").stat().st_mode & 0o777, 0o555)
 
+    def test_unknown_component_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifacts.lock.json"
+            path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+            with self.assertRaises(reconstruct.ReconstructError) as raised:
+                reconstruct.reconstruct(str(path), tmp, component_names=["kernel-release-iphoneos"])
+            self.assertIn("unknown promoted components", str(raised.exception))
+
     def test_empty_lock_cannot_reconstruct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "artifacts.lock.json"
