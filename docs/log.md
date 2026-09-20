@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-15
+updated: 2026-09-21
 ---
 # Orlix Knowledge Log
+
+## [2026-09-21] build | Split requested mode from resolved origins
+
+The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) requested mode is `source`, `promoted`, or `auto`. It resolves to per-component origins for kernel, UAPI, mlibc, and rootfs. Promoted members share one locked signed buildset and stay dependency-closed. [ADR 0033](objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md) records the same split.
 
 ## [2026-09-15] build | Rework the ordered kernel link for the Xcode 27 linker
 

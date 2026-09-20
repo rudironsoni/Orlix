@@ -6,7 +6,7 @@ tags:
   - migration
   - artifacts
   - worktrees
-updated: 2026-09-11
+updated: 2026-09-21
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
   - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
@@ -188,10 +188,15 @@ Keep these dimensions independent:
 Apple compilation mode: dbg or opt
 Orlix profile: development or release
 Destination: iphonesimulator or iphoneos
-Component mode: source or promoted
+Requested mode: source | promoted | auto
+Resolved origins: kernel, uapi, mlibc, rootfs each source | promoted
 Signing mode: unsigned, development, or distribution
 Proof tier: explicit target selection
 ```
+
+`--config=source` and `--config=promoted` remain whole-graph forcing modes. They are not four public origin switches. The resolver writes internal origin flags. All promoted members come from one locked signed buildset. The origin vector is dependency-closed: mlibc depends on selected UAPI identity, and rootfs depends on the selected userspace closure. An incompatible requested vector is rejected. It is not rewritten.
+
+Auto without complete facts may resolve only the coarse all-source or all-promoted states it can establish safely. Git delta classification and UAPI semantic probes belong to a later checkpoint.
 
 Xcode Debug and Release do not select an Orlix profile. The build must support a debug Apple build with either Orlix profile.
 
@@ -217,9 +222,11 @@ The final HostAdapter composition edge remains [UNVERIFIED] until a bounded symb
 
 ## Source And Promoted Modes
 
-Source mode is required for component-changing pull requests, component promotion, nightly reconstruction, toolchain changes, and reproducibility audits.
+Source forcing resolves every relevant boundary to source. It is required for component-changing pull requests, component promotion, nightly reconstruction, toolchain changes, and reproducibility audits.
 
-Promoted mode is the normal input mode for app-only integration, Xcode Cloud, TestFlight, and release candidates. It consumes one signed buildset that pins all private components, toolchain identity, and the proof index. It never resolves a mutable `latest` tag.
+Promoted forcing resolves every reachable boundary to the same committed signed buildset. It is the normal input mode for app-only integration, Xcode Cloud, TestFlight, and release candidates. It never resolves a mutable `latest` tag.
+
+Auto may resolve a component-specific, dependency-closed origin vector. A hybrid such as kernel=source with UAPI, mlibc, and rootfs promoted is valid when UAPI identity is unchanged. Product consumers still enter through `selected_*` projections.
 
 The committed `artifacts.lock.json` selects the signed buildset and its component OCI digests. A workflow proposes lock changes through a normal pull request. No promotion workflow writes directly to `main`.
 

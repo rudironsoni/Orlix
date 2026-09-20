@@ -75,7 +75,17 @@ sysroot_uapi_only_test = analysistest.make(_sysroot_uapi_only_test_impl)
 def _config_flags_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
-    asserts.true(env, target.label.name in ("profile", "component_mode", "apple_destination", "signing_mode"))
+    asserts.true(env, target.label.name in (
+        "profile",
+        "component_mode",
+        "apple_destination",
+        "signing_mode",
+        "origin_kernel",
+        "origin_uapi",
+        "origin_mlibc",
+        "origin_rootfs",
+        "use_promoted_lock",
+    ))
     return analysistest.end(env)
 
 config_flags_test = analysistest.make(_config_flags_test_impl)

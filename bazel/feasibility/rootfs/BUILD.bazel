@@ -42,7 +42,7 @@ orlix_rootfs(
 orlix_selected_rootfs(
     name = "selected_rootfs",
     origin = select({
-        "//bazel/config:component_promoted": "//bazel/promotion:promoted_rootfs",
+        "//bazel/config:origin_rootfs_promoted": "//bazel/promotion:promoted_rootfs",
         "//conditions:default": ":rootfs",
     }),
     visibility = [

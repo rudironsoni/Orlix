@@ -20,8 +20,54 @@ string_flag(
     name = "component_mode",
     build_setting_default = "source",
     values = [
+        "auto",
         "promoted",
         "source",
+    ],
+)
+
+string_flag(
+    name = "origin_kernel",
+    build_setting_default = "source",
+    values = [
+        "promoted",
+        "source",
+    ],
+)
+
+string_flag(
+    name = "origin_uapi",
+    build_setting_default = "source",
+    values = [
+        "promoted",
+        "source",
+    ],
+)
+
+string_flag(
+    name = "origin_mlibc",
+    build_setting_default = "source",
+    values = [
+        "promoted",
+        "source",
+    ],
+)
+
+string_flag(
+    name = "origin_rootfs",
+    build_setting_default = "source",
+    values = [
+        "promoted",
+        "source",
+    ],
+)
+
+string_flag(
+    name = "use_promoted_lock",
+    build_setting_default = "false",
+    values = [
+        "false",
+        "true",
     ],
 )
 
@@ -77,4 +123,34 @@ config_setting(
 config_setting(
     name = "component_promoted",
     flag_values = {":component_mode": "promoted"},
+)
+
+config_setting(
+    name = "component_auto",
+    flag_values = {":component_mode": "auto"},
+)
+
+config_setting(
+    name = "origin_kernel_promoted",
+    flag_values = {":origin_kernel": "promoted"},
+)
+
+config_setting(
+    name = "origin_uapi_promoted",
+    flag_values = {":origin_uapi": "promoted"},
+)
+
+config_setting(
+    name = "origin_mlibc_promoted",
+    flag_values = {":origin_mlibc": "promoted"},
+)
+
+config_setting(
+    name = "origin_rootfs_promoted",
+    flag_values = {":origin_rootfs": "promoted"},
+)
+
+config_setting(
+    name = "promoted_lock_enabled",
+    flag_values = {":use_promoted_lock": "true"},
 )

@@ -123,7 +123,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         build = (root / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/promotion:locked_buildset", build)
-        self.assertIn("//bazel/config:component_promoted", build)
+        self.assertIn("//bazel/config:promoted_lock_enabled", build)
         mk = (root / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("ORLIX_BAZEL_APP_TARGETS ?= //Orlix:Orlix", mk)
         self.assertIn("build $(ORLIX_BAZEL_APP_TARGETS) ", mk)

@@ -31,7 +31,7 @@ orlix_mlibc_sysroot(
 orlix_selected_sysroot(
     name = "selected_sysroot",
     origin = select({
-        "//bazel/config:component_promoted": "//bazel/promotion:promoted_sysroot",
+        "//bazel/config:origin_mlibc_promoted": "//bazel/promotion:promoted_sysroot",
         "//conditions:default": ":sysroot",
     }),
     visibility = [

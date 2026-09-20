@@ -175,7 +175,7 @@ ios_framework(
         ":os_resources",
         "//bazel/product:kernel_composition",
     ] + select({
-        "//bazel/config:component_promoted": ["//bazel/promotion:promoted_apple_inputs"],
+        "//bazel/config:promoted_lock_enabled": ["//bazel/promotion:promoted_apple_inputs"],
         "//conditions:default": [],
     }),
     tags = ["manual"],
@@ -211,7 +211,7 @@ ios_application(
         "Orlix/PrivacyInfo.xcprivacy",
         "//docs/sources/release:orlix-app-release-inputs.json",
     ] + glob(["Orlix/Assets.xcassets/**"]) + select({
-        "//bazel/config:component_promoted": ["//bazel/promotion:locked_buildset"],
+        "//bazel/config:promoted_lock_enabled": ["//bazel/promotion:locked_buildset"],
         "//conditions:default": [],
     }),
     linkopts = [

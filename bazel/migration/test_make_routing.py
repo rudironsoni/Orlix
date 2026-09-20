@@ -342,6 +342,7 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("bazel/promotion/substitute.py", mk)
         self.assertIn("--stage", mk)
         self.assertIn("bazel/promotion/imported", mk)
+        self.assertIn("origin_resolver.py", mk)
         self.assertIn("__bazel-substitute-promoted", mk.split("__bazel-orlix-app:")[1].split("__bazel-orlix-archive:")[0])
 
     def test_reconstruct_checks_local_store_before_network_tools(self) -> None:
@@ -532,7 +533,7 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("//bazel/feasibility/kernel:macho_link", app)
         rootfs = (ROOT / "bazel/feasibility/rootfs/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/promotion:promoted_rootfs", rootfs)
-        self.assertIn("component_promoted", rootfs)
+        self.assertIn("origin_rootfs_promoted", rootfs)
         promoted = (ROOT / "bazel/promotion/BUILD.bazel").read_text(encoding="utf-8")
         promoted_rule = (ROOT / "bazel/promotion/promoted.bzl").read_text(encoding="utf-8")
         self.assertIn("orlix_promoted_rootfs", promoted)
@@ -556,7 +557,11 @@ class MakeRoutingTests(unittest.TestCase):
             self.assertIn(f'"$exec_root/${{{position}}}"', promoted_rule)
             self.assertNotIn(f'"$exec_root/${position}"', promoted_rule)
         mlibc = (ROOT / "bazel/feasibility/mlibc/BUILD.bazel").read_text(encoding="utf-8")
-        self.assertIn("//bazel/promotion:promoted_uapi", mlibc)
+        self.assertIn("//bazel/promotion:promoted_sysroot", mlibc)
+        self.assertIn("origin_mlibc_promoted", mlibc)
+        kernel = (ROOT / "bazel/feasibility/kernel/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/promotion:promoted_uapi", kernel)
+        self.assertIn("origin_uapi_promoted", kernel)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
             encoding="utf-8"
         )

@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 tags: [architecture, decision, bazel, build-system]
-updated: 2026-09-11
+updated: 2026-09-21
 status: accepted
 external_id: "ADR-0033"
 summary: "Use Bazel as the repository product graph while Make remains the supported interface and upstream build engines retain internal ownership."
@@ -41,7 +41,7 @@ Action identity contains every effective input that can change an output. Increm
 
 Every Apple product build surface uses this Bazel graph for every row in the supported matrix, including iOS and iPadOS 15, later iOS and iPadOS versions, the optional iOS and iPadOS 16.1 Live Activity extension, and every supported Apple-silicon macOS version. A destination or OS version is a declared graph dimension, not a reason to add an XcodeGen, direct `xcodebuild`, or other parallel build authority. Local Xcode projects, the committed Xcode Cloud discovery project, and Make are frontends to the same Bazel graph.
 
-Apple compilation mode, Orlix profile, destination, source or promoted component mode, signing mode, and proof tier remain independent settings.
+Apple compilation mode, Orlix profile, destination, requested mode (`source`, `promoted`, or `auto`), signing mode, and proof tier remain independent settings. Requested mode resolves to per-component origins for kernel, UAPI, mlibc, and rootfs. Promoted members share one locked signed buildset and stay dependency-closed.
 
 ## Consequences
 

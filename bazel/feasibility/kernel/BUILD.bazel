@@ -20,7 +20,7 @@ orlix_kernel_uapi(
 orlix_selected_uapi(
     name = "selected_uapi",
     origin = select({
-        "//bazel/config:component_promoted": "//bazel/promotion:promoted_uapi",
+        "//bazel/config:origin_uapi_promoted": "//bazel/promotion:promoted_uapi",
         "//conditions:default": ":uapi",
     }),
     visibility = [
@@ -135,7 +135,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:device",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "release",
     },
 )
@@ -147,7 +147,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:simulator",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "release",
     },
 )
@@ -159,7 +159,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:device",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "development",
     },
 )
@@ -171,7 +171,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:simulator",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "development",
     },
 )
@@ -183,7 +183,7 @@ orlix_selected_linux_archive(
         ":promoted_development_iphonesimulator": "//bazel/promotion:promoted_kernel_development_iphonesimulator",
         ":promoted_release_iphoneos": "//bazel/promotion:promoted_kernel_release_iphoneos",
         ":promoted_release_iphonesimulator": "//bazel/promotion:promoted_kernel_release_iphonesimulator",
-        "//bazel/config:component_source": ":macho",
+        "//conditions:default": ":macho",
     }),
     visibility = [
         "//Orlix:__pkg__",

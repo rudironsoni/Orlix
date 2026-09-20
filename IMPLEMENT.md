@@ -899,3 +899,48 @@ Evidence: `Build/AgentHarness/bazel-promotion/empty-store-cold.json`, `Build/Age
 `bazel/selection/pin.bzl` was unused abandoned work. It is not in the tree.
 
 `//bazel/feasibility/analysis:all` remains 38/38.
+
+## Checkpoint 0.2: hybrid origin resolver
+
+Status: verified locally on `fix/ci-cd-cleanup`. Not 0.3. Not 0.6 Git/UAPI classification. Not the 16-scenario benchmark. Not canonical Apple CI.
+
+Requested mode is `source | promoted | auto`. Resolved origins are `kernel`, `uapi`, `mlibc`, `rootfs`, each `source | promoted`. `--config=source` and `--config=promoted` still force the whole graph. Internal flags `origin_*` and `use_promoted_lock` carry the resolver result. Consumers still enter through `selected_*`.
+
+Authority: `bazel/selection/origin_resolver.py`. BUILD files select on `origin_*`. Make stamp acquire calls the same resolver.
+
+```text
+PYTHONPATH=bazel/selection:bazel/migration python3 bazel/selection/origin_resolver.py \
+  --requested-mode auto --lock artifacts.lock.json \
+  --profile release --destination iphonesimulator \
+  --vector '{"kernel":"source","uapi":"promoted","mlibc":"promoted","rootfs":"promoted"}'
+```
+
+| Vector | Result |
+| --- | --- |
+| `--requested-mode source` | all source; acquire empty |
+| `--requested-mode promoted` | all promoted; one lock; acquire `uapi mlibc rootfs kernel-release-iphonesimulator` |
+| facts `kernel_changed=true` rest false | kernel source, rest promoted |
+| facts `uapi_changed=true` | all source |
+| facts `mlibc_changed=true` | kernel/uapi promoted, mlibc/rootfs source |
+| explicit `uapi=source mlibc=promoted` with mismatched consumed_uapi digest | `OriginError`, vector not rewritten |
+| two buildset ids | `OriginError` same-lock |
+| hybrid kernel source | acquire `uapi mlibc rootfs`; no Kernel artifact |
+
+Configured graph, `release` + `iphonesimulator` + `--config=auto` + hybrid flags:
+
+| Path | Result |
+| --- | --- |
+| `//Orlix:Orlix` → `:macho` | through `selected_macho` |
+| `//Orlix:Orlix` → `promoted_kernel_release_iphonesimulator` | empty |
+| `//Orlix:Orlix` → `promoted_uapi` / `promoted_sysroot` / `promoted_rootfs` | present |
+| `//Orlix:Orlix` → source `:uapi` / `:sysroot` / `:rootfs` | empty |
+| `--config=source` → `:macho` | present |
+| `--config=promoted` → `promoted_kernel_release_iphonesimulator` | present |
+
+Hybrid empty-store acquire (`Build/Bazel/proof/hybrid-acquire/store`): network 3, local 0, names `uapi mlibc rootfs`. All Kernel variants absent. Evidence `Build/AgentHarness/bazel-promotion/hybrid-acquire.json`.
+
+iOS `SwiftCompile` `//Orlix:OrlixAppLibrary` ActionKey `05284bbed41a547a9529c9d34c8981c71e17398f343370e68894b217ab1ff36e` identical for hybrid `origin_kernel=source` vs `origin_kernel=promoted` (config `ios_sim_arm64-dbg-ios-sim_arm64-min15.0-ST-03e9db8e5a96`). Changing Kernel origin does not change that action identity.
+
+`PYTHONPATH=bazel/selection python3 -m unittest discover -s bazel/selection -p 'test_*.py'` 13/13. `//bazel/feasibility/analysis:all` 43/43. `make docs-check` 0 problems.
+
+Unproved: source-built bytes vs lock; 0.6 fact classification; 16-scenario benchmark; Xcode 26.6 product pin.

@@ -55,6 +55,31 @@ config_flags_test(
 )
 
 config_flags_test(
+    name = "origin_kernel_flag_test",
+    target_under_test = "//bazel/config:origin_kernel",
+)
+
+config_flags_test(
+    name = "origin_uapi_flag_test",
+    target_under_test = "//bazel/config:origin_uapi",
+)
+
+config_flags_test(
+    name = "origin_mlibc_flag_test",
+    target_under_test = "//bazel/config:origin_mlibc",
+)
+
+config_flags_test(
+    name = "origin_rootfs_flag_test",
+    target_under_test = "//bazel/config:origin_rootfs",
+)
+
+config_flags_test(
+    name = "use_promoted_lock_flag_test",
+    target_under_test = "//bazel/config:use_promoted_lock",
+)
+
+config_flags_test(
     name = "apple_destination_flag_test",
     target_under_test = "//bazel/config:apple_destination",
 )
