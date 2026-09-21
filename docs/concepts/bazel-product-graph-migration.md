@@ -232,6 +232,23 @@ Each `selected_*` provider projects every consumer-visible file onto a stable co
 
 The committed `artifacts.lock.json` selects the signed buildset and its component OCI digests. A workflow proposes lock changes through a normal pull request. No promotion workflow writes directly to `main`.
 
+## Target architecture
+
+Bazel owns the repository product graph. Make is the only developer and CI entry. Kbuild, Meson/Ninja, compiler-rt, Autotools/Make, and Apple tools own their internal graphs. Guest ELF stays host data.
+
+Four identities stay separate:
+
+1. Action identity is the Bazel action key. It includes semantic inputs, tools, flags, and the projected artifact bytes.
+2. Incremental-state identity selects a worktree-local Kbuild, Meson/Ninja, or package directory. It is an accelerator. Deleting it rebuilds the same product more slowly.
+3. Content identity is the bytes, relative paths, file types, modes, and symlink targets of the selected product.
+4. Proof identity binds a tested artifact to its toolchain, inputs, destination, profile, buildset, and proof tier. It is not a compile input.
+
+A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key.
+
+Cache ownership is one job per layer. The Bazel action cache and disk cache store Bazel action results. The repository cache stores declared downloads. The promoted artifact store stores digest-addressed immutable components. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
+
+A warm promoted build downloads nothing that is already in the local store. An unused locked component is not fetched. Promotion and release consume the proved source artifact. They do not rebuild a substitute.
+
 ## Durable And Disposable Storage
 
 Use these storage roles:

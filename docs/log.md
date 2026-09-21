@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-21] build | Record the target build architecture
+
+The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) now states the four identities, the `selected_*` consumer boundary, and which layer owns each cache. An explicit allowed-local Xcode identity can start Make without installing the product pin.
+
 ## [2026-09-21] build | Project every selected consumer file
 
 The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) now requires `selected_*` to project ABI text, rootfs manifests, payload metadata, and content digests onto stable coordinates. Origin labels and proof files stay off the consumer provider.
