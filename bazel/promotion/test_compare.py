@@ -155,7 +155,7 @@ class PromotionCompareTests(unittest.TestCase):
                 artifact_identity_v2(artifacts={"OrlixKernel.a": promoted}),
             )
 
-    def test_files_only_manifest_drops_directories_and_rejects_symlinks(self) -> None:
+    def test_files_only_manifest_drops_directories_and_keeps_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "tree"
             nested = root / "usr" / "include"
@@ -172,8 +172,11 @@ class PromotionCompareTests(unittest.TestCase):
                 ["top.txt", "usr/include/foo.h"],
             )
             (root / "link").symlink_to("top.txt")
-            with self.assertRaisesRegex(ValueError, "cannot contain symlinks"):
-                artifact_manifest_v2(root, files_only=True)
+            with_link = json.loads(artifact_manifest_v2(root, files_only=True))
+            link = next(entry for entry in with_link["entries"] if entry["path"] == "link")
+            self.assertEqual(link["type"], "symlink")
+            self.assertEqual(link["target"], "top.txt")
+            self.assertFalse(any(entry.get("type") == "directory" for entry in with_link["entries"]))
 
     def test_artifact_identity_v2_rejects_unknown_formats_invalid_paths_and_types(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

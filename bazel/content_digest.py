@@ -103,13 +103,7 @@ def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
             if entry["type"] == "directory":
                 pending.append(child)
     if files_only:
-        # Promotion manifests name files only: directories are implicit in
-        # file paths, and the promotion validator rejects anything else.
-        # Symlinks fail loudly here instead of vanishing from the payload.
-        symlinks = sorted(entry["path"] for entry in entries if entry["type"] == "symlink")
-        if symlinks:
-            raise ValueError(f"promotion manifests cannot contain symlinks: {symlinks}")
-        entries = [entry for entry in entries if entry["type"] == "file"]
+        entries = [entry for entry in entries if entry["type"] != "directory"]
     return sorted(entries, key=lambda entry: entry["path"])
 
 
