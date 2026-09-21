@@ -336,12 +336,28 @@ def load_locked_buildset(
         locked[name] = validate_component(name, entry, schema=schema)
     if buildset != buildset_digest(locked, schema=schema):
         raise LockedBuildsetError("buildset digest does not match its component set")
+    source_sha = payload.get("source_sha")
+    if source_sha is not None:
+        if not isinstance(source_sha, str) or len(source_sha) != 40 or any(
+            char not in "0123456789abcdef" for char in source_sha
+        ):
+            raise LockedBuildsetError(f"invalid lock source_sha: {source_sha!r}")
     return {
         "schema": schema,
         "kind": "locked-buildset",
         "buildset": buildset,
         "components": locked,
+        "source_sha": source_sha,
     }
+
+
+def require_source_sha(payload: dict) -> str:
+    source_sha = payload.get("source_sha") if isinstance(payload, dict) else None
+    if not isinstance(source_sha, str) or len(source_sha) != 40 or any(
+        char not in "0123456789abcdef" for char in source_sha
+    ):
+        raise LockedBuildsetError("lock is missing a valid source_sha")
+    return source_sha
 
 
 def write_locked_buildset(lock_path: str, out_path: str) -> dict:

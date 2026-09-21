@@ -125,7 +125,36 @@ class LockProposalTests(unittest.TestCase):
         lock = self._activate(_schema2_proposal(), run)
         self.assertEqual(lock["schema"], 2)
         self.assertEqual(set(lock["components"]), set(locked_buildset.required_components(2)))
+        self.assertEqual(lock["source_sha"], "ab" * 20)
         self.assertEqual(run.call_args.args[0][0:2], ["cosign", "verify-blob"])
+
+    def test_activation_rejects_missing_source_sha_without_changing_lock(self) -> None:
+        payload = _schema2_proposal()
+        run = mock.Mock(return_value=subprocess.CompletedProcess([], 0, ""))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._evidence(root, payload)
+            payload.pop("source_sha", None)
+            proposal = root / "proposal.json"
+            bundle = root / "proposal.sigstore.json"
+            lock = root / "artifacts.lock.json"
+            proposal.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            bundle.write_text("{}\n", encoding="utf-8")
+            lock.write_text(json.dumps(lock_proposal.EMPTY_LOCK) + "\n", encoding="utf-8")
+            before = lock.read_bytes()
+            verify = lambda item: locked_buildset.validate_component(
+                item["component"], item, schema=item["schema"]
+            )
+            with mock.patch.dict(os.environ, {"ORLIX_COSIGN_PUB": "/public.pub"}, clear=True), \
+                 mock.patch("lock_proposal.shutil.which", return_value="/usr/bin/cosign"), \
+                 mock.patch("lock_proposal.trusted_public_key", return_value="/public.pub"), \
+                 mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION), \
+                 mock.patch("lock_proposal.verify_component", side_effect=verify):
+                with self.assertRaises(ValueError):
+                    lock_proposal.activate_signed_lock_proposal(
+                        str(proposal), str(bundle), str(lock), run=run, evidence_dir=str(root)
+                    )
+            self.assertEqual(lock.read_bytes(), before)
 
     def test_activation_rejects_invalid_signed_input_without_changing_lock(self) -> None:
         mutations = {

@@ -141,6 +141,13 @@ def apply_lock_proposal(proposal_path: str, lock_path: str) -> None:
         "buildset": proposal["buildset"],
         "components": components,
     }
+    if schema == SCHEMA2:
+        source_sha = proposal.get("source_sha")
+        if not isinstance(source_sha, str) or len(source_sha) != 40 or any(
+            char not in "0123456789abcdef" for char in source_sha
+        ):
+            raise ValueError("signed schema-2 lock proposal requires source_sha")
+        lock["source_sha"] = source_sha
     destination = Path(lock_path)
     with tempfile.NamedTemporaryFile(mode="w", dir=destination.parent, delete=False) as output:
         pending = Path(output.name)

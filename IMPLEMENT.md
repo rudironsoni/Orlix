@@ -1042,3 +1042,38 @@ mlibc sysroot digest after restore: `be316f517dccf8ded562424811d6f40a45bdafd0c28
 CI ccache restore/save: not changed. Benefit not established in 0.5.
 
 `//bazel/feasibility/analysis:all` 43/43.
+
+## Checkpoint 0.6: auto classification and UAPI probe
+
+Status: classifier and activation path implemented. Current committed lock has no `source_sha`, so live `auto` fail-closes until a lock with the signed proposal SHA is activated. Not 0.7.
+
+Activation: `apply_lock_proposal` copies schema-2 `source_sha` from the signed proposal into `artifacts.lock.json`. Missing or malformed `source_sha` is rejected without changing the lock. `load_locked_buildset` exposes `source_sha`. `require_source_sha` is the classifier entry. HEAD is not used as a baseline.
+
+Classifier: `bazel/selection/worktree_classifier.py`. NUL-safe `git diff -z --name-status` for committed (`source_sha`..HEAD), staged, and unstaged; `git ls-files -z --others --exclude-standard` for untracked. Deletes and renames included. Unknown paths raise `ClassifierError`. Disposable prefixes: `Build/`, `bazel-bin/`, `bazel-out/`, `bazel-testlogs/`, `.git/`.
+
+Ownership (path rules, not extension):
+
+- app: `Orlix/`, `OrlixHostAdapter/`, docs, listed repo files
+- kernel_impl: overlay/kbuild/isa/configs/boot; remaining `OrlixKernel/` except installed UAPI
+- uapi_sensitive: `include/uapi/`, `arch/arm64/include/uapi/`, `kernel_uapi.bzl`, `headers_install` scripts
+- mlibc: `OrlixMLibC/`, `bazel/feasibility/mlibc/`
+- rootfs: packages, init, distribution, `bazel/feasibility/packages/` and `rootfs/`
+- toolchain: remaining `bazel/`, `make/`, lock files, MODULE, `.bazelrc`
+
+Make: `__bazel-auto-preflight` writes `Build/Bazel/proof/origin-vector.json` and `origin-flags.txt`. `__bazel-orlix-app` and `__bazel-product-app` depend on it when `ORLIX_BAZEL_COMPONENT_MODE=auto` and append those flags. `source`/`promoted` skip classification. No `bazel query`/`cquery` in classification.
+
+UAPI probe: `gmake __bazel-kernel-uapi` (`//bazel/feasibility/kernel:uapi`) only. Compares source `uapi.sha256` with promoted product `bazel/promotion/imported/uapi/product/uapi.sha256`. Does not use lock `unsigned_digest` (artifact-identity-v2 of the whole product). Real probe 130.367 s. Source semantic digest `5664459c80f50b46ea399fd4d0e2c37154ba6ff7f96ec281e31aaf5f74e128a0` equals promoted product `uapi.sha256`. Promoted identity remains `945669d660f778f85e8e63c5bb9c95bdaf90aadd77b6fabad03ccd07648b0c3e`. Equal digest keeps userspace promoted. Different digest closes userspace through the 0.2 resolver. Probe log had no Mach-O, mlibc, package, or rootfs actions.
+
+No-probe classifier timings (no Bazel):
+
+| case | wall |
+| --- | ---: |
+| worktree vs HEAD (dirty 0.5/0.6 files) | 0.1093 s |
+| clean fixture | 0.0570 s |
+| app-only unstaged fixture | 0.0464 s |
+| Kernel implementation untracked fixture | 0.0590 s |
+| mlibc-only untracked fixture | 0.0477 s |
+
+`test_lock_proposal` 11 OK. `test_worktree_classifier test_auto_preflight test_origin_resolver` 33 OK. `//bazel/feasibility/analysis:all` 43/43.
+
+Limits: live `auto` on this lock fail-closes (no `source_sha`). Full `test_make_routing` suite was not waited to completion; targeted substitute/source-app tests passed.
