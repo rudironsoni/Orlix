@@ -497,10 +497,14 @@ $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lo
 	@set -euo pipefail; \
 	acquire="$(strip $(ORLIX_PROMOTED_ACQUIRE))"; \
 	if [ -z "$$acquire" ]; then \
-	  extra=(); \
-	  if [ -n "$(ORLIX_BAZEL_ORIGIN_VECTOR)" ]; then extra+=(--vector '$(ORLIX_BAZEL_ORIGIN_VECTOR)'); fi; \
-	  if [ -n "$(ORLIX_BAZEL_ORIGIN_FACTS)" ]; then extra+=(--facts '$(ORLIX_BAZEL_ORIGIN_FACTS)'); fi; \
-	  acquire="$$(PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/selection/origin_resolver.py" --requested-mode "$(ORLIX_BAZEL_COMPONENT_MODE)" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --lock "$(CURDIR)/artifacts.lock.json" "$${extra[@]}" --print-acquire)"; \
+	  if [ -z "$(ORLIX_BAZEL_ORIGIN_VECTOR)$(ORLIX_BAZEL_ORIGIN_FACTS)" ]; then \
+	    acquire="$$(PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/selection/origin_resolver.py" --requested-mode "$(ORLIX_BAZEL_COMPONENT_MODE)" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --lock "$(CURDIR)/artifacts.lock.json" --print-acquire)"; \
+	  else \
+	    extra=(); \
+	    if [ -n "$(ORLIX_BAZEL_ORIGIN_VECTOR)" ]; then extra+=(--vector '$(ORLIX_BAZEL_ORIGIN_VECTOR)'); fi; \
+	    if [ -n "$(ORLIX_BAZEL_ORIGIN_FACTS)" ]; then extra+=(--facts '$(ORLIX_BAZEL_ORIGIN_FACTS)'); fi; \
+	    acquire="$$(PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration" python3 "$(CURDIR)/bazel/selection/origin_resolver.py" --requested-mode "$(ORLIX_BAZEL_COMPONENT_MODE)" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --lock "$(CURDIR)/artifacts.lock.json" "$${extra[@]}" --print-acquire)"; \
+	  fi; \
 	fi; \
 	if [ -z "$$acquire" ]; then \
 	  mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
