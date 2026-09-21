@@ -944,3 +944,41 @@ iOS `SwiftCompile` `//Orlix:OrlixAppLibrary` ActionKey `05284bbed41a547a9529c9d3
 `PYTHONPATH=bazel/selection python3 -m unittest discover -s bazel/selection -p 'test_*.py'` 13/13. `//bazel/feasibility/analysis:all` 43/43. `make docs-check` 0 problems.
 
 Unproved: source-built bytes vs lock; 0.6 fact classification; 16-scenario benchmark; Xcode 26.6 product pin.
+
+## Checkpoint 0.3: origin-aware promoted execution proof
+
+Status: verified locally on `fix/ci-cd-cleanup`. Not 0.4. Not canonical Apple CI.
+
+The promotion registry is not the source-producer denylist. Policy lives in `bazel/promotion/source_producers.py`. Proof lives in `bazel/promotion/promoted_execution.py`. It consumes a resolved origin vector and a JSON execution log.
+
+Source-producer mnemonics (current rules):
+
+```text
+kernel  OrlixKernelMachOArchive, OrlixTctiIsaRestore
+uapi    OrlixLinuxHeadersInstall, OrlixPromotedUapiProduct
+mlibc   OrlixMLibCSysroot, OrlixCompilerRuntime, OrlixPromotedMlibcProduct
+rootfs  OrlixRootfs, OrlixGuestPackage, OrlixPackageInterface
+```
+
+Promoted presence mnemonics: `OrlixPromotedUapi`, `OrlixPromotedMlibc`, `OrlixPromotedRootfs`, and `OrlixPromotedKernel` on `promoted_kernel_{profile}_{destination}`.
+
+```text
+PYTHONPATH=bazel/promotion:bazel/selection python3 bazel/promotion/promoted_execution.py \
+  --execution-log <json> --requested-mode promoted \
+  --lock artifacts.lock.json --profile release --destination iphonesimulator
+```
+
+| Case | Result |
+| --- | --- |
+| full promoted, promoted actions present, no source producers | ok |
+| full promoted plus `:macho` `OrlixKernelMachOArchive` | fail, forbidden kernel |
+| hybrid kernel source plus UAPI/mlibc/rootfs promoted | kernel source allowed; others forbidden; kernel not required promoted |
+| hybrid plus `OrlixLinuxHeadersInstall` | fail, forbidden uapi |
+| all source | source producers allowed; no promoted presence required |
+| missing/malformed/empty log | fail closed |
+| `OrlixKernelMachOArchive` on a non-registry label | detected |
+| `OrlixGuestPackage` under promoted rootfs | fail |
+
+`count_component_actions` is gone. CI calls `promoted_execution.py`. Unittest `test_promoted_execution` 11 cases plus forwarder. `//bazel/feasibility/analysis:all` 43/43.
+
+Limit: the checker requires `--execution_log_json_file` JSON. Proto-text logs fail closed. No new Apple IPA rebuild in this checkpoint.

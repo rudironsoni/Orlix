@@ -342,12 +342,15 @@ jobs:
             end="$(date +%s)"
             echo "$((end - start))" > "$results/$pass.seconds"
             test -f "Build/AgentHarness/bazel-ci/execution.json" || { echo "::error::$pass pass produced no execution log"; exit 1; }
-            PYTHONPATH=bazel/promotion python3 bazel/promotion/component_actions.py \
+            PYTHONPATH=bazel/promotion:bazel/selection python3 bazel/promotion/promoted_execution.py \
               --execution-log "Build/AgentHarness/bazel-ci/execution.json" \
-              --registry bazel/promotion/components.json \
-              --out "Build/AgentHarness/bazel-promotion/component-actions.json"
-            cp "Build/AgentHarness/bazel-promotion/component-actions.json" "$results/$pass-component-actions.json"
-            python3 - "$results/$pass-acquisition.json" "$results/$pass-component-actions.json" "$pass" <<'PY'
+              --requested-mode promoted \
+              --lock artifacts.lock.json \
+              --profile release \
+              --destination iphonesimulator \
+              --out "Build/AgentHarness/bazel-promotion/promoted-execution.json"
+            cp "Build/AgentHarness/bazel-promotion/promoted-execution.json" "$results/$pass-promoted-execution.json"
+            python3 - "$results/$pass-acquisition.json" "$results/$pass-promoted-execution.json" "$pass" <<'PY'
           import json
           import sys
           acquisition = json.load(open(sys.argv[1]))
@@ -364,8 +367,8 @@ jobs:
                   raise SystemExit(f"{name} has no acquisition source")
               if entry.get("signature_verified") is not True:
                   raise SystemExit(f"{name} signature was not verified")
-          if actions["component_actions"] != 0:
-              raise SystemExit(f"{label} pass executed {actions['component_actions']} component-producing actions")
+          if actions.get("ok") is not True:
+              raise SystemExit(f"{label} pass failed promoted execution proof: {actions}")
           PY
           done
           python3 - "$results" <<'PY'
@@ -378,8 +381,8 @@ jobs:
               "kind": "promoted-consumer-proof",
               "cold": json.load(open(results / "cold-acquisition.json")),
               "warm": json.load(open(results / "warm-acquisition.json")),
-              "cold_actions": json.load(open(results / "cold-component-actions.json")),
-              "warm_actions": json.load(open(results / "warm-component-actions.json")),
+              "cold_actions": json.load(open(results / "cold-promoted-execution.json")),
+              "warm_actions": json.load(open(results / "warm-promoted-execution.json")),
               "cold_seconds": int((results / "cold.seconds").read_text().strip()),
               "warm_seconds": int((results / "warm.seconds").read_text().strip()),
           }

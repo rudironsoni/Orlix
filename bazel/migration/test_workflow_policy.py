@@ -232,7 +232,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("for pass in cold warm", workflow)
         self.assertIn("network_downloads", workflow)
         self.assertIn("local_store_hits", workflow)
-        self.assertIn("component_actions.py", workflow)
+        self.assertIn("promoted_execution.py", workflow)
+        self.assertIn("--requested-mode promoted", workflow)
         self.assertIn("orlix-promoted-store", workflow)
         self.assertIn("Build/Bazel/output-base", workflow)
 
