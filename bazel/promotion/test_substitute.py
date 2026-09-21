@@ -155,6 +155,36 @@ class SubstituteTests(unittest.TestCase):
             substitute.stage_imported(payload, str(base / "imported"))
             self.assertEqual(before_digests, digests())
 
+    def test_imported_trees_bind_without_reconstruction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            imported = base / "imported"
+            components = {
+                name: _component(imported, name, files) for name, files in PRODUCTS.items()
+            }
+            buildset = buildset_digest_v2(components)
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps({"schema": 2, "buildset": buildset, "components": components}) + "\n",
+                encoding="utf-8",
+            )
+            payload = substitute.bind_imported(
+                str(lock_path),
+                str(imported),
+                str(base / "out.json"),
+                ["uapi", "mlibc"],
+            )
+            self.assertEqual(set(payload["components"]), {"uapi", "mlibc"})
+            self.assertEqual(payload["components"]["uapi"]["tree"], str(imported / "uapi"))
+            (imported / "uapi" / "product" / "kbuild-archive.tar").write_bytes(b"tampered\n")
+            with self.assertRaises(substitute.SubstituteError):
+                substitute.bind_imported(
+                    str(lock_path),
+                    str(imported),
+                    str(base / "out.json"),
+                    ["uapi"],
+                )
+
     def test_v2_product_tampering_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

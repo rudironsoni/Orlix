@@ -84,6 +84,62 @@ def substitute(
     return payload
 
 
+def bind_imported(
+    lock_path: str,
+    imported_dir: str,
+    out_path: str,
+    component_names: list[str],
+) -> dict:
+    """Record imported trees that already match the lock.
+
+    A second worktree has those trees in git. It must not download them or
+    require a signature key. A tree that does not match fails closed.
+    """
+    if not component_names:
+        raise SubstituteError("imported reuse requires component names")
+    lock_file = Path(lock_path)
+    before = lock_file.read_bytes()
+    locked = locked_buildset.load_locked_buildset(lock_path)
+    available = locked["components"]
+    unknown = [name for name in component_names if name not in available]
+    if unknown:
+        raise SubstituteError(f"unknown promoted components: {', '.join(unknown)}")
+    stage = Path(imported_dir)
+    components: dict[str, dict] = {}
+    for name in component_names:
+        entry = available[name]
+        tree = stage / name
+        identity = entry.get("artifact_identity")
+        if identity is None:
+            raise SubstituteError(f"{name} lock entry has no artifact identity")
+        identity = locked_buildset.validate_artifact_identity(identity)
+        if identity["format"] != locked_buildset.ARTIFACT_IDENTITY_V2_FORMAT:
+            raise SubstituteError(f"{name} imported reuse requires artifact-identity-v2")
+        try:
+            locked_buildset.validate_v2_product(tree, identity, name)
+        except (OSError, TypeError, ValueError) as error:
+            raise SubstituteError(f"{name} imported tree does not match the lock: {error}") from error
+        components[name] = {
+            "unsigned_digest": entry["unsigned_digest"],
+            "oci_digest": entry["oci_digest"],
+            "oci_reference": entry["oci_reference"],
+            "tree": str(tree),
+            "artifact_identity": identity,
+        }
+    after = lock_file.read_bytes()
+    if after != before:
+        raise SubstituteError("substitute mutated artifacts.lock.json")
+    payload = {
+        "schema": locked["schema"],
+        "kind": "promoted-components",
+        "buildset": locked["buildset"],
+        "components": components,
+    }
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(out_path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
 def stage_imported(payload: dict, stage_dir: str) -> None:
     """Project reconstructed components into a package-visible real directory.
 
@@ -126,18 +182,29 @@ def stage_imported(payload: dict, stage_dir: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lock", required=True)
-    parser.add_argument("--reconstruct-dir", required=True)
+    parser.add_argument("--reconstruct-dir")
     parser.add_argument("--out", required=True)
     parser.add_argument("--stage")
+    parser.add_argument(
+        "--from-imported",
+        help="directory of already-local component trees; skip download when they match the lock",
+    )
     parser.add_argument(
         "--components",
         help="comma-separated lock component names to stage; default is the full lock",
     )
     args = parser.parse_args(argv)
     names = [part.strip() for part in args.components.split(",") if part.strip()] if args.components else None
-    payload = substitute(args.lock, args.reconstruct_dir, args.out, component_names=names)
-    if args.stage:
-        stage_imported(payload, args.stage)
+    if args.from_imported:
+        if not names:
+            raise SubstituteError("imported reuse requires --components")
+        payload = bind_imported(args.lock, args.from_imported, args.out, names)
+    else:
+        if not args.reconstruct_dir:
+            raise SubstituteError("reconstruct-dir is required unless imported trees are reused")
+        payload = substitute(args.lock, args.reconstruct_dir, args.out, component_names=names)
+        if args.stage:
+            stage_imported(payload, args.stage)
     print(payload["buildset"])
     return 0
 

@@ -511,16 +511,22 @@ $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lo
 	  printf '%s\n' '{"kind":"promoted-components","components":{}}' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json"; \
 	  exit 0; \
 	fi; \
-	$(MAKE) __bazel-reconstruct ORLIX_PROMOTED_ACQUIRE="$$acquire"; \
-	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
 	csv="$$(printf '%s,' $$acquire | sed 's/,$$//')"; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
+	lock_before="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
+	if ! PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
+		--lock "$(CURDIR)/artifacts.lock.json" \
+		--from-imported "$(CURDIR)/bazel/promotion/imported" \
+		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" \
+		--components "$$csv"; then \
+	  $(MAKE) __bazel-reconstruct ORLIX_PROMOTED_ACQUIRE="$$acquire"; \
+	  PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
 		--reconstruct-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" \
 		--stage "$(CURDIR)/bazel/promotion/imported" \
 		--components "$$csv"; \
+	fi; \
 	python3 -c 'import json,os,sys; p=json.load(open(sys.argv[1])); expected=set(sys.argv[2].split(",")); assert p.get("kind")=="promoted-components" and set(p.get("components",{}))==expected, (p, expected)' "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" "$$csv"; \
 	if rg -q ':latest' "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json"; then echo "promoted-components.json must not use mutable latest" >&2; exit 1; fi; \
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
