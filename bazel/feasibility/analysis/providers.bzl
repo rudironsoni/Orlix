@@ -416,6 +416,9 @@ def _selected_macho_boundary_test_impl(ctx):
     asserts.equals(env, None, archive.product)
     asserts.true(env, archive.archive.path.endswith("/selected_macho/OrlixKernel.a"))
     asserts.true(env, archive.source_input_digest.path.endswith("/selected_macho/archive.sha256"))
+    boot_paths = [f.path for f in archive.boot_resources.to_list()]
+    asserts.true(env, any([p.endswith("/selected_macho/arch/orlix/boot/dts/release.dtb") for p in boot_paths]))
+    asserts.true(env, any([p.endswith("/selected_macho/arch/orlix/boot/dts/development.dtb") for p in boot_paths]))
     return analysistest.end(env)
 
 selected_macho_boundary_test = analysistest.make(_selected_macho_boundary_test_impl)

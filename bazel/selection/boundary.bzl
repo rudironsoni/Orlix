@@ -147,7 +147,7 @@ def _selected_linux_archive_impl(ctx):
     digest = _stage_file(ctx, "archive.sha256", origin.source_input_digest)
     boot = []
     for resource in origin.boot_resources.to_list():
-        boot.append(_stage_file(ctx, "dts/" + resource.basename, resource))
+        boot.append(_stage_file(ctx, "arch/orlix/boot/dts/" + resource.basename, resource))
     return [
         DefaultInfo(files = depset([archive, digest] + boot)),
         OutputGroupInfo(

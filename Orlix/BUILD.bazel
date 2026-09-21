@@ -157,7 +157,7 @@ apple_resource_group(
         "//bazel/feasibility/rootfs:payload",
         "//bazel/feasibility/kernel:macho_boot_resources",
     ],
-    strip_structured_resources_prefixes = ["payload", "macho"],
+    strip_structured_resources_prefixes = ["payload", "macho", "selected_macho"],
     tags = ["manual"],
 )
 
