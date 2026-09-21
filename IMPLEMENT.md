@@ -1182,3 +1182,39 @@ Dirty forms: committed/staged/unstaged/untracked/delete/rename covered through t
 `test_invalidation_matrix` 10 tests, 5.631 s. Cache miss is not invalidation.
 
 Limits: specimens are configured-graph `aquery`, not timed product rebuilds. Live `auto` on the committed lock still fail-closes.
+
+## Checkpoint 0.10A: product-path blockers
+
+Status: 0.7E IPA and localized Ninja proved on Xcode 27.0 routing. Generated Xcode project installs and an Xcode-triggered Orlix build succeeded with `--config=promoted`. Full `test_make_routing` 30 OK. Not authority cutover. Not canonical Xcode 26.6.
+
+### aclocal-1.18 / 0.7E IPA
+
+Cause: `state.sync` rewrote tarball files with copy-order mtimes, so `m4/*.m4` looked newer than shipped `aclocal.m4`. Coreutils 9.11 has no `AM_MAINTAINER_MODE`, so `--disable-maintainer-mode` is unrecognized. GNU make then ran `missing aclocal-1.18`. Host has `aclocal-1.19` only. No version symlink.
+
+Fix: `bazel/build_state.py` keeps source Path mtimes. Coreutils product `gmake` uses `-f Makefile`, not maintainer `GNUmakefile`. Autotools packages still pass `--disable-maintainer-mode` when they honor it.
+
+0.7E `//Orlix:Orlix` release iphonesimulator, kernel/uapi promoted, mlibc/rootfs source:
+
+- IPA `bazel-bin/Orlix/Orlix.ipa`. 287.251 s. 205 action-cache hits. No `aclocal-1.18`.
+- First mlibc on this graph after prior native state: `Orlix Ninja compiled-objects: 0`.
+- Warm no-op: 4.228 s, 1 action.
+- wait3 trailing-space edit then restore: `Orlix Ninja compiled-objects: 2`, 11.470 s. Not 743.
+- `promoted_execution` forbidden kernel/uapi source: empty. Required promoted presence missing because those actions were cached (same 0.7C/D limit).
+
+### Xcode generated project
+
+`bazel run //xcode:feasibility` installed `Build/XcodeProjects/OrlixBazelFeasibility.xcodeproj`. Inner `env -i` does not inherit `--action_env=NAME`. Make now exports `ORLIX_PINNED_DEVELOPER_DIR` and writes `xcodeproj_extra_flags.bazelrc` with the pin value. `bazel_env.sh` carries the same pin.
+
+Xcode-triggered `-scheme Orlix` Debug `generic/platform=iOS Simulator` `CODE_SIGNING_ALLOWED=NO`: **BUILD SUCCEEDED**. Workspace `.bazelrc` `build:rules_xcodeproj --config=promoted` applied. Local Xcode 27.0/27A266a routing only.
+
+### Make routing
+
+Hang was parse-time `$(shell uuidgen|xcode-select|xcrun)`, not an infinite wait. `_dry_run` pins Xcode facts. `test_make_routing` 30 tests, 125.208 s OK.
+
+### 0.10B auto baseline
+
+Committed lock `2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c` still has no `source_sha`. Not synthesized. Default Make component mode is `promoted`. Product operating mode does not require live `auto` against this lock. Live `auto` remains fail-closed until the next ordinary signed buildset activation. No promotion run.
+
+### 0.10C/D not done
+
+`ORLIX_BAZEL_AUTHORITY ?= 0` retained. Source producers `:macho`/`:uapi`/`:sysroot`/`:rootfs` retained. Make retained. Kbuild/Meson/Ninja retained. Canonical pin remains `.xcode-version` `26.6` / `17F113`. Local 27.0 evidence is not that pin. 16-scenario benchmark is epic-level, not an owning 0.10 cutover command in current IMPLEMENT. Not run.

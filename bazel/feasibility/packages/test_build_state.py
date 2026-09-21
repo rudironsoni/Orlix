@@ -9,6 +9,35 @@ from bazel.feasibility.packages import build_state
 
 
 class PackageStateTests(unittest.TestCase):
+    def test_first_sync_keeps_shipped_autotools_newer_than_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, work = base / "source", base / "work"
+            source.mkdir()
+            work.mkdir()
+            (source / "configure").write_bytes(b"upstream configure\n")
+            (source / "aclocal.m4").write_bytes(b"generated aclocal\n")
+            (source / "m4").mkdir()
+            (source / "m4/dep.m4").write_bytes(b"input macro\n")
+            os.utime(source / "m4/dep.m4", ns=(1_000_000_000, 1_000_000_000))
+            os.utime(source / "aclocal.m4", ns=(2_000_000_000, 2_000_000_000))
+            os.utime(source / "configure", ns=(2_000_000_000, 2_000_000_000))
+            arguments = [str(source / "configure")]
+            for name in ("headers", "uapi", "libraries"):
+                tree = base / name
+                tree.mkdir()
+                (tree / "input").write_bytes(b"dependency\n")
+                arguments.append(str(tree))
+            runtime = base / "runtime.a"
+            runtime.write_bytes(b"runtime\n")
+            arguments.append(str(runtime))
+            build_state.prepare(work, arguments)
+            generated = work / "src/aclocal.m4"
+            macro = work / "src/m4/dep.m4"
+            self.assertEqual(generated.stat().st_mtime_ns, 2_000_000_000)
+            self.assertEqual(macro.stat().st_mtime_ns, 1_000_000_000)
+            self.assertGreaterEqual(generated.stat().st_mtime_ns, macro.stat().st_mtime_ns)
+
     def test_source_edits_preserve_upstream_generated_files_and_build_state(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

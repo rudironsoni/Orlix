@@ -140,14 +140,14 @@ export gl_cv_func_getopt_gnu=yes
 export gl_cv_func_getopt_long_gnu=yes
 export gl_cv_func_strtod_works=yes
 if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
-  "$work/src/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --with-selinux --enable-libcap --disable-gcc-warnings
+  "$work/src/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --disable-maintainer-mode --with-selinux --enable-libcap --disable-gcc-warnings
 fi
 config_header="$work/build/lib/config.h"
 test -s "$config_header"
 for macro in USE_XATTR USE_ACL USE_SELINUX_SELINUX_H HAVE_CAP; do
   /usr/bin/grep -Eq "^#define $macro 1$" "$config_header"
 done
-"$gmake" -j1 all PROGRAMS= LIBRARIES= MANS= INFO_DEPS=
+"$gmake" -f Makefile -j1 all PROGRAMS= LIBRARIES= MANS= INFO_DEPS=
 : > "$work/build/orlix-link-inputs.mk"
 link_inputs="${feature_libs[*]} $libraries/libc.a $libm $libpthread $runtime $libraries/crt1.o $libraries/crti.o $libraries/crtn.o"
 program_targets=()
@@ -158,7 +158,7 @@ while IFS= read -r program; do
   program_targets+=("src/$source_program")
   /usr/bin/printf 'src/%s: private .EXTRA_PREREQS := %s\n' "$source_program" "$link_inputs" >> "$work/build/orlix-link-inputs.mk"
 done < "$programs_file"
-"$gmake" -f GNUmakefile -f orlix-link-inputs.mk -j1 "${program_targets[@]}" MANS= INFO_DEPS=
+"$gmake" -f Makefile -f orlix-link-inputs.mk -j1 "${program_targets[@]}" MANS= INFO_DEPS=
 nm_bin="$(/usr/bin/command -v nm)"
 test -x "$nm_bin"
 assert_symbol() {

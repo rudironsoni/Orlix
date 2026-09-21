@@ -18,8 +18,15 @@ PATH = os.environ.get("PATH", "/usr/bin:/bin")
 def _dry_run(*args: str) -> str:
     env = os.environ.copy()
     env["PATH"] = PATH
+    pinned = [
+        "ORLIX_BAZEL_AUTHORITY=1",
+        "ORLIX_BAZEL_RUN_ID=test-run",
+        "ORLIX_XCODE_VERSION=26.6",
+        "ORLIX_XCODE_BUILD=17F113",
+        "ORLIX_PINNED_DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer",
+    ]
     completed = subprocess.run(
-        [MAKE, "-C", str(ROOT), "-n", "MAKE=echo", "ORLIX_BAZEL_AUTHORITY=1", *args],
+        [MAKE, "-C", str(ROOT), "-n", "MAKE=echo", *pinned, *args],
         check=False,
         capture_output=True,
         timeout=30,

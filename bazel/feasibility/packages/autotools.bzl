@@ -299,7 +299,14 @@ if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
     /opt/homebrew/bin/autoreconf --force --install --verbose
   fi
   if [ "$MAKE_ONLY" != 1 ]; then
-    "$conf" $CONFIGURE_ARGS
+    extra=""
+    if [ "$BOOTSTRAP" != 1 ]; then
+      case " $CONFIGURE_ARGS " in
+        *" --disable-maintainer-mode "*) ;;
+        *) extra="--disable-maintainer-mode" ;;
+      esac
+    fi
+    "$conf" $CONFIGURE_ARGS $extra
   fi
 fi
 gmake_bin="$(/usr/bin/command -v gmake)"

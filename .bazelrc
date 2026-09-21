@@ -12,6 +12,10 @@ build --action_env=ORLIX_COMPILER_LAUNCHER
 build --action_env=ORLIX_PACKAGE_INCREMENTAL
 build --action_env=ORLIX_MLIBC_INCREMENTAL
 build --action_env=ORLIX_KERNEL_INCREMENTAL
+build --action_env=ORLIX_PINNED_DEVELOPER_DIR
+build --host_action_env=ORLIX_PINNED_DEVELOPER_DIR
+build --action_env=DEVELOPER_DIR
+build --host_action_env=DEVELOPER_DIR
 build --experimental_disk_cache_gc_max_size=30G
 build --experimental_disk_cache_gc_max_age=30d
 
@@ -61,9 +65,4 @@ build:promotion --action_env=ORLIX_COMPILER_LAUNCHER=
 build:promotion --action_env=CCACHE_DISABLE=1
 
 build:rules_xcodeproj --//bazel/config:profile=release
-build:rules_xcodeproj --//bazel/config:component_mode=source
-build:rules_xcodeproj --//bazel/config:origin_kernel=source
-build:rules_xcodeproj --//bazel/config:origin_uapi=source
-build:rules_xcodeproj --//bazel/config:origin_mlibc=source
-build:rules_xcodeproj --//bazel/config:origin_rootfs=source
-build:rules_xcodeproj --//bazel/config:use_promoted_lock=false
+build:rules_xcodeproj --config=promoted

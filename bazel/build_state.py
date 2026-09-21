@@ -80,6 +80,11 @@ def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path, *, r
             _remove(target)
             target.write_bytes(data)
             target.chmod(stat.S_IMODE(mode))
+            # GNU make rebuilds shipped Autotools outputs when copy order
+            # makes inputs newer than generated files. Keep source mtimes.
+            if not isinstance(source, bytes):
+                source_stat = source.stat()
+                os.utime(target, ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns))
         changed += 1
     if remove_stale:
         for name, path in _files(destination).items():

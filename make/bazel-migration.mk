@@ -50,6 +50,7 @@ export ORLIX_BAZEL_REPOSITORY_CACHE
 export ORLIX_PROMOTED_ARTIFACT_STORE
 export ORLIX_BAZEL_OUTPUT_BASE
 export ORLIX_BAZEL_TOOL_ROOT
+export ORLIX_PINNED_DEVELOPER_DIR
 export CCACHE_BASEDIR
 export CCACHE_DIR
 export CCACHE_MAXSIZE
@@ -678,7 +679,13 @@ __bazel-live-activity-smoke: __bazel-feasibility-bootstrap
 
 __bazel-feasibility-xcodeproj: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-auto-preflight)
 	@mkdir -p Build/XcodeProjects
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" PATH="$(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION):$(HOME)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" run //xcode:feasibility --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),$$(cat "$(ORLIX_BUILD_ROOT)/Bazel/proof/origin-flags.txt"))
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" PATH="$(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION):$(HOME)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" run //xcode:feasibility --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),$$(cat "$(ORLIX_BUILD_ROOT)/Bazel/proof/origin-flags.txt"))
+	@printf '%s\n' \
+		"build --action_env=ORLIX_PINNED_DEVELOPER_DIR=$(ORLIX_PINNED_DEVELOPER_DIR)" \
+		"build --host_action_env=ORLIX_PINNED_DEVELOPER_DIR=$(ORLIX_PINNED_DEVELOPER_DIR)" \
+		"build:rules_xcodeproj --action_env=ORLIX_PINNED_DEVELOPER_DIR=$(ORLIX_PINNED_DEVELOPER_DIR)" \
+		"build:rules_xcodeproj --host_action_env=ORLIX_PINNED_DEVELOPER_DIR=$(ORLIX_PINNED_DEVELOPER_DIR)" \
+		> Build/XcodeProjects/OrlixBazelFeasibility.xcodeproj/rules_xcodeproj/bazel/xcodeproj_extra_flags.bazelrc
 
 __bazel-xcode-cloud-project-check:
 	@test -d OrlixCloud.xcodeproj
