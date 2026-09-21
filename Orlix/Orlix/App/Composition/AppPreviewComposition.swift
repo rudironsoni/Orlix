@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 import SwiftUI
 
 /// A deterministic app-shell preview with no live external dependencies.

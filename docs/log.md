@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-21] build | Split the app Swift module
+
+The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) splits the app shell from `OrlixAppLibraryImplementation`. A shell edit recompiles the shell only. The shell compile still uses `-Xfrontend -disable-access-control` because implementation declarations stay internal.
+
 ## [2026-09-21] build | Record the target build architecture
 
 The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) now states the four identities, the `selected_*` consumer boundary, and which layer owns each cache. An explicit allowed-local Xcode identity can start Make without installing the product pin.

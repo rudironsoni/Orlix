@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 @MainActor
 struct AppLifecycleDependencies {
     let subscribeToRemoteChanges: @MainActor () async -> Void

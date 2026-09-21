@@ -5,6 +5,11 @@
 //  Republishes commands from AppKit-hosted panes to scene Commands.
 //
 
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 #if os(macOS)
 import Combine
 import Foundation

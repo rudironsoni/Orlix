@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 import Foundation
 
 /// Breaks the production initialization cycle between server state and terminal state.

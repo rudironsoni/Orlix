@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 import Foundation
 
 /// The single production dependency graph for the application.

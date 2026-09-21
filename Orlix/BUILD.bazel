@@ -62,52 +62,92 @@ _TEST_SWIFT_FEATURES = [
     for flag in ["-enable-upcoming-feature", feature]
 ]
 
+_ORLIX_SWIFT_COPTS = [
+    "-default-isolation=MainActor",
+    "-strict-concurrency=minimal",
+    "-DORLIX_BETA_OBSERVABILITY",
+    "-import-objc-header",
+    "Orlix/Orlix/ghostty-bridging-header.h",
+]
+
+_ORLIX_SWIFT_DEFINES = [
+    "ORLIX_APP_HOSTED_BOOT=1",
+    "ORLIX_BETA_OBSERVABILITY=1",
+    "ORLIX_GHOSTTY_SPM=1",
+]
+
+_ORLIX_SWIFT_DEPS = [
+    ":GhosttyAbortShim",
+    ":ghostty_headers",
+    ":ssh2_headers",
+    "//OrlixOS/Sources/Session:OrlixOS",
+    "@swiftpkg_mlx_swift//:MLX",
+    "@swiftpkg_mlx_swift//:MLXFFT",
+    "@swiftpkg_mlx_swift//:MLXNN",
+    "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
+    "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
+    "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
+    "@swiftpkg_swift_cloudflared//:Cloudflared",
+    "@swiftpkg_swift_et//:ETBootstrap",
+    "@swiftpkg_swift_et//:ETSession",
+    "@swiftpkg_swift_mosh//:MoshBootstrap",
+    "@swiftpkg_swift_mosh//:MoshCore",
+    "@swiftpkg_zipfoundation//:ZIPFoundation",
+]
+
+_ORLIX_IMPLEMENTATION_SRCS = glob([
+    "Orlix/Core/**/*.swift",
+    "Orlix/Features/**/*.swift",
+    "OrlixShared/*.swift",
+]) + ["Orlix/App/Localization/AppLanguage.swift"]
+
+_ORLIX_APP_SRCS = glob(
+    ["Orlix/App/**/*.swift"],
+    exclude = [
+        "Orlix/App/Orlix.swift",
+        "Orlix/App/Localization/AppLanguage.swift",
+    ],
+)
+
+[
+    swift_library(
+        name = name + "Implementation",
+        testonly = is_test_host,
+        srcs = _ORLIX_IMPLEMENTATION_SRCS,
+        copts = [
+            "-swift-version",
+            "5" if is_test_host else "6",
+        ] + _ORLIX_SWIFT_COPTS + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
+        features = ["swift.add_target_name_to_output"] if is_test_host else [],
+        swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
+        defines = _ORLIX_SWIFT_DEFINES,
+        module_name = "OrlixTestImplementation" if is_test_host else "OrlixImplementation",
+        tags = ["manual"],
+        deps = _ORLIX_SWIFT_DEPS,
+    )
+    for name, entrypoint, is_test_host in [
+        ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
+        ("OrlixTestAppLibrary", "//OrlixTestApp:Sources/OrlixTestApp.swift", True),
+    ]
+]
+
 [
     swift_library(
         name = name,
         testonly = is_test_host,
-        srcs = glob([
-            "Orlix/App/**/*.swift",
-            "Orlix/Core/**/*.swift",
-            "Orlix/Features/**/*.swift",
-            "OrlixShared/*.swift",
-        ], exclude = ["Orlix/App/Orlix.swift"]) + [entrypoint],
+        srcs = _ORLIX_APP_SRCS + [entrypoint],
         copts = [
             "-swift-version",
             "5" if is_test_host else "6",
-            "-default-isolation=MainActor",
-            "-strict-concurrency=minimal",
-            "-DORLIX_BETA_OBSERVABILITY",
-            "-import-objc-header",
-            "Orlix/Orlix/ghostty-bridging-header.h",
-        ] + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
+            "-Xfrontend",
+            "-disable-access-control",
+        ] + _ORLIX_SWIFT_COPTS + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
         features = ["swift.add_target_name_to_output"] if is_test_host else [],
         swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
-        defines = [
-            "ORLIX_APP_HOSTED_BOOT=1",
-            "ORLIX_BETA_OBSERVABILITY=1",
-            "ORLIX_GHOSTTY_SPM=1",
-        ],
+        defines = _ORLIX_SWIFT_DEFINES + (["ORLIX_TEST_HOST=1"] if is_test_host else []),
         module_name = "Orlix",
         tags = ["manual"],
-        deps = [
-            ":GhosttyAbortShim",
-            ":ghostty_headers",
-            ":ssh2_headers",
-            "//OrlixOS/Sources/Session:OrlixOS",
-            "@swiftpkg_mlx_swift//:MLX",
-            "@swiftpkg_mlx_swift//:MLXFFT",
-            "@swiftpkg_mlx_swift//:MLXNN",
-            "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
-            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
-            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
-            "@swiftpkg_swift_cloudflared//:Cloudflared",
-            "@swiftpkg_swift_et//:ETBootstrap",
-            "@swiftpkg_swift_et//:ETSession",
-            "@swiftpkg_swift_mosh//:MoshBootstrap",
-            "@swiftpkg_swift_mosh//:MoshCore",
-            "@swiftpkg_zipfoundation//:ZIPFoundation",
-        ],
+        deps = [":" + name + "Implementation"] + _ORLIX_SWIFT_DEPS,
     )
     for name, entrypoint, is_test_host in [
         ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
