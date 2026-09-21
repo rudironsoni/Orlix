@@ -250,6 +250,7 @@ product-build-prepare:
 	if [ "$$needs_bump" = true ]; then \
 		next="$$((current + 1))"; \
 		perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
+		"$(ORLIX_RUBY)" bazel/migration/inventory.rb --write; \
 		printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next for product input changes"; \
 	else \
 		printf '%s\n' "product version unchanged: CURRENT_PROJECT_VERSION=$$current"; \
