@@ -676,9 +676,9 @@ __bazel-rootfs: __bazel-coreutils __bazel-bash __bazel-grep __bazel-findutils __
 __bazel-live-activity-smoke: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/apple:LiveActivitySmoke --compilation_mode=dbg --config=release --config=source --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
-__bazel-feasibility-xcodeproj: __bazel-feasibility-bootstrap
+__bazel-feasibility-xcodeproj: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-auto-preflight)
 	@mkdir -p Build/XcodeProjects
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" PATH="$(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION):$(HOME)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" run //xcode:feasibility --compilation_mode=dbg --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" PATH="$(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION):$(HOME)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" run //xcode:feasibility --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),$$(cat "$(ORLIX_BUILD_ROOT)/Bazel/proof/origin-flags.txt"))
 
 __bazel-xcode-cloud-project-check:
 	@test -d OrlixCloud.xcodeproj
@@ -829,7 +829,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_component_actions
 	@PYTHONPATH="$(CURDIR)/bazel/promotion:$(CURDIR)/bazel/selection" python3 -m unittest test_promoted_execution
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_remote_cache_policy
-	@PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration:$(CURDIR)/bazel/promotion" python3 -m unittest test_worktree_classifier test_auto_preflight test_origin_resolver
+	@PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration:$(CURDIR)/bazel/promotion" python3 -m unittest test_worktree_classifier test_auto_preflight test_origin_resolver test_daily_routing
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_artifact_store

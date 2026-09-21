@@ -1120,3 +1120,29 @@ wait3 patch space. Restored. Flags: kernel/uapi promoted, mlibc/rootfs source. `
 `bazel clean` on the proof output base plus emptied proof disk-cache. Rebuild 189.644 s, 446 processes. Guest verified digests unchanged (kernel/uapi/mlibc/rootfs). IPA bytes changed (`42f1458c…` vs `beed6e77…`): Apple packaging, not guest semantics. `OrlixPromotedUapi` ActionKey after rebuild `746193bb613646ce6aa37397b508675bc11fc70aec16f5c78d8f86600475bddb`. Eviction is cache availability, not graph invalidation.
 
 `promoted_execution.py` now parses concatenated pretty JSON objects from Bazel `--execution_log_json_file`. `test_promoted_execution` 12 OK.
+
+## Checkpoint 0.8: daily surfaces
+
+Status: routing topology. Not 0.9. Not authority cutover.
+
+Daily developer surfaces (Bazel authority):
+
+| Surface | Make target | Notes |
+| --- | --- | --- |
+| `make build` | `__bazel-orlix-app` when `ORLIX_BAZEL_AUTHORITY=1` | default component mode `promoted` |
+| `make rebuild` | clean then `__bazel-orlix-app` | same product target |
+| `make xcodeproj` | `__bazel-feasibility-xcodeproj` | now uses `ORLIX_BAZEL_COMPONENT_MODE` + origin flags |
+| Xcode generated project | `//xcode:feasibility` | same selected_* graph; no classifier clone |
+| `make test` | `__bazel-matrix-check` | analysis + unit tests, not the IPA |
+
+Not daily: `beta-archive`, promotion, canonical CI.
+
+Origin owner: `bazel/selection/auto_preflight.py` once. `source`/`promoted` skip it. Xcode Starlark does not import the classifier.
+
+`cquery` `--config=promoted` `somepath(//Orlix:Orlix, selected_macho)` holds. `somepath(..., //bazel/feasibility/kernel:macho)` empty. Same for `selected_rootfs` vs `:rootfs`. Promoted IPA does not traverse source `:uapi`/`:sysroot` because userspace is inside promoted rootfs.
+
+`__bazel-feasibility-xcodeproj` no longer hardcodes `--config=source`. It uses `--config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE)` and `origin-flags.txt` in `auto`. `xcode/BUILD.bazel` inherits `ORLIX_PINNED_DEVELOPER_DIR`. Inner generator bazel still failed here without that action_env on the nested invocation. Generated project was not installed in this session.
+
+Daily no-op: live `auto` fail-closes (lock has no `source_sha`). Equivalent promoted IPA on the isolated output base: 2.152 s, 122 action-cache hits, 0 guest source producers. `make build` itself was not timed through `__bazel-feasibility-bootstrap` because the local Xcode pin is 26.6 and this machine has 27.0.
+
+Routing tests: `test_daily_routing` 6 OK. Analysis `selected_sysroot_boundary_test` and `selected_rootfs_boundary_test` added. `//bazel/feasibility/analysis:all` 45/45. Targeted Make routing tests passed. Full `test_make_routing` suite not rerun to completion (known hang).

@@ -14,6 +14,8 @@ load(
     "uapi_providers_test",
     "selected_uapi_boundary_test",
     "selected_macho_boundary_test",
+    "selected_sysroot_boundary_test",
+    "selected_rootfs_boundary_test",
     "variant_stamp_test",
 )
 
@@ -37,6 +39,16 @@ selected_uapi_boundary_test(
 selected_macho_boundary_test(
     name = "selected_macho_boundary_test",
     target_under_test = "//bazel/feasibility/kernel:selected_macho",
+)
+
+selected_sysroot_boundary_test(
+    name = "selected_sysroot_boundary_test",
+    target_under_test = "//bazel/feasibility/mlibc:selected_sysroot",
+)
+
+selected_rootfs_boundary_test(
+    name = "selected_rootfs_boundary_test",
+    target_under_test = "//bazel/feasibility/rootfs:selected_rootfs",
 )
 
 sysroot_uapi_only_test(

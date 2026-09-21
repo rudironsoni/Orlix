@@ -419,3 +419,30 @@ def _selected_macho_boundary_test_impl(ctx):
     return analysistest.end(env)
 
 selected_macho_boundary_test = analysistest.make(_selected_macho_boundary_test_impl)
+
+def _selected_sysroot_boundary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixLibcSysrootInfo in target)
+    sysroot = target[OrlixLibcSysrootInfo]
+    asserts.equals(env, None, sysroot.artifact_identity_digest)
+    asserts.equals(env, None, sysroot.artifact_identity_manifest)
+    asserts.true(env, sysroot.headers.path.endswith("/selected_sysroot/headers"))
+    asserts.true(env, sysroot.sysroot_digest.path.endswith("/selected_sysroot/sysroot.sha256"))
+    return analysistest.end(env)
+
+selected_sysroot_boundary_test = analysistest.make(_selected_sysroot_boundary_test_impl)
+
+def _selected_rootfs_boundary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    asserts.true(env, OrlixRootfsInfo in target)
+    rootfs = target[OrlixRootfsInfo]
+    asserts.equals(env, None, rootfs.artifact_identity_digest)
+    asserts.equals(env, None, rootfs.artifact_identity_manifest)
+    asserts.true(env, rootfs.initramfs.path.endswith("/selected_rootfs/initramfs.cpio.gz"))
+    asserts.true(env, rootfs.base_ext4.path.endswith("/selected_rootfs/base.ext4"))
+    asserts.true(env, rootfs.state_ext4.path.endswith("/selected_rootfs/state.ext4"))
+    return analysistest.end(env)
+
+selected_rootfs_boundary_test = analysistest.make(_selected_rootfs_boundary_test_impl)
