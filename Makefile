@@ -61,7 +61,6 @@ ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WAL
 ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
 ORLIX_TCTI_TEST_ONLY_TESTING ?= OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession
 ORLIX_TCTI_XCODEBUILD ?= /usr/bin/xcodebuild
-ORLIX_BAZEL_AUTHORITY ?= 0
 
 define ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS
 run_xcodebuild() { \
@@ -372,12 +371,7 @@ beta-install-simulator: beta-prerequisites
 	xcrun simctl launch "$(ORLIX_BETA_SIMULATOR_ID)" "$(ORLIX_APP_BUNDLE_ID)"
 
 ios15-simulator-gate:
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-ios15-simulator-gate
-else
-	@$(MAKE) __ios15-simulator-build
-	@$(MAKE) __ios15-simulator-test
-endif
 
 .PHONY: __ios15-simulator-build __ios15-simulator-test
 __ios15-simulator-build:
@@ -854,35 +848,12 @@ orlixos-tests: xcodeproj console-policy-tests terminal-mux-tests
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		test
 
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 app-tests:
 	@$(MAKE) __bazel-test-app
 	@$(MAKE) __bazel-test-app-architecture
-else
-app-tests: xcodeproj
-	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
-		-project Orlix.xcodeproj \
-		-scheme "Orlix Tests" \
-		-configuration Debug \
-		-destination '$(ORLIX_TEST_DESTINATION)' \
-		test
-	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
-		-project Orlix.xcodeproj \
-		-scheme "OrlixOSTestApp Tests" \
-		-configuration Debug \
-		-destination '$(ORLIX_TEST_DESTINATION)' \
-		-only-testing:OrlixOSTestAppTests/ArchitectureInvariantTests \
-		test
-endif
 
-runtime-tests: xcodeproj
-	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
-		-project Orlix.xcodeproj \
-		-scheme "OrlixOS Runtime Tests" \
-		-configuration Debug \
-		-destination '$(ORLIX_TEST_DESTINATION)' \
-		ORLIX_PROFILE='$(PROFILE)' \
-		test
+runtime-tests:
+	@$(MAKE) __bazel-test-runtime
 
 docs-index:
 	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/build_index.py docs
@@ -979,51 +950,7 @@ agent-task-envelope-check:
 	fi
 
 beta-archive: beta-resolve-build-number
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-orlix-archive
-else
-	@set -euo pipefail; \
-	xcodegen generate --spec project.yml; \
-	build_number="$$(tr -d '[:space:]' < "$(ORLIX_BETA_BUILD_NUMBER_FILE)")"; \
-	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }; \
-	archive_settings=(DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" CODE_SIGN_STYLE="$(ORLIX_CODE_SIGN_STYLE)" CURRENT_PROJECT_VERSION="$$build_number"); \
-	case "$(ORLIX_ANALYTICS_ENABLED)" in YES|NO) ;; *) echo "ORLIX_ANALYTICS_ENABLED must be YES or NO" >&2; exit 2;; esac; \
-	case "$(ORLIX_OBSERVABILITY_ENABLED)" in YES|NO) ;; *) echo "ORLIX_OBSERVABILITY_ENABLED must be YES or NO" >&2; exit 2;; esac; \
-	archive_settings+=(ORLIX_ANALYTICS_ENABLED="$(ORLIX_ANALYTICS_ENABLED)" ORLIX_OBSERVABILITY_ENABLED="$(ORLIX_OBSERVABILITY_ENABLED)"); \
-	if [ "$(ORLIX_ANALYTICS_ENABLED)" = YES ]; then \
-		[ -n "$(ORLIX_OPENPANEL_CLIENT_ID)" ] || { echo "ORLIX_OPENPANEL_CLIENT_ID is required when analytics is enabled" >&2; exit 1; }; \
-		archive_settings+=(ORLIX_OPENPANEL_CLIENT_ID="$(ORLIX_OPENPANEL_CLIENT_ID)"); \
-	fi; \
-	if [ "$(ORLIX_OBSERVABILITY_ENABLED)" = YES ]; then \
-		[ -n "$(ORLIX_SIGNOZ_INGESTION_KEY)" ] || { echo "ORLIX_SIGNOZ_INGESTION_KEY is required when observability is enabled" >&2; exit 1; }; \
-		archive_settings+=(ORLIX_SIGNOZ_INGESTION_KEY="$(ORLIX_SIGNOZ_INGESTION_KEY)"); \
-	fi; \
-	xcodebuild_signing_flags=(); \
-	if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then xcodebuild_signing_flags+=(-allowProvisioningUpdates); fi; \
-	if [ -n "$(ORLIX_ASC_API_KEY_PATH)$(ORLIX_ASC_API_KEY_ID)$(ORLIX_ASC_API_ISSUER_ID)" ]; then \
-		[ -n "$(ORLIX_ASC_API_KEY_PATH)" ] || { echo "ORLIX_ASC_API_KEY_PATH is required when App Store Connect API key signing is used" >&2; exit 1; }; \
-		[ -n "$(ORLIX_ASC_API_KEY_ID)" ] || { echo "ORLIX_ASC_API_KEY_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
-		[ -n "$(ORLIX_ASC_API_ISSUER_ID)" ] || { echo "ORLIX_ASC_API_ISSUER_ID is required when App Store Connect API key signing is used" >&2; exit 1; }; \
-		xcodebuild_signing_flags+=(-authenticationKeyPath "$(ORLIX_ASC_API_KEY_PATH)" -authenticationKeyID "$(ORLIX_ASC_API_KEY_ID)" -authenticationKeyIssuerID "$(ORLIX_ASC_API_ISSUER_ID)"); \
-	fi; \
-	if [ -n "$(ORLIX_CODE_SIGN_IDENTITY)" ]; then archive_settings+=(CODE_SIGN_IDENTITY="$(ORLIX_CODE_SIGN_IDENTITY)"); fi; \
-	if [ -n "$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)" ]; then archive_settings+=(PROVISIONING_PROFILE_SPECIFIER="$(ORLIX_PROVISIONING_PROFILE_SPECIFIER)"); fi; \
-	$(MAKE) -f OrlixMLibC/Makefile build PROFILE=release; \
-	$(MAKE) -f OrlixCoreUtils/Makefile build PROFILE=release; \
-	$(MAKE) -f OrlixOS/Makefile rootfs PROFILE=release; \
-	$(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE=release ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"; \
-	$(MAKE) -f OrlixOS/Makefile kernel-payload PROFILE=release; \
-	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
-	"$(ORLIX_XCODEBUILD_ARCHIVE)" \
-		-project Orlix.xcodeproj \
-		-scheme "$(ORLIX_BETA_SCHEME)" \
-		-configuration Release \
-		-destination 'generic/platform=iOS' \
-		-archivePath "$(ORLIX_BETA_ARCHIVE_PATH)" \
-		"$${xcodebuild_signing_flags[@]}" \
-		"$${archive_settings[@]}" \
-		archive
-endif
 
 beta-validate-archive:
 	@set -euo pipefail; \
@@ -1121,35 +1048,18 @@ app-store-promote: app-store-release-report-check
 release-workflow-check: __release-workflow-tests
 
 xcodeproj:
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-feasibility-xcodeproj
-else
-	@$(KERNEL_MAKE) xcodeproj
-endif
 
 build: __build-$(type)
 
 __build-product: product-build-version-check
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-orlix-app
-else
-	@$(MLIBC_MAKE) build
-	@$(COREUTILS_MAKE) build PROFILE="$(PROFILE)"
-	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
-	@$(KERNEL_MAKE) build PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
-	@$(HOSTADAPTER_MAKE) build
-	@$(APP_MAKE) build
-endif
 
 __build-vendor:
 	@$(APP_MAKE) build type=vendor vendor="$(vendor)"
 
 rebuild: clean
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-orlix-app
-else
-	@$(MAKE) build
-endif
 
 prepare: __prepare-$(type)
 
@@ -1163,18 +1073,10 @@ scripts dtbs kunit kselftest kselftest-install:
 	@$(KERNEL_MAKE) $@
 
 test:
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-matrix-check
-else
-	@$(KERNEL_MAKE) test
-endif
 
 headers_install:
-ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
 	@$(MAKE) __bazel-kernel-uapi
-else
-	@$(MLIBC_MAKE) headers_install
-endif
 
 run:
 	@$(APP_MAKE) run PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"

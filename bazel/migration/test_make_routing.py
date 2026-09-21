@@ -19,7 +19,6 @@ def _dry_run(*args: str) -> str:
     env = os.environ.copy()
     env["PATH"] = PATH
     pinned = [
-        "ORLIX_BAZEL_AUTHORITY=1",
         "ORLIX_BAZEL_RUN_ID=test-run",
         "ORLIX_XCODE_VERSION=26.6",
         "ORLIX_XCODE_BUILD=17F113",
@@ -74,18 +73,11 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid ORLIX_BUILDBUDDY_CACHE_MODE", result.stderr)
 
-    def test_ios15_source_gate_separates_build_from_runtime(self) -> None:
-        aggregate = _dry_run("ios15-simulator-gate", "ORLIX_BAZEL_AUTHORITY=0")
-        self.assertLess(aggregate.index("__ios15-simulator-build"), aggregate.index("__ios15-simulator-test"))
-        build = _dry_run("__ios15-simulator-build", "ORLIX_BAZEL_AUTHORITY=0")
-        runtime = _dry_run("__ios15-simulator-test", "ORLIX_BAZEL_AUTHORITY=0")
-        self.assertIn("build-for-testing", build)
-        self.assertNotIn("test-without-building", build)
-        self.assertIn("test-without-building", runtime)
-        self.assertNotIn("build-for-testing", runtime)
-        self.assertIn("validate_simulator_app", runtime)
-        self.assertIn("-test-timeouts-enabled YES", runtime)
-        self.assertIn("-maximum-test-execution-time-allowance 180", runtime)
+    def test_ios15_public_gate_uses_bazel_runtime_proof(self) -> None:
+        aggregate = _dry_run("ios15-simulator-gate")
+        self.assertIn("__bazel-ios15-simulator-gate", aggregate)
+        self.assertNotIn("xcodegen generate", aggregate)
+        self.assertNotIn("__ios15-simulator-build", aggregate)
 
     def test_kernel_build_respects_profile_and_destination(self) -> None:
         output = _dry_run(
@@ -109,11 +101,15 @@ class MakeRoutingTests(unittest.TestCase):
             dependencies = next(line for line in result.stdout.splitlines() if line.startswith("__prepare-kbuild:"))
             self.assertEqual("__orlix-tcti-isa-prepare" in dependencies, prepared == "0")
 
-    def test_default_keeps_pre_cutover_authority(self) -> None:
-        self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text())
+    def test_authority_variable_does_not_control_product_routing(self) -> None:
+        makefile = (ROOT / "Makefile").read_text()
+        self.assertNotIn("ORLIX_BAZEL_AUTHORITY", makefile)
         output = _dry_run("xcodeproj", "ORLIX_BAZEL_AUTHORITY=0")
-        self.assertNotIn("__bazel-feasibility-xcodeproj", output)
-        self.assertIn("OrlixKernel/Makefile", output)
+        self.assertIn("__bazel-feasibility-xcodeproj", output)
+        self.assertNotIn("OrlixKernel/Makefile", output)
+        build = _dry_run("build", "type=product", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertIn("__bazel-orlix-app", build)
+        self.assertNotIn("xcodegen generate", build)
 
     def test_build_routes_to_orlix_app(self) -> None:
         output = _dry_run("build", "type=product")
@@ -154,6 +150,20 @@ class MakeRoutingTests(unittest.TestCase):
     def test_xcodeproj_routes_to_feasibility_project(self) -> None:
         output = _dry_run("xcodeproj")
         self.assertIn("__bazel-feasibility-xcodeproj", output)
+
+    def test_runtime_tests_use_generated_bazel_project(self) -> None:
+        output = _dry_run("runtime-tests")
+        self.assertIn("__bazel-test-runtime", output)
+        self.assertNotIn("-project Orlix.xcodeproj", output)
+
+    def test_origin_configs_remain(self) -> None:
+        bazelrc = (ROOT / ".bazelrc").read_text()
+        self.assertIn("build:source --//bazel/config:component_mode=source", bazelrc)
+        self.assertIn("build:promoted --//bazel/config:component_mode=promoted", bazelrc)
+        self.assertIn("build:auto --//bazel/config:component_mode=auto", bazelrc)
+        makefile = (ROOT / "make/bazel-migration.mk").read_text()
+        self.assertIn("name = \"macho\"", (ROOT / "bazel/feasibility/kernel/BUILD.bazel").read_text())
+        self.assertIn("__bazel-auto-preflight", makefile)
 
     def test_rebuild_routes_to_orlix_app(self) -> None:
         output = _dry_run("rebuild")
@@ -336,7 +346,7 @@ class MakeRoutingTests(unittest.TestCase):
     def test_beta_archive_routes_to_orlix_archive(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("__bazel-orlix-archive", makefile)
-        self.assertIn("ORLIX_BAZEL_AUTHORITY),1", makefile)
+        self.assertNotIn("ORLIX_BAZEL_AUTHORITY", makefile)
         recipe = (ROOT / "make/bazel-migration.mk").read_text().split("__bazel-orlix-archive:")[1].split("\n__bazel-ios15-simulator-gate:")[0]
         self.assertIn("build //Orlix:Orlix.xcarchive --apple_generate_dsym", recipe)
         self.assertIn("codesign --verify --deep --strict", recipe)

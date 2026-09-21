@@ -1217,4 +1217,20 @@ Committed lock `2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c
 
 ### 0.10C/D not done
 
-`ORLIX_BAZEL_AUTHORITY ?= 0` retained. Source producers `:macho`/`:uapi`/`:sysroot`/`:rootfs` retained. Make retained. Kbuild/Meson/Ninja retained. Canonical pin remains `.xcode-version` `26.6` / `17F113`. Local 27.0 evidence is not that pin. 16-scenario benchmark is epic-level, not an owning 0.10 cutover command in current IMPLEMENT. Not run.
+At the 0.10A checkpoint, `ORLIX_BAZEL_AUTHORITY ?= 0` was retained. Canonical 26.6 CI had not yet run.
+
+## Checkpoint 0.10B: canonical pre-cutover and authority switch removal
+
+Pre-cutover exact-head CI: GitHub Actions run `35608510610` on `cdbb22f399af125111c9ff17e3b51f6cad23f087`. Workflow `Bazel CI`, `workflow_dispatch`, `component_mode=source`. Not promotion. Not live `auto`.
+
+Toolchain: Xcode 26.6, build 17F113, Bazel 9.2.0. Disk-cache namespace `bazel-9.2.0-xcode-17F113`. Profile `release`. Destination iphonesimulator. Origins all source.
+
+Analysis `//bazel/feasibility/analysis:all` 45/45. `make __bazel-orlix-app` produced `Orlix.ipa`. App binary sha256 `902fbdd0147a6c4266ff7f7830f5a3e164e5a98cc081a5cf1c90d2b692499fbf`. `CFBundleVersion` 42. `MinimumOSVersion` 15.0. Simulator platform.
+
+Runtime proof (`Build/AgentHarness/bazel-ci/runtime-proof.json`): current 26.5 PASS, iOS 15.5 PASS, both XCTest PASS, same app path `.../app.K6pkru/Payload/Orlix.app`. `AppLaunchSmokeUITests/testLaunchCapturesScreenshot` passed on both simulators.
+
+Failed earlier exact-head attempts: `35598847486` inventory drift; `35600923773` missing `arch/orlix/boot/dts/*.dtb` after selected_macho flattened those paths. Fixed before this green run.
+
+Authority switch removed from `Makefile`. Public `build`, `rebuild`, `test`, `xcodeproj`, `app-tests`, `runtime-tests`, `ios15-simulator-gate`, `beta-archive`, `headers_install` route to Bazel without an opt-in variable. Source producers `:macho`, `:uapi`, `:sysroot`, `:rootfs` remain. `source`/`promoted`/`auto` configs remain. Live `auto` still fail-closes without lock `source_sha`. Promotion was not run. 16-scenario benchmark was not run.
+
+Final exact-head CI after this cutover is required. Do not treat the pre-cutover run as proof of the cutover commit.
