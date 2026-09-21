@@ -843,7 +843,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_component_actions
 	@PYTHONPATH="$(CURDIR)/bazel/promotion:$(CURDIR)/bazel/selection" python3 -m unittest test_promoted_execution
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_remote_cache_policy
-	@PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration:$(CURDIR)/bazel/promotion" python3 -m unittest test_worktree_classifier test_auto_preflight test_origin_resolver test_daily_routing test_invalidation_matrix
+	@PYTHONPATH="$(CURDIR)/bazel/selection:$(CURDIR)/bazel/migration:$(CURDIR)/bazel/promotion" python3 -m unittest test_worktree_classifier test_auto_preflight test_origin_resolver test_daily_routing test_invalidation_matrix test_origin_action_identity
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sign
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_publish
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_artifact_store
