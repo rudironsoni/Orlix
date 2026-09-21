@@ -982,3 +982,30 @@ PYTHONPATH=bazel/promotion:bazel/selection python3 bazel/promotion/promoted_exec
 `count_component_actions` is gone. CI calls `promoted_execution.py`. Unittest `test_promoted_execution` 11 cases plus forwarder. `//bazel/feasibility/analysis:all` 43/43.
 
 Limit: the checker requires `--execution_log_json_file` JSON. Proto-text logs fail closed. No new Apple IPA rebuild in this checkpoint.
+
+## Checkpoint 0.4: remote cacheability of expensive foreign producers
+
+Status: inventory and Gate A complete. No `no-remote-cache` removals. Not 0.5. Not BuildBuddy round-trip. Not the 16-scenario benchmark.
+
+Prioritized candidates and Gate A (effective-input completeness). Gate B was not run where Gate A failed.
+
+| Mnemonic | Rule | Engine | Mutable state | Host tools | `use_default_shell_env` | Cost | Gate A | Gate B | Decision |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `OrlixKernelMachOArchive` | `kernel_macho.bzl` | Kbuild | worktree Kbuild `O=` | gmake, clang, llvm-ar via PATH; ccache | True | high | fail: PATH tools and default shell env not action inputs | not run | keep `no-remote-cache` |
+| `OrlixTctiIsaRestore` | `kernel_macho.bzl` | gmake extract | none | `/opt/homebrew/bin/gmake` not a declared tool | False | low | fail: gmake binary not an input | not run | keep |
+| `OrlixMLibCSysroot` | `mlibc_sysroot.bzl` | Meson/Ninja | worktree Meson/Ninja dir | meson, ninja, clang, llvm via PATH; ccache | True | high | fail: PATH tools and default shell env | not run | keep |
+| `OrlixCompilerRuntime` | `mlibc_sysroot.bzl` | clang/llvm-ar | ccache | `llvm-ar` hardcoded Homebrew; ccache; default shell env | True | medium | fail: llvm-ar/ccache not inputs | not run | keep |
+| `OrlixGuestPackage` (coreutils, autotools, bash) | package `*.bzl` | Autotools/Make | package incremental dir | llvm/lld/gmake via PATH; ccache | True | high | fail: PATH tools and default shell env | not run | keep |
+| `OrlixPackageInterface` | `autotools.bzl` | copy | none | `/bin/cp` | unset | low | skipped (not expensive) | not run | keep |
+| `OrlixRootfs` | `rootfs.bzl` | gen_init_cpio, mke2fs | none | mke2fs/debugfs from Homebrew PATH; `MKE2FS_CONFIG=/opt/homebrew/etc/mke2fs.conf` not an input | False | high | fail: e2fsprogs tools and config file | not run | keep |
+| `OrlixArtifactIdentityV2` | `artifact_identity.bzl` | python | none | `/usr/bin/python3` | False | low | skipped (metadata; no-sandbox for symlink type) | not run | keep |
+
+Already without `no-remote-cache` (not a 0.4 removal): `OrlixLinuxHeadersInstall`; local/package `OrlixGuestPackage` in `local.bzl` / `package.bzl`. Those still use Homebrew PATH. 0.4 did not add a block and did not claim they passed A+B.
+
+`no-remote-exec` and `block-network` unchanged. Foreign mutable state stays worktree-local.
+
+BuildBuddy: no producer became remote-cache writable. No fake hit. Local action-result reuse for these foreign producers remains disabled by `no-remote-cache`.
+
+Negative action-key tests: none added, because no class became cacheable.
+
+`PYTHONPATH=bazel/promotion python3 -m unittest test_remote_cache_policy` locks the blocked mnemonics. `//bazel/feasibility/analysis:all` 43/43.
