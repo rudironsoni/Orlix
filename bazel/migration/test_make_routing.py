@@ -220,7 +220,7 @@ class MakeRoutingTests(unittest.TestCase):
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("__bazel-toolchain-manifest: __bazel-version-check", mk)
         self.assertIn(
-            "__bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest",
+            "__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest",
             mk,
         )
         self.assertIn("__bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest", mk)
