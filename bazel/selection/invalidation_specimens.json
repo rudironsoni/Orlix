@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "kind": "invalidation-specimens",
+  "profile": "release",
+  "destination": "iphonesimulator",
+  "note": "Captured by bazel aquery on fix/ci-cd-cleanup. Analysis-only. Xcode 27.0 routing.",
+  "equivalent_origin": {
+    "OrlixAppLibrary.SwiftCompile": {
+      "source": "05284bbed41a547a9529c9d34c8981c71e17398f343370e68894b217ab1ff36e",
+      "promoted": "05284bbed41a547a9529c9d34c8981c71e17398f343370e68894b217ab1ff36e"
+    },
+    "kernel_composition.OrlixKernelComposition": {
+      "source": "612bc74bc732e2283e324774c925bb762e93bb61b93b94d02b079a42bac90255",
+      "promoted": "612bc74bc732e2283e324774c925bb762e93bb61b93b94d02b079a42bac90255"
+    },
+    "swiftcompile_pairs_equal": 32
+  },
+  "promoted_app": {
+    "guest_source_mnemonics": [],
+    "selected_macho_coordinate": "selected_macho/OrlixKernel.a",
+    "OrlixAppLibrary.SwiftCompile": "05284bbed41a547a9529c9d34c8981c71e17398f343370e68894b217ab1ff36e"
+  },
+  "hybrid-kernel": {
+    "present": [
+      "OrlixKernelMachOArchive://bazel/feasibility/kernel:macho",
+      "OrlixPromotedUapi://bazel/promotion:promoted_uapi",
+      "OrlixPromotedMlibc://bazel/promotion:promoted_sysroot",
+      "OrlixPromotedRootfs://bazel/promotion:promoted_rootfs"
+    ],
+    "absent": [
+      "OrlixMLibCSysroot",
+      "OrlixLinuxHeadersInstall",
+      "OrlixRootfs",
+      "OrlixGuestPackage"
+    ]
+  },
+  "hybrid-mlibc": {
+    "present": [
+      "OrlixMLibCSysroot://bazel/feasibility/mlibc:sysroot",
+      "OrlixRootfs://bazel/feasibility/rootfs:rootfs",
+      "OrlixPromotedKernel://bazel/promotion:promoted_kernel_release_iphonesimulator",
+      "OrlixPromotedUapi://bazel/promotion:promoted_uapi"
+    ],
+    "absent": [
+      "OrlixKernelMachOArchive",
+      "OrlixLinuxHeadersInstall"
+    ]
+  },
+  "package-locality": {
+    "true_inputs_include": ["bazel/feasibility/packages/true/true.c"],
+    "coreutils_has_true_c": false,
+    "true_consumes": ["selected_sysroot"],
+    "coreutils_consumes": ["selected_uapi", "selected_sysroot"]
+  },
+  "cache_eviction": {
+    "guest_identities_unchanged": true,
+    "action_key_independent_of_cache": true
+  }
+}

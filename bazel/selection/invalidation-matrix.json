@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "kind": "invalidation-matrix",
+  "cache_eviction_is_invalidation": false,
+  "cases": [
+    {
+      "id": "A-app-only",
+      "class": "app-only",
+      "paths": ["Orlix/Orlix/App/Orlix.swift"],
+      "git_forms": ["committed", "staged", "unstaged", "untracked"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "probe_uapi": false,
+      "must_change": ["apple.SwiftCompile"],
+      "must_not_change": ["guest.kernel", "guest.uapi", "guest.mlibc", "guest.rootfs", "guest.source_producers"],
+      "specimen": "promoted-app"
+    },
+    {
+      "id": "B-kernel-impl",
+      "class": "kernel-implementation",
+      "paths": ["OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/idle.c"],
+      "git_forms": ["staged", "unstaged", "untracked"],
+      "expected_origins": {"kernel": "source", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "probe_uapi": false,
+      "must_change": ["guest.kernel.source"],
+      "must_not_change": ["guest.uapi", "guest.mlibc", "guest.rootfs", "apple.SwiftCompile.action_key"],
+      "specimen": "hybrid-kernel"
+    },
+    {
+      "id": "C-uapi-equal",
+      "class": "uapi-sensitive-equal",
+      "paths": ["include/uapi/linux/unistd.h"],
+      "facts_after_probe": {"kernel_changed": true, "uapi_changed": false, "mlibc_changed": false, "rootfs_changed": false},
+      "probe_uapi": true,
+      "uapi_digest_equal": true,
+      "expected_origins": {"kernel": "source", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "must_change": ["guest.kernel.source"],
+      "must_not_change": ["guest.uapi.consumer", "guest.mlibc", "guest.rootfs"]
+    },
+    {
+      "id": "D-uapi-changed",
+      "class": "uapi-sensitive-changed",
+      "paths": ["include/uapi/linux/unistd.h"],
+      "facts_after_probe": {"kernel_changed": true, "uapi_changed": true, "mlibc_changed": false, "rootfs_changed": false},
+      "probe_uapi": true,
+      "uapi_digest_equal": false,
+      "expected_origins": {"kernel": "source", "uapi": "source", "mlibc": "source", "rootfs": "source"},
+      "must_change": ["guest.kernel.source", "guest.uapi.source", "guest.mlibc.source", "guest.rootfs.source"],
+      "must_not_change": ["apple.SwiftCompile.action_key"]
+    },
+    {
+      "id": "E-mlibc",
+      "class": "mlibc",
+      "paths": ["OrlixMLibC/Sources/patches/0026-options-posix-implement-wait3-via-wait4.patch"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "source", "rootfs": "source"},
+      "probe_uapi": false,
+      "must_change": ["guest.mlibc.source", "guest.rootfs.source"],
+      "must_not_change": ["guest.kernel", "guest.uapi"],
+      "specimen": "hybrid-mlibc"
+    },
+    {
+      "id": "F-package",
+      "class": "package",
+      "paths": ["bazel/feasibility/packages/true/true.c"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "promoted", "rootfs": "source"},
+      "probe_uapi": false,
+      "must_change": ["guest.package.true", "guest.rootfs.source"],
+      "must_not_change": ["guest.kernel", "guest.uapi", "guest.mlibc", "guest.package.coreutils"],
+      "specimen": "package-locality"
+    },
+    {
+      "id": "G-rootfs-assembly",
+      "class": "rootfs-assembly",
+      "paths": ["bazel/feasibility/rootfs/rootfs.bzl"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "promoted", "rootfs": "source"},
+      "probe_uapi": false,
+      "must_change": ["guest.rootfs.source"],
+      "must_not_change": ["guest.kernel", "guest.uapi", "guest.mlibc"]
+    },
+    {
+      "id": "H-equivalent-origin",
+      "class": "equivalent-origin",
+      "boundaries": ["kernel", "uapi", "mlibc", "rootfs"],
+      "must_not_change": ["consumer.action_key", "consumer.selected_paths"],
+      "specimen": "equivalent-origin"
+    },
+    {
+      "id": "I-disposable",
+      "class": "disposable",
+      "paths": ["Build/Bazel/proof/noise.txt"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "probe_uapi": false,
+      "must_change": [],
+      "must_not_change": ["origins", "guest.kernel", "guest.uapi", "guest.mlibc", "guest.rootfs"]
+    },
+    {
+      "id": "J-toolchain",
+      "class": "toolchain",
+      "paths": ["MODULE.bazel"],
+      "expected_origins": {"kernel": "source", "uapi": "source", "mlibc": "source", "rootfs": "source"},
+      "probe_uapi": false,
+      "must_change": ["guest.closure"],
+      "must_not_change": []
+    },
+    {
+      "id": "J-unknown",
+      "class": "unknown",
+      "paths": ["mystery/new.c"],
+      "fail_closed": true
+    },
+    {
+      "id": "A-delete",
+      "class": "app-only",
+      "paths": ["Orlix/Gone.swift"],
+      "git_forms": ["delete"],
+      "expected_origins": {"kernel": "promoted", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "probe_uapi": false
+    },
+    {
+      "id": "rename-across",
+      "class": "rename-across-ownership",
+      "rename": {"from": "Orlix/App.swift", "to": "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/moved.c"},
+      "expected_classes": ["app", "kernel_impl"],
+      "expected_origins": {"kernel": "source", "uapi": "promoted", "mlibc": "promoted", "rootfs": "promoted"},
+      "probe_uapi": false
+    },
+    {
+      "id": "cache-eviction",
+      "class": "cache-eviction",
+      "cache_eviction_is_invalidation": false,
+      "must_not_change": ["action_key", "guest.semantic_identity"]
+    }
+  ]
+}

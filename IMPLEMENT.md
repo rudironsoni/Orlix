@@ -1146,3 +1146,39 @@ Origin owner: `bazel/selection/auto_preflight.py` once. `source`/`promoted` skip
 Daily no-op: live `auto` fail-closes (lock has no `source_sha`). Equivalent promoted IPA on the isolated output base: 2.152 s, 122 action-cache hits, 0 guest source producers. `make build` itself was not timed through `__bazel-feasibility-bootstrap` because the local Xcode pin is 26.6 and this machine has 27.0.
 
 Routing tests: `test_daily_routing` 6 OK. Analysis `selected_sysroot_boundary_test` and `selected_rootfs_boundary_test` added. `//bazel/feasibility/analysis:all` 45/45. Targeted Make routing tests passed. Full `test_make_routing` suite not rerun to completion (known hang).
+
+## Checkpoint 0.9: invalidation regression contract
+
+Status: one matrix owns expectations. Cheap CI unit tests. Real `aquery` specimens committed. Not 0.10.
+
+Owner: `bazel/selection/invalidation-matrix.json`. Tests: `bazel/selection/test_invalidation_matrix.py`. Specimens: `bazel/selection/invalidation_specimens.json`.
+
+| Case | origins | must change | must not change |
+| --- | --- | --- | --- |
+| A app-only | all promoted | Apple SwiftCompile | guest identities / source producers |
+| B Kernel impl | kernel source, userspace promoted | `OrlixKernelMachOArchive` | UAPI/mlibc/rootfs source, SwiftCompile key |
+| C UAPI equal digest | kernel source, userspace promoted | Kernel source | mlibc/rootfs/UAPI consumers |
+| D UAPI changed | all source | UAPI+mlibc+rootfs source | SwiftCompile action key |
+| E mlibc | mlibc+rootfs source, Kernel/UAPI promoted | mlibc/rootfs source | Kernel/UAPI source |
+| F package `true.c` | rootfs source | `:true` + rootfs | `:coreutils` inputs, Kernel/UAPI/mlibc |
+| G rootfs.bzl | rootfs source | rootfs assembly | Kernel/UAPI/mlibc |
+| H origin flip | n/a | none | SwiftCompile and composition ActionKeys |
+| I disposable `Build/` | all promoted | none | origins |
+| J MODULE.bazel | all source | conservative closure | n/a |
+| J unknown | fail closed | n/a | n/a |
+| cache eviction | n/a | execution | action key / guest identity |
+
+Real `aquery` (release, iphonesimulator, Xcode 27.0 routing):
+
+- 32 SwiftCompile ActionKeys identical source vs promoted. `OrlixAppLibrary` `05284bbe…1ff36e`.
+- `OrlixKernelComposition` ActionKey identical `612bc74b…ac90255`.
+- Promoted `//Orlix:Orlix`: zero guest source mnemonics.
+- Hybrid kernel source: Mach-O source + promoted UAPI/mlibc/rootfs.
+- Hybrid mlibc source: sysroot+rootfs+packages source, promoted Kernel/UAPI, no Mach-O/UAPI install.
+- `:true` inputs include `true.c`; `:coreutils` does not.
+
+Dirty forms: committed/staged/unstaged/untracked/delete/rename covered through the classifier on matrix paths. Not a full product rebuild per form.
+
+`test_invalidation_matrix` 10 tests, 5.631 s. Cache miss is not invalidation.
+
+Limits: specimens are configured-graph `aquery`, not timed product rebuilds. Live `auto` on the committed lock still fail-closes.
