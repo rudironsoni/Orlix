@@ -118,6 +118,25 @@ def _relative_artifact_path(name: str) -> str:
     return name
 
 
+def _selected_source(path: Path) -> Path:
+    """Hash the product file when Bazel stages it through an absolute symlink."""
+    try:
+        if not stat.S_ISLNK(path.lstat().st_mode):
+            return path
+    except OSError:
+        return path
+    target = os.readlink(path)
+    if not target.startswith("/"):
+        return path
+    resolved = Path(target)
+    try:
+        if stat.S_ISREG(resolved.lstat().st_mode):
+            return resolved
+    except OSError:
+        return path
+    return path
+
+
 def _selected_entries(artifacts: ArtifactSelection) -> list[dict]:
     items = artifacts.items() if isinstance(artifacts, Mapping) else artifacts
     entries = []
@@ -135,7 +154,7 @@ def _selected_entries(artifacts: ArtifactSelection) -> list[dict]:
         if relative in names:
             raise ValueError(f"duplicate artifact path: {relative}")
         names.add(relative)
-        entries.append(_entry(Path(source), relative, allow_directory=False))
+        entries.append(_entry(_selected_source(Path(source)), relative, allow_directory=False))
     return sorted(entries, key=lambda entry: entry["path"])
 
 

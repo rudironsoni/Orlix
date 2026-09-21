@@ -92,9 +92,11 @@ serializer is [content_digest.py](../../bazel/content_digest.py). The manifest
 contains the domain `orlix.artifact.identity`, version `2`, format
 `artifact-identity-v2`, and entries sorted by relative path. Each entry records
 its type and exact POSIX permission bits, including special bits. Regular
-files record SHA-256 of their bytes. Symlinks record their target without
-following it. Tree selection includes empty directories. The containing
-directory's host path is not part of the product identity.
+files record SHA-256 of their bytes. A relative symlink records its target
+without following it. An absolute symlink is Bazel input staging, not a
+product symlink: named artifact selection hashes the regular file it points
+at. Tree selection includes empty directories. The containing directory's
+host path is not part of the product identity.
 
 The manifest uses ASCII-escaped JSON, sorted keys, compact separators, and one
 final newline. Its SHA-256 is the artifact digest. Consumers MUST retain the

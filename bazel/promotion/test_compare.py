@@ -178,6 +178,25 @@ class PromotionCompareTests(unittest.TestCase):
             self.assertEqual(link["target"], "top.txt")
             self.assertFalse(any(entry.get("type") == "directory" for entry in with_link["entries"]))
 
+    def test_named_artifact_follows_absolute_staging_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            product = base / "OrlixKernel.a"
+            product.write_bytes(b"kernel-bytes")
+            product.chmod(0o555)
+            staged = base / "staged-archive"
+            staged.symlink_to(product)
+            relative = base / "relative-archive"
+            relative.symlink_to("OrlixKernel.a")
+            direct = json.loads(artifact_manifest_v2(artifacts={"OrlixKernel.a": product}))
+            absolute = json.loads(artifact_manifest_v2(artifacts={"OrlixKernel.a": staged}))
+            self.assertEqual(absolute, direct)
+            self.assertEqual(absolute["entries"][0]["type"], "file")
+            self.assertEqual(absolute["entries"][0]["mode"], 0o555)
+            kept = json.loads(artifact_manifest_v2(artifacts={"OrlixKernel.a": relative}))
+            self.assertEqual(kept["entries"][0]["type"], "symlink")
+            self.assertEqual(kept["entries"][0]["target"], "OrlixKernel.a")
+
     def test_artifact_identity_v2_rejects_unknown_formats_invalid_paths_and_types(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

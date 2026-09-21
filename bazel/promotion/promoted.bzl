@@ -252,6 +252,7 @@ verified_release_dtb="$exec_root/$9"
 verified_development_dtb="$exec_root/${10}"
 /usr/bin/cmp -s "$imported_manifest" "$computed_manifest" || {
   echo "promoted $component artifact identity manifest differs from imported manifest" >&2
+  /usr/bin/diff -u "$imported_manifest" "$computed_manifest" >&2 || true
   exit 1
 }
 got="$(/usr/bin/tr -d '[:space:]' < "$imported_digest")"
