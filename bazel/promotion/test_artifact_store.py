@@ -131,6 +131,34 @@ class ArtifactStoreTests(unittest.TestCase):
             store = artifact_store.ArtifactStore(Path(tmp) / "store")
             self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
 
+    def test_incompatible_lock_digest_is_not_a_hit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blob = _component_tar(root)
+            tree = root / "tree"
+            tree.mkdir()
+            (tree / "uapi.sha256").write_text(ENTRY["unsigned_digest"] + "\n", encoding="utf-8")
+            store = artifact_store.ArtifactStore(root / "store")
+            store.publish_download("uapi", ENTRY, blob, tree, VERIFICATION)
+            incompatible = dict(ENTRY)
+            incompatible["unsigned_digest"] = "bb" * 32
+            self.assertIsNone(store.lookup("uapi", incompatible, VERIFICATION))
+
+    def test_partial_tree_is_not_a_hit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blob = _component_tar(root)
+            tree = root / "tree"
+            tree.mkdir()
+            (tree / "uapi.sha256").write_text(ENTRY["unsigned_digest"] + "\n", encoding="utf-8")
+            (tree / "include").mkdir()
+            (tree / "include" / "unistd.h").write_text("/* uapi */\n", encoding="utf-8")
+            store = artifact_store.ArtifactStore(root / "store")
+            store.publish_download("uapi", ENTRY, blob, tree, VERIFICATION)
+            stored = store.root / "objects" / "oci" / "sha256" / ("ab" * 32) / "tree" / "include" / "unistd.h"
+            stored.unlink()
+            self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
+
     def test_corrupt_object_is_not_a_warm_hit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
