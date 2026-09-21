@@ -91,6 +91,7 @@ def reconstruct(
     store_root: str | Path | None = None,
     evidence_path: str | None = None,
     component_names: list[str] | None = None,
+    local_only: bool = False,
 ) -> dict:
     lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     buildset = lock.get("buildset")
@@ -112,10 +113,12 @@ def reconstruct(
         components = {name: available[name] for name in component_names}
     else:
         components = available
-    try:
-        verification = verification_context()
-    except (OSError, PublishError, ValueError, KeyError) as error:
-        raise ReconstructError(str(error)) from error
+    verification = None
+    if not local_only:
+        try:
+            verification = verification_context()
+        except (OSError, PublishError, ValueError, KeyError) as error:
+            raise ReconstructError(str(error)) from error
     store = ArtifactStore(store_root) if store_root is not None else store_from_environment()
     buildset = lock["buildset"]
     acquired = False
@@ -161,6 +164,8 @@ def reconstruct(
                 local_store_hits += 1
                 acquisition[name] = {"source": "local-store", "signature_verified": True}
             else:
+                if local_only:
+                    raise ReconstructError(f"{name} is not in the local artifact store")
                 if shutil.which("cosign") is None:
                     raise ReconstructError("cosign is required to reconstruct")
                 if shutil.which("oras") is None:
@@ -251,6 +256,11 @@ def main(argv: list[str] | None = None) -> int:
         "--components",
         help="comma-separated lock component names to acquire; default is the full lock",
     )
+    parser.add_argument(
+        "--local-only",
+        action="store_true",
+        help="copy digest-addressed store hits; do not download or require a signing key",
+    )
     args = parser.parse_args(argv)
     names = [part.strip() for part in args.components.split(",") if part.strip()] if args.components else None
     payload = reconstruct(
@@ -259,6 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         store_root=args.store,
         evidence_path=args.evidence,
         component_names=names,
+        local_only=args.local_only,
     )
     print(payload["buildset"])
     return 0

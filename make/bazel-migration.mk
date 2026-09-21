@@ -519,7 +519,15 @@ $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lo
 		--from-imported "$(CURDIR)/bazel/promotion/imported" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json" \
 		--components "$$csv"; then \
-	  $(MAKE) __bazel-reconstruct ORLIX_PROMOTED_ACQUIRE="$$acquire"; \
+	  if ! PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" \
+		--lock "$(CURDIR)/artifacts.lock.json" \
+		--out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" \
+		--store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" \
+		--evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json" \
+		--components "$$csv" \
+		--local-only; then \
+	    $(MAKE) __bazel-reconstruct ORLIX_PROMOTED_ACQUIRE="$$acquire"; \
+	  fi; \
 	  PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/substitute.py" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
 		--reconstruct-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" \

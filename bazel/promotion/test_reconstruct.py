@@ -41,6 +41,37 @@ def _lock_payload(reference: str) -> dict:
 
 
 class ReconstructTests(unittest.TestCase):
+    def test_local_only_materializes_a_store_hit_without_a_signing_key(self) -> None:
+        import artifact_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            tree = base / "tree"
+            tree.mkdir()
+            (tree / "uapi.sha256").write_text(("aa" * 32) + "\n", encoding="utf-8")
+            blob = base / "component.tar"
+            with tarfile.open(blob, "w") as archive:
+                archive.add(tree, arcname=".")
+            payload = _lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))
+            artifact_store.ArtifactStore(base / "store").publish_download(
+                "uapi", payload["components"]["uapi"], blob, tree, _VERIFICATION
+            )
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            saved = os.environ.pop("ORLIX_COSIGN_PUB", None)
+            try:
+                result = reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "out"),
+                    store_root=base / "store",
+                    local_only=True,
+                )
+            finally:
+                if saved is not None:
+                    os.environ["ORLIX_COSIGN_PUB"] = saved
+            self.assertEqual(result["acquisition"]["network_downloads"], 0)
+            self.assertEqual(result["acquisition"]["local_store_hits"], 1)
+            self.assertTrue((base / "out" / payload["buildset"] / "uapi" / "uapi.sha256").is_file())
     def test_component_tar_preserves_directories_and_cannot_escape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             blob = Path(tmp) / "component.tar"
