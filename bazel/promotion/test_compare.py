@@ -126,6 +126,35 @@ class PromotionCompareTests(unittest.TestCase):
             (first / "bin" / "tool").write_bytes(b"large" * (1024 * 1024))
             self.assertNotEqual(selected_digest, artifact_identity_v2(artifacts=selected))
 
+    def test_equivalent_origin_paths_share_selected_content_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = b"kernel-bytes\n"
+            source = base / "source" / "macho" / "OrlixKernel.a"
+            promoted = base / "imported" / "kernel" / "product" / "OrlixKernel.a"
+            source.parent.mkdir(parents=True)
+            promoted.parent.mkdir(parents=True)
+            source.write_bytes(payload)
+            promoted.write_bytes(payload)
+            source.chmod(0o644)
+            promoted.chmod(0o644)
+            source_id = artifact_identity_v2(artifacts={"OrlixKernel.a": source})
+            promoted_id = artifact_identity_v2(artifacts={"OrlixKernel.a": promoted})
+            self.assertEqual(source_id, promoted_id)
+            (promoted.parent / "artifact-identity-v2.json").write_text(
+                '{"origin":"promoted"}\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                source_id,
+                artifact_identity_v2(artifacts={"OrlixKernel.a": promoted}),
+            )
+            promoted.write_bytes(b"different-kernel\n")
+            self.assertNotEqual(
+                source_id,
+                artifact_identity_v2(artifacts={"OrlixKernel.a": promoted}),
+            )
+
     def test_files_only_manifest_drops_directories_and_rejects_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "tree"

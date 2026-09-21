@@ -178,6 +178,31 @@ class OriginContractTests(unittest.TestCase):
         self.assertFalse(result.probe_uapi)
 
 
+class ProductBoundaryTests(unittest.TestCase):
+    def test_app_shell_is_not_an_implementation_input(self) -> None:
+        repo = ROOT.parents[1]
+        build = (repo / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
+        implementation = build.split("_ORLIX_IMPLEMENTATION_SRCS", 1)[1].split("_ORLIX_APP_SRCS", 1)[0]
+        app = build.split("_ORLIX_APP_SRCS", 1)[1].split("swift_library(", 1)[0]
+        self.assertIn("Orlix/Core/**/*.swift", implementation)
+        self.assertIn("Orlix/Features/**/*.swift", implementation)
+        self.assertNotIn("Orlix/App/**/*.swift", implementation)
+        self.assertIn("Orlix/App/Localization/AppLanguage.swift", implementation)
+        self.assertIn("Orlix/App/**/*.swift", app)
+        self.assertNotIn("Orlix/Core/**/*.swift", app)
+        self.assertIn("Orlix/App/Localization/AppLanguage.swift", app)
+        shell = repo / "Orlix/Orlix/App/ContentView.swift"
+        self.assertTrue(shell.is_file())
+        self.assertIn("import OrlixImplementation", shell.read_text(encoding="utf-8"))
+        boundary = (repo / "bazel/selection/boundary.bzl").read_text(encoding="utf-8")
+        self.assertNotIn("abi_manifest = origin.abi_manifest", boundary)
+        self.assertNotIn("file_manifest = origin.file_manifest", boundary)
+        self.assertNotIn("payload_metadata = origin.payload_metadata", boundary)
+        self.assertNotIn("source_input_digest = origin.source_input_digest", boundary)
+        self.assertIn('abi_manifest = abi', boundary)
+        self.assertIn('file_manifest = file_manifest', boundary)
+
+
 class SpecimenTests(unittest.TestCase):
     def test_equivalent_origin_action_keys(self) -> None:
         eq = SPECIMENS["equivalent_origin"]

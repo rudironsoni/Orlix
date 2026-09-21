@@ -126,6 +126,11 @@ class ArtifactStoreTests(unittest.TestCase):
             stored_archive.write_bytes(b"changed")
             self.assertIsNone(store.lookup("kernel-release-iphoneos", entry, VERIFICATION))
 
+    def test_missing_object_lookup_requires_acquisition(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = artifact_store.ArtifactStore(Path(tmp) / "store")
+            self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
+
     def test_corrupt_object_is_not_a_warm_hit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
