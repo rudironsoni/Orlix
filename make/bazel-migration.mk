@@ -571,7 +571,7 @@ __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" aquery 'mnemonic("OrlixMLibCSysroot", //bazel/feasibility/mlibc:sysroot)' --output=text --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" > "$$aquery_out"; \
 	rg -q 'Mnemonic: OrlixMLibCSysroot' "$$aquery_out" || { echo "missing OrlixMLibCSysroot action" >&2; rm -f "$$aquery_out"; exit 1; }; \
 	rg -q 'uapi.sha256' "$$aquery_out" || { echo "mlibc sysroot must consume the UAPI digest" >&2; rm -f "$$aquery_out"; exit 1; }; \
-	rg -q 'feasibility/kernel/uapi' "$$aquery_out" || { echo "mlibc sysroot must consume installed UAPI headers" >&2; rm -f "$$aquery_out"; exit 1; }; \
+	rg -q 'selected_uapi' "$$aquery_out" || { echo "mlibc sysroot must consume installed UAPI headers" >&2; rm -f "$$aquery_out"; exit 1; }; \
 	if rg -q 'kbuild-archive.tar' "$$aquery_out"; then echo "mlibc sysroot must not consume the Kernel Kbuild archive" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	if rg -q 'OrlixKernelAppleProductInfo|xcframework' "$$aquery_out"; then echo "mlibc sysroot must not consume an Apple product provider" >&2; rm -f "$$aquery_out"; exit 1; fi; \
 	rm -f "$$aquery_out"
@@ -645,7 +645,7 @@ __bazel-$(1): __bazel-mlibc-from-uapi
 	@aquery_out="$$$$(mktemp -t orlix-$(1)-aquery)"; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" aquery 'mnemonic("OrlixGuestPackage", //bazel/feasibility/packages:$(1))' --output=text --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" > "$$$$aquery_out"; \
 	rg -q 'Mnemonic: OrlixGuestPackage' "$$$$aquery_out" || { echo "missing OrlixGuestPackage action for $(1)" >&2; rm -f "$$$$aquery_out"; exit 1; }; \
-	rg '^  Inputs:' "$$$$aquery_out" | rg -q 'feasibility/kernel/uapi' || { echo "$(1) must consume installed UAPI" >&2; rm -f "$$$$aquery_out"; exit 1; }; \
+	rg '^  Inputs:' "$$$$aquery_out" | rg -q 'selected_uapi' || { echo "$(1) must consume installed UAPI" >&2; rm -f "$$$$aquery_out"; exit 1; }; \
 	rg '^  Inputs:' "$$$$aquery_out" | rg -q 'feasibility/mlibc' || { echo "$(1) must consume the mlibc sysroot" >&2; rm -f "$$$$aquery_out"; exit 1; }; \
 	if rg '^  Inputs:' "$$$$aquery_out" | rg -q 'kbuild-archive.tar'; then echo "$(1) must not consume the Kernel Kbuild archive" >&2; rm -f "$$$$aquery_out"; exit 1; fi; \
 	if rg -q 'OrlixKernelAppleProductInfo|xcframework' "$$$$aquery_out"; then echo "$(1) must not consume an Apple product provider" >&2; rm -f "$$$$aquery_out"; exit 1; fi; \
