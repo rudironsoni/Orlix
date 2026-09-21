@@ -186,3 +186,11 @@ orlix_selected_linux_archive = rule(
         "origin": attr.label(mandatory = True, providers = [OrlixLinuxArchiveInfo]),
     },
 )
+
+def _refuse_unmatched_promoted_kernel_impl(ctx):
+    fail("promoted kernel has no matching slice for this platform and profile")
+
+orlix_refuse_unmatched_promoted_kernel = rule(
+    implementation = _refuse_unmatched_promoted_kernel_impl,
+    provides = [OrlixLinuxArchiveInfo],
+)

@@ -245,7 +245,7 @@ Four identities stay separate:
 
 The app Swift sources are two modules. `OrlixAppLibraryImplementation` owns Core, Features, shared files, and `AppLanguage`. `OrlixAppLibrary` owns the app shell and imports that module. A shell edit recompiles the shell and relinks. It does not recompile the implementation module. The shell compile passes `-Xfrontend -disable-access-control` so it can use implementation declarations that are still internal.
 
-A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key.
+A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
 
 Cache ownership is one job per layer. The Bazel action cache and disk cache store Bazel action results. The repository cache stores declared downloads. The promoted artifact store stores digest-addressed immutable components. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
 

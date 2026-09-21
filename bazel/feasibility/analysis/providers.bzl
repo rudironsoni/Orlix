@@ -423,6 +423,19 @@ def _selected_macho_boundary_test_impl(ctx):
 
 selected_macho_boundary_test = analysistest.make(_selected_macho_boundary_test_impl)
 
+def _selected_macho_unmatched_promoted_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.expect_failure(env, "promoted kernel has no matching slice")
+    return analysistest.end(env)
+
+selected_macho_unmatched_promoted_test = analysistest.make(
+    _selected_macho_unmatched_promoted_test_impl,
+    expect_failure = True,
+    config_settings = {
+        str(Label("//bazel/config:origin_kernel")): "promoted",
+    },
+)
+
 def _selected_sysroot_boundary_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)

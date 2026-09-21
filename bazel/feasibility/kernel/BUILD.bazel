@@ -1,6 +1,11 @@
 load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
 load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library", "orlix_tcti_isa_prepare")
-load("//bazel/selection:boundary.bzl", "orlix_selected_linux_archive", "orlix_selected_uapi")
+load(
+    "//bazel/selection:boundary.bzl",
+    "orlix_refuse_unmatched_promoted_kernel",
+    "orlix_selected_linux_archive",
+    "orlix_selected_uapi",
+)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -176,6 +181,11 @@ config_setting(
     },
 )
 
+orlix_refuse_unmatched_promoted_kernel(
+    name = "promoted_kernel_unmatched",
+    tags = ["manual"],
+)
+
 orlix_selected_linux_archive(
     name = "selected_macho",
     origin = select({
@@ -183,6 +193,7 @@ orlix_selected_linux_archive(
         ":promoted_development_iphonesimulator": "//bazel/promotion:promoted_kernel_development_iphonesimulator",
         ":promoted_release_iphoneos": "//bazel/promotion:promoted_kernel_release_iphoneos",
         ":promoted_release_iphonesimulator": "//bazel/promotion:promoted_kernel_release_iphonesimulator",
+        "//bazel/config:origin_kernel_promoted": ":promoted_kernel_unmatched",
         "//conditions:default": ":macho",
     }),
     visibility = [

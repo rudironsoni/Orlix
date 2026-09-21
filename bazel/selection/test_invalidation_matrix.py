@@ -201,6 +201,9 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertNotIn("source_input_digest = origin.source_input_digest", boundary)
         self.assertIn('abi_manifest = abi', boundary)
         self.assertIn('file_manifest = file_manifest', boundary)
+        kernel = (repo / "bazel/feasibility/kernel/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn('"//bazel/config:origin_kernel_promoted": ":promoted_kernel_unmatched"', kernel)
+        self.assertIn("promoted kernel has no matching slice", boundary)
 
 
 class SpecimenTests(unittest.TestCase):
