@@ -23,6 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from toolchain_pin import allowed_identities
+
 VERSION_FILENAME = ".xcode-version"
 VERSION_PATTERN = re.compile(r"^\d+\.\d+(\.\d+)?$")
 XCODES_INSTALL_HINT = "brew install xcodesorg/made/xcodes"
@@ -138,7 +140,6 @@ def observed_toolchain(developer_dir: str) -> tuple[str, str]:
 def verify(repo_root: str | Path, build: str, developer_dir: str | None = None) -> dict:
     """Verify the selected Xcode without changing machine state."""
     version = read_requested_version(repo_root)
-    resolved = resolve_requested(version)
     selected = selected_developer_dir()
     if developer_dir is not None and developer_dir != selected:
         raise XcodeSelectError(
@@ -146,6 +147,18 @@ def verify(repo_root: str | Path, build: str, developer_dir: str | None = None) 
             f"the selected Xcode {selected}; unset it or run xcodes select from {repo_root}"
         )
     observed_version, observed_build = observed_toolchain(selected)
+    allowed = (observed_version, observed_build) in allowed_identities()
+    if allowed and observed_build == build and observed_version != version:
+        return {
+            "schema": 1,
+            "kind": "xcode-selection",
+            "version": observed_version,
+            "build": observed_build,
+            "developer_dir": selected,
+            "xcodes_resolved_path": None,
+            "product_pin": False,
+        }
+    resolved = resolve_requested(version)
     if observed_version != version:
         raise XcodeSelectError(
             f"selected Xcode is Xcode {observed_version} (expected Xcode {version}); "
@@ -163,6 +176,7 @@ def verify(repo_root: str | Path, build: str, developer_dir: str | None = None) 
         "build": observed_build,
         "developer_dir": selected,
         "xcodes_resolved_path": resolved,
+        "product_pin": True,
     }
 
 

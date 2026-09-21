@@ -183,6 +183,23 @@ class XcodeSelectTests(unittest.TestCase):
             with self.assertRaisesRegex(xcode_select.XcodeSelectError, "17F113"):
                 xcode_select.verify(str(REPO), "17F113")
 
+    def test_explicit_allowed_local_build_does_not_require_the_product_pin(self) -> None:
+        calls = []
+        with _which(), mock.patch(
+            "xcode_select.subprocess.run",
+            side_effect=_runner(
+                developer_dir=DIR_27,
+                version="27.0",
+                build="27A266a",
+                calls=calls,
+            ),
+        ):
+            payload = xcode_select.verify(str(REPO), "27A266a", developer_dir=DIR_27)
+        self.assertEqual(payload["version"], "27.0")
+        self.assertEqual(payload["build"], "27A266a")
+        self.assertFalse(payload["product_pin"])
+        self.assertFalse(any(command[:2] == ["xcodes", "installed"] for command, _ in calls))
+
     def test_xcode_27_selection_does_not_leak_into_acceptance(self) -> None:
         with _which(), mock.patch(
             "xcode_select.subprocess.run",
