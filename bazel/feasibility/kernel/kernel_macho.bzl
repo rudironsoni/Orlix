@@ -202,6 +202,8 @@ hostcc="$work/hostcc"
 export ORLIX_KERNEL_PREPARED_SOURCE_SHA256="$(/bin/cat "$work/prepared-source.sha256")"
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$compiler_identity"
+export CCACHE_STATSLOG="$work/compiler-cache.log"
+: > "$CCACHE_STATSLOG"
 export ORLIX_BUILD_ROOT="$work"
 export ORLIX_KERNEL_PORT_PREPARED=1
 export ORLIX_KERNEL_KUNIT=0
@@ -213,6 +215,8 @@ export ORLIX_KERNEL_HOST_SDKROOT="$sdkroot"
 export ORLIX_KERNEL_ARCHIVE_PLATFORMS
 export DEVELOPER_DIR
 cd "$exec_root"
+compile_stamp="$work/.kbuild-run-stamp"
+/usr/bin/printf '' > "$compile_stamp"
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
     SDKROOT="$sdkroot" \
@@ -226,6 +230,9 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     ORLIX_KERNEL_HOST_SDKROOT="$sdkroot" \
     ORLIX_KERNEL_ARCHIVE_PLATFORMS="$ORLIX_KERNEL_ARCHIVE_PLATFORMS" \
     "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive
+compiled="$(/usr/bin/find "$work/OrlixKernel/build" -name '*.o' -newer "$compile_stamp" -print 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+echo "Orlix Kbuild compiled-objects: ${compiled:-0}"
+if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then "$ORLIX_COMPILER_LAUNCHER" --print-log-stats --format=json; fi
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
 built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"

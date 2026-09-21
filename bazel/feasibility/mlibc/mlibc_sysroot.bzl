@@ -193,6 +193,11 @@ lld="$(/usr/bin/command -v ld.lld)"
 test -n "$lld"
 /usr/bin/printf '%s\n' '[binaries]' "c = [${compiler_prefix}'$clang', '--target=aarch64-linux-gnu']" "cpp = [${compiler_prefix}'$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
 /usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot']" "cpp = ['$clangxx', '-isysroot', '$sdkroot']" > "$work/native.ini"
+need_setup=1
+if [ "$(/bin/cat "$work/inputs/configure-cache")" = keep ] && [ -s "$work/build/build.ninja" ]; then
+  need_setup=0
+fi
+if [ "$need_setup" = 1 ]; then
 configure_args=(--reconfigure)
 if [ "$(/bin/cat "$work/inputs/configure-cache")" = clear ]; then configure_args+=(--clearcache); fi
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
@@ -215,7 +220,13 @@ if [ "$(/bin/cat "$work/inputs/configure-cache")" = clear ]; then configure_args
         -Dlinux_kernel_headers="$uapi_dir/include" \
         "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']" \
         "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+fi
+echo "Orlix Meson setup: $need_setup"
+compile_stamp="$work/.ninja-run-stamp"
+/usr/bin/printf '' > "$compile_stamp"
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_bin" compile -C "$work/build"
+compiled="$(/usr/bin/find "$work/build" -name '*.o' -newer "$compile_stamp" -print 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+echo "Orlix Ninja compiled-objects: ${compiled:-0}"
 if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 /usr/bin/python3 -B -c 'from pathlib import Path; from bazel.build_state import _remove; import sys; _remove(Path(sys.argv[1]))' "$work/dest"
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" DESTDIR="$work/dest" "$meson_bin" install -C "$work/build"

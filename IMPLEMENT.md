@@ -1009,3 +1009,36 @@ BuildBuddy: no producer became remote-cache writable. No fake hit. Local action-
 Negative action-key tests: none added, because no class became cacheable.
 
 `PYTHONPATH=bazel/promotion python3 -m unittest test_remote_cache_policy` locks the blocked mnemonics. `//bazel/feasibility/analysis:all` 43/43.
+
+## Checkpoint 0.5: foreign-engine incrementality
+
+Status: measured on `fix/ci-cd-cleanup`. Native state stays under the worktree Bazel output base. Not 0.4 remote AC. Not 0.7. CI ccache unchanged.
+
+Kernel state: `Build/Bazel/output-base/orlix-kernel-state/{profile}/{destination}` via `source_state.run_locked`. Identity inputs: toolchain file, generated action script, kbuild engine files. Profile and destination are in the path. Mutable Kbuild trees are not a semantic output.
+
+mlibc state: `Build/Bazel/output-base/orlix-mlibc-state/aarch64-linux-gnu`. Meson `setup --reconfigure` runs only when `configure-cache` is `clear` or `build.ninja` is missing.
+
+Force-execute: `--nouse_action_cache --disk_cache=` after deleting Bazel outputs only. Native `orlix-*-state` kept. Config: release, iphonesimulator, source Kernel/mlibc. Xcode 27.0/27A266a routing proof only.
+
+Kbuild compiler count is `ORLIXCC` lines. The stamped `.o` find under `OrlixKernel/build` also counts product-adapter objects. ccache is a separate layer.
+
+| Kernel | wall | ORLIXCC | stamp `.o` | ccache miss | ccache direct hit | native state |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| clean native | 754.691 s | 918 | 54 | 967 | 164 | clean |
+| warm no-op | 239.032 s | 0 | 14 | 0 | 209 | verified, prepared source `changed: 0` |
+| idle.c comment edit | 243.429 s | 2 | 14 | 1 | 209 | verified, prepared source `changed: 1` |
+
+Warm Kbuild did not recompile Linux objects. The product adapter still regenerates payload/boundary/kallsyms and relinks `OrlixKernel.a` (14 stamp `.o`, 209 ccache hits, ~239 s). idle.c rebuilt `arch/orlix/kernel/idle.c` and `target_native_proof_registry.c` only. Mutations restored, not committed. Kernel archive digest after restore was not compared. A separate TCTI-only edit was not measured.
+
+| mlibc | wall | Meson setup | Ninja `.o` | ccache miss | native state |
+| --- | ---: | ---: | ---: | ---: | --- |
+| clean native | ~204 s | 1 | 743 | 660 | clean |
+| warm no-op | 10.275 s | 0 | 0 | 0 | verified |
+| wait3 patch edit | 10.453 s | 0 | 2 | 2 | verified |
+| restore | 9.884 s | 0 | 2 | 0 | verified |
+
+mlibc sysroot digest after restore: `be316f517dccf8ded562424811d6f40a45bdafd0c2838638989ce425400d56dd` (matches clean).
+
+CI ccache restore/save: not changed. Benefit not established in 0.5.
+
+`//bazel/feasibility/analysis:all` 43/43.
