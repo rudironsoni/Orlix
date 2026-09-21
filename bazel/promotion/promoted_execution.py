@@ -41,11 +41,16 @@ def _iter_entries(path: Path):
             for entry in payload:
                 yield entry
             return
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            line = line.strip()
-            if not line:
-                continue
-            yield json.loads(line)
+        decoder = json.JSONDecoder()
+        index = 0
+        length = len(text)
+        while index < length:
+            while index < length and text[index].isspace():
+                index += 1
+            if index >= length:
+                return
+            entry, index = decoder.raw_decode(text, index)
+            yield entry
     except json.JSONDecodeError as error:
         raise PromotedExecutionError(f"execution log is malformed: {path}: {error}") from error
 

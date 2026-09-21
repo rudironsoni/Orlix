@@ -138,6 +138,19 @@ class PromotedExecutionTests(unittest.TestCase):
                     destination="iphonesimulator",
                 )
 
+    def test_concatenated_pretty_json_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_text(
+                "\n".join(json.dumps(entry, indent=2) for entry in _promoted_entries()) + "\n",
+                encoding="utf-8",
+            )
+            payload = promoted_execution.prove_execution(
+                path, PROMOTED_ORIGINS, profile="release", destination="iphonesimulator"
+            )
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["total_actions"], 5)
+
     def test_malformed_log_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "execution.json"

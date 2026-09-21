@@ -1077,3 +1077,46 @@ No-probe classifier timings (no Bazel):
 `test_lock_proposal` 11 OK. `test_worktree_classifier test_auto_preflight test_origin_resolver` 33 OK. `//bazel/feasibility/analysis:all` 43/43.
 
 Limits: live `auto` on this lock fail-closes (no `source_sha`). Full `test_make_routing` suite was not waited to completion; targeted substitute/source-app tests passed.
+
+## Checkpoint 0.7: end-to-end reuse
+
+Status: proved on `fix/ci-cd-cleanup`. Xcode 27.0/27A266a routing only. Not 0.8. Not 0.9. Isolated store `Build/Bazel/proof/0.7-store`. Isolated output base `Build/Bazel/proof/0.7-output-base` for promoted IPA. Developer output base used for Kernel A/B and hybrid source.
+
+### Carried debts
+
+Kernel clean vs retained semantic product (release, iphonesimulator, source `//bazel/feasibility/kernel:macho`):
+
+| | identity-v2 | archive.sha256 | `OrlixKernel.a` | release.dtb | development.dtb |
+| --- | --- | --- | --- | --- | --- |
+| retained | `0209e5b5…ef8f45a4` | `ad85c5d1…e23fa71e` | equal | equal | equal |
+| clean native | same | same | equal | equal | equal |
+
+Clean: 789.833 s, ORLIXCC 918, state clean. Retained: 286.428 s, ORLIXCC 2 (`idle.c`, `target_native_proof_registry.c`) because native objects still held the unrestored 0.5 mutation. Native state changed work. Semantic bytes did not.
+
+Current lock `2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c` has no `source_sha`. No matching signed proposal was present locally or in committed proof. GitHub artifact API 404. Lock left unchanged. Live current-lock `auto` remains fail-closed until the next signed buildset activation.
+
+### 0.7A cold promoted IPA
+
+`//Orlix:Orlix` release iphonesimulator `--config=promoted`. Isolated empty store. Network downloads 4: `uapi`, `mlibc`, `rootfs`, `kernel-release-iphonesimulator`. Local hits 0. Unused Kernel variants 0. IPA 185.717 s. Execution log 318 actions. Guest source producers 0. Promoted presence: `OrlixPromotedKernel`, `OrlixPromotedUapi`, `OrlixPromotedMlibc`, `OrlixPromotedRootfs`. cacheHit 0. Reuse: GHCR substitution only.
+
+### 0.7B warm promoted
+
+Same store: network 0, local 4. Same output base: 2.152 s, `122 action cache hit, 1 internal`, execution log empty (no actions ran). Guest source 0. Reuse: Bazel action cache / output tree. Not GHCR. Not Kbuild. Not ccache.
+
+### 0.7C app-only
+
+Temporary comment in `Orlix/Orlix/App/Orlix.swift`. Restored. Explicit `promoted` (auto would be untruthful on this baseline). 138.824 s, 32 SwiftCompile, 12 action-cache hits. Guest identities unchanged: kernel `54b4d948…`, uapi `945669d6…`, mlibc `bf3d281e…`, rootfs `1e1b8bef…`. Guest source producers 0. Promoted actions not re-executed (cached). Auto classifier fixtures still pass separately.
+
+### 0.7D Kernel implementation-only
+
+idle.c SPDX comment. Restored. Flags: kernel source, userspace promoted. 274.916 s. ORLIXCC 2 (`idle.c`, `target_native_proof_registry.c`). Kbuild state verified. `OrlixKernelMachOArchive` + `OrlixTctiIsaRestore` executed. UAPI/mlibc/rootfs source mnemonics 0. Not 918 Linux objects.
+
+### 0.7E mlibc
+
+wait3 patch space. Restored. Flags: kernel/uapi promoted, mlibc/rootfs source. `OrlixMLibCSysroot` executed. Kernel/UAPI source 0. `OrlixPromotedKernel` and `OrlixPromotedUapiHeaders` present. IPA failed: coreutils `aclocal-1.18` missing. First source mlibc on this graph: Meson setup 1, Ninja 743 (native state clean). Ninja 2-object incrementality from 0.5 not reproduced on this product IPA path.
+
+### 0.7F empty isolated cache
+
+`bazel clean` on the proof output base plus emptied proof disk-cache. Rebuild 189.644 s, 446 processes. Guest verified digests unchanged (kernel/uapi/mlibc/rootfs). IPA bytes changed (`42f1458c…` vs `beed6e77…`): Apple packaging, not guest semantics. `OrlixPromotedUapi` ActionKey after rebuild `746193bb613646ce6aa37397b508675bc11fc70aec16f5c78d8f86600475bddb`. Eviction is cache availability, not graph invalidation.
+
+`promoted_execution.py` now parses concatenated pretty JSON objects from Bazel `--execution_log_json_file`. `test_promoted_execution` 12 OK.
