@@ -247,9 +247,9 @@ The app Swift sources are two modules. `OrlixAppLibraryImplementation` owns Core
 
 A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
 
-Cache ownership is one job per layer. The Bazel action cache and disk cache store Bazel action results. The repository cache stores declared downloads. The promoted artifact store stores digest-addressed immutable components. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
+Cache ownership is one job per layer. The Bazel action cache and the local disk cache are the first Bazel hit. BuildBuddy (`grpcs://remote.buildbuddy.io`, instance `orlix/apple/bazel-9.2.0/xcode-<build>/v1`) is the shared remote action cache: `main` may write, a pull request and a local build with `BUILDBUDDY_API_KEY` may read. The repository cache stores declared downloads. The promoted artifact store is the first hit for a locked component. A miss is pulled from GHCR with `oras` after signature verification, then stored by digest. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
 
-A warm promoted build downloads nothing that is already in the local store. An unused locked component is not fetched. Promotion and release consume the proved source artifact. They do not rebuild a substitute.
+A warm promoted build downloads nothing that is already in the local store. An unused locked component is not fetched from GHCR. Promotion and release consume the proved source artifact. They do not rebuild a substitute.
 
 ## Durable And Disposable Storage
 
@@ -260,7 +260,7 @@ Use these storage roles:
 | Private promoted components | GHCR OCI artifacts | OCI digest, signature, provenance |
 | Signed compatible component set | GHCR buildset artifact | Buildset digest and signature |
 | Public `OrlixKit.xcframework.zip` and official release evidence | Immutable GitHub Release | Asset hashes, signatures, provenance |
-| Bazel action results | Local disk cache, later remote cache | Disposable speed input |
+| Bazel action results | Local disk cache, then BuildBuddy remote cache | Disposable speed input |
 | Repository downloads | Digest-verified local and Actions caches | Disposable speed input |
 | CI reports and logs | GitHub Actions artifacts | Disposable evidence transport |
 

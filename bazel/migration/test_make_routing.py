@@ -43,6 +43,7 @@ class MakeRoutingTests(unittest.TestCase):
         expected = {
             ("normal", "main"): "write",
             ("normal", "pr"): "read",
+            ("normal", "local"): "read",
             ("normal", "fork"): "off",
             ("conserve", "main"): "write",
             ("conserve", "pr"): "off",
@@ -360,7 +361,12 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("--stage", mk)
         self.assertIn("bazel/promotion/imported", mk)
         self.assertIn("origin_resolver.py", mk)
+        self.assertIn("--from-imported", mk)
+        self.assertIn("--local-only", mk)
+        stamp = mk.split("promoted-components.json:", 1)[1].split("__bazel-reconstruct-source:", 1)[0]
+        self.assertLess(stamp.index("--local-only"), stamp.index("__bazel-reconstruct"))
         self.assertIn("__bazel-substitute-promoted", mk.split("__bazel-orlix-app:")[1].split("__bazel-orlix-archive:")[0])
+        self.assertIn("__bazel-buildbuddy-local", mk.split("__bazel-feasibility-bootstrap:", 1)[1].split("\n", 1)[0])
 
     def test_reconstruct_checks_local_store_before_network_tools(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

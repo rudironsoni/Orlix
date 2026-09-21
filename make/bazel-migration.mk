@@ -98,7 +98,17 @@ __bazel-module-lock-update: __bazel-version-check
 	@mkdir -p "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=update --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
-__bazel-feasibility-bootstrap: __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest
+__bazel-buildbuddy-local:
+	@set -euo pipefail; \
+	if [ -z "$${BUILDBUDDY_API_KEY:-}" ] || [ -e "$(CURDIR)/.bazelrc.local" ]; then exit 0; fi; \
+	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel"; \
+	rc="$(ORLIX_BUILD_ROOT)/Bazel/buildbuddy.bazelrc"; \
+	umask 077; \
+	printf '%s\n' "build --config=buildbuddy-read" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
+	chmod 600 "$$rc"; \
+	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"
+
+__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest
 	@case "$(ORLIX_BAZEL_DESTINATION)" in iphoneos|iphonesimulator) ;; *) echo "unsupported Bazel destination: $(ORLIX_BAZEL_DESTINATION)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPONENT_MODE)" in source|promoted|auto) ;; *) echo "unsupported Bazel component mode: $(ORLIX_BAZEL_COMPONENT_MODE)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPILATION_MODE)" in dbg|opt) ;; *) echo "unsupported Bazel compilation mode: $(ORLIX_BAZEL_COMPILATION_MODE)" >&2; exit 1 ;; esac
@@ -118,6 +128,7 @@ __bazel-buildbuddy-policy:
 	access=off; \
 	if [ "$$mode" = normal ] && [ "$$context" = main ]; then access=write; fi; \
 	if [ "$$mode" = normal ] && [ "$$context" = pr ]; then access=read; fi; \
+	if [ "$$mode" = normal ] && [ "$$context" = local ]; then access=read; fi; \
 	if [ "$$mode" = conserve ] && [ "$$context" = main ]; then access=write; fi; \
 	printf '%s\n' "mode=$$mode" "access=$$access"; \
 	if [ -n "$${GITHUB_OUTPUT:-}" ]; then printf '%s\n' "mode=$$mode" "access=$$access" >> "$$GITHUB_OUTPUT"; fi; \
