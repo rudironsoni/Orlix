@@ -15,7 +15,9 @@ load(
     "selected_uapi_boundary_test",
     "selected_macho_boundary_test",
     "selected_sysroot_boundary_test",
+    "selected_sysroot_boundary_promoted_test",
     "selected_rootfs_boundary_test",
+    "selected_rootfs_boundary_promoted_test",
     "variant_stamp_test",
 )
 
@@ -43,11 +45,25 @@ selected_macho_boundary_test(
 
 selected_sysroot_boundary_test(
     name = "selected_sysroot_boundary_test",
+    origin_input_fragment = "bazel/feasibility/mlibc/sysroot/abi.txt",
+    target_under_test = "//bazel/feasibility/mlibc:selected_sysroot",
+)
+
+selected_sysroot_boundary_promoted_test(
+    name = "selected_sysroot_boundary_promoted_test",
+    origin_input_fragment = "bazel/promotion/imported/mlibc/product/abi.txt",
     target_under_test = "//bazel/feasibility/mlibc:selected_sysroot",
 )
 
 selected_rootfs_boundary_test(
     name = "selected_rootfs_boundary_test",
+    origin_input_fragment = "bazel/feasibility/rootfs/rootfs/file-manifest.txt",
+    target_under_test = "//bazel/feasibility/rootfs:selected_rootfs",
+)
+
+selected_rootfs_boundary_promoted_test(
+    name = "selected_rootfs_boundary_promoted_test",
+    origin_input_fragment = "bazel/promotion/imported/rootfs/product/file-manifest.txt",
     target_under_test = "//bazel/feasibility/rootfs:selected_rootfs",
 )
 

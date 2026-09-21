@@ -82,6 +82,7 @@ def _selected_sysroot_impl(ctx):
     loader = _stage_file(ctx, "ld.so", origin.dynamic_loader)
     sysroot_digest = _stage_file(ctx, "sysroot.sha256", origin.sysroot_digest)
     consumed = _stage_file(ctx, "consumed_uapi.sha256", origin.consumed_uapi_digest)
+    abi = _stage_file(ctx, "abi.txt", origin.abi_manifest)
     return [
         DefaultInfo(files = depset([
             headers,
@@ -90,9 +91,10 @@ def _selected_sysroot_impl(ctx):
             loader,
             sysroot_digest,
             consumed,
+            abi,
         ])),
         OrlixLibcSysrootInfo(
-            abi_manifest = origin.abi_manifest,
+            abi_manifest = abi,
             artifact_identity_digest = None,
             artifact_identity_manifest = None,
             compiler_runtime = runtime,
@@ -119,17 +121,27 @@ def _selected_rootfs_impl(ctx):
     initramfs = _stage_file(ctx, "initramfs.cpio.gz", origin.initramfs)
     base_ext4 = _stage_file(ctx, "base.ext4", origin.base_ext4)
     state_ext4 = _stage_file(ctx, "state.ext4", origin.state_ext4)
+    file_manifest = _stage_file(ctx, "file-manifest.txt", origin.file_manifest)
+    payload_metadata = _stage_file(ctx, "payload-metadata.txt", origin.payload_metadata)
+    source_input_digest = _stage_file(ctx, "source-input.sha256", origin.source_input_digest)
     return [
-        DefaultInfo(files = depset([initramfs, base_ext4, state_ext4])),
+        DefaultInfo(files = depset([
+            initramfs,
+            base_ext4,
+            state_ext4,
+            file_manifest,
+            payload_metadata,
+            source_input_digest,
+        ])),
         OrlixRootfsInfo(
             artifact_identity_digest = None,
             artifact_identity_manifest = None,
             base_ext4 = base_ext4,
-            file_manifest = origin.file_manifest,
+            file_manifest = file_manifest,
             initramfs = initramfs,
             package_closure = depset(),
-            payload_metadata = origin.payload_metadata,
-            source_input_digest = origin.source_input_digest,
+            payload_metadata = payload_metadata,
+            source_input_digest = source_input_digest,
             state_ext4 = state_ext4,
         ),
     ]

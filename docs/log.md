@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-21] build | Project every selected consumer file
+
+The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) now requires `selected_*` to project ABI text, rootfs manifests, payload metadata, and content digests onto stable coordinates. Origin labels and proof files stay off the consumer provider.
+
 ## [2026-09-21] build | Split requested mode from resolved origins
 
 The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) requested mode is `source`, `promoted`, or `auto`. It resolves to per-component origins for kernel, UAPI, mlibc, and rootfs. Promoted members share one locked signed buildset and stay dependency-closed. [ADR 0033](objects/architecture-decision/0033-use-bazel-as-the-repository-product-graph.md) records the same split.

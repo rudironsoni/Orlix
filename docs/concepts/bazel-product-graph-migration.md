@@ -228,6 +228,8 @@ Promoted forcing resolves every reachable boundary to the same committed signed 
 
 Auto may resolve a component-specific, dependency-closed origin vector. A hybrid such as kernel=source with UAPI, mlibc, and rootfs promoted is valid when UAPI identity is unchanged. Product consumers still enter through `selected_*` projections.
 
+Each `selected_*` provider projects every consumer-visible file onto a stable coordinate under that target. The projected files are the semantic product: headers, libraries, archives, images, ABI text, file manifests, payload metadata, and content digests. Proof manifests and artifact-identity files stay off the selected provider. A consumer action key therefore depends on the projected path and the file bytes, not on whether the origin label was source or promoted. A real byte difference still changes the key. Provenance, the worktree path, and the origin target label are not compilation inputs.
+
 The committed `artifacts.lock.json` selects the signed buildset and its component OCI digests. A workflow proposes lock changes through a normal pull request. No promotion workflow writes directly to `main`.
 
 ## Durable And Disposable Storage

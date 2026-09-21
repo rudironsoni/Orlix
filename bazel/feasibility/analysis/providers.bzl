@@ -432,9 +432,38 @@ def _selected_sysroot_boundary_test_impl(ctx):
     asserts.equals(env, None, sysroot.artifact_identity_manifest)
     asserts.true(env, sysroot.headers.path.endswith("/selected_sysroot/headers"))
     asserts.true(env, sysroot.sysroot_digest.path.endswith("/selected_sysroot/sysroot.sha256"))
+    asserts.true(env, sysroot.abi_manifest.path.endswith("/selected_sysroot/abi.txt"))
+    asserts.true(env, sysroot.consumed_uapi_digest.path.endswith("/selected_sysroot/consumed_uapi.sha256"))
+    asserts.false(env, "/promoted_sysroot/" in sysroot.abi_manifest.path)
+    asserts.false(env, "/sysroot/abi.txt" in sysroot.abi_manifest.path)
+    fragment = ctx.attr.origin_input_fragment
+    if fragment:
+        matched = False
+        for action in target.actions:
+            for out in action.outputs.to_list():
+                if out.path.endswith("/selected_sysroot/abi.txt"):
+                    inputs = " ".join([f.short_path for f in action.inputs.to_list()])
+                    asserts.true(env, fragment in inputs, inputs)
+                    matched = True
+        asserts.true(env, matched)
     return analysistest.end(env)
 
-selected_sysroot_boundary_test = analysistest.make(_selected_sysroot_boundary_test_impl)
+selected_sysroot_boundary_test = analysistest.make(
+    _selected_sysroot_boundary_test_impl,
+    attrs = {
+        "origin_input_fragment": attr.string(default = ""),
+    },
+)
+
+selected_sysroot_boundary_promoted_test = analysistest.make(
+    _selected_sysroot_boundary_test_impl,
+    attrs = {
+        "origin_input_fragment": attr.string(default = ""),
+    },
+    config_settings = {
+        str(Label("//bazel/config:origin_mlibc")): "promoted",
+    },
+)
 
 def _selected_rootfs_boundary_test_impl(ctx):
     env = analysistest.begin(ctx)
@@ -446,6 +475,36 @@ def _selected_rootfs_boundary_test_impl(ctx):
     asserts.true(env, rootfs.initramfs.path.endswith("/selected_rootfs/initramfs.cpio.gz"))
     asserts.true(env, rootfs.base_ext4.path.endswith("/selected_rootfs/base.ext4"))
     asserts.true(env, rootfs.state_ext4.path.endswith("/selected_rootfs/state.ext4"))
+    asserts.true(env, rootfs.file_manifest.path.endswith("/selected_rootfs/file-manifest.txt"))
+    asserts.true(env, rootfs.payload_metadata.path.endswith("/selected_rootfs/payload-metadata.txt"))
+    asserts.true(env, rootfs.source_input_digest.path.endswith("/selected_rootfs/source-input.sha256"))
+    asserts.false(env, "/promoted_rootfs/" in rootfs.file_manifest.path)
+    asserts.false(env, "/rootfs/file-manifest.txt" in rootfs.file_manifest.path)
+    fragment = ctx.attr.origin_input_fragment
+    if fragment:
+        matched = False
+        for action in target.actions:
+            for out in action.outputs.to_list():
+                if out.path.endswith("/selected_rootfs/file-manifest.txt"):
+                    inputs = " ".join([f.short_path for f in action.inputs.to_list()])
+                    asserts.true(env, fragment in inputs, inputs)
+                    matched = True
+        asserts.true(env, matched)
     return analysistest.end(env)
 
-selected_rootfs_boundary_test = analysistest.make(_selected_rootfs_boundary_test_impl)
+selected_rootfs_boundary_test = analysistest.make(
+    _selected_rootfs_boundary_test_impl,
+    attrs = {
+        "origin_input_fragment": attr.string(default = ""),
+    },
+)
+
+selected_rootfs_boundary_promoted_test = analysistest.make(
+    _selected_rootfs_boundary_test_impl,
+    attrs = {
+        "origin_input_fragment": attr.string(default = ""),
+    },
+    config_settings = {
+        str(Label("//bazel/config:origin_rootfs")): "promoted",
+    },
+)
