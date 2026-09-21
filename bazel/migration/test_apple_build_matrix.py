@@ -69,7 +69,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         rootfs = (root / "bazel/feasibility/rootfs/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn('name = "selected_rootfs"', rootfs)
         self.assertIn("rootfs = \":selected_rootfs\"", rootfs)
-        self.assertIn("hostadapter = \"//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs\"", product)
+        self.assertIn("hostadapter = \"//OrlixHostAdapter/Sources:OrlixHostAdapter\"", product)
         self.assertIn('name = "OrlixOS"', session)
         self.assertIn('name = "OrlixOSFramework"', app)
         self.assertIn("//Orlix:OrlixOSFramework", mk)

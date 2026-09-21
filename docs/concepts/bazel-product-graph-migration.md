@@ -140,6 +140,8 @@ The mutation proof MUST inspect both Bazel action execution and actual upstream 
 
 The proof also covers TCTI edits, removed inputs, tool or configuration changes, interrupted builds, corrupted cache entries, concurrent worktrees, and garbage collection during active use. A provenance-only change may update evidence or packaging, but MUST NOT recompile unchanged semantic consumers.
 
+Compile actions take the product bytes they compile or link. A digest sidecar, an ABI note, or a source-file list is proof unless the compiler reads it. Kernel composition records the selected Mach-O archive and the compiled HostAdapter and boot libraries. It does not hash their source trees or `archive.sha256`. Guest package actions take installed headers, libraries, and compiler-rt. They do not take `uapi.sha256` or `consumed_uapi.sha256`. The proof-registry header stays a Kbuild input because `target_native_proof_registry.c` compiles that header and the archive command hashes its generator into that object.
+
 ## Developer-loop benchmark contract
 
 The benchmark MUST measure these sixteen scenarios with the same declared toolchain and workload before and after the relevant optimization checkpoint:

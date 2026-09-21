@@ -4,8 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 orlix_kernel_composition(
     name = "kernel_composition",
-    boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
-    hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
+    boot = "//OrlixKernel/Sources:OrlixKernelBoot",
+    hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter",
     linux_archive = "//bazel/feasibility/kernel:selected_macho",
     locked_buildset = "//bazel/promotion:no_lock",
     tags = ["manual"],

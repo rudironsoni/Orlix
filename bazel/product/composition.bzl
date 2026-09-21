@@ -26,16 +26,14 @@ def _kernel_composition_impl(ctx):
 set -euo pipefail
 exec_root="$PWD"
 archive="$exec_root/$1"
-archive_digest="$exec_root/$2"
-manifest_out="$exec_root/$3"
-host_count="$4"
-boot_count="$5"
-lock_rel="$6"
+manifest_out="$exec_root/$2"
+host_count="$3"
+boot_count="$4"
+lock_rel="$5"
 test -s "$archive"
-test -s "$archive_digest"
-digest="$(/usr/bin/tr -d '[:space:]' < "$archive_digest")"
+digest="$(/usr/bin/shasum -a 256 "$archive" | /usr/bin/awk '{print $1}')"
 test "${#digest}" -eq 64
-shift 6
+shift 5
 host_paths=()
 i=0
 while [ "$i" -lt "$host_count" ]; do
@@ -74,13 +72,12 @@ fi
 """,
         arguments = [
             archive.archive.path,
-            archive.source_input_digest.path,
             manifest.path,
             str(host_count),
             str(boot_count),
             lock_path,
         ] + [f.path for f in hostadapter_files] + [f.path for f in boot_files],
-        inputs = [archive.archive, archive.source_input_digest] + hostadapter_files + boot_files + lock_files,
+        inputs = [archive.archive] + hostadapter_files + boot_files + lock_files,
         outputs = [manifest],
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1"},

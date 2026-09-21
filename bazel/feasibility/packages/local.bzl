@@ -115,10 +115,8 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
             direct = [
                 sysroot.headers,
                 uapi.headers,
-                uapi.uapi_digest,
                 sysroot.libraries,
                 sysroot.compiler_runtime,
-                sysroot.consumed_uapi_digest,
             ] + ctx.files.srcs + ([ctx.file.root_init] if ctx.file.root_init else []),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],

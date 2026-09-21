@@ -99,7 +99,6 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 sysroot.headers,
                 sysroot.libraries,
                 sysroot.compiler_runtime,
-                sysroot.consumed_uapi_digest,
             ],
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
