@@ -1,7 +1,9 @@
 ORLIX_BAZEL_CACHE_ROOT ?= $(HOME)/Library/Caches/Orlix/Bazel
 ORLIX_BAZEL_VERSION ?= 9.2.0
 ORLIX_XCODE_VERSION_FILE := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../.xcode-version)
-ORLIX_XCODE_VERSION ?= $(shell tr -d '[:space:]' < $(ORLIX_XCODE_VERSION_FILE))
+ifndef ORLIX_XCODE_VERSION
+ORLIX_XCODE_VERSION := $(shell tr -d '[:space:]' < $(ORLIX_XCODE_VERSION_FILE))
+endif
 ORLIX_XCODE_BUILD ?= 17F113
 ORLIX_BAZEL_CACHE_EPOCH ?= v1
 ORLIX_BUILDBUDDY_CACHE_MODE ?= normal
@@ -10,10 +12,12 @@ ORLIX_BUILDBUDDY_ACCESS ?=
 ORLIX_BAZEL_DISK_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/disk-cache/bazel-$(ORLIX_BAZEL_VERSION)-xcode-$(ORLIX_XCODE_BUILD)
 ORLIX_BAZEL_REPOSITORY_CACHE ?= $(ORLIX_BAZEL_CACHE_ROOT)/repository-cache
 ORLIX_PROMOTED_ARTIFACT_STORE ?= $(HOME)/Library/Caches/Orlix/Artifacts
+ifndef ORLIX_BAZEL_RUN_ID
 ifdef GITHUB_RUN_ID
-ORLIX_BAZEL_RUN_ID ?= $(GITHUB_RUN_ID)-$(GITHUB_RUN_ATTEMPT)
+ORLIX_BAZEL_RUN_ID := $(GITHUB_RUN_ID)-$(GITHUB_RUN_ATTEMPT)
 else
-ORLIX_BAZEL_RUN_ID ?= $(shell uuidgen 2>/dev/null || date +%s)
+ORLIX_BAZEL_RUN_ID := $(shell uuidgen 2>/dev/null || date +%s)
+endif
 endif
 ORLIX_BAZEL_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/output-base
 ORLIX_BAZEL_DESTINATION ?= iphonesimulator
@@ -33,7 +37,9 @@ ORLIX_BAZEL_KERNEL_FLAGS = --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --
 ORLIX_BAZEL_TOOL_ROOT ?= $(HOME)/Library/Caches/Orlix/Tools/bazel
 ORLIX_BAZEL ?= $(ORLIX_BAZEL_TOOL_ROOT)/$(ORLIX_BAZEL_VERSION)/bazel
 ORLIX_RUBY ?= /usr/bin/ruby
-ORLIX_PINNED_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)
+ifndef ORLIX_PINNED_DEVELOPER_DIR
+ORLIX_PINNED_DEVELOPER_DIR := $(shell xcode-select -p 2>/dev/null)
+endif
 CCACHE_BASEDIR ?= $(CURDIR)
 CCACHE_DIR ?= $(HOME)/Library/Caches/Orlix/ccache
 CCACHE_MAXSIZE ?= 20G

@@ -394,7 +394,7 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn(".xcode-version", mk)
         self.assertNotIn("ORLIX_XCODE_VERSION ?= 26.6", mk)
         self.assertNotIn("/Applications/Xcode", mk)
-        self.assertIn("ORLIX_PINNED_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)", mk)
+        self.assertIn("ORLIX_PINNED_DEVELOPER_DIR := $(shell xcode-select -p 2>/dev/null)", mk)
         self.assertIn("__xcode-select:", mk)
         self.assertIn("xcode_select.py\" --repo \"$(CURDIR)\" --build \"$(ORLIX_XCODE_BUILD)\" --select", mk)
         bootstrap = mk.split("__bazel-feasibility-bootstrap:", 1)[1].split(
