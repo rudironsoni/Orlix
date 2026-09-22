@@ -210,6 +210,10 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("OnlyTestIdentifiers", proof)
         self.assertIn("OrlixUITests-Runner.app/Info.plist", proof)
         self.assertIn("com.apple.test.OrlixUITests-Runner", proof)
+        self.assertLess(
+            proof.index('simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" com.apple.test.OrlixUITests-Runner'),
+            proof.index("test-without-building"),
+        )
         self.assertIn("test-without-building", proof)
         self.assertIn("-derivedDataPath", proof)
         self.assertIn("xctest-app-identity.txt", proof)
