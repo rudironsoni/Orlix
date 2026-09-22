@@ -259,7 +259,7 @@ Four identities stay separate:
 3. Content identity is the bytes, relative paths, file types, modes, and symlink targets of the selected product.
 4. Proof identity binds a tested artifact to its toolchain, inputs, destination, profile, buildset, and proof tier. It is not a compile input.
 
-The app Swift sources are two modules. `OrlixAppLibraryImplementation` owns Core, Features, shared files, and `AppLanguage`. `OrlixAppLibrary` owns the app shell and imports that module. A shell edit recompiles the shell and relinks. It does not recompile the implementation module. The shell compile passes `-Xfrontend -disable-access-control` so it can use implementation declarations that are still internal.
+The app Swift sources are three modules. `OrlixAppLibraryImplementation` owns Core, Features, shared files, and `AppLanguage`, except the Ghostty terminal sources. `OrlixAppLibraryTerminal` owns those Ghostty sources and imports the implementation module. `OrlixAppLibrary` owns the app shell and imports both. A terminal edit recompiles the terminal module. It does not recompile the implementation module. The shell and the terminal compile pass `-Xfrontend -disable-access-control` so they can use implementation declarations that are still internal.
 
 A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
 

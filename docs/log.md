@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-22] build | Split the terminal Swift module
+
+`OrlixAppLibraryTerminal` owns the Ghostty sources. A terminal edit recompiles that module and does not recompile `OrlixAppLibraryImplementation`.
+
 ## [2026-09-21] build | Split the app Swift module
 
 The [Bazel product graph migration](concepts/bazel-product-graph-migration.md) splits the app shell from `OrlixAppLibraryImplementation`. A shell edit recompiles the shell only. The shell compile still uses `-Xfrontend -disable-access-control` because implementation declarations stay internal.

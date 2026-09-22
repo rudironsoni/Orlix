@@ -188,6 +188,11 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertIn("Orlix/Features/**/*.swift", implementation)
         self.assertNotIn("Orlix/App/**/*.swift", implementation)
         self.assertIn("Orlix/App/Localization/AppLanguage.swift", implementation)
+        self.assertIn("exclude = _ORLIX_TERMINAL_GLOBS + _ORLIX_TERMINAL_EXTRA", implementation)
+        terminal = build.split("_ORLIX_TERMINAL_SRCS", 1)[0]
+        self.assertIn("Orlix/Features/TerminalSessions/Infrastructure/Ghostty/**/*.swift", terminal)
+        self.assertIn("Orlix/Features/TerminalSessions/UI/Ghostty/**/*.swift", terminal)
+        self.assertIn('name = name + "Terminal"', build)
         self.assertIn("Orlix/App/**/*.swift", app)
         self.assertNotIn("Orlix/Core/**/*.swift", app)
         self.assertIn("Orlix/App/Localization/AppLanguage.swift", app)

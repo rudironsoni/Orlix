@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 //
 //  GhosttyTerminalIME+macOS.swift
 //  Orlix

@@ -3,6 +3,11 @@ import OrlixTestImplementation
 #else
 import OrlixImplementation
 #endif
+#if ORLIX_TEST_HOST
+import OrlixTestTerminal
+#else
+import OrlixTerminal
+#endif
 import SwiftUI
 
 /// A deterministic app-shell preview with no live external dependencies.

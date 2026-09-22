@@ -1,3 +1,8 @@
+#if ORLIX_TEST_HOST
+import OrlixTestImplementation
+#else
+import OrlixImplementation
+#endif
 extension Ghostty {
     /// Tracks a native surface without extending the terminal view lifetime.
     final class SurfaceReference {

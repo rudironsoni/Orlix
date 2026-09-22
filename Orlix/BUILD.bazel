@@ -95,11 +95,36 @@ _ORLIX_SWIFT_DEPS = [
     "@swiftpkg_zipfoundation//:ZIPFoundation",
 ]
 
-_ORLIX_IMPLEMENTATION_SRCS = glob([
-    "Orlix/Core/**/*.swift",
-    "Orlix/Features/**/*.swift",
-    "OrlixShared/*.swift",
-]) + ["Orlix/App/Localization/AppLanguage.swift"]
+_ORLIX_TERMINAL_GLOBS = [
+    "Orlix/Core/Terminal/Ghostty/**/*.swift",
+    "Orlix/Features/TerminalSessions/Infrastructure/Ghostty/**/*.swift",
+    "Orlix/Features/TerminalSessions/UI/Ghostty/**/*.swift",
+]
+
+_ORLIX_TERMINAL_EXTRA = [
+    "Orlix/Core/Terminal/Input/TerminalHardwareTextInputRoutingPolicy.swift",
+    "Orlix/Core/Terminal/Input/TerminalInputSequences.swift",
+    "Orlix/Core/Terminal/Input/TerminalPointerInputRoutingPolicy.swift",
+    "Orlix/Features/TerminalSessions/UI/Splits/TerminalPaneSurface+iOS.swift",
+    "Orlix/Features/TerminalSessions/UI/Splits/TerminalView+iOS.swift",
+    "Orlix/Features/TerminalSessions/UI/Splits/TerminalView+macOS.swift",
+    "Orlix/Features/TerminalSessions/UI/Splits/TerminalView.swift",
+    "Orlix/Features/TerminalSessions/UI/Tabs/ConnectionTabsView+iOS.swift",
+    "Orlix/Features/TerminalSessions/UI/Tabs/ConnectionTabsView+macOS.swift",
+    "Orlix/Features/TerminalSessions/UI/Tabs/ConnectionTabsView.swift",
+    "Orlix/Features/TerminalSessions/UI/Terminal/DefaultLocalInstanceTerminalView+iOS.swift",
+]
+
+_ORLIX_TERMINAL_SRCS = glob(_ORLIX_TERMINAL_GLOBS) + _ORLIX_TERMINAL_EXTRA
+
+_ORLIX_IMPLEMENTATION_SRCS = glob(
+    [
+        "Orlix/Core/**/*.swift",
+        "Orlix/Features/**/*.swift",
+        "OrlixShared/*.swift",
+    ],
+    exclude = _ORLIX_TERMINAL_GLOBS + _ORLIX_TERMINAL_EXTRA,
+) + ["Orlix/App/Localization/AppLanguage.swift"]
 
 _ORLIX_APP_SRCS = glob(
     ["Orlix/App/**/*.swift"],
@@ -133,6 +158,30 @@ _ORLIX_APP_SRCS = glob(
 
 [
     swift_library(
+        name = name + "Terminal",
+        testonly = is_test_host,
+        srcs = _ORLIX_TERMINAL_SRCS,
+        copts = [
+            "-swift-version",
+            "5" if is_test_host else "6",
+            "-Xfrontend",
+            "-disable-access-control",
+        ] + _ORLIX_SWIFT_COPTS + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
+        features = ["swift.add_target_name_to_output"] if is_test_host else [],
+        swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
+        defines = _ORLIX_SWIFT_DEFINES + (["ORLIX_TEST_HOST=1"] if is_test_host else []),
+        module_name = "OrlixTestTerminal" if is_test_host else "OrlixTerminal",
+        tags = ["manual"],
+        deps = [":" + name + "Implementation"] + _ORLIX_SWIFT_DEPS,
+    )
+    for name, entrypoint, is_test_host in [
+        ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
+        ("OrlixTestAppLibrary", "//OrlixTestApp:Sources/OrlixTestApp.swift", True),
+    ]
+]
+
+[
+    swift_library(
         name = name,
         testonly = is_test_host,
         srcs = _ORLIX_APP_SRCS + [entrypoint],
@@ -147,7 +196,10 @@ _ORLIX_APP_SRCS = glob(
         defines = _ORLIX_SWIFT_DEFINES + (["ORLIX_TEST_HOST=1"] if is_test_host else []),
         module_name = "Orlix",
         tags = ["manual"],
-        deps = [":" + name + "Implementation"] + _ORLIX_SWIFT_DEPS,
+        deps = [
+            ":" + name + "Implementation",
+            ":" + name + "Terminal",
+        ] + _ORLIX_SWIFT_DEPS,
     )
     for name, entrypoint, is_test_host in [
         ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
