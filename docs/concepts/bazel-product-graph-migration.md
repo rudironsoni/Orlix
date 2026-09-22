@@ -113,6 +113,9 @@ selected consumer inputs. Different host-tool bytes must not change a
 consumer's execution identity when the headers and `uapi.sha256` match. A
 changed header byte must change that identity. A changed mlibc library or
 rootfs image is a real product difference and must change its consumers.
+Source and promoted bytes match only when those semantic bytes match. A
+different Apple clang or LLD changes `.comment` and `.text` in mlibc and in
+the rootfs `init` image. That difference stays in the content identity.
 
 Product selection MUST exclude proof and provenance through declared artifact
 boundaries. The serializer does not ignore files by name. A real product file
