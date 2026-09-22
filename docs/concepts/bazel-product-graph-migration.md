@@ -107,6 +107,13 @@ format, hash algorithm, and digest together. The content namespace is
 format. Equivalent selected entries have the same identity regardless of
 their build directory or selection method.
 
+The installed UAPI contract is the header tree plus `uapi.sha256`. Host
+tools inside `kbuild-archive.tar`, such as `fixdep` and `unifdef`, are not
+selected consumer inputs. Different host-tool bytes must not change a
+consumer's execution identity when the headers and `uapi.sha256` match. A
+changed header byte must change that identity. A changed mlibc library or
+rootfs image is a real product difference and must change its consumers.
+
 Product selection MUST exclude proof and provenance through declared artifact
 boundaries. The serializer does not ignore files by name. A real product file
 named `provenance.json` is still product content. Timestamps do not affect the

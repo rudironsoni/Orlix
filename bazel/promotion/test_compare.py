@@ -201,6 +201,33 @@ class PromotionCompareTests(unittest.TestCase):
             self.assertEqual(kept["entries"][0]["type"], "symlink")
             self.assertEqual(kept["entries"][0]["target"], "OrlixKernel.a")
 
+    def test_installed_uapi_headers_ignore_host_archive_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+
+            def header_identity(archive: bytes, header: bytes) -> str:
+                root = base / hashlib.sha256(archive + header).hexdigest()
+                include = root / "include" / "linux"
+                include.mkdir(parents=True)
+                errno = include / "errno.h"
+                errno.write_bytes(header)
+                errno.chmod(0o644)
+                (root / "kbuild-archive.tar").write_bytes(archive)
+                return artifact_identity_v2(include)
+
+            same = header_identity(b"host-tool-a", b"header")
+            self.assertEqual(same, header_identity(b"host-tool-b", b"header"))
+            self.assertNotEqual(same, header_identity(b"host-tool-a", b"header-changed"))
+        selection = (
+            Path(__file__).resolve().parents[1] / "selection" / "boundary.bzl"
+        ).read_text(encoding="utf-8")
+        impl = selection.split("def _selected_uapi_impl", 1)[1].split(
+            "def _selected_sysroot_impl", 1
+        )[0]
+        self.assertIn("origin.headers", impl)
+        self.assertIn("origin.uapi_digest", impl)
+        self.assertNotIn("kbuild-archive", impl)
+
     def test_staged_product_match_allows_only_owner_write(self) -> None:
         recorded = {
             "content_sha256": "abc",
