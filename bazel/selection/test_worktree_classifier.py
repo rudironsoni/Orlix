@@ -156,6 +156,26 @@ class WorktreeClassifierTests(unittest.TestCase):
         with self.assertRaises(ClassifierError):
             classify(Path("/tmp"), "ab" * 20)
 
+    def test_lock_record_does_not_force_source(self) -> None:
+        repo, sha = _repo()
+        lock = repo / "artifacts.lock.json"
+        lock.write_text("{}\n", encoding="utf-8")
+        _git(repo, "add", "artifacts.lock.json")
+        _git(repo, "commit", "-m", "lock")
+        proved = _git(repo, "rev-parse", "HEAD").stdout.strip()
+        lock.write_text(json.dumps({"schema": 2, "buildset": "aa" * 32, "components": {}}) + "\n", encoding="utf-8")
+        _git(repo, "add", "artifacts.lock.json")
+        _git(repo, "commit", "-m", "apply lock")
+        result = classify(repo, proved)
+        self.assertEqual(result.classes, ())
+        self.assertFalse(any(result.facts.values()))
+        vector = resolve(requested_mode="auto", facts=result.facts, lock_path=lock)
+        self.assertEqual(vector.kernel, "promoted")
+        self.assertEqual(vector.uapi, "promoted")
+        self.assertEqual(vector.mlibc, "promoted")
+        self.assertEqual(vector.rootfs, "promoted")
+        self.assertEqual(vector.buildset, "aa" * 32)
+
     def test_disposable_path_is_ignored(self) -> None:
         repo, sha = _repo()
         junk = repo / "Build/Bazel/proof/noise.txt"

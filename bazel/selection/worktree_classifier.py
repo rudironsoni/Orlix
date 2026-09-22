@@ -76,8 +76,11 @@ TOOLCHAIN_PREFIXES = (
     "xcode/",
 )
 
-TOOLCHAIN_FILES = (
+LOCK_RECORD_FILES = (
     "artifacts.lock.json",
+)
+
+TOOLCHAIN_FILES = (
     "upstreams.lock.json",
     "MODULE.bazel",
     "MODULE.bazel.lock",
@@ -169,6 +172,8 @@ def classify_path(path: str) -> str:
     for prefix in DISPOSABLE_PREFIXES:
         if normalized == prefix.rstrip("/") or normalized.startswith(prefix):
             return "disposable"
+    if normalized in LOCK_RECORD_FILES:
+        return "lock_record"
     if normalized in TOOLCHAIN_FILES:
         return "toolchain"
     for prefix in UAPI_PREFIXES:
@@ -235,7 +240,7 @@ def classify(repo: Path, source_sha: str) -> Classification:
     classes = []
     for path in paths:
         kind = classify_path(path)
-        if kind != "disposable":
+        if kind not in ("disposable", "lock_record"):
             classes.append(kind)
     unique_classes = tuple(dict.fromkeys(classes))
     if "toolchain" in unique_classes:
