@@ -944,6 +944,10 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZE
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build $(ORLIX_BAZEL_APP_TARGETS) --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(ORLIX_BAZEL_BUILD_FLAGS) $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),$$(cat "$(ORLIX_BUILD_ROOT)/Bazel/proof/origin-flags.txt"))
 	@set -euo pipefail; \
 	ipa="$(CURDIR)/bazel-bin/Orlix/Orlix.ipa"; \
+	if [ ! -s "$$ipa" ]; then \
+	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
+	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
+	fi; \
 	test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
 	ipa_key="$$(/usr/bin/stat -f '%d:%i:%z:%Fm' "$$ipa") $(PROFILE) $(ORLIX_BAZEL_COMPONENT_MODE) $(ORLIX_BAZEL_DESTINATION)"; \
 	ipa_stamp="$(ORLIX_BUILD_ROOT)/Bazel/proof/ipa-check.txt"; \
