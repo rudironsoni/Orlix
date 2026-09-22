@@ -43,8 +43,7 @@ jobs:
     name: Dual-build promote
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.repository == 'rudironsoni/Orlix' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/build-optimizations')
+      github.repository == 'rudironsoni/Orlix'
     runs-on: macos-26
     permissions:
       contents: read

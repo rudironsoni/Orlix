@@ -332,8 +332,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch'", text)
         self.assertIn("github.repository == 'rudironsoni/Orlix'", text)
         guard = text.split("name: Dual-build promote", 1)[1].split("runs-on:", 1)[0]
-        for allowed_ref in ("refs/heads/main", "refs/heads/fix/build-optimizations"):
-            self.assertIn(allowed_ref, guard)
+        self.assertIn("github.event_name == 'workflow_dispatch'", guard)
+        self.assertIn("github.repository == 'rudironsoni/Orlix'", guard)
+        self.assertNotIn("refs/heads/", guard)
         self.assertNotIn("id-token: write", text)
         self.assertNotIn("attestations: write", text)
         self.assertIn("Cancel if derailed", text)
