@@ -8,7 +8,11 @@ import unittest
 from pathlib import Path
 
 import compare
-from bazel.content_digest import artifact_identity_v2, artifact_manifest_v2
+from bazel.content_digest import (
+    artifact_identity_v2,
+    artifact_manifest_v2,
+    assert_staged_product_match,
+)
 from locked_buildset import (
     ARTIFACT_IDENTITY_V2_FORMAT,
     ARTIFACT_IDENTITY_V2_VERSION,
@@ -196,6 +200,33 @@ class PromotionCompareTests(unittest.TestCase):
             kept = json.loads(artifact_manifest_v2(artifacts={"OrlixKernel.a": relative}))
             self.assertEqual(kept["entries"][0]["type"], "symlink")
             self.assertEqual(kept["entries"][0]["target"], "OrlixKernel.a")
+
+    def test_staged_product_match_allows_only_owner_write(self) -> None:
+        recorded = {
+            "content_sha256": "abc",
+            "mode": 0o555,
+            "path": "OrlixKernel.a",
+            "type": "file",
+        }
+        imported = json.dumps(
+            {
+                "domain": "orlix.artifact.identity",
+                "entries": [recorded],
+                "format": "artifact-identity-v2",
+                "version": 2,
+            },
+            sort_keys=True,
+        ).encode()
+        staged = json.loads(imported)
+        staged["entries"][0]["mode"] = 0o755
+        assert_staged_product_match(imported, json.dumps(staged, sort_keys=True).encode())
+        staged["entries"][0]["mode"] = 0o644
+        with self.assertRaisesRegex(ValueError, "mode differs"):
+            assert_staged_product_match(imported, json.dumps(staged, sort_keys=True).encode())
+        staged["entries"][0]["mode"] = 0o755
+        staged["entries"][0]["content_sha256"] = "def"
+        with self.assertRaisesRegex(ValueError, "content differs"):
+            assert_staged_product_match(imported, json.dumps(staged, sort_keys=True).encode())
 
     def test_artifact_identity_v2_rejects_unknown_formats_invalid_paths_and_types(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

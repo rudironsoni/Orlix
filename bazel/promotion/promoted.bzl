@@ -250,17 +250,18 @@ stamp="$exec_root/$7"
 verified_archive="$exec_root/$8"
 verified_release_dtb="$exec_root/$9"
 verified_development_dtb="$exec_root/${10}"
-/usr/bin/cmp -s "$imported_manifest" "$computed_manifest" || {
-  echo "promoted $component artifact identity manifest differs from imported manifest" >&2
-  /usr/bin/diff -u "$imported_manifest" "$computed_manifest" >&2 || true
-  exit 1
-}
+serializer="$exec_root/${14}"
+PYTHONPATH="$(/usr/bin/dirname "$serializer")" /usr/bin/python3 -B -c '
+import sys
+from pathlib import Path
+from content_digest import assert_staged_product_match
+try:
+    assert_staged_product_match(Path(sys.argv[1]).read_bytes(), Path(sys.argv[2]).read_bytes())
+except ValueError as error:
+    print("promoted artifact identity manifest differs from imported manifest: %s" % error, file=sys.stderr)
+    raise SystemExit(1)
+' "$imported_manifest" "$computed_manifest"
 got="$(/usr/bin/tr -d '[:space:]' < "$imported_digest")"
-computed="$(/usr/bin/tr -d '[:space:]' < "$computed_digest")"
-test "$got" = "$computed" || {
-  echo "promoted $component artifact identity digest differs from recomputed digest" >&2
-  exit 1
-}
 want="$(/usr/bin/python3 -c 'import json,sys; payload=json.load(open(sys.argv[1])); assert payload["schema"] == 2; identity=payload["components"][sys.argv[2]]["artifact_identity"]; assert identity["format"] == "artifact-identity-v2" and identity["version"] == 2; print(identity["digest"])' "$lock" "$component")"
 test "$got" = "$want" || {
   echo "promoted $component artifact identity digest differs from schema-2 lock" >&2
@@ -271,6 +272,12 @@ test "$got" = "$want" || {
 /bin/cp "$exec_root/${11}" "$verified_archive"
 /bin/cp "$exec_root/${12}" "$verified_release_dtb"
 /bin/cp "$exec_root/${13}" "$verified_development_dtb"
+PYTHONPATH="$(/usr/bin/dirname "$serializer")" /usr/bin/python3 -B -c '
+import sys
+from pathlib import Path
+from content_digest import restore_recorded_modes
+restore_recorded_modes(Path(sys.argv[1]).read_bytes(), Path(sys.argv[2]))
+' "$imported_manifest" "$(/usr/bin/dirname "$verified_archive")"
 """,
         arguments = [
             ctx.file.lock.path,
@@ -286,6 +293,7 @@ test "$got" = "$want" || {
             archive.path,
             release_dtb.path,
             development_dtb.path,
+            ctx.file._artifact_identity_serializer.path,
         ],
         inputs = [
             ctx.file.lock,
@@ -296,6 +304,7 @@ test "$got" = "$want" || {
             identity_digest,
             recomputed.manifest,
             recomputed.digest,
+            ctx.file._artifact_identity_serializer,
         ],
         outputs = [verification, verified_archive, verified_release_dtb, verified_development_dtb],
         use_default_shell_env = False,

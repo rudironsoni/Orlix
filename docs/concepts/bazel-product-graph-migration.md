@@ -95,7 +95,9 @@ its type and exact POSIX permission bits, including special bits. Regular
 files record SHA-256 of their bytes. A relative symlink records its target
 without following it. An absolute symlink is Bazel input staging, not a
 product symlink: named artifact selection hashes the regular file it points
-at. Tree selection includes empty directories. The containing directory's
+at. Bazel local staging may add the owner-write bit. The promoted check
+accepts that bit and restores the recorded mode on the verified copy. Any
+other mode or content change still fails. Tree selection includes empty directories. The containing directory's
 host path is not part of the product identity.
 
 The manifest uses ASCII-escaped JSON, sorted keys, compact separators, and one

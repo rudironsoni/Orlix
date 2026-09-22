@@ -186,6 +186,55 @@ def artifact_manifest_v2(
     ).encode("ascii")
 
 
+def _owner_write_only(recorded: int, observed: int) -> bool:
+    if type(recorded) is not int or type(observed) is not int:
+        return False
+    return observed == (recorded | 0o200) and (recorded & 0o200) == 0
+
+
+def assert_staged_product_match(imported: bytes, computed: bytes) -> None:
+    """Accept a staged manifest whose only mode change is Bazel's owner-write bit."""
+    try:
+        left = json.loads(imported)
+        right = json.loads(computed)
+    except json.JSONDecodeError as error:
+        raise ValueError("artifact identity manifest is not JSON") from error
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        raise ValueError("artifact identity manifest is not an object")
+    for key in ("domain", "format", "version"):
+        if left.get(key) != right.get(key):
+            raise ValueError(f"artifact identity {key} differs")
+    left_entries = left.get("entries")
+    right_entries = right.get("entries")
+    if not isinstance(left_entries, list) or not isinstance(right_entries, list):
+        raise ValueError("artifact identity entries are missing")
+    if len(left_entries) != len(right_entries):
+        raise ValueError("artifact identity entry count differs")
+    for recorded, observed in zip(left_entries, right_entries):
+        if not isinstance(recorded, dict) or not isinstance(observed, dict):
+            raise ValueError("artifact identity entry is not an object")
+        if recorded.get("path") != observed.get("path") or recorded.get("type") != observed.get("type"):
+            raise ValueError("artifact identity path or type differs")
+        if recorded.get("content_sha256") != observed.get("content_sha256"):
+            raise ValueError("artifact identity content differs")
+        if recorded.get("target") != observed.get("target"):
+            raise ValueError("artifact identity symlink target differs")
+        recorded_mode = recorded.get("mode")
+        observed_mode = observed.get("mode")
+        if recorded_mode != observed_mode and not _owner_write_only(recorded_mode, observed_mode):
+            raise ValueError(
+                f"artifact identity mode differs for {recorded.get('path')}: {recorded_mode} != {observed_mode}"
+            )
+
+
+def restore_recorded_modes(imported: bytes, root: Path) -> None:
+    payload = json.loads(imported)
+    for entry in payload["entries"]:
+        if entry.get("type") != "file":
+            continue
+        os.chmod(root / entry["path"], entry["mode"])
+
+
 def artifact_identity_v2(
     root: Optional[Path] = None,
     *,
