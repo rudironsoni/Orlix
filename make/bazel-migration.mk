@@ -108,7 +108,17 @@ __bazel-buildbuddy-local:
 	chmod 600 "$$rc"; \
 	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"
 
-__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest
+$(ORLIX_BUILD_ROOT)/Bazel/proof/module-lock.stamp: $(CURDIR)/MODULE.bazel $(CURDIR)/MODULE.bazel.lock
+	@mkdir -p "$(dir $@)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=error --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@touch $@
+
+$(ORLIX_BUILD_ROOT)/Bazel/proof/config-flags.stamp: $(CURDIR)/MODULE.bazel $(CURDIR)/.bazelrc $(CURDIR)/bazel/config/BUILD.bazel
+	@mkdir -p "$(dir $@)" "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
+	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/config:all --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
+	@touch $@
+
+__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest $(ORLIX_BUILD_ROOT)/Bazel/proof/module-lock.stamp $(ORLIX_BUILD_ROOT)/Bazel/proof/config-flags.stamp
 	@case "$(ORLIX_BAZEL_DESTINATION)" in iphoneos|iphonesimulator) ;; *) echo "unsupported Bazel destination: $(ORLIX_BAZEL_DESTINATION)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPONENT_MODE)" in source|promoted|auto) ;; *) echo "unsupported Bazel component mode: $(ORLIX_BAZEL_COMPONENT_MODE)" >&2; exit 1 ;; esac
 	@case "$(ORLIX_BAZEL_COMPILATION_MODE)" in dbg|opt) ;; *) echo "unsupported Bazel compilation mode: $(ORLIX_BAZEL_COMPILATION_MODE)" >&2; exit 1 ;; esac
@@ -117,8 +127,6 @@ __bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" >/dev/null
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import toolchain_pin; toolchain_pin.validate_manifest("$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json", "$(ORLIX_PINNED_DEVELOPER_DIR)", "$(ORLIX_BAZEL_RUN_ID)", "$(ORLIX_BAZEL_DISK_CACHE)")' >/dev/null
 	@mkdir -p "$(ORLIX_BAZEL_DISK_CACHE)" "$(ORLIX_BAZEL_REPOSITORY_CACHE)" "$(ORLIX_BAZEL_OUTPUT_BASE)"
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" mod deps --lockfile_mode=error --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
-	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/config:all --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 
 __bazel-buildbuddy-policy:
 	@set -euo pipefail; \
@@ -935,9 +943,11 @@ __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surfa
 __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-auto-preflight) $(if $(filter promoted auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build $(ORLIX_BAZEL_APP_TARGETS) --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" $(ORLIX_BAZEL_BUILD_FLAGS) $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),$$(cat "$(ORLIX_BUILD_ROOT)/Bazel/proof/origin-flags.txt"))
 	@set -euo pipefail; \
-	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
-	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
-	test -n "$$ipa" && test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	ipa="$(CURDIR)/bazel-bin/Orlix/Orlix.ipa"; \
+	test -s "$$ipa" || { echo "missing //Orlix:Orlix ipa" >&2; exit 1; }; \
+	ipa_key="$$(/usr/bin/stat -f '%d:%i:%z:%Fm' "$$ipa") $(PROFILE) $(ORLIX_BAZEL_COMPONENT_MODE) $(ORLIX_BAZEL_DESTINATION)"; \
+	ipa_stamp="$(ORLIX_BUILD_ROOT)/Bazel/proof/ipa-check.txt"; \
+	if [ -f "$$ipa_stamp" ] && [ "$$(/bin/cat "$$ipa_stamp")" = "$$ipa_key" ]; then exit 0; fi; \
 	/usr/bin/unzip -l "$$ipa" | /usr/bin/grep -F 'Payload/Orlix.app/Info.plist'; \
 	/usr/bin/unzip -p "$$ipa" Payload/Orlix.app/Info.plist | python3 -c 'import plistlib,sys; info=plistlib.loads(sys.stdin.buffer.read()); assert info["MinimumOSVersion"] == "15.0"; assert info["CFBundleSupportedPlatforms"] == [sys.argv[1]]' "$(if $(filter iphoneos,$(ORLIX_BAZEL_DESTINATION)),iPhoneOS,iPhoneSimulator)"; \
 	ipa_work="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-ipa.XXXXXX")"; \
@@ -973,6 +983,7 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZE
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
 	/usr/bin/nm -gU "$$os_binary" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_OrlixBoot|[[:space:]]T[[:space:]]+_arch_boot_entry' > "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log"; \
 	test -s "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-link.log" || { echo "missing kernel link evidence from IPA" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	printf '%s\n' "$$ipa_key" > "$(ORLIX_BUILD_ROOT)/Bazel/proof/ipa-check.txt"; \
 	rm -rf "$$ipa_work"
 
 __bazel-product-app: __bazel-feasibility-bootstrap $(if $(filter auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-auto-preflight) $(if $(filter promoted auto,$(ORLIX_BAZEL_COMPONENT_MODE)),__bazel-substitute-promoted)

@@ -128,7 +128,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("--compilation_mode=opt", command)
         self.assertIn("--ios_multi_cpus=arm64", command)
         self.assertNotIn("bazel/promotion/reconstruct.py", output)
-        self.assertIn(" cquery //Orlix:Orlix ", output)
+        self.assertIn("bazel-bin/Orlix/Orlix.ipa", output)
+        self.assertNotIn(" cquery //Orlix:Orlix ", output)
 
     def test_test_routes_to_matrix_check(self) -> None:
         output = _dry_run("test")
@@ -220,7 +221,7 @@ class MakeRoutingTests(unittest.TestCase):
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("__bazel-toolchain-manifest: __bazel-version-check", mk)
         self.assertIn(
-            "__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest",
+            "__bazel-feasibility-bootstrap: __bazel-buildbuddy-local __bazel-version-check __bazel-migration-inventory-check __bazel-toolchain-manifest $(ORLIX_BUILD_ROOT)/Bazel/proof/module-lock.stamp $(ORLIX_BUILD_ROOT)/Bazel/proof/config-flags.stamp",
             mk,
         )
         self.assertIn("__bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest", mk)

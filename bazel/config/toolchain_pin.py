@@ -102,9 +102,15 @@ def capture_manifest(developer_dir: str, bazel: str, output: str, run_id: str | 
     tools = {}
     for name in ("clang", "ld", "swift", "metal", "bazel"):
         path = Path(bazel if name == "bazel" else observe("/usr/bin/xcrun", "--find", name)).resolve(strict=True)
+        info = path.stat()
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        tools[name] = {"path": str(path), "sha256": digest}
+        tools[name] = {
+            "path": str(path),
+            "sha256": digest,
+            "size": info.st_size,
+            "mtime_ns": info.st_mtime_ns,
+        }
     payload = {
         "schema": 1,
         "kind": "observed-toolchain",
@@ -165,18 +171,67 @@ def validate_manifest(path: str, developer_dir: str, run_id: str | None, disk_ca
     return payload
 
 
+def _tools_unchanged(payload: dict) -> bool:
+    tools = payload.get("tools")
+    if not isinstance(tools, dict):
+        return False
+    for name in ("clang", "ld", "swift", "metal", "bazel"):
+        record = tools.get(name)
+        if not isinstance(record, dict):
+            return False
+        path = record.get("path")
+        size = record.get("size")
+        mtime_ns = record.get("mtime_ns")
+        if not isinstance(path, str) or not isinstance(size, int) or not isinstance(mtime_ns, int):
+            return False
+        try:
+            info = Path(path).stat()
+        except OSError:
+            return False
+        if info.st_size != size or info.st_mtime_ns != mtime_ns:
+            return False
+    return True
+
+
+def _write_manifest(output: str, payload: dict) -> None:
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = destination.with_name(f"{destination.name}.tmp-{os.getpid()}")
+    staging.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(staging, destination)
+
+
 def ensure_current_manifest(
     developer_dir: str, bazel: str, output: str, run_id: str | None, disk_cache: str
 ) -> dict:
-    """Reuse the current run's manifest, or capture it once when absent or stale.
+    """Reuse the manifest when the toolchain files are unchanged.
 
-    Capture itself re-observes the toolchain and enforces the accepted
-    identity, so a stale manifest is replaced, never reused.
+    A new run id rewrites that field only. A changed tool, developer
+    directory, or accepted identity recaptures the manifest.
     """
     try:
         return validate_manifest(output, developer_dir, run_id, disk_cache)
     except PinError:
+        pass
+    try:
+        payload = json.loads(Path(output).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return capture_manifest(developer_dir, bazel, output, run_id)
+    developer = str(Path(developer_dir).resolve(strict=True))
+    if (
+        isinstance(payload, dict)
+        and payload.get("developer_dir") == developer
+        and payload.get("bazel_version") == f"bazel {product_pin()['bazel']}"
+        and _tools_unchanged(payload)
+    ):
+        try:
+            require_identity(payload["xcode_version"], payload["xcode_build"], disk_cache)
+        except (PinError, KeyError):
+            return capture_manifest(developer_dir, bazel, output, run_id)
+        payload["run_id"] = run_id
+        _write_manifest(output, payload)
+        return payload
+    return capture_manifest(developer_dir, bazel, output, run_id)
 
 
 def capture_kernel_manifest(developer_dir: str, output: str) -> dict:

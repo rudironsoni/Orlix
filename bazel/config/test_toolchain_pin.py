@@ -242,4 +242,12 @@ class ToolchainPinTests(unittest.TestCase):
                     "cache/bazel-9.2.0-xcode-17F113",
                 )
             self.assertEqual(payload["run_id"], "run-2")
+            self.assertFalse(calls)
+            binary.write_bytes(b"compiler-changed")
+            with mock.patch("toolchain_pin.subprocess.run", side_effect=observe):
+                changed = pin.ensure_current_manifest(
+                    str(root), str(binary), str(output), "run-3",
+                    "cache/bazel-9.2.0-xcode-17F113",
+                )
+            self.assertEqual(changed["run_id"], "run-3")
             self.assertTrue(calls)
