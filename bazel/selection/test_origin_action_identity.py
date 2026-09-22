@@ -100,6 +100,11 @@ def _one(actions: list[dict[str, list[str]]], mnemonic: str) -> dict[str, list[s
 
 
 class OriginActionIdentityTests(unittest.TestCase):
+    def _require_promoted_kernel(self) -> None:
+        archive = REPO / "bazel/promotion/imported/kernel-release-iphonesimulator/product/OrlixKernel.a"
+        if not archive.is_file():
+            self.skipTest("promoted kernel archive is absent; run make __bazel-substitute-promoted")
+
     @classmethod
     def setUpClass(cls) -> None:
         if not BAZEL.is_file():
@@ -121,6 +126,7 @@ class OriginActionIdentityTests(unittest.TestCase):
         return result.stdout
 
     def test_composition_template_ignores_origin(self) -> None:
+        self._require_promoted_kernel()
         expression = 'mnemonic("OrlixKernelComposition", //bazel/product:kernel_composition)'
         source = _one(_actions(self._aquery("source", expression)), "OrlixKernelComposition")
         promoted = _one(_actions(self._aquery("promoted", expression)), "OrlixKernelComposition")
@@ -134,6 +140,7 @@ class OriginActionIdentityTests(unittest.TestCase):
             self.assertNotIn("/kernel/macho/", visible)
 
     def test_selected_macho_keeps_origin_on_the_producer_side(self) -> None:
+        self._require_promoted_kernel()
         expression = "//bazel/feasibility/kernel:selected_macho"
         source = _actions(self._aquery("source", expression))
         promoted = _actions(self._aquery("promoted", expression))
@@ -158,6 +165,7 @@ class OriginActionIdentityTests(unittest.TestCase):
         )
 
     def test_promoted_selection_cache_miss_preserves_archive_bytes(self) -> None:
+        self._require_promoted_kernel()
         target = ["//bazel/feasibility/kernel:selected_macho"]
         first = _bazel(
             self.developer_dir,
