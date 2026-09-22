@@ -376,6 +376,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("__bazel-$(1): __bazel-feasibility-bootstrap", macro)
         self.assertNotIn("__bazel-$(1): __bazel-mlibc-from-uapi", macro)
         self.assertIn("__bazel-mlibc-from-uapi: __bazel-kernel-uapi", makefile)
+        reconstruct = makefile.split("__bazel-reconstruct:", 1)[1].split("__bazel-auto-preflight:", 1)[0]
+        self.assertNotIn("extra[@]", reconstruct)
 
     def test_source_matrix_skips_promoted_boundaries_without_imports(self) -> None:
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")

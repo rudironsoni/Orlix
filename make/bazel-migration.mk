@@ -483,9 +483,12 @@ __bazel-reconstruct: __bazel-version-check
 	if [ -n "$${ORLIX_COSIGN_KEY_PASSWORD:-}" ]; then export COSIGN_PASSWORD="$$ORLIX_COSIGN_KEY_PASSWORD"; fi; \
 	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); schema=p.get("schema",1); expected={"uapi","mlibc","rootfs"} if schema == 1 else {"uapi","mlibc","rootfs","kernel-release-iphoneos","kernel-release-iphonesimulator","kernel-development-iphoneos","kernel-development-iphonesimulator"}; assert schema in (1,2) and set(p.get("components",{})) == expected, p' "$(CURDIR)/artifacts.lock.json"; \
 	acquire="$(strip $(ORLIX_PROMOTED_ACQUIRE))"; \
-	extra=(); \
-	if [ -n "$$acquire" ]; then extra+=(--components "$$(printf '%s,' $$acquire | sed 's/,$$//')"); fi; \
-	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json" "$${extra[@]}"
+	if [ -n "$$acquire" ]; then \
+		csv="$$(printf '%s,' $$acquire | sed 's/,$$//')"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json" --components "$$csv"; \
+	else \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/reconstruct.py" --lock "$(CURDIR)/artifacts.lock.json" --out-dir "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct" --store "$(ORLIX_PROMOTED_ARTIFACT_STORE)" --evidence "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-promotion/acquisition.json"; \
+	fi
 
 __bazel-auto-preflight:
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
