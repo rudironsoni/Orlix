@@ -11,8 +11,32 @@ import subprocess
 import tempfile
 
 from bazel import build_state as state
+from bazel.content_digest import tree_digest
 
 _TREES = ("mlibc", "build", "inputs", "arch")
+
+
+def followed_tree_digest(root: Path) -> str:
+    root = Path(root)
+    if not root.is_dir():
+        raise ValueError(f"missing component tree: {root}")
+    real_root = None
+    for path in root.rglob("*"):
+        if not path.is_symlink():
+            continue
+        target = Path(os.readlink(path))
+        if not target.is_absolute():
+            target = path.parent / target
+        candidate = target
+        for _ in path.relative_to(root).parts:
+            candidate = candidate.parent
+        if real_root is None:
+            real_root = candidate
+        elif candidate != real_root:
+            raise ValueError(f"symlink tree has mixed roots: {real_root} and {candidate}")
+    if real_root is None:
+        return tree_digest(root)
+    return tree_digest(real_root)
 
 
 def prepare(root: Path, source: Path, patches: list[Path], subprojects: dict[str, Path],

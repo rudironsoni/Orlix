@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Keep the UAPI digest off the mlibc compile
+
+`OrlixMLibCSysroot` records `tree_digest` of the installed include tree. It does not read `uapi.sha256`.
+
 ## [2026-09-22] build | Split the terminal Swift module
 
 `OrlixAppLibraryTerminal` owns the Ghostty sources. A terminal edit recompiles that module and does not recompile `OrlixAppLibraryImplementation`.

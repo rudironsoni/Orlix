@@ -21,6 +21,9 @@ def _pinned_env(ctx):
     tmpdir = shell.get("TMPDIR")
     if tmpdir:
         env["TMPDIR"] = tmpdir
+    ccache_dir = shell.get("CCACHE_DIR")
+    if ccache_dir:
+        env["CCACHE_DIR"] = ccache_dir
     return env
 
 _COMPILER_RT_SOURCES = [
@@ -141,8 +144,7 @@ c_hdrs="$exec_root/${11}"
 cxx_hdrs="$exec_root/${12}"
 smarter="$exec_root/${13}"
 bragi="$exec_root/${14}"
-digest_in="$exec_root/${15}"
-digest_out="$exec_root/${16}"
+digest_out="$exec_root/${15}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -166,9 +168,10 @@ test -x "$clang"; test -d "$sdkroot"
 test -d "$uapi_dir/include"
 test -s "$uapi_dir/include/linux/unistd.h"
 test -s "$uapi_dir/include/asm/unistd.h"
+uapi_include="$uapi_dir/include"
 work="$ORLIX_MLIBC_WORK_ROOT"
 export PYTHONPATH="$exec_root"
-shift 16
+shift 15
 /usr/bin/python3 -B -c 'from pathlib import Path; import sys; from bazel.feasibility.mlibc import build_state; build_state.prepare(Path(sys.argv[1]), Path(sys.argv[2]).parent, [Path(p) for p in sys.argv[10:]], dict(zip(("frigg", "freestnd-c-hdrs", "freestnd-cxx-hdrs", "libsmarter", "bragi"), (Path(p).parent for p in sys.argv[5:10]))), Path(sys.argv[3]), Path(sys.argv[4]))' "$work" "$mlibc_meson" "$uapi_dir" "$runtime_in" "$frigg_meson" "$c_hdrs" "$cxx_hdrs" "$smarter" "$bragi" "$@"
 uapi_dir="$work/inputs/uapi"
 runtime_archives=("$work"/inputs/runtime/libcompiler_rt-*.a)
@@ -244,8 +247,7 @@ else
     /usr/bin/printf '' > "$loader_out"
 fi
 /usr/bin/nm "$work/dest/usr/lib/libc.a" | /usr/bin/awk '{print $3}' | /usr/bin/sort -u > "$abi_out"
-test -s "$digest_in"
-uapi_digest="$(/usr/bin/tr -d '[:space:]' < "$digest_in")"
+uapi_digest="$(/usr/bin/python3 -B -c 'from pathlib import Path; import sys; from bazel.feasibility.mlibc.build_state import followed_tree_digest; print(followed_tree_digest(Path(sys.argv[1])))' "$uapi_include")"
 test "${#uapi_digest}" -eq 64
 sysroot_digest="$(/usr/bin/find "$headers_out" "$libraries_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' | /usr/bin/sort | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
 test "${#sysroot_digest}" -eq 64
@@ -280,7 +282,6 @@ test "${#sysroot_digest}" -eq 64
             ctx.file.freestnd_cxx.path,
             ctx.file.libsmarter.path,
             ctx.file.bragi.path,
-            uapi.uapi_digest.path,
             digest.path,
         ] + [f.path for f in ctx.files.patches],
         inputs = depset(
@@ -292,12 +293,12 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.shared_state,
                 ctx.file.mlibc_meson,
                 uapi.headers,
-                uapi.uapi_digest,
                 ctx.file.frigg_meson,
                 ctx.file.freestnd_c,
                 ctx.file.freestnd_cxx,
                 ctx.file.libsmarter,
                 ctx.file.bragi,
+                ctx.file._artifact_identity_serializer,
                 runtime,
             ] + ctx.files.patches,
             transitive = [

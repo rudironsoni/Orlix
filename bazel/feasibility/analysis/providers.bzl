@@ -61,6 +61,8 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.false(env, "OrlixMLibC/Makefile" in argv)
+            asserts.false(env, "uapi.sha256" in joined)
+            asserts.false(env, "consumed_uapi.sha256" in joined)
             asserts.true(env, "OrlixMLibC/Sources/patches" in joined)
             asserts.true(env, "0022-options-ansi-reset-line-buffer-after-flush.patch" in joined)
             asserts.true(env, "0023-options-internal-accept-required-shortopt-dash-arg.patch" in joined)
