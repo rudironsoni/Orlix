@@ -229,6 +229,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'", workflow)
         # Cold then warm proof in one job with acquisition and action evidence.
         self.assertIn("Promoted-consumer proof (cold then warm)", workflow)
+        proof = workflow.split("Promoted-consumer proof (cold then warm)", 1)[1].split("Store promoted-consumer proof evidence", 1)[0]
+        self.assertIn("ORLIX_PROMOTED_ACQUIRE=\"uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator\"", proof)
+        self.assertIn("cold pass expected 7 network downloads", proof)
+        self.assertIn("warm pass expected 0 downloads / 7 store hits", proof)
         self.assertIn("for pass in cold warm", workflow)
         self.assertIn("network_downloads", workflow)
         self.assertIn("local_store_hits", workflow)

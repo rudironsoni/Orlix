@@ -327,7 +327,9 @@ jobs:
             # package globs the imported tree, so it must exist before any Bazel
             # analysis. The acquisition evidence is captured here, before the
             # second reconstruction inside Apple CI (which is a store hit).
-            ORLIX_PROMOTED_ARTIFACT_STORE="$store" make __bazel-substitute-promoted
+            make __bazel-substitute-promoted \
+              ORLIX_PROMOTED_ARTIFACT_STORE="$store" \
+              ORLIX_PROMOTED_ACQUIRE="uapi mlibc rootfs kernel-release-iphoneos kernel-release-iphonesimulator kernel-development-iphoneos kernel-development-iphonesimulator"
             cp Build/AgentHarness/bazel-promotion/acquisition.json "$results/$pass-acquisition.json"
             # Fresh output base so the package glob is re-evaluated against the
             # freshly staged tree and no first-pass Bazel result is reused.
