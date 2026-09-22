@@ -1017,7 +1017,7 @@
     {
       "name": "__bazel-test-app",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1029,7 +1029,7 @@
     {
       "name": "__bazel-test-app-architecture",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1041,7 +1041,7 @@
     {
       "name": "__bazel-test-native-smoke",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1053,7 +1053,7 @@
     {
       "name": "__bazel-test-output-parser",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1065,7 +1065,7 @@
     {
       "name": "__bazel-test-runtime",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1077,7 +1077,7 @@
     {
       "name": "__bazel-test-terminal-surface",
       "source": "make/bazel-migration.mk",
-      "line": 899,
+      "line": 904,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1089,7 +1089,7 @@
     {
       "name": "__bazel-simulator-runtime-proof",
       "source": "make/bazel-migration.mk",
-      "line": 1087,
+      "line": 1092,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1101,7 +1101,7 @@
     {
       "name": "__bazel-current-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1114,
+      "line": 1119,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1113,7 +1113,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1117,
+      "line": 1122,
       "classification": "private",
       "phony": true,
       "prerequisites": [

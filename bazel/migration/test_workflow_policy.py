@@ -365,6 +365,22 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertEqual(policy["required_environment"], "bazel-promotion")
         self.assertIn("refs/heads/fix/build-optimizations", policy["allowed_refs"])
 
+    def test_source_matrix_skips_promoted_boundaries_without_imports(self) -> None:
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        build = (ROOT / "bazel/feasibility/analysis/BUILD.bazel").read_text(encoding="utf-8")
+        recipe = makefile.split("__bazel-matrix-check:", 1)[1].split("\n__bazel-orlixos:", 1)[0]
+        self.assertIn("imported/mlibc/product/abi.txt", recipe)
+        self.assertIn("imported/rootfs/product/file-manifest.txt", recipe)
+        self.assertIn("--//bazel/config:imported_promoted_trees=false", recipe)
+        self.assertIn("--//bazel/config:imported_promoted_trees=true", recipe)
+        for name in (
+            "selected_sysroot_boundary_promoted_test",
+            "selected_rootfs_boundary_promoted_test",
+        ):
+            block = build.split(f'name = "{name}"', 1)[1].split(")", 1)[0]
+            self.assertIn("//bazel/config:imported_promoted_trees_present", block)
+            self.assertIn("@platforms//:incompatible", block)
+
     def test_nightly_workflow_calls_make(self) -> None:
         text = (ROOT / ".github/workflows/bazel-nightly.yml").read_text(encoding="utf-8")
         self.assertIn("make __bazel-matrix-check", text)

@@ -6,7 +6,7 @@ tags:
   - migration
   - artifacts
   - worktrees
-updated: 2026-09-21
+updated: 2026-09-22
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
   - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
@@ -262,6 +262,8 @@ Four identities stay separate:
 The app Swift sources are two modules. `OrlixAppLibraryImplementation` owns Core, Features, shared files, and `AppLanguage`. `OrlixAppLibrary` owns the app shell and imports that module. A shell edit recompiles the shell and relinks. It does not recompile the implementation module. The shell compile passes `-Xfrontend -disable-access-control` so it can use implementation declarations that are still internal.
 
 A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
+
+Source-mode analysis does not require a reconstructed OCI tree. The promoted sysroot and rootfs boundary tests run only when `make __bazel-matrix-check` finds both `bazel/promotion/imported/mlibc/product/abi.txt` and `bazel/promotion/imported/rootfs/product/file-manifest.txt`. Without those files the tests are incompatible and Bazel skips them. A promoted build that selects a missing tree still fails with the reconstruct message.
 
 Cache ownership is one job per layer. The Bazel action cache and the local disk cache are the first Bazel hit. BuildBuddy (`grpcs://remote.buildbuddy.io`, instance `orlix/apple/bazel-9.2.0/xcode-<build>/v1`) is the shared remote action cache: `main` may write, a pull request and a local build with `BUILDBUDDY_API_KEY` may read. The repository cache stores declared downloads. The promoted artifact store is the first hit for a locked component. A miss is pulled from GHCR with `oras` after signature verification, then stored by digest. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
 

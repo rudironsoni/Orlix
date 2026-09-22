@@ -581,7 +581,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "3a2399b67d0ab10ad5425f1f2820db02805cf0ff00da7f7bd1693ac8e03831b6",
+      "source_sha256": "6ff4b70fc781c74974f8c2c71166a1f8784ecdc8ecb70a5643294856c388f184",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -616,7 +616,7 @@
           },
           "promote": {
             "name": "Dual-build promote",
-            "if": "github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/build-optimizations')",
+            "if": "github.event_name == 'workflow_dispatch' && github.repository == 'rudironsoni/Orlix'",
             "runs-on": "macos-26",
             "permissions": {
               "contents": "read",

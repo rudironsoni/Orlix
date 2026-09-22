@@ -72,6 +72,15 @@ string_flag(
 )
 
 string_flag(
+    name = "imported_promoted_trees",
+    build_setting_default = "false",
+    values = [
+        "false",
+        "true",
+    ],
+)
+
+string_flag(
     name = "apple_destination",
     build_setting_default = "iphonesimulator",
     values = [
@@ -153,4 +162,9 @@ config_setting(
 config_setting(
     name = "promoted_lock_enabled",
     flag_values = {":use_promoted_lock": "true"},
+)
+
+config_setting(
+    name = "imported_promoted_trees_present",
+    flag_values = {":imported_promoted_trees": "true"},
 )
