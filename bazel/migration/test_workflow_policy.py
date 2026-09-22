@@ -380,6 +380,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("__bazel-$(1): __bazel-feasibility-bootstrap", macro)
         self.assertNotIn("__bazel-$(1): __bazel-mlibc-from-uapi", macro)
         self.assertIn("__bazel-mlibc-from-uapi: __bazel-kernel-uapi", makefile)
+        boot = makefile.split("__bazel-kernel-boot:", 1)[1].split("__bazel-proof-graph:", 1)[0]
+        self.assertIn("build //bazel/feasibility/kernel:macho ", boot)
+        self.assertIn("cquery //bazel/feasibility/kernel:macho ", boot)
+        self.assertNotIn("cquery //bazel/feasibility/kernel:macho_archive", boot)
+        self.assertIn("execroot/_main/$$macho_rel", boot)
         reconstruct = makefile.split("__bazel-reconstruct:", 1)[1].split("__bazel-auto-preflight:", 1)[0]
         self.assertNotIn("extra[@]", reconstruct)
 
