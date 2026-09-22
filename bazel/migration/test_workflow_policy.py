@@ -365,6 +365,18 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertEqual(policy["required_environment"], "bazel-promotion")
         self.assertIn("refs/heads/fix/build-optimizations", policy["allowed_refs"])
 
+    def test_package_targets_do_not_invoke_uapi_recipe(self) -> None:
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        for name in ("__bazel-coreutils:", "__bazel-guest-package:", "__bazel-bash:"):
+            recipe = makefile.split(name, 1)[1].split("\n", 1)[0]
+            self.assertIn("__bazel-feasibility-bootstrap", recipe)
+            self.assertNotIn("__bazel-kernel-uapi", recipe)
+            self.assertNotIn("__bazel-mlibc-from-uapi", recipe)
+        macro = makefile.split("define ORLIX_BAZEL_PACKAGE_PROOF", 1)[1].split("endef", 1)[0]
+        self.assertIn("__bazel-$(1): __bazel-feasibility-bootstrap", macro)
+        self.assertNotIn("__bazel-$(1): __bazel-mlibc-from-uapi", macro)
+        self.assertIn("__bazel-mlibc-from-uapi: __bazel-kernel-uapi", makefile)
+
     def test_source_matrix_skips_promoted_boundaries_without_imports(self) -> None:
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         build = (ROOT / "bazel/feasibility/analysis/BUILD.bazel").read_text(encoding="utf-8")
