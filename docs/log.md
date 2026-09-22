@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Bound app Mach-O byte drift
+
+Two cache-disabled source builds match the guest product digests. `OrlixOS` differs only in its code signature. `Orlix` also differs in its UUID, signature, OpenSSL build timestamp, `orlix-ssh` temporary path, and LDR immediates.
+
 ## [2026-09-23] build | Keep the UAPI digest off the mlibc compile
 
 `OrlixMLibCSysroot` records `tree_digest` of the installed include tree. It does not read `uapi.sha256`.

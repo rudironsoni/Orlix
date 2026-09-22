@@ -117,6 +117,15 @@ Source and promoted bytes match only when those semantic bytes match. A
 different Apple clang or LLD changes `.comment` and `.text` in mlibc and in
 the rootfs `init` image. That difference stays in the content identity.
 
+Two cache-disabled source builds of `//Orlix:Orlix` keep the same UAPI
+digest, kernel archive digest, mlibc sysroot digest, rootfs source-input
+digest, initramfs, `base.ext4`, and `state.ext4`. The `OrlixOS` Mach-O keeps
+its UUID and differs only inside `LC_CODE_SIGNATURE`. The `Orlix` Mach-O also
+differs in `LC_UUID`, `LC_CODE_SIGNATURE`, the OpenSSL `built on:` cstring,
+the `orlix-ssh.<6>` temporary directory in libssh2 and OpenSSL cstrings, and
+LDR immediates in `__text`, `__stubs`, and `__objc_stubs`. Those fields are
+not the guest product identity.
+
 Product selection MUST exclude proof and provenance through declared artifact
 boundaries. The serializer does not ignore files by name. A real product file
 named `provenance.json` is still product content. Timestamps do not affect the
