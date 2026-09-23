@@ -147,6 +147,7 @@ class OriginActionIdentityTests(unittest.TestCase):
             self.assertIn("OrlixKernel.a", text)
 
     def test_rootfs_payload_ignores_origin(self) -> None:
+        self._require_imported("bazel/promotion/imported/rootfs/product")
         expression = 'mnemonic("OrlixRootfsPayload", //bazel/feasibility/rootfs:payload)'
         source = _one(_actions(self._aquery("source", expression)), "OrlixRootfsPayload")
         promoted = _one(_actions(self._aquery("promoted", expression)), "OrlixRootfsPayload")
@@ -158,7 +159,14 @@ class OriginActionIdentityTests(unittest.TestCase):
             self.assertIn("selected_rootfs/state.ext4", text)
             self.assertNotIn("promoted_rootfs", text)
 
+    def _require_imported(self, relative: str) -> None:
+        path = REPO / relative
+        if not path.exists():
+            self.skipTest(f"imported product is absent: {relative}")
+
     def test_getconf_archives_ignore_origin(self) -> None:
+        self._require_imported("bazel/promotion/imported/mlibc/product")
+        self._require_imported("bazel/promotion/imported/uapi/product")
         expression = 'mnemonic("OrlixGuestPackageTreeArchive", //bazel/feasibility/packages:getconf)'
         source = _actions(self._aquery("source", expression))
         promoted = _actions(self._aquery("promoted", expression))

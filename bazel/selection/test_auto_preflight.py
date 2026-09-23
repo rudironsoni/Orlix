@@ -31,18 +31,14 @@ class AutoPreflightTests(unittest.TestCase):
              mock.patch("auto_preflight.classify", return_value=classification), \
              mock.patch("auto_preflight._promoted_uapi_semantic_digest", return_value="11" * 32), \
              mock.patch("auto_preflight.probe_source_uapi", return_value="11" * 32), \
+             mock.patch("auto_preflight.enforce_promoted_compiler"), \
              mock.patch("auto_preflight.resolve") as resolver:
             from origin_resolver import OriginVector
             resolver.return_value = OriginVector("auto", "source", "promoted", "promoted", "promoted", "ff" * 32)
-            try:
-                body = run_preflight(Path("."), Path("artifacts.lock.json"), requested_mode="auto", profile="release", destination="iphonesimulator")
-            except ClassifierError as error:
-                self.assertIn("built by", str(error))
-                body = None
+            body = run_preflight(Path("."), Path("artifacts.lock.json"), requested_mode="auto", profile="release", destination="iphonesimulator")
         facts = resolver.call_args.kwargs["facts"]
         self.assertFalse(facts["uapi_changed"])
-        if body is not None:
-            self.assertEqual(body["origins"]["uapi"], "promoted")
+        self.assertEqual(body["origins"]["uapi"], "promoted")
 
     def test_different_digest_closes_userspace(self) -> None:
         classification = Classification(
@@ -95,18 +91,14 @@ class AutoPreflightTests(unittest.TestCase):
         )
         with mock.patch("auto_preflight._lock_source_sha", return_value="ab" * 20), \
              mock.patch("auto_preflight.classify", return_value=classification), \
+             mock.patch("auto_preflight.enforce_promoted_compiler"), \
              mock.patch("auto_preflight.probe_source_uapi") as probe, \
              mock.patch("auto_preflight._promoted_uapi_semantic_digest") as promoted:
-            try:
-                body = run_preflight(Path("."), Path("artifacts.lock.json"), requested_mode="auto", profile="release", destination="iphonesimulator")
-            except ClassifierError as error:
-                self.assertIn("built by", str(error))
-                body = None
+            body = run_preflight(Path("."), Path("artifacts.lock.json"), requested_mode="auto", profile="release", destination="iphonesimulator")
         probe.assert_not_called()
         promoted.assert_not_called()
-        if body is not None:
-            self.assertEqual(body["origins"]["kernel"], "promoted")
-            self.assertFalse(body["classification"]["probe_uapi"])
+        self.assertEqual(body["origins"]["kernel"], "promoted")
+        self.assertFalse(body["classification"]["probe_uapi"])
 
     def test_digest_parse_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
