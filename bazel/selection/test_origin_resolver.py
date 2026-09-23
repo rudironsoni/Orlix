@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,9 @@ from origin_resolver import (
     PROMOTED,
     SOURCE,
     acquire_components,
+    active_clang_version,
+    embedded_clang_version,
+    require_promoted_compiler,
     resolve,
 )
 
@@ -212,6 +216,31 @@ class OriginResolverTests(unittest.TestCase):
                     mlibc_consumed_uapi_digest="22" * 32,
                 )
         self.assertIn("consumed_uapi_digest", str(raised.exception))
+
+    def test_promoted_compiler_mismatch_fails_on_real_archives(self) -> None:
+        repo = Path(__file__).resolve().parents[2]
+        developer = Path(os.environ["DEVELOPER_DIR"]) if os.environ.get("DEVELOPER_DIR") else None
+        if developer is None:
+            import subprocess
+            developer = Path(subprocess.check_output(["/usr/bin/xcode-select", "-p"], text=True).strip())
+        active = active_clang_version(developer)
+        source = repo / "Build/Bazel/output-base/execroot/_main/bazel-out/darwin_arm64-dbg/bin/bazel/feasibility/mlibc/sysroot/libcompiler_rt.a"
+        locked = repo / "bazel/promotion/imported/mlibc/product/libcompiler_rt.a"
+        libc = repo / "bazel/promotion/imported/mlibc/product/usr/lib/libc.a"
+        self.assertTrue(locked.is_file(), locked)
+        self.assertTrue(libc.is_file(), libc)
+        locked_version = embedded_clang_version(locked)
+        self.assertEqual(embedded_clang_version(libc), locked_version)
+        if source.is_file():
+            self.assertEqual(embedded_clang_version(source), active)
+        if locked_version == active:
+            require_promoted_compiler(locked, developer)
+            require_promoted_compiler(libc, developer)
+        else:
+            with self.assertRaises(OriginError) as raised:
+                require_promoted_compiler(locked, developer)
+            self.assertIn(locked_version, str(raised.exception))
+            self.assertIn(active, str(raised.exception))
 
     def test_matching_uapi_digest_allows_promoted_mlibc(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

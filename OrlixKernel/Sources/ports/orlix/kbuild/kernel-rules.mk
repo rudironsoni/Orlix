@@ -2192,12 +2192,22 @@ __kernel-archive: __prepare-kbuild
 			if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			rm -f "$$proof_source_paths"; \
 			fi; \
-				proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" "$$target_proof_registry_provenance_header" "$$target_proof_registry_decode_source" "$$target_proof_registry_partition_source" "$$target_proof_registry_build_source"); \
-			for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do proof_archive_inputs+=("$$(orlix_product_adapter_source_for "$$proof_src_rel")"); done; \
+				proof_inputs_rsp="$$obj_dir/.proof-inputs"; \
+			{ \
+				printf '%s\n' "$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" "$$target_proof_registry_provenance_header" "$$target_proof_registry_decode_source" "$$target_proof_registry_partition_source" "$$target_proof_registry_build_source"; \
+				for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do orlix_product_adapter_source_for "$$proof_src_rel"; done; \
+			} > "$$proof_inputs_rsp"; \
 			printf -v proof_archive_prefix 'platform=%s\ntarget=%s\nsource_revision=%s\n' "$$platform" "$$target" "$$proof_source_revision"; \
-			proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$${proof_archive_inputs[@]}")" || exit 1; \
+			proof_archive_sha256="$$(python3 "$(ORLIX_PRODUCT_ADAPTER_TOOL_DIR)/product_proof_inputs.py" --prefix "$$proof_archive_prefix" --inputs "$$proof_inputs_rsp")" || exit 1; \
 			$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
 			proof_cflags="-DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\"$$proof_archive_sha256\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\"$$proof_config_sha256\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\"$$proof_profile_sha256\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\"$$proof_source_revision\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\"$$proof_artifact_sha256\""; \
+			command_epoch="$$obj_dir/.command-epoch"; \
+			command_epoch_new="$$obj_dir/.command-epoch.new"; \
+			printf '%s\n' "$$cc" "$$target" "$$config_fingerprint" "$(ORLIX_PRODUCT_ADAPTER_CFLAGS)" > "$$command_epoch_new"; \
+			command_epoch_same=0; \
+			if [ -f "$$command_epoch" ] && cmp -s "$$command_epoch_new" "$$command_epoch"; then command_epoch_same=1; unlink "$$command_epoch_new"; else mv -f "$$command_epoch_new" "$$command_epoch"; fi; \
+			stale_objects_rsp="$$obj_dir/.stale-objects"; \
+			python3 "$(ORLIX_PRODUCT_ADAPTER_TOOL_DIR)/product_stale_objects.py" --objects "$$obj_dir" --cwd "$$PWD" > "$$stale_objects_rsp"; \
 			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
 			src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
 			product_cflags="$$(orlix_product_adapter_source_cflags_for "$$src_rel")"; \
@@ -2229,6 +2239,10 @@ __kernel-archive: __prepare-kbuild
 				lib/crc32.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/lib -I$(ORLIX_KERNEL_BUILD_DIR)/lib" ;; \
 				lib/fdt*.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/scripts/dtc/libfdt" ;; \
 			esac; \
+			if [ "$$command_epoch_same" -eq 1 ] && [ "$$src_rel" != "arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c" ] && [ -s "$$obj" ] && [ -s "$$obj.command" ] && [ -e "$$verified" ] && ! grep -F -x -q "$$obj" "$$stale_objects_rsp"; then \
+				objs+=("$$obj"); \
+				continue; \
+			fi; \
 			compile_command=("$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_modname\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags $$product_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"); \
 			printf '%q ' "$${compile_command[@]}" > "$$obj.command.tmp"; \
 			needs_build=1; \

@@ -1,6 +1,5 @@
 """Narrow HostAdapter + boot + Linux archive composition. Does not fake an xcframework."""
 
-load("//bazel:artifact_identity.bzl", "semantic_files")
 load(
     "//bazel/providers:kernel_info.bzl",
     "OrlixKernelAppleProductInfo",
@@ -20,7 +19,8 @@ def _kernel_composition_impl(ctx):
     if boot_count == 0:
         fail("kernel composition requires OrlixKernel boot sources")
     lock_path = lock_files[0].path if lock_files else ""
-    linux_files = semantic_files(archive) or [archive.archive]
+    linux_boot = sorted(archive.boot_resources.to_list(), key = lambda item: item.basename)
+    linux_files = [archive.archive] + linux_boot
     linux_names = ["OrlixKernel.a"] + [
         "arch/orlix/boot/dts/" + item.basename
         for item in linux_files[1:]

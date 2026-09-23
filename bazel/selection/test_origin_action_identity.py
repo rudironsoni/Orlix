@@ -83,7 +83,14 @@ def _actions(text: str) -> list[dict[str, list[str]]]:
                 found.append(current)
             current = {"header": [line]}
             continue
-        if current is None or not line.startswith("  ") or ": " not in line:
+        if current is None or not line.startswith("  "):
+            continue
+        if line.startswith("    ") and current:
+            key = next(reversed(current))
+            if key != "header":
+                current[key][-1] += " " + line.strip()
+            continue
+        if ": " not in line:
             continue
         key, value = line.strip().split(": ", 1)
         current.setdefault(key, []).append(value)
@@ -132,13 +139,69 @@ class OriginActionIdentityTests(unittest.TestCase):
         promoted_text = self._aquery("promoted", expression)
         source = _one(_actions(source_text), "OrlixKernelComposition")
         promoted = _one(_actions(promoted_text), "OrlixKernelComposition")
-        self.assertNotEqual(source["ActionKey"], promoted["ActionKey"])
+        self.assertEqual(source["ActionKey"], promoted["ActionKey"])
         for mode, text in ((source, source_text), (promoted, promoted_text)):
             inputs = " ".join(mode.get("Inputs", []))
-            self.assertNotIn("selected_macho/OrlixKernel.a", inputs)
+            self.assertIn("selected_macho/OrlixKernel.a", inputs)
             self.assertIn("artifact_identity_v2", text)
             self.assertIn("OrlixKernel.a", text)
-            self.assertNotIn("selected_macho", text)
+
+    def test_rootfs_payload_ignores_origin(self) -> None:
+        expression = 'mnemonic("OrlixRootfsPayload", //bazel/feasibility/rootfs:payload)'
+        source = _one(_actions(self._aquery("source", expression)), "OrlixRootfsPayload")
+        promoted = _one(_actions(self._aquery("promoted", expression)), "OrlixRootfsPayload")
+        self.assertEqual(source["ActionKey"], promoted["ActionKey"])
+        for action in (source, promoted):
+            text = " ".join(action.get("Inputs", []) + action.get("Arguments", []))
+            self.assertIn("selected_rootfs/initramfs.cpio.gz", text)
+            self.assertIn("selected_rootfs/base.ext4", text)
+            self.assertIn("selected_rootfs/state.ext4", text)
+            self.assertNotIn("promoted_rootfs", text)
+
+    def test_getconf_archives_ignore_origin(self) -> None:
+        expression = 'mnemonic("OrlixGuestPackageTreeArchive", //bazel/feasibility/packages:getconf)'
+        source = _actions(self._aquery("source", expression))
+        promoted = _actions(self._aquery("promoted", expression))
+        self.assertEqual(
+            sorted(item["ActionKey"][0] for item in source),
+            sorted(item["ActionKey"][0] for item in promoted),
+        )
+        def blob(action: dict[str, list[str]]) -> str:
+            parts: list[str] = []
+            for values in action.values():
+                parts.extend(values)
+            return " ".join(parts)
+
+        headers = [item for item in source if "headers.tar" in blob(item)]
+        libraries = [item for item in source if "libraries.tar" in blob(item)]
+        self.assertEqual(len(headers), 1)
+        self.assertEqual(len(libraries), 1)
+        self.assertIn("-chf", blob(headers[0]))
+        self.assertIn("-chf", blob(libraries[0]))
+        uapi = [item for item in source if "uapi.tar" in blob(item)]
+        self.assertEqual(len(uapi), 1)
+        self.assertIn("-chf", blob(uapi[0]))
+        self.assertIn("selected_uapi", " ".join(uapi[0]["Inputs"]))
+        self.assertNotIn("promoted_uapi", " ".join(uapi[0]["Inputs"]))
+        stage = 'mnemonic("OrlixSelectSysrootHeaders", //bazel/feasibility/mlibc:selected_sysroot)'
+        staged = _one(_actions(self._aquery("source", stage)), "OrlixSelectSysrootHeaders")
+        self.assertIn("-R -L", blob(staged))
+        package = 'mnemonic("OrlixGuestPackage", //bazel/feasibility/packages:getconf)'
+        source_package = _one(_actions(self._aquery("source", package)), "OrlixGuestPackage")
+        promoted_package = _one(_actions(self._aquery("promoted", package)), "OrlixGuestPackage")
+        source_inputs = " ".join(source_package.get("Inputs", []))
+        promoted_inputs = " ".join(promoted_package.get("Inputs", []))
+        for inputs, action in (
+            (source_inputs, source_package),
+            (promoted_inputs, promoted_package),
+        ):
+            self.assertIn("selected_uapi/uapi.sha256", inputs)
+            self.assertIn("selected_sysroot/sysroot.sha256", inputs)
+            self.assertNotIn("promoted_uapi", inputs)
+            self.assertNotIn("promoted_sysroot", inputs)
+            command = " ".join(action.get("Command Line", []) + action.get("Arguments", []))
+            self.assertIn("--consumer", command)
+            self.assertIn("--consumer-file", command)
 
     def test_selected_macho_keeps_origin_on_the_producer_side(self) -> None:
         self._require_promoted_kernel()

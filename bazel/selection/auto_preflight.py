@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from origin_resolver import OriginError, payload, resolve
+from origin_resolver import OriginError, enforce_promoted_compiler, payload, resolve
 from worktree_classifier import ClassifierError, classify
 
 
@@ -112,6 +112,8 @@ def run_preflight(
             facts["uapi_changed"] = source_digest != locked
             facts["kernel_changed"] = True
         vector = resolve(requested_mode="auto", facts=facts, lock_path=lock_path)
+        developer = Path(os.environ["DEVELOPER_DIR"]) if os.environ.get("DEVELOPER_DIR") else None
+        enforce_promoted_compiler(repo, vector, developer)
         body = payload(vector, profile=profile, destination=destination)
         body["classification"] = {
             "classes": list(classification.classes),

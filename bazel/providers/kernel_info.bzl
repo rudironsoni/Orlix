@@ -20,7 +20,6 @@ OrlixLinuxArchiveInfo = provider(
         "destination": "Apple destination for the archive.",
         "product": "Product tree containing the archive and delivered device trees.",
         "profile": "Orlix release or development profile.",
-        "semantic_inputs": "Origin archive and boot resources in logical order. None outside the selected boundary.",
         "source_input_digest": "Prepared Linux source input digest.",
         "symbol_manifest": "Exported and required symbol manifest.",
     },
@@ -34,7 +33,6 @@ OrlixInstalledUapiInfo = provider(
         "artifact_identity_manifest": "Canonical artifact-identity-v2 manifest.",
         "headers": "Installed UAPI headers tree.",
         "linux_revision": "Exact upstream Linux revision.",
-        "semantic_inputs": "Origin files whose bytes, modes, and symlink targets are the consumer identity. None outside the selected boundary.",
         "uapi_digest": "Content digest of the installed UAPI tree.",
     },
 )

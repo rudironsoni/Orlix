@@ -13,7 +13,6 @@ OrlixLibcSysrootInfo = provider(
         "dynamic_loader": "Dynamic loader contract and artifact.",
         "headers": "Installed libc headers.",
         "libraries": "Installed guest libraries.",
-        "semantic_inputs": "Origin sysroot files whose content is the consumer identity. None outside the selected boundary.",
         "sysroot_digest": "Content digest of installed headers and libraries.",
         "target_triple": "Guest compiler target triple.",
     },

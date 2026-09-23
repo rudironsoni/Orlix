@@ -260,6 +260,21 @@ class ContentDigestTests(unittest.TestCase):
             source.rename(root / "renamed.h")
             self.assertNotEqual(symlink_changed, tree_digest(root))
 
+    def test_directory_owner_write_stays_out_of_consumer_identity(self) -> None:
+        from bazel.content_digest import consumer_tree_identity
+
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / "a"
+            second = Path(tmp) / "b"
+            for root, mode in ((first, 0o755), (second, 0o555)):
+                include = root / "linux"
+                include.mkdir(parents=True)
+                (include / "errno.h").write_text("same\n", encoding="utf-8")
+                include.chmod(mode)
+                root.chmod(mode)
+            self.assertNotEqual(tree_digest(first), tree_digest(second))
+            self.assertEqual(consumer_tree_identity(first), consumer_tree_identity(second))
+
 
 class HeadersInstallTests(unittest.TestCase):
     def test_removed_headers_cannot_survive_installed_or_staging_state(self) -> None:

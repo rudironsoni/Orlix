@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,6 +63,66 @@ def _all(origin: str, requested_mode: str, buildset: str | None) -> OriginVector
         rootfs=origin,
         buildset=buildset if origin == PROMOTED else None,
     )
+
+
+_CLANG_VERSION = re.compile(rb"Apple clang version \d+(?:\.\d+)* \(clang-[^)\x00\n]+\)")
+
+
+def embedded_clang_version(path: Path) -> str:
+    data = Path(path).read_bytes()
+    found = {item.decode("ascii") for item in _CLANG_VERSION.findall(data)}
+    if not found:
+        raise OriginError(f"{path} has no embedded Apple clang version")
+    if len(found) != 1:
+        raise OriginError(f"{path} embeds more than one Apple clang version")
+    return found.pop()
+
+
+def active_clang_version(developer_dir: Path) -> str:
+    clang = Path(developer_dir) / "Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+    if not clang.is_file():
+        raise OriginError(f"missing clang: {clang}")
+    result = subprocess.run(
+        [str(clang), "--version"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise OriginError("clang --version failed")
+    for line in result.stdout.splitlines():
+        if line.startswith("Apple clang version "):
+            return line.strip()
+    raise OriginError("clang --version has no Apple clang version")
+
+
+def require_promoted_compiler(archive: Path, developer_dir: Path) -> None:
+    embedded = embedded_clang_version(archive)
+    active = active_clang_version(developer_dir)
+    if embedded != active:
+        raise OriginError(
+            f"promoted {Path(archive).name} was built by {embedded}; this compiler is {active}"
+        )
+
+
+def enforce_promoted_compiler(repo: Path, vector: OriginVector, developer_dir: Path | None) -> None:
+    if vector.requested_mode != AUTO:
+        return
+    if vector.mlibc != PROMOTED and vector.kernel != PROMOTED:
+        return
+    if developer_dir is None:
+        env = os.environ.get("DEVELOPER_DIR")
+        if not env:
+            raise OriginError("DEVELOPER_DIR is required before auto can select promoted kernel or mlibc")
+        developer_dir = Path(env)
+    archives = (
+        Path(repo) / "bazel/promotion/imported/mlibc/product/libcompiler_rt.a",
+        Path(repo) / "bazel/promotion/imported/mlibc/product/usr/lib/libc.a",
+    )
+    for archive in archives:
+        if not archive.is_file():
+            raise OriginError(f"missing promoted archive for compiler check: {archive}")
+        require_promoted_compiler(archive, developer_dir)
 
 
 def _lock_buildset(lock_path: str | Path | None) -> str | None:
@@ -270,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--selected-sysroot-digest")
     parser.add_argument("--rootfs-consumed-sysroot-digest")
     parser.add_argument("--promoted-buildsets", help="comma-separated buildset ids to reject if mixed")
+    parser.add_argument("--developer-dir")
     parser.add_argument("--out")
     parser.add_argument("--print-acquire", action="store_true")
     parser.add_argument("--print-flags", action="store_true")
@@ -296,6 +360,9 @@ def main(argv: list[str] | None = None) -> int:
             rootfs_consumed_sysroot_digest=args.rootfs_consumed_sysroot_digest,
             promoted_buildsets=extra or None,
         )
+        repo = Path(args.lock).resolve().parent if args.lock else Path.cwd()
+        developer = Path(args.developer_dir) if args.developer_dir else None
+        enforce_promoted_compiler(repo, vector, developer)
         body = payload(vector, profile=args.profile, destination=args.destination)
     except OriginError as error:
         print(error, file=sys.stderr)

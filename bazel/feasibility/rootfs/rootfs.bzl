@@ -2,7 +2,6 @@
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
-load("//bazel:artifact_identity.bzl", "semantic_files")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 
 def _pinned_env(ctx):
@@ -211,7 +210,7 @@ digest="$( (
 def _rootfs_payload_impl(ctx):
     info = ctx.attr.rootfs[OrlixRootfsInfo]
     root = ctx.actions.declare_directory(ctx.label.name + "/rootfs")
-    images = semantic_files(info) or [info.initramfs, info.base_ext4, info.state_ext4]
+    images = [info.initramfs, info.base_ext4, info.state_ext4]
     names = ["initramfs.cpio.gz", "base.ext4", "state.ext4"]
     identity_args = []
     for name, item in zip(names, images):

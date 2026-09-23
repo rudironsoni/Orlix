@@ -1,6 +1,6 @@
 """Autotools/upstream-Make guest package from OrlixMLibC sysroot only."""
 
-load("//bazel:artifact_identity.bzl", "declare_artifact_identity", "semantic_files")
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
@@ -97,7 +97,6 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 sysroot.libraries,
                 sysroot.compiler_runtime,
             ],
-            transitive = [depset(semantic_files(sysroot))],
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),

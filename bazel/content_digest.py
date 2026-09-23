@@ -247,11 +247,30 @@ def artifact_identity_v2(
     ).hexdigest()
 
 
+def consumer_tree_identity(root: Path) -> str:
+    """Identity of the files a compiler reads. Directory modes stay out."""
+    return hashlib.sha256(artifact_manifest_v2(root, files_only=True)).hexdigest()
+
+
+def consumer_file_identity(path: Path) -> str:
+    """Identity of one linked file. The absolute path stays out."""
+    return artifact_identity_v2(artifacts={"file": path})
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--consumer", action="store_true")
+    parser.add_argument("--consumer-file", action="store_true")
     parser.add_argument("root", type=Path)
     args = parser.parse_args(argv)
-    print(tree_digest(args.root))
+    if args.consumer and args.consumer_file:
+        raise SystemExit("choose one of --consumer or --consumer-file")
+    if args.consumer_file:
+        print(consumer_file_identity(args.root))
+    elif args.consumer:
+        print(consumer_tree_identity(args.root))
+    else:
+        print(tree_digest(args.root))
     return 0
 
 

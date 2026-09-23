@@ -18,8 +18,9 @@ def _stage_file(ctx, name, src):
     ctx.actions.symlink(output = out, target_file = src)
     return out
 
-def _stage_tree(ctx, name, src, mnemonic):
+def _stage_tree(ctx, name, src, mnemonic, follow_symlinks = False):
     out = ctx.actions.declare_directory(ctx.label.name + "/" + name)
+    copy_flags = "-R -L" if follow_symlinks else "-R"
     ctx.actions.run_shell(
         mnemonic = mnemonic,
         progress_message = "Projecting %s onto %s" % (src.short_path, ctx.label.name),
@@ -27,20 +28,21 @@ def _stage_tree(ctx, name, src, mnemonic):
 set -euo pipefail
 src="$1"
 dest="$2"
+copy_flags="$3"
 /bin/mkdir -p "$dest"
 if [ -s "$src/include/linux/unistd.h" ]; then
-  /bin/cp -R "$src/." "$dest/"
+  /bin/cp $copy_flags "$src/." "$dest/"
 elif [ -s "$src/linux/unistd.h" ]; then
   /bin/mkdir -p "$dest/include"
-  /bin/cp -R "$src/." "$dest/include/"
+  /bin/cp $copy_flags "$src/." "$dest/include/"
 elif [ -d "$src" ]; then
-  /bin/cp -R "$src/." "$dest/"
+  /bin/cp $copy_flags "$src/." "$dest/"
 else
   echo "selected boundary missing tree: $src" >&2
   exit 1
 fi
 """,
-        arguments = [src.path, out.path],
+        arguments = [src.path, out.path, copy_flags],
         inputs = [src],
         outputs = [out],
         use_default_shell_env = False,
@@ -53,7 +55,7 @@ fi
 
 def _selected_uapi_impl(ctx):
     origin = ctx.attr.origin[OrlixInstalledUapiInfo]
-    headers = _stage_tree(ctx, "headers", origin.headers, "OrlixSelectUapiHeaders")
+    headers = _stage_tree(ctx, "headers", origin.headers, "OrlixSelectUapiHeaders", follow_symlinks = True)
     digest = _stage_file(ctx, "uapi.sha256", origin.uapi_digest)
     return [
         DefaultInfo(files = depset([headers, digest])),
@@ -63,7 +65,6 @@ def _selected_uapi_impl(ctx):
             artifact_identity_manifest = None,
             headers = headers,
             linux_revision = origin.linux_revision,
-            semantic_inputs = [origin.headers],
             uapi_digest = digest,
         ),
     ]
@@ -77,8 +78,8 @@ orlix_selected_uapi = rule(
 
 def _selected_sysroot_impl(ctx):
     origin = ctx.attr.origin[OrlixLibcSysrootInfo]
-    headers = _stage_tree(ctx, "headers", origin.headers, "OrlixSelectSysrootHeaders")
-    libraries = _stage_tree(ctx, "libraries", origin.libraries, "OrlixSelectSysrootLibraries")
+    headers = _stage_tree(ctx, "headers", origin.headers, "OrlixSelectSysrootHeaders", follow_symlinks = True)
+    libraries = _stage_tree(ctx, "libraries", origin.libraries, "OrlixSelectSysrootLibraries", follow_symlinks = True)
     runtime = _stage_file(ctx, "libcompiler_rt.a", origin.compiler_runtime)
     loader = _stage_file(ctx, "ld.so", origin.dynamic_loader)
     sysroot_digest = _stage_file(ctx, "sysroot.sha256", origin.sysroot_digest)
@@ -105,7 +106,6 @@ def _selected_sysroot_impl(ctx):
             dynamic_loader = loader,
             headers = headers,
             libraries = libraries,
-            semantic_inputs = [origin.headers, origin.libraries, origin.compiler_runtime, origin.dynamic_loader],
             sysroot_digest = sysroot_digest,
             target_triple = origin.target_triple,
         ),
@@ -143,7 +143,6 @@ def _selected_rootfs_impl(ctx):
             initramfs = initramfs,
             package_closure = depset(),
             payload_metadata = payload_metadata,
-            semantic_inputs = [origin.initramfs, origin.base_ext4, origin.state_ext4],
             source_input_digest = source_input_digest,
             state_ext4 = state_ext4,
         ),
@@ -179,7 +178,6 @@ def _selected_linux_archive_impl(ctx):
             destination = origin.destination,
             product = None,
             profile = origin.profile,
-            semantic_inputs = [origin.archive] + origin_boot,
             source_input_digest = digest,
             symbol_manifest = None,
         ),

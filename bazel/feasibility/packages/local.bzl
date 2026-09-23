@@ -1,6 +1,6 @@
 """Orlix-local C programs against OrlixMLibC sysroot and UAPI."""
 
-load("//bazel:artifact_identity.bzl", "declare_artifact_identity", "semantic_files")
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -17,13 +17,14 @@ def _pinned_env(ctx):
     }
     return env
 
-def _archive_tree(ctx, name, tree):
+def _archive_tree(ctx, name, tree, follow_symlinks = False):
     archive = ctx.actions.declare_file(ctx.label.name + "/" + name + ".tar")
+    tar_flags = "-chf" if follow_symlinks else "-cf"
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackageTreeArchive",
         progress_message = "Archiving %s for %s" % (name, ctx.label.name),
-        command = "out=\"$1\"; tree=\"$2\"; /usr/bin/tar -cf \"$out\" -C \"$tree\" .",
-        arguments = [archive.path, tree.path],
+        command = "out=\"$1\"; tree=\"$2\"; flags=\"$3\"; /usr/bin/tar $flags \"$out\" -C \"$tree\" .",
+        arguments = [archive.path, tree.path, tar_flags],
         inputs = [tree],
         outputs = [archive],
         execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
@@ -33,9 +34,9 @@ def _archive_tree(ctx, name, tree):
 def _local_c_package_impl(ctx):
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
-    header_archive = _archive_tree(ctx, "headers", sysroot.headers)
-    uapi_archive = _archive_tree(ctx, "uapi", uapi.headers)
-    library_archive = _archive_tree(ctx, "libraries", sysroot.libraries)
+    header_archive = _archive_tree(ctx, "headers", sysroot.headers, follow_symlinks = True)
+    uapi_archive = _archive_tree(ctx, "uapi", uapi.headers, follow_symlinks = True)
+    library_archive = _archive_tree(ctx, "libraries", sysroot.libraries, follow_symlinks = True)
     install_tree = ctx.actions.declare_directory(ctx.label.name + "/install")
     file_manifest = ctx.actions.declare_file(ctx.label.name + "/file-manifest.txt")
     license_manifest = ctx.actions.declare_file(ctx.label.name + "/license-manifest.txt")
@@ -71,7 +72,10 @@ output_rel="${10}"
 package_name="${11}"
 package_version="${12}"
 root_init_source="${13}"
-shift 13
+uapi_digest_file="${14}"
+sysroot_digest_file="${15}"
+digest_tool="${16}"
+shift 16
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-local.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 headers="$work/headers"
@@ -123,7 +127,22 @@ fi
 /bin/cp -R "$work/dest/." "$install_out/"
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-2.0-or-later' > "$license_manifest"
-/usr/bin/printf 'name=%s\nversion=%s\nengine=local-c\n' "$package_name" "$package_version" > "$metadata"
+recorded_uapi="$(IFS= read -r line < "$exec_root/$uapi_digest_file"; printf '%s' "$line")"
+recorded_sysroot="$(IFS= read -r line < "$exec_root/$sysroot_digest_file"; printf '%s' "$line")"
+test "${#recorded_uapi}" -eq 64
+test "${#recorded_sysroot}" -eq 64
+digest_of() {
+  PYTHONPATH="$(/usr/bin/dirname "$exec_root/$digest_tool")" /usr/bin/python3 -B "$exec_root/$digest_tool" "$@"
+}
+uapi_digest="$(digest_of --consumer "$uapi_headers/include")"
+sysroot_digest="$(digest_of --consumer "$libraries")"
+header_digest="$(digest_of --consumer "$headers")"
+runtime_digest="$(digest_of --consumer-file "$runtime")"
+test "${#uapi_digest}" -eq 64
+test "${#sysroot_digest}" -eq 64
+test "${#header_digest}" -eq 64
+test "${#runtime_digest}" -eq 64
+/usr/bin/printf 'name=%s\nversion=%s\nengine=local-c\nuapi_digest=%s\nsysroot_digest=%s\nheader_digest=%s\nruntime_digest=%s\n' "$package_name" "$package_version" "$uapi_digest" "$sysroot_digest" "$header_digest" "$runtime_digest" > "$metadata"
 digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
@@ -141,6 +160,9 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
             ctx.attr.package_name,
             ctx.attr.package_version,
             ctx.file.root_init.path if ctx.file.root_init else "",
+            uapi.uapi_digest.path,
+            sysroot.sysroot_digest.path,
+            ctx.file._artifact_identity_serializer.path,
         ] + [f.path for f in ctx.files.srcs],
         inputs = depset(
             direct = [
@@ -149,8 +171,10 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 library_archive,
                 sysroot.compiler_runtime,
                 source_stamp,
+                uapi.uapi_digest,
+                sysroot.sysroot_digest,
+                ctx.file._artifact_identity_serializer,
             ] + source_files,
-            transitive = [depset(semantic_files(uapi) + semantic_files(sysroot))],
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),

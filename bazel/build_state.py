@@ -47,17 +47,48 @@ def directory(path: Path, boundary: Path) -> None:
         current.mkdir(exist_ok=True)
 
 
+def _manifest_path(destination: Path) -> Path:
+    return destination.parent / f".{destination.name}.sync-manifest.json"
+
+
+def _load_manifest(path: Path) -> dict:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _dest_matches(target: Path, mode: int, data: bytes, recorded_mtime: int) -> bool:
+    try:
+        current = target.lstat()
+    except OSError:
+        return False
+    if current.st_mtime_ns != recorded_mtime:
+        return False
+    if stat.S_ISLNK(mode):
+        return stat.S_ISLNK(current.st_mode) and os.fsencode(os.readlink(target)) == data
+    return current.st_mode == mode and current.st_size == len(data)
+
+
+def _remember(recorded: dict, name: str, file_sha: str, mode: int, target: Path) -> None:
+    recorded[name] = [file_sha, mode, target.lstat().st_mtime_ns]
+
+
 def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path, *, remove_stale: bool = True) -> dict:
     directory(destination, boundary)
     directories = {destination}
     changed = 0
     digest = hashlib.sha256()
+    previous = _load_manifest(_manifest_path(destination))
+    recorded: dict[str, list] = {}
     for name, source in sorted(files.items()):
         relative = PurePosixPath(name)
         if relative.is_absolute() or ".." in relative.parts or relative.as_posix() != name:
             raise ValueError(f"invalid source path: {name}")
         mode, data = _entry(source)
-        digest.update(json.dumps([name, mode, hashlib.sha256(data).hexdigest()]).encode() + b"\n")
+        file_sha = hashlib.sha256(data).hexdigest()
+        digest.update(json.dumps([name, mode, file_sha]).encode() + b"\n")
         target = destination / name
         for parent in reversed(target.parents):
             if destination in parent.parents and parent not in directories:
@@ -65,17 +96,30 @@ def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path, *, r
                     _remove(parent)
                 parent.mkdir(exist_ok=True)
                 directories.add(parent)
+        entry = previous.get(name)
+        if (
+            isinstance(entry, list)
+            and len(entry) == 3
+            and entry[0] == file_sha
+            and entry[1] == mode
+            and isinstance(entry[2], int)
+            and _dest_matches(target, mode, data, entry[2])
+        ):
+            recorded[name] = entry
+            continue
         try:
             current = target.lstat().st_mode
         except FileNotFoundError:
             current = 0
         if stat.S_ISLNK(mode):
             if stat.S_ISLNK(current) and os.fsencode(target.readlink()) == data:
+                _remember(recorded, name, file_sha, mode, target)
                 continue
             _remove(target)
             target.symlink_to(os.fsdecode(data))
         else:
             if current == mode and target.read_bytes() == data:
+                _remember(recorded, name, file_sha, mode, target)
                 continue
             _remove(target)
             target.write_bytes(data)
@@ -86,11 +130,16 @@ def sync(files: dict[str, Path | bytes], destination: Path, boundary: Path, *, r
                 source_stat = source.stat()
                 os.utime(target, ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns))
         changed += 1
+        _remember(recorded, name, file_sha, mode, target)
     if remove_stale:
         for name, path in _files(destination).items():
             if name not in files:
                 _remove(path)
                 changed += 1
+    manifest = _manifest_path(destination)
+    temporary = manifest.with_name(manifest.name + ".tmp")
+    temporary.write_text(json.dumps(recorded, sort_keys=True))
+    temporary.replace(manifest)
     return {"sha256": digest.hexdigest(), "files": len(files), "changed": changed}
 
 
