@@ -5,15 +5,11 @@ load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 
 def _pinned_env(ctx):
-    shell = ctx.configuration.default_shell_env
     env = {
         "HOME": "/var/empty",
         "MKE2FS_CONFIG": "/opt/homebrew/etc/mke2fs.conf",
         "PATH": "/opt/homebrew/opt/e2fsprogs/sbin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
     return env
 
 def _rootfs_impl(ctx):

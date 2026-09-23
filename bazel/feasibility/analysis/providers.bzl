@@ -144,6 +144,8 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
             found = True
             asserts.equals(env, archive.profile, action.env["PROFILE"])
             asserts.equals(env, archive.destination, action.env["ORLIX_KERNEL_ARCHIVE_PLATFORMS"])
+            asserts.equals(env, "/var/empty", action.env["HOME"])
+            asserts.false(env, "TMPDIR" in action.env)
             argv = " ".join(action.argv)
             inputs = " ".join([f.path for f in action.inputs.to_list()])
             asserts.false(env, "OrlixKernel/Makefile" in argv)

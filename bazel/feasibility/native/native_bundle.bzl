@@ -88,28 +88,41 @@ build_one() {
     sdk_path="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" --show-sdk-path)"
     clang="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" -f clang)"
     ( cd "$openssl_src"
+      export SOURCE_DATE_EPOCH=1
       export CC="$clang -isysroot $sdk_path -arch arm64 $min_flag"
       if test "$sdk" != macosx; then
           export CROSS_TOP="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" --show-sdk-platform-path)/Developer"
           if test "$sdk" = iphoneos; then export CROSS_SDK=iPhoneOS.sdk; else export CROSS_SDK=iPhoneSimulator.sdk; fi
       fi
-      /usr/bin/perl ./Configure "$target" --prefix="$openssl_prefix" no-shared no-tests no-apps
-      /usr/bin/make -j8 build_libs
-      /usr/bin/make install_sw )
+      /usr/bin/perl ./Configure "$target" --prefix=/orlix --openssldir=/orlix/ssl --libdir=lib no-shared no-tests no-apps
+      /usr/bin/make -j8 build_libs SOURCE_DATE_EPOCH=1
+      /usr/bin/make DESTDIR="$openssl_prefix" install_sw SOURCE_DATE_EPOCH=1 )
     system_name=Darwin; if test "$sdk" != macosx; then system_name=iOS; fi
     "$cmake" -S "$libssh2_src" -B "$libssh2_build" -G "Unix Makefiles" -Wno-dev \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
+      -DCMAKE_C_COMPILER="$clang" \
+      -DCMAKE_C_FLAGS=-DOPENSSL_NO_FILENAMES \
       -DCMAKE_SYSTEM_NAME="$system_name" -DCMAKE_OSX_SYSROOT="$sdk_path" \
       -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET="$deployment" \
-      -DCMAKE_INSTALL_PREFIX="$libssh2_install" -DOPENSSL_ROOT_DIR="$openssl_prefix" \
-      -DOPENSSL_INCLUDE_DIR="$openssl_prefix/include" -DOPENSSL_CRYPTO_LIBRARY="$openssl_prefix/lib/libcrypto.a" \
-      -DOPENSSL_SSL_LIBRARY="$openssl_prefix/lib/libssl.a" -DCRYPTO_BACKEND=OpenSSL \
+      -DCMAKE_INSTALL_PREFIX="$libssh2_install" -DOPENSSL_ROOT_DIR="$openssl_prefix/orlix" \
+      -DOPENSSL_INCLUDE_DIR="$openssl_prefix/orlix/include" -DOPENSSL_CRYPTO_LIBRARY="$openssl_prefix/orlix/lib/libcrypto.a" \
+      -DOPENSSL_SSL_LIBRARY="$openssl_prefix/orlix/lib/libssl.a" -DCRYPTO_BACKEND=OpenSSL \
       -DBUILD_SHARED_LIBS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF
     /usr/bin/make -C "$libssh2_build" -j8; /usr/bin/make -C "$libssh2_build" install
     /bin/mkdir -p "$(/usr/bin/dirname "$output")"
     /usr/bin/libtool -static -o "$output" "$libssh2_install/lib/libssh2.a" \
-      "$openssl_prefix/lib/libssl.a" "$openssl_prefix/lib/libcrypto.a"
+      "$openssl_prefix/orlix/lib/libssl.a" "$openssl_prefix/orlix/lib/libcrypto.a"
     /usr/bin/lipo "$output" -verify_arch arm64
+    bad="$(/usr/bin/strings -a "$output" | /usr/bin/grep -F -e 'orlix-ssh.' -e '/var/folders/' | /usr/bin/head -n 1 || true)"
+    if test -n "$bad"; then
+      echo "ssh archive contains a temporary path: $bad" >&2
+      exit 1
+    fi
+    date_line="$(/usr/bin/strings "$output" | /usr/bin/grep 'built on:' | /usr/bin/head -n 1 || true)"
+    if test "$date_line" != 'built on: Thu Jan  1 00:00:01 1970 UTC'; then
+      echo "openssl build date is not fixed: $date_line" >&2
+      exit 1
+    fi
 }
 build_one ios-device iphoneos ios64-xcrun -miphoneos-version-min=15.0 15.0 "$device_out"
 build_one ios-simulator iphonesimulator iossimulator-xcrun -mios-simulator-version-min=15.0 15.0 "$simulator_out"

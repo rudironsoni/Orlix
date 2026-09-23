@@ -18,12 +18,12 @@ def _pinned_env(ctx):
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
     ccache_dir = shell.get("CCACHE_DIR")
     if ccache_dir:
         env["CCACHE_DIR"] = ccache_dir
+    ccache_disable = shell.get("CCACHE_DISABLE")
+    if ccache_disable:
+        env["CCACHE_DISABLE"] = ccache_disable
     return env
 
 _COMPILER_RT_SOURCES = [
@@ -104,7 +104,7 @@ test -s "$runtime_out"
         inputs = depset(selected + headers + [ctx.file.runtime_toolchain_identity, ctx.file.compiler_identity]),
         outputs = [runtime],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1"},
     )
     return declare_artifact_identity(
@@ -312,7 +312,7 @@ test "${#sysroot_digest}" -eq 64
         ),
         outputs = [sysroot, headers, libraries, manifest, abi, loader, digest],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     ctx.actions.run_shell(

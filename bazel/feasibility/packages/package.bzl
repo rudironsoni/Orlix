@@ -14,9 +14,6 @@ def _pinned_env(ctx):
         "HOME": "/var/empty",
         "PATH": "/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
     return env
 
 def _guest_package_impl(ctx):

@@ -238,6 +238,7 @@ ios_extension(
         "//bazel/feasibility/native:ios_device": ":OrlixLiveActivityDevelopmentProfile",
         "//conditions:default": None,
     }),
+    linkopts = ["-objc_stubs_small"],
     resources = glob(["OrlixLiveActivity/Assets.xcassets/**"]) + glob(["OrlixLiveActivity/Resources/**"]),
     tags = ["manual"],
     deps = [":OrlixLiveActivityLibrary"],
@@ -307,6 +308,7 @@ ios_application(
         "//conditions:default": [],
     }),
     linkopts = [
+        "-objc_stubs_small",
         "-weak_framework",
         "AppIntents",
     ],
@@ -366,7 +368,11 @@ ios_application(
         "OrlixStoreKit.storekit",
         "//docs/sources/release:orlix-app-release-inputs.json",
     ] + glob(["Orlix/Assets.xcassets/**"]),
-    linkopts = ["-weak_framework", "AppIntents"],
+    linkopts = [
+        "-objc_stubs_small",
+        "-weak_framework",
+        "AppIntents",
+    ],
     tags = ["manual"],
     deps = [
         ":OrlixTestAppLibrary",

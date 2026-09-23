@@ -23,9 +23,12 @@ def _pinned_env(ctx):
         "PROFILE": ctx.attr.profile,
         "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
+    ccache_dir = shell.get("CCACHE_DIR")
+    if ccache_dir:
+        env["CCACHE_DIR"] = ccache_dir
+    ccache_disable = shell.get("CCACHE_DISABLE")
+    if ccache_disable:
+        env["CCACHE_DISABLE"] = ccache_disable
     return env
 
 def _tcti_isa_prepare_impl(ctx):
@@ -300,7 +303,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(

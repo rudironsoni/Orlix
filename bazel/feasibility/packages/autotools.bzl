@@ -23,9 +23,12 @@ def _pinned_env(ctx):
         "CCACHE_MAXSIZE": "20G",
         "PATH": "/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
+    ccache_dir = shell.get("CCACHE_DIR")
+    if ccache_dir:
+        env["CCACHE_DIR"] = ccache_dir
+    ccache_disable = shell.get("CCACHE_DISABLE")
+    if ccache_disable:
+        env["CCACHE_DISABLE"] = ccache_disable
     return env
 
 def declare_orlix_package_interface(ctx, package_trees, paths_by_package):
@@ -466,7 +469,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
