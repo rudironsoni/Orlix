@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Hash selected consumers by semantic identity
+
+`OrlixKernelComposition`, rootfs payload, mlibc, and guest packages take the origin files behind `selected_*`. Their identity is `artifact_identity_v2`: logical path, bytes, type, mode, and symlink target. The stable `selected_*` path is not that identity.
+
 ## [2026-09-23] build | Keep output paths out of composition identity
 
 `composition.json` hashes HostAdapter and boot by execroot-relative path and file bytes. An absolute output-base path is not an input. That file sits in the app bundle, so a path in the digest changes the resource seal.

@@ -1,6 +1,6 @@
 """Pinned GNU Bash Autotools package from OrlixMLibC sysroot and UAPI."""
 
-load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity", "semantic_files")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -169,6 +169,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
             ] + ctx.files.sources,
+            transitive = [depset(semantic_files(uapi) + semantic_files(sysroot))],
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),

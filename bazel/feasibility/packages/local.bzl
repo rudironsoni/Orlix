@@ -1,6 +1,6 @@
 """Orlix-local C programs against OrlixMLibC sysroot and UAPI."""
 
-load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity", "semantic_files")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -150,6 +150,7 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 sysroot.compiler_runtime,
                 source_stamp,
             ] + source_files,
+            transitive = [depset(semantic_files(uapi) + semantic_files(sysroot))],
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),

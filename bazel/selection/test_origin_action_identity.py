@@ -132,17 +132,13 @@ class OriginActionIdentityTests(unittest.TestCase):
         promoted_text = self._aquery("promoted", expression)
         source = _one(_actions(source_text), "OrlixKernelComposition")
         promoted = _one(_actions(promoted_text), "OrlixKernelComposition")
-        self.assertEqual(source["ActionKey"], promoted["ActionKey"])
+        self.assertNotEqual(source["ActionKey"], promoted["ActionKey"])
         for mode, text in ((source, source_text), (promoted, promoted_text)):
             inputs = " ".join(mode.get("Inputs", []))
-            command = " ".join(mode.get("Command Line", []))
-            visible = inputs + " " + command
-            self.assertIn("selected_macho/OrlixKernel.a", visible)
-            self.assertNotIn("promoted_kernel_", visible)
-            self.assertNotIn("/kernel/macho/", visible)
-            self.assertNotIn('"$exec_root/$rel"; done', text)
-            self.assertIn('"$hash" "$rel"', text)
-            self.assertIn('"$rel"; done', text)
+            self.assertNotIn("selected_macho/OrlixKernel.a", inputs)
+            self.assertIn("artifact_identity_v2", text)
+            self.assertIn("OrlixKernel.a", text)
+            self.assertNotIn("selected_macho", text)
 
     def test_selected_macho_keeps_origin_on_the_producer_side(self) -> None:
         self._require_promoted_kernel()

@@ -1,6 +1,6 @@
 """Meson/Ninja OrlixMLibC sysroot from installed Linux UAPI only."""
 
-load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:artifact_identity.bzl", "declare_artifact_identity", "semantic_files")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
@@ -300,7 +300,7 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.bragi,
                 ctx.file._artifact_identity_serializer,
                 runtime,
-            ] + ctx.files.patches,
+            ] + ctx.files.patches + semantic_files(uapi),
             transitive = [
                 ctx.attr.mlibc_source[DefaultInfo].files,
                 ctx.attr.frigg_source[DefaultInfo].files,

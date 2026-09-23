@@ -63,6 +63,7 @@ def _selected_uapi_impl(ctx):
             artifact_identity_manifest = None,
             headers = headers,
             linux_revision = origin.linux_revision,
+            semantic_inputs = [origin.headers],
             uapi_digest = digest,
         ),
     ]
@@ -104,6 +105,7 @@ def _selected_sysroot_impl(ctx):
             dynamic_loader = loader,
             headers = headers,
             libraries = libraries,
+            semantic_inputs = [origin.headers, origin.libraries, origin.compiler_runtime, origin.dynamic_loader],
             sysroot_digest = sysroot_digest,
             target_triple = origin.target_triple,
         ),
@@ -141,6 +143,7 @@ def _selected_rootfs_impl(ctx):
             initramfs = initramfs,
             package_closure = depset(),
             payload_metadata = payload_metadata,
+            semantic_inputs = [origin.initramfs, origin.base_ext4, origin.state_ext4],
             source_input_digest = source_input_digest,
             state_ext4 = state_ext4,
         ),
@@ -158,7 +161,8 @@ def _selected_linux_archive_impl(ctx):
     archive = _stage_file(ctx, "OrlixKernel.a", origin.archive)
     digest = _stage_file(ctx, "archive.sha256", origin.source_input_digest)
     boot = []
-    for resource in origin.boot_resources.to_list():
+    origin_boot = sorted(origin.boot_resources.to_list(), key = lambda item: item.basename)
+    for resource in origin_boot:
         boot.append(_stage_file(ctx, "arch/orlix/boot/dts/" + resource.basename, resource))
     return [
         DefaultInfo(files = depset([archive, digest] + boot)),
@@ -175,6 +179,7 @@ def _selected_linux_archive_impl(ctx):
             destination = origin.destination,
             product = None,
             profile = origin.profile,
+            semantic_inputs = [origin.archive] + origin_boot,
             source_input_digest = digest,
             symbol_manifest = None,
         ),

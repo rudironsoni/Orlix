@@ -1,5 +1,11 @@
 """Declare a separate canonical artifact identity action."""
 
+def semantic_files(info):
+    value = info.semantic_inputs
+    if value == None:
+        return []
+    return value
+
 def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None):
     if not name:
         fail("artifact identity output name is required")

@@ -2,6 +2,7 @@
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
+load("//bazel:artifact_identity.bzl", "semantic_files")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 
 def _pinned_env(ctx):
@@ -210,24 +211,38 @@ digest="$( (
 def _rootfs_payload_impl(ctx):
     info = ctx.attr.rootfs[OrlixRootfsInfo]
     root = ctx.actions.declare_directory(ctx.label.name + "/rootfs")
+    images = semantic_files(info) or [info.initramfs, info.base_ext4, info.state_ext4]
+    names = ["initramfs.cpio.gz", "base.ext4", "state.ext4"]
+    identity_args = []
+    for name, item in zip(names, images):
+        identity_args.extend([name, item.path])
     ctx.actions.run_shell(
         mnemonic = "OrlixRootfsPayload",
         progress_message = "Staging OrlixOS rootfs payload images",
         command = r"""
 set -euo pipefail
-dest="$1"
+exec_root="$PWD"
+dest="$exec_root/$1"
+serializer="$exec_root/$2"
+shift 2
 /bin/mkdir -p "$dest"
-/bin/cp "$2" "$dest/initramfs.cpio.gz"
-/bin/cp "$3" "$dest/base.ext4"
-/bin/cp "$4" "$dest/state.ext4"
+PYTHONPATH="$(/usr/bin/dirname "$serializer")" /usr/bin/python3 -B -c '
+import sys
+from pathlib import Path
+from content_digest import artifact_identity_v2
+values = sys.argv[1:]
+pairs = list(zip(values[0::2], (Path(path) for path in values[1::2])))
+digest = artifact_identity_v2(artifacts=pairs)
+if len(digest) != 64:
+    raise SystemExit("rootfs semantic identity is not sha256")
+print(digest)
+' "$1" "$exec_root/$2" "$3" "$exec_root/$4" "$5" "$exec_root/$6" > "$dest/semantic.sha256"
+/bin/cp "$exec_root/$2" "$dest/initramfs.cpio.gz"
+/bin/cp "$exec_root/$4" "$dest/base.ext4"
+/bin/cp "$exec_root/$6" "$dest/state.ext4"
 """,
-        arguments = [
-            root.path,
-            info.initramfs.path,
-            info.base_ext4.path,
-            info.state_ext4.path,
-        ],
-        inputs = [info.initramfs, info.base_ext4, info.state_ext4],
+        arguments = [root.path, ctx.file._artifact_identity_serializer.path] + identity_args,
+        inputs = [ctx.file._artifact_identity_serializer] + images,
         outputs = [root],
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
@@ -238,6 +253,10 @@ dest="$1"
 orlix_rootfs_payload = rule(
     implementation = _rootfs_payload_impl,
     attrs = {
+        "_artifact_identity_serializer": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel:content_digest.py"),
+        ),
         "rootfs": attr.label(mandatory = True, providers = [OrlixRootfsInfo]),
     },
 )
