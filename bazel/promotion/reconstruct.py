@@ -271,6 +271,11 @@ def main(argv: list[str] | None = None) -> int:
         component_names=names,
         local_only=args.local_only,
     )
+    acquisition = payload["acquisition"]
+    print(
+        "promoted-acquisition network_downloads=%s local_store_hits=%s"
+        % (acquisition["network_downloads"], acquisition["local_store_hits"])
+    )
     print(payload["buildset"])
     return 0
 

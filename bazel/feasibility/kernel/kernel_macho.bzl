@@ -237,9 +237,11 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     >"$work/kbuild-make.log" 2>"$kbuild_err"
 kbuild_status="$?"
 set -e
-cat "$work/kbuild-make.log"
-cat "$kbuild_err" >&2
-[ "$kbuild_status" -eq 0 ]
+if [ "$kbuild_status" -ne 0 ]; then
+  cat "$work/kbuild-make.log"
+  cat "$kbuild_err" >&2
+  exit "$kbuild_status"
+fi
 compiled="$(/usr/bin/grep -c 'ORLIXCC ' "$kbuild_err" || true)"
 echo "Orlix Kbuild compiled-objects: ${compiled:-0}"
 if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then "$ORLIX_COMPILER_LAUNCHER" --print-log-stats --format=json; fi
