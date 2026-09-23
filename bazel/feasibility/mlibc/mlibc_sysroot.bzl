@@ -313,7 +313,7 @@ test "${#sysroot_digest}" -eq 64
         outputs = [sysroot, headers, libraries, manifest, abi, loader, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     ctx.actions.run_shell(
         mnemonic = "OrlixPromotedMlibcProduct",

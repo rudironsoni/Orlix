@@ -304,7 +304,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,

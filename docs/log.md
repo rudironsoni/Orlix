@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Cache kernel and mlibc across worktrees
+
+`OrlixKernelMachOArchive` and `OrlixMLibCSysroot` no longer set `no-remote-cache`. That tag also disables the Bazel disk cache. The worktree output path stays out of the action command. Kbuild and Ninja state stay under the worktree output base.
+
 ## [2026-09-23] build | Hash local C package sources before compile
 
 `getconf`, `getent`, and `init` compile from tar files and a source stamp. A directory-tree input on that action hid a C source byte change from the Bazel 9.2.0 action cache.
