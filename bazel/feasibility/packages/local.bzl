@@ -72,10 +72,8 @@ output_rel="${10}"
 package_name="${11}"
 package_version="${12}"
 root_init_source="${13}"
-uapi_digest_file="${14}"
-sysroot_digest_file="${15}"
-digest_tool="${16}"
-shift 16
+digest_tool="${14}"
+shift 14
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-local.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 headers="$work/headers"
@@ -127,10 +125,6 @@ fi
 /bin/cp -R "$work/dest/." "$install_out/"
 /usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-2.0-or-later' > "$license_manifest"
-recorded_uapi="$(IFS= read -r line < "$exec_root/$uapi_digest_file"; printf '%s' "$line")"
-recorded_sysroot="$(IFS= read -r line < "$exec_root/$sysroot_digest_file"; printf '%s' "$line")"
-test "${#recorded_uapi}" -eq 64
-test "${#recorded_sysroot}" -eq 64
 digest_of() {
   PYTHONPATH="$(/usr/bin/dirname "$exec_root/$digest_tool")" /usr/bin/python3 -B "$exec_root/$digest_tool" "$@"
 }
@@ -160,8 +154,6 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
             ctx.attr.package_name,
             ctx.attr.package_version,
             ctx.file.root_init.path if ctx.file.root_init else "",
-            uapi.uapi_digest.path,
-            sysroot.sysroot_digest.path,
             ctx.file._artifact_identity_serializer.path,
         ] + [f.path for f in ctx.files.srcs],
         inputs = depset(
@@ -171,8 +163,6 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
                 library_archive,
                 sysroot.compiler_runtime,
                 source_stamp,
-                uapi.uapi_digest,
-                sysroot.sysroot_digest,
                 ctx.file._artifact_identity_serializer,
             ] + source_files,
         ),

@@ -203,8 +203,9 @@ class OriginActionIdentityTests(unittest.TestCase):
             (source_inputs, source_package),
             (promoted_inputs, promoted_package),
         ):
-            self.assertIn("selected_uapi/uapi.sha256", inputs)
-            self.assertIn("selected_sysroot/sysroot.sha256", inputs)
+            self.assertNotIn("uapi.sha256", inputs)
+            self.assertNotIn("sysroot.sha256", inputs)
+            self.assertIn("selected_", inputs)
             self.assertNotIn("promoted_uapi", inputs)
             self.assertNotIn("promoted_sysroot", inputs)
             command = " ".join(action.get("Command Line", []) + action.get("Arguments", []))
