@@ -43,9 +43,8 @@ host_count="$4"
 boot_count="$5"
 lock_rel="$6"
 shift 6
-PYTHONPATH="$(/usr/bin/dirname "$serializer")"
 identity() {
-  /usr/bin/python3 -B -c '
+  PYTHONPATH="$(/usr/bin/dirname "$serializer")" /usr/bin/python3 -B -c '
 import sys
 from pathlib import Path
 from content_digest import artifact_identity_v2
