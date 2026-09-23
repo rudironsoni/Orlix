@@ -119,8 +119,9 @@ def _no_wrapper_makefile_test_impl(ctx):
         if action.mnemonic == "OrlixLinuxHeadersInstall":
             found = True
             argv = " ".join(action.argv)
-            asserts.false(env, "OrlixKernel/" in argv)
+            asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.true(env, "headers_install" in argv)
+            asserts.true(env, "0005-uapi-errno-orlix-comment.patch" in argv)
             asserts.true(env, "orlix_linux_source" in argv)
     asserts.true(env, found)
     return analysistest.end(env)

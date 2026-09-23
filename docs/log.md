@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Apply Linux patches before UAPI install
+
+`headers_install` applies `//OrlixKernel/Sources:linux_patches` on the copied Linux tree. A patch that changes an installed header changes the UAPI tree that mlibc and guest packages consume. A host adapter edit does not.
+
 ## [2026-09-23] build | Cache kernel and mlibc across worktrees
 
 `OrlixKernelMachOArchive` and `OrlixMLibCSysroot` no longer set `no-remote-cache`. That tag also disables the Bazel disk cache. The worktree output path stays out of the action command. Kbuild and Ninja state stay under the worktree output base.

@@ -16,6 +16,10 @@ def _pinned_env(ctx):
     return env
 
 def _kernel_uapi_impl(ctx):
+    patches = sorted(
+        [item for item in ctx.files.patches if item.path.endswith(".patch") or item.path.endswith(".diff")],
+        key = lambda item: item.path,
+    )
     headers = ctx.actions.declare_directory(ctx.label.name + "/uapi")
     archive = ctx.actions.declare_file(ctx.label.name + "/kbuild-archive.tar")
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
@@ -34,6 +38,7 @@ manifest_out="$exec_root/$4"
 digest_out="$exec_root/$5"
 archive_py="$exec_root/$6"
 digest_py="$exec_root/$7"
+patch_count="$8"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -59,6 +64,13 @@ trap '/bin/rm -rf "$work"' EXIT
 /bin/mkdir -p "$work/linux" "$work/hdr"
 /bin/cp -R "$linux_src/." "$work/linux"
 /usr/bin/find "$work/linux" -type d -exec /bin/chmod u+w {} +
+shift 8
+i=0
+while [ "$i" -lt "$patch_count" ]; do
+  /usr/bin/patch --batch -p1 -d "$work/linux" < "$exec_root/$1"
+  shift
+  i=$((i + 1))
+done
 /bin/mkdir -p "$work/linux/.orlix-uapi-build"
 cd "$work/linux"
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
@@ -95,9 +107,10 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
             digest.path,
             ctx.file.archive_tool.path,
             ctx.file.digest_tool.path,
-        ],
+            str(len(patches)),
+        ] + [item.path for item in patches],
         inputs = depset(
-            direct = [ctx.file.linux_makefile, ctx.file.archive_tool, ctx.file.digest_tool],
+            direct = [ctx.file.linux_makefile, ctx.file.archive_tool, ctx.file.digest_tool] + patches,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [headers, archive, manifest, digest],
@@ -177,6 +190,7 @@ orlix_kernel_uapi = rule(
     attrs = {
         "linux_source": attr.label(mandatory = True),
         "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
+        "patches": attr.label(allow_files = True, mandatory = True),
         "archive_tool": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/kernel:kbuild_persist.py")),
         "digest_tool": attr.label(allow_single_file = True, default = Label("//bazel:content_digest.py")),
     },

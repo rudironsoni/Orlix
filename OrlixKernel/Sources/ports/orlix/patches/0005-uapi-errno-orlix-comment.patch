@@ -1,0 +1,5 @@
+--- a/include/uapi/linux/errno.h
++++ b/include/uapi/linux/errno.h
+@@ -1 +1,2 @@
+ #include <asm/errno.h>
++/* orlix installed uapi */

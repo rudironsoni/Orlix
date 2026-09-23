@@ -15,6 +15,7 @@ orlix_kernel_uapi(
     name = "uapi",
     linux_makefile = "@orlix_linux_source//:Makefile",
     linux_source = "@orlix_linux_source//:source",
+    patches = "//OrlixKernel/Sources:linux_patches",
     tags = ["manual"],
     visibility = [
         "//bazel/feasibility:__subpackages__",

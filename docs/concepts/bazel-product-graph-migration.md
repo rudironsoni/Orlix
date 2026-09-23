@@ -36,7 +36,7 @@ The migration preserves these product rules:
 2. Durable Linux port inputs remain in the existing overlay, driver, configuration, and patch roots.
 3. Generated Linux, mlibc, package, Xcode, and Bazel trees are read-only results.
 4. OrlixHostAdapter owns private Apple and Darwin mechanics only.
-5. OrlixMLibC consumes Linux UAPI only from upstream `headers_install` for `ARCH=arm64`.
+5. OrlixMLibC consumes Linux UAPI only from upstream `headers_install` for `ARCH=arm64`, after the Orlix Linux patch set is applied to that tree.
 6. Guest packages consume the OrlixMLibC sysroot and installed Linux UAPI contract.
 7. OrlixOS is the running hosted Linux operating system. The internal OrlixDistribution concept owns guest distribution policy, rootfs assembly, payload metadata, environments, and the resources packaged by OrlixKit.
 8. Orlix remains the terminal host and user interface. Its local runtime entry point is OrlixKit.
