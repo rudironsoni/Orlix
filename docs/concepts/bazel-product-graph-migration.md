@@ -282,6 +282,8 @@ Source-mode analysis does not require a reconstructed OCI tree. The promoted sys
 
 `OrlixKernelMachOArchive` and `OrlixMLibCSysroot` may hit the Bazel disk cache. Their commands do not contain the worktree output path. Mutable Kbuild and Ninja state stays under that worktree's output base and is not an action input. A cache hit restores the product and does not run the foreign engine.
 
+`OrlixKernelComposition` hashes HostAdapter and boot by execroot-relative path plus file bytes. The absolute output-base path is not part of `composition.json`. That file is inside the app bundle, so a path in the digest changes the resource seal and the app signature.
+
 Cache ownership is one job per layer. The Bazel action cache and the local disk cache are the first Bazel hit. BuildBuddy (`grpcs://remote.buildbuddy.io`, instance `orlix/apple/bazel-9.2.0/xcode-<build>/v1`) is the shared remote action cache: `main` may write, a pull request and a local build with `BUILDBUDDY_API_KEY` may read. The repository cache stores declared downloads. The promoted artifact store is the first hit for a locked component. A miss is pulled from GHCR with `oras` after signature verification, then stored by digest. Compiler and foreign-engine directories store mutable incremental state inside one worktree and one configuration. A missing or corrupt disposable cache must execute or fail clearly. It must not become the product.
 
 A warm promoted build downloads nothing that is already in the local store. An unused locked component is not fetched from GHCR. Promotion and release consume the proved source artifact. They do not rebuild a substitute.

@@ -48,8 +48,8 @@ while [ "$i" -lt "$boot_count" ]; do
   shift
   i=$((i + 1))
 done
-host_digest="$(for rel in "${host_paths[@]}"; do printf '%s\0' "$exec_root/$rel"; done | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
-boot_digest="$(for rel in "${boot_paths[@]}"; do printf '%s\0' "$exec_root/$rel"; done | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+host_digest="$(for rel in "${host_paths[@]}"; do printf '%s\0' "$rel"; done | /usr/bin/sort -z | while IFS= read -r -d '' rel; do hash="$(/usr/bin/shasum -a 256 "$exec_root/$rel" | /usr/bin/awk '{print $1}')"; printf '%s  %s\n' "$hash" "$rel"; done | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+boot_digest="$(for rel in "${boot_paths[@]}"; do printf '%s\0' "$rel"; done | /usr/bin/sort -z | while IFS= read -r -d '' rel; do hash="$(/usr/bin/shasum -a 256 "$exec_root/$rel" | /usr/bin/awk '{print $1}')"; printf '%s  %s\n' "$hash" "$rel"; done | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
 test "${#host_digest}" -eq 64
 test "${#boot_digest}" -eq 64
 buildset_json="null"

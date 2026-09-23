@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Keep output paths out of composition identity
+
+`composition.json` hashes HostAdapter and boot by execroot-relative path and file bytes. An absolute output-base path is not an input. That file sits in the app bundle, so a path in the digest changes the resource seal.
+
 ## [2026-09-23] build | Track the Coreutils echo patch
 
 The fetched Coreutils tree is refetched when a file inside it changes, so that edit never reaches the package action. `coreutils-echo.patch` is an input of the Coreutils source repository. Editing it changes `src/echo.c` and reruns that package.
