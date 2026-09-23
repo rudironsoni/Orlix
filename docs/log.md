@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Track the Coreutils echo patch
+
+The fetched Coreutils tree is refetched when a file inside it changes, so that edit never reaches the package action. `coreutils-echo.patch` is an input of the Coreutils source repository. Editing it changes `src/echo.c` and reruns that package.
+
 ## [2026-09-23] build | Apply Linux patches before UAPI install
 
 `headers_install` applies `//OrlixKernel/Sources:linux_patches` on the copied Linux tree. A patch that changes an installed header changes the UAPI tree that mlibc and guest packages consume. A host adapter edit does not.

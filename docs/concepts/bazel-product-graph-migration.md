@@ -274,7 +274,7 @@ The app Swift sources are three modules. `OrlixAppLibraryImplementation` owns Co
 
 A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
 
-A guest-package Make target does not invoke the UAPI or mlibc recipe. Bazel builds installed UAPI only when that action's inputs changed. An edit under the Coreutils source does not run `headers_install`.
+A guest-package Make target does not invoke the UAPI or mlibc recipe. Bazel builds installed UAPI only when that action's inputs changed. The Coreutils tarball is pristine. `bazel/extensions/coreutils-echo.patch` is applied when that repository is fetched, so an edit of that patch changes `src/echo.c` and rebuilds the Coreutils package. It does not run `headers_install`. An edit of the fetched tarball is fetched again and is not a package input.
 
 Local C packages (`getconf`, `getent`, `init`) compile from file inputs: a tar of the header tree, a tar of the UAPI tree, a tar of the library tree, the compiler runtime, the C sources, and a SHA-256 stamp of those sources. A directory-tree input on that same action hid a source-byte change from the Bazel 9.2.0 action cache. The compile still runs outside the sandbox so it can see the pinned clang and `llvm-strip`.
 
