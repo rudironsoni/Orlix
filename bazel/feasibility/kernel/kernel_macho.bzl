@@ -218,8 +218,9 @@ export ORLIX_KERNEL_HOST_SDKROOT="$sdkroot"
 export ORLIX_KERNEL_ARCHIVE_PLATFORMS
 export DEVELOPER_DIR
 cd "$exec_root"
-compile_stamp="$work/.kbuild-run-stamp"
-/usr/bin/printf '' > "$compile_stamp"
+kbuild_err="$work/kbuild-compiler.log"
+: > "$kbuild_err"
+set +e
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
     SDKROOT="$sdkroot" \
@@ -232,8 +233,14 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     ORLIX_KERNEL_HOSTCC="$hostcc" \
     ORLIX_KERNEL_HOST_SDKROOT="$sdkroot" \
     ORLIX_KERNEL_ARCHIVE_PLATFORMS="$ORLIX_KERNEL_ARCHIVE_PLATFORMS" \
-    "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive
-compiled="$(/usr/bin/find "$work/OrlixKernel/build" -name '*.o' -newer "$compile_stamp" -print 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+    "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive \
+    >"$work/kbuild-make.log" 2>"$kbuild_err"
+kbuild_status="$?"
+set -e
+cat "$work/kbuild-make.log"
+cat "$kbuild_err" >&2
+[ "$kbuild_status" -eq 0 ]
+compiled="$(/usr/bin/grep -c 'ORLIXCC ' "$kbuild_err" || true)"
 echo "Orlix Kbuild compiled-objects: ${compiled:-0}"
 if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then "$ORLIX_COMPILER_LAUNCHER" --print-log-stats --format=json; fi
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
