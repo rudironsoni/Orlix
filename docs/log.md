@@ -7,9 +7,13 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
-## [2026-09-23] build | Bound app Mach-O byte drift
+## [2026-09-23] build | Hash local C package sources before compile
 
-Two cache-disabled source builds match the guest product digests. `OrlixOS` differs only in its code signature. `Orlix` also differs in its UUID, signature, OpenSSL build timestamp, `orlix-ssh` temporary path, and LDR immediates.
+`getconf`, `getent`, and `init` compile from tar files and a source stamp. A directory-tree input on that action hid a C source byte change from the Bazel 9.2.0 action cache.
+
+## [2026-09-23] build | Make the app Mach-O stable across clean builds
+
+Two cache-disabled source builds match raw `Orlix` and `OrlixOS` bytes, plus the guest product digests. OpenSSL uses a fixed epoch date. libssh2 uses `-DOPENSSL_NO_FILENAMES`. The app link uses `-objc_stubs_small`. Foreign compile actions take a pinned environment. They do not take the client `TMPDIR` or the rest of the client shell environment. Make passes `CCACHE_DIR` as an explicit action environment value.
 
 ## [2026-09-23] build | Keep the UAPI digest off the mlibc compile
 

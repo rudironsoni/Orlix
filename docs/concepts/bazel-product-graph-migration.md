@@ -119,12 +119,14 @@ the rootfs `init` image. That difference stays in the content identity.
 
 Two cache-disabled source builds of `//Orlix:Orlix` keep the same UAPI
 digest, kernel archive digest, mlibc sysroot digest, rootfs source-input
-digest, initramfs, `base.ext4`, and `state.ext4`. The `OrlixOS` Mach-O keeps
-its UUID and differs only inside `LC_CODE_SIGNATURE`. The `Orlix` Mach-O also
-differs in `LC_UUID`, `LC_CODE_SIGNATURE`, the OpenSSL `built on:` cstring,
-the `orlix-ssh.<6>` temporary directory in libssh2 and OpenSSL cstrings, and
-LDR immediates in `__text`, `__stubs`, and `__objc_stubs`. Those fields are
-not the guest product identity.
+digest, initramfs, `base.ext4`, and `state.ext4`. OpenSSL's `built on:` line
+is `Thu Jan  1 00:00:01 1970 UTC` because `SOURCE_DATE_EPOCH=1` is a Make
+argument. libssh2 compiles with `-DOPENSSL_NO_FILENAMES`, so the temporary
+`orlix-ssh` directory is not a cstring. The app link passes
+`-objc_stubs_small` because ld otherwise picks a different duplicate
+`objc_msgSend` GOT slot on each link. On Xcode 27.0 build 27A266a those two
+builds matched `Orlix` and `OrlixOS` raw bytes, including UUID and signature.
+`LC_UUID` and `LC_CODE_SIGNATURE` are still not guest product identity.
 
 Product selection MUST exclude proof and provenance through declared artifact
 boundaries. The serializer does not ignore files by name. A real product file
@@ -273,6 +275,8 @@ The app Swift sources are three modules. `OrlixAppLibraryImplementation` owns Co
 A source origin and a promoted origin are two ways to obtain one semantic component. `selected_uapi`, `selected_sysroot`, `selected_rootfs`, and `selected_macho` are the consumer boundary. Origin labels, proof files, and absolute worktree paths stop there. A byte difference is a real difference and must change the downstream action key. Promoted Kernel selection matches one of the four platform and profile slices. A promoted request with no matching slice fails analysis. It does not build the source Kernel.
 
 A guest-package Make target does not invoke the UAPI or mlibc recipe. Bazel builds installed UAPI only when that action's inputs changed. An edit under the Coreutils source does not run `headers_install`.
+
+Local C packages (`getconf`, `getent`, `init`) compile from file inputs: a tar of the header tree, a tar of the UAPI tree, a tar of the library tree, the compiler runtime, the C sources, and a SHA-256 stamp of those sources. A directory-tree input on that same action hid a source-byte change from the Bazel 9.2.0 action cache. The compile still runs outside the sandbox so it can see the pinned clang and `llvm-strip`.
 
 Source-mode analysis does not require a reconstructed OCI tree. The promoted sysroot and rootfs boundary tests run only when `make __bazel-matrix-check` finds both `bazel/promotion/imported/mlibc/product/abi.txt` and `bazel/promotion/imported/rootfs/product/file-manifest.txt`. Without those files the tests are incompatible and Bazel skips them. A promoted build that selects a missing tree still fails with the reconstruct message.
 

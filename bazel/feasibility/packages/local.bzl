@@ -15,28 +15,52 @@ def _pinned_env(ctx):
         "HOME": "/var/empty",
         "PATH": "/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
     return env
+
+def _archive_tree(ctx, name, tree):
+    archive = ctx.actions.declare_file(ctx.label.name + "/" + name + ".tar")
+    ctx.actions.run_shell(
+        mnemonic = "OrlixGuestPackageTreeArchive",
+        progress_message = "Archiving %s for %s" % (name, ctx.label.name),
+        command = "out=\"$1\"; tree=\"$2\"; /usr/bin/tar -cf \"$out\" -C \"$tree\" .",
+        arguments = [archive.path, tree.path],
+        inputs = [tree],
+        outputs = [archive],
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+    )
+    return archive
 
 def _local_c_package_impl(ctx):
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
+    header_archive = _archive_tree(ctx, "headers", sysroot.headers)
+    uapi_archive = _archive_tree(ctx, "uapi", uapi.headers)
+    library_archive = _archive_tree(ctx, "libraries", sysroot.libraries)
     install_tree = ctx.actions.declare_directory(ctx.label.name + "/install")
     file_manifest = ctx.actions.declare_file(ctx.label.name + "/file-manifest.txt")
     license_manifest = ctx.actions.declare_file(ctx.label.name + "/license-manifest.txt")
     metadata = ctx.actions.declare_file(ctx.label.name + "/package-metadata.txt")
     digest = ctx.actions.declare_file(ctx.label.name + "/source-input.sha256")
+    source_stamp = ctx.actions.declare_file(ctx.label.name + "/source-stamp.txt")
+    source_files = ctx.files.srcs + ([ctx.file.root_init] if ctx.file.root_init else [])
+    ctx.actions.run_shell(
+        mnemonic = "OrlixGuestPackageSourceStamp",
+        progress_message = "Hashing local C sources for %s" % ctx.attr.package_name,
+        command = 'out="$1"; shift; /usr/bin/shasum -a 256 "$@" | /usr/bin/sort > "$out"',
+        arguments = [source_stamp.path] + [f.path for f in source_files],
+        inputs = source_files,
+        outputs = [source_stamp],
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+    )
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
         progress_message = "Building local C package %s" % ctx.attr.package_name,
         command = r"""
 set -euo pipefail
 exec_root="$PWD"
-headers="$exec_root/$1"
-uapi_headers="$exec_root/$2"
-libraries="$exec_root/$3"
+header_archive="$exec_root/$1"
+uapi_archive="$exec_root/$2"
+library_archive="$exec_root/$3"
 runtime="$exec_root/$4"
 install_out="$exec_root/$5"
 file_manifest="$exec_root/$6"
@@ -48,6 +72,15 @@ package_name="${11}"
 package_version="${12}"
 root_init_source="${13}"
 shift 13
+work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-local.XXXXXX")"
+trap '/bin/rm -rf "$work"' EXIT
+headers="$work/headers"
+uapi_headers="$work/uapi"
+libraries="$work/libraries"
+/bin/mkdir -p "$headers" "$uapi_headers" "$libraries"
+/usr/bin/tar -xf "$header_archive" -C "$headers"
+/usr/bin/tar -xf "$uapi_archive" -C "$uapi_headers"
+/usr/bin/tar -xf "$library_archive" -C "$libraries"
 c_srcs=""
 inc=""
 for rel in "$@"; do
@@ -72,8 +105,6 @@ libssp_ns=""
 [ -s "$libraries/libpthread.a" ] && libpthread="$libraries/libpthread.a"
 [ -s "$libraries/libssp.a" ] && libssp="$libraries/libssp.a"
 [ -s "$libraries/libssp_nonshared.a" ] && libssp_ns="$libraries/libssp_nonshared.a"
-work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-local.XXXXXX")"
-trap '/bin/rm -rf "$work"' EXIT
 build_program() {
 out="$1"
 shift
@@ -97,9 +128,9 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 """,
         arguments = [
-            sysroot.headers.path,
-            uapi.headers.path,
-            sysroot.libraries.path,
+            header_archive.path,
+            uapi_archive.path,
+            library_archive.path,
             sysroot.compiler_runtime.path,
             install_tree.path,
             file_manifest.path,
@@ -113,11 +144,12 @@ digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sor
         ] + [f.path for f in ctx.files.srcs],
         inputs = depset(
             direct = [
-                sysroot.headers,
-                uapi.headers,
-                sysroot.libraries,
+                header_archive,
+                uapi_archive,
+                library_archive,
                 sysroot.compiler_runtime,
-            ] + ctx.files.srcs + ([ctx.file.root_init] if ctx.file.root_init else []),
+                source_stamp,
+            ] + source_files,
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
         env = _pinned_env(ctx),
