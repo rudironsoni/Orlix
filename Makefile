@@ -256,7 +256,7 @@ product-build-prepare:
 		printf '%s\n' "product version unchanged: CURRENT_PROJECT_VERSION=$$current"; \
 	fi
 
-product-build-version-check: product-build-prepare
+product-build-version-check:
 	@set -euo pipefail; \
 	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
 	baseline="$$(git log -G 'CURRENT_PROJECT_VERSION:' -1 --format=%H -- project.yml)"; \
@@ -1053,7 +1053,7 @@ xcodeproj:
 
 build: __build-$(type)
 
-__build-product: product-build-version-check
+__build-product:
 	@$(MAKE) __bazel-orlix-app
 
 __build-vendor:

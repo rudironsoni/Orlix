@@ -7,6 +7,10 @@ updated: 2026-09-21
 ---
 # Orlix Knowledge Log
 
+## [2026-09-23] build | Keep the project version off the developer build
+
+`make build` does not run `product-build-prepare`. `CURRENT_PROJECT_VERSION` stays the committed release number. `make product-build-version-check` reports a stale number and does not rewrite `project.yml`.
+
 ## [2026-09-23] build | Hash selected consumers by semantic identity
 
 `OrlixKernelComposition`, rootfs payload, mlibc, and guest packages take the origin files behind `selected_*`. Their identity is `artifact_identity_v2`: logical path, bytes, type, mode, and symlink target. The stable `selected_*` path is not that identity.

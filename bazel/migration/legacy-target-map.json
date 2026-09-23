@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Exhaustive explicit target inventory for the top-level and component Orlix Makefiles.",
   "source_files": {
-    "Makefile": "d124c9723969e7a2cf73e22f7bf783c838adaac6799ba3b2550df894d5425015",
+    "Makefile": "bc4399c7724e8559e9340efcbf7fea00409fb7ed6f689b6716cc9d5b5cf0e09b",
     "Orlix/Makefile": "8857a522bac42d41214d13d23bafcc70eeab1d07bd0c9419c122783599b36d54",
     "OrlixCoreUtils/Makefile": "b3f9af85030ea1eceb64893805cbc716ce277fdbcef401a2f91ee341080d590e",
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
@@ -3435,7 +3435,7 @@
       "classification": "command",
       "phony": true,
       "prerequisites": [
-        "product-build-prepare"
+
       ]
     },
     {
@@ -4283,7 +4283,7 @@
       "classification": "private",
       "phony": true,
       "prerequisites": [
-        "product-build-version-check"
+
       ]
     },
     {
