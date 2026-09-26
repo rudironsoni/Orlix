@@ -1,9 +1,41 @@
 from __future__ import annotations
 
-from pathlib import Path
+import gzip
+import importlib.util
+import json
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+_OBSERVATION_PATH = ROOT / "bazel" / "config" / "cache_observation.py"
+_OBSERVATION_SPEC = importlib.util.spec_from_file_location(
+    "orlix_cache_observation", _OBSERVATION_PATH
+)
+if _OBSERVATION_SPEC is None or _OBSERVATION_SPEC.loader is None:
+    raise ImportError(f"missing cache observation module: {_OBSERVATION_PATH}")
+cache_observation = importlib.util.module_from_spec(_OBSERVATION_SPEC)
+_OBSERVATION_SPEC.loader.exec_module(cache_observation)
+
+SCENARIOS = (
+    "clean-clone",
+    "swift-app-shell",
+    "terminal-ui",
+    "orlix-engine",
+    "orlix-bootloader",
+    "orlix-host-adapter",
+    "kernel-tcti",
+    "installed-uapi",
+    "mlibc",
+    "guest-package",
+    "rootfs-policy",
+    "proof-noise",
+    "second-worktree",
+    "switch-back",
+    "empty-promoted-store",
+    "warm-promoted-local",
+)
 
 BAZEL_RELEVANT_PATHS = (
     ".github/workflows/bazel-*.yml",
@@ -421,6 +453,350 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)
         self.assertNotIn("--apply-lock", text)
+
+
+class RoutingContractTests(unittest.TestCase):
+    def test_authority_stays_default_zero_and_legacy_build_remains(self) -> None:
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", makefile)
+        self.assertIn("ifeq ($(ORLIX_BAZEL_AUTHORITY),1)", makefile)
+        product = makefile.split("__build-product:", 1)[1].split("__build-vendor:", 1)[0]
+        self.assertRegex(makefile, r"(?m)^__build-product:$")
+        self.assertNotIn("product-build-version-check", product)
+        self.assertNotIn("product-build-prepare", product)
+        self.assertIn("$(MAKE) __bazel-orlix-app", product)
+        self.assertIn("$(APP_MAKE) build", product)
+        self.assertIn("$(KERNEL_MAKE) build", product)
+        prepare = makefile.split("product-build-prepare:", 1)[1].split(
+            "product-build-version-check:", 1
+        )[0]
+        self.assertRegex(makefile, r"(?m)^product-build-prepare:$")
+        self.assertRegex(makefile, r"(?m)^product-build-version-check:$")
+        self.assertIn("CURRENT_PROJECT_VERSION", prepare)
+        self.assertIn("project.yml", prepare)
+        self.assertTrue(makefile.split("product-build-version-check:", 1)[1].startswith("\n"))
+
+    def test_make_command_line_values_ccache_and_expands_developer_dir_once(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn(
+            "ORLIX_PINNED_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)",
+            mk,
+        )
+        self.assertIn("ORLIX_PINNED_DEVELOPER_DIR := $(ORLIX_PINNED_DEVELOPER_DIR)", mk)
+        self.assertIn('export ORLIX_PINNED_DEVELOPER_DIR', mk)
+        self.assertGreater(mk.count('--action_env=CCACHE_DIR="$(CCACHE_DIR)"'), 0)
+        outside_contract = mk.split("__bazel-routing-contract:", 1)[0]
+        self.assertNotRegex(outside_contract, r"--action_env=CCACHE_DIR(?!=)")
+        self.assertNotRegex(outside_contract, r"--action_env=DEVELOPER_DIR(?![A-Za-z0-9_])")
+        self.assertNotRegex(outside_contract, r"--host_action_env=DEVELOPER_DIR(?![A-Za-z0-9_])")
+        self.assertIn("--repo_env=DEVELOPER_DIR=", mk)
+        self.assertIn("--action_env=ORLIX_PINNED_DEVELOPER_DIR=", mk)
+        app = mk.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        self.assertIn('--action_env=CCACHE_DIR="$(CCACHE_DIR)"', app)
+        xcodeproj = mk.split("__bazel-feasibility-xcodeproj:", 1)[1].split(
+            "__bazel-xcode-cloud-project-check:", 1
+        )[0]
+        self.assertIn('DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)"', xcodeproj)
+        self.assertIn('ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)"', xcodeproj)
+        bazel_env = (ROOT / "xcode" / "BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn('"DEVELOPER_DIR": None', bazel_env)
+        self.assertIn('"ORLIX_PINNED_DEVELOPER_DIR": None', bazel_env)
+
+    def test_ipa_staging_uses_one_payload_path(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        staged = (
+            "$(ORLIX_BUILD_ROOT)/Bazel/product/Orlix-$(ORLIX_BAZEL_DESTINATION)/Payload/Orlix.app"
+        )
+        self.assertIn(f"ORLIX_BAZEL_STAGED_APP = {staged}", mk)
+        self.assertNotIn("Orlix-$(ORLIX_BAZEL_DESTINATION).app", mk)
+        for target, end in (
+            ("__bazel-product-app:", "__builder-component-mode:"),
+            ("__builder-package-ipa:", "__bazel-orlix-archive:"),
+        ):
+            body = mk.split(target, 1)[1].split(end, 1)[0]
+            self.assertIn('app="$(ORLIX_BAZEL_STAGED_APP)"', body)
+        self.assertGreaterEqual(mk.count('app="$(ORLIX_BAZEL_STAGED_APP)"'), 2)
+
+    def test_scenario_harness_lists_sixteen_and_does_not_build_them(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        declared = mk.split("ORLIX_SCENARIOS = ", 1)[1].splitlines()[0].split()
+        self.assertEqual(declared, list(SCENARIOS))
+        harness = mk.split("__bazel-scenario-harness:", 1)[1].split(
+            "__bazel-routing-contract:", 1
+        )[0]
+        equivalence = mk.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        self.assertNotIn("__bazel-scenario-harness", equivalence)
+        self.assertNotIn("__bazel-cache-equivalence", harness)
+        self.assertNotIn("builder ios", harness)
+        self.assertEqual(harness.count("__bazel-orlix-app"), 1)
+        self.assertIn("ORLIX_SCENARIO_RUN", harness)
+        self.assertLess(harness.index("exit 0"), harness.index("__bazel-orlix-app"))
+        for flag in (
+            "--remote_download_outputs=toplevel",
+            "--execution_log_json_file=",
+            "--build_event_json_file=",
+            "--profile=",
+            "--experimental_remote_grpc_log=",
+        ):
+            self.assertIn(flag, harness)
+        self.assertIn("python3 -m cache_observation", harness)
+        self.assertIn("--scenario", harness)
+        self.assertIn("--orlixcc", harness)
+        self.assertIn("--ninja-log", harness)
+        self.assertIn("--acquisition", harness)
+        self.assertIn("--output-base", harness)
+        self.assertIn("--disk-cache", harness)
+        self.assertIn("--repository-cache", harness)
+        self.assertIn("--ccache-dir", harness)
+        self.assertIn("--product", harness)
+        self.assertIn("--previous", harness)
+        contract = mk.split("__bazel-routing-contract:", 1)[1]
+        self.assertIn("python3 -m unittest test_workflow_policy", contract)
+        self.assertIn("__bazel-scenario-harness ORLIX_SCENARIO_RUN=0", contract)
+        self.assertNotIn("__bazel-orlix-app", contract)
+
+    def test_reduce_scenario_writes_one_ledger_row(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            execution = root / "execution.json"
+            execution.write_text(
+                "".join(
+                    json.dumps(action)
+                    for action in (
+                        {
+                            "cacheHit": True,
+                            "runner": "disk cache hit",
+                            "mnemonic": "OrlixGuestPackage",
+                            "targetLabel": "//pkg:coreutils",
+                        },
+                        {
+                            "cacheHit": False,
+                            "runner": "local",
+                            "mnemonic": "CppCompile",
+                            "label": "//other:x",
+                        },
+                        {
+                            "mnemonic": "OrlixGuestPackage",
+                            "label": "//pkg:bash",
+                        },
+                    )
+                ),
+                encoding="utf-8",
+            )
+            bep = root / "build-events.json"
+            bep.write_text(
+                json.dumps(
+                    {"buildMetrics": {"timingMetrics": {"wallTimeInMs": 70000}}}
+                ),
+                encoding="utf-8",
+            )
+            profile = root / "profile.json.gz"
+            profile.write_bytes(
+                gzip.compress(
+                    json.dumps(
+                        {
+                            "traceEvents": [
+                                {
+                                    "cat": "critical path component",
+                                    "name": "compile",
+                                    "dur": 1_500_000,
+                                },
+                                {
+                                    "cat": "phase",
+                                    "name": "action processing",
+                                    "dur": 6_000_000,
+                                },
+                                {"name": "fetch phase", "dur": 1000},
+                            ]
+                        }
+                    ).encode()
+                )
+            )
+            remote = root / "remote-grpc.log"
+            remote.write_bytes(b"grpc-bytes")
+            orlixcc = root / "build.log"
+            orlixcc.write_text(
+                "make: something\n  ORLIXCC gcc foo.c\nnot ORLIXCC_EXTRA\n",
+                encoding="utf-8",
+            )
+            ninja = root / ".ninja_log"
+            ninja.write_text(
+                "# ninja log v5\n"
+                "100\t200\t0\tout/foo.o\tcc\n"
+                "100\t200\t0\tout/foo.c\tcc\n",
+                encoding="utf-8",
+            )
+            acquisition = root / "acquisition.json"
+            acquisition.write_text(
+                json.dumps(
+                    {
+                        "network_downloads": 2,
+                        "local_store_hits": 1,
+                        "components": {
+                            "kernel": {"source": "network", "bytes": 100},
+                            "mlibc": {"source": "local-store", "bytes": 50},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output_base = root / "output-base"
+            output_base.mkdir()
+            (output_base / "marker").write_text("bytes", encoding="utf-8")
+            product = root / "Payload"
+            product.mkdir()
+            (product / "Orlix").write_text("app", encoding="utf-8")
+            row = cache_observation.reduce_scenario(
+                scenario="kernel-tcti",
+                execution=execution,
+                bep=bep,
+                profile=profile,
+                remote_grpc=remote,
+                access="off",
+                orlixcc_log=orlixcc,
+                ninja_log=ninja,
+                acquisition=acquisition,
+                output_base=output_base,
+                product=product,
+            )
+            self.assertEqual(row["kind"], "scenario-row")
+            self.assertEqual(row["scenario"], "kernel-tcti")
+            self.assertEqual(row["wallTimeInMs"], 70000)
+            self.assertEqual(row["critical_path_ms"], 1500)
+            self.assertEqual(
+                row["slow_phases"],
+                [{"duration_ms": 6000, "name": "action processing"}],
+            )
+            self.assertEqual(row["execution"]["cacheHit"], 1)
+            self.assertEqual(row["execution"]["label"], ["//pkg:bash", "//pkg:coreutils"])
+            self.assertEqual(row["execution"]["runner"]["disk cache hit"], 1)
+            self.assertEqual(row["execution"]["mnemonic"]["OrlixGuestPackage"], 2)
+            self.assertIsNone(row["remote_grpc_bytes"])
+            self.assertEqual(row["orlixcc_lines"], 1)
+            self.assertEqual(row["ninja_compiler_edges"], 1)
+            self.assertEqual(row["acquisition"]["network_downloads"], 2)
+            self.assertEqual(row["acquisition"]["local_store_hits"], 1)
+            self.assertEqual(row["acquisition"]["downloaded_bytes"], 100)
+            self.assertIsInstance(row["disk_kibibytes"]["output_base"], int)
+            self.assertIsNone(row["disk_kibibytes"]["ccache"])
+            self.assertIsInstance(row["content_digest"], str)
+            self.assertIsNone(row["content_digest_matches_previous"])
+            self.assertEqual(
+                row["targets_unverified"]["status"], "unverified-until-remeasured"
+            )
+            self.assertEqual(row["targets_unverified"]["warm_noop_median_ms"], 3000)
+            self.assertEqual(row["targets_unverified"]["warm_promoted_downloads"], 0)
+            (root / "short-bep.json").write_text(
+                json.dumps({"buildMetrics": {"timingMetrics": {"wallTimeInMs": 1000}}}),
+                encoding="utf-8",
+            )
+            readable = cache_observation.reduce_scenario(
+                scenario="warm-promoted-local",
+                execution=execution,
+                bep=bep,
+                remote_grpc=remote,
+                access="read",
+                product=product,
+            )
+            self.assertEqual(readable["remote_grpc_bytes"], len(b"grpc-bytes"))
+            quiet = cache_observation.reduce_scenario(
+                scenario="swift-app-shell",
+                execution=execution,
+                bep=root / "short-bep.json",
+                profile=profile,
+            )
+            self.assertEqual(quiet["wallTimeInMs"], 1000)
+            self.assertEqual(quiet["slow_phases"], [])
+            self.assertEqual(quiet["critical_path_ms"], 1500)
+            previous = root / "previous.json"
+            previous.write_text(json.dumps({"content_digest": row["content_digest"]}), encoding="utf-8")
+            matched = cache_observation.reduce_scenario(
+                scenario="switch-back",
+                execution=execution,
+                bep=bep,
+                product=product,
+                previous=previous,
+            )
+            self.assertTrue(matched["content_digest_matches_previous"])
+            previous.write_text(json.dumps({"content_digest": "different"}), encoding="utf-8")
+            differed = cache_observation.reduce_scenario(
+                scenario="switch-back",
+                execution=execution,
+                bep=bep,
+                product=product,
+                previous=previous,
+            )
+            self.assertFalse(differed["content_digest_matches_previous"])
+            with self.assertRaises(ValueError):
+                cache_observation.reduce_scenario(
+                    scenario="", execution=execution, bep=bep
+                )
+
+    def test_scenario_cli_does_not_replace_cache_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            execution = root / "execution.json"
+            bep = root / "bep.json"
+            execution.write_text(json.dumps({"runner": "disk cache hit"}), encoding="utf-8")
+            bep.write_text(
+                json.dumps({"buildMetrics": {"timingMetrics": {"wallTimeInMs": 42}}}),
+                encoding="utf-8",
+            )
+            observed = root / "observed.json"
+            completed = subprocess.run(
+                [
+                    "python3",
+                    "-m",
+                    "cache_observation",
+                    "--execution",
+                    str(execution),
+                    "--bep",
+                    str(bep),
+                    "--access",
+                    "off",
+                    "--out",
+                    str(observed),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=ROOT,
+                env={"PYTHONPATH": str(ROOT / "bazel" / "config"), "PATH": "/usr/bin:/bin"},
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(observed.read_text(encoding="utf-8"))
+            self.assertEqual(payload["elapsed_ms"], 42)
+            self.assertNotIn("kind", payload)
+            scenario = root / "scenario.json"
+            completed = subprocess.run(
+                [
+                    "python3",
+                    "-m",
+                    "cache_observation",
+                    "--scenario",
+                    "clean-clone",
+                    "--execution",
+                    str(execution),
+                    "--bep",
+                    str(bep),
+                    "--access",
+                    "off",
+                    "--out",
+                    str(scenario),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=ROOT,
+                env={"PYTHONPATH": str(ROOT / "bazel" / "config"), "PATH": "/usr/bin:/bin"},
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            row = json.loads(scenario.read_text(encoding="utf-8"))
+            self.assertEqual(row["kind"], "scenario-row")
+            self.assertEqual(row["scenario"], "clean-clone")
+            self.assertEqual(row["wallTimeInMs"], 42)
 
 
 if __name__ == "__main__":
