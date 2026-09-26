@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import artifact_store
 import locked_buildset
 import lock_proposal
 import reconstruct
@@ -38,6 +39,36 @@ def _lock_payload(reference: str) -> dict:
     }
     payload["buildset"] = locked_buildset.buildset_digest(payload["components"])
     return payload
+
+
+def _pair_lock() -> dict:
+    components = {
+        "uapi": {
+            "unsigned_digest": "aa" * 32,
+            "oci_digest": "sha256:" + ("ab" * 32),
+            "oci_reference": "ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32),
+        },
+        "mlibc": {
+            "unsigned_digest": "bb" * 32,
+            "oci_digest": "sha256:" + ("cd" * 32),
+            "oci_reference": "ghcr.io/rudironsoni/orlix/mlibc@sha256:" + ("cd" * 32),
+        },
+    }
+    return {
+        "schema": 1,
+        "buildset": locked_buildset.buildset_digest(components),
+        "components": components,
+    }
+
+
+def _publish_legacy(store_root: Path, name: str, entry: dict) -> None:
+    tree = store_root.parent / f"source-{name}"
+    tree.mkdir()
+    (tree / f"{name}.sha256").write_text(entry["unsigned_digest"] + "\n", encoding="utf-8")
+    blob = store_root.parent / f"{name}.tar"
+    with tarfile.open(blob, "w") as archive:
+        archive.add(tree, arcname=".")
+    artifact_store.ArtifactStore(store_root).publish_download(name, entry, blob, tree, _VERIFICATION)
 
 
 class ReconstructTests(unittest.TestCase):
@@ -211,7 +242,9 @@ class ReconstructTests(unittest.TestCase):
             tree = Path(payload["components"]["uapi"]["tree"])
             self.assertTrue((tree / "include" / "unistd.h").is_file())
             self.assertEqual((tree / "uapi.sha256").read_text(encoding="utf-8").strip(), "aa" * 32)
-        self.assertEqual(payload["components"]["uapi"]["oci_reference"], reference)
+            self.assertEqual(payload["components"]["uapi"]["oci_reference"], reference)
+            self.assertIs(payload["acquisition"]["components"]["uapi"]["signature_verified"], True)
+            self.assertEqual(payload["acquisition"]["network_downloads"], 1)
         self.assertTrue(any(call[0] == "oras" and "pull" in call and reference in call for call in calls))
         self.assertTrue(any(call[0] == "cosign" and "verify" in call and reference in call for call in calls))
 
@@ -274,10 +307,15 @@ class ReconstructTests(unittest.TestCase):
                     reconstruct.reconstruct(str(path), tmp, run=fake_run, store_root=store)
                 calls.clear()
                 with mock.patch("reconstruct.shutil.which", return_value=None):
-                    reconstruct.reconstruct(str(path), str(Path(tmp) / "second"), run=fake_run, store_root=store)
+                    second = reconstruct.reconstruct(
+                        str(path), str(Path(tmp) / "second"), run=fake_run, store_root=store
+                    )
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
         self.assertEqual(calls, [])
+        self.assertEqual(second["acquisition"]["network_downloads"], 0)
+        self.assertEqual(second["acquisition"]["local_store_hits"], 1)
+        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], False)
 
     @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
     @mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION)
@@ -472,13 +510,137 @@ class ReconstructTests(unittest.TestCase):
                     "reconstruct.shutil.which",
                     side_effect=lambda name: None if name == "oras" else "/usr/bin/cosign",
                 ):
-                    reconstruct.reconstruct(
+                    second = reconstruct.reconstruct(
                         str(path), str(Path(tmp) / "second"), run=fake_run, store_root=store
                     )
             finally:
                 os.environ.pop("ORLIX_COSIGN_KEY", None)
         self.assertTrue(any(call[0] == "cosign" for call in calls))
         self.assertFalse(any(call[0] == "oras" for call in calls))
+        self.assertEqual(second["acquisition"]["network_downloads"], 0)
+        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], False)
+
+    def test_local_hit_does_not_set_signature_verified_without_verification_context(self) -> None:
+        self.assertIs(reconstruct.acquisition_record("local-store", None)["signature_verified"], False)
+        self.assertIs(reconstruct.acquisition_record("network", None)["signature_verified"], False)
+        saved_key = os.environ.pop("ORLIX_COSIGN_KEY", None)
+        saved_pub = os.environ.pop("ORLIX_COSIGN_PUB", None)
+        try:
+            self._local_hit_without_verification_context()
+        finally:
+            if saved_key is not None:
+                os.environ["ORLIX_COSIGN_KEY"] = saved_key
+            if saved_pub is not None:
+                os.environ["ORLIX_COSIGN_PUB"] = saved_pub
+
+    def _local_hit_without_verification_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = _lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            before = lock_path.read_bytes()
+            _publish_legacy(base / "store", "uapi", payload["components"]["uapi"])
+            root = base / "out" / payload["buildset"]
+            root.mkdir(parents=True)
+            (root / "marker.txt").write_text("keep\n", encoding="utf-8")
+            evidence = base / "acquisition.json"
+            with self.assertRaises(reconstruct.ReconstructError):
+                reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "out"),
+                    store_root=base / "store",
+                    evidence_path=str(evidence),
+                )
+            self.assertFalse(evidence.exists())
+            self.assertEqual((root / "marker.txt").read_text(encoding="utf-8"), "keep\n")
+            self.assertEqual(lock_path.read_bytes(), before)
+
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    def test_partial_acquire_keeps_siblings_and_skips_downloads(self, verification) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = _pair_lock()
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            before = lock_path.read_bytes()
+            _publish_legacy(base / "store", "uapi", payload["components"]["uapi"])
+            _publish_legacy(base / "store", "mlibc", payload["components"]["mlibc"])
+            root = base / "out" / payload["buildset"]
+            sibling = root / "mlibc"
+            sibling.mkdir(parents=True)
+            (sibling / "keep.txt").write_text("sibling\n", encoding="utf-8")
+            (root / "marker.txt").write_text("root\n", encoding="utf-8")
+            with mock.patch("reconstruct.shutil.which", return_value=None):
+                named = reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "out"),
+                    store_root=base / "store",
+                    component_names=["uapi"],
+                )
+                verification.reset_mock()
+                empty = reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "out"),
+                    store_root=base / "store",
+                    component_names=[],
+                )
+                self.assertFalse(verification.called)
+                full = reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "full-out"),
+                    store_root=base / "store",
+                )
+            self.assertEqual(named["acquisition"]["network_downloads"], 0)
+            self.assertEqual(named["acquisition"]["local_store_hits"], 1)
+            self.assertEqual(set(named["acquisition"]["components"]), {"uapi"})
+            self.assertIs(named["acquisition"]["components"]["uapi"]["signature_verified"], False)
+            self.assertEqual((sibling / "keep.txt").read_text(encoding="utf-8"), "sibling\n")
+            self.assertEqual((root / "marker.txt").read_text(encoding="utf-8"), "root\n")
+            self.assertTrue((root / "uapi" / "uapi.sha256").is_file())
+            self.assertEqual(empty["acquisition"]["network_downloads"], 0)
+            self.assertEqual(empty["acquisition"]["components_total"], 0)
+            self.assertEqual(empty["acquisition"]["components"], {})
+            self.assertTrue((root / "uapi" / "uapi.sha256").is_file())
+            self.assertEqual((sibling / "keep.txt").read_text(encoding="utf-8"), "sibling\n")
+            self.assertEqual(full["acquisition"]["network_downloads"], 0)
+            self.assertEqual(full["acquisition"]["local_store_hits"], 2)
+            self.assertEqual(set(full["components"]), {"uapi", "mlibc"})
+            self.assertEqual(lock_path.read_bytes(), before)
+
+    def test_unknown_component_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifacts.lock.json"
+            path.write_text(json.dumps(_lock_payload("ghcr.io/rudironsoni/orlix/uapi@sha256:" + ("ab" * 32))) + "\n")
+            with self.assertRaises(reconstruct.ReconstructError) as raised:
+                reconstruct.reconstruct(str(path), tmp, component_names=["kernel-release-iphoneos"])
+            self.assertIn("unknown promoted components", str(raised.exception))
+
+    @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
+    def test_partial_acquire_mismatch_does_not_delete_siblings(self, verification) -> None:
+        self.assertIs(verification.return_value, _VERIFICATION)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            payload = _pair_lock()
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            _publish_legacy(base / "store", "uapi", payload["components"]["uapi"])
+            root = base / "out" / payload["buildset"]
+            existing = root / "uapi"
+            existing.mkdir(parents=True)
+            (existing / "uapi.sha256").write_text("different\n", encoding="utf-8")
+            sibling = root / "mlibc"
+            sibling.mkdir()
+            (sibling / "keep.txt").write_text("sibling\n", encoding="utf-8")
+            with self.assertRaises(reconstruct.ReconstructError):
+                reconstruct.reconstruct(
+                    str(lock_path),
+                    str(base / "out"),
+                    store_root=base / "store",
+                    component_names=["uapi"],
+                )
+            self.assertEqual((existing / "uapi.sha256").read_text(encoding="utf-8"), "different\n")
+            self.assertEqual((sibling / "keep.txt").read_text(encoding="utf-8"), "sibling\n")
 
 
 if __name__ == "__main__":
