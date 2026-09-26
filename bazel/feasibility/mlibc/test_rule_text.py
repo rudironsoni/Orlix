@@ -31,7 +31,34 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
         self.assertIn("patch_list", action)
         self.assertNotIn("no-remote-cache", action)
         self.assertNotIn("0005-uapi-errno-orlix-comment.patch", text)
+        self.assertIn('endswith(".patch")', text)
+        self.assertIn('endswith(".diff")', text)
+        self.assertIn("*.patch|*.diff)", action)
         self.assertIn('"no-remote-exec": "1"', action)
+        root = ROOT / "OrlixKernel/Sources/ports/orlix/patches"
+        selected = [
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*")
+            if path.is_file() and path.suffix in {".patch", ".diff"}
+        ]
+        self.assertIn("0001-kbuild-add-orlix-clang-target.patch", selected)
+        self.assertIn("0004-sched-add-arch-cond-resched-hook.patch", selected)
+        self.assertNotIn("exceptions/README.md", selected)
+        self.assertNotIn("exceptions/0004-sched-add-arch-cond-resched-hook.patch.md", selected)
+        self.assertTrue(all(name.endswith((".patch", ".diff")) for name in selected))
+        skipped = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'case "$1" in *.patch|*.diff) echo apply ;; *) echo skip ;; esac',
+                "bash",
+                "exceptions/0004-sched-add-arch-cond-resched-hook.patch.md",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(skipped.stdout.strip(), "skip")
 
     def test_sysroot_ignores_uapi_sidecar_and_keeps_cache_tags(self) -> None:
         text = SYSROOT.read_text(encoding="utf-8")

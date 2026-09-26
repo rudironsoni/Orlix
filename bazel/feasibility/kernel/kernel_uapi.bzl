@@ -20,7 +20,11 @@ def _kernel_uapi_impl(ctx):
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
     digest = ctx.actions.declare_file(ctx.label.name + "/uapi.sha256")
     product = ctx.actions.declare_directory(ctx.label.name + "/product")
-    patch_files = sorted(ctx.files.patches, key = lambda item: item.path)
+    patch_files = []
+    for item in ctx.files.patches:
+        if item.path.endswith(".patch") or item.path.endswith(".diff"):
+            patch_files.append(item)
+    patch_files = sorted(patch_files, key = lambda item: item.path)
     patch_list = ctx.actions.declare_file(ctx.label.name + "/patch-inputs.txt")
     ctx.actions.write(patch_list, "".join([item.path + "\n" for item in patch_files]))
     ctx.actions.run_shell(
@@ -66,9 +70,10 @@ trap '/bin/rm -rf "$work"' EXIT
 /bin/cp -R "$linux_src/." "$work/linux"
 /bin/chmod -R u+w "$work/linux"
 while IFS= read -r patch || [ -n "$patch" ]; do
-  if [ -z "$patch" ]; then
-    continue
-  fi
+  case "$patch" in
+    *.patch|*.diff) ;;
+    *) continue ;;
+  esac
   /usr/bin/patch --batch -p1 -d "$work/linux" -i "$exec_root/$patch"
 done < "$patch_list"
 /bin/mkdir -p "$work/linux/.orlix-uapi-build"
