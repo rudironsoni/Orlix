@@ -214,25 +214,37 @@ digest="$( (
 def _rootfs_payload_impl(ctx):
     info = ctx.attr.rootfs[OrlixRootfsInfo]
     root = ctx.actions.declare_directory(ctx.label.name + "/rootfs")
+    # Copies only the three images. The semantic digest stays on the
+    # provider and is not staged. Omitting no-remote-cache leaves this copy
+    # disk-cache and BuildBuddy cacheable. Package trees stay on OrlixRootfs.
     ctx.actions.run_shell(
         mnemonic = "OrlixRootfsPayload",
         progress_message = "Staging OrlixOS rootfs payload images",
         command = r"""
 set -euo pipefail
-dest="$1"
-/bin/mkdir -p "$dest"
-/bin/cp "$2" "$dest/initramfs.cpio.gz"
-/bin/cp "$3" "$dest/base.ext4"
-/bin/cp "$4" "$dest/state.ext4"
+/usr/bin/python3 -B "$1" --dest "$2" \
+  --image "initramfs.cpio.gz=$3" \
+  --image "base.ext4=$4" \
+  --image "state.ext4=$5"
 """,
         arguments = [
+            ctx.file._stage_payload.path,
             root.path,
             info.initramfs.path,
             info.base_ext4.path,
             info.state_ext4.path,
         ],
-        inputs = [info.initramfs, info.base_ext4, info.state_ext4],
+        inputs = [
+            ctx.file._stage_payload,
+            info.initramfs,
+            info.base_ext4,
+            info.state_ext4,
+        ],
         outputs = [root],
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
         use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
     )
@@ -243,6 +255,10 @@ orlix_rootfs_payload = rule(
     implementation = _rootfs_payload_impl,
     attrs = {
         "rootfs": attr.label(mandatory = True, providers = [OrlixRootfsInfo]),
+        "_stage_payload": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/rootfs:stage_payload.py"),
+        ),
     },
 )
 
