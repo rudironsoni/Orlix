@@ -1,4 +1,10 @@
-"""Declare a separate canonical artifact identity action."""
+"""Declare a separate canonical artifact identity action.
+
+The manifest is artifact-identity-v2: logical path, type, mode, file bytes, and
+symlink target. Exec paths are how the action reads bytes. They are not part of
+the manifest, and source-input, proof, revision, profile, destination, and
+target-triple strings are not inputs of this action.
+"""
 
 def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None):
     if not name:
@@ -69,7 +75,6 @@ Path(digest_path).write_text(hashlib.sha256(manifest).hexdigest() + "\n", encodi
         inputs = inputs,
         outputs = [manifest, digest],
         env = {
-            "DEVELOPER_DIR": ctx.configuration.default_shell_env.get("ORLIX_PINNED_DEVELOPER_DIR", ""),
             "PATH": "/usr/bin:/bin",
             "PYTHONDONTWRITEBYTECODE": "1",
         },
