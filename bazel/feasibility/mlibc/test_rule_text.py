@@ -103,6 +103,42 @@ printf '%s\n' "${compiler[0]}"
         )
         self.assertEqual(cached.stdout.strip(), "/opt/homebrew/bin/ccache")
 
+    def test_empty_meson_plan_does_not_expand_an_empty_array(self) -> None:
+        text = SYSROOT.read_text(encoding="utf-8")
+        self.assertIn('if [ "${#configure_args[@]}" -gt 0 ]; then', text)
+        self.assertNotIn('"$meson_bin" setup "${configure_args[@]}"', text)
+        script = r"""
+set -euo pipefail
+plan="$1"
+configure_args=()
+if [ -n "$plan" ]; then
+  read -r -a configure_args <<< "$plan"
+fi
+meson_setup=(meson setup)
+if [ "${#configure_args[@]}" -gt 0 ]; then
+  meson_setup+=("${configure_args[@]}")
+fi
+meson_setup+=(builddir sourcedir --wrap-mode=nodownload)
+printf '%s\n' "${meson_setup[@]}"
+"""
+        empty = subprocess.run(
+            ["bash", "-c", script, "bash", ""],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(empty.stdout.splitlines(), ["meson", "setup", "builddir", "sourcedir", "--wrap-mode=nodownload"])
+        flagged = subprocess.run(
+            ["bash", "-c", script, "bash", "--reconfigure --clearcache"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            flagged.stdout.splitlines()[:4],
+            ["meson", "setup", "--reconfigure", "--clearcache"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

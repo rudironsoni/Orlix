@@ -204,26 +204,34 @@ if [ "$plan" != skip ]; then
   if [ -n "$plan" ]; then
     read -r -a configure_args <<< "$plan"
   fi
+  meson_setup=("$meson_bin" setup)
+  if [ "${#configure_args[@]}" -gt 0 ]; then
+    meson_setup+=("${configure_args[@]}")
+  fi
+  meson_setup+=(
+    "$work/build"
+    "$work/mlibc"
+    --wrap-mode=nodownload
+    --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter
+    --cross-file "$work/cross.ini"
+    --native-file "$work/native.ini"
+    --prefix /usr
+    -Ddefault_library=both
+    -Dheaders_only=false
+    -Dno_headers=false
+    -Dbuild_tests=false
+    -Dlibgcc_dependency=false
+    -Dlinux_option=enabled
+    -Dposix_option=enabled
+    -Dglibc_option=enabled
+    -Dbsd_option=enabled
+    -Dlinux_kernel_headers="$uapi_dir/include"
+    "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']"
+    "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+  )
   /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
       SDKROOT="$sdkroot" \
-      "$meson_bin" setup "${configure_args[@]}" "$work/build" "$work/mlibc" \
-          --wrap-mode=nodownload \
-          --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter \
-          --cross-file "$work/cross.ini" \
-          --native-file "$work/native.ini" \
-          --prefix /usr \
-          -Ddefault_library=both \
-          -Dheaders_only=false \
-          -Dno_headers=false \
-          -Dbuild_tests=false \
-          -Dlibgcc_dependency=false \
-          -Dlinux_option=enabled \
-          -Dposix_option=enabled \
-          -Dglibc_option=enabled \
-          -Dbsd_option=enabled \
-          -Dlinux_kernel_headers="$uapi_dir/include" \
-          "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']" \
-          "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+      "${meson_setup[@]}"
 fi
 previous_end="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import ninja_log_end; import pathlib,sys; print(ninja_log_end(pathlib.Path(sys.argv[1])))' "$work/build/.ninja_log")"
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_bin" compile -C "$work/build"
