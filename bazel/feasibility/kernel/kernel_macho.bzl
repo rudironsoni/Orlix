@@ -176,9 +176,11 @@ test -n "$sdkroot"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
 export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
-if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
-  test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; }
-fi
+launcher="$ORLIX_COMPILER_LAUNCHER"
+case "$launcher" in
+  /opt/homebrew/bin/ccache) if [ -z "${CCACHE_DIR:-}" ]; then launcher=""; fi ;;
+esac
+ORLIX_COMPILER_LAUNCHER="$launcher"
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
 export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
