@@ -20,9 +20,9 @@ def _pinned_env(ctx):
         "CCACHE_MAXSIZE": "20G",
         "PATH": "/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
+    for name in ("CCACHE_DIR", "CCACHE_DISABLE", "ORLIX_COMPILER_LAUNCHER", "ORLIX_PACKAGE_INCREMENTAL"):
+        if name in shell:
+            env[name] = shell[name]
     return env
 
 def _bash_package_impl(ctx):
@@ -32,7 +32,6 @@ def _bash_package_impl(ctx):
     file_manifest = ctx.actions.declare_file(ctx.label.name + "/file-manifest.txt")
     license_manifest = ctx.actions.declare_file(ctx.label.name + "/license-manifest.txt")
     metadata = ctx.actions.declare_file(ctx.label.name + "/package-metadata.txt")
-    digest = ctx.actions.declare_file(ctx.label.name + "/source-input.sha256")
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(script, r"""
 set -euo pipefail
@@ -46,9 +45,8 @@ install_out="$exec_root/$6"
 file_manifest="$exec_root/$7"
 license_manifest="$exec_root/$8"
 metadata="$exec_root/$9"
-digest_out="$exec_root/${10}"
-package_name="${11}"
-package_version="${12}"
+package_name="${10}"
+package_version="${11}"
 case "$configure" in
   *OrlixOS/Sources/make*|*OrlixCoreUtils/Makefile*|*OrlixKernel/Makefile*|*OrlixMLibC/Makefile*)
     echo "bash must not invoke wrapper Makefiles: $configure" >&2
@@ -127,8 +125,6 @@ export MAKEFILES="$work/build/orlix-link-inputs.mk"
 (cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-3.0-or-later' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$package_name" "$package_version" > "$metadata"
-digest="$( ( cd "$install_out" && /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 ) | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' )"
-/usr/bin/printf '%s\n' "$digest" > "$digest_out"
 if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 """.replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
     ctx.actions.run_shell(
@@ -149,7 +145,6 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             file_manifest.path,
             license_manifest.path,
             metadata.path,
-            digest.path,
             ctx.attr.package_name,
             ctx.attr.package_version,
         ],
@@ -167,9 +162,9 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.compiler_runtime,
             ] + ctx.files.sources,
         ),
-        outputs = [install_tree, file_manifest, license_manifest, metadata, digest],
+        outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
@@ -184,7 +179,6 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             file_manifest,
             license_manifest,
             metadata,
-            digest,
             artifact_identity.manifest,
             artifact_identity.digest,
         ])),
@@ -197,7 +191,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             install_tree = install_tree,
             license_manifest = license_manifest,
             package_metadata = metadata,
-            source_input_digest = digest,
+            source_input_digest = artifact_identity.digest,
         ),
     ]
 

@@ -1,0 +1,10 @@
+--- a/src/echo.c
++++ b/src/echo.c
+@@ -20,6 +20,7 @@
+ #include "system.h"
+ #include "assure.h"
+ #include "c-ctype.h"
++/* orlix coreutils echo source */
+
+ /* The official name of this program (e.g., no 'g' prefix).  */
+ #define PROGRAM_NAME "echo"
