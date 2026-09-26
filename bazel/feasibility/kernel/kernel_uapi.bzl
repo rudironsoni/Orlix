@@ -8,15 +8,11 @@ def _pinned_env(ctx):
     developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
     if not developer_dir:
         fail("kernel UAPI requires action_env ORLIX_PINNED_DEVELOPER_DIR")
-    env = {
+    return {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
         "PATH": "/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/bin:/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
-    return env
 
 def _kernel_uapi_impl(ctx):
     headers = ctx.actions.declare_directory(ctx.label.name + "/uapi")
@@ -24,6 +20,9 @@ def _kernel_uapi_impl(ctx):
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
     digest = ctx.actions.declare_file(ctx.label.name + "/uapi.sha256")
     product = ctx.actions.declare_directory(ctx.label.name + "/product")
+    patch_files = sorted(ctx.files.patches, key = lambda item: item.path)
+    patch_list = ctx.actions.declare_file(ctx.label.name + "/patch-inputs.txt")
+    ctx.actions.write(patch_list, "".join([item.path + "\n" for item in patch_files]))
     ctx.actions.run_shell(
         mnemonic = "OrlixLinuxHeadersInstall",
         progress_message = "Installing upstream Linux arm64 UAPI headers",
@@ -36,7 +35,11 @@ archive_out="$exec_root/$3"
 manifest_out="$exec_root/$4"
 digest_out="$exec_root/$5"
 archive_py="$exec_root/$6"
-digest_py="$exec_root/$7"
+header_digest="$exec_root/$7"
+toolchain_identity="$exec_root/$8"
+patch_list="$exec_root/$9"
+test -s "$toolchain_identity"
+/usr/bin/wc -c "$toolchain_identity" >/dev/null
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -61,7 +64,13 @@ work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-linux-uapi.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 /bin/mkdir -p "$work/linux" "$work/hdr"
 /bin/cp -R "$linux_src/." "$work/linux"
-/usr/bin/find "$work/linux" -type d -exec /bin/chmod u+w {} +
+/bin/chmod -R u+w "$work/linux"
+while IFS= read -r patch || [ -n "$patch" ]; do
+  if [ -z "$patch" ]; then
+    continue
+  fi
+  /usr/bin/patch --batch -p1 -d "$work/linux" -i "$exec_root/$patch"
+done < "$patch_list"
 /bin/mkdir -p "$work/linux/.orlix-uapi-build"
 cd "$work/linux"
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
@@ -75,11 +84,11 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
 test -s "$work/hdr/include/linux/unistd.h"
 test -s "$work/hdr/include/asm/unistd.h"
 /bin/mkdir -p "$headers_out"
-/bin/cp -R "$work/hdr/include" "$headers_out/include"
+/bin/cp -R -L "$work/hdr/include" "$headers_out/include"
 /usr/bin/python3 "$archive_py" archive "$work/linux/.orlix-uapi-build" "$archive_out"
 /usr/sbin/chown -R "$(/usr/bin/id -u):$(/usr/bin/id -g)" "$headers_out" 2>/dev/null || true
 /bin/chmod -R 0555 "$headers_out"
-digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
+digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
 /usr/bin/printf '%s\n' '{' \
     '  "arch": "arm64",' \
@@ -97,10 +106,18 @@ digest="$(/usr/bin/python3 "$digest_py" "$headers_out/include")"
             manifest.path,
             digest.path,
             ctx.file.archive_tool.path,
-            ctx.file.digest_tool.path,
+            ctx.file.header_digest.path,
+            ctx.file.toolchain_identity.path,
+            patch_list.path,
         ],
         inputs = depset(
-            direct = [ctx.file.linux_makefile, ctx.file.archive_tool, ctx.file.digest_tool],
+            direct = [
+                ctx.file.linux_makefile,
+                ctx.file.archive_tool,
+                ctx.file.header_digest,
+                ctx.file.toolchain_identity,
+                patch_list,
+            ] + patch_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [headers, archive, manifest, digest],
@@ -182,6 +199,9 @@ orlix_kernel_uapi = rule(
         "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
         "archive_tool": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/kernel:kbuild_persist.py")),
         "digest_tool": attr.label(allow_single_file = True, default = Label("//bazel:content_digest.py")),
+        "header_digest": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/mlibc:header_digest.py")),
+        "patches": attr.label(allow_files = True, default = Label("//OrlixKernel/Sources:linux_patches")),
+        "toolchain_identity": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:identity.json")),
     },
 )
 
