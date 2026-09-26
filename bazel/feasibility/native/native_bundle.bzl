@@ -35,10 +35,8 @@ def _pinned_apple_env(ctx, extra):
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
         "PATH": "/usr/bin:/bin",
+        "SOURCE_DATE_EPOCH": "1",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
     env.update(extra)
     return env
 
@@ -73,10 +71,12 @@ esac
 test "$("$cmake" --version | /usr/bin/head -n 1)" = "cmake version 4.0.3"
 test "$(/usr/bin/make --version | /usr/bin/head -n 1)" = "GNU Make 3.81"
 test "$(/usr/bin/perl -e 'printf "%vd", $^V')" = "5.34.1"
-work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-ssh.XXXXXX")"
+work="$exec_root/orlix-ssh-work"
+/bin/rm -rf "$work"
 trap '/bin/rm -rf "$work"' EXIT
 /bin/mkdir -p "$work/home"
 export HOME="$work/home"
+export SOURCE_DATE_EPOCH=1
 openssl_root="$(/usr/bin/dirname "$openssl_configure")"
 libssh2_root="$(/usr/bin/dirname "$libssh2_cmake")"
 build_one() {
@@ -94,8 +94,8 @@ build_one() {
           if test "$sdk" = iphoneos; then export CROSS_SDK=iPhoneOS.sdk; else export CROSS_SDK=iPhoneSimulator.sdk; fi
       fi
       /usr/bin/perl ./Configure "$target" --prefix="$openssl_prefix" no-shared no-tests no-apps
-      /usr/bin/make -j8 build_libs
-      /usr/bin/make install_sw )
+      /usr/bin/make -j8 build_libs SOURCE_DATE_EPOCH=1
+      /usr/bin/make install_sw SOURCE_DATE_EPOCH=1 )
     system_name=Darwin; if test "$sdk" != macosx; then system_name=iOS; fi
     "$cmake" -S "$libssh2_src" -B "$libssh2_build" -G "Unix Makefiles" -Wno-dev \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
