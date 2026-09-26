@@ -77,8 +77,11 @@ export CCACHE_EXTRAFILES="$exec_root/$3"
 export CCACHE_BASEDIR="$exec_root"
 shift 3
 launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
+  launcher=""
+fi
 case "$launcher" in
-  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  /opt/homebrew/bin/ccache) ;;
   "") ;;
   *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
 esac
@@ -174,8 +177,11 @@ runtime_archives=("$work"/inputs/runtime/libcompiler_rt-*.a)
 runtime_in="${runtime_archives[0]}"
 export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
 launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
+  launcher=""
+fi
 case "$launcher" in
-  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  /opt/homebrew/bin/ccache) ;;
   "") ;;
   *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
 esac

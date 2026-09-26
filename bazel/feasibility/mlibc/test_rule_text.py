@@ -1,6 +1,8 @@
 """Linux rule-text proof for UAPI inputs and mlibc cache tags."""
 
 from pathlib import Path
+import os
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -47,6 +49,32 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
         for action in (compiler, sysroot):
             self.assertIn('"no-remote-cache": "1"', action)
             self.assertIn('"no-remote-exec": "1"', action)
+
+    def test_unset_ccache_dir_compiles_with_clang(self) -> None:
+        text = SYSROOT.read_text(encoding="utf-8")
+        self.assertNotIn("CCACHE_DIR is required", text)
+        self.assertEqual(text.count('if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then'), 2)
+        script = r"""
+launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
+  launcher=""
+fi
+clang=clang
+compiler=("$clang")
+if [ -n "$launcher" ]; then compiler=("$launcher" "$clang"); fi
+printf '%s\n' "${compiler[0]}"
+"""
+        base = {"PATH": os.environ["PATH"]}
+        unset = subprocess.run(["bash", "-c", script], env=base, check=True, capture_output=True, text=True)
+        self.assertEqual(unset.stdout.strip(), "clang")
+        cached = subprocess.run(
+            ["bash", "-c", script],
+            env={**base, "CCACHE_DIR": "/tmp/orlix-ccache"},
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(cached.stdout.strip(), "/opt/homebrew/bin/ccache")
 
 
 if __name__ == "__main__":
