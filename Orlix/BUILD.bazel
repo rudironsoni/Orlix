@@ -62,6 +62,11 @@ _TEST_SWIFT_FEATURES = [
     for flag in ["-enable-upcoming-feature", feature]
 ]
 
+# Single-module fallback. Implementation, terminal/Herdr-facing UI, and the app
+# shell cannot be separate Swift modules on this tree: declarations used across
+# those globs are internal, and the sources do not import sibling modules. Real
+# access control stays on. Terminal and app-shell edits invalidate this one
+# Orlix module together.
 [
     swift_library(
         name = name,
@@ -146,6 +151,7 @@ ios_extension(
         "//bazel/feasibility/native:ios_device": ":OrlixLiveActivityDevelopmentProfile",
         "//conditions:default": None,
     }),
+    linkopts = ["-objc_stubs_small"],
     resources = glob(["OrlixLiveActivity/Assets.xcassets/**"]) + glob(["OrlixLiveActivity/Resources/**"]),
     tags = ["manual"],
     deps = [":OrlixLiveActivityLibrary"],
@@ -210,11 +216,9 @@ ios_application(
         "//Orlix/Orlix/Resources:bundle_resources",
         "Orlix/PrivacyInfo.xcprivacy",
         "//docs/sources/release:orlix-app-release-inputs.json",
-    ] + glob(["Orlix/Assets.xcassets/**"]) + select({
-        "//bazel/config:component_promoted": ["//bazel/promotion:locked_buildset"],
-        "//conditions:default": [],
-    }),
+    ] + glob(["Orlix/Assets.xcassets/**"]),
     linkopts = [
+        "-objc_stubs_small",
         "-weak_framework",
         "AppIntents",
     ],
@@ -274,7 +278,7 @@ ios_application(
         "OrlixStoreKit.storekit",
         "//docs/sources/release:orlix-app-release-inputs.json",
     ] + glob(["Orlix/Assets.xcassets/**"]),
-    linkopts = ["-weak_framework", "AppIntents"],
+    linkopts = ["-objc_stubs_small", "-weak_framework", "AppIntents"],
     tags = ["manual"],
     deps = [
         ":OrlixTestAppLibrary",
