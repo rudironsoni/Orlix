@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "S8hCn/46GXSHXtmfRg27/nofagxzo68mfGd9OE+Vz/Q=",
+        "bzlTransitiveDigest": "RkJ9ql7kCy6AIkHLIC+IJ8gbcknNsFeUaocCigLSJh0=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -416,7 +416,8 @@
               "url": "https://ftp.gnu.org/gnu/coreutils/coreutils-9.11.tar.xz",
               "sha256": "394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3",
               "strip_prefix": "coreutils-9.11",
-              "marker": "configure"
+              "marker": "configure",
+              "patch": "@@//bazel/extensions:coreutils-echo.patch"
             }
           },
           "orlix_bash_source": {
