@@ -373,6 +373,71 @@ class ArtifactStoreTests(unittest.TestCase):
             self.assertTrue(Path(res["components"]["uapi"]["tree"]).exists())
             self.assertIsNotNone(store.lookup("uapi", ENTRY, VERIFICATION))
 
+    def test_bazel_disk_cache_hit_does_not_authorize_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            disk_cache = root / "Bazel" / "disk-cache" / ("ab" * 32)
+            disk_cache.parent.mkdir(parents=True)
+            disk_cache.write_bytes(b"bazel-action-result")
+            store = artifact_store.ArtifactStore(root / "Artifacts")
+            self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
+            self.assertFalse(any(store.root.rglob("verification.json")))
+
+    def test_local_hit_verifies_and_does_not_authorize_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blob = _component_tar(root)
+            tree = root / "tree"
+            tree.mkdir()
+            (tree / "uapi.sha256").write_text(ENTRY["unsigned_digest"] + "\n", encoding="utf-8")
+            store = artifact_store.ArtifactStore(root / "Artifacts")
+            store.publish_download("uapi", ENTRY, blob, tree, VERIFICATION)
+            found = store.lookup("uapi", ENTRY, VERIFICATION)
+            self.assertIsNotNone(found)
+            assert found is not None
+            self.assertFalse(found["needs_reverify"])
+            self.assertNotIn("signature_verified", found)
+            self.assertNotIn("promotion_authorized", found)
+            self.assertNotIn("release_authorized", found)
+            mismatched = dict(VERIFICATION)
+            mismatched["trust_policy_sha256"] = "33" * 32
+            again = store.lookup("uapi", ENTRY, mismatched)
+            self.assertIsNotNone(again)
+            assert again is not None
+            self.assertTrue(again["needs_reverify"])
+            self.assertNotIn("signature_verified", again)
+
+    def test_eviction_does_not_change_locked_artifact_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blob = _component_tar(root)
+            tree = root / "tree"
+            tree.mkdir()
+            (tree / "uapi.sha256").write_text(ENTRY["unsigned_digest"] + "\n", encoding="utf-8")
+            store = artifact_store.ArtifactStore(root / "Artifacts")
+            store.publish_download("uapi", ENTRY, blob, tree, VERIFICATION)
+            before = store.lookup("uapi", ENTRY, VERIFICATION)
+            self.assertIsNotNone(before)
+            assert before is not None
+            identity = before["artifact_identity"]
+            extra = store.root / "objects" / "oci" / "sha256" / ("ef" * 32)
+            extra.mkdir(parents=True)
+            (extra / "payload").write_bytes(b"evict-me")
+            (extra / "verification.json").write_text(
+                json.dumps({"last_used_at": 0}),
+                encoding="utf-8",
+            )
+            lock = root / "artifacts.lock.json"
+            _write_lock(lock)
+            payload = store.gc(lock, now=100, max_age_seconds=10, max_bytes=10**9)
+            self.assertEqual(payload["removed_objects"], 1)
+            self.assertFalse(extra.exists())
+            found = store.lookup("uapi", ENTRY, VERIFICATION)
+            self.assertIsNotNone(found)
+            assert found is not None
+            self.assertEqual(found["artifact_identity"], identity)
+            self.assertFalse(found["needs_reverify"])
+
 
 if __name__ == "__main__":
     unittest.main()
