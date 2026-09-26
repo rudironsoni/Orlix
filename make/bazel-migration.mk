@@ -880,7 +880,7 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	rg -F -q "$$lock_buildset" "$${os_binary%/*}/composition.json" || { echo "promoted kernel composition must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	initramfs="$$(/usr/bin/find "$$ipa_work/Payload/Orlix.app" -name 'initramfs.cpio.gz' -print | /usr/bin/head -n 1)"; \
 	test -s "$$initramfs" || { echo "promoted IPA missing reconstructed rootfs initramfs" >&2; rm -rf "$$ipa_work"; exit 1; }; \
-	imported_initramfs="$(CURDIR)/bazel/promotion/imported/rootfs/initramfs.cpio.gz"; \
+	imported_initramfs="$(CURDIR)/bazel/promotion/imported/rootfs/product/initramfs.cpio.gz"; \
 	test -s "$$imported_initramfs" || { echo "missing staged reconstructed initramfs" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	test "$$(/usr/bin/shasum -a 256 "$$initramfs" | /usr/bin/awk '{print $$1}')" = "$$(/usr/bin/shasum -a 256 "$$imported_initramfs" | /usr/bin/awk '{print $$1}')" || { echo "IPA initramfs does not match reconstructed OCI tree" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	fi; \
