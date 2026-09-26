@@ -17,7 +17,8 @@ def _pinned_env(ctx):
     }
 
 def _extract():
-    return '/usr/bin/python3 -B -c \'import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="data")\''
+    # filter= exists only when tarfile.data_filter does (Python 3.12+).
+    return "/usr/bin/python3 -B -c 'import sys,tarfile; archive=tarfile.open(sys.argv[1]); archive.extractall(sys.argv[2], filter=\"data\") if hasattr(tarfile, \"data_filter\") else archive.extractall(sys.argv[2])'"
 
 def _guest_package_impl(ctx):
     sysroot = ctx.attr.sysroot[OrlixLibcSysrootInfo]

@@ -5,7 +5,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
+import sysconfig
+import tarfile
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -18,6 +25,13 @@ LOCAL_RULES = ("local.bzl", "package.bzl", "source_key.bzl")
 
 def _execution_requirements(text: str) -> list[str]:
     return re.findall(r"execution_requirements\s*=\s*\{([^}]*)\}", text)
+
+
+def _starlark_extract_command(text: str) -> str:
+    match = re.search(r'def _extract\(\):\n(?:    #[^\n]*\n)?    return "(.*)"\n', text)
+    if match is None:
+        raise AssertionError("local extraction command is missing")
+    return match.group(1).replace('\\"', '"')
 
 
 class PackageActionKeyTests(unittest.TestCase):
@@ -45,6 +59,9 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertIn("source_stamp", text)
             self.assertIn("test -s \"$source_archive\"", text)
             self.assertIn("test -s \"$source_stamp\"", text)
+            self.assertIn(r'hasattr(tarfile, \"data_filter\")', text)
+            self.assertIn(r'filter=\"data\"', text)
+            self.assertIn("else archive.extractall(sys.argv[2])", text)
             self.assertNotIn("TMPDIR", text)
             self.assertIn("use_default_shell_env = False", text)
         self.assertIn("configure_directory", package)
@@ -52,6 +69,60 @@ class PackageActionKeyTests(unittest.TestCase):
         self.assertIn('name = "true_configure_directory"', build)
         self.assertIn('configure_directory = ":true_configure_directory"', build)
         self.assertIn('glob(["true/**"])', build)
+
+    def test_local_extraction_runs_without_data_filter(self) -> None:
+        command = _starlark_extract_command((PACKAGES / "local.bzl").read_text(encoding="utf-8"))
+        package_command = _starlark_extract_command((PACKAGES / "package.bzl").read_text(encoding="utf-8"))
+        self.assertEqual(command, package_command)
+        code = command.split("-c ", 1)[1]
+        self.assertTrue(code.startswith("'") and code.endswith("'"))
+        code = code[1:-1]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "sources.tar"
+            member = root / "getconf.c"
+            member.write_text("int main(void){return 0;}\n", encoding="utf-8")
+            with tarfile.open(archive, "w") as tar:
+                tar.add(member, arcname="getconf.c")
+            modern = root / "modern"
+            modern.mkdir()
+            subprocess.run([sys.executable, "-B", "-c", code, str(archive), str(modern)], check=True)
+            self.assertEqual((modern / "getconf.c").read_text(encoding="utf-8"), member.read_text(encoding="utf-8"))
+            legacy = root / "legacy"
+            legacy.mkdir()
+            fake = root / "fakepy"
+            fake.mkdir()
+            stdlib = Path(sysconfig.get_path("stdlib")) / "tarfile.py"
+            (fake / "tarfile.py").write_text(
+                textwrap.dedent(
+                    f"""
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("_real_tarfile", {str(stdlib)!r})
+                    real = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(real)
+
+                    class _Archive:
+                        def __init__(self, inner):
+                            self._inner = inner
+                        def extractall(self, path, **kwargs):
+                            if "filter" in kwargs:
+                                raise TypeError("extractall() got an unexpected keyword argument 'filter'")
+                            return self._inner.extractall(path)
+
+                    def open(*args, **kwargs):
+                        return _Archive(real.open(*args, **kwargs))
+                    """
+                ),
+                encoding="utf-8",
+            )
+            env = dict(os.environ)
+            env["PYTHONPATH"] = str(fake)
+            subprocess.run(
+                [sys.executable, "-B", "-c", code, str(archive), str(legacy)],
+                check=True,
+                env=env,
+            )
+            self.assertEqual((legacy / "getconf.c").read_text(encoding="utf-8"), member.read_text(encoding="utf-8"))
 
     def test_lockfile_matches_coreutils_patch_input(self) -> None:
         extension = ROOT / "bazel/extensions/native_sources.bzl"
