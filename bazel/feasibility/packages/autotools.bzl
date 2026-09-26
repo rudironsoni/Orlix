@@ -193,7 +193,7 @@ if [ -n "$extra_tree" ]; then extra_tree="$work/inputs/extra"; fi
 /bin/mkdir -p "$work/build" "$work/dest" "$work/toolchain"
 launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 case "$launcher" in
-  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  /opt/homebrew/bin/ccache) if [ -z "${CCACHE_DIR:-}" ]; then launcher=""; fi ;;
   "") ;;
   *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
 esac
