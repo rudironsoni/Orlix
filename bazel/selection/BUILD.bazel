@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "auto_preflight.py",
+    "boundary.bzl",
+    "materialize_bytes.py",
+    "origin_resolver.py",
+    "worktree_classifier.py",
+])
