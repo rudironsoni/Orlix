@@ -23,9 +23,6 @@ def _pinned_env(ctx):
         "PROFILE": ctx.attr.profile,
         "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
-    ccache_dir = shell.get("CCACHE_DIR")
-    if ccache_dir:
-        env["CCACHE_DIR"] = ccache_dir
     ccache_disable = shell.get("CCACHE_DISABLE")
     if ccache_disable:
         env["CCACHE_DISABLE"] = ccache_disable
@@ -174,10 +171,11 @@ test -x "$clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 test -n "$sdkroot"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
-export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
-if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
-  test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; }
+if [ -z "${CCACHE_DIR:-}" ]; then
+  export ORLIX_COMPILER_LAUNCHER=
+else
+  export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 fi
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"

@@ -32,9 +32,18 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertIn("use_default_shell_env = False", archive)
         self.assertNotIn("use_default_shell_env = True", self.rule)
         self.assertNotIn("TMPDIR", self.rule)
-        self.assertIn('shell.get("CCACHE_DIR")', self.rule)
+        self.assertNotIn('shell.get("CCACHE_DIR")', self.rule)
+        self.assertNotIn('env["CCACHE_DIR"]', self.rule)
         self.assertIn('shell.get("CCACHE_DISABLE")', self.rule)
         self.assertNotIn("env[\"TMPDIR\"]", self.rule)
+        self.assertNotIn("CCACHE_DIR is required", self.rule)
+
+    def test_unset_ccache_dir_compiles_directly(self) -> None:
+        start = self.rule.index('if [ -z "${CCACHE_DIR:-}" ]; then')
+        snippet = self.rule[start:self.rule.index("fi\n", start) + 3]
+        script = "set -euo pipefail\nunset CCACHE_DIR\nunset ORLIX_COMPILER_LAUNCHER\n" + snippet + '\ntest -z "${ORLIX_COMPILER_LAUNCHER}"\n'
+        result = subprocess.run(["bash"], input=script, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unread_extra_inputs_are_gone(self) -> None:
         self.assertNotIn("extra_inputs", self.rule)
