@@ -216,7 +216,10 @@ ios_application(
         "//Orlix/Orlix/Resources:bundle_resources",
         "Orlix/PrivacyInfo.xcprivacy",
         "//docs/sources/release:orlix-app-release-inputs.json",
-    ] + glob(["Orlix/Assets.xcassets/**"]),
+    ] + glob(["Orlix/Assets.xcassets/**"]) + select({
+        "//bazel/config:component_promoted": ["//bazel/promotion:locked_buildset"],
+        "//conditions:default": [],
+    }),
     linkopts = [
         "-objc_stubs_small",
         "-weak_framework",
