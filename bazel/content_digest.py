@@ -106,6 +106,7 @@ def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
         # Promotion manifests name files only: directories are implicit in
         # file paths, and the promotion validator rejects anything else.
         # Symlinks fail loudly here instead of vanishing from the payload.
+        # Consumer actions also refuse symlink inputs; projection copies bytes.
         symlinks = sorted(entry["path"] for entry in entries if entry["type"] == "symlink")
         if symlinks:
             raise ValueError(f"promotion manifests cannot contain symlinks: {symlinks}")
@@ -122,6 +123,31 @@ def _relative_artifact_path(name: str) -> str:
     if any(part in ("", ".", "..") for part in parts):
         raise ValueError(f"invalid artifact path: {name!r}")
     return name
+
+
+def _selected_source(path: Path) -> Path:
+    """Read staged file bytes when Bazel exposes the file as an absolute symlink.
+
+    A relative symlink is product content: its target stays in the identity.
+    An absolute symlink is an origin exec path. Follow it only when it names a
+    regular file, so that path cannot become the consumer key.
+    """
+    try:
+        if not stat.S_ISLNK(path.lstat().st_mode):
+            return path
+    except OSError:
+        return path
+    target = os.readlink(path)
+    if not target.startswith("/"):
+        return path
+    resolved = Path(target)
+    try:
+        metadata = resolved.lstat()
+    except OSError as error:
+        raise ValueError(f"artifact symlink target is not a file: {path}") from error
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"artifact symlink target is not a file: {path}")
+    return resolved
 
 
 def _selected_entries(artifacts: ArtifactSelection) -> list[dict]:
@@ -141,7 +167,7 @@ def _selected_entries(artifacts: ArtifactSelection) -> list[dict]:
         if relative in names:
             raise ValueError(f"duplicate artifact path: {relative}")
         names.add(relative)
-        entries.append(_entry(Path(source), relative, allow_directory=False))
+        entries.append(_entry(_selected_source(Path(source)), relative, allow_directory=False))
     return sorted(entries, key=lambda entry: entry["path"])
 
 
@@ -173,6 +199,55 @@ def artifact_manifest_v2(
     ).encode("ascii")
 
 
+def _owner_write_only(recorded: int, observed: int) -> bool:
+    if type(recorded) is not int or type(observed) is not int:
+        return False
+    return observed == (recorded | 0o200) and (recorded & 0o200) == 0
+
+
+def assert_staged_product_match(imported: bytes, computed: bytes) -> None:
+    """Accept a staged manifest whose only mode change is Bazel's owner-write bit."""
+    try:
+        left = json.loads(imported)
+        right = json.loads(computed)
+    except json.JSONDecodeError as error:
+        raise ValueError("artifact identity manifest is not JSON") from error
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        raise ValueError("artifact identity manifest is not an object")
+    for key in ("domain", "format", "version"):
+        if left.get(key) != right.get(key):
+            raise ValueError(f"artifact identity {key} differs")
+    left_entries = left.get("entries")
+    right_entries = right.get("entries")
+    if not isinstance(left_entries, list) or not isinstance(right_entries, list):
+        raise ValueError("artifact identity entries are missing")
+    if len(left_entries) != len(right_entries):
+        raise ValueError("artifact identity entry count differs")
+    for recorded, observed in zip(left_entries, right_entries):
+        if not isinstance(recorded, dict) or not isinstance(observed, dict):
+            raise ValueError("artifact identity entry is not an object")
+        if recorded.get("path") != observed.get("path") or recorded.get("type") != observed.get("type"):
+            raise ValueError("artifact identity path or type differs")
+        if recorded.get("content_sha256") != observed.get("content_sha256"):
+            raise ValueError("artifact identity content differs")
+        if recorded.get("target") != observed.get("target"):
+            raise ValueError("artifact identity symlink target differs")
+        recorded_mode = recorded.get("mode")
+        observed_mode = observed.get("mode")
+        if recorded_mode != observed_mode and not _owner_write_only(recorded_mode, observed_mode):
+            raise ValueError(
+                f"artifact identity mode differs for {recorded.get('path')}: {recorded_mode} != {observed_mode}"
+            )
+
+
+def restore_recorded_modes(imported: bytes, root: Path) -> None:
+    payload = json.loads(imported)
+    for entry in payload["entries"]:
+        if entry.get("type") != "file":
+            continue
+        os.chmod(root / entry["path"], entry["mode"])
+
+
 def artifact_identity_v2(
     root: Optional[Path] = None,
     *,
@@ -185,11 +260,31 @@ def artifact_identity_v2(
     ).hexdigest()
 
 
+def consumer_tree_identity(root: Path) -> str:
+    """Identity of the files a consumer reads. Directory modes and origin paths stay out."""
+    return hashlib.sha256(artifact_manifest_v2(root, files_only=True)).hexdigest()
+
+
+def consumer_file_identity(path: Path, logical_path: str = "file") -> str:
+    """Identity of one file under a stable logical path. The origin path stays out."""
+    return artifact_identity_v2(artifacts={logical_path: path})
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--consumer", action="store_true")
+    parser.add_argument("--consumer-file", action="store_true")
+    parser.add_argument("--logical-path", default="file")
     parser.add_argument("root", type=Path)
     args = parser.parse_args(argv)
-    print(tree_digest(args.root))
+    if args.consumer and args.consumer_file:
+        raise SystemExit("choose one of --consumer or --consumer-file")
+    if args.consumer_file:
+        print(consumer_file_identity(args.root, args.logical_path))
+    elif args.consumer:
+        print(consumer_tree_identity(args.root))
+    else:
+        print(tree_digest(args.root))
     return 0
 
 
