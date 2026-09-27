@@ -1,4 +1,6 @@
+load(":bytes_archive.bzl", "orlix_bytes_archive")
 load(":composition.bzl", "orlix_kernel_composition")
+load(":composition_stamp.bzl", "orlix_kernel_composition_stamp")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -7,9 +9,46 @@ orlix_kernel_composition(
     boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
     hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
     linux_archive = "//bazel/feasibility/kernel:selected_macho",
-    locked_buildset = select({
-        "//bazel/config:component_promoted": "//bazel/promotion:locked_buildset",
-        "//conditions:default": "//bazel/promotion:no_lock",
+    tags = ["manual"],
+)
+
+orlix_kernel_composition_stamp(
+    name = "kernel_composition_stamp",
+    composition = ":kernel_composition",
+    locked_buildset = "//bazel/promotion:locked_buildset",
+    record_promoted = select({
+        "//bazel/config:component_promoted": True,
+        "//conditions:default": False,
+    }),
+    tags = ["manual"],
+)
+
+# Action-key probe only. The app does not package this target.
+orlix_bytes_archive(
+    name = "action_identity_archive",
+    archive = "composition_stamp.py",
+    boot = [
+        "composition.bzl",
+        "lock_digest.bzl",
+    ],
+    digest = "composition_stamp.py",
+)
+
+orlix_kernel_composition(
+    name = "action_identity_composition",
+    boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
+    hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
+    linux_archive = ":action_identity_archive",
+    tags = ["manual"],
+)
+
+orlix_kernel_composition_stamp(
+    name = "action_identity_stamp",
+    composition = ":action_identity_composition",
+    locked_buildset = "//bazel/promotion:locked_buildset",
+    record_promoted = select({
+        "//bazel/config:component_promoted": True,
+        "//conditions:default": False,
     }),
     tags = ["manual"],
 )

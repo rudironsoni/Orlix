@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Stamp promoted composition provenance off the kernel action
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) records the locked buildset on the promoted composition stamp. The byte-hashed kernel composition stays `"buildset": null`, and source mode does not claim that promoted buildset.
+
 ## [2026-09-27] build | Select promoted boundaries in the live product graph
 
 The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) makes per-boundary origin flags the product-graph selector. Source and promoted producers feed selected kernel, UAPI, sysroot, and rootfs targets, and those selected targets are what the app consumes. Recording the locked buildset inside composition metadata stays a separate change.

@@ -881,7 +881,8 @@ __bazel-orlix-app: __bazel-feasibility-bootstrap $(if $(filter promoted,$(ORLIX_
 	test -s "$$stamp" || { echo "promoted //Orlix:Orlix must embed locked-buildset.json" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	rg -F -q "$$lock_buildset" "$$stamp" || { echo "IPA lock stamp does not match artifacts.lock.json" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	if rg -q ':latest' "$$stamp"; then echo "locked-buildset.json must not use mutable latest" >&2; rm -rf "$$ipa_work"; exit 1; fi; \
-	rg -F -q "$$lock_buildset" "$${os_binary%/*}/composition.json" || { echo "promoted kernel composition must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
+	composition_stamp="$${os_binary%/*}/composition.json"; \
+	python3 -c 'import json,sys; payload=json.load(open(sys.argv[1])); assert payload.get("buildset")==sys.argv[2], payload.get("buildset")' "$$composition_stamp" "$$lock_buildset" || { echo "promoted //bazel/product:kernel_composition_stamp must record the locked buildset" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	initramfs="$$(/usr/bin/find "$$ipa_work/Payload/Orlix.app" -name 'initramfs.cpio.gz' -print | /usr/bin/head -n 1)"; \
 	test -s "$$initramfs" || { echo "promoted IPA missing reconstructed rootfs initramfs" >&2; rm -rf "$$ipa_work"; exit 1; }; \
 	imported_initramfs="$(CURDIR)/bazel/promotion/imported/rootfs/product/initramfs.cpio.gz"; \
@@ -1080,6 +1081,8 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 	@rg -q '"linked_symbol": "_arch_boot_entry"' bazel-bin/bazel/product/kernel_composition/composition.json
 	@rg -F -q '"undefined_kernel_symbols": []' bazel-bin/bazel/product/kernel_composition/composition.json
 	@rg -q '"xcframework": null' bazel-bin/bazel/product/kernel_composition/composition.json
+	@rg -F -q '"buildset": null' bazel-bin/bazel/product/kernel_composition/composition.json
+	@lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; if rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json; then echo "source mode must not claim promoted provenance" >&2; exit 1; fi
 	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
 
 __bazel-cache-equivalence: __bazel-feasibility-bootstrap
