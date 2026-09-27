@@ -66,6 +66,10 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("hostadapter = \"//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs\"", product)
         self.assertIn('name = "OrlixOS"', session)
         self.assertIn('name = "OrlixOSFramework"', app)
+        self.assertIn(
+            'strip_structured_resources_prefixes = ["payload", "selected_macho", "macho"]',
+            app,
+        )
         self.assertIn("//Orlix:OrlixOSFramework", mk)
         self.assertIn("//bazel/product:kernel_composition", mk)
 
