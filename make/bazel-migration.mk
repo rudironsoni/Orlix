@@ -698,6 +698,10 @@ __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	extra=(); \
 	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
 	rootfs_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"rootfs",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/rootfs-live-mismatch.json")"; \
+	kernel_identity="bazel-bin/bazel/feasibility/kernel/macho/kernel.artifact-identity-v2.sha256"; \
+	test -s "$$kernel_identity" || { echo "missing kernel artifact-identity-v2 digest" >&2; exit 1; }; \
+	kernel_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1], profile=sys.argv[4], destination=sys.argv[5]); p=graph.select_matching_live_digest(s,"kernel",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" "$$kernel_identity" "$(ORLIX_BUILD_ROOT)/Bazel/proof/kernel-live-mismatch.json" "$(PROFILE)" "$(ORLIX_BAZEL_DESTINATION)")"; \
+	test -n "$$kernel_digest" || { echo "kernel artifact identity does not match the locked profile and destination" >&2; exit 1; }; \
 	if [ -n "$$mlibc_digest" ]; then extra+=(--mlibc-digest "$$mlibc_digest"); fi; \
 	if [ -n "$$rootfs_digest" ]; then extra+=(--rootfs-digest "$$rootfs_digest"); fi; \
 	if [ -s bazel-bin/Orlix/Orlix.ipa ]; then extra+=(--app-digest "$$(/usr/bin/shasum -a 256 bazel-bin/Orlix/Orlix.ipa | /usr/bin/awk '{print $$1}')"); fi; \
@@ -712,10 +716,10 @@ __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
 		--uapi-digest bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256 \
-		--kernel-digest "$$(/usr/bin/shasum -a 256 bazel-bin/bazel/feasibility/kernel/macho/OrlixKernel.a | /usr/bin/awk '{print $$1}')" \
+		--kernel-digest "$$kernel_digest" \
 		--toolchain-digest "$$toolchain_digest" \
 		--profile "$(PROFILE)" \
-		--destination iphonesimulator \
+		--destination "$(ORLIX_BAZEL_DESTINATION)" \
 		"$${extra[@]}"
 	@python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); print("proof graph complete:", p["complete"]); sys.exit(0 if p["complete"] else 1)' "$(ORLIX_BUILD_ROOT)/Bazel/proof/index.json"
 

@@ -16,14 +16,39 @@ def load_digest(path: str) -> str:
     return require_sha256(text)
 
 
-def subjects_from_lock(path: str) -> tuple[dict[str, str], str | None]:
+KERNEL_PROFILES = frozenset({"release", "development"})
+KERNEL_DESTINATIONS = frozenset({"iphoneos", "iphonesimulator"})
+
+
+def kernel_lock_component(profile: str, destination: str) -> str:
+    if profile not in KERNEL_PROFILES or destination not in KERNEL_DESTINATIONS:
+        raise BindError(
+            f"kernel proof requires a locked profile and destination, got {profile!r} {destination!r}"
+        )
+    return f"kernel-{profile}-{destination}"
+
+
+def subjects_from_lock(
+    path: str,
+    profile: str | None = None,
+    destination: str | None = None,
+) -> tuple[dict[str, str], str | None]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    components = payload.get("components") or {}
     subjects: dict[str, str] = {}
     for name in ("uapi", "mlibc", "rootfs"):
-        entry = (payload.get("components") or {}).get(name) or {}
+        entry = components.get(name) or {}
         unsigned = entry.get("unsigned_digest")
         if unsigned:
             subjects[name] = require_sha256(unsigned)
+    if profile is not None or destination is not None:
+        if not profile or not destination:
+            raise BindError("kernel lock selection requires both profile and destination")
+        component = kernel_lock_component(profile, destination)
+        unsigned = (components.get(component) or {}).get("unsigned_digest")
+        if not unsigned:
+            raise BindError(f"lock is missing {component} unsigned digest")
+        subjects["kernel"] = require_sha256(unsigned)
     buildset = payload.get("buildset")
     return subjects, require_sha256(str(buildset)) if buildset else None
 
@@ -185,7 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     lock_subjects: dict[str, str] = {}
     lock_buildset = None
     if args.lock:
-        lock_subjects, lock_buildset = subjects_from_lock(args.lock)
+        lock_subjects, lock_buildset = subjects_from_lock(
+            args.lock, profile=args.profile, destination=args.destination
+        )
     live = {"uapi": _digest(args.uapi_digest), "kernel": _digest(args.kernel_digest)}
     if args.mlibc_digest:
         live["mlibc"] = _digest(args.mlibc_digest)

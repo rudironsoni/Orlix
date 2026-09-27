@@ -593,6 +593,19 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn('"name": "__bazel-substitute-promoted"', inventory)
         self.assertIn('"name": "__bazel-promote-$(1)"', inventory)
 
+    def test_proof_graph_binds_locked_kernel_identity(self) -> None:
+        recipe = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8").split(
+            "__bazel-proof-graph:", 1
+        )[1].split("__bazel-prove-matrix:", 1)[0]
+        self.assertIn("kernel.artifact-identity-v2.sha256", recipe)
+        self.assertIn("profile=sys.argv[4], destination=sys.argv[5]", recipe)
+        self.assertIn('--destination "$(ORLIX_BAZEL_DESTINATION)"', recipe)
+        self.assertIn(
+            "kernel-dependency kunit kselftest orlixmlibc syscall-uapi posix-shell jq curl zsh product-integration",
+            recipe,
+        )
+        self.assertNotIn("OrlixKernel.a", recipe)
+
 
 if __name__ == "__main__":
     unittest.main()
