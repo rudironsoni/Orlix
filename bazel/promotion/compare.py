@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from content_digest import tree_digest  # noqa: E402
+from content_digest import iter_tree_records, tree_digest  # noqa: E402
 from locked_buildset import (  # noqa: E402
     ARTIFACT_IDENTITY_V2_FORMAT,
     ARTIFACT_IDENTITY_V2_VERSION,
@@ -40,6 +40,30 @@ def compare_digests(first: str, second: str) -> str:
     return left
 
 
+def first_tree_difference(first: Path, second: Path) -> str:
+    """Return the first relative path whose presence, mode, or content differs.
+
+    The caller passes the cached tree first and the fresh tree second. A path
+    only in the second tree was dropped by cache restoration.
+    """
+    left = {relative: (mode, content) for relative, mode, content in iter_tree_records(first)}
+    right = {relative: (mode, content) for relative, mode, content in iter_tree_records(second)}
+    for relative in sorted(set(left) | set(right)):
+        if relative not in left:
+            return f"{relative} (only in the second tree)"
+        if relative not in right:
+            return f"{relative} (only in the first tree)"
+        left_mode, left_content = left[relative]
+        right_mode, right_content = right[relative]
+        if left_mode != right_mode and left_content == right_content:
+            return f"{relative} (mode {oct(left_mode)} != {oct(right_mode)})"
+        if left_content != right_content and left_mode == right_mode:
+            return f"{relative} (content)"
+        if (left_mode, left_content) != (right_mode, right_content):
+            return f"{relative} (mode and content)"
+    return "unknown"
+
+
 def compare_trees(
     first: str,
     second: str,
@@ -63,11 +87,15 @@ def compare_trees(
         left_product = validate_v2_product(left, left_identity, component)
         right_product = validate_v2_product(right, right_identity, component)
         if left_product["identity"]["digest"] != right_product["identity"]["digest"]:
-            raise ValueError("promotion component contents differ")
+            relative = first_tree_difference(left, right)
+            label = component or "component"
+            raise ValueError(f"promotion component contents differ: {label} {relative}")
         return left_product["identity"]["digest"]
     digest = tree_digest(left)
     if digest != tree_digest(right):
-        raise ValueError("promotion component contents differ")
+        relative = first_tree_difference(left, right)
+        label = component or "component"
+        raise ValueError(f"promotion component contents differ: {label} {relative}")
     return digest
 
 

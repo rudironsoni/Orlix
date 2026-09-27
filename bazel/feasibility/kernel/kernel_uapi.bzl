@@ -90,7 +90,11 @@ test -s "$work/hdr/include/linux/unistd.h"
 test -s "$work/hdr/include/asm/unistd.h"
 /bin/mkdir -p "$headers_out"
 /bin/cp -R -L "$work/hdr/include" "$headers_out/include"
-/usr/bin/python3 "$archive_py" archive "$work/linux/.orlix-uapi-build" "$archive_out"
+work_real="$(/usr/bin/python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$work")"
+replace_args=(--replace "$work=/orlix/linux-uapi-work")
+if [ "$work_real" != "$work" ]; then replace_args+=(--replace "$work_real=/orlix/linux-uapi-work"); fi
+/usr/bin/python3 "$archive_py" stabilize "$headers_out" "${replace_args[@]}"
+/usr/bin/python3 "$archive_py" archive "$work/linux/.orlix-uapi-build" "$archive_out" "${replace_args[@]}"
 /usr/sbin/chown -R "$(/usr/bin/id -u):$(/usr/bin/id -g)" "$headers_out" 2>/dev/null || true
 /bin/chmod -R 0555 "$headers_out"
 digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"

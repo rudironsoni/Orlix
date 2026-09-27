@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Keep disk-cache restores equal to fresh foreign outputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. A content mismatch now names the component and the first differing relative path. The UAPI Kbuild archive rewrites the temporary work directory to a stable path, and the mlibc install rewrites the same class of absolute path in text files and symlink targets. Archive timestamps use `SOURCE_DATE_EPOCH` and `ZERO_AR_DATE`. `DEVELOPER_DIR` stays off the mlibc action key.
+
 ## [2026-09-27] build | Use LLVM clang for the mlibc guest link
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps Apple clang for the native SDK slice and points the guest compiler at staged Homebrew LLVM clang. The guest link passes `-fuse-ld=` the absolute path of the staged `ld.lld` input. The action rejects that compiler when its version string says Apple clang. `DEVELOPER_DIR` stays off the action key.

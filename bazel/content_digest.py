@@ -24,10 +24,14 @@ ArtifactSelection = Union[
 ]
 
 
-def tree_digest(root: Path) -> str:
+def iter_tree_records(root: Path):
+    """Yield ``(relative posix path, st_mode, content)`` in tree_digest order.
+
+    Content is the symlink target, the sha256 of a regular file, or empty for a
+    directory. Modes include the file-type bits.
+    """
     if not root.is_dir():
         raise ValueError(f"missing component tree: {root}")
-    digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         mode = path.lstat().st_mode
         if stat.S_ISLNK(mode):
@@ -42,7 +46,13 @@ def tree_digest(root: Path) -> str:
             content = ""
         else:
             raise ValueError(f"unsupported component entry: {path}")
-        record = [path.relative_to(root).as_posix(), mode, content]
+        yield path.relative_to(root).as_posix(), mode, content
+
+
+def tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for relative, mode, content in iter_tree_records(root):
+        record = [relative, mode, content]
         digest.update(json.dumps(record, separators=(",", ":")).encode() + b"\n")
     return digest.hexdigest()
 

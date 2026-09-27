@@ -168,6 +168,7 @@ class MakeRoutingTests(unittest.TestCase):
         )[0]
         self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
         self.assertIn("compare_trees", equivalence)
+        self.assertIn("component=name", equivalence)
         self.assertIn("--nouse_action_cache --disk_cache=", equivalence)
         self.assertIn("//bazel/feasibility/kernel:uapi", equivalence)
         self.assertIn("//bazel/feasibility/mlibc:sysroot", equivalence)
