@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Stage only the cycle-free macOS SDK slice
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.json`, `usr/include`, and `usr/lib` for the sysroot's native compiler. The Ruby.framework header symlink cycle stays out of the action inputs, and `DEVELOPER_DIR` stays off the action key.
+
 ## [2026-09-27] build | Run cache equivalence from Apple CI
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) makes `make __bazel-apple-ci` run the existing `__bazel-cache-equivalence` target. That target still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. The workflow file is unchanged.
