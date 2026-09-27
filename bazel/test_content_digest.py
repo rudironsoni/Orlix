@@ -217,7 +217,7 @@ class ConsumerIdentityTests(unittest.TestCase):
         self.assertNotIn("DEVELOPER_DIR", identity)
         self.assertNotIn("source_input_digest", identity)
         product = (ROOT / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
-        self.assertIn('linux_archive = "//bazel/feasibility/kernel:macho"', product)
+        self.assertIn('linux_archive = "//bazel/feasibility/kernel:selected_macho"', product)
         self.assertIn('hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs"', product)
 
 

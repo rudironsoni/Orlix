@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Select promoted boundaries in the live product graph
+
+The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) makes per-boundary origin flags the product-graph selector. Source and promoted producers feed selected kernel, UAPI, sysroot, and rootfs targets, and those selected targets are what the app consumes. Recording the locked buildset inside composition metadata stays a separate change.
+
 ## [2026-09-15] build | Rework the ordered kernel link for the Xcode 27 linker
 
 The [feasibility experiment](objects/task/done/run-bazel-xcode-26-6-feasibility-experiment.md) stays the completed 26.6 gate. Xcode 27.0 removed `ld-classic` and ignores `-order_file`, so the kernel product link `OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk` now emits per-level start-boundary stub objects and a post-link reordering tool that permutes the merged `__initcalls` entries, their relocations, and the `__sched_class` struct ranges into the expected upstream order. The product pin returned to Xcode 26.6 because the GitHub runner image cannot select Xcode 27.0; Xcode 27.0 stays an allowed local identity and the kernel ordering works under both toolchains. The promoted consumer build proved the schema-2 lock consumption under Xcode 27.0 locally.

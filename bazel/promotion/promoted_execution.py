@@ -64,12 +64,18 @@ def _load_origins(args) -> dict:
     except ImportError as error:
         raise PromotedExecutionError("origin resolver is unavailable") from error
 
+    origins = json.loads(args.vector) if args.vector else None
+    requested_mode = "auto" if origins is not None else args.requested_mode
+    lock_path = Path(args.lock) if args.lock else None
     try:
         vector = resolve(
-            requested_mode=args.requested_mode,
-            vector=json.loads(args.vector) if args.vector else None,
+            requested_mode=requested_mode,
+            origins=origins,
             facts=json.loads(args.facts) if args.facts else None,
-            lock_path=args.lock,
+            lock_path=lock_path,
+            use_promoted_lock=bool(args.lock) or requested_mode == "promoted",
+            profile=args.profile,
+            destination=args.destination,
         )
     except OriginError as error:
         raise PromotedExecutionError(str(error)) from error

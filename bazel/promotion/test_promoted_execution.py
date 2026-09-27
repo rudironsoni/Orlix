@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import promoted_execution
 from source_producers import classify_source_producer
@@ -208,6 +209,29 @@ class PromotedExecutionTests(unittest.TestCase):
             )
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["forbidden_executed"][0]["origin"], "rootfs")
+
+    def test_vector_argument_resolves_as_origins(self) -> None:
+        lock = Path(__file__).resolve().parents[2] / "artifacts.lock.json"
+        args = SimpleNamespace(
+            requested_mode="promoted",
+            vector=json.dumps(
+                {
+                    "kernel": "source",
+                    "uapi": "promoted",
+                    "mlibc": "promoted",
+                    "rootfs": "promoted",
+                }
+            ),
+            facts=None,
+            lock=str(lock),
+            profile="release",
+            destination="iphonesimulator",
+        )
+        origins = promoted_execution._load_origins(args)
+        self.assertEqual(origins["kernel"], "source")
+        self.assertEqual(origins["uapi"], "promoted")
+        self.assertEqual(origins["mlibc"], "promoted")
+        self.assertEqual(origins["rootfs"], "promoted")
 
 
 if __name__ == "__main__":

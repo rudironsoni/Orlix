@@ -532,7 +532,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("//bazel/feasibility/kernel:macho_link", app)
         rootfs = (ROOT / "bazel/feasibility/rootfs/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/promotion:promoted_rootfs", rootfs)
-        self.assertIn("component_promoted", rootfs)
+        self.assertIn("origin_rootfs_promoted", rootfs)
+        self.assertIn('rootfs = ":selected_rootfs"', rootfs)
         promoted = (ROOT / "bazel/promotion/BUILD.bazel").read_text(encoding="utf-8")
         promoted_rule = (ROOT / "bazel/promotion/promoted.bzl").read_text(encoding="utf-8")
         self.assertIn("orlix_promoted_rootfs", promoted)
@@ -556,7 +557,14 @@ class MakeRoutingTests(unittest.TestCase):
             self.assertIn(f'"$exec_root/${{{position}}}"', promoted_rule)
             self.assertNotIn(f'"$exec_root/${position}"', promoted_rule)
         mlibc = (ROOT / "bazel/feasibility/mlibc/BUILD.bazel").read_text(encoding="utf-8")
-        self.assertIn("//bazel/promotion:promoted_uapi", mlibc)
+        self.assertIn("//bazel/feasibility/kernel:selected_uapi", mlibc)
+        self.assertIn("//bazel/promotion:promoted_sysroot", mlibc)
+        app_recipe = mk.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        product_recipe = mk.split("__bazel-product-app:", 1)[1].split("__builder-component-mode:", 1)[0]
+        self.assertIn("bazel/selection/origin_resolver.py", app_recipe)
+        self.assertIn("bazel/selection/origin_resolver.py", product_recipe)
+        self.assertIn("origin-flags.txt", app_recipe)
+        self.assertIn("origin-flags.txt", product_recipe)
         inventory = (ROOT / "bazel/migration/legacy-target-map.json").read_text(
             encoding="utf-8"
         )

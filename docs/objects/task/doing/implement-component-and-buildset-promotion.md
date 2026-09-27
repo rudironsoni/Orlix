@@ -1,13 +1,40 @@
 ---
 type: task
 tags: [task, bazel, artifacts]
-updated: 2026-09-12
+updated: 2026-09-27
 status: doing
 summary: "Implement clean component promotion, signed buildsets, lock proposals, provenance, verification, and retention."
 task_of:
   - "[Promote signed component buildsets](../../story/doing/promote-signed-component-buildsets.md)"
 blocks:
   - "[Implement shared Bazel cache and buildset reuse](implement-shared-bazel-cache-and-buildset-reuse.md)"
+owned_paths:
+  - "bazel/feasibility/kernel/BUILD.bazel"
+  - "bazel/feasibility/mlibc/BUILD.bazel"
+  - "bazel/feasibility/packages/BUILD.bazel"
+  - "bazel/feasibility/rootfs/BUILD.bazel"
+  - "bazel/product/**"
+  - "bazel/selection/**"
+  - "bazel/promotion/promoted.bzl"
+  - "bazel/promotion/promoted_execution.py"
+  - "bazel/promotion/test_promoted_execution.py"
+  - "bazel/migration/test_apple_build_matrix.py"
+  - "bazel/migration/test_make_routing.py"
+  - "bazel/test_content_digest.py"
+  - "make/bazel-migration.mk"
+  - "Orlix/BUILD.bazel"
+  - "docs/objects/task/doing/implement-component-and-buildset-promotion.md"
+  - "docs/log.md"
+required_skills:
+  - "orlix-bazel"
+  - "orlix-implementation-boundaries"
+required_role: "orlix-implementer"
+required_proof:
+  - "configured per-boundary origin selection"
+build_intents:
+  - "instantiate selected kernel, UAPI, sysroot, and rootfs"
+verification_intents:
+  - "bazel query, cquery, and aquery of origin configurations"
 ---
 
 # Implement Component And Buildset Promotion
@@ -27,3 +54,5 @@ The promoted OrlixKit build verifies the embedded initramfs against the reconstr
 Normal protected promotion builds all seven compatible components in one Bazel graph under clean root A and again under clean root B. Both builds disable Bazel action-result reuse, the local disk cache, BuildBuddy, ccache, retained Kbuild state, retained Meson/Ninja state, and retained package state. They may restore only Bazel's checksum-verified repository downloads. The existing per-component Make targets remain diagnostic operations.
 
 The protected workflow compares every component between A and B before it publishes any component. It runs only by manual dispatch in `rudironsoni/Orlix` and requires the `bazel-promotion` environment, so the protected environment can approve an exact pre-merge `fix/build-optimizations` commit without granting pull-request code an automatic package-write path. It signs and publishes all seven immutable GHCR artifacts in the same job, then creates one buildset lock proposal without changing `artifacts.lock.json`. The proposal binds the component types, artifact identities, immutable OCI digests, signing-key fingerprint, and trust-policy digest. Cosign signs and verifies the exact proposal bytes before the proposal can enter the atomic lock target. A separate workflow no longer assembles a buildset from seven independent promotion runs. The Cosign Sigstore bundle is the promotion provenance for the signed proposal, while Cosign component signatures and runtime proof remain separate. The workflow carries no build-provenance attestation path or its token permissions.
+
+The product graph selects each boundary through the origin resolver. Source and promoted producers feed `selected` kernel, UAPI, sysroot, and rootfs targets, and those selected targets are what the app, packages, and rootfs payload consume. `component_mode` remains the all-source or all-promoted request. Recording the locked buildset inside composition metadata stays a separate change.
