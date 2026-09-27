@@ -164,11 +164,17 @@ test -x "$tool_bin/llvm-strip"; test -x "$tool_bin/ld.lld"; test -x "$tool_bin/l
 guest_clang="$tool_root/llvm/bin/clang"
 guest_clangxx="$tool_root/llvm/bin/clang++"
 test -x "$guest_clang"; test -x "$guest_clangxx"; test -d "$guest_lib/clang"
+guest_version="$("$guest_clang" --version 2>&1)"
+printf '%s\n' "$guest_version" >&2
+case "$guest_version" in
+  *"Apple clang"*) printf '%s\n' "guest compiler is Apple clang" >&2; exit 1 ;;
+esac
 clang=clang
 clangxx=clang++
 ar=llvm-ar
 strip=llvm-strip
-lld=ld.lld
+lld="$tool_bin/ld.lld"
+test -x "$lld"
 test -d "$sdkroot"
 test -s "$sdkroot/SDKSettings.json"
 test -d "$uapi_dir/include"
