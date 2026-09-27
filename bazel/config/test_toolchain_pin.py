@@ -243,3 +243,15 @@ class ToolchainPinTests(unittest.TestCase):
                 )
             self.assertEqual(payload["run_id"], "run-2")
             self.assertTrue(calls)
+
+    def test_stage_binary_copies_regular_file_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "ninja"
+            source.write_bytes(b"#!/bin/sh\nprintf ok\n")
+            source.chmod(0o755)
+            destination = root / "stage"
+            staged = pin.stage_binary(source, destination / "bin", destination / "lib", set())
+            self.assertEqual(staged.read_bytes(), source.read_bytes())
+            self.assertTrue(staged.stat().st_mode & 0o111)
+            self.assertEqual(list((destination / "lib").glob("*")), [])

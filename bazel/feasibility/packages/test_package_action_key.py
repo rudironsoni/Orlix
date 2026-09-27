@@ -36,7 +36,7 @@ def _starlark_extract_command(text: str) -> str:
 
 class PackageActionKeyTests(unittest.TestCase):
     def test_guest_packages_stay_uncached(self) -> None:
-        for name in GUEST_RULES:
+        for name in ("coreutils.bzl", "bash.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")
             blocks = _execution_requirements(text)
             self.assertTrue(blocks, name)
@@ -45,6 +45,20 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertNotIn("use_default_shell_env = True", text, name)
             self.assertNotIn("TMPDIR", text, name)
             self.assertNotIn("source-input.sha256", text, name)
+        autotools = (PACKAGES / "autotools.bzl").read_text(encoding="utf-8")
+        blocks = _execution_requirements(autotools)
+        guest = [block for block in blocks if "no-sandbox" in block]
+        interface = [block for block in blocks if "no-sandbox" not in block]
+        self.assertTrue(guest)
+        self.assertTrue(interface)
+        for block in guest:
+            self.assertIn("no-remote-cache", block)
+        for block in interface:
+            self.assertNotIn("no-remote-cache", block)
+            self.assertIn("no-remote-exec", block)
+        self.assertNotIn("use_default_shell_env = True", autotools)
+        self.assertNotIn("TMPDIR", autotools)
+        self.assertNotIn("source-input.sha256", autotools)
 
     def test_local_c_key_is_tar_plus_stamp(self) -> None:
         for name in LOCAL_RULES:

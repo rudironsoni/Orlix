@@ -1,8 +1,8 @@
 """Linux rule-text proof for UAPI inputs and mlibc cache tags."""
 
 from pathlib import Path
-import os
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -74,34 +74,46 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
         self.assertNotIn("configure_args=(--reconfigure)", text)
         self.assertNotIn("-newer", text)
         for action in (compiler, sysroot):
-            self.assertIn('"no-remote-cache": "1"', action)
+            self.assertNotIn("no-remote-cache", action)
             self.assertIn('"no-remote-exec": "1"', action)
+            self.assertIn("use_default_shell_env = False", action)
+        self.assertNotIn("TMPDIR", text)
+        self.assertNotIn("/opt/homebrew/bin/ccache", text)
+        self.assertNotIn("command -v meson", text)
+        self.assertNotIn("command -v ninja", text)
+        self.assertNotIn("command -v llvm-ar", text)
+        self.assertNotIn("command -v llvm-strip", text)
+        self.assertNotIn("command -v ld.lld", text)
+        self.assertNotIn("orlix-mlibc-state", text)
+        self.assertIn("ORLIX_MLIBC_TOOL_BIN", text)
+        self.assertIn("mlibc-work", text)
+        self.assertIn('"$ar" rcs "$runtime_out"', compiler)
+        self.assertNotIn('"$work"/*.o', text)
 
-    def test_unset_ccache_dir_compiles_with_clang(self) -> None:
-        text = SYSROOT.read_text(encoding="utf-8")
-        self.assertNotIn("CCACHE_DIR is required", text)
-        self.assertEqual(text.count('if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then'), 2)
+    def test_compiler_runtime_archives_relative_member_names(self) -> None:
         script = r"""
-launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
-if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
-  launcher=""
-fi
-clang=clang
-compiler=("$clang")
-if [ -n "$launcher" ]; then compiler=("$launcher" "$clang"); fi
-printf '%s\n' "${compiler[0]}"
+set -euo pipefail
+work="$1"
+mkdir -p "$work"
+printf 'obj\n' > "$work/addtf3.o"
+ar_out="$2"
+(
+  cd "$work"
+  members=()
+  for object in *.o; do members+=("$object"); done
+  printf '%s\n' "${members[@]}"
+)
 """
-        base = {"PATH": os.environ["PATH"]}
-        unset = subprocess.run(["bash", "-c", script], env=base, check=True, capture_output=True, text=True)
-        self.assertEqual(unset.stdout.strip(), "clang")
-        cached = subprocess.run(
-            ["bash", "-c", script],
-            env={**base, "CCACHE_DIR": "/tmp/orlix-ccache"},
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(cached.stdout.strip(), "/opt/homebrew/bin/ccache")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            work = root / "compiler-rt-objects"
+            listed = subprocess.run(
+                ["bash", "-c", script, "bash", str(work), str(root / "libcompiler_rt.a")],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(listed.stdout.splitlines(), ["addtf3.o"])
 
     def test_empty_meson_plan_does_not_expand_an_empty_array(self) -> None:
         text = SYSROOT.read_text(encoding="utf-8")

@@ -18,19 +18,33 @@ POLICY = {
     "no_remote_cache_does_not_block": ("output_base_action_cache",),
     "no_remote_exec": True,
 }
+# Remaining tags are missing inputs, not a cache preference:
+# OrlixKernelMachOArchive: gmake, target clang, llvm-ar, ld.lld, and ccache are
+# not file inputs; PATH still selects gnu-sed, coreutils, and findutils;
+# make/tcti-proof-registry-provenance.mk is not an input; incremental state is
+# output_base/orlix-kernel-state.
+# OrlixTctiIsaRestore: /opt/homebrew/bin/gmake is not an input, and the members
+# makefile can run awk from PATH.
+# OrlixGuestPackage: ORLIX_PACKAGE_WORK_ROOT is output-base orlix-package-state
+# or a temp directory and is not an input; configure embeds that absolute path;
+# CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
+# not file inputs.
+# OrlixArtifactIdentityV2: the sandbox presents tree entries as absolute symlinks.
 REQUIRED_NO_REMOTE_CACHE = (
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
-    ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
-    ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfs"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
+    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
 )
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
+    ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
+    ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
+    ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfs"),
     ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfsPayload"),
+    ("bazel/feasibility/packages/autotools.bzl", "OrlixPackageInterface"),
     ("bazel/feasibility/packages/package.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/local.bzl", "OrlixGuestPackage"),
 )
@@ -66,11 +80,9 @@ class RemoteCachePolicyTests(unittest.TestCase):
         self.assertEqual(
             seen,
             {
-                "OrlixCompilerRuntime",
+                "OrlixArtifactIdentityV2",
                 "OrlixGuestPackage",
                 "OrlixKernelMachOArchive",
-                "OrlixMLibCSysroot",
-                "OrlixRootfs",
                 "OrlixTctiIsaRestore",
             },
         )

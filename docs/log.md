@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Cache foreign producers with complete tool inputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) drops `no-remote-cache` from OrlixMLibC, the compiler runtime, rootfs assembly, the package interface, and `gen_init_cpio`. Those actions now take staged host tools as files, omit the client shell environment, and keep `no-remote-exec`. Kernel, ISA restore, guest packages, and artifact identity stay uncached until their missing inputs are declared.
+
 ## [2026-09-27] build | Stamp promoted composition provenance off the kernel action
 
 The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) records the locked buildset on the promoted composition stamp. The byte-hashed kernel composition stays `"buildset": null`, and source mode does not claim that promoted buildset.

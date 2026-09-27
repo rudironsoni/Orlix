@@ -1,6 +1,7 @@
 """Mlibc incremental state without compiling mlibc or running Meson."""
 
 from pathlib import Path
+import os
 import tempfile
 import unittest
 
@@ -127,6 +128,46 @@ class MlibcStateTests(unittest.TestCase):
             self.assertEqual(build_state.ninja_log_end(log), 450)
             self.assertEqual(build_state.compiler_edges_since(log, build_ninja, 250), ["src/foo.c.o"])
             self.assertEqual(build_state.compiler_edges_since(log, build_ninja, 400), [])
+
+    def test_work_root_rejects_output_base_and_temp_state(self) -> None:
+        with self.assertRaises(SystemExit):
+            build_state.run("script", "toolchain", "compiler", "/var/orlix-mlibc-state/aarch64-linux-gnu", ".", [])
+        with self.assertRaises(SystemExit):
+            build_state.run("script", "toolchain", "compiler", "/var/tmp/orlix-mlibc.AbCd", ".", [])
+
+    def test_declared_work_root_drops_client_tmpdir(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / "build.sh"
+            script.write_text(
+                "set -euo pipefail\n"
+                'test -n "$ORLIX_MLIBC_WORK_ROOT"\n'
+                'test -z "${TMPDIR:-}"\n'
+                'test -z "$ORLIX_COMPILER_LAUNCHER"\n'
+                'test -n "$ORLIX_MLIBC_TOOL_BIN"\n',
+                encoding="utf-8",
+            )
+            (root / "toolchain.json").write_text("{}\n", encoding="utf-8")
+            (root / "compiler.json").write_text("{}\n", encoding="utf-8")
+            tools = root / "tools" / "bin"
+            tools.mkdir(parents=True)
+            work = root / "mlibc-work"
+            previous = os.environ.get("TMPDIR")
+            os.environ["TMPDIR"] = "/tmp/client"
+            os.environ["ORLIX_COMPILER_LAUNCHER"] = "/opt/homebrew/bin/ccache"
+            try:
+                status = build_state.run(
+                    str(script), str(root / "toolchain.json"), str(root / "compiler.json"),
+                    str(work), str(tools), [],
+                )
+            finally:
+                if previous is None:
+                    os.environ.pop("TMPDIR", None)
+                else:
+                    os.environ["TMPDIR"] = previous
+                os.environ.pop("ORLIX_COMPILER_LAUNCHER", None)
+            self.assertEqual(status, 0)
+            self.assertTrue((work / "build-state.json").is_file())
 
 
 if __name__ == "__main__":

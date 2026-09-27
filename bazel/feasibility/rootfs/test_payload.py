@@ -83,14 +83,20 @@ class RootfsPayloadTests(unittest.TestCase):
                 stage_payload(destination, images)
             self.assertFalse(destination.exists())
 
-    def test_assembly_keeps_no_remote_cache_and_payload_may_cache(self) -> None:
+    def test_assembly_and_payload_may_cache(self) -> None:
         text = RULE.read_text(encoding="utf-8")
         assembly = _action_requirements(text, "OrlixRootfs")
         payload = _action_requirements(text, "OrlixRootfsPayload")
-        self.assertIn('"no-remote-cache": "1"', assembly)
+        self.assertNotIn("no-remote-cache", assembly)
         self.assertIn('"no-remote-exec": "1"', assembly)
         self.assertNotIn("no-remote-cache", payload)
         self.assertIn('"no-remote-exec": "1"', payload)
+        self.assertIn("ctx.file.mke2fs", text)
+        self.assertIn("ctx.file.debugfs", text)
+        self.assertIn("ctx.file.mke2fs_config", text)
+        self.assertNotIn('"/opt/homebrew/etc/mke2fs.conf"', text)
+        self.assertNotIn("command -v mke2fs", text)
+        self.assertNotIn("TMPDIR", text)
         payload_impl = text.split("def _rootfs_payload_impl", 1)[1].split("orlix_rootfs_payload = rule", 1)[0]
         payload_rule = text.split("orlix_rootfs_payload = rule", 1)[1].split("orlix_rootfs = rule", 1)[0]
         self.assertIn("_stage_payload", payload_impl)
