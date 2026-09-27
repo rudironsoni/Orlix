@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -154,13 +155,107 @@ def resume_identity(toolchain: Path, compiler: Path, script: Path, launcher: Pat
     ]
 
 
-def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int:
+def _declared_work(work: str) -> Path:
+    root = Path(work)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    root = root.resolve()
+    if "orlix-mlibc-state" in root.parts or root.name.startswith("orlix-mlibc."):
+        raise SystemExit("mlibc work root must be the declared exec-root directory, not temp or output-base state")
+    return root
+
+
+def _absolute_replacements(replacements: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for old, new in replacements:
+        if not old.startswith("/") or not new:
+            raise ValueError(f"installed tree replacement must rewrite an absolute path: {old!r}")
+        for candidate in (old, os.path.realpath(old)):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            pairs.append((candidate, new))
+    pairs.sort(key=lambda item: len(item[0]), reverse=True)
+    return pairs
+
+
+def stabilize_installed_tree(roots: list[Path], replacements: list[tuple[str, str]]) -> None:
+    """Replace output-base paths in installed files and symlink targets."""
+    pairs = _absolute_replacements(replacements)
+    for root in roots:
+        if not root.is_dir():
+            raise ValueError(f"missing installed tree: {root}")
+        paths = sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix())
+        for path in paths:
+            if path.is_symlink():
+                target = os.readlink(path)
+                updated = target
+                for old, new in pairs:
+                    updated = updated.replace(old, new)
+                if updated != target:
+                    path.unlink()
+                    path.symlink_to(updated)
+                continue
+            if not path.is_file():
+                continue
+            mode = stat.S_IMODE(path.stat().st_mode)
+            data = path.read_bytes()
+            # ELF and ar records use internal offsets. Rewriting those bytes can
+            # break the library even when both trees change the same way.
+            if data.startswith(b"\x7fELF") or data.startswith(b"!<arch>\n"):
+                continue
+            updated = data
+            for old, new in pairs:
+                updated = updated.replace(old.encode(), new.encode())
+            if updated == data:
+                continue
+            if not os.access(path, os.W_OK):
+                path.chmod(mode | 0o200)
+            path.write_bytes(updated)
+            path.chmod(mode)
+
+
+def _tool_environment(tool_bin: str, sdk: str) -> dict[str, str]:
+    tools = Path(tool_bin)
+    if not tools.is_absolute():
+        tools = Path.cwd() / tools
+    tools = tools.resolve()
+    sdk_root = Path(sdk)
+    if not sdk_root.is_absolute():
+        sdk_root = Path.cwd() / sdk_root
     environment = dict(os.environ)
+    environment.pop("TMPDIR", None)
+    environment.pop("CCACHE_DIR", None)
+    environment.pop("DEVELOPER_DIR", None)
+    environment.pop("SDKROOT", None)
+    environment.pop("ORLIX_PINNED_DEVELOPER_DIR", None)
+    environment["ORLIX_COMPILER_LAUNCHER"] = ""
+    environment["ORLIX_MLIBC_TOOL_BIN"] = str(tools)
+    environment["ORLIX_MLIBC_TOOL_LIB"] = str((tools.parent / "lib").resolve())
+    environment["ORLIX_MLIBC_GUEST_LIB"] = str((tools.parent / "llvm" / "lib").resolve())
+    environment["ORLIX_MLIBC_MESON_HOME"] = str((tools.parent / "python-home").resolve())
+    environment["ORLIX_MLIBC_MESON_LIB"] = str((tools.parent / "py").resolve())
+    environment["ORLIX_MLIBC_SDK"] = str(sdk_root.resolve())
+    environment["PATH"] = str(tools) + ":/usr/bin:/bin"
+    environment["DYLD_LIBRARY_PATH"] = environment["ORLIX_MLIBC_GUEST_LIB"] + ":" + environment["ORLIX_MLIBC_TOOL_LIB"]
+    environment["SOURCE_DATE_EPOCH"] = "1"
+    environment["ZERO_AR_DATE"] = "1"
+    environment["LC_ALL"] = "C"
+    environment["TZ"] = "UTC"
+    return environment
+
+
+def run(script: str, toolchain: str, compiler: str, work: str, tool_bin: str, sdk: str, arguments: list[str]) -> int:
+    environment = _tool_environment(tool_bin, sdk)
+    root = _declared_work(work)
 
     def build(root: Path) -> int:
+        for child in list(root.iterdir()) if root.exists() else []:
+            if child.name != "build.lock":
+                state._remove(child)
         launcher = root / "compiler-launcher"
-        state._remove(launcher)
-        launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", "/opt/homebrew/bin/ccache"))
+        launcher.write_text("")
         identity = resume_identity(Path(toolchain), Path(compiler), Path(script), launcher)
         valid = state.resume(root, identity, _TREES)
         print("Orlix Ninja state: " + ("verified" if valid else "clean"), flush=True)
@@ -172,10 +267,5 @@ def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int
             state.record(root, _TREES)
         return result
 
-    if environment.get("ORLIX_MLIBC_INCREMENTAL", "1") == "0":
-        with tempfile.TemporaryDirectory(prefix="orlix-mlibc.") as temporary:
-            return build(Path(temporary).resolve())
-    base = Path.cwd().parent.parent
-    root = base / "orlix-mlibc-state/aarch64-linux-gnu"
-    with state.locked(root, base):
+    with state.locked(root, root.parent):
         return build(root)

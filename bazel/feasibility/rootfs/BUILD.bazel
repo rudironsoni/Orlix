@@ -7,7 +7,7 @@ package(default_visibility = ["//visibility:private"])
 cc_binary(
     name = "gen_init_cpio",
     srcs = ["@orlix_linux_source//:usr/gen_init_cpio.c"],
-    tags = ["manual", "no-remote-cache", "no-remote-exec"],
+    tags = ["manual", "no-remote-exec"],
     visibility = ["//bazel/feasibility:__subpackages__"],
 )
 

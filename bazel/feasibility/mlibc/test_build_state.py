@@ -1,6 +1,8 @@
 """Mlibc incremental state without compiling mlibc or running Meson."""
 
 from pathlib import Path
+import os
+import stat
 import tempfile
 import unittest
 
@@ -127,6 +129,82 @@ class MlibcStateTests(unittest.TestCase):
             self.assertEqual(build_state.ninja_log_end(log), 450)
             self.assertEqual(build_state.compiler_edges_since(log, build_ninja, 250), ["src/foo.c.o"])
             self.assertEqual(build_state.compiler_edges_since(log, build_ninja, 400), [])
+
+    def test_work_root_rejects_output_base_and_temp_state(self) -> None:
+        with self.assertRaises(SystemExit):
+            build_state.run("script", "toolchain", "compiler", "/var/orlix-mlibc-state/aarch64-linux-gnu", ".", ".", [])
+        with self.assertRaises(SystemExit):
+            build_state.run("script", "toolchain", "compiler", "/var/tmp/orlix-mlibc.AbCd", ".", ".", [])
+
+    def test_declared_work_root_drops_client_tmpdir(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / "build.sh"
+            script.write_text(
+                "set -euo pipefail\n"
+                'test -n "$ORLIX_MLIBC_WORK_ROOT"\n'
+                'test -z "${TMPDIR:-}"\n'
+                'test -z "${DEVELOPER_DIR:-}"\n'
+                'test -z "${SDKROOT:-}"\n'
+                'test -z "$ORLIX_COMPILER_LAUNCHER"\n'
+                'test -n "$ORLIX_MLIBC_TOOL_BIN"\n'
+                'test -s "$ORLIX_MLIBC_SDK/SDKSettings.json"\n',
+                encoding="utf-8",
+            )
+            (root / "toolchain.json").write_text("{}\n", encoding="utf-8")
+            (root / "compiler.json").write_text("{}\n", encoding="utf-8")
+            tools = root / "tools" / "bin"
+            tools.mkdir(parents=True)
+            sdk = root / "sdk"
+            sdk.mkdir()
+            (sdk / "SDKSettings.json").write_text("{}\n", encoding="utf-8")
+            work = root / "mlibc-work"
+            previous = os.environ.get("TMPDIR")
+            os.environ["TMPDIR"] = "/tmp/client"
+            os.environ["DEVELOPER_DIR"] = "/Applications/Xcode.app/Contents/Developer"
+            os.environ["SDKROOT"] = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+            os.environ["ORLIX_COMPILER_LAUNCHER"] = "/opt/homebrew/bin/ccache"
+            try:
+                status = build_state.run(
+                    str(script), str(root / "toolchain.json"), str(root / "compiler.json"),
+                    str(work), str(tools), str(sdk), [],
+                )
+            finally:
+                if previous is None:
+                    os.environ.pop("TMPDIR", None)
+                else:
+                    os.environ["TMPDIR"] = previous
+                os.environ.pop("ORLIX_COMPILER_LAUNCHER", None)
+                os.environ.pop("DEVELOPER_DIR", None)
+                os.environ.pop("SDKROOT", None)
+            self.assertEqual(status, 0)
+            self.assertTrue((work / "build-state.json").is_file())
+
+    def test_installed_tree_rewrites_text_and_symlinks_but_not_elf(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            work = root / "work-aaa"
+            installed = root / "sysroot"
+            include = installed / "usr" / "include"
+            include.mkdir(parents=True)
+            header = include / "limits.h"
+            header.write_bytes(b"from " + str(work).encode() + b"/include\n")
+            header.chmod(0o444)
+            link = installed / "usr" / "lib"
+            link.parent.mkdir(exist_ok=True)
+            link.symlink_to(str(work) + "/lib")
+            elf = installed / "usr" / "bin"
+            elf.mkdir()
+            binary = elf / "true"
+            binary.write_bytes(b"\x7fELF" + str(work).encode())
+            build_state.stabilize_installed_tree(
+                [installed],
+                [(str(work), "/orlix/mlibc-work")],
+            )
+            self.assertEqual(header.read_bytes(), b"from /orlix/mlibc-work/include\n")
+            self.assertEqual(stat.S_IMODE(header.stat().st_mode), 0o444)
+            self.assertEqual(os.readlink(link), "/orlix/mlibc-work/lib")
+            self.assertEqual(binary.read_bytes(), b"\x7fELF" + str(work).encode())
 
 
 if __name__ == "__main__":

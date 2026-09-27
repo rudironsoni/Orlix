@@ -93,7 +93,12 @@ done
         arguments = arguments,
         inputs = inputs,
         outputs = [extra_input],
-        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1"},
+        env = {
+            "HOME": "/var/empty",
+            "PATH": "/usr/bin:/bin",
+        },
+        use_default_shell_env = False,
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
     )
     return extra_input
 

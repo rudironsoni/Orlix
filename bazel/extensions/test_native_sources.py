@@ -13,6 +13,15 @@ class NativeSourceHashTests(unittest.TestCase):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertNotIn("/Applications/Xcode", text)
         self.assertIn('ctx.getenv("DEVELOPER_DIR", "")', text)
+        self.assertIn("stage_executed_tools", text)
+        self.assertIn('"tools/bin/mke2fs"', text)
+        self.assertIn('"tools/bin/clang"', text)
+        self.assertIn('"tools/bin/llvm-nm"', text)
+        self.assertIn('"tools/llvm/bin/clang"', text)
+        self.assertIn('name = "guest_clang_support"', text)
+        self.assertIn('"tools/sdk/SDKSettings.json"', text)
+        self.assertIn('name = "macos_sdk"', text)
+        self.assertIn('name = "mlibc_support"', text)
 
     def test_linux_and_mlibc_archives_have_sha256(self) -> None:
         text = SOURCE.read_text(encoding="utf-8")

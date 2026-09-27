@@ -135,6 +135,43 @@ class KbuildArchiveTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertEqual(source.stat().st_mtime, 1000)
 
+    def test_archive_bytes_ignore_work_paths_modes_and_member_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+
+            def fill(name: str, prefix: str, early_first: bool) -> Path:
+                root = base / name
+                root.mkdir()
+                if early_first:
+                    include = root / "include"
+                    include.mkdir()
+                    (include / "early.h").write_bytes(f"path {prefix}/include\n".encode())
+                    (root / "later.h").write_bytes(f"{prefix}/later\n".encode())
+                else:
+                    (root / "later.h").write_bytes(f"{prefix}/later\n".encode())
+                    include = root / "include"
+                    include.mkdir()
+                    (include / "early.h").write_bytes(f"path {prefix}/include\n".encode())
+                (root / "later.h").chmod(0o755 if early_first else 0o644)
+                (root / "source").symlink_to(prefix + "/linux")
+                return root
+
+            first_root = fill("a", "/tmp/orlix-linux-uapi.aaa", True)
+            second_root = fill("b", "/private/tmp/orlix-linux-uapi.bbb", False)
+            first, second = base / "first.tar", base / "second.tar"
+            persist.write_archive(str(first_root), str(first), [("/tmp/orlix-linux-uapi.aaa", "/orlix/linux-uapi-work")])
+            persist.write_archive(
+                str(second_root),
+                str(second),
+                [("/private/tmp/orlix-linux-uapi.bbb", "/orlix/linux-uapi-work")],
+            )
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with tarfile.open(first) as archive:
+                self.assertEqual(archive.getnames(), [".", "include", "include/early.h", "later.h", "source"])
+                self.assertEqual(archive.extractfile("later.h").read(), b"/orlix/linux-uapi-work/later\n")
+                self.assertEqual(archive.getmember("source").linkname, "/orlix/linux-uapi-work/linux")
+                self.assertEqual(archive.getmember("later.h").mode & 0o777, 0o644)
+
     def test_publish_and_extract_cli_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "source"

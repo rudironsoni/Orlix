@@ -175,9 +175,18 @@ class PromotionCompareTests(unittest.TestCase):
                 (tree / "binary").write_bytes(b"same")
                 (tree / "link").symlink_to("binary")
             self.assertEqual(compare.compare_trees(str(first), str(second)), compare.tree_digest(first))
+            (second / "binary").chmod(0o755)
+            with self.assertRaisesRegex(ValueError, "contents differ: uapi binary"):
+                compare.compare_trees(str(first), str(second), component="uapi")
+            (second / "binary").chmod(0o644)
             (second / "binary").write_bytes(b"different")
-            with self.assertRaisesRegex(ValueError, "contents differ"):
-                compare.compare_trees(str(first), str(second))
+            with self.assertRaisesRegex(ValueError, "contents differ: mlibc binary"):
+                compare.compare_trees(str(first), str(second), component="mlibc")
+            (second / "binary").write_bytes(b"same")
+            extra = second / "zz-only"
+            extra.write_bytes(b"extra")
+            with self.assertRaisesRegex(ValueError, "contents differ: rootfs zz-only"):
+                compare.compare_trees(str(first), str(second), component="rootfs")
 
     def test_v2_component_contract_recomputes_product_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -383,7 +392,8 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn('shasum -a 256 < "$payload_metadata"', rootfs)
         self.assertIn('"$gen_init_cpio" -t 1', rootfs)
         self.assertIn("package_closure = depset(transitive = [pkg.artifact_identity_closure for pkg in pkgs])", rootfs)
-        self.assertIn('"MKE2FS_CONFIG": "/opt/homebrew/etc/mke2fs.conf"', rootfs)
+        self.assertIn('export MKE2FS_CONFIG="$exec_root/${12}"', rootfs)
+        self.assertNotIn('"/opt/homebrew/etc/mke2fs.conf"', rootfs)
         self.assertIn('"rootfs",', rootfs)
         self.assertIn('rootfs_tools.add(Path("/opt/homebrew/etc/mke2fs.conf"))', (root / "bazel/config/toolchain_pin.py").read_text(encoding="utf-8"))
         self.assertIn("@orlix_kernel_toolchain//:rootfs-identity.json", rootfs)

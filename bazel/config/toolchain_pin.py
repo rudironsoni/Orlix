@@ -423,3 +423,254 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
             digest.update(relative.as_posix().encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
         trees[str(tree)] = digest.hexdigest()
     return {"schema": 1, "macos": runtime["macos"], "host_arch": runtime["host_arch"], "files": files, "trees": trees}
+
+
+def macho_linked_libraries(binary: Path) -> list[Path]:
+    """Non-system Mach-O dependencies of one executed host tool.
+
+    A text script or a non-Darwin host has no closure. System libraries stay
+    outside the action; Homebrew and toolchain libraries are inputs.
+    """
+    if platform.system() != "Darwin" or not binary.is_file():
+        return []
+    try:
+        load_commands = subprocess.check_output(
+            ["/usr/bin/otool", "-arch", platform.machine(), "-l", str(binary)],
+            text=True, stderr=subprocess.DEVNULL,
+        ).splitlines()
+        libraries = subprocess.check_output(
+            ["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)],
+            text=True, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    rpaths = []
+    library_ids = set()
+    for index, line in enumerate(load_commands):
+        stripped = line.strip()
+        if stripped == "cmd LC_ID_DYLIB" and index + 2 < len(load_commands):
+            library_ids.add(load_commands[index + 2].strip().removeprefix("name ").split(" (offset", 1)[0])
+        if stripped == "cmd LC_RPATH" and index + 2 < len(load_commands):
+            name = load_commands[index + 2].strip().removeprefix("path ").split(" (offset", 1)[0]
+            resolved = name.replace("@loader_path", str(binary.resolve().parent)).replace(
+                "@executable_path", str(binary.resolve().parent)
+            )
+            rpaths.append(Path(resolved))
+    found = []
+    for line in libraries.splitlines()[1:]:
+        name = line.strip().split(" (", 1)[0]
+        if not name or name in library_ids or name.startswith(("/usr/lib/", "/System/Library/")):
+            continue
+        if name.startswith("@rpath/"):
+            candidates = [path / name.removeprefix("@rpath/") for path in rpaths]
+            path = next((candidate for candidate in candidates if candidate.is_file()), None)
+            if path is None:
+                raise PinError(f"unresolved tool dependency: {name} from {binary}")
+        else:
+            path = Path(name.replace("@loader_path", str(binary.resolve().parent)).replace(
+                "@executable_path", str(binary.resolve().parent)
+            ))
+        if not path.is_file():
+            raise PinError(f"missing tool dependency: {path} from {binary}")
+        found.append(path)
+    return found
+
+
+def _copy_file(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink() or destination.exists():
+        destination.unlink()
+    shutil.copy2(source, destination, follow_symlinks=True)
+    if os.access(source, os.X_OK):
+        destination.chmod(destination.stat().st_mode | 0o755)
+
+
+def _copy_tree(source: Path, destination: Path) -> None:
+    if destination.exists():
+        shutil.rmtree(destination)
+
+    def ignore(_directory: str, names: list[str]) -> list[str]:
+        return [
+            name for name in names
+            if name in {"__pycache__", "site-packages"} or name.endswith(".pyc")
+        ]
+
+    shutil.copytree(source, destination, symlinks=False, ignore=ignore)
+
+
+def stage_binary(source: Path, bin_dir: Path, lib_dir: Path, seen: set[Path]) -> Path:
+    """Copy one executable and its non-system libraries as regular files."""
+    if not source.is_file():
+        raise PinError(f"executed tool is missing: {source}")
+    real = source.resolve()
+    destination = bin_dir / source.name
+    if real not in seen:
+        seen.add(real)
+        _copy_file(real, destination)
+        pending = [real]
+        while pending:
+            current = pending.pop()
+            for library in macho_linked_libraries(current):
+                library_real = library.resolve()
+                if library_real in seen:
+                    continue
+                seen.add(library_real)
+                _copy_file(library_real, lib_dir / library_real.name)
+                pending.append(library_real)
+    elif not destination.exists():
+        _copy_file(real, destination)
+    return destination
+
+
+def stage_executed_tools(developer_dir: str, destination: str) -> None:
+    """Copy the host tools foreign actions execute into the toolchain repo.
+
+    Identity JSON hashes these bytes and is not the executed file. Actions run
+    the copies so the action key contains the tool content.
+    """
+    developer = Path(developer_dir).resolve(strict=True)
+    dest = Path(destination)
+    bin_dir = dest / "bin"
+    lib_dir = dest / "lib"
+    seen: set[Path] = set()
+    xcode_bin = developer / "Toolchains/XcodeDefault.xctoolchain/usr/bin"
+    for binary in (
+        xcode_bin / "clang",
+        xcode_bin / "clang++",
+        Path("/opt/homebrew/opt/llvm/bin/llvm-ar"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-strip"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-nm"),
+        Path("/opt/homebrew/opt/lld/bin/ld.lld"),
+        Path("/opt/homebrew/bin/ninja"),
+        Path("/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"),
+        Path("/opt/homebrew/opt/e2fsprogs/sbin/debugfs"),
+    ):
+        stage_binary(binary, bin_dir, lib_dir, seen)
+    _copy_file(Path("/opt/homebrew/etc/mke2fs.conf"), dest / "mke2fs.conf")
+    resource = developer / "Toolchains/XcodeDefault.xctoolchain/usr/lib/clang"
+    if not resource.is_dir():
+        raise PinError(f"clang resource directory is missing: {resource}")
+    _copy_tree(resource, lib_dir / "clang")
+    meson = Path("/opt/homebrew/bin/meson")
+    if not meson.is_file():
+        raise PinError(f"executed tool is missing: {meson}")
+    _copy_file(meson, bin_dir / "meson")
+    shebang = meson.read_text(encoding="utf-8").splitlines()[0]
+    if not shebang.startswith("#!"):
+        raise PinError(f"meson has no interpreter: {meson}")
+    interpreter = Path(shebang[2:].strip().split()[0])
+    stage_binary(interpreter, bin_dir, lib_dir, seen)
+    _copy_file(interpreter, bin_dir / "meson-python")
+    info = json.loads(subprocess.check_output(
+        [
+            str(interpreter), "-B", "-c",
+            "import json,mesonbuild,sysconfig; print(json.dumps({"
+            "'stdlib': sysconfig.get_path('stdlib'),"
+            "'version': sysconfig.get_python_version(),"
+            "'meson': list(mesonbuild.__path__)[0]}))",
+        ],
+        text=True,
+    ))
+    _copy_tree(Path(info["meson"]), dest / "py" / "mesonbuild")
+    _copy_tree(Path(info["stdlib"]), dest / "python-home" / "lib" / ("python" + info["version"]))
+    _require_supported_xcode(developer_dir)
+    stage_guest_clang(dest / "llvm")
+    stage_macos_sdk(developer_dir, dest / "sdk")
+
+
+def stage_guest_clang(destination: Path) -> None:
+    """Copy Homebrew LLVM clang beside its own resource directory.
+
+    Apple clang rejects ``-fuse-ld=ld.lld``. The guest compiler is this LLVM
+    clang, staged under its own prefix so it does not replace the Apple clang
+    the native build uses with the macOS SDK slice.
+    """
+    bin_dir = destination / "bin"
+    lib_dir = destination / "lib"
+    seen: set[Path] = set()
+    for binary in (
+        Path("/opt/homebrew/opt/llvm/bin/clang"),
+        Path("/opt/homebrew/opt/llvm/bin/clang++"),
+    ):
+        stage_binary(binary, bin_dir, lib_dir, seen)
+    resource = Path("/opt/homebrew/opt/llvm/lib/clang")
+    if not resource.is_dir():
+        raise PinError(f"guest clang resource directory is missing: {resource}")
+    _copy_tree(resource, lib_dir / "clang")
+    version = subprocess.check_output(
+        [str(bin_dir / "clang"), "--version"],
+        text=True,
+        env={**os.environ, "DYLD_LIBRARY_PATH": str(lib_dir)},
+    )
+    if "Apple clang" in version:
+        raise PinError(f"staged guest clang is Apple clang: {version.strip()}")
+
+
+def _require_supported_xcode(developer_dir: str) -> None:
+    """Reject an unpinned Xcode while staging, not inside the cached action."""
+    environment = {**os.environ, "DEVELOPER_DIR": developer_dir}
+    version_text = subprocess.check_output(["/usr/bin/xcodebuild", "-version"], env=environment, text=True)
+    lines = [line.strip() for line in version_text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        raise PinError(f"xcodebuild did not report an identity: {version_text!r}")
+    version = lines[0].removeprefix("Xcode ").strip()
+    build = lines[1].removeprefix("Build version ").strip()
+    namespace_for(version, build)
+
+
+def _resolved_inside(path: Path, root: Path) -> Path | None:
+    """Resolve one path when it stays inside root and does not symlink-cycle."""
+    try:
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return resolved
+
+
+def copy_sdk_slice(sdk: Path, destination: Path) -> None:
+    """Copy the host-compile slice of a macOS SDK as regular files.
+
+    The native compiler needs SDKSettings.json, usr/include, and usr/lib.
+    Framework trees such as Ruby.framework contain directory symlink cycles, so
+    they are not copied and links that leave this slice or cycle are skipped.
+    """
+    if not (sdk / "SDKSettings.json").is_file():
+        raise PinError(f"macOS SDK is missing SDKSettings.json: {sdk}")
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    _copy_file(sdk / "SDKSettings.json", destination / "SDKSettings.json")
+    for relative in ("usr/include", "usr/lib"):
+        source = sdk / relative
+        if not source.is_dir():
+            raise PinError(f"macOS SDK slice is missing: {source}")
+        root = source.resolve()
+        visited: set[Path] = set()
+
+        def copy_directory(current: Path, target: Path) -> None:
+            resolved = _resolved_inside(current, root)
+            if resolved is None or resolved in visited:
+                return
+            visited.add(resolved)
+            target.mkdir(parents=True, exist_ok=True)
+            for child in current.iterdir():
+                child_resolved = _resolved_inside(child, root)
+                if child_resolved is None:
+                    continue
+                if child_resolved.is_dir():
+                    copy_directory(child, target / child.name)
+                elif child_resolved.is_file():
+                    _copy_file(child_resolved, target / child.name)
+
+        copy_directory(source, destination / relative)
+
+
+def stage_macos_sdk(developer_dir: str, destination: Path) -> None:
+    """Stage the host SDK slice the sysroot's native compiler compiles against."""
+    environment = {**os.environ, "DEVELOPER_DIR": developer_dir}
+    sdk = Path(subprocess.check_output(
+        ["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
+        env=environment, text=True,
+    ).strip()).resolve(strict=True)
+    copy_sdk_slice(sdk, destination)

@@ -16,6 +16,30 @@ depends_on:
   - "[Implement protected Bazel automation](implement-protected-bazel-automation.md)"
 blocks:
   - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
+owned_paths:
+  - "bazel/**"
+  - "make/bazel-migration.mk"
+  - "MODULE.bazel.lock"
+  - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
+  - "docs/log.md"
+read_only_paths:
+  - "artifacts.lock.json"
+  - "project.yml"
+  - ".github/workflows/**"
+forbidden_paths:
+  - "Orlix/**"
+  - "OrlixKernel/**"
+required_skills:
+  - "orlix-bazel"
+  - "orlix-implementation-boundaries"
+required_role: "orlix-implementer"
+required_proof:
+  - "foreign producers with complete inputs are disk-cacheable"
+  - "cache policy agrees with cache equivalence"
+build_intents:
+  - "cache foreign producers whose tools and environment are inputs"
+verification_intents:
+  - "python unittest cache policy and action contracts"
 ---
 
 # Implement Shared Bazel Cache And Buildset Reuse

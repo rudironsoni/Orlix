@@ -243,3 +243,59 @@ class ToolchainPinTests(unittest.TestCase):
                 )
             self.assertEqual(payload["run_id"], "run-2")
             self.assertTrue(calls)
+
+    def test_stage_binary_copies_regular_file_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "ninja"
+            source.write_bytes(b"#!/bin/sh\nprintf ok\n")
+            source.chmod(0o755)
+            destination = root / "stage"
+            staged = pin.stage_binary(source, destination / "bin", destination / "lib", set())
+            self.assertEqual(staged.read_bytes(), source.read_bytes())
+            self.assertTrue(staged.stat().st_mode & 0o111)
+            self.assertEqual(list((destination / "lib").glob("*")), [])
+
+    def test_copy_tree_materializes_symlink_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "sdk"
+            source.mkdir()
+            payload = source / "usr" / "include"
+            payload.mkdir(parents=True)
+            header = payload / "stdint.h"
+            header.write_text("typedef int x;\n", encoding="utf-8")
+            link = source / "SDKSettings.json"
+            link.symlink_to(header)
+            destination = root / "staged"
+            pin._copy_tree(source, destination)
+            copied = destination / "SDKSettings.json"
+            self.assertFalse(copied.is_symlink())
+            self.assertEqual(copied.read_text(encoding="utf-8"), header.read_text(encoding="utf-8"))
+
+    def test_sdk_slice_skips_framework_cycles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk = root / "MacOSX.sdk"
+            include = sdk / "usr" / "include"
+            include.mkdir(parents=True)
+            (include / "stdio.h").write_text("int printf(const char *, ...);\n", encoding="utf-8")
+            library = sdk / "usr" / "lib"
+            library.mkdir()
+            (library / "libSystem.tbd").write_text("tbd\n", encoding="utf-8")
+            (sdk / "SDKSettings.json").write_text("{}\n", encoding="utf-8")
+            headers = sdk / "System" / "Library" / "Frameworks" / "Ruby.framework" / "Versions" / "2.6" / "Headers"
+            headers.mkdir(parents=True)
+            (headers / "ruby").symlink_to(headers)
+            (include / "ruby").symlink_to(headers)
+            (include / "escape.h").symlink_to(root / "secret.h")
+            (root / "secret.h").write_text("secret\n", encoding="utf-8")
+            destination = root / "staged"
+            pin.copy_sdk_slice(sdk, destination)
+            self.assertEqual((destination / "usr/include/stdio.h").read_text(encoding="utf-8"), "int printf(const char *, ...);\n")
+            self.assertEqual((destination / "usr/lib/libSystem.tbd").read_text(encoding="utf-8"), "tbd\n")
+            self.assertTrue((destination / "SDKSettings.json").is_file())
+            self.assertFalse((destination / "usr/include/ruby").exists())
+            self.assertFalse((destination / "usr/include/escape.h").exists())
+            self.assertFalse((destination / "System").exists())
+            self.assertFalse(any(path.is_symlink() for path in destination.rglob("*")))

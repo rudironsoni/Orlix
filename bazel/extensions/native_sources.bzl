@@ -201,7 +201,72 @@ def _kernel_toolchain_repository_impl(ctx):
         ctx.watch(path)
     for path in watched["trees"]:
         ctx.watch_tree(path)
-    ctx.file("BUILD.bazel", 'exports_files(["identity.json", "compiler-identity.json", "compiler-runtime-identity.json", "mlibc-identity.json", "guest-compiler-identity.json", "coreutils-identity.json", "bash-identity.json", "autotools-identity.json", "autotools-bootstrap-identity.json", "rootfs-identity.json"], visibility = ["//visibility:public"])\n')
+    staged = ctx.execute([
+        "/usr/bin/python3", "-B", "-c",
+        "import sys; sys.path.insert(0,sys.argv[1]); import toolchain_pin; toolchain_pin.stage_executed_tools(sys.argv[2], sys.argv[3])",
+        str(observer.dirname), developer, str(ctx.path("tools")),
+    ], timeout = 1800)
+    if staged.return_code:
+        fail("Kernel toolchain tool staging failed:\n%s" % staged.stderr)
+    ctx.file("BUILD.bazel", """
+exports_files([
+    "identity.json",
+    "compiler-identity.json",
+    "compiler-runtime-identity.json",
+    "mlibc-identity.json",
+    "guest-compiler-identity.json",
+    "coreutils-identity.json",
+    "bash-identity.json",
+    "autotools-identity.json",
+    "autotools-bootstrap-identity.json",
+    "rootfs-identity.json",
+    "tools/mke2fs.conf",
+    "tools/bin/clang",
+    "tools/bin/clang++",
+    "tools/bin/llvm-ar",
+    "tools/bin/llvm-nm",
+    "tools/bin/llvm-strip",
+    "tools/bin/ld.lld",
+    "tools/llvm/bin/clang",
+    "tools/llvm/bin/clang++",
+    "tools/bin/ninja",
+    "tools/bin/meson",
+    "tools/bin/meson-python",
+    "tools/bin/mke2fs",
+    "tools/bin/debugfs",
+    "tools/sdk/SDKSettings.json",
+], visibility = ["//visibility:public"])
+
+filegroup(
+    name = "macos_sdk",
+    srcs = glob(["tools/sdk/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "tool_libs",
+    srcs = glob(["tools/lib/*.dylib"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "clang_resources",
+    srcs = glob(["tools/lib/clang/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "guest_clang_support",
+    srcs = glob(["tools/llvm/lib/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "mlibc_support",
+    srcs = glob(["tools/**"]),
+    visibility = ["//visibility:public"],
+)
+""")
 
 _kernel_toolchain_repository = repository_rule(
     implementation = _kernel_toolchain_repository_impl,

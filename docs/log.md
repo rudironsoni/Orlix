@@ -7,6 +7,38 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Materialize the cached UAPI Kbuild archive
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saw a disk-cache hit, then `compare_trees` reported `uapi kbuild-archive.tar (only in the second tree)`. BuildBuddy read mode sets `remote_download_outputs=minimal`, so the cached execroot omitted that declared archive. Cache equivalence now sets `remote_download_outputs=all`. The `cacheHit == true` and `runner == "disk cache hit"` gates stay in place.
+
+## [2026-09-27] build | Refresh the migration inventory after rebasing onto main
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) is rebased onto `bd559333`, which added the warm-pass simulator uninstall lines and a new makefile digest. `bazel/migration/legacy-target-map.json` now records the merged `make/bazel-migration.mk` digest. Cache equivalence still requires `runner == "disk cache hit"` and equal UAPI, mlibc, and rootfs trees. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-09-27] build | Keep disk-cache restores equal to fresh foreign outputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. A content mismatch now names the component and the first differing relative path. The UAPI Kbuild archive rewrites the temporary work directory to a stable path, and the mlibc install rewrites the same class of absolute path in text files and symlink targets. Archive timestamps use `SOURCE_DATE_EPOCH` and `ZERO_AR_DATE`. `DEVELOPER_DIR` stays off the mlibc action key.
+
+## [2026-09-27] build | Use LLVM clang for the mlibc guest link
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps Apple clang for the native SDK slice and points the guest compiler at staged Homebrew LLVM clang. The guest link passes `-fuse-ld=` the absolute path of the staged `ld.lld` input. The action rejects that compiler when its version string says Apple clang. `DEVELOPER_DIR` stays off the action key.
+
+## [2026-09-27] build | Stage only the cycle-free macOS SDK slice
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.json`, `usr/include`, and `usr/lib` for the sysroot's native compiler. The Ruby.framework header symlink cycle stays out of the action inputs, and `DEVELOPER_DIR` stays off the action key.
+
+## [2026-09-27] build | Run cache equivalence from Apple CI
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) makes `make __bazel-apple-ci` run the existing `__bazel-cache-equivalence` target. That target still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. The workflow file is unchanged.
+
+## [2026-09-27] build | Keep the Xcode path off the mlibc action key
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stops `OrlixMLibCSysroot` and `OrlixCompilerRuntime` from taking `DEVELOPER_DIR` as their identity. The native compiler reads a copied macOS SDK, `llvm-nm` replaces `/usr/bin/nm`, and prefix maps cover the staged SDK and tool directory. Xcode selection stays at toolchain fetch time.
+
+## [2026-09-27] build | Cache foreign producers with complete tool inputs
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) drops `no-remote-cache` from OrlixMLibC, the compiler runtime, rootfs assembly, the package interface, and `gen_init_cpio`. Those actions now take staged host tools as files, omit the client shell environment, and keep `no-remote-exec`. Kernel, ISA restore, guest packages, and artifact identity stay uncached until their missing inputs are declared.
+
 ## [2026-09-27] build | Stamp promoted composition provenance off the kernel action
 
 The [promotion task](objects/task/doing/implement-component-and-buildset-promotion.md) records the locked buildset on the promoted composition stamp. The byte-hashed kernel composition stays `"buildset": null`, and source mode does not claim that promoted buildset.
