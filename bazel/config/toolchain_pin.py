@@ -318,7 +318,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     compiler = {**runtime, "files": {name: digest for name, digest in runtime["files"].items() if name.endswith("/clang")}}
     Path(output).with_name("guest-compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
-    return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees] + [str(sdk)]}
+    return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
 
 
 def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str, extra_tools: tuple[Path, ...] = ()) -> dict:
@@ -589,17 +589,59 @@ def _require_supported_xcode(developer_dir: str) -> None:
     namespace_for(version, build)
 
 
-def stage_macos_sdk(developer_dir: str, destination: Path) -> None:
-    """Copy the macOS SDK as regular files so the native compiler's sysroot is an input.
+def _resolved_inside(path: Path, root: Path) -> Path | None:
+    """Resolve one path when it stays inside root and does not symlink-cycle."""
+    try:
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return resolved
 
-    Symlinks are materialized. The action then passes this tree to -isysroot and
-    rewrites that path, instead of reading the live Xcode SDK.
+
+def copy_sdk_slice(sdk: Path, destination: Path) -> None:
+    """Copy the host-compile slice of a macOS SDK as regular files.
+
+    The native compiler needs SDKSettings.json, usr/include, and usr/lib.
+    Framework trees such as Ruby.framework contain directory symlink cycles, so
+    they are not copied and links that leave this slice or cycle are skipped.
     """
+    if not (sdk / "SDKSettings.json").is_file():
+        raise PinError(f"macOS SDK is missing SDKSettings.json: {sdk}")
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    _copy_file(sdk / "SDKSettings.json", destination / "SDKSettings.json")
+    for relative in ("usr/include", "usr/lib"):
+        source = sdk / relative
+        if not source.is_dir():
+            raise PinError(f"macOS SDK slice is missing: {source}")
+        root = source.resolve()
+        visited: set[Path] = set()
+
+        def copy_directory(current: Path, target: Path) -> None:
+            resolved = _resolved_inside(current, root)
+            if resolved is None or resolved in visited:
+                return
+            visited.add(resolved)
+            target.mkdir(parents=True, exist_ok=True)
+            for child in current.iterdir():
+                child_resolved = _resolved_inside(child, root)
+                if child_resolved is None:
+                    continue
+                if child_resolved.is_dir():
+                    copy_directory(child, target / child.name)
+                elif child_resolved.is_file():
+                    _copy_file(child_resolved, target / child.name)
+
+        copy_directory(source, destination / relative)
+
+
+def stage_macos_sdk(developer_dir: str, destination: Path) -> None:
+    """Stage the host SDK slice the sysroot's native compiler compiles against."""
     environment = {**os.environ, "DEVELOPER_DIR": developer_dir}
     sdk = Path(subprocess.check_output(
         ["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
         env=environment, text=True,
     ).strip()).resolve(strict=True)
-    if not (sdk / "SDKSettings.json").is_file():
-        raise PinError(f"macOS SDK is missing SDKSettings.json: {sdk}")
-    _copy_tree(sdk, destination)
+    copy_sdk_slice(sdk, destination)
