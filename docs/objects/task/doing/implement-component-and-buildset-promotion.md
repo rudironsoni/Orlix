@@ -23,6 +23,10 @@ owned_paths:
   - "bazel/test_content_digest.py"
   - "make/bazel-migration.mk"
   - "Orlix/BUILD.bazel"
+  - "MODULE.bazel"
+  - "MODULE.bazel.lock"
+  - "bazel/migration/legacy-target-map.json"
+  - "bazel/migration/proof-map.json"
   - "docs/objects/task/doing/implement-component-and-buildset-promotion.md"
   - "docs/log.md"
 required_skills:
@@ -31,10 +35,13 @@ required_skills:
 required_role: "orlix-implementer"
 required_proof:
   - "configured per-boundary origin selection"
+  - "promoted composition stamp records the locked buildset off the kernel action key"
 build_intents:
   - "instantiate selected kernel, UAPI, sysroot, and rootfs"
+  - "stamp promoted composition provenance from the locked buildset"
 verification_intents:
   - "bazel query, cquery, and aquery of origin configurations"
+  - "aquery action keys for a lock-only buildset change"
 ---
 
 # Implement Component And Buildset Promotion
@@ -55,4 +62,4 @@ Normal protected promotion builds all seven compatible components in one Bazel g
 
 The protected workflow compares every component between A and B before it publishes any component. It runs only by manual dispatch in `rudironsoni/Orlix` and requires the `bazel-promotion` environment, so the protected environment can approve an exact pre-merge `fix/build-optimizations` commit without granting pull-request code an automatic package-write path. It signs and publishes all seven immutable GHCR artifacts in the same job, then creates one buildset lock proposal without changing `artifacts.lock.json`. The proposal binds the component types, artifact identities, immutable OCI digests, signing-key fingerprint, and trust-policy digest. Cosign signs and verifies the exact proposal bytes before the proposal can enter the atomic lock target. A separate workflow no longer assembles a buildset from seven independent promotion runs. The Cosign Sigstore bundle is the promotion provenance for the signed proposal, while Cosign component signatures and runtime proof remain separate. The workflow carries no build-provenance attestation path or its token permissions.
 
-The product graph selects each boundary through the origin resolver. Source and promoted producers feed `selected` kernel, UAPI, sysroot, and rootfs targets, and those selected targets are what the app, packages, and rootfs payload consume. `component_mode` remains the all-source or all-promoted request. Recording the locked buildset inside composition metadata stays a separate change.
+The product graph selects each boundary through the origin resolver. Source and promoted producers feed `selected` kernel, UAPI, sysroot, and rootfs targets, and those selected targets are what the app, packages, and rootfs payload consume. `component_mode` remains the all-source or all-promoted request. Promoted mode records the locked buildset on `kernel_composition_stamp`, whose inputs are the byte-hashed composition and `OrlixLockedBuildset`. The byte-hashed `OrlixKernelComposition` action keeps `"buildset": null` and does not take the lock, so a provenance-only lock change does not recompile the Kernel. Source mode embeds that byte-hashed composition and does not claim the promoted buildset.

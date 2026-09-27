@@ -179,10 +179,12 @@ ios_framework(
     minimum_os_version = "15.0",
     resources = [
         ":os_resources",
-        "//bazel/product:kernel_composition",
     ] + select({
-        "//bazel/config:component_promoted": ["//bazel/promotion:promoted_apple_inputs"],
-        "//conditions:default": [],
+        "//bazel/config:component_promoted": [
+            "//bazel/product:kernel_composition_stamp",
+            "//bazel/promotion:promoted_apple_inputs",
+        ],
+        "//conditions:default": ["//bazel/product:kernel_composition"],
     }),
     tags = ["manual"],
     deps = [

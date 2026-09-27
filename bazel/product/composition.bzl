@@ -4,7 +4,8 @@ Consumer identity is artifact-identity-v2 of stable logical paths and file bytes
 Origin exec paths, source_input_digest, the lock, and proof sidecars are not
 action inputs. Profile, destination, linux revision, and target triple stay on
 the archive provider for the fail-closed kernel check and are not interpolated
-into this command.
+into this command. Promoted buildset provenance is the sibling stamp in
+composition_stamp.bzl. This action always writes "buildset": null.
 """
 
 load(
@@ -155,8 +156,5 @@ orlix_kernel_composition = rule(
         "linux_archive": attr.label(mandatory = True, providers = [OrlixLinuxArchiveInfo]),
         "hostadapter": attr.label(mandatory = True, allow_files = True),
         "boot": attr.label(mandatory = True, allow_files = True),
-        # Retained so the product graph can still name a lock target. The lock
-        # is not an action input: a lock-record change is not a content change.
-        "locked_buildset": attr.label(allow_files = True),
     },
 )
