@@ -7,7 +7,9 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import stat
+import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -125,12 +127,26 @@ def _relative_artifact_path(name: str) -> str:
     return name
 
 
-def _selected_source(path: Path) -> Path:
-    """Read staged file bytes when Bazel exposes the file as an absolute symlink.
+def _origin_staging_symlink(target: str) -> bool:
+    """True when a symlink is Bazel's execroot staging, not product content.
 
-    A relative symlink is product content: its target stays in the identity.
-    An absolute symlink is an origin exec path. Follow it only when it names a
-    regular file, so that path cannot become the consumer key.
+    An absolute target is an origin path. A relative target that climbs with
+    ``..`` is the unsandboxed execroot forest: output-base lives inside the
+    worktree, so each source input is a parent-relative link back to the real
+    file. A relative target that stays in the product, such as ``bin/tool``,
+    remains product content.
+    """
+    if target.startswith("/"):
+        return True
+    return ".." in target.split("/")
+
+
+def _selected_source(path: Path) -> Path:
+    """Read staged file bytes when Bazel exposes the file as an origin symlink.
+
+    A product-relative symlink keeps its target in the identity. An absolute
+    symlink, or a parent-relative execroot symlink, is staging. Follow it only
+    when it names a regular file, so that path cannot become the consumer key.
     """
     try:
         if not stat.S_ISLNK(path.lstat().st_mode):
@@ -138,9 +154,12 @@ def _selected_source(path: Path) -> Path:
     except OSError:
         return path
     target = os.readlink(path)
-    if not target.startswith("/"):
+    if not _origin_staging_symlink(target):
         return path
-    resolved = Path(target)
+    if target.startswith("/"):
+        resolved = Path(target)
+    else:
+        resolved = Path(os.path.normpath(os.path.join(path.parent, target)))
     try:
         metadata = resolved.lstat()
     except OSError as error:
@@ -238,6 +257,53 @@ def assert_staged_product_match(imported: bytes, computed: bytes) -> None:
             raise ValueError(
                 f"artifact identity mode differs for {recorded.get('path')}: {recorded_mode} != {observed_mode}"
             )
+
+
+def artifact_manifest_without_bazel_owner_write(artifacts: ArtifactSelection, recorded: bytes) -> bytes:
+    """Serialize files after removing Bazel's owner-write bit from a private copy.
+
+    The signed kernel manifest records mode 0555. Bazel stages those same bytes
+    as mode 0755. The copy is chmod'd back to the recorded mode and then hashed
+    by artifact_manifest_v2. Any other mode change stays on the original file,
+    so the byte compare still fails.
+    """
+    payload = json.loads(recorded)
+    entries = payload.get("entries")
+    modes: dict[str, int] = {}
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("type") != "file":
+                continue
+            mode = entry.get("mode")
+            path = entry.get("path")
+            if isinstance(path, str) and isinstance(mode, int) and not isinstance(mode, bool):
+                modes[path] = mode
+    staged: dict[str, Path] = {}
+    with tempfile.TemporaryDirectory(prefix="orlix-identity-") as tmp:
+        root = Path(tmp)
+        items = artifacts.items() if isinstance(artifacts, Mapping) else artifacts
+        for name, source in items:
+            selected = _selected_source(Path(source))
+            try:
+                metadata = selected.lstat()
+            except OSError:
+                staged[name] = Path(source)
+                continue
+            observed = stat.S_IMODE(metadata.st_mode)
+            recorded_mode = modes.get(name)
+            if (
+                stat.S_ISREG(metadata.st_mode)
+                and recorded_mode is not None
+                and _owner_write_only(recorded_mode, observed)
+            ):
+                dest = root.joinpath(*name.split("/"))
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(selected, dest)
+                dest.chmod(recorded_mode)
+                staged[name] = dest
+            else:
+                staged[name] = Path(source)
+        return artifact_manifest_v2(artifacts=staged)
 
 
 def restore_recorded_modes(imported: bytes, root: Path) -> None:

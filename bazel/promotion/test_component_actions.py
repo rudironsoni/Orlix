@@ -61,6 +61,24 @@ class ComponentActionTests(unittest.TestCase):
             self.assertEqual(payload["component_actions"], 0)
             self.assertEqual(payload["total_actions"], 1)
 
+    def test_pretty_printed_execution_log_is_counted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = _registry(root)
+            log = root / "execution.json"
+            log.write_text(
+                json.dumps(
+                    {"targetLabel": "//bazel/feasibility/kernel:uapi", "mnemonic": "Kbuild"},
+                    indent=2,
+                )
+                + json.dumps({"targetLabel": "//Orlix:Orlix", "mnemonic": "SwiftCompile"}, indent=2),
+                encoding="utf-8",
+            )
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines()[0], "{")
+            payload = component_actions.count_component_actions(log, registry)
+            self.assertEqual(payload["total_actions"], 2)
+            self.assertEqual(payload["component_actions"], 1)
+
     def test_missing_log_is_an_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

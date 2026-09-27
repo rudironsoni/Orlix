@@ -6,7 +6,7 @@ the manifest, and source-input, proof, revision, profile, destination, and
 target-triple strings are not inputs of this action.
 """
 
-def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None):
+def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None, recorded_manifest = None):
     if not name:
         fail("artifact identity output name is required")
     if (root == None) == (artifacts == None):
@@ -27,6 +27,11 @@ def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = No
     ]
     inputs = [serializer]
     arguments.append("artifact-identity-v2")
+    if recorded_manifest != None:
+        arguments.append(recorded_manifest.path)
+        inputs.append(recorded_manifest)
+    else:
+        arguments.append("-")
     if root != None:
         arguments.extend(["tree", root.path])
         inputs.append(root)
@@ -46,30 +51,34 @@ serializer="$exec_root/$1"
 manifest="$exec_root/$2"
 digest="$exec_root/$3"
 format="$4"
-mode="$5"
-shift 5
+recorded="$5"
+mode="$6"
+shift 6
 serializer_dir="$(/usr/bin/dirname "$serializer")"
 PYTHONPATH="$serializer_dir" /usr/bin/python3 -B -c '
 import hashlib
 import sys
 from pathlib import Path
 
-from content_digest import artifact_manifest_v2
+from content_digest import artifact_manifest_v2, artifact_manifest_without_bazel_owner_write
 
-mode, manifest_path, digest_path, format = sys.argv[1:5]
+mode, manifest_path, digest_path, format, recorded = sys.argv[1:6]
 if mode == "tree":
-    manifest = artifact_manifest_v2(Path(sys.argv[5]), format=format, files_only=True)
+    manifest = artifact_manifest_v2(Path(sys.argv[6]), format=format, files_only=True)
 elif mode == "artifacts":
-    values = sys.argv[5:]
+    values = sys.argv[6:]
     if len(values) % 2:
         raise ValueError("artifact identity arguments require path and source pairs")
     artifacts = dict(zip(values[0::2], (Path(value) for value in values[1::2])))
-    manifest = artifact_manifest_v2(artifacts=artifacts, format="artifact-identity-v2")
+    if recorded != "-":
+        manifest = artifact_manifest_without_bazel_owner_write(artifacts, Path(recorded).read_bytes())
+    else:
+        manifest = artifact_manifest_v2(artifacts=artifacts, format="artifact-identity-v2")
 else:
     raise ValueError("unknown artifact identity selection mode: %s" % mode)
 Path(manifest_path).write_bytes(manifest)
 Path(digest_path).write_text(hashlib.sha256(manifest).hexdigest() + "\n", encoding="ascii")
-' "$mode" "$manifest" "$digest" "$format" "$@"
+' "$mode" "$manifest" "$digest" "$format" "$recorded" "$@"
 """,
         arguments = arguments,
         inputs = inputs,

@@ -87,15 +87,18 @@ def _extract_component_tar(blob: Path, dest: Path) -> None:
 def acquisition_record(source: str, verification: dict | None) -> dict:
     """Record where a member came from.
 
-    ``signature_verified`` is true only for a network fetch performed after
-    ``verification_context()``. A local hit still verifies stored bytes, but it
-    does not set the flag and does not authorize promotion or release.
+    ``signature_verified`` is true only when ``verification`` is the current
+    verification context. Network acquisition sets it after cosign verify.
+    A local hit sets it after the store accepts the bytes under that same
+    context: the stored verification record matches, or cosign reverified a
+    changed policy. A missing context stays false. A local hit is not a
+    download and does not by itself authorize a new promotion or release.
     """
     if source not in {"local-store", "network"}:
         raise ReconstructError(f"unknown acquisition source: {source}")
     return {
         "source": source,
-        "signature_verified": source == "network" and verification is not None,
+        "signature_verified": verification is not None,
     }
 
 

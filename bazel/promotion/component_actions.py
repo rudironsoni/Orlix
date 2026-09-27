@@ -29,17 +29,30 @@ def _registry_labels(registry_path: str | Path) -> list[str]:
 
 
 def _iter_entries(path: Path):
+    """Read a Bazel execution log.
+
+    ``--execution_log_json_file`` is a JSON array, one object per line, or
+    pretty-printed objects concatenated in one file. The first line of a
+    pretty-printed object is ``{``, which is not a JSON value by itself.
+    """
     text = path.read_text(encoding="utf-8")
     stripped = text.lstrip()
+    if not stripped:
+        return
     if stripped.startswith("["):
         for entry in json.loads(text):
             yield entry
         return
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        yield json.loads(line)
+    decoder = json.JSONDecoder()
+    index = 0
+    length = len(text)
+    while index < length:
+        while index < length and text[index].isspace():
+            index += 1
+        if index >= length:
+            return
+        entry, index = decoder.raw_decode(text, index)
+        yield entry
 
 
 def count_component_actions(execution_log: str | Path, registry: str | Path) -> dict:
