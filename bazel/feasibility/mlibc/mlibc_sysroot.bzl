@@ -4,13 +4,8 @@ load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
-def _pinned_env(ctx):
-    shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
-    if not developer_dir:
-        fail("mlibc sysroot requires action_env ORLIX_PINNED_DEVELOPER_DIR")
-    env = {
-        "DEVELOPER_DIR": developer_dir,
+def _pinned_env(_ctx):
+    return {
         "HOME": "/var/empty",
         "PATH": "/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
@@ -18,7 +13,6 @@ def _pinned_env(ctx):
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
     }
-    return env
 
 _COMPILER_RT_SOURCES = [
     "addtf3.c",
@@ -75,6 +69,7 @@ ar_name="$(/usr/bin/basename "$exec_root/$4")"
 libdir=""
 if [ "$5" != none ]; then libdir="$exec_root/$5"; fi
 if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"; fi
+tool_root="$(/usr/bin/dirname "$tool_bin")"
 export PATH="$tool_bin:/usr/bin:/bin"
 shift 5
 test -x "$tool_bin/clang"
@@ -89,7 +84,7 @@ for relative in "$@"; do
     source="$exec_root/$relative"
     source_name="${source#"$builtins/"}"
     object_name="${source_name//\//-}"
-    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
+    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -nostdlibinc -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" "-ffile-prefix-map=$tool_root=/orlix/tools" -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
 done
 (
   cd "$work"
@@ -155,29 +150,23 @@ cxx_hdrs="$exec_root/${12}"
 smarter="$exec_root/${13}"
 bragi="$exec_root/${14}"
 digest_out="$exec_root/${15}"
-test -n "${DEVELOPER_DIR:-}"
-xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
-xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
-xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
-case "$xcode_name|$xcode_build" in
-  "Xcode 27.0|Build version 27A266a"|"Xcode 26.6|Build version 17F113") ;;
-  *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
-esac
 tool_bin="${ORLIX_MLIBC_TOOL_BIN:?}"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
+sdkroot="${ORLIX_MLIBC_SDK:?}"
 export PATH="$tool_bin:/usr/bin:/bin"
 if [ -n "${ORLIX_MLIBC_TOOL_LIB:-}" ]; then export DYLD_LIBRARY_PATH="$ORLIX_MLIBC_TOOL_LIB${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"; fi
 meson_bin="$tool_bin/meson"
 meson_py="$tool_bin/meson-python"
 test -x "$meson_bin"; test -x "$meson_py"; test -x "$tool_bin/ninja"
 test -x "$tool_bin/clang"; test -x "$tool_bin/clang++"; test -x "$tool_bin/llvm-ar"
-test -x "$tool_bin/llvm-strip"; test -x "$tool_bin/ld.lld"
+test -x "$tool_bin/llvm-strip"; test -x "$tool_bin/ld.lld"; test -x "$tool_bin/llvm-nm"
 clang=clang
 clangxx=clang++
 ar=llvm-ar
 strip=llvm-strip
 lld=ld.lld
-sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
-test -x "$clang"; test -d "$sdkroot"
+test -d "$sdkroot"
+test -s "$sdkroot/SDKSettings.json"
 test -d "$uapi_dir/include"
 test -s "$uapi_dir/include/linux/unistd.h"
 test -s "$uapi_dir/include/asm/unistd.h"
@@ -192,8 +181,8 @@ export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
 /bin/mkdir -p "$work/arch"
 /usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp.new"
 if ! /usr/bin/cmp -s "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; then /bin/mv "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; fi
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot']" "cpp = ['$clangxx', '-isysroot', '$sdkroot']" > "$work/native.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = ['$clangxx', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" > "$work/native.ini"
 plan="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import meson_setup_plan; import pathlib,sys; print(meson_setup_plan(pathlib.Path(sys.argv[1]).read_text(), pathlib.Path(sys.argv[2]).is_file()))' "$work/inputs/configure-cache" "$work/build/build.ninja")"
 if [ "$plan" != skip ]; then
   configure_args=()
@@ -226,17 +215,16 @@ if [ "$plan" != skip ]; then
     "-Dcpp_link_args=['-fuse-ld=$lld', '$runtime_in']"
   )
   PYTHONHOME="${ORLIX_MLIBC_MESON_HOME:?}" PYTHONPATH="${ORLIX_MLIBC_MESON_LIB:?}" \
-    /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
-      SDKROOT="$sdkroot" \
+    /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u SDKROOT -u DEVELOPER_DIR \
       "${meson_setup[@]}"
 fi
 previous_end="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import ninja_log_end; import pathlib,sys; print(ninja_log_end(pathlib.Path(sys.argv[1])))' "$work/build/.ninja_log")"
 PYTHONHOME="${ORLIX_MLIBC_MESON_HOME:?}" PYTHONPATH="${ORLIX_MLIBC_MESON_LIB:?}" \
-  /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_py" "$meson_bin" compile -C "$work/build"
+  /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u SDKROOT -u DEVELOPER_DIR "$meson_py" "$meson_bin" compile -C "$work/build"
 /usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import report_compiler_edges; import pathlib,sys; report_compiler_edges(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), int(sys.argv[3]))' "$work/build/.ninja_log" "$work/build/build.ninja" "$previous_end"
 /usr/bin/python3 -B -c 'from pathlib import Path; from bazel.build_state import _remove; import sys; _remove(Path(sys.argv[1]))' "$work/dest"
 PYTHONHOME="${ORLIX_MLIBC_MESON_HOME:?}" PYTHONPATH="${ORLIX_MLIBC_MESON_LIB:?}" \
-  /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" DESTDIR="$work/dest" "$meson_py" "$meson_bin" install -C "$work/build"
+  /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u SDKROOT -u DEVELOPER_DIR DESTDIR="$work/dest" "$meson_py" "$meson_bin" install -C "$work/build"
 test -d "$work/dest/usr/include"
 test -d "$work/dest/usr/lib"
 test -s "$work/dest/usr/lib/libc.a"
@@ -250,7 +238,7 @@ if [ -s "$libraries_out/ld.so" ]; then
 else
     /usr/bin/printf '' > "$loader_out"
 fi
-/usr/bin/nm "$work/dest/usr/lib/libc.a" | /usr/bin/awk '{print $3}' | /usr/bin/sort -u > "$abi_out"
+"$tool_bin/llvm-nm" -j "$work/dest/usr/lib/libc.a" | /usr/bin/awk 'NF' | /usr/bin/sort -u > "$abi_out"
 followed_uapi="$work/inputs/followed-header.sha256"
 test -s "$followed_uapi"
 uapi_digest="$(/usr/bin/tr -d '[:space:]' < "$followed_uapi")"
@@ -269,13 +257,14 @@ test "${#sysroot_digest}" -eq 64
     ctx.actions.run_shell(
         mnemonic = "OrlixMLibCSysroot",
         progress_message = "Building OrlixMLibC from declared tools",
-        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.mlibc import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6:]))' \"$@\"",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.mlibc import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7:]))' \"$@\"",
         arguments = [
             script.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
             "mlibc-work",
             ctx.file.clang.dirname,
+            ctx.file.sdk_settings.dirname,
             ctx.file.mlibc_meson.path,
             uapi.headers.path,
             sysroot.path,
@@ -316,7 +305,9 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.meson,
                 ctx.file.ninja,
                 ctx.file.meson_python,
-            ] + ctx.files.patches + ctx.files.mlibc_support + ctx.files.tool_libs + ctx.files.clang_resources,
+                ctx.file.llvm_nm,
+                ctx.file.sdk_settings,
+            ] + ctx.files.patches + ctx.files.mlibc_support + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.macos_sdk,
             transitive = [
                 ctx.attr.mlibc_source[DefaultInfo].files,
                 ctx.attr.frigg_source[DefaultInfo].files,
@@ -433,6 +424,9 @@ orlix_mlibc_sysroot = rule(
         "meson": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/meson")),
         "ninja": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ninja")),
         "meson_python": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/meson-python")),
+        "llvm_nm": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-nm")),
+        "sdk_settings": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/sdk/SDKSettings.json")),
+        "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
         "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
         "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
         "mlibc_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),

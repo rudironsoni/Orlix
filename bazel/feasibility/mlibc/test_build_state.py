@@ -131,9 +131,9 @@ class MlibcStateTests(unittest.TestCase):
 
     def test_work_root_rejects_output_base_and_temp_state(self) -> None:
         with self.assertRaises(SystemExit):
-            build_state.run("script", "toolchain", "compiler", "/var/orlix-mlibc-state/aarch64-linux-gnu", ".", [])
+            build_state.run("script", "toolchain", "compiler", "/var/orlix-mlibc-state/aarch64-linux-gnu", ".", ".", [])
         with self.assertRaises(SystemExit):
-            build_state.run("script", "toolchain", "compiler", "/var/tmp/orlix-mlibc.AbCd", ".", [])
+            build_state.run("script", "toolchain", "compiler", "/var/tmp/orlix-mlibc.AbCd", ".", ".", [])
 
     def test_declared_work_root_drops_client_tmpdir(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -143,22 +143,30 @@ class MlibcStateTests(unittest.TestCase):
                 "set -euo pipefail\n"
                 'test -n "$ORLIX_MLIBC_WORK_ROOT"\n'
                 'test -z "${TMPDIR:-}"\n'
+                'test -z "${DEVELOPER_DIR:-}"\n'
+                'test -z "${SDKROOT:-}"\n'
                 'test -z "$ORLIX_COMPILER_LAUNCHER"\n'
-                'test -n "$ORLIX_MLIBC_TOOL_BIN"\n',
+                'test -n "$ORLIX_MLIBC_TOOL_BIN"\n'
+                'test -s "$ORLIX_MLIBC_SDK/SDKSettings.json"\n',
                 encoding="utf-8",
             )
             (root / "toolchain.json").write_text("{}\n", encoding="utf-8")
             (root / "compiler.json").write_text("{}\n", encoding="utf-8")
             tools = root / "tools" / "bin"
             tools.mkdir(parents=True)
+            sdk = root / "sdk"
+            sdk.mkdir()
+            (sdk / "SDKSettings.json").write_text("{}\n", encoding="utf-8")
             work = root / "mlibc-work"
             previous = os.environ.get("TMPDIR")
             os.environ["TMPDIR"] = "/tmp/client"
+            os.environ["DEVELOPER_DIR"] = "/Applications/Xcode.app/Contents/Developer"
+            os.environ["SDKROOT"] = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
             os.environ["ORLIX_COMPILER_LAUNCHER"] = "/opt/homebrew/bin/ccache"
             try:
                 status = build_state.run(
                     str(script), str(root / "toolchain.json"), str(root / "compiler.json"),
-                    str(work), str(tools), [],
+                    str(work), str(tools), str(sdk), [],
                 )
             finally:
                 if previous is None:
@@ -166,6 +174,8 @@ class MlibcStateTests(unittest.TestCase):
                 else:
                     os.environ["TMPDIR"] = previous
                 os.environ.pop("ORLIX_COMPILER_LAUNCHER", None)
+                os.environ.pop("DEVELOPER_DIR", None)
+                os.environ.pop("SDKROOT", None)
             self.assertEqual(status, 0)
             self.assertTrue((work / "build-state.json").is_file())
 

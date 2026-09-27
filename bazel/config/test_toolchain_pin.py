@@ -255,3 +255,20 @@ class ToolchainPinTests(unittest.TestCase):
             self.assertEqual(staged.read_bytes(), source.read_bytes())
             self.assertTrue(staged.stat().st_mode & 0o111)
             self.assertEqual(list((destination / "lib").glob("*")), [])
+
+    def test_copy_tree_materializes_symlink_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "sdk"
+            source.mkdir()
+            payload = source / "usr" / "include"
+            payload.mkdir(parents=True)
+            header = payload / "stdint.h"
+            header.write_text("typedef int x;\n", encoding="utf-8")
+            link = source / "SDKSettings.json"
+            link.symlink_to(header)
+            destination = root / "staged"
+            pin._copy_tree(source, destination)
+            copied = destination / "SDKSettings.json"
+            self.assertFalse(copied.is_symlink())
+            self.assertEqual(copied.read_text(encoding="utf-8"), header.read_text(encoding="utf-8"))
