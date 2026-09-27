@@ -162,6 +162,16 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-current-simulator-gate", apple_ci)
         self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
         self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
+        self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 1)
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
+        self.assertIn("compare_trees", equivalence)
+        self.assertIn("--nouse_action_cache --disk_cache=", equivalence)
+        self.assertIn("//bazel/feasibility/kernel:uapi", equivalence)
+        self.assertIn("//bazel/feasibility/mlibc:sysroot", equivalence)
+        self.assertIn("//bazel/feasibility/rootfs:rootfs", equivalence)
         self.assertNotIn("__tcti-isa-restore", makefile)
         self.assertNotIn("ORLIX_TCTI_ISA_PREPARED", makefile)
         self.assertNotIn("ORLIX_TCTI_ISA_ARTIFACTS", makefile)

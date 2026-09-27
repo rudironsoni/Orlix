@@ -18,6 +18,7 @@ blocks:
   - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
 owned_paths:
   - "bazel/**"
+  - "make/bazel-migration.mk"
   - "MODULE.bazel.lock"
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"

@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Run cache equivalence from Apple CI
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) makes `make __bazel-apple-ci` run the existing `__bazel-cache-equivalence` target. That target still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. The workflow file is unchanged.
+
 ## [2026-09-27] build | Keep the Xcode path off the mlibc action key
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stops `OrlixMLibCSysroot` and `OrlixCompilerRuntime` from taking `DEVELOPER_DIR` as their identity. The native compiler reads a copied macOS SDK, `llvm-nm` replaces `/usr/bin/nm`, and prefix maps cover the staged SDK and tool directory. Xcode selection stays at toolchain fetch time.
