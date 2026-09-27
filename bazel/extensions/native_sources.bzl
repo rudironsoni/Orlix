@@ -205,7 +205,7 @@ def _kernel_toolchain_repository_impl(ctx):
         "/usr/bin/python3", "-B", "-c",
         "import sys; sys.path.insert(0,sys.argv[1]); import toolchain_pin; toolchain_pin.stage_executed_tools(sys.argv[2], sys.argv[3])",
         str(observer.dirname), developer, str(ctx.path("tools")),
-    ], timeout = 900)
+    ], timeout = 1800)
     if staged.return_code:
         fail("Kernel toolchain tool staging failed:\n%s" % staged.stderr)
     ctx.file("BUILD.bazel", """
@@ -224,6 +224,7 @@ exports_files([
     "tools/bin/clang",
     "tools/bin/clang++",
     "tools/bin/llvm-ar",
+    "tools/bin/llvm-nm",
     "tools/bin/llvm-strip",
     "tools/bin/ld.lld",
     "tools/bin/ninja",
@@ -231,7 +232,14 @@ exports_files([
     "tools/bin/meson-python",
     "tools/bin/mke2fs",
     "tools/bin/debugfs",
+    "tools/sdk/SDKSettings.json",
 ], visibility = ["//visibility:public"])
+
+filegroup(
+    name = "macos_sdk",
+    srcs = glob(["tools/sdk/**"]),
+    visibility = ["//visibility:public"],
+)
 
 filegroup(
     name = "tool_libs",

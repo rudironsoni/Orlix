@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Keep the Xcode path off the mlibc action key
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stops `OrlixMLibCSysroot` and `OrlixCompilerRuntime` from taking `DEVELOPER_DIR` as their identity. The native compiler reads a copied macOS SDK, `llvm-nm` replaces `/usr/bin/nm`, and prefix maps cover the staged SDK and tool directory. Xcode selection stays at toolchain fetch time.
+
 ## [2026-09-27] build | Cache foreign producers with complete tool inputs
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) drops `no-remote-cache` from OrlixMLibC, the compiler runtime, rootfs assembly, the package interface, and `gen_init_cpio`. Those actions now take staged host tools as files, omit the client shell environment, and keep `no-remote-exec`. Kernel, ISA restore, guest packages, and artifact identity stay uncached until their missing inputs are declared.

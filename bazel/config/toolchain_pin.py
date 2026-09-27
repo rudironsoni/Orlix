@@ -318,7 +318,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     compiler = {**runtime, "files": {name: digest for name, digest in runtime["files"].items() if name.endswith("/clang")}}
     Path(output).with_name("guest-compiler-identity.json").write_text(json.dumps(compiler, sort_keys=True) + "\n")
     candidates = [str(Path(directory) / name) for directory in search_path.split(":") for name in names]
-    return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
+    return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees] + [str(sdk)]}
 
 
 def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str, extra_tools: tuple[Path, ...] = ()) -> dict:
@@ -539,6 +539,7 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
         xcode_bin / "clang++",
         Path("/opt/homebrew/opt/llvm/bin/llvm-ar"),
         Path("/opt/homebrew/opt/llvm/bin/llvm-strip"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-nm"),
         Path("/opt/homebrew/opt/lld/bin/ld.lld"),
         Path("/opt/homebrew/bin/ninja"),
         Path("/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"),
@@ -572,3 +573,33 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
     ))
     _copy_tree(Path(info["meson"]), dest / "py" / "mesonbuild")
     _copy_tree(Path(info["stdlib"]), dest / "python-home" / "lib" / ("python" + info["version"]))
+    _require_supported_xcode(developer_dir)
+    stage_macos_sdk(developer_dir, dest / "sdk")
+
+
+def _require_supported_xcode(developer_dir: str) -> None:
+    """Reject an unpinned Xcode while staging, not inside the cached action."""
+    environment = {**os.environ, "DEVELOPER_DIR": developer_dir}
+    version_text = subprocess.check_output(["/usr/bin/xcodebuild", "-version"], env=environment, text=True)
+    lines = [line.strip() for line in version_text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        raise PinError(f"xcodebuild did not report an identity: {version_text!r}")
+    version = lines[0].removeprefix("Xcode ").strip()
+    build = lines[1].removeprefix("Build version ").strip()
+    namespace_for(version, build)
+
+
+def stage_macos_sdk(developer_dir: str, destination: Path) -> None:
+    """Copy the macOS SDK as regular files so the native compiler's sysroot is an input.
+
+    Symlinks are materialized. The action then passes this tree to -isysroot and
+    rewrites that path, instead of reading the live Xcode SDK.
+    """
+    environment = {**os.environ, "DEVELOPER_DIR": developer_dir}
+    sdk = Path(subprocess.check_output(
+        ["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
+        env=environment, text=True,
+    ).strip()).resolve(strict=True)
+    if not (sdk / "SDKSettings.json").is_file():
+        raise PinError(f"macOS SDK is missing SDKSettings.json: {sdk}")
+    _copy_tree(sdk, destination)

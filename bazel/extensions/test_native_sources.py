@@ -16,6 +16,9 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn("stage_executed_tools", text)
         self.assertIn('"tools/bin/mke2fs"', text)
         self.assertIn('"tools/bin/clang"', text)
+        self.assertIn('"tools/bin/llvm-nm"', text)
+        self.assertIn('"tools/sdk/SDKSettings.json"', text)
+        self.assertIn('name = "macos_sdk"', text)
         self.assertIn('name = "mlibc_support"', text)
 
     def test_linux_and_mlibc_archives_have_sha256(self) -> None:
