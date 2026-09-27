@@ -258,7 +258,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("artifact-identity-v2", workflow)
         self.assertIn("no immutable sha256 OCI digest", workflow)
         self.assertIn("manual promoted mode rejected", workflow)
-        self.assertIn("if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'", workflow)
+        self.assertIn("if: steps.promoted-proof.outputs.enabled != 'true'", workflow)
         # Cold then warm proof in one job with acquisition and action evidence.
         self.assertIn("Promoted-consumer proof (cold then warm)", workflow)
         self.assertIn("for pass in cold warm", workflow)
@@ -267,6 +267,35 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("component_actions.py", workflow)
         self.assertIn("orlix-promoted-store", workflow)
         self.assertIn("Build/Bazel/output-base", workflow)
+
+    def test_same_repo_promoted_consumer_branch_runs_the_promoted_proof(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        detector = workflow.split("id: promoted-proof", 1)[1].split("id: component-mode", 1)[0]
+        self.assertIn('[ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$REQUESTED_COMPONENT_MODE" = "promoted" ]', detector)
+        self.assertIn('[ "$GITHUB_EVENT_NAME" = "pull_request" ]', detector)
+        self.assertIn('[ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ]', detector)
+        self.assertIn('[ "$HEAD_REF" = "proof/promoted-consumer" ]', detector)
+        self.assertIn("github.event.pull_request.head.repo.full_name", detector)
+        self.assertIn("github.head_ref", detector)
+        self.assertIn(
+            "steps.promoted-proof.outputs.enabled == 'true' && 'promoted'",
+            workflow,
+        )
+        proof = workflow.split("name: Promoted-consumer proof (cold then warm)", 1)[1].split(
+            "name: Store promoted-consumer proof evidence", 1
+        )[0]
+        self.assertIn("if: steps.promoted-proof.outputs.enabled == 'true'", proof)
+        self.assertIn("for pass in cold warm", proof)
+        self.assertIn("network_downloads", proof)
+        evidence = workflow.split("name: Store promoted-consumer proof evidence", 1)[1].split(
+            "name: Save Bazel repository cache", 1
+        )[0]
+        self.assertIn("always() && steps.promoted-proof.outputs.enabled == 'true'", evidence)
+        apple = workflow.split("name: Run the Make-owned Apple CI operation", 1)[1].split(
+            "name: Promoted-consumer proof (cold then warm)", 1
+        )[0]
+        self.assertIn("if: steps.promoted-proof.outputs.enabled != 'true'", apple)
+        self.assertNotIn("github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'", workflow)
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")

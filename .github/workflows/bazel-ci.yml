@@ -183,11 +183,31 @@ jobs:
             echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
           } >> "$GITHUB_ENV"
 
+      # Same proof as workflow_dispatch component_mode=promoted. The branch
+      # gate requires this repository and the exact head branch
+      # proof/promoted-consumer.
+      - name: Detect the promoted-consumer proof request
+        id: promoted-proof
+        env:
+          REQUESTED_COMPONENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.component_mode || '' }}
+          HEAD_REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || '' }}
+          HEAD_REF: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
+        run: |
+          set -euo pipefail
+          enabled=false
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$REQUESTED_COMPONENT_MODE" = "promoted" ]; then
+            enabled=true
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] && [ "$HEAD_REF" = "proof/promoted-consumer" ]; then
+            enabled=true
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
       - name: Select the component mode
         id: component-mode
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          REQUESTED_COMPONENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.component_mode || 'auto' }}
+          REQUESTED_COMPONENT_MODE: ${{ steps.promoted-proof.outputs.enabled == 'true' && 'promoted' || (github.event_name == 'workflow_dispatch' && inputs.component_mode || 'auto') }}
         run: |
           set -euo pipefail
           schema="$(python3 -c "import json; print(json.load(open('artifacts.lock.json')).get('schema', 1))")"
@@ -289,16 +309,19 @@ jobs:
           printf '%s\n' "$GITHUB_TOKEN" | oras login ghcr.io --registry-config "$ORLIX_ORAS_REGISTRY_CONFIG" -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Run the Make-owned Apple CI operation
-        if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'
+        if: steps.promoted-proof.outputs.enabled != 'true'
         env:
           ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
         run: make __bazel-apple-ci
 
-      # Manual promoted proof: two passes in one job. Each pass starts with a
-      # cleared Bazel output base, reconstruction tree, proof output, promotion
-      # staging, and Apple CI evidence, so nothing is reused from the previous
-      # pass except the promoted-artifact store. The Bazel output base path
+      # Promoted-consumer proof: two passes in one job. It runs for an explicit
+      # workflow_dispatch component_mode=promoted request and for a same-repo
+      # pull request whose head branch is exactly proof/promoted-consumer.
+      # Each pass starts with a cleared Bazel output base, reconstruction tree,
+      # proof output, promotion staging, and Apple CI evidence, so nothing is
+      # reused from the previous pass except the promoted-artifact store. The
+      # Bazel output base path
       # stays repository-relative because MODULE.bazel.lock records that path;
       # freshness comes from deleting its contents. The cold pass starts with
       # an empty store, so the seven components must come from GHCR; the warm
@@ -306,7 +329,7 @@ jobs:
       # Reconstruction verifies every signature in both passes, and
       # component-producing actions are counted from the executed execution log.
       - name: Promoted-consumer proof (cold then warm)
-        if: github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        if: steps.promoted-proof.outputs.enabled == 'true'
         env:
           ORLIX_BAZEL_COMPONENT_MODE: promoted
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
@@ -388,7 +411,7 @@ jobs:
           PY
 
       - name: Store promoted-consumer proof evidence
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'
+        if: always() && steps.promoted-proof.outputs.enabled == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: promoted-consumer-proof-${{ github.sha }}
