@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Refresh the migration inventory after rebasing onto main
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) is rebased onto `bd559333`, which added the warm-pass simulator uninstall lines and a new makefile digest. `bazel/migration/legacy-target-map.json` now records the merged `make/bazel-migration.mk` digest. Cache equivalence still requires `runner == "disk cache hit"` and equal UAPI, mlibc, and rootfs trees. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-27] build | Keep disk-cache restores equal to fresh foreign outputs
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) still requires a disk-cache hit and equal UAPI, mlibc, and rootfs trees. A content mismatch now names the component and the first differing relative path. The UAPI Kbuild archive rewrites the temporary work directory to a stable path, and the mlibc install rewrites the same class of absolute path in text files and symlink targets. Archive timestamps use `SOURCE_DATE_EPOCH` and `ZERO_AR_DATE`. `DEVELOPER_DIR` stays off the mlibc action key.
