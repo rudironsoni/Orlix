@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "kind": "orlix-invalidation-matrix",
+  "proof": "contract-spec",
+  "timed_runs": false,
+  "swift_layout": {
+    "accepted": "single_module",
+    "module": "Orlix",
+    "reason": "Implementation, terminal/Herdr UI, and the app shell stay one Swift module until a legal three-module split with real access control lands.",
+    "split_modules": ["app_shell", "implementation", "terminal_herdr_ui"]
+  },
+  "linux_foundations": [
+    "compiler_runtime",
+    "coreutils",
+    "coreutils_compilation",
+    "guest_package",
+    "guest_package_compile",
+    "guest_packages",
+    "headers",
+    "installed_uapi",
+    "kbuild_objects",
+    "kernel",
+    "kernel_products",
+    "mlibc",
+    "mlibc_compilation",
+    "ninja_closure",
+    "other_guest_packages",
+    "rootfs",
+    "rootfs_assembly",
+    "tcti"
+  ],
+  "compile_actions": [
+    "apple_swift_compile",
+    "compiler_runtime",
+    "coreutils_compilation",
+    "guest_package_compile",
+    "kbuild_objects",
+    "ninja_closure"
+  ],
+  "rows": [
+    {
+      "id": "swift_app_shell",
+      "edit": "Swift app shell, not terminal",
+      "split": {
+        "rebuilds": ["app_link", "app_package", "app_shell_module"],
+        "stays_reusable": [
+          "coreutils",
+          "engine",
+          "implementation_module",
+          "installed_uapi",
+          "kernel",
+          "mlibc",
+          "rootfs"
+        ]
+      },
+      "single_module": {
+        "rebuilds": ["app_link", "app_package", "orlix_swift_module"],
+        "stays_reusable": [
+          "bootloader",
+          "compiler_runtime",
+          "coreutils",
+          "engine",
+          "guest_packages",
+          "host_adapter",
+          "installed_uapi",
+          "kernel",
+          "mlibc",
+          "rootfs",
+          "tcti"
+        ]
+      }
+    },
+    {
+      "id": "terminal_herdr_ui",
+      "edit": "Terminal / Herdr-facing UI",
+      "notes": ["Herdr is not an Engine or OrlixKit input"],
+      "split": {
+        "rebuilds": ["app_link", "terminal_module"],
+        "stays_reusable": [
+          "coreutils",
+          "engine",
+          "guest_packages",
+          "implementation_module",
+          "kernel",
+          "mlibc",
+          "rootfs"
+        ]
+      },
+      "single_module": {
+        "rebuilds": ["app_link", "orlix_swift_module"],
+        "stays_reusable": [
+          "bootloader",
+          "compiler_runtime",
+          "coreutils",
+          "engine",
+          "guest_packages",
+          "host_adapter",
+          "installed_uapi",
+          "kernel",
+          "mlibc",
+          "rootfs",
+          "tcti"
+        ]
+      }
+    },
+    {
+      "id": "orlix_engine",
+      "edit": "OrlixEngine",
+      "effect": {
+        "rebuilds": ["app_link", "engine", "kit_link"],
+        "stays_reusable": ["coreutils", "guest_packages", "kernel", "mlibc", "rootfs"]
+      }
+    },
+    {
+      "id": "orlix_bootloader",
+      "edit": "OrlixBootloader",
+      "effect": {
+        "rebuilds": ["bootloader_objects", "downstream_links"],
+        "stays_reusable": ["guest_producers"]
+      }
+    },
+    {
+      "id": "orlix_host_adapter",
+      "edit": "OrlixHostAdapter",
+      "notes": ["Guest producers stay reusable unless the edit changes an interface those producers consume"],
+      "effect": {
+        "rebuilds": ["downstream_links", "host_adapter_objects"],
+        "stays_reusable": ["guest_producers"]
+      }
+    },
+    {
+      "id": "kernel_or_tcti_uapi_unchanged",
+      "edit": "Kernel or TCTI implementation, UAPI bytes unchanged",
+      "effect": {
+        "rebuilds": ["kbuild_objects", "kernel_products"],
+        "stays_reusable": [
+          "apple_swift_compile",
+          "coreutils",
+          "guest_packages",
+          "mlibc",
+          "rootfs"
+        ]
+      }
+    },
+    {
+      "id": "installed_uapi_bytes",
+      "edit": "Installed UAPI bytes",
+      "effect": {
+        "rebuilds": ["guest_packages", "headers", "kernel", "mlibc", "rootfs"],
+        "stays_reusable": ["unrelated_host_swift"]
+      }
+    },
+    {
+      "id": "mlibc",
+      "edit": "mlibc",
+      "effect": {
+        "rebuilds": ["ninja_closure", "rootfs", "sysroot_consumers"],
+        "stays_reusable": ["bootloader", "compiler_runtime", "host_adapter", "kernel"]
+      }
+    },
+    {
+      "id": "one_guest_package",
+      "edit": "One Coreutils or guest package",
+      "effect": {
+        "rebuilds": ["guest_package", "rootfs"],
+        "stays_reusable": ["kernel", "mlibc", "mlibc_compilation", "other_guest_packages"]
+      }
+    },
+    {
+      "id": "rootfs_policy",
+      "edit": "Rootfs policy only",
+      "effect": {
+        "rebuilds": ["resource_packaging", "rootfs_assembly"],
+        "stays_reusable": [
+          "compiler_runtime",
+          "coreutils_compilation",
+          "guest_package_compile",
+          "kernel",
+          "mlibc"
+        ]
+      }
+    },
+    {
+      "id": "proof_lock_or_build_noise",
+      "edit": "Proof, lock record, or Build/ noise",
+      "effect": {
+        "rebuilds": ["evidence"],
+        "stays_reusable": [
+          "apple_swift_compile",
+          "compiler_runtime",
+          "coreutils_compilation",
+          "guest_package_compile",
+          "kbuild_objects",
+          "ninja_closure"
+        ]
+      }
+    },
+    {
+      "id": "toolchain_or_module_bazel",
+      "edit": "Toolchain or MODULE.bazel",
+      "fail_closed": true,
+      "effect": {
+        "rebuilds": ["affected_closure"],
+        "stays_reusable": []
+      }
+    },
+    {
+      "id": "cache_eviction",
+      "edit": "Cache eviction",
+      "notes": ["The next miss rebuilds; eviction is not invalidation"],
+      "effect": {
+        "rebuilds": [],
+        "stays_reusable": [],
+        "eviction_is_not_invalidation": true
+      }
+    }
+  ]
+}

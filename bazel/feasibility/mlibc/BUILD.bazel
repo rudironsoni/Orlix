@@ -2,6 +2,11 @@ load(":mlibc_sysroot.bzl", "orlix_mlibc_sysroot")
 
 package(default_visibility = ["//visibility:private"])
 
+exports_files(
+    ["header_digest.py"],
+    visibility = ["//bazel/feasibility/kernel:__pkg__"],
+)
+
 orlix_mlibc_sysroot(
     name = "sysroot",
     toolchain_identity = "@orlix_kernel_toolchain//:mlibc-identity.json",

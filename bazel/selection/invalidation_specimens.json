@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "kind": "orlix-invalidation-specimens",
+  "proof": "contract-spec",
+  "timed_runs": false,
+  "layout": "single_module",
+  "specimens": [
+    {
+      "id": "app-shell-edit",
+      "row": "swift_app_shell",
+      "example": "Orlix/Orlix/App/ContentView.swift",
+      "rebuilds": ["app_link", "app_package", "orlix_swift_module"],
+      "must_not_rebuild": [
+        "compiler_runtime",
+        "coreutils",
+        "engine",
+        "guest_packages",
+        "installed_uapi",
+        "kernel",
+        "mlibc",
+        "rootfs",
+        "tcti"
+      ]
+    },
+    {
+      "id": "terminal-herdr-edit",
+      "row": "terminal_herdr_ui",
+      "example": "Orlix/Orlix/Features/TerminalSessions",
+      "rebuilds": ["app_link", "orlix_swift_module"],
+      "must_not_rebuild": [
+        "compiler_runtime",
+        "coreutils",
+        "engine",
+        "guest_packages",
+        "installed_uapi",
+        "kernel",
+        "mlibc",
+        "rootfs",
+        "tcti"
+      ]
+    },
+    {
+      "id": "engine-edit",
+      "row": "orlix_engine",
+      "example": "OrlixEngine",
+      "rebuilds": ["app_link", "engine", "kit_link"],
+      "must_not_rebuild": ["coreutils", "guest_packages", "kernel", "mlibc", "rootfs"]
+    },
+    {
+      "id": "bootloader-edit",
+      "row": "orlix_bootloader",
+      "example": "OrlixBootloader",
+      "rebuilds": ["bootloader_objects", "downstream_links"],
+      "must_not_rebuild": ["guest_producers"]
+    },
+    {
+      "id": "host-adapter-edit",
+      "row": "orlix_host_adapter",
+      "example": "OrlixHostAdapter",
+      "rebuilds": ["downstream_links", "host_adapter_objects"],
+      "must_not_rebuild": ["guest_producers"]
+    },
+    {
+      "id": "kernel-tcti-uapi-unchanged",
+      "row": "kernel_or_tcti_uapi_unchanged",
+      "example": "kernel or TCTI implementation with installed UAPI bytes unchanged",
+      "rebuilds": ["kbuild_objects", "kernel_products"],
+      "must_not_rebuild": ["apple_swift_compile", "coreutils", "guest_packages", "mlibc", "rootfs"]
+    },
+    {
+      "id": "installed-uapi-bytes",
+      "row": "installed_uapi_bytes",
+      "example": "installed UAPI header bytes",
+      "rebuilds": ["guest_packages", "headers", "kernel", "mlibc", "rootfs"],
+      "must_not_rebuild": ["unrelated_host_swift"]
+    },
+    {
+      "id": "mlibc-edit",
+      "row": "mlibc",
+      "example": "OrlixMLibC",
+      "rebuilds": ["ninja_closure", "rootfs", "sysroot_consumers"],
+      "must_not_rebuild": ["bootloader", "compiler_runtime", "host_adapter", "kernel"]
+    },
+    {
+      "id": "one-guest-package",
+      "row": "one_guest_package",
+      "example": "one Coreutils or guest package",
+      "rebuilds": ["guest_package", "rootfs"],
+      "must_not_rebuild": ["kernel", "mlibc", "mlibc_compilation", "other_guest_packages"]
+    },
+    {
+      "id": "rootfs-policy",
+      "row": "rootfs_policy",
+      "example": "rootfs policy only",
+      "rebuilds": ["resource_packaging", "rootfs_assembly"],
+      "must_not_rebuild": [
+        "compiler_runtime",
+        "coreutils_compilation",
+        "guest_package_compile",
+        "kernel",
+        "mlibc"
+      ]
+    },
+    {
+      "id": "proof-lock-build-noise",
+      "row": "proof_lock_or_build_noise",
+      "example": "proof record, lock record, or Build/ noise",
+      "rebuilds": ["evidence"],
+      "must_not_rebuild": [
+        "apple_swift_compile",
+        "compiler_runtime",
+        "coreutils_compilation",
+        "guest_package_compile",
+        "kbuild_objects",
+        "ninja_closure"
+      ]
+    },
+    {
+      "id": "toolchain-or-module",
+      "row": "toolchain_or_module_bazel",
+      "example": "toolchain or MODULE.bazel",
+      "rebuilds": ["affected_closure"],
+      "must_not_rebuild": []
+    },
+    {
+      "id": "cache-eviction",
+      "row": "cache_eviction",
+      "example": "disk cache, BuildBuddy, or output-base eviction",
+      "rebuilds": [],
+      "must_not_rebuild": ["kernel", "mlibc", "orlix_swift_module", "rootfs"]
+    }
+  ]
+}

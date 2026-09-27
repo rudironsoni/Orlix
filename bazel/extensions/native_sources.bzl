@@ -303,6 +303,7 @@ def _native_sources_impl(_ctx):
         sha256 = "394024eda0a5955217ceda9cd1201e65dc8fa3aa29c2951135a49521d57c3cc3",
         strip_prefix = "coreutils-9.11",
         marker = "configure",
+        patch = "//bazel/extensions:coreutils-echo.patch",
     )
     # GNU Bash 5.3 Autotools tarball. Pins match OrlixOS BASH_URL / BASH_SHA256.
     _archive_repository(

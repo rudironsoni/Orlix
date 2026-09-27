@@ -13,10 +13,10 @@ OrlixProofSubjectInfo = provider(
 OrlixProofReportInfo = provider(
     doc = "Provides one ordered proof report bound to an exact subject.",
     fields = {
-        "destination": "Host, simulator, or device destination.",
+        "destination": "Host, simulator, or device destination. Proof metadata, not a consumer action input.",
         "forbidden_behavior_fields": "Required negative proof fields.",
         "prerequisite_reports": "Reports that must authorize this tier.",
-        "profile": "Orlix profile under test.",
+        "profile": "Orlix profile under test. Proof metadata, not a consumer action input.",
         "proof_tier": "Accepted proof tier name.",
         "report": "Structured proof report.",
         "result": "Native owning-suite result.",
