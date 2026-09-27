@@ -52,10 +52,57 @@ def _source_identity(source: Path) -> bytes:
     return (json.dumps(entries, sort_keys=True) + "\n").encode()
 
 
+def _sync_digest(files: dict[str, Path]) -> str:
+    digest = hashlib.sha256()
+    for name, source in sorted(files.items()):
+        mode, data = state._entry(source)
+        digest.update(json.dumps([name, mode, hashlib.sha256(data).hexdigest()]).encode() + b"\n")
+    return digest.hexdigest()
+
+
+def _configured_source(path: Path) -> bool:
+    return (
+        path.name in _CONFIGURATION_NAMES
+        or path.suffix == ".m4"
+        or (path.name.startswith("config") and path.suffix == ".in")
+    )
+
+
+def _configuration_digest(files: dict[str, Path], arguments: list[str], extra_tree: str | None) -> str:
+    configuration = hashlib.sha256()
+    for name, path in sorted(files.items()):
+        if _configured_source(path):
+            configuration.update(name.encode() + hashlib.sha256(path.read_bytes()).digest())
+    for name, argument in zip(("headers", "uapi", "libraries"), arguments[1:4]):
+        configuration.update(name.encode() + _sync_digest(state._files(Path(argument))).encode())
+    configuration.update(_sync_digest({"libcompiler_rt.a": Path(arguments[4])}).encode())
+    if extra_tree:
+        configuration.update(_sync_digest(state._files(Path(extra_tree))).encode())
+    return configuration.hexdigest()
+
+
+def _preserve_shipped_mtimes(copied: dict[str, Path], destination: Path) -> None:
+    """Keep tarball timestamps so a no-op does not regenerate Autotools outputs."""
+    for name, source in copied.items():
+        target = destination / name
+        if source.is_symlink() or not target.is_file() or target.is_symlink():
+            continue
+        if target.read_bytes() != source.read_bytes():
+            continue
+        copied_stat = source.stat()
+        os.utime(target, ns=(copied_stat.st_atime_ns, copied_stat.st_mtime_ns))
+
+
 def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tree: str | None = None) -> None:
     source = Path(arguments[0]).absolute().parent
     files = state._files(source)
     files.pop("BUILD.bazel", None)
+    current_configuration = _configuration_digest(files, arguments, extra_tree)
+    signature = root / "inputs/configured.sha256"
+    previous_configuration = signature.read_text() if signature.is_file() else None
+    if previous_configuration != current_configuration:
+        for name in _TREES:
+            state._remove(root / name)
     state.directory(root / "inputs", root)
     source_index = root / "inputs/source-files.json"
     previous = json.loads(source_index.read_text()) if source_index.is_file() else {}
@@ -66,6 +113,7 @@ def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tr
     changed = {name: path for name, path in files.items() if current[name] != previous.get(name)}
     source_root = root / ("build" if in_tree else "src")
     source_result = state.sync(changed, source_root, root, remove_stale=False)
+    _preserve_shipped_mtimes(changed, source_root)
     for name, path in state._files(source_root).items():
         if name in previous and name not in current:
             state._remove(path)
@@ -74,25 +122,16 @@ def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tr
     source_result["sha256"] = hashlib.sha256(json.dumps(current, sort_keys=True).encode()).hexdigest()
     state._remove(source_index)
     source_index.write_text(json.dumps(current, sort_keys=True) + "\n")
-    configuration = hashlib.sha256()
-    for name, path in sorted(files.items()):
-        if path.name in _CONFIGURATION_NAMES or path.suffix == ".m4" or (path.name.startswith("config") and path.suffix == ".in"):
-            configuration.update(name.encode() + hashlib.sha256(path.read_bytes()).digest())
     for name, argument in zip(("headers", "uapi", "libraries"), arguments[1:4]):
-        result = state.sync(state._files(Path(argument)), root / "inputs" / name, root)
-        configuration.update(name.encode() + result["sha256"].encode())
-    result = state.sync({"libcompiler_rt.a": Path(arguments[4])}, root / "inputs/runtime", root)
-    configuration.update(result["sha256"].encode())
+        state.sync(state._files(Path(argument)), root / "inputs" / name, root)
+    state.sync({"libcompiler_rt.a": Path(arguments[4])}, root / "inputs/runtime", root)
     if extra_tree:
-        result = state.sync(state._files(Path(extra_tree)), root / "inputs/extra", root)
-        configuration.update(result["sha256"].encode())
-    signature = root / "inputs/configured.sha256"
-    current = configuration.hexdigest()
-    configure = not signature.is_file() or signature.read_text() != current or not (root / "build/Makefile").is_file()
+        state.sync(state._files(Path(extra_tree)), root / "inputs/extra", root)
+    configure = previous_configuration != current_configuration or not (root / "build/Makefile").is_file()
     state._remove(root / "inputs/configure-required")
     (root / "inputs/configure-required").write_text("1" if configure else "0")
     state._remove(signature)
-    signature.write_text(current)
+    signature.write_text(current_configuration)
     print("Orlix package source: " + json.dumps(source_result, sort_keys=True), flush=True)
 
 
