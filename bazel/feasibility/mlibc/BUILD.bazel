@@ -1,4 +1,5 @@
 load(":mlibc_sysroot.bzl", "orlix_mlibc_sysroot")
+load("//bazel/selection:boundary.bzl", "orlix_selected_sysroot")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -28,9 +29,21 @@ orlix_mlibc_sysroot(
     mlibc_source = "@orlix_mlibc_source//:source",
     patches = "//OrlixMLibC/Sources/patches:files",
     tags = ["manual"],
-    uapi = select({
-        "//bazel/config:component_promoted": "//bazel/promotion:promoted_uapi",
-        "//conditions:default": "//bazel/feasibility/kernel:uapi",
-    }),
+    uapi = "//bazel/feasibility/kernel:selected_uapi",
     visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
+orlix_selected_sysroot(
+    name = "selected_sysroot",
+    origin = select({
+        "//bazel/config:origin_mlibc_promoted": "//bazel/promotion:promoted_sysroot",
+        "//conditions:default": ":sysroot",
+    }),
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+        "//bazel/promotion:__pkg__",
+    ],
 )

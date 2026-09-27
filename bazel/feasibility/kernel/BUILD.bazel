@@ -1,5 +1,11 @@
 load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
 load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library", "orlix_tcti_isa_prepare")
+load(
+    "//bazel/selection:boundary.bzl",
+    "orlix_refuse_unmatched_promoted_kernel",
+    "orlix_selected_linux_archive",
+    "orlix_selected_uapi",
+)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -13,6 +19,21 @@ orlix_kernel_uapi(
     visibility = [
         "//bazel/feasibility:__subpackages__",
         "//bazel/product:__pkg__",
+    ],
+)
+
+orlix_selected_uapi(
+    name = "selected_uapi",
+    origin = select({
+        "//bazel/config:origin_uapi_promoted": "//bazel/promotion:promoted_uapi",
+        "//conditions:default": ":uapi",
+    }),
+    tags = ["manual"],
+    visibility = [
+        "//Orlix:__pkg__",
+        "//bazel/feasibility:__subpackages__",
+        "//bazel/product:__pkg__",
+        "//bazel/promotion:__pkg__",
     ],
 )
 
@@ -112,7 +133,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:device",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "release",
     },
 )
@@ -124,7 +145,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:simulator",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "release",
     },
 )
@@ -136,7 +157,7 @@ config_setting(
         "@build_bazel_apple_support//constraints:device",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "development",
     },
 )
@@ -148,20 +169,27 @@ config_setting(
         "@build_bazel_apple_support//constraints:simulator",
     ],
     flag_values = {
-        "//bazel/config:component_mode": "promoted",
+        "//bazel/config:origin_kernel": "promoted",
         "//bazel/config:profile": "development",
     },
 )
 
-alias(
+orlix_refuse_unmatched_promoted_kernel(
+    name = "promoted_kernel_unmatched",
+    tags = ["manual"],
+)
+
+orlix_selected_linux_archive(
     name = "selected_macho",
-    actual = select({
+    origin = select({
         ":promoted_development_iphoneos": "//bazel/promotion:promoted_kernel_development_iphoneos",
         ":promoted_development_iphonesimulator": "//bazel/promotion:promoted_kernel_development_iphonesimulator",
         ":promoted_release_iphoneos": "//bazel/promotion:promoted_kernel_release_iphoneos",
         ":promoted_release_iphonesimulator": "//bazel/promotion:promoted_kernel_release_iphonesimulator",
-        "//bazel/config:component_source": ":macho",
+        "//bazel/config:origin_kernel_promoted": ":promoted_kernel_unmatched",
+        "//conditions:default": ":macho",
     }),
+    tags = ["manual"],
     visibility = [
         "//Orlix:__pkg__",
         "//bazel/feasibility:__subpackages__",
@@ -172,7 +200,7 @@ alias(
 
 filegroup(
     name = "macho_boot_resources",
-    srcs = [":macho"],
+    srcs = [":selected_macho"],
     output_group = "boot_resources",
     tags = ["manual"],
     visibility = ["//Orlix:__pkg__"],
@@ -180,7 +208,7 @@ filegroup(
 
 filegroup(
     name = "macho_archive",
-    srcs = [":macho"],
+    srcs = [":selected_macho"],
     output_group = "archive",
     tags = ["manual"],
     visibility = [
