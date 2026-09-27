@@ -258,7 +258,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("artifact-identity-v2", workflow)
         self.assertIn("no immutable sha256 OCI digest", workflow)
         self.assertIn("manual promoted mode rejected", workflow)
-        self.assertIn("if: steps.promoted-proof.outputs.enabled != 'true'", workflow)
+        self.assertIn("if: github.event_name != 'workflow_dispatch' || inputs.component_mode != 'promoted'", workflow)
         # Cold then warm proof in one job with acquisition and action evidence.
         self.assertIn("Promoted-consumer proof (cold then warm)", workflow)
         self.assertIn("for pass in cold warm", workflow)
@@ -268,34 +268,33 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("orlix-promoted-store", workflow)
         self.assertIn("Build/Bazel/output-base", workflow)
 
-    def test_same_repo_promoted_consumer_branch_runs_the_promoted_proof(self) -> None:
-        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
-        detector = workflow.split("id: promoted-proof", 1)[1].split("id: component-mode", 1)[0]
-        self.assertIn('[ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$REQUESTED_COMPONENT_MODE" = "promoted" ]', detector)
-        self.assertIn('[ "$GITHUB_EVENT_NAME" = "pull_request" ]', detector)
-        self.assertIn('[ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ]', detector)
-        self.assertIn('[ "$HEAD_REF" = "proof/promoted-consumer" ]', detector)
-        self.assertIn("github.event.pull_request.head.repo.full_name", detector)
-        self.assertIn("github.head_ref", detector)
-        self.assertIn(
-            "steps.promoted-proof.outputs.enabled == 'true' && 'promoted'",
-            workflow,
-        )
-        proof = workflow.split("name: Promoted-consumer proof (cold then warm)", 1)[1].split(
-            "name: Store promoted-consumer proof evidence", 1
-        )[0]
-        self.assertIn("if: steps.promoted-proof.outputs.enabled == 'true'", proof)
-        self.assertIn("for pass in cold warm", proof)
-        self.assertIn("network_downloads", proof)
-        evidence = workflow.split("name: Store promoted-consumer proof evidence", 1)[1].split(
-            "name: Save Bazel repository cache", 1
-        )[0]
-        self.assertIn("always() && steps.promoted-proof.outputs.enabled == 'true'", evidence)
-        apple = workflow.split("name: Run the Make-owned Apple CI operation", 1)[1].split(
-            "name: Promoted-consumer proof (cold then warm)", 1
-        )[0]
-        self.assertIn("if: steps.promoted-proof.outputs.enabled != 'true'", apple)
-        self.assertNotIn("github.event_name == 'workflow_dispatch' && inputs.component_mode == 'promoted'", workflow)
+    def test_promoted_consumer_proof_push_forces_promoted_mode(self) -> None:
+        canonical = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("proof/promoted-consumer", canonical)
+        self.assertNotIn("select_component_mode.py", (ROOT / ".github/workflows/bazel-promoted-consumer-proof.yml").read_text(encoding="utf-8"))
+        workflow = (ROOT / ".github/workflows/bazel-promoted-consumer-proof.yml").read_text(encoding="utf-8")
+        self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertIn("proof/promoted-consumer", workflow)
+        self.assertIn("github.repository == 'rudironsoni/Orlix'", workflow)
+        self.assertIn("bazel/promotion/promoted-consumer-proof.json", workflow)
+        self.assertIn('request.get("component_mode") != "promoted"', workflow)
+        self.assertIn("2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c", workflow)
+        self.assertIn("ORLIX_BAZEL_COMPONENT_MODE=promoted", workflow)
+        self.assertIn("--//bazel/config:component_mode=promoted", workflow)
+        self.assertIn("--//bazel/config:origin_kernel=promoted", workflow)
+        self.assertIn("--//bazel/config:origin_uapi=promoted", workflow)
+        self.assertIn("--//bazel/config:origin_mlibc=promoted", workflow)
+        self.assertIn("--//bazel/config:origin_rootfs=promoted", workflow)
+        self.assertIn("for pass in cold warm", workflow)
+        self.assertIn("network_downloads", workflow)
+        self.assertIn("local_store_hits", workflow)
+        request = json.loads((ROOT / "bazel/promotion/promoted-consumer-proof.json").read_text(encoding="utf-8"))
+        lock = json.loads((ROOT / "artifacts.lock.json").read_text(encoding="utf-8"))
+        self.assertEqual(request["kind"], "promoted-consumer-proof-request")
+        self.assertEqual(request["component_mode"], "promoted")
+        self.assertEqual(request["buildset"], lock["buildset"])
+        self.assertEqual(request["buildset"], "2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c")
 
     def test_canonical_workflow_reuses_one_product_for_both_runtimes(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")

@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "kind": "promoted-consumer-proof-request",
+  "component_mode": "promoted",
+  "buildset": "2a4697e1928fd6a33edb08cefe13cdd6c84a621bc9a0f0c694e303b1758b486c"
+}
