@@ -17,6 +17,8 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn('"tools/bin/mke2fs"', text)
         self.assertIn('"tools/bin/clang"', text)
         self.assertIn('"tools/bin/llvm-nm"', text)
+        self.assertIn('"tools/llvm/bin/clang"', text)
+        self.assertIn('name = "guest_clang_support"', text)
         self.assertIn('"tools/sdk/SDKSettings.json"', text)
         self.assertIn('name = "macos_sdk"', text)
         self.assertIn('name = "mlibc_support"', text)
