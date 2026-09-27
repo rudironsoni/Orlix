@@ -252,6 +252,19 @@ verified_release_dtb="$exec_root/$9"
 verified_development_dtb="$exec_root/${10}"
 /usr/bin/cmp -s "$imported_manifest" "$computed_manifest" || {
   echo "promoted $component artifact identity manifest differs from imported manifest" >&2
+  /usr/bin/python3 -c 'import json,sys
+def rows(path):
+    payload = json.load(open(path))
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return {}
+    return {entry.get("path"): entry for entry in entries if isinstance(entry, dict)}
+imported, computed = rows(sys.argv[1]), rows(sys.argv[2])
+for path in sorted(set(imported) | set(computed)):
+    left, right = imported.get(path), computed.get(path)
+    if left != right:
+        print("identity %s imported=%s computed=%s" % (path, left, right), file=sys.stderr)
+' "$imported_manifest" "$computed_manifest" >&2
   exit 1
 }
 got="$(/usr/bin/tr -d '[:space:]' < "$imported_digest")"

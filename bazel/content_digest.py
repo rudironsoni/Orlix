@@ -125,12 +125,26 @@ def _relative_artifact_path(name: str) -> str:
     return name
 
 
-def _selected_source(path: Path) -> Path:
-    """Read staged file bytes when Bazel exposes the file as an absolute symlink.
+def _origin_staging_symlink(target: str) -> bool:
+    """True when a symlink is Bazel's execroot staging, not product content.
 
-    A relative symlink is product content: its target stays in the identity.
-    An absolute symlink is an origin exec path. Follow it only when it names a
-    regular file, so that path cannot become the consumer key.
+    An absolute target is an origin path. A relative target that climbs with
+    ``..`` is the unsandboxed execroot forest: output-base lives inside the
+    worktree, so each source input is a parent-relative link back to the real
+    file. A relative target that stays in the product, such as ``bin/tool``,
+    remains product content.
+    """
+    if target.startswith("/"):
+        return True
+    return ".." in target.split("/")
+
+
+def _selected_source(path: Path) -> Path:
+    """Read staged file bytes when Bazel exposes the file as an origin symlink.
+
+    A product-relative symlink keeps its target in the identity. An absolute
+    symlink, or a parent-relative execroot symlink, is staging. Follow it only
+    when it names a regular file, so that path cannot become the consumer key.
     """
     try:
         if not stat.S_ISLNK(path.lstat().st_mode):
@@ -138,9 +152,12 @@ def _selected_source(path: Path) -> Path:
     except OSError:
         return path
     target = os.readlink(path)
-    if not target.startswith("/"):
+    if not _origin_staging_symlink(target):
         return path
-    resolved = Path(target)
+    if target.startswith("/"):
+        resolved = Path(target)
+    else:
+        resolved = Path(os.path.normpath(os.path.join(path.parent, target)))
     try:
         metadata = resolved.lstat()
     except OSError as error:

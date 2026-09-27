@@ -110,6 +110,54 @@ class ConsumerIdentityTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not a file"):
                 artifact_identity_v2(artifacts={"tree": link})
 
+    def test_execroot_parent_symlink_uses_file_bytes_not_the_link(self) -> None:
+        payload = b"kernel-archive"
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            real = base / "bazel" / "promotion" / "imported" / "kernel" / "product" / "OrlixKernel.a"
+            real.parent.mkdir(parents=True)
+            real.write_bytes(payload)
+            real.chmod(0o644)
+            staged = (
+                base
+                / "Build"
+                / "Bazel"
+                / "output-base"
+                / "execroot"
+                / "_main"
+                / "bazel"
+                / "promotion"
+                / "imported"
+                / "kernel"
+                / "product"
+                / "OrlixKernel.a"
+            )
+            staged.parent.mkdir(parents=True)
+            staged.symlink_to(os.path.relpath(real, staged.parent))
+            self.assertIn("..", os.readlink(staged))
+            logical = "OrlixKernel.a"
+            via_link = artifact_manifest_v2(artifacts={logical: staged})
+            via_file = artifact_manifest_v2(artifacts={logical: real})
+            self.assertEqual(via_link, via_file)
+            entry = json.loads(via_link)["entries"][0]
+            self.assertEqual(entry["type"], "file")
+            self.assertEqual(entry["mode"], 0o644)
+            self.assertNotIn("..", via_link.decode("ascii"))
+            self.assertNotIn("execroot", via_link.decode("ascii"))
+
+    def test_selected_product_relative_symlink_keeps_its_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tree"
+            (root / "bin").mkdir(parents=True)
+            tool = root / "bin" / "tool"
+            tool.write_bytes(b"same")
+            tool.chmod(0o755)
+            alias = root / "alias"
+            alias.symlink_to("bin/tool")
+            manifest = json.loads(artifact_manifest_v2(artifacts={"alias": alias}))
+            self.assertEqual(manifest["entries"][0]["type"], "symlink")
+            self.assertEqual(manifest["entries"][0]["target"], "bin/tool")
+
     def test_relative_symlink_target_stays_and_tree_origin_does_not(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "tree"
