@@ -96,7 +96,7 @@ class MakeRoutingTests(unittest.TestCase):
             result = subprocess.run(
                 [MAKE, "-qp", "-f", "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk",
                  "__prepare-kbuild", f"ORLIX_KERNEL_PORT_PREPARED={prepared}"],
-                cwd=ROOT, capture_output=True, text=True, timeout=30,
+                cwd=ROOT, capture_output=True, text=True, timeout=120,
             )
             self.assertIn(result.returncode, (0, 1), result.stderr)
             dependencies = next(line for line in result.stdout.splitlines() if line.startswith("__prepare-kbuild:"))

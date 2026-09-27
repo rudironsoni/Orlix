@@ -14,9 +14,15 @@ exports_files([
     "true/true.c",
 ])
 
+filegroup(
+    name = "true_configure_directory",
+    srcs = glob(["true/**"]),
+)
+
 orlix_guest_package(
     name = "true",
     configure = "true/configure",
+    configure_directory = ":true_configure_directory",
     package_name = "true",
     package_version = "0.1",
     source = "true/true.c",

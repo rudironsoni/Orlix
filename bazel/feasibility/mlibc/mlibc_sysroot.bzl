@@ -77,8 +77,11 @@ export CCACHE_EXTRAFILES="$exec_root/$3"
 export CCACHE_BASEDIR="$exec_root"
 shift 3
 launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
+  launcher=""
+fi
 case "$launcher" in
-  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  /opt/homebrew/bin/ccache) ;;
   "") ;;
   *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
 esac
@@ -141,8 +144,7 @@ c_hdrs="$exec_root/${11}"
 cxx_hdrs="$exec_root/${12}"
 smarter="$exec_root/${13}"
 bragi="$exec_root/${14}"
-digest_in="$exec_root/${15}"
-digest_out="$exec_root/${16}"
+digest_out="$exec_root/${15}"
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -168,15 +170,18 @@ test -s "$uapi_dir/include/linux/unistd.h"
 test -s "$uapi_dir/include/asm/unistd.h"
 work="$ORLIX_MLIBC_WORK_ROOT"
 export PYTHONPATH="$exec_root"
-shift 16
+shift 15
 /usr/bin/python3 -B -c 'from pathlib import Path; import sys; from bazel.feasibility.mlibc import build_state; build_state.prepare(Path(sys.argv[1]), Path(sys.argv[2]).parent, [Path(p) for p in sys.argv[10:]], dict(zip(("frigg", "freestnd-c-hdrs", "freestnd-cxx-hdrs", "libsmarter", "bragi"), (Path(p).parent for p in sys.argv[5:10]))), Path(sys.argv[3]), Path(sys.argv[4]))' "$work" "$mlibc_meson" "$uapi_dir" "$runtime_in" "$frigg_meson" "$c_hdrs" "$cxx_hdrs" "$smarter" "$bragi" "$@"
 uapi_dir="$work/inputs/uapi"
 runtime_archives=("$work"/inputs/runtime/libcompiler_rt-*.a)
 runtime_in="${runtime_archives[0]}"
 export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
 launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+if [ "$launcher" = /opt/homebrew/bin/ccache ] && [ -z "${CCACHE_DIR:-}" ]; then
+  launcher=""
+fi
 case "$launcher" in
-  /opt/homebrew/bin/ccache) test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; } ;;
+  /opt/homebrew/bin/ccache) ;;
   "") ;;
   *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
 esac
@@ -193,29 +198,44 @@ lld="$(/usr/bin/command -v ld.lld)"
 test -n "$lld"
 /usr/bin/printf '%s\n' '[binaries]' "c = [${compiler_prefix}'$clang', '--target=aarch64-linux-gnu']" "cpp = [${compiler_prefix}'$clangxx', '--target=aarch64-linux-gnu']" "c_ld = 'lld'" "cpp_ld = 'lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=lld', '$runtime_in']" > "$work/cross.ini"
 /usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot']" "cpp = ['$clangxx', '-isysroot', '$sdkroot']" > "$work/native.ini"
-configure_args=(--reconfigure)
-if [ "$(/bin/cat "$work/inputs/configure-cache")" = clear ]; then configure_args+=(--clearcache); fi
-/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
-    SDKROOT="$sdkroot" \
-    "$meson_bin" setup "${configure_args[@]}" "$work/build" "$work/mlibc" \
-        --wrap-mode=nodownload \
-        --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter \
-        --cross-file "$work/cross.ini" \
-        --native-file "$work/native.ini" \
-        --prefix /usr \
-        -Ddefault_library=both \
-        -Dheaders_only=false \
-        -Dno_headers=false \
-        -Dbuild_tests=false \
-        -Dlibgcc_dependency=false \
-        -Dlinux_option=enabled \
-        -Dposix_option=enabled \
-        -Dglibc_option=enabled \
-        -Dbsd_option=enabled \
-        -Dlinux_kernel_headers="$uapi_dir/include" \
-        "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']" \
-        "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+plan="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import meson_setup_plan; import pathlib,sys; print(meson_setup_plan(pathlib.Path(sys.argv[1]).read_text(), pathlib.Path(sys.argv[2]).is_file()))' "$work/inputs/configure-cache" "$work/build/build.ninja")"
+if [ "$plan" != skip ]; then
+  configure_args=()
+  if [ -n "$plan" ]; then
+    read -r -a configure_args <<< "$plan"
+  fi
+  meson_setup=("$meson_bin" setup)
+  if [ "${#configure_args[@]}" -gt 0 ]; then
+    meson_setup+=("${configure_args[@]}")
+  fi
+  meson_setup+=(
+    "$work/build"
+    "$work/mlibc"
+    --wrap-mode=nodownload
+    --force-fallback-for=freestnd-c-hdrs-aarch64,freestnd-cxx-hdrs-aarch64,frigg,libsmarter
+    --cross-file "$work/cross.ini"
+    --native-file "$work/native.ini"
+    --prefix /usr
+    -Ddefault_library=both
+    -Dheaders_only=false
+    -Dno_headers=false
+    -Dbuild_tests=false
+    -Dlibgcc_dependency=false
+    -Dlinux_option=enabled
+    -Dposix_option=enabled
+    -Dglibc_option=enabled
+    -Dbsd_option=enabled
+    -Dlinux_kernel_headers="$uapi_dir/include"
+    "-Dc_link_args=['-fuse-ld=lld', '$runtime_in']"
+    "-Dcpp_link_args=['-fuse-ld=lld', '$runtime_in']"
+  )
+  /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+      SDKROOT="$sdkroot" \
+      "${meson_setup[@]}"
+fi
+previous_end="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import ninja_log_end; import pathlib,sys; print(ninja_log_end(pathlib.Path(sys.argv[1])))' "$work/build/.ninja_log")"
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" "$meson_bin" compile -C "$work/build"
+/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import report_compiler_edges; import pathlib,sys; report_compiler_edges(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), int(sys.argv[3]))' "$work/build/.ninja_log" "$work/build/build.ninja" "$previous_end"
 if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 /usr/bin/python3 -B -c 'from pathlib import Path; from bazel.build_state import _remove; import sys; _remove(Path(sys.argv[1]))' "$work/dest"
 /usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET SDKROOT="$sdkroot" DESTDIR="$work/dest" "$meson_bin" install -C "$work/build"
@@ -233,8 +253,9 @@ else
     /usr/bin/printf '' > "$loader_out"
 fi
 /usr/bin/nm "$work/dest/usr/lib/libc.a" | /usr/bin/awk '{print $3}' | /usr/bin/sort -u > "$abi_out"
-test -s "$digest_in"
-uapi_digest="$(/usr/bin/tr -d '[:space:]' < "$digest_in")"
+followed_uapi="$work/inputs/followed-header.sha256"
+test -s "$followed_uapi"
+uapi_digest="$(/usr/bin/tr -d '[:space:]' < "$followed_uapi")"
 test "${#uapi_digest}" -eq 64
 sysroot_digest="$(/usr/bin/find "$headers_out" "$libraries_out" -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}' | /usr/bin/sort | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
 test "${#sysroot_digest}" -eq 64
@@ -269,7 +290,6 @@ test "${#sysroot_digest}" -eq 64
             ctx.file.freestnd_cxx.path,
             ctx.file.libsmarter.path,
             ctx.file.bragi.path,
-            uapi.uapi_digest.path,
             digest.path,
         ] + [f.path for f in ctx.files.patches],
         inputs = depset(
@@ -281,12 +301,12 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.shared_state,
                 ctx.file.mlibc_meson,
                 uapi.headers,
-                uapi.uapi_digest,
                 ctx.file.frigg_meson,
                 ctx.file.freestnd_c,
                 ctx.file.freestnd_cxx,
                 ctx.file.libsmarter,
                 ctx.file.bragi,
+                ctx.file.header_digest,
                 runtime,
             ] + ctx.files.patches,
             transitive = [
@@ -378,6 +398,7 @@ orlix_mlibc_sysroot = rule(
         "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
         "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
+        "header_digest": attr.label(allow_single_file = True, default = ":header_digest.py"),
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "runtime_toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
