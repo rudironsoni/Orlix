@@ -87,10 +87,12 @@ for relative in "$@"; do
     "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -nostdlibinc -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" "-ffile-prefix-map=$tool_root=/orlix/tools" -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
 done
 (
-  cd "$work"
-  members=()
-  for object in *.o; do members+=("$object"); done
-  "$ar" rcs "$runtime_out" "${members[@]}"
+    cd "$work"
+    members=()
+    while IFS= read -r object; do members+=("$object"); done < <(/usr/bin/printf '%s\n' *.o | /usr/bin/sort)
+    export ZERO_AR_DATE=1
+    export SOURCE_DATE_EPOCH=1
+    "$ar" rcs "$runtime_out" "${members[@]}"
 )
 test -s "$runtime_out"
 """,
@@ -243,6 +245,7 @@ test -s "$work/dest/usr/lib/libc.a"
 /bin/cp -R "$work/dest/usr/include/." "$headers_out/"
 /bin/cp -R "$work/dest/usr/lib/." "$libraries_out/"
 /usr/bin/find "$libraries_out" "$sysroot_out/usr/lib" -type f \( -name '*.a' -o -name '*.so' -o -name '*.o' -o -name 'ld.so' \) -print0 | /usr/bin/xargs -0 -n 1 "$strip" -g
+/usr/bin/python3 -B -c 'from pathlib import Path; from bazel.feasibility.mlibc.build_state import stabilize_installed_tree; import sys; stabilize_installed_tree([Path(p) for p in sys.argv[1:4]], [(sys.argv[4], "/orlix/mlibc-work"), (sys.argv[5], "/orlix/tools"), (sys.argv[6], "/orlix/macos-sdk"), (sys.argv[7], "/orlix/execroot")])' "$sysroot_out" "$headers_out" "$libraries_out" "$work" "$tool_root" "$sdkroot" "$exec_root"
 if [ -s "$libraries_out/ld.so" ]; then
     /bin/cp "$libraries_out/ld.so" "$loader_out"
 else

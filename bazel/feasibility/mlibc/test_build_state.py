@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import os
+import stat
 import tempfile
 import unittest
 
@@ -178,6 +179,32 @@ class MlibcStateTests(unittest.TestCase):
                 os.environ.pop("SDKROOT", None)
             self.assertEqual(status, 0)
             self.assertTrue((work / "build-state.json").is_file())
+
+    def test_installed_tree_rewrites_text_and_symlinks_but_not_elf(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            work = root / "work-aaa"
+            installed = root / "sysroot"
+            include = installed / "usr" / "include"
+            include.mkdir(parents=True)
+            header = include / "limits.h"
+            header.write_bytes(b"from " + str(work).encode() + b"/include\n")
+            header.chmod(0o444)
+            link = installed / "usr" / "lib"
+            link.parent.mkdir(exist_ok=True)
+            link.symlink_to(str(work) + "/lib")
+            elf = installed / "usr" / "bin"
+            elf.mkdir()
+            binary = elf / "true"
+            binary.write_bytes(b"\x7fELF" + str(work).encode())
+            build_state.stabilize_installed_tree(
+                [installed],
+                [(str(work), "/orlix/mlibc-work")],
+            )
+            self.assertEqual(header.read_bytes(), b"from /orlix/mlibc-work/include\n")
+            self.assertEqual(stat.S_IMODE(header.stat().st_mode), 0o444)
+            self.assertEqual(os.readlink(link), "/orlix/mlibc-work/lib")
+            self.assertEqual(binary.read_bytes(), b"\x7fELF" + str(work).encode())
 
 
 if __name__ == "__main__":

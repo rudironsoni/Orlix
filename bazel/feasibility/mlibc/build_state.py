@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -164,6 +165,57 @@ def _declared_work(work: str) -> Path:
     return root
 
 
+def _absolute_replacements(replacements: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for old, new in replacements:
+        if not old.startswith("/") or not new:
+            raise ValueError(f"installed tree replacement must rewrite an absolute path: {old!r}")
+        for candidate in (old, os.path.realpath(old)):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            pairs.append((candidate, new))
+    pairs.sort(key=lambda item: len(item[0]), reverse=True)
+    return pairs
+
+
+def stabilize_installed_tree(roots: list[Path], replacements: list[tuple[str, str]]) -> None:
+    """Replace output-base paths in installed files and symlink targets."""
+    pairs = _absolute_replacements(replacements)
+    for root in roots:
+        if not root.is_dir():
+            raise ValueError(f"missing installed tree: {root}")
+        paths = sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix())
+        for path in paths:
+            if path.is_symlink():
+                target = os.readlink(path)
+                updated = target
+                for old, new in pairs:
+                    updated = updated.replace(old, new)
+                if updated != target:
+                    path.unlink()
+                    path.symlink_to(updated)
+                continue
+            if not path.is_file():
+                continue
+            mode = stat.S_IMODE(path.stat().st_mode)
+            data = path.read_bytes()
+            # ELF and ar records use internal offsets. Rewriting those bytes can
+            # break the library even when both trees change the same way.
+            if data.startswith(b"\x7fELF") or data.startswith(b"!<arch>\n"):
+                continue
+            updated = data
+            for old, new in pairs:
+                updated = updated.replace(old.encode(), new.encode())
+            if updated == data:
+                continue
+            if not os.access(path, os.W_OK):
+                path.chmod(mode | 0o200)
+            path.write_bytes(updated)
+            path.chmod(mode)
+
+
 def _tool_environment(tool_bin: str, sdk: str) -> dict[str, str]:
     tools = Path(tool_bin)
     if not tools.is_absolute():
@@ -187,6 +239,10 @@ def _tool_environment(tool_bin: str, sdk: str) -> dict[str, str]:
     environment["ORLIX_MLIBC_SDK"] = str(sdk_root.resolve())
     environment["PATH"] = str(tools) + ":/usr/bin:/bin"
     environment["DYLD_LIBRARY_PATH"] = environment["ORLIX_MLIBC_GUEST_LIB"] + ":" + environment["ORLIX_MLIBC_TOOL_LIB"]
+    environment["SOURCE_DATE_EPOCH"] = "1"
+    environment["ZERO_AR_DATE"] = "1"
+    environment["LC_ALL"] = "C"
+    environment["TZ"] = "UTC"
     return environment
 
 

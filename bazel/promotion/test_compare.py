@@ -175,9 +175,18 @@ class PromotionCompareTests(unittest.TestCase):
                 (tree / "binary").write_bytes(b"same")
                 (tree / "link").symlink_to("binary")
             self.assertEqual(compare.compare_trees(str(first), str(second)), compare.tree_digest(first))
+            (second / "binary").chmod(0o755)
+            with self.assertRaisesRegex(ValueError, "contents differ: uapi binary"):
+                compare.compare_trees(str(first), str(second), component="uapi")
+            (second / "binary").chmod(0o644)
             (second / "binary").write_bytes(b"different")
-            with self.assertRaisesRegex(ValueError, "contents differ"):
-                compare.compare_trees(str(first), str(second))
+            with self.assertRaisesRegex(ValueError, "contents differ: mlibc binary"):
+                compare.compare_trees(str(first), str(second), component="mlibc")
+            (second / "binary").write_bytes(b"same")
+            extra = second / "zz-only"
+            extra.write_bytes(b"extra")
+            with self.assertRaisesRegex(ValueError, "contents differ: rootfs zz-only"):
+                compare.compare_trees(str(first), str(second), component="rootfs")
 
     def test_v2_component_contract_recomputes_product_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
