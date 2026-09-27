@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import substitute
 from content_digest import artifact_manifest_v2
-from locked_buildset import KERNEL_COMPONENTS, buildset_digest_v2
+from locked_buildset import KERNEL_COMPONENTS, buildset_digest, buildset_digest_v2
 
 KERNEL_PRODUCT = {
     "OrlixKernel.a": b"kernel\n",
@@ -174,6 +174,90 @@ class SubstituteTests(unittest.TestCase):
                 substitute.substitute(
                     str(lock_path), str(reconstruct), str(base / "out.json")
                 )
+
+    def test_imported_trees_bind_v2_identity_and_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            imported = base / "imported"
+            components = {
+                name: _component(imported, name, files) for name, files in PRODUCTS.items()
+            }
+            buildset = buildset_digest_v2(components)
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(
+                json.dumps({"schema": 2, "buildset": buildset, "components": components}) + "\n",
+                encoding="utf-8",
+            )
+            before = lock_path.read_bytes()
+            payload = substitute.bind_imported(
+                str(lock_path),
+                str(imported),
+                str(base / "out.json"),
+                ["uapi", "mlibc"],
+            )
+            self.assertEqual(set(payload["components"]), {"uapi", "mlibc"})
+            self.assertEqual(payload["components"]["uapi"]["tree"], str(imported / "uapi"))
+            self.assertEqual(
+                payload["components"]["uapi"]["artifact_identity"]["format"],
+                "artifact-identity-v2",
+            )
+            self.assertEqual(lock_path.read_bytes(), before)
+            (imported / "uapi" / "product" / "kbuild-archive.tar").write_bytes(b"tampered\n")
+            with self.assertRaises(substitute.SubstituteError) as raised:
+                substitute.bind_imported(
+                    str(lock_path),
+                    str(imported),
+                    str(base / "out.json"),
+                    ["uapi"],
+                )
+            self.assertIn("does not match the lock", str(raised.exception))
+            self.assertEqual(lock_path.read_bytes(), before)
+
+    def test_imported_reuse_rejects_missing_v2_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            components = {}
+            for index, name in enumerate(("uapi", "mlibc", "rootfs")):
+                unsigned = f"{index + 1:02x}" * 32
+                oci = f"{index + 10:02x}" * 32
+                components[name] = {
+                    "unsigned_digest": unsigned,
+                    "oci_digest": "sha256:" + oci,
+                    "oci_reference": f"ghcr.io/rudironsoni/orlix/{name}@sha256:{oci}",
+                }
+            payload = {
+                "schema": 1,
+                "buildset": buildset_digest(components),
+                "components": components,
+            }
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            before = lock_path.read_bytes()
+            with self.assertRaises(substitute.SubstituteError) as raised:
+                substitute.bind_imported(str(lock_path), str(base), str(base / "out.json"), ["uapi"])
+            self.assertIn("no artifact identity", str(raised.exception))
+            self.assertEqual(lock_path.read_bytes(), before)
+
+    def test_named_substitute_does_not_require_siblings_or_replace_the_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            reconstruct = base / "reconstruct"
+            lock_payload = _lock(reconstruct)
+            lock_path = base / "artifacts.lock.json"
+            lock_path.write_text(json.dumps(lock_payload) + "\n", encoding="utf-8")
+            before = lock_path.read_bytes()
+            sibling = reconstruct / lock_payload["buildset"] / "mlibc"
+            sibling_marker = sibling / "product" / "usr" / "lib" / "libc.a"
+            sibling_bytes = sibling_marker.read_bytes()
+            payload = substitute.substitute(
+                str(lock_path),
+                str(reconstruct),
+                str(base / "out.json"),
+                component_names=["uapi"],
+            )
+            self.assertEqual(set(payload["components"]), {"uapi"})
+            self.assertEqual(sibling_marker.read_bytes(), sibling_bytes)
+            self.assertEqual(lock_path.read_bytes(), before)
 
 
 if __name__ == "__main__":
