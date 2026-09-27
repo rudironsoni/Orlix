@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Materialize the cached UAPI Kbuild archive
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saw a disk-cache hit, then `compare_trees` reported `uapi kbuild-archive.tar (only in the second tree)`. BuildBuddy read mode sets `remote_download_outputs=minimal`, so the cached execroot omitted that declared archive. Cache equivalence now sets `remote_download_outputs=all`. The `cacheHit == true` and `runner == "disk cache hit"` gates stay in place.
+
 ## [2026-09-27] build | Refresh the migration inventory after rebasing onto main
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) is rebased onto `bd559333`, which added the warm-pass simulator uninstall lines and a new makefile digest. `bazel/migration/legacy-target-map.json` now records the merged `make/bazel-migration.mk` digest. Cache equivalence still requires `runner == "disk cache hit"` and equal UAPI, mlibc, and rootfs trees. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

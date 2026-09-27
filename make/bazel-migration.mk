@@ -1090,11 +1090,15 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 	@lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; if rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json; then echo "source mode must not claim promoted provenance" >&2; exit 1; fi
 	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
 
+# BuildBuddy read mode sets remote_download_outputs=minimal. A disk-cache hit
+# then keeps large outputs such as kbuild-archive.tar in the cache and does not
+# copy them into the execroot. Equivalence compares those trees, so materialize
+# every output. The cacheHit and runner gates stay in place.
 __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	command -v jq >/dev/null || { echo "jq is required to inspect Bazel cache execution logs" >&2; exit 1; }; \
 	proof="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/cache-equivalence.XXXXXX")"; \
-	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --remote_cache= --remote_executor= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
+	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --remote_cache= --remote_executor= --remote_download_outputs=all --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
 	for side in seed cached uncached; do \
 		mkdir -p "$$proof/$$side"; \
 		cache_flags=(--disk_cache="$$proof/disk"); \
