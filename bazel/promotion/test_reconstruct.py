@@ -315,7 +315,7 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertEqual(second["acquisition"]["network_downloads"], 0)
         self.assertEqual(second["acquisition"]["local_store_hits"], 1)
-        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], False)
+        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], True)
 
     @mock.patch("reconstruct.verification_context", return_value=_VERIFICATION)
     @mock.patch("lock_proposal.verification_context", return_value=_VERIFICATION)
@@ -474,6 +474,10 @@ class ReconstructTests(unittest.TestCase):
                 )
             self.assertEqual(first["buildset"], second["buildset"])
             self.assertEqual(calls, [])
+            self.assertEqual(second["acquisition"]["network_downloads"], 0)
+            self.assertEqual(second["acquisition"]["local_store_hits"], 7)
+            for entry in second["acquisition"]["components"].values():
+                self.assertIs(entry["signature_verified"], True)
 
     @mock.patch("publish.trusted_public_key", return_value="/unused.pub")
     def test_trust_policy_change_reverifies_without_oras_pull(self, public_key) -> None:
@@ -518,11 +522,13 @@ class ReconstructTests(unittest.TestCase):
         self.assertTrue(any(call[0] == "cosign" for call in calls))
         self.assertFalse(any(call[0] == "oras" for call in calls))
         self.assertEqual(second["acquisition"]["network_downloads"], 0)
-        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], False)
+        self.assertIs(second["acquisition"]["components"]["uapi"]["signature_verified"], True)
 
     def test_local_hit_does_not_set_signature_verified_without_verification_context(self) -> None:
         self.assertIs(reconstruct.acquisition_record("local-store", None)["signature_verified"], False)
         self.assertIs(reconstruct.acquisition_record("network", None)["signature_verified"], False)
+        self.assertIs(reconstruct.acquisition_record("local-store", _VERIFICATION)["signature_verified"], True)
+        self.assertIs(reconstruct.acquisition_record("network", _VERIFICATION)["signature_verified"], True)
         saved_key = os.environ.pop("ORLIX_COSIGN_KEY", None)
         saved_pub = os.environ.pop("ORLIX_COSIGN_PUB", None)
         try:
@@ -594,7 +600,7 @@ class ReconstructTests(unittest.TestCase):
             self.assertEqual(named["acquisition"]["network_downloads"], 0)
             self.assertEqual(named["acquisition"]["local_store_hits"], 1)
             self.assertEqual(set(named["acquisition"]["components"]), {"uapi"})
-            self.assertIs(named["acquisition"]["components"]["uapi"]["signature_verified"], False)
+            self.assertIs(named["acquisition"]["components"]["uapi"]["signature_verified"], True)
             self.assertEqual((sibling / "keep.txt").read_text(encoding="utf-8"), "sibling\n")
             self.assertEqual((root / "marker.txt").read_text(encoding="utf-8"), "root\n")
             self.assertTrue((root / "uapi" / "uapi.sha256").is_file())

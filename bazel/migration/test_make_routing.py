@@ -190,6 +190,16 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("OnlyTestIdentifiers", proof)
         self.assertIn("OrlixUITests-Runner.app/Info.plist", proof)
         self.assertIn("com.apple.test.OrlixUITests-Runner", proof)
+        runner_uninstall = proof.find(
+            'simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" com.apple.test.OrlixUITests-Runner'
+        )
+        app_uninstall = proof.find(
+            'simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" "$$app_bundle_id"'
+        )
+        xcodebuild = proof.find("test-without-building")
+        self.assertGreater(runner_uninstall, 0)
+        self.assertGreater(app_uninstall, runner_uninstall)
+        self.assertLess(app_uninstall, xcodebuild)
         self.assertIn("test-without-building", proof)
         self.assertIn("-derivedDataPath", proof)
         self.assertIn("xctest-app-identity.txt", proof)
