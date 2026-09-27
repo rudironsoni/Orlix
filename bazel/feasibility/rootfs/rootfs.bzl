@@ -4,17 +4,11 @@ load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 
-def _pinned_env(ctx):
-    shell = ctx.configuration.default_shell_env
-    env = {
+def _pinned_env(_ctx):
+    return {
         "HOME": "/var/empty",
-        "MKE2FS_CONFIG": "/opt/homebrew/etc/mke2fs.conf",
-        "PATH": "/opt/homebrew/opt/e2fsprogs/sbin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
-    return env
 
 def _rootfs_impl(ctx):
     pkgs = [p[OrlixPackageTreeInfo] for p in ctx.attr.packages]
@@ -49,13 +43,20 @@ case "$trees_file" in
     exit 1
     ;;
 esac
-mke2fs="$(/usr/bin/command -v mke2fs)"
-debugfs="$(/usr/bin/command -v debugfs)"
+mke2fs="$exec_root/${10}"
+debugfs="$exec_root/${11}"
+export MKE2FS_CONFIG="$exec_root/${12}"
+libdir=""
+if [ "${13}" != none ]; then libdir="$exec_root/${13}"; fi
+if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir"; fi
 test -x "$gen_init_cpio"
 test -s "$toolchain_identity"
-test -n "$mke2fs"
+test -x "$mke2fs"
 test -x "$debugfs"
-work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-rootfs.XXXXXX")"
+test -s "$MKE2FS_CONFIG"
+work="$exec_root/rootfs-work"
+/bin/rm -rf "$work"
+/bin/mkdir -p "$work"
 trap '/bin/rm -rf "$work"' EXIT
 base_tree="$work/base-tree"
 state_tree="$work/state-tree"
@@ -161,18 +162,25 @@ digest="$( (
             payload_metadata.path,
             digest.path,
             ctx.file.toolchain_identity.path,
+            ctx.file.mke2fs.path,
+            ctx.file.debugfs.path,
+            ctx.file.mke2fs_config.path,
+            ctx.files.rootfs_libs[0].dirname if ctx.files.rootfs_libs else "none",
         ],
         inputs = depset(
             direct = pkg_inputs + [
                 trees,
                 ctx.file.toolchain_identity,
-            ],
+                ctx.file.mke2fs,
+                ctx.file.debugfs,
+                ctx.file.mke2fs_config,
+            ] + ctx.files.rootfs_libs,
         ),
         tools = [ctx.executable.gen_init_cpio],
         outputs = [initramfs, base_ext4, state_ext4, file_manifest, payload_metadata, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -268,6 +276,10 @@ orlix_rootfs = rule(
     attrs = {
         "packages": attr.label_list(mandatory = True, providers = [OrlixPackageTreeInfo]),
         "gen_init_cpio": attr.label(allow_single_file = True, executable = True, cfg = "exec", mandatory = True),
+        "mke2fs": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/mke2fs")),
+        "debugfs": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/debugfs")),
+        "mke2fs_config": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/mke2fs.conf")),
+        "rootfs_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
         "toolchain_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:rootfs-identity.json"),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,

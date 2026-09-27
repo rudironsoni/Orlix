@@ -154,13 +154,44 @@ def resume_identity(toolchain: Path, compiler: Path, script: Path, launcher: Pat
     ]
 
 
-def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int:
+def _declared_work(work: str) -> Path:
+    root = Path(work)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    root = root.resolve()
+    if "orlix-mlibc-state" in root.parts or root.name.startswith("orlix-mlibc."):
+        raise SystemExit("mlibc work root must be the declared exec-root directory, not temp or output-base state")
+    return root
+
+
+def _tool_environment(tool_bin: str) -> dict[str, str]:
+    tools = Path(tool_bin)
+    if not tools.is_absolute():
+        tools = Path.cwd() / tools
+    tools = tools.resolve()
     environment = dict(os.environ)
+    environment.pop("TMPDIR", None)
+    environment.pop("CCACHE_DIR", None)
+    environment["ORLIX_COMPILER_LAUNCHER"] = ""
+    environment["ORLIX_MLIBC_TOOL_BIN"] = str(tools)
+    environment["ORLIX_MLIBC_TOOL_LIB"] = str((tools.parent / "lib").resolve())
+    environment["ORLIX_MLIBC_MESON_HOME"] = str((tools.parent / "python-home").resolve())
+    environment["ORLIX_MLIBC_MESON_LIB"] = str((tools.parent / "py").resolve())
+    environment["PATH"] = str(tools) + ":/usr/bin:/bin"
+    environment["DYLD_LIBRARY_PATH"] = environment["ORLIX_MLIBC_TOOL_LIB"]
+    return environment
+
+
+def run(script: str, toolchain: str, compiler: str, work: str, tool_bin: str, arguments: list[str]) -> int:
+    environment = _tool_environment(tool_bin)
+    root = _declared_work(work)
 
     def build(root: Path) -> int:
+        for child in list(root.iterdir()) if root.exists() else []:
+            if child.name != "build.lock":
+                state._remove(child)
         launcher = root / "compiler-launcher"
-        state._remove(launcher)
-        launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", "/opt/homebrew/bin/ccache"))
+        launcher.write_text("")
         identity = resume_identity(Path(toolchain), Path(compiler), Path(script), launcher)
         valid = state.resume(root, identity, _TREES)
         print("Orlix Ninja state: " + ("verified" if valid else "clean"), flush=True)
@@ -172,10 +203,5 @@ def run(script: str, toolchain: str, compiler: str, arguments: list[str]) -> int
             state.record(root, _TREES)
         return result
 
-    if environment.get("ORLIX_MLIBC_INCREMENTAL", "1") == "0":
-        with tempfile.TemporaryDirectory(prefix="orlix-mlibc.") as temporary:
-            return build(Path(temporary).resolve())
-    base = Path.cwd().parent.parent
-    root = base / "orlix-mlibc-state/aarch64-linux-gnu"
-    with state.locked(root, base):
+    with state.locked(root, root.parent):
         return build(root)
