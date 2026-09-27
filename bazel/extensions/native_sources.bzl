@@ -227,6 +227,8 @@ exports_files([
     "tools/bin/llvm-nm",
     "tools/bin/llvm-strip",
     "tools/bin/ld.lld",
+    "tools/llvm/bin/clang",
+    "tools/llvm/bin/clang++",
     "tools/bin/ninja",
     "tools/bin/meson",
     "tools/bin/meson-python",
@@ -250,6 +252,12 @@ filegroup(
 filegroup(
     name = "clang_resources",
     srcs = glob(["tools/lib/clang/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "guest_clang_support",
+    srcs = glob(["tools/llvm/lib/**"]),
     visibility = ["//visibility:public"],
 )
 

@@ -154,12 +154,16 @@ tool_bin="${ORLIX_MLIBC_TOOL_BIN:?}"
 tool_root="$(/usr/bin/dirname "$tool_bin")"
 sdkroot="${ORLIX_MLIBC_SDK:?}"
 export PATH="$tool_bin:/usr/bin:/bin"
-if [ -n "${ORLIX_MLIBC_TOOL_LIB:-}" ]; then export DYLD_LIBRARY_PATH="$ORLIX_MLIBC_TOOL_LIB${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"; fi
+guest_lib="$tool_root/llvm/lib"
+if [ -n "${ORLIX_MLIBC_TOOL_LIB:-}" ]; then export DYLD_LIBRARY_PATH="$guest_lib:$ORLIX_MLIBC_TOOL_LIB"; else export DYLD_LIBRARY_PATH="$guest_lib"; fi
 meson_bin="$tool_bin/meson"
 meson_py="$tool_bin/meson-python"
 test -x "$meson_bin"; test -x "$meson_py"; test -x "$tool_bin/ninja"
 test -x "$tool_bin/clang"; test -x "$tool_bin/clang++"; test -x "$tool_bin/llvm-ar"
 test -x "$tool_bin/llvm-strip"; test -x "$tool_bin/ld.lld"; test -x "$tool_bin/llvm-nm"
+guest_clang="$tool_root/llvm/bin/clang"
+guest_clangxx="$tool_root/llvm/bin/clang++"
+test -x "$guest_clang"; test -x "$guest_clangxx"; test -d "$guest_lib/clang"
 clang=clang
 clangxx=clang++
 ar=llvm-ar
@@ -181,7 +185,7 @@ export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
 /bin/mkdir -p "$work/arch"
 /usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp.new"
 if ! /usr/bin/cmp -s "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; then /bin/mv "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; fi
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '--target=aarch64-linux-gnu']" "cpp = ['$clangxx', '--target=aarch64-linux-gnu']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = ['$guest_clang', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = ['$guest_clangxx', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
 /usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = ['$clangxx', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" > "$work/native.ini"
 plan="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import meson_setup_plan; import pathlib,sys; print(meson_setup_plan(pathlib.Path(sys.argv[1]).read_text(), pathlib.Path(sys.argv[2]).is_file()))' "$work/inputs/configure-cache" "$work/build/build.ninja")"
 if [ "$plan" != skip ]; then
@@ -299,6 +303,8 @@ test "${#sysroot_digest}" -eq 64
                 runtime,
                 ctx.file.clang,
                 ctx.file.clangxx,
+                ctx.file.guest_clang,
+                ctx.file.guest_clangxx,
                 ctx.file.llvm_ar,
                 ctx.file.llvm_strip,
                 ctx.file.ld_lld,
@@ -307,7 +313,7 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.meson_python,
                 ctx.file.llvm_nm,
                 ctx.file.sdk_settings,
-            ] + ctx.files.patches + ctx.files.mlibc_support + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.macos_sdk,
+            ] + ctx.files.patches + ctx.files.mlibc_support + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.guest_clang_support + ctx.files.macos_sdk,
             transitive = [
                 ctx.attr.mlibc_source[DefaultInfo].files,
                 ctx.attr.frigg_source[DefaultInfo].files,
@@ -418,6 +424,8 @@ orlix_mlibc_sysroot = rule(
         "compiler_rt": attr.label(allow_single_file = True, mandatory = True),
         "clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
         "clangxx": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang++")),
+        "guest_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang")),
+        "guest_clangxx": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang++")),
         "llvm_ar": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-ar")),
         "llvm_strip": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-strip")),
         "ld_lld": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ld.lld")),
@@ -429,6 +437,7 @@ orlix_mlibc_sysroot = rule(
         "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
         "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
         "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
+        "guest_clang_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:guest_clang_support")),
         "mlibc_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,

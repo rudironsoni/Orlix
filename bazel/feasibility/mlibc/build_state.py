@@ -181,11 +181,12 @@ def _tool_environment(tool_bin: str, sdk: str) -> dict[str, str]:
     environment["ORLIX_COMPILER_LAUNCHER"] = ""
     environment["ORLIX_MLIBC_TOOL_BIN"] = str(tools)
     environment["ORLIX_MLIBC_TOOL_LIB"] = str((tools.parent / "lib").resolve())
+    environment["ORLIX_MLIBC_GUEST_LIB"] = str((tools.parent / "llvm" / "lib").resolve())
     environment["ORLIX_MLIBC_MESON_HOME"] = str((tools.parent / "python-home").resolve())
     environment["ORLIX_MLIBC_MESON_LIB"] = str((tools.parent / "py").resolve())
     environment["ORLIX_MLIBC_SDK"] = str(sdk_root.resolve())
     environment["PATH"] = str(tools) + ":/usr/bin:/bin"
-    environment["DYLD_LIBRARY_PATH"] = environment["ORLIX_MLIBC_TOOL_LIB"]
+    environment["DYLD_LIBRARY_PATH"] = environment["ORLIX_MLIBC_GUEST_LIB"] + ":" + environment["ORLIX_MLIBC_TOOL_LIB"]
     return environment
 
 

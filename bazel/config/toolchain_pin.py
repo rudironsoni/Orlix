@@ -574,7 +574,29 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
     _copy_tree(Path(info["meson"]), dest / "py" / "mesonbuild")
     _copy_tree(Path(info["stdlib"]), dest / "python-home" / "lib" / ("python" + info["version"]))
     _require_supported_xcode(developer_dir)
+    stage_guest_clang(dest / "llvm")
     stage_macos_sdk(developer_dir, dest / "sdk")
+
+
+def stage_guest_clang(destination: Path) -> None:
+    """Copy Homebrew LLVM clang beside its own resource directory.
+
+    Apple clang rejects ``-fuse-ld=ld.lld``. The guest compiler is this LLVM
+    clang, staged under its own prefix so it does not replace the Apple clang
+    the native build uses with the macOS SDK slice.
+    """
+    bin_dir = destination / "bin"
+    lib_dir = destination / "lib"
+    seen: set[Path] = set()
+    for binary in (
+        Path("/opt/homebrew/opt/llvm/bin/clang"),
+        Path("/opt/homebrew/opt/llvm/bin/clang++"),
+    ):
+        stage_binary(binary, bin_dir, lib_dir, seen)
+    resource = Path("/opt/homebrew/opt/llvm/lib/clang")
+    if not resource.is_dir():
+        raise PinError(f"guest clang resource directory is missing: {resource}")
+    _copy_tree(resource, lib_dir / "clang")
 
 
 def _require_supported_xcode(developer_dir: str) -> None:

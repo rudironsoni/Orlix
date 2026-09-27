@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Use LLVM clang for the mlibc guest link
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps Apple clang for the native SDK slice and points the guest compiler at staged Homebrew LLVM clang, which accepts `-fuse-ld=ld.lld`. `ld.lld` stays a file input. `DEVELOPER_DIR` stays off the action key.
+
 ## [2026-09-27] build | Stage only the cycle-free macOS SDK slice
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.json`, `usr/include`, and `usr/lib` for the sysroot's native compiler. The Ruby.framework header symlink cycle stays out of the action inputs, and `DEVELOPER_DIR` stays off the action key.
