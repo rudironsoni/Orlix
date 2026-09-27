@@ -597,6 +597,13 @@ def stage_guest_clang(destination: Path) -> None:
     if not resource.is_dir():
         raise PinError(f"guest clang resource directory is missing: {resource}")
     _copy_tree(resource, lib_dir / "clang")
+    version = subprocess.check_output(
+        [str(bin_dir / "clang"), "--version"],
+        text=True,
+        env={**os.environ, "DYLD_LIBRARY_PATH": str(lib_dir)},
+    )
+    if "Apple clang" in version:
+        raise PinError(f"staged guest clang is Apple clang: {version.strip()}")
 
 
 def _require_supported_xcode(developer_dir: str) -> None:
