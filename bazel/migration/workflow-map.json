@@ -3,7 +3,7 @@
   "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
   "workflows": {
     ".github/workflows/app-store-review.yml": {
-      "source_sha256": "e5898f79e6ae32b9d6bef296e1790329960ebd9a3680dda2f9fc9aeed7d9ae71",
+      "source_sha256": "76f4d6e96aa24fa75fbf87392c42fe9166a5ad09f481614c0936f9e9a5bae3ff",
       "workflow": {
         "name": "Promote TestFlight beta to App Review",
         "on": {
@@ -67,7 +67,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4",
+                "uses": "ruby/setup-ruby@762794c140bbeda0f1224786aa33b4b46783a6c1",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": true
@@ -1168,7 +1168,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "73d7bea15327ccf00fb639082a74ccbfeb29000619a7ed76d4fd0fd2b8e9eaa1",
+      "source_sha256": "4ad5ef35c11345feece849812ebe5cbe026194c544f3762e8dae4d117bc33d36",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1263,7 +1263,7 @@
               },
               {
                 "name": "Install mobai-ci + boot simulator",
-                "uses": "MobAI-App/mobai-ci@7cac484883bccde46bb5253e9c1335fd88c5a8d4",
+                "uses": "MobAI-App/mobai-ci@f551408608e57dec92693883c17189de9923c329",
                 "with": {
                   "boot-sim": true
                 }
@@ -1694,7 +1694,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "7a26f5c92a698e2a275bf00110df3ea57f6c1be9d0b899bce8a4add92cdd5414",
+      "source_sha256": "d55ef83f4ce43f897ac5e25045d8f9d40f8f01b085d06c602ae5b602b47431e7",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -1769,7 +1769,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4",
+                "uses": "ruby/setup-ruby@762794c140bbeda0f1224786aa33b4b46783a6c1",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": false
