@@ -7,7 +7,9 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import stat
+import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -255,6 +257,53 @@ def assert_staged_product_match(imported: bytes, computed: bytes) -> None:
             raise ValueError(
                 f"artifact identity mode differs for {recorded.get('path')}: {recorded_mode} != {observed_mode}"
             )
+
+
+def artifact_manifest_without_bazel_owner_write(artifacts: ArtifactSelection, recorded: bytes) -> bytes:
+    """Serialize files after removing Bazel's owner-write bit from a private copy.
+
+    The signed kernel manifest records mode 0555. Bazel stages those same bytes
+    as mode 0755. The copy is chmod'd back to the recorded mode and then hashed
+    by artifact_manifest_v2. Any other mode change stays on the original file,
+    so the byte compare still fails.
+    """
+    payload = json.loads(recorded)
+    entries = payload.get("entries")
+    modes: dict[str, int] = {}
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("type") != "file":
+                continue
+            mode = entry.get("mode")
+            path = entry.get("path")
+            if isinstance(path, str) and isinstance(mode, int) and not isinstance(mode, bool):
+                modes[path] = mode
+    staged: dict[str, Path] = {}
+    with tempfile.TemporaryDirectory(prefix="orlix-identity-") as tmp:
+        root = Path(tmp)
+        items = artifacts.items() if isinstance(artifacts, Mapping) else artifacts
+        for name, source in items:
+            selected = _selected_source(Path(source))
+            try:
+                metadata = selected.lstat()
+            except OSError:
+                staged[name] = Path(source)
+                continue
+            observed = stat.S_IMODE(metadata.st_mode)
+            recorded_mode = modes.get(name)
+            if (
+                stat.S_ISREG(metadata.st_mode)
+                and recorded_mode is not None
+                and _owner_write_only(recorded_mode, observed)
+            ):
+                dest = root.joinpath(*name.split("/"))
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(selected, dest)
+                dest.chmod(recorded_mode)
+                staged[name] = dest
+            else:
+                staged[name] = Path(source)
+        return artifact_manifest_v2(artifacts=staged)
 
 
 def restore_recorded_modes(imported: bytes, root: Path) -> None:

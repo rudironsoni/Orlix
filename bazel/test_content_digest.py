@@ -19,6 +19,7 @@ from pathlib import Path
 from bazel.content_digest import (
     artifact_identity_v2,
     artifact_manifest_v2,
+    artifact_manifest_without_bazel_owner_write,
     assert_staged_product_match,
     consumer_file_identity,
     consumer_tree_identity,
@@ -201,6 +202,31 @@ class ConsumerIdentityTests(unittest.TestCase):
             self.assertEqual(consumer_tree_identity(first), consumer_tree_identity(second))
             (second / "linux" / "unistd.h").write_bytes(b"int write(void);\n")
             self.assertNotEqual(consumer_tree_identity(first), consumer_tree_identity(second))
+
+    def test_bazel_owner_write_serializes_back_to_the_recorded_manifest(self) -> None:
+        payload = b"kernel-archive"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "OrlixKernel.a"
+            path.write_bytes(payload)
+            path.chmod(0o555)
+            recorded = artifact_manifest_v2(artifacts={"OrlixKernel.a": path})
+            path.chmod(0o755)
+            computed = artifact_manifest_without_bazel_owner_write(
+                {"OrlixKernel.a": path}, recorded
+            )
+            self.assertEqual(computed, recorded)
+            self.assertEqual(json.loads(computed)["entries"][0]["mode"], 0o555)
+            path.chmod(0o777)
+            changed = artifact_manifest_without_bazel_owner_write(
+                {"OrlixKernel.a": path}, recorded
+            )
+            self.assertNotEqual(changed, recorded)
+            path.write_bytes(b"other")
+            path.chmod(0o755)
+            tampered = artifact_manifest_without_bazel_owner_write(
+                {"OrlixKernel.a": path}, recorded
+            )
+            self.assertNotEqual(tampered, recorded)
 
     def test_mode_change_misses_and_owner_write_staging_matches(self) -> None:
         payload = b"payload"

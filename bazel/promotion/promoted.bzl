@@ -224,6 +224,7 @@ def _promoted_kernel_impl(ctx):
         ctx,
         "kernel",
         ctx.file._artifact_identity_serializer,
+        recorded_manifest = identity_manifest,
         artifacts = {
             "OrlixKernel.a": archive,
             "arch/orlix/boot/dts/development.dtb": development_dtb,
