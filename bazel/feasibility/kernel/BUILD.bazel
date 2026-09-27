@@ -59,10 +59,6 @@ orlix_kernel_macho_archive(
         "//conditions:default": "iphonesimulator",
     }),
     configs = "//OrlixKernel/Sources:linux_configs",
-    extra_inputs = [
-        "//:make/tcti-proof-registry-provenance.mk",
-        "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
-    ],
     kbuild_engine = "//OrlixKernel/Sources:kbuild_engine",
     isa_tree = ":tcti_isa",
     linux_makefile = "@orlix_linux_source//:Makefile",
@@ -85,10 +81,6 @@ orlix_kernel_macho_archive(
         profile = profile,
         destination = destination,
         configs = "//OrlixKernel/Sources:linux_configs",
-        extra_inputs = [
-            "//:make/tcti-proof-registry-provenance.mk",
-            "//:OrlixOS/Sources/distribution/target-settings.xcconfig",
-        ],
         kbuild_engine = "//OrlixKernel/Sources:kbuild_engine",
         isa_tree = ":tcti_isa",
         linux_makefile = "@orlix_linux_source//:Makefile",

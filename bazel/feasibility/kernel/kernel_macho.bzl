@@ -23,9 +23,13 @@ def _pinned_env(ctx):
         "PROFILE": ctx.attr.profile,
         "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
-    tmpdir = shell.get("TMPDIR")
-    if tmpdir:
-        env["TMPDIR"] = tmpdir
+    ccache_disable = shell.get("CCACHE_DISABLE")
+    if ccache_disable:
+        env["CCACHE_DISABLE"] = ccache_disable
+    if "ORLIX_COMPILER_LAUNCHER" in shell:
+        env["ORLIX_COMPILER_LAUNCHER"] = shell["ORLIX_COMPILER_LAUNCHER"]
+    if "ORLIX_KERNEL_INCREMENTAL" in shell:
+        env["ORLIX_KERNEL_INCREMENTAL"] = shell["ORLIX_KERNEL_INCREMENTAL"]
     return env
 
 def _tcti_isa_prepare_impl(ctx):
@@ -95,7 +99,6 @@ def _kernel_macho_impl(ctx):
     patch_files = ctx.files.patches
     config_files = ctx.files.configs
     engine_files = ctx.files.kbuild_engine
-    extra_files = ctx.files.extra_inputs
     isa_tree = ctx.file.isa_tree
     if not isa_tree.is_directory:
         fail("kernel Mach-O requires a prepared ISA tree artifact")
@@ -112,14 +115,13 @@ overlay_count="$6"
 patch_count="$7"
 config_count="$8"
 engine_count="$9"
-extra_count="${10}"
-isa_tree="$exec_root/${11}"
-release_dtb="$exec_root/${12}"
-development_dtb="$exec_root/${13}"
-product="$exec_root/${14}"
-toolchain_identity="$exec_root/${15}"
-compiler_identity="$exec_root/${16}"
-shift 16
+isa_tree="$exec_root/${10}"
+release_dtb="$exec_root/${11}"
+development_dtb="$exec_root/${12}"
+product="$exec_root/${13}"
+toolchain_identity="$exec_root/${14}"
+compiler_identity="$exec_root/${15}"
+shift 15
 overlay_paths=()
 i=0
 while [ "$i" -lt "$overlay_count" ]; do
@@ -148,11 +150,6 @@ while [ "$i" -lt "$engine_count" ]; do
   shift
   i=$((i + 1))
 done
-i=0
-while [ "$i" -lt "$extra_count" ]; do
-  shift
-  i=$((i + 1))
-done
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -174,10 +171,11 @@ test -x "$clang"
 sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
 test -n "$sdkroot"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
-export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
-if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
-  test -n "${CCACHE_DIR:-}" || { echo "CCACHE_DIR is required; use the repository Make interface" >&2; exit 1; }
+if [ -z "${CCACHE_DIR:-}" ]; then
+  export ORLIX_COMPILER_LAUNCHER=
+else
+  export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
 fi
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
@@ -213,6 +211,22 @@ export ORLIX_KERNEL_HOST_SDKROOT="$sdkroot"
 export ORLIX_KERNEL_ARCHIVE_PLATFORMS
 export DEVELOPER_DIR
 cd "$exec_root"
+# kernel-rules.mk includes this file. It stays out of the action inputs.
+if [ "${#engine_paths[@]}" -gt 0 ]; then
+  provenance_root="$(/usr/bin/python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${engine_paths[0]}")"
+  while [ ! -f "$provenance_root/make/tcti-proof-registry-provenance.mk" ] && [ "$provenance_root" != "/" ]; do
+    provenance_root="$(/usr/bin/dirname "$provenance_root")"
+  done
+  if [ -f "$provenance_root/make/tcti-proof-registry-provenance.mk" ] && [ ! -e "$exec_root/make/tcti-proof-registry-provenance.mk" ]; then
+    /bin/mkdir -p "$exec_root/make"
+    /bin/ln -s "$provenance_root/make/tcti-proof-registry-provenance.mk" "$exec_root/make/tcti-proof-registry-provenance.mk"
+  fi
+fi
+kbuild_log="$work/kbuild-make.log"
+kbuild_err="$work/kbuild-compiler.log"
+: > "$kbuild_log"
+: > "$kbuild_err"
+set +e
 env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
     SDKROOT="$sdkroot" \
@@ -225,7 +239,17 @@ env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS \
     ORLIX_KERNEL_HOSTCC="$hostcc" \
     ORLIX_KERNEL_HOST_SDKROOT="$sdkroot" \
     ORLIX_KERNEL_ARCHIVE_PLATFORMS="$ORLIX_KERNEL_ARCHIVE_PLATFORMS" \
-    "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive
+    "$gmake" -f OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk __kernel-archive \
+    >"$kbuild_log" 2>"$kbuild_err"
+kbuild_status=$?
+set -e
+if [ "$kbuild_status" -ne 0 ]; then
+  /bin/cat "$kbuild_log" >&2
+  /bin/cat "$kbuild_err" >&2
+  exit "$kbuild_status"
+fi
+/usr/bin/grep -v -E '^[[:space:]]*ORLIXCC[[:space:]]' "$kbuild_err" >&2 || true
+/bin/cat "$kbuild_log"
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
 built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"
@@ -279,21 +303,20 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             str(len(patch_files)),
             str(len(config_files)),
             str(len(engine_files)),
-            str(len(extra_files)),
             isa_tree.path,
             release_dtb.path,
             development_dtb.path,
             product.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
-        ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [f.path for f in extra_files],
+        ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files],
         inputs = depset(
-            direct = [script, ctx.file.linux_makefile, isa_tree, ctx.file.toolchain_identity, ctx.file.compiler_identity] + overlay_files + patch_files + config_files + engine_files + extra_files,
+            direct = [script, ctx.file.linux_makefile, isa_tree, ctx.file.toolchain_identity, ctx.file.compiler_identity] + overlay_files + patch_files + config_files + engine_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
-        use_default_shell_env = True,
+        use_default_shell_env = False,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
@@ -353,7 +376,6 @@ orlix_kernel_macho_archive = rule(
         "patches": attr.label(mandatory = True, allow_files = True),
         "configs": attr.label(mandatory = True, allow_files = True),
         "kbuild_engine": attr.label(mandatory = True, allow_files = True),
-        "extra_inputs": attr.label_list(allow_files = True),
         "isa_tree": attr.label(allow_single_file = True, mandatory = True),
         "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
