@@ -66,6 +66,19 @@ orlix_kernel_composition_stamp(
     tags = ["manual"],
 )
 
+# Private native boot edge. The boot glue stays in OrlixKernelBoot.
+objc_library(
+    name = "OrlixBootloader",
+    srcs = ["orlixbootloader_anchor.c"],
+    alwayslink = True,
+    copts = ["-fno-objc-arc"],
+    tags = ["manual"],
+    deps = [
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources:OrlixKernelBoot",
+    ],
+)
+
 # Apple-native link edge. Guest archives stay off this target.
 objc_library(
     name = "OrlixKit",
@@ -75,7 +88,7 @@ objc_library(
     tags = ["manual"],
     deps = [
         "//OrlixHostAdapter/Sources:OrlixHostAdapter",
-        "//OrlixKernel/Sources:OrlixKernelBoot",
         "//bazel/feasibility/kernel:macho_link",
+        "//bazel/product:OrlixBootloader",
     ],
 )
