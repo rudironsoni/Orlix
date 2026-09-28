@@ -196,6 +196,41 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("DiagnosticReports", runtime)
         self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
 
+    def test_cache_equivalence_empty_cache_flags_survive_nounset(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        guarded = '$${cache_flags[@]+"$${cache_flags[@]}"}'
+        self.assertEqual(equivalence.count(guarded), 2)
+        self.assertNotIn('"$${cache_flags[@]}"', equivalence.replace(guarded, ""))
+        uncached = next(
+            line for line in equivalence.splitlines() if "cache_flags=(--nouse_action_cache" in line
+        )
+        self.assertIn("--disk_cache=", uncached)
+        self.assertIn("--noremote_accept_cached", uncached)
+        # Make turns $$ into $. This is the expansion seed and cached run.
+        script = r"""
+set -euo pipefail
+cache_flags=()
+set -- ${cache_flags[@]+"${cache_flags[@]}"}
+test "$#" -eq 0
+cache_flags=(--nouse_action_cache --disk_cache= --noremote_accept_cached)
+set -- ${cache_flags[@]+"${cache_flags[@]}"}
+test "$#" -eq 3
+test "$1" = --nouse_action_cache
+test "$2" = --disk_cache=
+test "$3" = --noremote_accept_cached
+"""
+        result = subprocess.run(
+            ["/bin/bash", "--noprofile", "--norc", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_xctest_proof_uses_helper_and_canonical_app(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         proof = makefile.split("__bazel-xctest-runtime-proof:", 1)[1].split(
