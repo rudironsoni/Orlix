@@ -7,6 +7,14 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Keep the Apple CI compact log through later Bazel commands
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps the remote gRPC log, compact execution log, and full timing profile on `build:buildbuddy` and on the Apple CI product build. The cquery after that build, and the other cqueries, clear `--execution_log_compact_file=` so a zero-action command does not replace `execution_log.binpb.zst` before it is projected. An empty spawn projection is still rejected. `cacheHit == true`, `runner == "disk cache hit"`, and `compare_trees` stay in place. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-09-28] build | Record BuildBuddy diagnostics on the Apple CI cache config
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) adds the remote gRPC log, compact execution log, and full timing profile to the existing `build:buildbuddy` configuration. The Apple CI product invocation keeps those flags. Invocations that already write a JSON execution log clear the compact log for that invocation, including the disk-cache gate. `cacheHit == true`, `runner == "disk cache hit"`, and `compare_trees` stay in place. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Package kernel boot behind OrlixBootloader
 
 The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds `//bazel/product:OrlixBootloader` around `OrlixKernelBoot` and HostAdapter. `//bazel/product:OrlixKit` links that target instead of naming `OrlixKernelBoot`. The Bootloader target does not link the Mach-O archive or guest archives. OrlixEngine and the public XCFramework remain unbuilt. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
