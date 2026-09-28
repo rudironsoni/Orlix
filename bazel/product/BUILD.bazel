@@ -79,6 +79,20 @@ objc_library(
     ],
 )
 
+# One running OrlixOS and one upstream Linux kernel. Guest archives stay off this target.
+objc_library(
+    name = "OrlixEngine",
+    srcs = ["orlixengine_anchor.c"],
+    alwayslink = True,
+    copts = ["-fno-objc-arc"],
+    tags = ["manual"],
+    deps = [
+        "//OrlixOS/Sources/Session:OrlixOS",
+        "//bazel/feasibility/kernel:macho_link",
+        "//bazel/product:OrlixBootloader",
+    ],
+)
+
 # Apple-native link edge. Guest archives stay off this target.
 objc_library(
     name = "OrlixKit",
@@ -88,7 +102,6 @@ objc_library(
     tags = ["manual"],
     deps = [
         "//OrlixHostAdapter/Sources:OrlixHostAdapter",
-        "//bazel/feasibility/kernel:macho_link",
-        "//bazel/product:OrlixBootloader",
+        "//bazel/product:OrlixEngine",
     ],
 )

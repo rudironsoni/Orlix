@@ -31,12 +31,14 @@ required_skills:
 required_role: "orlix-implementer"
 required_proof:
   - "HostAdapter composition edge is nm evidence from the Linux archive and HostAdapter archive"
-  - "OrlixKit links HostAdapter, OrlixBootloader, and the Mach-O archive, and does not link guest archives"
+  - "OrlixKit links HostAdapter and OrlixEngine, and does not link guest archives"
   - "OrlixBootloader links OrlixKernelBoot and HostAdapter, and does not link guest archives"
+  - "OrlixEngine links one OrlixOS, one Mach-O kernel archive, and OrlixBootloader, and does not link guest archives"
 build_intents:
   - "record the HostAdapter composition edge in kernel_composition"
   - "route the app and OrlixOS framework through the OrlixKit link edge"
   - "package OrlixKernelBoot behind the OrlixBootloader target"
+  - "host one OrlixOS and one kernel from OrlixEngine"
 verification_intents:
   - "python unittest hostadapter edge"
   - "python unittest OrlixKit link edge"
@@ -46,7 +48,7 @@ verification_intents:
 
 Determine the HostAdapter composition edge from symbol evidence. `//bazel/product:kernel_composition` reads `nm` output for the selected Linux archive, the HostAdapter static archive, and the boot archive. `undefined_kernel_symbols` is that archive's host-shaped undefined symbols, and each one must be a HostAdapter export. The boot archive must reference `_arch_boot_entry`, which the Linux archive defines. Trap imports are the callback edge. Resource and directory exports are the resource-lookup edge. The recorded archive order is `OrlixKernel.a`, then `OrlixHostAdapter`, then `OrlixKernelBoot`. Framework visibility is CoreFoundation and Foundation. Guest mlibc, Coreutils, and libc archives are rejected as link inputs. Preserve target-specific Swift language modes, all native libraries and frameworks, resources, privacy data, StoreKit configuration, entitlements, deployment targets, and signing behavior. Generate local Xcode projects and commit only the narrow Xcode Cloud bootstrap project.
 
-The app and the embedded OrlixOS framework link `//bazel/product:OrlixKit` instead of HostAdapter, kernel boot, and the Mach-O archive directly. `//bazel/product:OrlixBootloader` packages `OrlixKernelBoot` and HostAdapter, and OrlixKit links that target instead of naming `OrlixKernelBoot`. Neither target links guest mlibc, Coreutils, or rootfs archives. Guest rootfs and kernel boot resources stay on the OrlixOS framework. The OrlixOS module links the mlibc and Coreutils marker objects it calls. OrlixEngine and the public OrlixKit XCFramework remain unbuilt. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries.
+The app and the embedded OrlixOS framework link `//bazel/product:OrlixKit` instead of HostAdapter, kernel boot, and the Mach-O archive directly. `//bazel/product:OrlixBootloader` packages `OrlixKernelBoot` and HostAdapter. `//bazel/product:OrlixEngine` links that Bootloader, the OrlixOS session module, and one Mach-O kernel archive. OrlixKit links HostAdapter and that Engine target instead of naming the Bootloader or the kernel archive. None of these targets link guest mlibc, Coreutils, or rootfs archives. Guest rootfs and kernel boot resources stay on the OrlixOS framework. The OrlixOS module links the mlibc and Coreutils marker objects it calls. The public OrlixKit XCFramework remains unbuilt. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries.
 
 The app uses Apple's registered bundle identifier `com.rudironsoni.Orlix`, and the Live Activity extension uses `com.rudironsoni.Orlix.live-activity`. Device builds resolve the installed Development profiles through the upstream `local_provisioning_profile` rule. The app profile includes its existing iCloud container, App Group, Push, and Fonts capabilities. The extension requests its exact application identifier from the team wildcard profile selected by Xcode. Simulator builds do not resolve device profiles. Make verifies bundle signatures and rejects unresolved or mismatched application identifiers. Existing iCloud, keychain, App Group, and widget identifiers remain stable.
 
