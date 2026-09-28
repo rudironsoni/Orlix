@@ -6,9 +6,21 @@ package(default_visibility = ["//visibility:public"])
 
 orlix_kernel_composition(
     name = "kernel_composition",
+    archive_order = [
+        "OrlixKernel.a",
+        "OrlixHostAdapter",
+        "OrlixKernelBoot",
+    ],
     boot = "//OrlixKernel/Sources:OrlixKernelBoot_srcs",
+    boot_library = "//OrlixKernel/Sources:OrlixKernelBoot",
+    frameworks = [
+        "CoreFoundation",
+        "Foundation",
+    ],
     hostadapter = "//OrlixHostAdapter/Sources:OrlixHostAdapter_srcs",
+    hostadapter_library = "//OrlixHostAdapter/Sources:OrlixHostAdapter",
     linux_archive = "//bazel/feasibility/kernel:selected_macho",
+    record_symbol_edge = True,
     tags = ["manual"],
 )
 

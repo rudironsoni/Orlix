@@ -1,18 +1,41 @@
 ---
 type: task
 tags: [task, bazel, apple]
-updated: 2026-09-10
+updated: 2026-09-27
 status: doing
 summary: "Implement explicit Bazel targets for HostAdapter, Bootloader, Engine, hosted Kernel composition, OrlixKit, OrlixOS, Orlix, extensions, and tests."
 task_of:
   - "[Move the Apple product graph to Bazel](../../story/doing/move-apple-product-graph-to-bazel.md)"
 blocks:
   - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
+owned_paths:
+  - "bazel/feasibility/analysis/providers.bzl"
+  - "bazel/migration/legacy-target-map.json"
+  - "bazel/product/**"
+  - "docs/concepts/bazel-product-graph-migration.md"
+  - "docs/log.md"
+  - "docs/objects/task/doing/implement-bazel-apple-product-graph.md"
+  - "make/bazel-migration.mk"
+read_only_paths:
+  - ".github/workflows/**"
+  - "artifacts.lock.json"
+forbidden_paths:
+  - ".github/workflows/bazel-ci.yml"
+required_skills:
+  - "orlix-bazel"
+  - "orlix-implementation-boundaries"
+required_role: "orlix-implementer"
+required_proof:
+  - "HostAdapter composition edge is nm evidence from the Linux archive and HostAdapter archive"
+build_intents:
+  - "record the HostAdapter composition edge in kernel_composition"
+verification_intents:
+  - "python unittest hostadapter edge"
 ---
 
 # Implement The Bazel Apple Product Graph
 
-Determine the HostAdapter composition edge from symbol evidence. Preserve target-specific Swift language modes, all native libraries and frameworks, resources, privacy data, StoreKit configuration, entitlements, deployment targets, and signing behavior. Generate local Xcode projects and commit only the narrow Xcode Cloud bootstrap project.
+Determine the HostAdapter composition edge from symbol evidence. `//bazel/product:kernel_composition` reads `nm` output for the selected Linux archive, the HostAdapter static archive, and the boot archive. `undefined_kernel_symbols` is that archive's host-shaped undefined symbols, and each one must be a HostAdapter export. The boot archive must reference `_arch_boot_entry`, which the Linux archive defines. Trap imports are the callback edge. Resource and directory exports are the resource-lookup edge. The recorded archive order is `OrlixKernel.a`, then `OrlixHostAdapter`, then `OrlixKernelBoot`. Framework visibility is CoreFoundation and Foundation. Guest mlibc, Coreutils, and libc archives are rejected as link inputs. Preserve target-specific Swift language modes, all native libraries and frameworks, resources, privacy data, StoreKit configuration, entitlements, deployment targets, and signing behavior. Generate local Xcode projects and commit only the narrow Xcode Cloud bootstrap project.
 
 The app embeds OrlixKit. OrlixKit packages the Apple-native Engine, Bootloader, HostAdapter, and Kernel integration together with OrlixOS guest distribution resources. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries. Guest mlibc, Coreutils, package, and rootfs providers remain resource inputs and are not Apple-native app link dependencies.
 

@@ -7,6 +7,14 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Refresh the migration inventory after the composition recipe change
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) changed `make/bazel-migration.mk` so `__bazel-product-composition` checks the nm edge. `bazel/migration/legacy-target-map.json` now records that makefile digest. Make target lines are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-09-27] build | Record the HostAdapter composition edge from nm
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) stops writing an empty `undefined_kernel_symbols` list. `//bazel/product:kernel_composition` now reads `nm` output for the selected Linux archive, the HostAdapter static archive, and the boot archive. The edge is the archive's host-shaped undefined symbols, each of which must be a HostAdapter export. The boot archive must reference `_arch_boot_entry`. Trap imports, resource-lookup exports, archive order, and CoreFoundation/Foundation visibility are recorded with that edge. Guest mlibc, Coreutils, and libc archives are rejected as link inputs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-27] build | Bind kernel proof to the locked artifact identity
 
 The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the locked `kernel-<profile>-<destination>` artifact-identity-v2 digest as the kernel proof subject. A live identity that disagrees with that lock entry is recorded and rejected. The raw Mach-O archive hash is not that subject. ADR 0017 ordering is unchanged, and `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
