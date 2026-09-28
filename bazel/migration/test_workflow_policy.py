@@ -347,6 +347,21 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("--remote_upload_local_results=false", rc)
         self.assertNotIn("--remote_executor", rc)
         self.assertNotIn("--remote_instance_name", rc)
+        buildbuddy = rc.split("build:buildbuddy --remote_cache=", 1)[1].split(
+            "build:buildbuddy-read ", 1
+        )[0]
+        for flag in (
+            "--remote_grpc_log=bazel-remote-grpc.log",
+            "--execution_log_compact_file=execution_log.binpb.zst",
+            "--noslim_profile",
+            "--experimental_profile_include_target_label",
+            "--experimental_profile_include_primary_output",
+        ):
+            self.assertIn(flag, buildbuddy)
+        self.assertNotIn("--slim_profile", buildbuddy)
+        self.assertNotIn("--noexperimental_profile_include_target_label", buildbuddy)
+        self.assertNotIn("--noexperimental_profile_include_primary_output", buildbuddy)
+        self.assertEqual(rc.count("build:buildbuddy --remote_cache="), 1)
         self.assertIn("ORLIX_BAZEL_CACHE_EPOCH ?= v1", makefile)
         configure = makefile.split("__bazel-buildbuddy-configure:", 1)[1].split(
             "__bazel-buildbuddy-cleanup:", 1
@@ -355,6 +370,27 @@ class WorkflowPolicyTests(unittest.TestCase):
             "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)",
             configure,
         )
+        apple = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        enabled = apple.split("read|write)", 1)[1].split("*)", 1)[0]
+        for flag in (
+            "--remote_grpc_log=bazel-remote-grpc.log",
+            "--execution_log_compact_file=execution_log.binpb.zst",
+            "--noslim_profile",
+            "--experimental_profile_include_target_label",
+            "--experimental_profile_include_primary_output",
+        ):
+            self.assertIn(flag, enabled)
+        self.assertNotIn("--execution_log_json_file=", enabled)
+        self.assertNotIn("--slim_profile", enabled)
+        self.assertIn("python3 -m compact_execution_log", apple)
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        self.assertIn("--execution_log_compact_file= --execution_log_json_file=", equivalence)
+        self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
+        self.assertIn("compare_trees", equivalence)
 
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")

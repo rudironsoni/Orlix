@@ -348,7 +348,7 @@ __bazel-promote-buildset: __bazel-version-check __bazel-toolchain-manifest
 		mkdir -p "$$promote/buildset/a/output-base" "$$promote/buildset/b/output-base"; \
 		labels=($$(python3 "$(CURDIR)/bazel/promotion/components.py" --labels)); \
 		for side in a b; do \
-			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
+			DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$promote/buildset/$$side/output-base" build "$${labels[@]}" --nouse_action_cache --remote_cache= --remote_executor= --config=release --config=promotion --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --execution_log_compact_file= --execution_log_json_file="$$promote/buildset/$$side/execution.json" --build_event_json_file="$$promote/buildset/$$side/build-events.json" --profile="$$promote/buildset/$$side/profile.json.gz"; \
 			for component in $$components; do \
 				stage="$$promote/$$component/$$side/staged"; mkdir -p "$$stage"; \
 				eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
@@ -1007,7 +1007,20 @@ __bazel-apple-ci: __bazel-matrix-check
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "apple-ci: profile=$(PROFILE) component_mode=$(ORLIX_BAZEL_COMPONENT_MODE) current_runtime=$(ORLIX_CURRENT_SIMULATOR_VERSION) current_simulator=$(ORLIX_CURRENT_SIMULATOR_ID) ios15_simulator=$(ORLIX_IOS15_SIMULATOR_ID)"; \
-	$(MAKE) __bazel-orlix-app ORLIX_BAZEL_DESTINATION=iphonesimulator ORLIX_BAZEL_COMPILATION_MODE=dbg ORLIX_BAZEL_APP_TARGETS="//Orlix:Orlix //Orlix:OrlixUITests" ORLIX_BAZEL_BUILD_FLAGS="--remote_download_outputs=toplevel --execution_log_json_file=$$evidence_dir/execution.json --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --experimental_remote_grpc_log=$$evidence_dir/remote-grpc.log"; \
+	case "$(ORLIX_BUILDBUDDY_ACCESS)" in \
+	read|write) \
+		build_flags="--remote_download_outputs=toplevel --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --remote_grpc_log=bazel-remote-grpc.log --execution_log_compact_file=execution_log.binpb.zst --noslim_profile --experimental_profile_include_target_label --experimental_profile_include_primary_output"; \
+		;; \
+	*) \
+		build_flags="--remote_download_outputs=toplevel --execution_log_json_file=$$evidence_dir/execution.json --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --experimental_remote_grpc_log=$$evidence_dir/remote-grpc.log"; \
+		;; \
+	esac; \
+	$(MAKE) __bazel-orlix-app ORLIX_BAZEL_DESTINATION=iphonesimulator ORLIX_BAZEL_COMPILATION_MODE=dbg ORLIX_BAZEL_APP_TARGETS="//Orlix:Orlix //Orlix:OrlixUITests" ORLIX_BAZEL_BUILD_FLAGS="$$build_flags"; \
+	if [ "$(ORLIX_BUILDBUDDY_ACCESS)" = read ] || [ "$(ORLIX_BUILDBUDDY_ACCESS)" = write ]; then \
+		test -s execution_log.binpb.zst || { echo "BuildBuddy compact execution log is missing" >&2; exit 1; }; \
+		PYTHONPATH="$(CURDIR)/bazel/config" python3 -m compact_execution_log --compact execution_log.binpb.zst --out "$$evidence_dir/execution.json"; \
+	fi; \
+	test -s "$$evidence_dir/execution.json" || { echo "apple-ci execution log is missing" >&2; exit 1; }; \
 	ipa_rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:Orlix --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --output=files | awk '/Orlix[.]ipa$$/ {path=$$0; count++} END {if (count != 1) exit 1; print path}')"; \
 	ipa="$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main/$$ipa_rel"; \
 	app_root="$$(mktemp -d "$$evidence_dir/app.XXXXXX")"; \
@@ -1102,6 +1115,8 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 # then keeps large outputs such as kbuild-archive.tar in the cache and does not
 # copy them into the execroot. Equivalence compares those trees, so materialize
 # every output. The cacheHit and runner gates stay in place.
+# The buildbuddy config sets --execution_log_compact_file. Bazel 9.2 allows one
+# execution-log format, so this gate clears that flag and keeps the JSON log.
 __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	command -v jq >/dev/null || { echo "jq is required to inspect Bazel cache execution logs" >&2; exit 1; }; \
@@ -1112,7 +1127,7 @@ __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 		cache_flags=(--disk_cache="$$proof/disk"); \
 		if [ "$$side" = uncached ]; then cache_flags=(--nouse_action_cache --disk_cache=); fi; \
 		echo "cache-equivalence: $$side build, evidence $$proof/$$side"; \
-		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" build //bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs "$${flags[@]}" "$${cache_flags[@]}" --execution_log_json_file="$$proof/$$side/execution.json" --build_event_json_file="$$proof/$$side/build-events.json" --profile="$$proof/$$side/profile.json.gz"; \
+		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" build //bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs "$${flags[@]}" "$${cache_flags[@]}" --execution_log_compact_file= --execution_log_json_file="$$proof/$$side/execution.json" --build_event_json_file="$$proof/$$side/build-events.json" --profile="$$proof/$$side/profile.json.gz"; \
 		if [ "$$side" = seed ]; then continue; fi; \
 		jq -e -s --arg side "$$side" 'map(select(.mnemonic == "OrlixLinuxHeadersInstall" or .mnemonic == "OrlixMLibCSysroot" or .mnemonic == "OrlixRootfs")) | if (map(.mnemonic) | sort) == ["OrlixLinuxHeadersInstall", "OrlixMLibCSysroot", "OrlixRootfs"] and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and (if $$side == "cached" then .cacheHit == true and .runner == "disk cache hit" else (.cacheHit // false) == false and .runner != "remote" and (.runner | length) > 0 end)) then map({mnemonic, runner, cacheHit, exitCode}) else error("required component cache behavior was not observed") end' "$$proof/$$side/execution.json" > "$$proof/$$side/cache-observation.json"; \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" cquery 'set(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs)' "$${flags[@]}" "$${cache_flags[@]}" --output=files > "$$proof/$$side/outputs.txt"; \
@@ -1136,7 +1151,7 @@ __bazel-scenario-harness:
 	esac; \
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-scenarios/$(ORLIX_SCENARIO)"; \
 	mkdir -p "$$evidence_dir"; \
-	$(MAKE) __bazel-orlix-app ORLIX_BAZEL_BUILD_FLAGS="--remote_download_outputs=toplevel --execution_log_json_file=$$evidence_dir/execution.json --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --experimental_remote_grpc_log=$$evidence_dir/remote-grpc.log" 2>&1 | tee "$$evidence_dir/build.log"; \
+	$(MAKE) __bazel-orlix-app ORLIX_BAZEL_BUILD_FLAGS="--remote_download_outputs=toplevel --execution_log_compact_file= --execution_log_json_file=$$evidence_dir/execution.json --build_event_json_file=$$evidence_dir/build-events.json --profile=$$evidence_dir/profile.json.gz --experimental_remote_grpc_log=$$evidence_dir/remote-grpc.log" 2>&1 | tee "$$evidence_dir/build.log"; \
 	ninja_log="$$(find "$(ORLIX_BAZEL_OUTPUT_BASE)" -name .ninja_log -type f 2>/dev/null | awk 'NR==1{print; exit}' || true)"; \
 	obs_args=( \
 		--scenario "$(ORLIX_SCENARIO)" \

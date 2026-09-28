@@ -93,6 +93,8 @@ ModuleCache/
 /bazel-out
 /bazel-testlogs
 /bazel-*
+bazel-remote-grpc.log
+execution_log.binpb.zst
 # (No @.cache variants should be tracked; only .cache is ignored)
 
 # Generated binary

@@ -15,6 +15,11 @@ build:buildbuddy --experimental_remote_cache_chunking
 build:buildbuddy --remote_download_outputs=minimal
 build:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/
 build:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io
+build:buildbuddy --remote_grpc_log=bazel-remote-grpc.log
+build:buildbuddy --execution_log_compact_file=execution_log.binpb.zst
+build:buildbuddy --noslim_profile
+build:buildbuddy --experimental_profile_include_target_label
+build:buildbuddy --experimental_profile_include_primary_output
 build:buildbuddy-read --config=buildbuddy
 build:buildbuddy-read --remote_upload_local_results=false
 build:buildbuddy-write --config=buildbuddy

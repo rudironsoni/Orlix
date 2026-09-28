@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-09-12
+updated: 2026-09-28
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -17,6 +17,9 @@ depends_on:
 blocks:
   - "[Prove all supported Apple builds and feature gates](prove-all-supported-apple-builds-and-feature-gates.md)"
 owned_paths:
+  - ".bazelrc"
+  - ".gitignore"
+  - "Brewfile"
   - "bazel/**"
   - "make/bazel-migration.mk"
   - "MODULE.bazel.lock"
@@ -54,7 +57,7 @@ Acceptance requires cache-on and cache-off output equivalence for reproducible o
 
 The shared promoted-artifact store is local-first and digest-addressed. A warm hit for all locked artifacts performs zero downloads. Locked buildsets and active consumers are pinned against garbage collection. OrlixDistribution artifacts remain guest resources and are not hidden as Apple-native link dependencies.
 
-BuildBuddy Cloud is the shared Bazel AC/CAS at `grpcs://remote.buildbuddy.io`. The compatible cache instance is `orlix/apple/bazel-9.2.0/xcode-17F113/v1`; `v1` is the tracked `ORLIX_BAZEL_CACHE_EPOCH`. The instance excludes commit, branch, pull-request, and simulator-runtime identity. Remote execution stays disabled. Cache-enabled builds use compression, content-defined chunking, minimal downloads by default, the local disk cache, and BuildBuddy BES. The canonical simulator-product operation requests top-level outputs only when it needs the app locally.
+BuildBuddy Cloud is the shared Bazel AC/CAS at `grpcs://remote.buildbuddy.io`. The compatible cache instance is `orlix/apple/bazel-9.2.0/xcode-17F113/v1`; `v1` is the tracked `ORLIX_BAZEL_CACHE_EPOCH`. The instance excludes commit, branch, pull-request, and simulator-runtime identity. Remote execution stays disabled. Cache-enabled builds use compression, content-defined chunking, minimal downloads by default, the local disk cache, and BuildBuddy BES. That same `build:buildbuddy` configuration records `bazel-remote-grpc.log`, `execution_log.binpb.zst`, and a full timing profile with target labels and primary outputs. The canonical simulator-product operation requests top-level outputs only when it needs the app locally. Invocations that must keep a JSON execution log, including the disk-cache gate, clear the compact log for that invocation only.
 
 `ORLIX_BUILDBUDDY_CACHE_MODE` accepts only `normal`, `conserve`, or `off`, and defaults to `normal`. In `normal`, main uses `ORLIX_CI_BUILDBUDDY_WRITE_API_KEY`, same-repository pull requests use `ORLIX_CI_BUILDBUDDY_READ_API_KEY` with disabled uploads, and forks stay off. In `conserve`, only main reads and writes. In `off`, all contexts stay off. Promotion, nightly independent reconstruction, TestFlight, and release do not use BuildBuddy action results. Local use is explicit through the untracked `.bazelrc.local`.
 
