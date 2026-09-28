@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from stage_v2_product import StageError, stage_product
+from stage_v2_product import StageError, main, stage_cold_source, stage_product
 
 
 def _manifest_bytes(entries):
@@ -71,6 +71,38 @@ class StageV2ProductTests(unittest.TestCase):
             (root / "bad.json").write_text("not json", encoding="utf-8")
             with self.assertRaises(StageError):
                 stage_product(root / "bad.json", root, root / "staged")
+
+    def test_cold_source_uses_stem_manifest_and_product_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            (source / "product").mkdir(parents=True)
+            (source / "product" / "payload").write_bytes(b"payload")
+            entries = [{"content_sha256": "00" * 32, "mode": 0o644, "path": "payload", "type": "file"}]
+            (source / "uapi.artifact-identity-v2.json").write_bytes(_manifest_bytes(entries))
+            (source / "uapi.artifact-identity-v2.sha256").write_text("ab" * 32 + "\n", encoding="ascii")
+            self.assertEqual(
+                main(
+                    [
+                        "--cold-source",
+                        str(source),
+                        "--stage",
+                        str(root / "staged"),
+                        "--manifest-stem",
+                        "uapi",
+                        "--product-kind",
+                        "tree",
+                        "--product-subdir",
+                        "product",
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual((root / "staged" / "product" / "payload").read_bytes(), b"payload")
+            with self.assertRaises(StageError):
+                stage_cold_source(source, root / "bad", "uapi", "unknown")
+            with self.assertRaises(StageError):
+                main(["--stage", str(root / "missing")])
 
     def test_empty_file_list_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

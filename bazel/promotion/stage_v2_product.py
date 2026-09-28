@@ -59,13 +59,70 @@ def stage_product(manifest_path: str | Path, product_src: str | Path, stage_dir:
     return {"files": len(files), "digest": digest}
 
 
+def stage_cold_source(
+    source_tree: str | Path,
+    stage_dir: str | Path,
+    manifest_stem: str,
+    product_kind: str,
+    product_subdir: str = "",
+) -> dict:
+    """Stage a cold Bazel output directory as the reconstructed component.
+
+    Source actions emit ``<stem>.artifact-identity-v2.json``. Reconstruction
+    extracts the promoted product, which names that manifest
+    ``artifact-identity-v2.json``. ``stage_product`` performs that copy.
+    """
+    source = Path(source_tree)
+    if (
+        not isinstance(manifest_stem, str)
+        or not manifest_stem
+        or "/" in manifest_stem
+        or manifest_stem in {".", ".."}
+    ):
+        raise StageError(f"invalid artifact identity stem: {manifest_stem!r}")
+    manifest = source / f"{manifest_stem}.artifact-identity-v2.json"
+    if product_kind == "tree":
+        if not isinstance(product_subdir, str) or not product_subdir:
+            raise StageError(f"tree product subdir is invalid: {product_subdir!r}")
+        subdir = Path(product_subdir)
+        if subdir.is_absolute() or ".." in subdir.parts:
+            raise StageError(f"tree product subdir is invalid: {product_subdir!r}")
+        product_src = source / subdir
+    elif product_kind == "manifest-files":
+        if product_subdir:
+            raise StageError("manifest-files product does not take a subdirectory")
+        product_src = source
+    else:
+        raise StageError(f"unknown product kind: {product_kind!r}")
+    return stage_product(manifest, product_src, stage_dir)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", required=True)
-    parser.add_argument("--product-src", required=True)
+    parser.add_argument("--manifest")
+    parser.add_argument("--product-src")
     parser.add_argument("--stage", required=True)
+    parser.add_argument("--cold-source")
+    parser.add_argument("--manifest-stem")
+    parser.add_argument("--product-kind")
+    parser.add_argument("--product-subdir", default="")
     args = parser.parse_args(argv)
-    payload = stage_product(args.manifest, args.product_src, args.stage)
+    if args.cold_source is not None:
+        if args.manifest or args.product_src:
+            raise StageError("cold source staging does not take a separate manifest or product source")
+        if not args.manifest_stem or not args.product_kind:
+            raise StageError("cold source staging requires the identity stem and product kind")
+        payload = stage_cold_source(
+            args.cold_source,
+            args.stage,
+            args.manifest_stem,
+            args.product_kind,
+            args.product_subdir,
+        )
+    else:
+        if not args.manifest or not args.product_src:
+            raise StageError("manifest and product source are required")
+        payload = stage_product(args.manifest, args.product_src, args.stage)
     print(json.dumps(payload, sort_keys=True))
     return 0
 

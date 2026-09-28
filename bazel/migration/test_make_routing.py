@@ -585,6 +585,28 @@ test "$1" = --remote_upload_local_results=true
         self.assertNotIn("ORLIX_COSIGN_KEY", activation_recipe)
         self.assertNotIn("--signed", activation_recipe)
 
+    def test_reconstruct_source_stages_cold_tree_before_compare(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        recipe = makefile.split("__bazel-reconstruct-source:", 1)[1].split(
+            "\n__bazel-mlibc-from-uapi:", 1
+        )[0]
+        self.assertIn("stage_v2_product.py", recipe)
+        self.assertIn('--cold-source "$$tree"', recipe)
+        self.assertIn("--manifest-stem", recipe)
+        self.assertIn("--product-kind", recipe)
+        self.assertIn("compare.compare_trees(sys.argv[2], sys.argv[3])", recipe)
+        compared = recipe.split("compare.compare_trees", 1)[1]
+        self.assertIn('"$$stage"', compared)
+        self.assertNotIn('"$$tree"', compared)
+        self.assertNotIn("artifact_format", recipe)
+        self.assertNotIn("--artifact-identity-format", recipe)
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "\n__bazel-scenario-harness:", 1
+        )[0]
+        self.assertIn('.cacheHit == true and .runner == "remote cache hit"', equivalence)
+        self.assertNotIn("disk cache hit", equivalence)
+        self.assertIn("component=name", equivalence)
+
     def test_kernel_promotion_routes_use_exact_v2_component_boundaries(self) -> None:
         mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         components = (
