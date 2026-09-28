@@ -106,6 +106,102 @@ class GraphTests(unittest.TestCase):
             self.assertEqual(report["result"], "blocked")
             self.assertFalse(json.loads((out / "index.json").read_text())["complete"])
 
+    def test_uapi_and_mlibc_use_locked_artifact_identity(self) -> None:
+        uapi = "11" * 32
+        mlibc = "22" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "buildset": TOOLCHAIN,
+                "components": {
+                    "uapi": {"unsigned_digest": uapi},
+                    "mlibc": {"unsigned_digest": mlibc},
+                    "kernel-release-iphonesimulator": {"unsigned_digest": SUBJECT},
+                },
+            }))
+            subjects = graph.subjects_from_lock(
+                str(lock), profile="release", destination="iphonesimulator"
+            )[0]
+            self.assertEqual(subjects["uapi"], uapi)
+            self.assertEqual(subjects["mlibc"], mlibc)
+            uapi_live = root / "uapi.artifact-identity-v2.sha256"
+            mlibc_live = root / "sysroot.artifact-identity-v2.sha256"
+            kernel_live = root / "kernel.artifact-identity-v2.sha256"
+            uapi_live.write_text(("ab" * 32) + "\n")
+            mlibc_live.write_text(mlibc + "\n")
+            kernel_live.write_text(SUBJECT + "\n")
+            uapi_mismatch = root / "uapi-live-mismatch.json"
+            mlibc_mismatch = root / "mlibc-live-mismatch.json"
+            with self.assertRaisesRegex(bind.BindError, "uapi"):
+                graph.select_matching_live_digest(subjects, "uapi", str(uapi_live), str(uapi_mismatch))
+            self.assertEqual(json.loads(uapi_mismatch.read_text())["lock_unsigned_digest"], uapi)
+            uapi_live.write_text(uapi + "\n")
+            mlibc_live.write_text(("cd" * 32) + "\n")
+            with self.assertRaisesRegex(bind.BindError, "mlibc"):
+                graph.select_matching_live_digest(subjects, "mlibc", str(mlibc_live), str(mlibc_mismatch))
+            recorded = json.loads(mlibc_mismatch.read_text())
+            self.assertEqual(recorded["component"], "mlibc")
+            self.assertEqual(recorded["lock_unsigned_digest"], mlibc)
+            mlibc_live.write_text(mlibc + "\n")
+            self.assertIsNone(graph.select_matching_live_digest(
+                subjects, "mlibc", str(root / "missing-sysroot.artifact-identity-v2.sha256")
+            ))
+            evidence = []
+            for tier, marker in (
+                ("kernel-dependency", "Run /init as init process\n"),
+                ("kunit", "ORLIX-KSELFTEST-END\n"),
+                ("kselftest", "ORLIX-KSELFTEST-END\n"),
+            ):
+                path = write_evidence(root, tier, marker, TOOLCHAIN)
+                evidence.extend(["--evidence", f"{tier}={path}"])
+            out = root / "reports"
+            self.assertEqual(graph.main([
+                "--out", str(out),
+                "--lock", str(lock),
+                "--uapi-digest", str(uapi_live),
+                "--kernel-digest", str(kernel_live),
+                "--mlibc-digest", str(mlibc_live),
+                "--toolchain-digest", TOOLCHAIN,
+                "--profile", "release",
+                "--destination", "iphonesimulator",
+                *evidence,
+            ]), 0)
+            index = json.loads((out / "index.json").read_text())
+            self.assertEqual(index["reports"], [
+                "kernel-dependency:pass",
+                "kunit:pass",
+                "kselftest:pass",
+                "orlixmlibc:blocked",
+            ])
+            report = json.loads((out / "orlixmlibc.json").read_text())
+            self.assertEqual(report["subject_digest"], mlibc)
+            self.assertEqual(report["owner"], "OrlixMLibC")
+            self.assertEqual(report["result"], "blocked")
+            self.assertFalse((out / "syscall-uapi.json").exists())
+            with self.assertRaisesRegex(bind.BindError, "uapi"):
+                graph.main([
+                    "--out", str(root / "rejected-uapi"),
+                    "--lock", str(lock),
+                    "--uapi-digest", "ab" * 32,
+                    "--kernel-digest", SUBJECT,
+                    "--mlibc-digest", mlibc,
+                    "--toolchain-digest", TOOLCHAIN,
+                    "--profile", "release",
+                    "--destination", "iphonesimulator",
+                ])
+            with self.assertRaisesRegex(bind.BindError, "mlibc"):
+                graph.main([
+                    "--out", str(root / "rejected-mlibc"),
+                    "--lock", str(lock),
+                    "--uapi-digest", uapi,
+                    "--kernel-digest", SUBJECT,
+                    "--mlibc-digest", "cd" * 32,
+                    "--toolchain-digest", TOOLCHAIN,
+                    "--profile", "release",
+                    "--destination", "iphonesimulator",
+                ])
+
     def test_lock_rejects_kernel_identity_from_another_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
