@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Publish the cache-equivalence seed to BuildBuddy
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps the cached side on `cacheHit == true` and `runner == "remote cache hit"` for UAPI, mlibc, and rootfs. Pull-request read mode cannot upload those trees, so the seed invocation alone uses the write credential and `--remote_upload_local_results=true` on same-repo pull requests and main. The rest of the pull-request job stays read-only. Forks fail closed. `compare_trees` still decides equality. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Require a BuildBuddy hit for UAPI, mlibc, and rootfs
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) requires the cache-equivalence cached side to observe `cacheHit == true` and `runner == "remote cache hit"` for UAPI, mlibc, and rootfs. Seed and cached inherit BuildBuddy and do not use a private disk cache. `remote_download_outputs=all` materializes the UAPI tree and `kbuild-archive.tar`, the mlibc sysroot tree, and the rootfs images, manifest, and digest for `compare_trees`. The uncached side is the only deliberate miss. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

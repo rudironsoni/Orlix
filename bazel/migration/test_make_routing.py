@@ -231,6 +231,57 @@ test "$3" = --noremote_accept_cached
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_cache_equivalence_seed_uploads_and_cached_requires_remote_hit(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        self.assertIn(
+            '.cacheHit == true and .runner == "remote cache hit"',
+            equivalence,
+        )
+        self.assertNotIn("disk cache hit", equivalence)
+        self.assertNotIn("--remote_cache=", equivalence)
+        self.assertIn("cache-equivalence seed cannot publish without BuildBuddy", equivalence)
+        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", equivalence)
+        self.assertIn("build --config=buildbuddy-write", equivalence)
+        self.assertIn("restore_seed_rc", equivalence)
+        shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
+        self.assertNotIn("--remote_upload_local_results", shared_flags)
+        self.assertNotIn("--noremote_accept_cached", shared_flags)
+        self.assertNotIn("--disk_cache=", shared_flags)
+        seed_upload = next(
+            line for line in equivalence.splitlines() if "seed_flags=(--remote_upload_local_results=true)" in line
+        )
+        self.assertIn('if [ "$$side" = seed ]', seed_upload)
+        build = next(line for line in equivalence.splitlines() if " build //bazel/feasibility/kernel:uapi " in line)
+        self.assertIn('$${seed_flags[@]+"$${seed_flags[@]}"}', build)
+        self.assertNotIn('"$${seed_flags[@]}"', build.replace('$${seed_flags[@]+"$${seed_flags[@]}"}', ""))
+        restored = equivalence.find("restore_seed_rc;")
+        self.assertLess(equivalence.find('$${seed_flags[@]+"$${seed_flags[@]}"}'), restored)
+        self.assertLess(restored, equivalence.find("required component cache behavior was not observed"))
+        cached_jq = equivalence.split("execution.json", 1)[1]
+        self.assertIn('.runner == "remote cache hit"', cached_jq)
+        self.assertNotIn("buildbuddy-write", cached_jq)
+        script = r"""
+set -euo pipefail
+seed_flags=()
+set -- ${seed_flags[@]+"${seed_flags[@]}"}
+test "$#" -eq 0
+seed_flags=(--remote_upload_local_results=true)
+set -- ${seed_flags[@]+"${seed_flags[@]}"}
+test "$#" -eq 1
+test "$1" = --remote_upload_local_results=true
+"""
+        result = subprocess.run(
+            ["/bin/bash", "--noprofile", "--norc", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_xctest_proof_uses_helper_and_canonical_app(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         proof = makefile.split("__bazel-xctest-runtime-proof:", 1)[1].split(

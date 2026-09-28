@@ -169,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "50076606a3721a76f638fde8dfe03a66a6071eae51920de1b7f975d105fa02ba",
+      "source_sha256": "faac207f530a60ab566cbc34f8ade95a48f5c45e988f53911dc03929fd0b774e",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -339,6 +339,14 @@
                   "ORLIX_BUILDBUDDY_ACCESS": "read"
                 },
                 "run": "make __bazel-buildbuddy-configure"
+              },
+              {
+                "name": "Stage cache-equivalence seed upload credential",
+                "if": "steps.buildbuddy.outputs.access == 'read' || steps.buildbuddy.outputs.access == 'write'",
+                "env": {
+                  "BUILDBUDDY_API_KEY": "${{ secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY }}"
+                },
+                "run": "set -euo pipefail\ntest -n \"${BUILDBUDDY_API_KEY}\" || { echo \"the cache-equivalence seed upload credential is required\" >&2; exit 1; }\numask 077\nkey_file=\"$RUNNER_TEMP/orlix-buildbuddy-seed.key\"\nprintf '%s\\n' \"$BUILDBUDDY_API_KEY\" > \"$key_file\"\nchmod 600 \"$key_file\"\necho \"ORLIX_BUILDBUDDY_SEED_KEY_FILE=$key_file\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Prepare both simulator runtimes",
