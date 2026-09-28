@@ -10,6 +10,12 @@ PRIVATE = (
     "//OrlixHostAdapter/Sources:OrlixHostAdapter",
     "//OrlixKernel/Sources:OrlixKernelBoot",
     "//bazel/feasibility/kernel:macho_link",
+    "//bazel/product:OrlixBootloader",
+)
+KIT = (
+    "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+    "//bazel/feasibility/kernel:macho_link",
+    "//bazel/product:OrlixBootloader",
 )
 GUEST = (
     "OrlixMLibC",
@@ -31,11 +37,20 @@ class OrlixKitEdgeTests(unittest.TestCase):
     def test_kit_packages_native_link_inputs_only(self) -> None:
         product = (ROOT / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
         kit = _deps(_rule(product, 'objc_library(\n    name = "OrlixKit",'))
-        for label in PRIVATE:
+        for label in KIT:
             self.assertIn(label, kit)
+        self.assertNotIn("//OrlixKernel/Sources:OrlixKernelBoot", kit)
         for marker in GUEST:
             self.assertNotIn(marker, kit)
         self.assertIn("orlixkit_anchor.c", product)
+        bootloader = _deps(_rule(product, 'objc_library(\n    name = "OrlixBootloader",'))
+        self.assertIn("//OrlixHostAdapter/Sources:OrlixHostAdapter", bootloader)
+        self.assertIn("//OrlixKernel/Sources:OrlixKernelBoot", bootloader)
+        self.assertNotIn("macho_link", bootloader)
+        self.assertNotIn("OrlixKit", bootloader)
+        for marker in GUEST:
+            self.assertNotIn(marker, bootloader)
+        self.assertIn("orlixbootloader_anchor.c", product)
 
     def test_app_and_framework_link_the_kit_edge(self) -> None:
         app = (ROOT / "Orlix/BUILD.bazel").read_text(encoding="utf-8")

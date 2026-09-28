@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Package kernel boot behind OrlixBootloader
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds `//bazel/product:OrlixBootloader` around `OrlixKernelBoot` and HostAdapter. `//bazel/product:OrlixKit` links that target instead of naming `OrlixKernelBoot`. The Bootloader target does not link the Mach-O archive or guest archives. OrlixEngine and the public XCFramework remain unbuilt. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Bind UAPI and mlibc proof to locked artifact identities
 
 The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the locked `uapi` and `mlibc` artifact-identity-v2 digests for the UAPI proof input and the orlixmlibc and syscall-uapi subject. A live identity that disagrees with the lock is recorded and rejected. The semantic header and sysroot markers are not those subjects. Kernel lock rejection is unchanged. Rootfs and product-integration stay unbound. ADR 0017 ordering is unchanged, and `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
