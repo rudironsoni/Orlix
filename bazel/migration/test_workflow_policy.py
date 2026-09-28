@@ -385,6 +385,19 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("--execution_log_json_file=", enabled)
         self.assertNotIn("--slim_profile", enabled)
         self.assertIn("python3 -m compact_execution_log", apple)
+        cqueries = [
+            line
+            for line in makefile.splitlines()
+            if " cquery " in line and "$(ORLIX_BAZEL)" in line
+        ]
+        self.assertEqual(len(cqueries), 9)
+        for line in cqueries:
+            self.assertIn("--execution_log_compact_file=", line)
+            self.assertNotIn("execution_log.binpb.zst", line)
+        app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        app_build = next(line for line in app.splitlines() if " build $(ORLIX_BAZEL_APP_TARGETS) " in line)
+        self.assertIn("$(ORLIX_BAZEL_BUILD_FLAGS)", app_build)
+        self.assertNotIn("--execution_log_compact_file=", app_build)
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
