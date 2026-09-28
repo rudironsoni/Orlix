@@ -116,6 +116,7 @@ apple_static_xcframework(
         "device": ["arm64"],
         "simulator": ["arm64"],
     },
+    infoplists = ["OrlixKitInfo.plist"],
     minimum_os_versions = {
         "ios": "15.0",
     },

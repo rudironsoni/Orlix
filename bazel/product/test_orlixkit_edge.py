@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import plistlib
 import unittest
 from pathlib import Path
 
@@ -124,6 +125,11 @@ class OrlixKitEdgeTests(unittest.TestCase):
         self.assertIn('"simulator": ["arm64"]', framework)
         self.assertNotIn("x86_64", framework)
         self.assertIn('"ios": "15.0"', framework)
+        self.assertIn('infoplists = ["OrlixKitInfo.plist"]', framework)
+        app_info = plistlib.loads((ROOT / "Orlix/Orlix-iOS/BazelInfo.plist").read_bytes())
+        kit_info = plistlib.loads((ROOT / "bazel/product/OrlixKitInfo.plist").read_bytes())
+        self.assertEqual(kit_info["CFBundleShortVersionString"], app_info["CFBundleShortVersionString"])
+        self.assertEqual(kit_info["CFBundleVersion"], app_info["CFBundleVersion"])
         header = (ROOT / "bazel/product/orlixkit_umbrella.h").read_text(encoding="utf-8")
         self.assertNotIn("mmap", header)
         self.assertNotIn(".elf", header)
