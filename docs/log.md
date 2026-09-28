@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Bind kernel proof to the locked artifact identity
+
+The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the locked `kernel-<profile>-<destination>` artifact-identity-v2 digest as the kernel proof subject. A live identity that disagrees with that lock entry is recorded and rejected. The raw Mach-O archive hash is not that subject. ADR 0017 ordering is unchanged, and `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-27] build | Materialize the cached UAPI Kbuild archive
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saw a disk-cache hit, then `compare_trees` reported `uapi kbuild-archive.tar (only in the second tree)`. BuildBuddy read mode sets `remote_download_outputs=minimal`, so the cached execroot omitted that declared archive. Cache equivalence now sets `remote_download_outputs=all`. The `cacheHit == true` and `runner == "disk cache hit"` gates stay in place.

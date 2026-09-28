@@ -39,6 +39,93 @@ class GraphTests(unittest.TestCase):
         with self.assertRaises(bind.BindError):
             graph.merge_subjects({"mlibc": SUBJECT}, {"mlibc": "bb" * 32})
 
+    def test_kernel_subject_uses_locked_profile_destination_identity(self) -> None:
+        identity = "ab" * 32
+        other = "cd" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "schema": 2,
+                "buildset": SUBJECT,
+                "components": {
+                    "kernel-release-iphonesimulator": {"unsigned_digest": identity},
+                    "kernel-development-iphoneos": {"unsigned_digest": other},
+                },
+            }))
+            subjects, buildset = graph.subjects_from_lock(
+                str(lock), profile="release", destination="iphonesimulator"
+            )
+            self.assertEqual(subjects["kernel"], identity)
+            self.assertEqual(buildset, SUBJECT)
+            device = graph.subjects_from_lock(str(lock), profile="development", destination="iphoneos")[0]
+            self.assertEqual(device["kernel"], other)
+            live = root / "kernel.artifact-identity-v2.sha256"
+            mismatch = root / "kernel-live-mismatch.json"
+            live.write_text(other + "\n")
+            with self.assertRaisesRegex(bind.BindError, "does not match"):
+                graph.select_matching_live_digest(subjects, "kernel", str(live), str(mismatch))
+            recorded = json.loads(mismatch.read_text())
+            self.assertEqual(recorded["component"], "kernel")
+            self.assertEqual(recorded["live_digest"], other)
+            self.assertEqual(recorded["lock_unsigned_digest"], identity)
+            live.write_text(identity + "\n")
+            self.assertEqual(
+                graph.select_matching_live_digest(subjects, "kernel", str(live), str(mismatch)),
+                str(live),
+            )
+            with self.assertRaisesRegex(bind.BindError, "kernel-release-iphoneos"):
+                graph.subjects_from_lock(str(lock), profile="release", destination="iphoneos")
+            with self.assertRaisesRegex(bind.BindError, "locked profile and destination"):
+                graph.subjects_from_lock(str(lock), profile="release", destination="macos")
+
+    def test_matching_kernel_identity_stays_blocked_without_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "buildset": TOOLCHAIN,
+                "components": {
+                    "kernel-release-iphonesimulator": {"unsigned_digest": SUBJECT},
+                },
+            }))
+            digest = root / "kernel.artifact-identity-v2.sha256"
+            digest.write_text(SUBJECT + "\n")
+            out = root / "reports"
+            self.assertEqual(graph.main([
+                "--out", str(out),
+                "--lock", str(lock),
+                "--uapi-digest", SUBJECT,
+                "--kernel-digest", str(digest),
+                "--toolchain-digest", TOOLCHAIN,
+                "--profile", "release",
+                "--destination", "iphonesimulator",
+            ]), 0)
+            report = json.loads((out / "kernel-dependency.json").read_text())
+            self.assertEqual(report["subject_digest"], SUBJECT)
+            self.assertEqual(report["result"], "blocked")
+            self.assertFalse(json.loads((out / "index.json").read_text())["complete"])
+
+    def test_lock_rejects_kernel_identity_from_another_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "components": {
+                    "kernel-release-iphonesimulator": {"unsigned_digest": SUBJECT},
+                },
+            }))
+            with self.assertRaisesRegex(bind.BindError, "does not match"):
+                graph.main([
+                    "--out", str(root / "reports"),
+                    "--lock", str(lock),
+                    "--uapi-digest", SUBJECT,
+                    "--kernel-digest", "cd" * 32,
+                    "--toolchain-digest", TOOLCHAIN,
+                    "--profile", "release",
+                    "--destination", "iphonesimulator",
+                ])
+
     def test_complete_graph_binds_evidence_and_report_digests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
