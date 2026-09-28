@@ -23,4 +23,8 @@ swift_library(
     copts = ["-swift-version", "6", "-DORLIX_BETA_OBSERVABILITY"],
     module_name = "OrlixOS",
     tags = ["manual"],
+    deps = [
+        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
+        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
+    ],
 )

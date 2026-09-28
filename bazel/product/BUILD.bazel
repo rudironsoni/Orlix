@@ -1,3 +1,4 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(":bytes_archive.bzl", "orlix_bytes_archive")
 load(":composition.bzl", "orlix_kernel_composition")
 load(":composition_stamp.bzl", "orlix_kernel_composition_stamp")
@@ -63,4 +64,18 @@ orlix_kernel_composition_stamp(
         "//conditions:default": False,
     }),
     tags = ["manual"],
+)
+
+# Apple-native link edge. Guest archives stay off this target.
+objc_library(
+    name = "OrlixKit",
+    srcs = ["orlixkit_anchor.c"],
+    alwayslink = True,
+    copts = ["-fno-objc-arc"],
+    tags = ["manual"],
+    deps = [
+        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+        "//OrlixKernel/Sources:OrlixKernelBoot",
+        "//bazel/feasibility/kernel:macho_link",
+    ],
 )
