@@ -495,6 +495,10 @@ $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lo
 	lock_after="$$(/usr/bin/shasum -a 256 "$(CURDIR)/artifacts.lock.json")"; \
 	test "$$lock_before" = "$$lock_after" || { echo "promoted substitute mutated artifacts.lock.json" >&2; exit 1; }
 
+# Cold outputs name the identity by stem (uapi.artifact-identity-v2.json, and
+# the same for mlibc and rootfs). Reconstruction extracts the staged product,
+# whose identity file is artifact-identity-v2.json. Stage the cold tree, then
+# compare that product with compare_trees and no identity-format exception.
 __bazel-reconstruct-source: __bazel-feasibility-bootstrap __bazel-reconstruct
 	@set -euo pipefail; \
 	cold="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct-source.XXXXXX")"; \
@@ -502,11 +506,13 @@ __bazel-reconstruct-source: __bazel-feasibility-bootstrap __bazel-reconstruct
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildset"])' "$(CURDIR)/artifacts.lock.json")"; \
 	for component in uapi mlibc rootfs; do \
 		label="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" label)"; \
-		digest_path="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" digest_path)"; \
+		eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
 		marker="$$(/usr/bin/basename "$$digest_path")"; \
 		rel="$$(DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" cquery "$$label" --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --execution_log_compact_file= --output=files | awk -v marker="$$marker" 'substr($$0,length($$0)-length(marker)) == "/" marker {path=$$0; count++} END {if(count != 1) exit 1; print path}')"; \
 		tree="$$(/usr/bin/dirname "$$cold/output-base/execroot/_main/$$rel")"; \
-		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import compare,sys; print(sys.argv[1], compare.compare_trees(sys.argv[2], sys.argv[3]))' "$$component" "$$tree" "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct/$$buildset/$$component"; \
+		stage="$$cold/staged/$$component"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/promotion/stage_v2_product.py" --cold-source "$$tree" --stage "$$stage" --manifest-stem "$$manifest_stem" --product-kind "$$product_kind" --product-subdir "$$product_subdir"; \
+		PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import compare,sys; print(sys.argv[1], compare.compare_trees(sys.argv[2], sys.argv[3]))' "$$component" "$$stage" "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct/$$buildset/$$component"; \
 	done
 
 __bazel-mlibc-from-uapi: __bazel-kernel-uapi
@@ -809,6 +815,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/packages" python3 -m unittest test_build_state
+	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_stage_v2_product
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_in_toto

@@ -188,6 +188,111 @@ class PromotionCompareTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "contents differ: rootfs zz-only"):
                 compare.compare_trees(str(first), str(second), component="rootfs")
 
+    def test_cold_source_matches_reconstructed_component(self) -> None:
+        from stage_v2_product import main as stage_main
+        from stage_v2_product import stage_cold_source
+
+        def identity(entries: list[dict]) -> bytes:
+            return (
+                json.dumps(
+                    {
+                        "domain": "orlix.artifact.identity",
+                        "entries": entries,
+                        "format": "artifact-identity-v2",
+                        "version": 2,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode()
+
+        cases = (
+            {
+                "stem": "uapi",
+                "kind": "tree",
+                "subdir": "product",
+                "marker": "uapi.sha256",
+                "payload": ("include/linux/unistd.h", b"header"),
+            },
+            {
+                "stem": "rootfs",
+                "kind": "manifest-files",
+                "subdir": "",
+                "marker": "source-input.sha256",
+                "payload": ("base.ext4", b"image"),
+            },
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for case in cases:
+                with self.subTest(stem=case["stem"]):
+                    source = base / case["stem"] / "source"
+                    relative, payload = case["payload"]
+                    product_root = source / case["subdir"] if case["subdir"] else source
+                    artifact = product_root / relative
+                    artifact.parent.mkdir(parents=True)
+                    artifact.write_bytes(payload)
+                    artifact.chmod(0o644)
+                    (source / case["marker"]).write_text("semantic\n", encoding="ascii")
+                    (source / "stray.bin").write_bytes(b"not-a-product-file")
+                    entries = [
+                        {
+                            "content_sha256": "00" * 32,
+                            "mode": 0o644,
+                            "path": relative,
+                            "type": "file",
+                        }
+                    ]
+                    manifest = identity(entries)
+                    (source / f"{case['stem']}.artifact-identity-v2.json").write_bytes(manifest)
+                    (source / f"{case['stem']}.artifact-identity-v2.sha256").write_text(
+                        "ab" * 32 + "\n", encoding="ascii"
+                    )
+                    reconstructed = base / case["stem"] / "reconstructed"
+                    stage_cold_source(
+                        source,
+                        reconstructed,
+                        case["stem"],
+                        case["kind"],
+                        case["subdir"],
+                    )
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        r"promotion component contents differ: component artifact-identity-v2\.json \(only in the second tree\)",
+                    ):
+                        compare.compare_trees(str(source), str(reconstructed))
+                    staged = base / case["stem"] / "staged"
+                    self.assertEqual(
+                        stage_main(
+                            [
+                                "--cold-source",
+                                str(source),
+                                "--stage",
+                                str(staged),
+                                "--manifest-stem",
+                                case["stem"],
+                                "--product-kind",
+                                case["kind"],
+                                "--product-subdir",
+                                case["subdir"],
+                            ]
+                        ),
+                        0,
+                    )
+                    self.assertEqual(
+                        compare.compare_trees(str(staged), str(reconstructed)),
+                        compare.tree_digest(staged),
+                    )
+                    self.assertTrue((staged / "artifact-identity-v2.json").is_file())
+                    self.assertFalse((staged / f"{case['stem']}.artifact-identity-v2.json").exists())
+                    self.assertFalse((staged / case["marker"]).exists())
+                    self.assertFalse((staged / "stray.bin").exists())
+                    self.assertEqual((staged / "product" / relative).read_bytes(), payload)
+                    (reconstructed / "product" / "extra.bin").write_bytes(b"unexpected")
+                    with self.assertRaisesRegex(ValueError, "contents differ: component"):
+                        compare.compare_trees(str(staged), str(reconstructed))
+
     def test_v2_component_contract_recomputes_product_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             roots = [Path(tmp) / name for name in ("a", "b")]
