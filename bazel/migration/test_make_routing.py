@@ -167,11 +167,16 @@ class MakeRoutingTests(unittest.TestCase):
             "__bazel-scenario-harness:", 1
         )[0]
         self.assertIn(
-            '.cacheHit == true and (.runner == "disk cache hit" or .runner == "remote cache hit")',
+            '.cacheHit == true and .runner == "remote cache hit"',
             equivalence,
         )
+        self.assertNotIn("disk cache hit", equivalence)
+        self.assertNotIn('--disk_cache="$$proof/disk"', equivalence)
         self.assertIn("--noremote_accept_cached", equivalence)
         self.assertNotIn("--remote_cache=", equivalence)
+        shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
+        self.assertNotIn("--noremote_accept_cached", shared_flags)
+        self.assertNotIn("--disk_cache=", shared_flags)
         self.assertIn("compare_trees", equivalence)
         self.assertIn("component=name", equivalence)
         self.assertIn("--remote_download_outputs=all", equivalence)

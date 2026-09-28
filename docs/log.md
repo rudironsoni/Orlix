@@ -7,9 +7,9 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
-## [2026-09-28] build | Let cache equivalence reuse BuildBuddy
+## [2026-09-28] build | Require a BuildBuddy hit for UAPI, mlibc, and rootfs
 
-The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stops the cache-equivalence gate from blanking the remote cache. Seed and cached UAPI, mlibc, and rootfs builds inherit BuildBuddy when CI configured it, and a cached observation accepts a BuildBuddy hit or a disk hit. The uncached side still disables the action cache, disk cache, remote-accept, compiler cache, and persistent Kbuild. Full tree comparison stays. Promotion, nightly reconstruction, TestFlight, and release still do not use BuildBuddy action results. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) requires the cache-equivalence cached side to observe `cacheHit == true` and `runner == "remote cache hit"` for UAPI, mlibc, and rootfs. Seed and cached inherit BuildBuddy and do not use a private disk cache. `remote_download_outputs=all` materializes the UAPI tree and `kbuild-archive.tar`, the mlibc sysroot tree, and the rootfs images, manifest, and digest for `compare_trees`. The uncached side is the only deliberate miss. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-09-28] build | Keep the Apple CI compact log through later Bazel commands
 

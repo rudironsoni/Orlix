@@ -64,14 +64,17 @@ BuildBuddy Cloud is the shared Bazel AC/CAS at `grpcs://remote.buildbuddy.io`. T
 The operating ceiling is 80 GB of the 100 GB monthly transfer allowance. From 0 to less than 60 GB, keep `normal`. From 60 to less than 75 GB, keep `normal` and inspect actions with high transfer. From 75 to less than 80 GB, use `conserve`. At 80 GB or more, use `off` until the billing period resets. The 20 GB reserve is not an operating target. Optimize for CI time avoided per GB transferred, not cache-hit percentage alone. Publication artifacts stay in GHCR or release storage, never BuildBuddy.
 
 The cache-equivalence gate uses independent seed, cached, and uncached output
-bases. The cached side may be a BuildBuddy hit or a disk hit for UAPI, MLibC,
-and rootfs. The uncached side still disables the action cache, disk cache,
-remote-accept, compiler cache, and persistent Kbuild. Full component-tree
-comparison covers paths, modes, symlinks, and file contents. Digest marker
-equality alone cannot satisfy this gate. The gate produces verification
-evidence without publishing artifacts or changing the signed buildset lock.
-Promotion, nightly reconstruction, TestFlight, and release still do not use
-BuildBuddy action results.
+bases. Seed and cached inherit BuildBuddy and do not use a private disk cache.
+The cached side requires `cacheHit == true` and `runner == "remote cache hit"`
+for UAPI, MLibC, and rootfs. A disk hit does not pass. The uncached side still
+disables the action cache, disk cache, and remote accept. Full component-tree
+comparison covers paths, modes, symlinks, and file contents. That comparison
+includes the UAPI directory and `kbuild-archive.tar`, the mlibc sysroot
+directory, and the rootfs images `initramfs.cpio.gz`, `base.ext4`, and
+`state.ext4` with their manifest and digest. Empty directories stay inside
+those images. Digest marker equality alone cannot satisfy this gate.
+The gate produces verification evidence without publishing artifacts or
+changing the signed buildset lock.
 
 Rootfs output representation must retain empty directories across cache
 restoration. Bazel's [tree-artifact limitation](https://github.com/bazelbuild/bazel/issues/15901)
