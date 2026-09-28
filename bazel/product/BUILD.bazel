@@ -1,3 +1,4 @@
+load("@rules_apple//apple:apple.bzl", "apple_static_xcframework")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(":bytes_archive.bzl", "orlix_bytes_archive")
 load(":composition.bzl", "orlix_kernel_composition")
@@ -103,5 +104,24 @@ objc_library(
     deps = [
         "//OrlixHostAdapter/Sources:OrlixHostAdapter",
         "//bazel/product:OrlixEngine",
+    ],
+)
+
+# Public SDK surface. The archive is static host data. Guest archives stay off this target.
+apple_static_xcframework(
+    name = "public_xcframework",
+    bundle_id = "com.rudironsoni.OrlixKit",
+    bundle_name = "OrlixKit",
+    ios = {
+        "device": ["arm64"],
+        "simulator": ["arm64"],
+    },
+    minimum_os_versions = {
+        "ios": "15.0",
+    },
+    public_hdrs = ["orlixkit_umbrella.h"],
+    tags = ["manual"],
+    deps = [
+        "//bazel/product:OrlixKit",
     ],
 )
