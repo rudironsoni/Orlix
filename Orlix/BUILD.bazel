@@ -188,12 +188,8 @@ ios_framework(
     }),
     tags = ["manual"],
     deps = [
-        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
-        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
-        "//OrlixKernel/Sources:OrlixKernelBoot",
-        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
         "//OrlixOS/Sources/Session:OrlixOS",
-        "//bazel/feasibility/kernel:macho_link",
+        "//bazel/product:OrlixKit",
     ],
 )
 
@@ -231,12 +227,8 @@ ios_application(
     visibility = ["//visibility:public"],
     deps = [
         ":OrlixAppLibrary",
-        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
-        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
-        "//OrlixKernel/Sources:OrlixKernelBoot",
-        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
-        "//bazel/feasibility/kernel:macho_link",
         "//bazel/feasibility/native:native_link_smoke",
+        "//bazel/product:OrlixKit",
     ],
 )
 
@@ -287,12 +279,8 @@ ios_application(
     tags = ["manual"],
     deps = [
         ":OrlixTestAppLibrary",
-        "//OrlixCoreUtils/Sources/Provider:OrlixCoreUtilsProvider",
-        "//OrlixHostAdapter/Sources:OrlixHostAdapter",
-        "//OrlixKernel/Sources:OrlixKernelBoot",
-        "//OrlixMLibC/Sources/Provider:OrlixMLibCProvider",
-        "//bazel/feasibility/kernel:macho_link",
         "//bazel/feasibility/native:native_link_smoke",
+        "//bazel/product:OrlixKit",
     ],
 )
 

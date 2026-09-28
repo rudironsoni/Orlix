@@ -104,7 +104,9 @@ class AppleBuildMatrixTests(unittest.TestCase):
     def test_product_app_does_not_declare_a_kernel_framework(self) -> None:
         build = (Path(__file__).resolve().parents[2] / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
         self.assertNotIn('name = "OrlixKernelFramework"', build)
-        self.assertIn("//bazel/feasibility/kernel:macho_link", build)
+        self.assertIn("//bazel/product:OrlixKit", build)
+        product = (Path(__file__).resolve().parents[2] / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertIn("//bazel/feasibility/kernel:macho_link", product)
         self.assertIn('name = "Orlix"', build)
         self.assertIn('name = "OrlixOSFramework"', build)
         self.assertIn('name = "OrlixUITests"', build)

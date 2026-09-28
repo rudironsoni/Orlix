@@ -9,8 +9,12 @@ task_of:
 blocks:
   - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
 owned_paths:
+  - "Orlix/BUILD.bazel"
+  - "OrlixOS/Sources/Session/BUILD.bazel"
   - "bazel/feasibility/analysis/providers.bzl"
   - "bazel/migration/legacy-target-map.json"
+  - "bazel/migration/test_apple_build_matrix.py"
+  - "bazel/migration/test_make_routing.py"
   - "bazel/product/**"
   - "docs/concepts/bazel-product-graph-migration.md"
   - "docs/log.md"
@@ -27,17 +31,20 @@ required_skills:
 required_role: "orlix-implementer"
 required_proof:
   - "HostAdapter composition edge is nm evidence from the Linux archive and HostAdapter archive"
+  - "OrlixKit links HostAdapter, kernel boot, and the Mach-O archive, and does not link guest archives"
 build_intents:
   - "record the HostAdapter composition edge in kernel_composition"
+  - "route the app and OrlixOS framework through the OrlixKit link edge"
 verification_intents:
   - "python unittest hostadapter edge"
+  - "python unittest OrlixKit link edge"
 ---
 
 # Implement The Bazel Apple Product Graph
 
 Determine the HostAdapter composition edge from symbol evidence. `//bazel/product:kernel_composition` reads `nm` output for the selected Linux archive, the HostAdapter static archive, and the boot archive. `undefined_kernel_symbols` is that archive's host-shaped undefined symbols, and each one must be a HostAdapter export. The boot archive must reference `_arch_boot_entry`, which the Linux archive defines. Trap imports are the callback edge. Resource and directory exports are the resource-lookup edge. The recorded archive order is `OrlixKernel.a`, then `OrlixHostAdapter`, then `OrlixKernelBoot`. Framework visibility is CoreFoundation and Foundation. Guest mlibc, Coreutils, and libc archives are rejected as link inputs. Preserve target-specific Swift language modes, all native libraries and frameworks, resources, privacy data, StoreKit configuration, entitlements, deployment targets, and signing behavior. Generate local Xcode projects and commit only the narrow Xcode Cloud bootstrap project.
 
-The app embeds OrlixKit. OrlixKit packages the Apple-native Engine, Bootloader, HostAdapter, and Kernel integration together with OrlixOS guest distribution resources. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries. Guest mlibc, Coreutils, package, and rootfs providers remain resource inputs and are not Apple-native app link dependencies.
+The app and the embedded OrlixOS framework link `//bazel/product:OrlixKit` instead of HostAdapter, kernel boot, and the Mach-O archive directly. That target packages those Apple-native link inputs and does not link guest mlibc, Coreutils, or rootfs archives. Guest rootfs and kernel boot resources stay on the OrlixOS framework. The OrlixOS module links the mlibc and Coreutils marker objects it calls. OrlixEngine, OrlixBootloader, and the public OrlixKit XCFramework remain unbuilt. The existing init component builds the guest `/init` for the initramfs. Kernel actions select the requested profile and Apple destination. Make selects artifacts through configured Bazel queries.
 
 The app uses Apple's registered bundle identifier `com.rudironsoni.Orlix`, and the Live Activity extension uses `com.rudironsoni.Orlix.live-activity`. Device builds resolve the installed Development profiles through the upstream `local_provisioning_profile` rule. The app profile includes its existing iCloud container, App Group, Push, and Fonts capabilities. The extension requests its exact application identifier from the team wildcard profile selected by Xcode. Simulator builds do not resolve device profiles. Make verifies bundle signatures and rejects unresolved or mismatched application identifiers. Existing iCloud, keychain, App Group, and widget identifiers remain stable.
 

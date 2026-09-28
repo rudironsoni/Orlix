@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Link the app through the OrlixKit edge
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) stops naming HostAdapter, kernel boot, and the Mach-O archive on the app and the OrlixOS framework. `//bazel/product:OrlixKit` packages those Apple-native link inputs. Guest rootfs resources stay on the OrlixOS framework, and the OrlixOS module keeps the mlibc and Coreutils marker objects it calls. OrlixKit does not link the guest archives. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Refresh the migration inventory after the composition recipe change
 
 The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) changed `make/bazel-migration.mk` so `__bazel-product-composition` checks the nm edge. `bazel/migration/legacy-target-map.json` now records that makefile digest. Make target lines are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

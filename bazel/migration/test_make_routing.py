@@ -551,7 +551,11 @@ class MakeRoutingTests(unittest.TestCase):
         app = (ROOT / "Orlix" / "BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/feasibility/rootfs:payload", app)
         self.assertIn("name = \"OrlixOSFramework\"", app)
-        self.assertIn("//bazel/feasibility/kernel:macho_link", app)
+        self.assertIn("//bazel/product:OrlixKit", app)
+        self.assertIn(
+            "//bazel/feasibility/kernel:macho_link",
+            (ROOT / "bazel/product/BUILD.bazel").read_text(encoding="utf-8"),
+        )
         rootfs = (ROOT / "bazel/feasibility/rootfs/BUILD.bazel").read_text(encoding="utf-8")
         self.assertIn("//bazel/promotion:promoted_rootfs", rootfs)
         self.assertIn("origin_rootfs_promoted", rootfs)
