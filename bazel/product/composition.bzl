@@ -12,6 +12,7 @@ archive, the HostAdapter link outputs, and the boot link outputs. The action-key
 probe does not claim that edge.
 """
 
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     "//bazel/providers:kernel_info.bzl",
     "OrlixKernelAppleProductInfo",
