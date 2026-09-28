@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-27] build | Record the HostAdapter composition edge from nm
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) stops writing an empty `undefined_kernel_symbols` list. `//bazel/product:kernel_composition` now reads `nm` output for the selected Linux archive, the HostAdapter static archive, and the boot archive. The edge is the archive's host-shaped undefined symbols, each of which must be a HostAdapter export. The boot archive must reference `_arch_boot_entry`. Trap imports, resource-lookup exports, archive order, and CoreFoundation/Foundation visibility are recorded with that edge. Guest mlibc, Coreutils, and libc archives are rejected as link inputs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-27] build | Materialize the cached UAPI Kbuild archive
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saw a disk-cache hit, then `compare_trees` reported `uapi kbuild-archive.tar (only in the second tree)`. BuildBuddy read mode sets `remote_download_outputs=minimal`, so the cached execroot omitted that declared archive. Cache equivalence now sets `remote_download_outputs=all`. The `cacheHit == true` and `runner == "disk cache hit"` gates stay in place.

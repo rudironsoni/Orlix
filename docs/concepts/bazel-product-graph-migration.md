@@ -6,7 +6,7 @@ tags:
   - migration
   - artifacts
   - worktrees
-updated: 2026-09-11
+updated: 2026-09-27
 summary: "Migrate Orlix to a Bazel-owned repository product graph while preserving Make, upstream build engines, proof ownership, and worktree isolation."
 relates_to:
   - "[Adopt the Bazel product graph](../objects/epic/doing/adopt-bazel-product-graph.md)"
@@ -213,7 +213,7 @@ OrlixProofReportInfo
 
 OrlixMLibC accepts `OrlixInstalledUapiInfo`. It cannot receive the Linux archive or Apple product provider. Guest packages accept `OrlixLibcSysrootInfo`. Application targets consume OrlixKit, not private component providers or guest build providers. Consumers select specific semantic artifact fields rather than inheriting a producer's complete `DefaultInfo` output set. Provenance, source manifests, proof records, and source identities are not compilation inputs unless their contents semantically affect the result.
 
-The final HostAdapter composition edge remains [UNVERIFIED] until a bounded symbol and link inventory identifies Linux archive imports, HostAdapter exports, boot entry points, callbacks, resource lookup, archive ordering, and framework visibility. This evidence cannot make guest artifacts Apple-native link dependencies.
+`//bazel/product:kernel_composition` records the HostAdapter composition edge from `nm` output. The edge is the host-shaped undefined symbols in the selected Linux archive that the HostAdapter static archive defines. The same action records the `_arch_boot_entry` boot entry, trap callback imports, HostAdapter resource-lookup exports, the archive order `OrlixKernel.a`, `OrlixHostAdapter`, `OrlixKernelBoot`, and CoreFoundation and Foundation visibility. Guest mlibc, Coreutils, and libc archives are not inputs of that action. This inventory does not prove the app link or runtime.
 
 ## Source And Promoted Modes
 

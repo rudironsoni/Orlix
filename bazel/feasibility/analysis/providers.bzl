@@ -374,8 +374,10 @@ def _kernel_composition_test_impl(ctx):
             argv = " ".join(action.argv)
             asserts.true(env, "OrlixHostAdapter" in joined)
             asserts.true(env, "OrlixKernel" in joined)
+            asserts.true(env, "hostadapter_edge.py" in joined)
             asserts.false(env, "OrlixKernel/Makefile" in argv)
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
+            asserts.false(env, '"undefined_kernel_symbols": []' in argv)
     asserts.true(env, found)
     return analysistest.end(env)
 
