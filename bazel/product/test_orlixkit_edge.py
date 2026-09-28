@@ -11,9 +11,14 @@ PRIVATE = (
     "//OrlixKernel/Sources:OrlixKernelBoot",
     "//bazel/feasibility/kernel:macho_link",
     "//bazel/product:OrlixBootloader",
+    "//bazel/product:OrlixEngine",
 )
 KIT = (
     "//OrlixHostAdapter/Sources:OrlixHostAdapter",
+    "//bazel/product:OrlixEngine",
+)
+ENGINE = (
+    "//OrlixOS/Sources/Session:OrlixOS",
     "//bazel/feasibility/kernel:macho_link",
     "//bazel/product:OrlixBootloader",
 )
@@ -40,9 +45,25 @@ class OrlixKitEdgeTests(unittest.TestCase):
         for label in KIT:
             self.assertIn(label, kit)
         self.assertNotIn("//OrlixKernel/Sources:OrlixKernelBoot", kit)
+        self.assertNotIn("OrlixBootloader", kit)
+        self.assertNotIn("macho_link", kit)
         for marker in GUEST:
             self.assertNotIn(marker, kit)
         self.assertIn("orlixkit_anchor.c", product)
+        engine = _deps(_rule(product, 'objc_library(\n    name = "OrlixEngine",'))
+        for label in ENGINE:
+            self.assertEqual(engine.count(label), 1)
+        self.assertNotIn("//OrlixHostAdapter/Sources:OrlixHostAdapter", engine)
+        self.assertNotIn("//OrlixKernel/Sources:OrlixKernelBoot", engine)
+        self.assertNotIn("OrlixKit", engine)
+        self.assertNotIn("macho_archive", engine)
+        self.assertNotIn("selected_macho", engine)
+        for marker in GUEST:
+            self.assertNotIn(marker, engine)
+        anchor = (ROOT / "bazel/product/orlixengine_anchor.c").read_text(encoding="utf-8")
+        self.assertIn("static const int orlix_engine_link_anchor", anchor)
+        self.assertNotIn("mmap", anchor)
+        self.assertNotIn(".elf", anchor)
         bootloader = _deps(_rule(product, 'objc_library(\n    name = "OrlixBootloader",'))
         self.assertIn("//OrlixHostAdapter/Sources:OrlixHostAdapter", bootloader)
         self.assertIn("//OrlixKernel/Sources:OrlixKernelBoot", bootloader)
