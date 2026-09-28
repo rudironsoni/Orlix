@@ -134,6 +134,7 @@ class HostAdapterEdgeTests(unittest.TestCase):
         self.assertIn("_edge_tool", implementation)
         self.assertIn("llvm-nm", implementation)
         self.assertIn("hostadapter_edge.py", composition)
+        self.assertIn('load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")', composition)
         self.assertNotIn('"undefined_kernel_symbols": []', implementation)
         self.assertIn('"symbol_edge": false', implementation)
         product = (ROOT / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
