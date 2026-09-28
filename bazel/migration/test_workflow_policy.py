@@ -402,7 +402,12 @@ class WorkflowPolicyTests(unittest.TestCase):
             "__bazel-scenario-harness:", 1
         )[0]
         self.assertIn("--execution_log_compact_file= --execution_log_json_file=", equivalence)
-        self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
+        self.assertIn(
+            '.cacheHit == true and (.runner == "disk cache hit" or .runner == "remote cache hit")',
+            equivalence,
+        )
+        self.assertIn("--noremote_accept_cached", equivalence)
+        self.assertNotIn("--remote_cache=", equivalence)
         self.assertIn("compare_trees", equivalence)
 
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:

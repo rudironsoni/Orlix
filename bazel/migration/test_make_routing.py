@@ -166,7 +166,12 @@ class MakeRoutingTests(unittest.TestCase):
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
-        self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
+        self.assertIn(
+            '.cacheHit == true and (.runner == "disk cache hit" or .runner == "remote cache hit")',
+            equivalence,
+        )
+        self.assertIn("--noremote_accept_cached", equivalence)
+        self.assertNotIn("--remote_cache=", equivalence)
         self.assertIn("compare_trees", equivalence)
         self.assertIn("component=name", equivalence)
         self.assertIn("--remote_download_outputs=all", equivalence)

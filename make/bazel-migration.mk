@@ -1111,27 +1111,31 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 	@lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; if rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json; then echo "source mode must not claim promoted provenance" >&2; exit 1; fi
 	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
 
-# BuildBuddy read mode sets remote_download_outputs=minimal. A disk-cache hit
-# then keeps large outputs such as kbuild-archive.tar in the cache and does not
-# copy them into the execroot. Equivalence compares those trees, so materialize
-# every output. The cacheHit and runner gates stay in place.
-# The buildbuddy config sets --execution_log_compact_file. Bazel 9.2 allows one
-# execution-log format, so this gate clears that flag and keeps the JSON log.
-# Its cquery clears the compact log too, so a zero-action query does not replace
-# execution_log.binpb.zst.
+# Seed and cached inherit the configured remote cache, including BuildBuddy
+# when CI wrote it into .bazelrc.local. This gate does not blank that cache.
+# An empty remote executor keeps remote execution off. BuildBuddy read mode
+# sets remote_download_outputs=minimal, which leaves declared outputs such as
+# kbuild-archive.tar out of the execroot. Equivalence compares those trees, so
+# materialize every output. Seed and cached keep the private disk cache. The
+# uncached side disables the action cache, that disk cache, and remote accept.
+# A cached observation is a disk-cache hit or a remote-cache hit. A miss is not
+# a hit. The buildbuddy config sets --execution_log_compact_file. Bazel 9.2
+# allows one execution-log format, so this gate clears that flag and keeps the
+# JSON log. Its cquery clears the compact log too, so a zero-action query does
+# not replace execution_log.binpb.zst.
 __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	command -v jq >/dev/null || { echo "jq is required to inspect Bazel cache execution logs" >&2; exit 1; }; \
 	proof="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/cache-equivalence.XXXXXX")"; \
-	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --remote_cache= --remote_executor= --remote_download_outputs=all --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
+	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --remote_executor= --remote_download_outputs=all --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
 	for side in seed cached uncached; do \
 		mkdir -p "$$proof/$$side"; \
 		cache_flags=(--disk_cache="$$proof/disk"); \
-		if [ "$$side" = uncached ]; then cache_flags=(--nouse_action_cache --disk_cache=); fi; \
+		if [ "$$side" = uncached ]; then cache_flags=(--nouse_action_cache --disk_cache= --noremote_accept_cached); fi; \
 		echo "cache-equivalence: $$side build, evidence $$proof/$$side"; \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" build //bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs "$${flags[@]}" "$${cache_flags[@]}" --execution_log_compact_file= --execution_log_json_file="$$proof/$$side/execution.json" --build_event_json_file="$$proof/$$side/build-events.json" --profile="$$proof/$$side/profile.json.gz"; \
 		if [ "$$side" = seed ]; then continue; fi; \
-		jq -e -s --arg side "$$side" 'map(select(.mnemonic == "OrlixLinuxHeadersInstall" or .mnemonic == "OrlixMLibCSysroot" or .mnemonic == "OrlixRootfs")) | if (map(.mnemonic) | sort) == ["OrlixLinuxHeadersInstall", "OrlixMLibCSysroot", "OrlixRootfs"] and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and (if $$side == "cached" then .cacheHit == true and .runner == "disk cache hit" else (.cacheHit // false) == false and .runner != "remote" and (.runner | length) > 0 end)) then map({mnemonic, runner, cacheHit, exitCode}) else error("required component cache behavior was not observed") end' "$$proof/$$side/execution.json" > "$$proof/$$side/cache-observation.json"; \
+		jq -e -s --arg side "$$side" 'map(select(.mnemonic == "OrlixLinuxHeadersInstall" or .mnemonic == "OrlixMLibCSysroot" or .mnemonic == "OrlixRootfs")) | if (map(.mnemonic) | sort) == ["OrlixLinuxHeadersInstall", "OrlixMLibCSysroot", "OrlixRootfs"] and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and (if $$side == "cached" then .cacheHit == true and (.runner == "disk cache hit" or .runner == "remote cache hit") else (.cacheHit // false) == false and .runner != "remote" and (.runner | length) > 0 end)) then map({mnemonic, runner, cacheHit, exitCode}) else error("required component cache behavior was not observed") end' "$$proof/$$side/execution.json" > "$$proof/$$side/cache-observation.json"; \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" cquery 'set(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs)' "$${flags[@]}" "$${cache_flags[@]}" --execution_log_compact_file= --output=files > "$$proof/$$side/outputs.txt"; \
 	done; \
 	PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -c 'import compare,json,sys; from pathlib import Path; root=Path(sys.argv[1]); outputs={side:(root/side/"outputs.txt").read_text().splitlines() for side in ("cached","uncached")}; markers={"uapi":"/uapi.sha256","mlibc":"/sysroot.sha256","rootfs":"/source-input.sha256"}; trees={side:{name:[root/side/"output-base/execroot/_main"/p for p in paths if p.endswith(marker)] for name,marker in markers.items()} for side,paths in outputs.items()}; assert all(len(matches)==1 for components in trees.values() for matches in components.values()), trees; digests={name:compare.compare_trees(str(trees["cached"][name][0].parent),str(trees["uncached"][name][0].parent),component=name) for name in markers}; (root/"comparison.json").write_text(json.dumps({"schema":1,"component_tree_digests":digests,"cache_observations":[str(root/side/"cache-observation.json") for side in outputs]},indent=2)+"\n"); print(json.dumps(digests,sort_keys=True))' "$$proof"

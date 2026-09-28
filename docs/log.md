@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Let cache equivalence reuse BuildBuddy
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stops the cache-equivalence gate from blanking the remote cache. Seed and cached UAPI, mlibc, and rootfs builds inherit BuildBuddy when CI configured it, and a cached observation accepts a BuildBuddy hit or a disk hit. The uncached side still disables the action cache, disk cache, remote-accept, compiler cache, and persistent Kbuild. Full tree comparison stays. Promotion, nightly reconstruction, TestFlight, and release still do not use BuildBuddy action results. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Keep the Apple CI compact log through later Bazel commands
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps the remote gRPC log, compact execution log, and full timing profile on `build:buildbuddy` and on the Apple CI product build. The cquery after that build, and the other cqueries, clear `--execution_log_compact_file=` so a zero-action command does not replace `execution_log.binpb.zst` before it is projected. An empty spawn projection is still rejected. `cacheHit == true`, `runner == "disk cache hit"`, and `compare_trees` stay in place. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
