@@ -28,8 +28,11 @@ required_role: "orlix-implementer"
 required_proof:
   - "kernel proof uses the locked artifact-identity-v2 digest for the selected profile and destination"
   - "a live kernel identity that disagrees with the lock is rejected"
+  - "uapi and mlibc proof inputs use the locked artifact-identity-v2 digests"
+  - "a live uapi or mlibc identity that disagrees with the lock is rejected"
 build_intents:
   - "bind kernel proof subjects to the locked profile and destination identity"
+  - "bind uapi and mlibc proof subjects to the locked artifact-identity-v2 digests"
 verification_intents:
   - "python unittest for the proof graph lock binding"
 ---
@@ -39,3 +42,5 @@ verification_intents:
 Preserve ADR 0017 ordering and current test ownership. Use analysis tests only for graph properties, execution tests for generated contents, workflow tests for automation policy, and fault injection for tampering and environment failures.
 
 Kernel-dependency, KUnit, and kselftest bind the locked `kernel-<profile>-<destination>` artifact-identity-v2 digest. The live identity for that same profile and destination must match the lock. A mismatch is recorded and rejected. The raw Mach-O archive hash is not the proof subject.
+
+The UAPI proof input and the mlibc subject for orlixmlibc and syscall-uapi bind the locked `uapi` and `mlibc` artifact-identity-v2 digests. The live UAPI identity is required and must match the lock. The live mlibc identity, when that file is present, must match the lock. A mismatch is recorded and rejected. The semantic `uapi.sha256` and `sysroot.sha256` markers are not those subjects. Rootfs and product-integration stay unbound.

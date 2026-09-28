@@ -691,12 +691,16 @@ __bazel-kernel-boot: __bazel-feasibility-bootstrap
 	/usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' "$${macho%/*}/symbols.txt" >/dev/null || /usr/bin/nm -gU "$$macho" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "OrlixKernel.a missing defined _arch_boot_entry" >&2; exit 1; }
 
 __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
-	@test -s bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
 	@set -euo pipefail; \
 	toolchain_digest="$$(/usr/bin/shasum -a 256 "$(ORLIX_BUILD_ROOT)/Bazel/toolchain.json" | /usr/bin/awk '{print $$1}')"; \
 	extra=(); \
-	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
+	uapi_identity="bazel-bin/bazel/feasibility/kernel/uapi/uapi.artifact-identity-v2.sha256"; \
+	test -s "$$uapi_identity" || { echo "missing uapi artifact-identity-v2 digest" >&2; exit 1; }; \
+	uapi_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"uapi",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" "$$uapi_identity" "$(ORLIX_BUILD_ROOT)/Bazel/proof/uapi-live-mismatch.json")"; \
+	test -n "$$uapi_digest" || { echo "uapi artifact identity does not match the lock" >&2; exit 1; }; \
+	mlibc_identity="bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256"; \
+	mlibc_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"mlibc",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" "$$mlibc_identity" "$(ORLIX_BUILD_ROOT)/Bazel/proof/mlibc-live-mismatch.json")"; \
 	rootfs_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"rootfs",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" bazel-bin/bazel/feasibility/rootfs/rootfs/source-input.sha256 "$(ORLIX_BUILD_ROOT)/Bazel/proof/rootfs-live-mismatch.json")"; \
 	kernel_identity="bazel-bin/bazel/feasibility/kernel/macho/kernel.artifact-identity-v2.sha256"; \
 	test -s "$$kernel_identity" || { echo "missing kernel artifact-identity-v2 digest" >&2; exit 1; }; \
@@ -715,7 +719,7 @@ __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 "$(CURDIR)/bazel/proof/graph.py" \
 		--out "$(ORLIX_BUILD_ROOT)/Bazel/proof" \
 		--lock "$(CURDIR)/artifacts.lock.json" \
-		--uapi-digest bazel-bin/bazel/feasibility/kernel/uapi/uapi.sha256 \
+		--uapi-digest "$$uapi_digest" \
 		--kernel-digest "$$kernel_digest" \
 		--toolchain-digest "$$toolchain_digest" \
 		--profile "$(PROFILE)" \

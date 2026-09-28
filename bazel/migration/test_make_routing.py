@@ -610,6 +610,27 @@ class MakeRoutingTests(unittest.TestCase):
         )
         self.assertNotIn("OrlixKernel.a", recipe)
 
+    def test_proof_graph_binds_locked_uapi_and_mlibc_identity(self) -> None:
+        recipe = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8").split(
+            "__bazel-proof-graph:", 1
+        )[1].split("__bazel-prove-matrix:", 1)[0]
+        self.assertIn("uapi.artifact-identity-v2.sha256", recipe)
+        self.assertIn("sysroot.artifact-identity-v2.sha256", recipe)
+        self.assertIn('select_matching_live_digest(s,"uapi"', recipe)
+        self.assertIn('select_matching_live_digest(s,"mlibc"', recipe)
+        self.assertIn("uapi-live-mismatch.json", recipe)
+        self.assertIn("mlibc-live-mismatch.json", recipe)
+        self.assertIn("missing uapi artifact-identity-v2 digest", recipe)
+        self.assertIn("uapi artifact identity does not match the lock", recipe)
+        self.assertNotIn("uapi.sha256", recipe)
+        self.assertNotIn("sysroot.sha256", recipe)
+        self.assertIn("kernel.artifact-identity-v2.sha256", recipe)
+        self.assertIn(
+            "kernel artifact identity does not match the locked profile and destination",
+            recipe,
+        )
+        self.assertIn("source-input.sha256", recipe)
+
 
 if __name__ == "__main__":
     unittest.main()
