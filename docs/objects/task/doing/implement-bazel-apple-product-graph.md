@@ -10,6 +10,7 @@ blocks:
   - "[Implement universal Apple Bazel build routing](implement-universal-apple-bazel-build-routing.md)"
 owned_paths:
   - "bazel/feasibility/analysis/providers.bzl"
+  - "bazel/migration/legacy-target-map.json"
   - "bazel/product/**"
   - "docs/concepts/bazel-product-graph-migration.md"
   - "docs/log.md"
