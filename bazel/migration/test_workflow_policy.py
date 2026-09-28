@@ -402,7 +402,17 @@ class WorkflowPolicyTests(unittest.TestCase):
             "__bazel-scenario-harness:", 1
         )[0]
         self.assertIn("--execution_log_compact_file= --execution_log_json_file=", equivalence)
-        self.assertIn('.cacheHit == true and .runner == "disk cache hit"', equivalence)
+        self.assertIn(
+            '.cacheHit == true and .runner == "remote cache hit"',
+            equivalence,
+        )
+        self.assertNotIn("disk cache hit", equivalence)
+        self.assertNotIn('--disk_cache="$$proof/disk"', equivalence)
+        self.assertIn("--noremote_accept_cached", equivalence)
+        self.assertNotIn("--remote_cache=", equivalence)
+        shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
+        self.assertNotIn("--noremote_accept_cached", shared_flags)
+        self.assertNotIn("--disk_cache=", shared_flags)
         self.assertIn("compare_trees", equivalence)
 
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
@@ -410,6 +420,24 @@ class WorkflowPolicyTests(unittest.TestCase):
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
+        seed_step = workflow.split("Stage cache-equivalence seed upload credential", 1)[1].split(
+            "Prepare both simulator runtimes", 1
+        )[0]
+        self.assertIn("steps.buildbuddy.outputs.access == 'read'", seed_step)
+        self.assertIn("steps.buildbuddy.outputs.access == 'write'", seed_step)
+        self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", seed_step)
+        self.assertNotIn("ORLIX_BUILDBUDDY_ACCESS: write", seed_step)
+        self.assertIn("chmod 600", seed_step)
+        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", seed_step)
+        apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Promoted-consumer proof", 1
+        )[0]
+        self.assertIn("steps.buildbuddy.outputs.access", apple_step)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", apple_step)
+        write_step = workflow.split("Configure trusted BuildBuddy writes", 1)[1].split(
+            "Configure read-only BuildBuddy access", 1
+        )[0]
+        self.assertIn("steps.buildbuddy.outputs.access == 'write'", write_step)
         self.assertNotIn("secrets.BUILDBUDDY_API_KEY_WRITE", workflow)
         self.assertNotIn("secrets.BUILDBUDDY_API_KEY_READ", workflow)
         self.assertIn("head.repo.full_name == github.repository", workflow)
@@ -425,6 +453,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("chmod 600", configure)
         self.assertIn("x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY", configure)
         self.assertIn("unlink", cleanup)
+        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", cleanup)
+        self.assertIn("orlix-buildbuddy-seed.bazelrc", cleanup)
         self.assertIn("if: always()", workflow.split("Remove BuildBuddy credentials", 1)[1])
 
     def test_promote_workflow_is_dispatch_and_protected(self) -> None:

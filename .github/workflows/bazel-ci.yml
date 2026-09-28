@@ -158,6 +158,19 @@ jobs:
           ORLIX_BUILDBUDDY_ACCESS: read
         run: make __bazel-buildbuddy-configure
 
+      - name: Stage cache-equivalence seed upload credential
+        if: steps.buildbuddy.outputs.access == 'read' || steps.buildbuddy.outputs.access == 'write'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${BUILDBUDDY_API_KEY}" || { echo "the cache-equivalence seed upload credential is required" >&2; exit 1; }
+          umask 077
+          key_file="$RUNNER_TEMP/orlix-buildbuddy-seed.key"
+          printf '%s\n' "$BUILDBUDDY_API_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          echo "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$key_file" >> "$GITHUB_ENV"
+
       - name: Prepare both simulator runtimes
         run: |
           set -euo pipefail
