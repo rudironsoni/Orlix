@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-29] build | Route runtime-tests through the Bazel Xcode project
+
+The [universal Apple Bazel routing task](objects/task/doing/implement-universal-apple-bazel-build-routing.md) sends `make runtime-tests` to `__bazel-test-runtime` when `ORLIX_BAZEL_AUTHORITY=1`. That runner uses the Bazel-generated `OrlixOS Runtime Tests` scheme and passes `ORLIX_PROFILE`. The default authority stays `?= 0`, and the pre-cutover `Orlix.xcodeproj` recipe stays in place. `orlix-tcti-kernel-tests` stays unrouted. Cache equivalence and `compare_trees` are unchanged.
+
 ## [2026-09-29] build | Bind product-integration to the IPA artifact identity
 
 The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the artifact-identity-v2 digest of `Orlix.ipa` as the product-integration subject. The raw IPA byte hash is not that subject. A live identity that disagrees with a locked `app` unsigned digest is recorded and rejected. Kernel, UAPI, mlibc, and rootfs lock rejection stay in place. Cache equivalence and `compare_trees` are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

@@ -875,6 +875,10 @@ app-tests: xcodeproj
 		test
 endif
 
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+runtime-tests:
+	@$(MAKE) __bazel-test-runtime
+else
 runtime-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -883,6 +887,7 @@ runtime-tests: xcodeproj
 		-destination '$(ORLIX_TEST_DESTINATION)' \
 		ORLIX_PROFILE='$(PROFILE)' \
 		test
+endif
 
 docs-index:
 	@PYTHONDONTWRITEBYTECODE=1 python3 .rulesync/skills/orlix-docs-lint/scripts/build_index.py docs
