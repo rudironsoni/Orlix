@@ -169,7 +169,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "faac207f530a60ab566cbc34f8ade95a48f5c45e988f53911dc03929fd0b774e",
+      "source_sha256": "c16f26e46827e9de1f9bf1e0911523bb7a3c77336ec5fbd3a0f4d46f41209bae",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -258,7 +258,7 @@
           "apple-ci": {
             "name": "Bazel matrix check",
             "runs-on": "macos-26",
-            "timeout-minutes": 120,
+            "timeout-minutes": 180,
             "steps": [
               {
                 "name": "Check out the exact commit",
