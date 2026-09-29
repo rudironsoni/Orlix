@@ -2,14 +2,14 @@
   "schema": 1,
   "purpose": "Exhaustive explicit target inventory for the top-level and component Orlix Makefiles.",
   "source_files": {
-    "Makefile": "d5edc20c59cbddfef185958e2a1c80a2ed17fcd67f1733ecb6450b6405202107",
+    "Makefile": "87da7bf75f2f477681df987221c21f173119e2a2ed62516b452fe7fb72be1a06",
     "Orlix/Makefile": "8857a522bac42d41214d13d23bafcc70eeab1d07bd0c9419c122783599b36d54",
     "OrlixCoreUtils/Makefile": "b3f9af85030ea1eceb64893805cbc716ce277fdbcef401a2f91ee341080d590e",
     "OrlixHostAdapter/Makefile": "aa5a9c525c5337ae2c4bf0653a61b0dc438ee143a69cdb522cb92d070ece92c2",
     "OrlixKernel/Makefile": "8206b3b2b61f63852cba9e8b3b4110ba168a70e831dfcc67770ea23aa3fd93c2",
     "OrlixMLibC/Makefile": "97e9c0e6ab14a119b47a8a83a7e046b5efaab47fe61d4ceb833ba22a77fd96b5",
     "OrlixOS/Makefile": "0db3aadfa9711c08e8a88a4ff1a0eb947007dfc3851ce7b4e8c1788dc195b878",
-    "make/bazel-migration.mk": "520e30d23bd821779cc97d0243eabc1b71d0a7480c7b7c1b6abc601153b0a8ba",
+    "make/bazel-migration.mk": "dd08c5a9d5a00ba64f6a22894a103a1a180da4887eab72efdb7269a95184ce5b",
     "make/gnu-make-contract.mk": "33975f64db094c955695e2f03759edc308ed324face23147f84d58c0e7447a06",
     "make/release.mk": "e14c32ac92025a3b6fbeb00f4b89dbc4e931a01f015163c09c10bcae27c22646",
     "make/runtime.mk": "a18aa44afaac88ce41f1a55a66e2710e4f3b48ed6e8b7867bc679d12c68b6329",
@@ -3886,7 +3886,17 @@
     {
       "name": "runtime-tests",
       "source": "Makefile",
-      "line": 878,
+      "line": 879,
+      "classification": "command",
+      "phony": true,
+      "prerequisites": [
+
+      ]
+    },
+    {
+      "name": "runtime-tests",
+      "source": "Makefile",
+      "line": 882,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3896,7 +3906,7 @@
     {
       "name": "docs-index",
       "source": "Makefile",
-      "line": 887,
+      "line": 892,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3906,7 +3916,7 @@
     {
       "name": "docs-check",
       "source": "Makefile",
-      "line": 890,
+      "line": 895,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3916,7 +3926,7 @@
     {
       "name": "agent-rules-version-check",
       "source": "Makefile",
-      "line": 898,
+      "line": 903,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3926,7 +3936,7 @@
     {
       "name": "agent-rules-generate",
       "source": "Makefile",
-      "line": 901,
+      "line": 906,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3936,7 +3946,7 @@
     {
       "name": "agent-rules-check",
       "source": "Makefile",
-      "line": 904,
+      "line": 909,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3946,7 +3956,7 @@
     {
       "name": "agent-harness-check",
       "source": "Makefile",
-      "line": 908,
+      "line": 913,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3956,7 +3966,7 @@
     {
       "name": "agent-context",
       "source": "Makefile",
-      "line": 912,
+      "line": 917,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3966,7 +3976,7 @@
     {
       "name": "agent-task-envelope",
       "source": "Makefile",
-      "line": 916,
+      "line": 921,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3976,7 +3986,7 @@
     {
       "name": "agent-capabilities",
       "source": "Makefile",
-      "line": 920,
+      "line": 925,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3986,7 +3996,7 @@
     {
       "name": "agent-rules-inventory",
       "source": "Makefile",
-      "line": 923,
+      "line": 928,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -3996,7 +4006,7 @@
     {
       "name": "agent-rules-pr-guard",
       "source": "Makefile",
-      "line": 926,
+      "line": 931,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4006,7 +4016,7 @@
     {
       "name": "agent-rules-generated-pr-check",
       "source": "Makefile",
-      "line": 930,
+      "line": 935,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4016,7 +4026,7 @@
     {
       "name": "agent-rules-generated-status-check",
       "source": "Makefile",
-      "line": 934,
+      "line": 939,
       "classification": "file-or-internal",
       "phony": false,
       "prerequisites": [
@@ -4026,7 +4036,7 @@
     {
       "name": "agent-rules-validate-write-set",
       "source": "Makefile",
-      "line": 938,
+      "line": 943,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4036,7 +4046,7 @@
     {
       "name": "agent-hooks-generate",
       "source": "Makefile",
-      "line": 941,
+      "line": 946,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4046,7 +4056,7 @@
     {
       "name": "agent-hooks-check",
       "source": "Makefile",
-      "line": 944,
+      "line": 949,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4056,7 +4066,7 @@
     {
       "name": "agent-skills-check",
       "source": "Makefile",
-      "line": 947,
+      "line": 952,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4066,7 +4076,7 @@
     {
       "name": "agent-subagents-check",
       "source": "Makefile",
-      "line": 950,
+      "line": 955,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4076,7 +4086,7 @@
     {
       "name": "agent-mcp-check",
       "source": "Makefile",
-      "line": 953,
+      "line": 958,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4086,7 +4096,7 @@
     {
       "name": "agent-permissions-check",
       "source": "Makefile",
-      "line": 956,
+      "line": 961,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4096,7 +4106,7 @@
     {
       "name": "agent-frontier",
       "source": "Makefile",
-      "line": 959,
+      "line": 964,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4106,7 +4116,7 @@
     {
       "name": "agent-graph-check",
       "source": "Makefile",
-      "line": 962,
+      "line": 967,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4116,7 +4126,7 @@
     {
       "name": "agent-status",
       "source": "Makefile",
-      "line": 965,
+      "line": 970,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4126,7 +4136,7 @@
     {
       "name": "agent-next",
       "source": "Makefile",
-      "line": 969,
+      "line": 974,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4136,7 +4146,7 @@
     {
       "name": "agent-task-envelope-check",
       "source": "Makefile",
-      "line": 973,
+      "line": 978,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4146,7 +4156,7 @@
     {
       "name": "beta-archive",
       "source": "Makefile",
-      "line": 981,
+      "line": 986,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4156,7 +4166,7 @@
     {
       "name": "beta-validate-archive",
       "source": "Makefile",
-      "line": 1028,
+      "line": 1033,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4166,7 +4176,7 @@
     {
       "name": "beta-export-options",
       "source": "Makefile",
-      "line": 1042,
+      "line": 1047,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4176,7 +4186,7 @@
     {
       "name": "beta-export-archive",
       "source": "Makefile",
-      "line": 1051,
+      "line": 1056,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4186,7 +4196,7 @@
     {
       "name": "beta-validate-export",
       "source": "Makefile",
-      "line": 1071,
+      "line": 1076,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4196,7 +4206,7 @@
     {
       "name": "beta-upload-prerequisites",
       "source": "Makefile",
-      "line": 1081,
+      "line": 1086,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4206,7 +4216,7 @@
     {
       "name": "beta-upload",
       "source": "Makefile",
-      "line": 1084,
+      "line": 1089,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4216,7 +4226,7 @@
     {
       "name": "beta-distribute",
       "source": "Makefile",
-      "line": 1094,
+      "line": 1099,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4226,7 +4236,7 @@
     {
       "name": "beta-release-report",
       "source": "Makefile",
-      "line": 1106,
+      "line": 1111,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4236,7 +4246,7 @@
     {
       "name": "app-store-release-report-check",
       "source": "Makefile",
-      "line": 1108,
+      "line": 1113,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4249,7 +4259,7 @@
     {
       "name": "app-store-promote",
       "source": "Makefile",
-      "line": 1111,
+      "line": 1116,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4259,7 +4269,7 @@
     {
       "name": "release-workflow-check",
       "source": "Makefile",
-      "line": 1121,
+      "line": 1126,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4269,7 +4279,7 @@
     {
       "name": "xcodeproj",
       "source": "Makefile",
-      "line": 1123,
+      "line": 1128,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4279,7 +4289,7 @@
     {
       "name": "build",
       "source": "Makefile",
-      "line": 1130,
+      "line": 1135,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4289,7 +4299,7 @@
     {
       "name": "__build-product",
       "source": "Makefile",
-      "line": 1132,
+      "line": 1137,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4299,7 +4309,7 @@
     {
       "name": "__build-vendor",
       "source": "Makefile",
-      "line": 1144,
+      "line": 1149,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4309,7 +4319,7 @@
     {
       "name": "rebuild",
       "source": "Makefile",
-      "line": 1147,
+      "line": 1152,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4319,7 +4329,7 @@
     {
       "name": "prepare",
       "source": "Makefile",
-      "line": 1154,
+      "line": 1159,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4329,7 +4339,7 @@
     {
       "name": "__prepare-product",
       "source": "Makefile",
-      "line": 1156,
+      "line": 1161,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4339,7 +4349,7 @@
     {
       "name": "__prepare-tcti-isa",
       "source": "Makefile",
-      "line": 1159,
+      "line": 1164,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -4349,7 +4359,7 @@
     {
       "name": "dtbs",
       "source": "Makefile",
-      "line": 1162,
+      "line": 1167,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4359,7 +4369,7 @@
     {
       "name": "kselftest",
       "source": "Makefile",
-      "line": 1162,
+      "line": 1167,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4369,7 +4379,7 @@
     {
       "name": "kselftest-install",
       "source": "Makefile",
-      "line": 1162,
+      "line": 1167,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4379,7 +4389,7 @@
     {
       "name": "kunit",
       "source": "Makefile",
-      "line": 1162,
+      "line": 1167,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4389,7 +4399,7 @@
     {
       "name": "scripts",
       "source": "Makefile",
-      "line": 1162,
+      "line": 1167,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4399,7 +4409,7 @@
     {
       "name": "test",
       "source": "Makefile",
-      "line": 1165,
+      "line": 1170,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4409,7 +4419,7 @@
     {
       "name": "headers_install",
       "source": "Makefile",
-      "line": 1172,
+      "line": 1177,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4419,7 +4429,7 @@
     {
       "name": "run",
       "source": "Makefile",
-      "line": 1179,
+      "line": 1184,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4429,7 +4439,7 @@
     {
       "name": "clean",
       "source": "Makefile",
-      "line": 1182,
+      "line": 1187,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4439,7 +4449,7 @@
     {
       "name": "mrproper",
       "source": "Makefile",
-      "line": 1189,
+      "line": 1194,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4449,7 +4459,7 @@
     {
       "name": "terminal-mux-tests",
       "source": "Makefile",
-      "line": 1196,
+      "line": 1201,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -4459,7 +4469,7 @@
     {
       "name": "console-policy-tests",
       "source": "Makefile",
-      "line": 1204,
+      "line": 1209,
       "classification": "command",
       "phony": true,
       "prerequisites": [
@@ -6104,6 +6114,16 @@
       ]
     },
     {
+      "name": "__bazel-test-runtime",
+      "source": "make/bazel-migration.mk",
+      "line": 852,
+      "classification": "private",
+      "phony": true,
+      "prerequisites": [
+        "__bazel-feasibility-xcodeproj"
+      ]
+    },
+    {
       "name": "__bazel-test-terminal-surface",
       "source": "make/bazel-migration.mk",
       "line": 852,
@@ -6116,7 +6136,7 @@
     {
       "name": "__bazel-orlix-app",
       "source": "make/bazel-migration.mk",
-      "line": 878,
+      "line": 880,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6129,7 +6149,7 @@
     {
       "name": "__bazel-product-app",
       "source": "make/bazel-migration.mk",
-      "line": 923,
+      "line": 925,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6142,7 +6162,7 @@
     {
       "name": "__builder-component-mode",
       "source": "make/bazel-migration.mk",
-      "line": 955,
+      "line": 957,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6152,7 +6172,7 @@
     {
       "name": "__builder-package-ipa",
       "source": "make/bazel-migration.mk",
-      "line": 975,
+      "line": 977,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6162,7 +6182,7 @@
     {
       "name": "__bazel-orlix-archive",
       "source": "make/bazel-migration.mk",
-      "line": 1004,
+      "line": 1006,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6173,7 +6193,7 @@
     {
       "name": "__bazel-apple-ci",
       "source": "make/bazel-migration.mk",
-      "line": 1019,
+      "line": 1021,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6183,7 +6203,7 @@
     {
       "name": "__bazel-simulator-runtime-proof",
       "source": "make/bazel-migration.mk",
-      "line": 1055,
+      "line": 1057,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6193,7 +6213,7 @@
     {
       "name": "__bazel-current-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1082,
+      "line": 1084,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6203,7 +6223,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1085,
+      "line": 1087,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6213,7 +6233,7 @@
     {
       "name": "__bazel-xctest-runtime-proof",
       "source": "make/bazel-migration.mk",
-      "line": 1090,
+      "line": 1092,
       "classification": "private",
       "phony": false,
       "prerequisites": [
@@ -6223,7 +6243,7 @@
     {
       "name": "__bazel-hostadapter",
       "source": "make/bazel-migration.mk",
-      "line": 1115,
+      "line": 1117,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6233,7 +6253,7 @@
     {
       "name": "__bazel-product-composition",
       "source": "make/bazel-migration.mk",
-      "line": 1118,
+      "line": 1120,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6244,7 +6264,7 @@
     {
       "name": "__bazel-cache-equivalence",
       "source": "make/bazel-migration.mk",
-      "line": 1151,
+      "line": 1153,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6254,7 +6274,7 @@
     {
       "name": "__bazel-scenario-harness",
       "source": "make/bazel-migration.mk",
-      "line": 1205,
+      "line": 1207,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -6264,7 +6284,7 @@
     {
       "name": "__bazel-routing-contract",
       "source": "make/bazel-migration.mk",
-      "line": 1244,
+      "line": 1246,
       "classification": "private",
       "phony": true,
       "prerequisites": [

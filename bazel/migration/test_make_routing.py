@@ -130,6 +130,24 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("test")
         self.assertIn("__bazel-matrix-check", output)
 
+    def test_runtime_tests_use_bazel_runtime_scheme(self) -> None:
+        output = _dry_run("runtime-tests")
+        self.assertIn("__bazel-test-runtime", output)
+        self.assertNotIn("-project Orlix.xcodeproj", output)
+        launched = _dry_run("__bazel-test-runtime")
+        self.assertIn("OrlixBazelFeasibility.xcodeproj", launched)
+        self.assertIn('test_scheme="OrlixOS Runtime Tests"', launched)
+        self.assertIn('test_filter="OrlixOSRuntimeTests"', launched)
+        self.assertIn('test_filters+=("ORLIX_PROFILE=release")', launched)
+        self.assertIn(
+            'test_filters+=("ORLIX_PROFILE=$(PROFILE)")',
+            (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8"),
+        )
+        kept = _dry_run("runtime-tests", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertIn("-project Orlix.xcodeproj", kept)
+        self.assertIn('scheme "OrlixOS Runtime Tests"', kept)
+        self.assertNotIn("__bazel-test-runtime", kept)
+
     def test_app_tests_use_bazel_project_and_existing_suites(self) -> None:
         output = _dry_run("app-tests")
         self.assertIn("__bazel-test-app", output)

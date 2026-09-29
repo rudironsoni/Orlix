@@ -182,8 +182,8 @@
     {
       "public_name": "runtime-tests",
       "later_bazel": "OrlixOS session proof",
-      "now": "Make runtime-tests uses the Bazel-generated Xcode project after the ADR 0037 cutover.",
-      "bazel_shadow": "__bazel-feasibility-xcodeproj"
+      "now": "Make runtime-tests runs the OrlixOS Runtime Tests scheme from the Bazel-generated Xcode project when ORLIX_BAZEL_AUTHORITY=1. Default authority stays unchanged until the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-test-runtime"
     },
     {
       "public_name": "ios15-simulator-gate",

@@ -5,7 +5,7 @@ tags:
   - bazel
   - apple
   - build-system
-updated: 2026-09-10
+updated: 2026-09-29
 status: doing
 summary: "Make Bazel the product build authority for every supported Apple target while retaining Make as the public interface."
 task_of:
@@ -15,6 +15,34 @@ depends_on:
   - "[Implement the Bazel Apple product graph](implement-bazel-apple-product-graph.md)"
 blocks:
   - "[Prove all supported Apple builds and feature gates](../doing/prove-all-supported-apple-builds-and-feature-gates.md)"
+owned_paths:
+  - "Makefile"
+  - "bazel/migration/apple-build-matrix.json"
+  - "bazel/migration/legacy-target-map.json"
+  - "bazel/migration/proof-map.json"
+  - "bazel/migration/test_apple_build_matrix.py"
+  - "bazel/migration/test_make_routing.py"
+  - "docs/concepts/bazel-product-graph-migration.md"
+  - "docs/log.md"
+  - "docs/objects/task/doing/implement-universal-apple-bazel-build-routing.md"
+  - "make/bazel-migration.mk"
+read_only_paths:
+  - ".github/workflows/**"
+  - "artifacts.lock.json"
+forbidden_paths:
+  - ".github/workflows/bazel-ci.yml"
+required_skills:
+  - "orlix-bazel"
+  - "orlix-implementation-boundaries"
+required_role: "orlix-implementer"
+required_proof:
+  - "ORLIX_BAZEL_AUTHORITY=1 routes runtime-tests through the Bazel-generated OrlixOS Runtime Tests scheme"
+  - "default authority stays ?= 0 and the pre-cutover runtime-tests recipe stays in place"
+build_intents:
+  - "route runtime-tests through the Bazel-generated Xcode project"
+verification_intents:
+  - "python unittest make routing"
+  - "python unittest apple build matrix"
 ---
 
 # Implement Universal Apple Bazel Build Routing
@@ -34,6 +62,6 @@ Do not make Bazel invoke the repository top-level or component wrapper Makefiles
 
 Acceptance requires a graph and workflow audit showing no Apple build surface bypasses Bazel, no Xcode phase owns product compilation, every supported matrix row selects the correct target and deployment setting, and private Kernel, Bootloader, HostAdapter, Engine implementation, mlibc, Coreutils, packages, and rootfs products are not exposed as direct app dependencies. Guest distribution artifacts are packaged or referenced through OrlixKit resources.
 
-With `ORLIX_BAZEL_AUTHORITY=1`, `make app-tests` selects the Bazel-owned native app suite and the existing architecture invariant suite through the shared Make test runner. `ORLIX_APP_TEST_ONLY_TESTING` can select an app test without changing the architecture checks. The default authority remains unchanged until cutover.
+With `ORLIX_BAZEL_AUTHORITY=1`, `make app-tests` selects the Bazel-owned native app suite and the existing architecture invariant suite through the shared Make test runner. `ORLIX_APP_TEST_ONLY_TESTING` can select an app test without changing the architecture checks. The same authority routes `make runtime-tests` through `__bazel-test-runtime`, which runs the OrlixOS Runtime Tests scheme from the Bazel-generated Xcode project and passes `ORLIX_PROFILE`. `orlix-tcti-kernel-tests` stays on the current Make path. The default authority remains unchanged until cutover.
 
 Make passes `ORLIX_PINNED_DEVELOPER_DIR` to custom component rules, which set `DEVELOPER_DIR` only for their own actions. Standard Apple actions select both compiler and SDK through Bazel's Xcode version setting. Global `DEVELOPER_DIR` action overrides must not mix the selected compiler with the system-default SDK.
