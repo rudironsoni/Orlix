@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-29] build | Route coreutils-tests through the Bazel Xcode project
+
+The [universal Apple Bazel routing task](objects/task/doing/implement-universal-apple-bazel-build-routing.md) sends `make coreutils-tests` to `__bazel-test-coreutils` when `ORLIX_BAZEL_AUTHORITY=1`. The Coreutils build and `coreutils-test-initramfs` stay on Make. The runner uses the Bazel-generated `OrlixPackages Conformance` scheme, `ORLIX_PROFILE`, and `ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES`. `hostadapter-tests` stays on `Orlix.xcodeproj`. The default authority stays `?= 0`. `orlix-tcti-kernel-tests` stays unrouted. Cache equivalence and `compare_trees` are unchanged.
+
 ## [2026-09-29] build | Route mlibc-tests through the Bazel Xcode project
 
 The [universal Apple Bazel routing task](objects/task/doing/implement-universal-apple-bazel-build-routing.md) sends `make mlibc-tests` to `__bazel-test-mlibc` when `ORLIX_BAZEL_AUTHORITY=1`. That runner uses the Bazel-generated `OrlixMLibC Conformance` scheme, the existing only-testing filter, `ORLIX_PROFILE`, and `ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES`. The generated project has no `OrlixHostAdapter Tests` scheme, so `hostadapter-tests` stays on `Orlix.xcodeproj`. The default authority stays `?= 0`. `orlix-tcti-kernel-tests` stays unrouted. Cache equivalence and `compare_trees` are unchanged.

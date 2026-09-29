@@ -804,6 +804,12 @@ mlibc-tests: xcodeproj
 		test
 endif
 
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+coreutils-tests:
+	@$(COREUTILS_MAKE) build PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
+	@$(ORLIXOS_MAKE) coreutils-test-initramfs PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
+	@$(MAKE) __bazel-test-coreutils
+else
 coreutils-tests: xcodeproj
 	@$(COREUTILS_MAKE) build PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
 	@$(ORLIXOS_MAKE) coreutils-test-initramfs PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
@@ -815,6 +821,7 @@ coreutils-tests: xcodeproj
 		ORLIX_PROFILE='$(PROFILE)' \
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
 		test
+endif
 
 hostadapter-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

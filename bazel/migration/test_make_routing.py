@@ -130,6 +130,26 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("test")
         self.assertIn("__bazel-matrix-check", output)
 
+    def test_coreutils_tests_use_bazel_conformance_scheme(self) -> None:
+        output = _dry_run("coreutils-tests")
+        self.assertIn("__bazel-test-coreutils", output)
+        self.assertIn("OrlixCoreUtils/Makefile", output)
+        self.assertIn("coreutils-test-initramfs", output)
+        self.assertNotIn("-project Orlix.xcodeproj", output)
+        launched = _dry_run("__bazel-test-coreutils")
+        self.assertIn("OrlixBazelFeasibility.xcodeproj", launched)
+        self.assertIn('test_scheme="OrlixPackages Conformance"', launched)
+        self.assertIn('test_filter="OrlixPackagesConformanceTests"', launched)
+        self.assertIn(
+            'test_filters+=("ORLIX_PROFILE=release" "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES")',
+            launched,
+        )
+        kept = _dry_run("coreutils-tests", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertIn("-project Orlix.xcodeproj", kept)
+        self.assertIn('scheme "OrlixPackages Conformance"', kept)
+        self.assertIn("coreutils-test-initramfs", kept)
+        self.assertNotIn("__bazel-test-coreutils", kept)
+
     def test_mlibc_tests_use_bazel_conformance_scheme(self) -> None:
         output = _dry_run("mlibc-tests")
         self.assertIn("__bazel-test-mlibc", output)

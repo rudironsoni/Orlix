@@ -812,6 +812,7 @@ __bazel-apple-routing-check:
 	@rg -A3 '^rebuild:' Makefile | rg -F -q '__bazel-orlix-app'
 	@rg -A3 '^runtime-tests:' Makefile | rg -F -q '__bazel-test-runtime'
 	@rg -A3 '^mlibc-tests:' Makefile | rg -F -q '__bazel-test-mlibc'
+	@rg -A4 '^coreutils-tests:' Makefile | rg -F -q '__bazel-test-coreutils'
 	@rg -F -q 'ORLIX_BAZEL_AUTHORITY),1' Makefile
 	@rg -q '^common --repository_cache=~/Library/Caches/Orlix/Bazel/repository-cache$$' .bazelrc
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_make_routing
@@ -861,8 +862,8 @@ __bazel-orlixos: __bazel-feasibility-bootstrap
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //OrlixOS/Sources/Session:OrlixOS //Orlix:OrlixOSFramework //OrlixOSTestApp:OrlixOSTestApp //OrlixOSTestApp:OrlixOSTestAppTests //OrlixOSTestApp:OrlixKernelConformanceTests //OrlixOSTestApp:OrlixMLibCConformanceTests //OrlixOSTestApp:OrlixPackagesConformanceTests //OrlixOSTestApp:OrlixOSRuntimeTests --compilation_mode=dbg --config=release --config=source --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"
 	@test -s bazel-bin/OrlixOS/Sources/Session/libOrlixOS.a
 
-.PHONY: __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface __bazel-test-app __bazel-test-app-architecture __bazel-test-runtime __bazel-test-mlibc
-__bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface __bazel-test-app __bazel-test-app-architecture __bazel-test-runtime __bazel-test-mlibc: __bazel-feasibility-xcodeproj
+.PHONY: __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface __bazel-test-app __bazel-test-app-architecture __bazel-test-runtime __bazel-test-mlibc __bazel-test-coreutils
+__bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surface __bazel-test-app __bazel-test-app-architecture __bazel-test-runtime __bazel-test-mlibc __bazel-test-coreutils: __bazel-feasibility-xcodeproj
 	@set -euo pipefail; \
 	case "$@" in \
 		__bazel-test-app) test_scheme="Orlix Tests"; test_filter="$(or $(ORLIX_APP_TEST_ONLY_TESTING),OrlixTests)" ;; \
@@ -872,11 +873,13 @@ __bazel-test-output-parser __bazel-test-native-smoke __bazel-test-terminal-surfa
 		__bazel-test-terminal-surface) test_scheme="OrlixUITests"; test_filter="$(or $(ORLIX_APP_TEST_ONLY_TESTING),OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal)" ;; \
 		__bazel-test-runtime) test_scheme="OrlixOS Runtime Tests"; test_filter="OrlixOSRuntimeTests" ;; \
 		__bazel-test-mlibc) test_scheme="OrlixMLibC Conformance"; test_filter="$(ORLIX_MLIBC_TEST_ONLY_TESTING)" ;; \
+		__bazel-test-coreutils) test_scheme="OrlixPackages Conformance"; test_filter="OrlixPackagesConformanceTests" ;; \
 	esac; \
 	test_filters=("-only-testing:$$test_filter"); \
 	if [ "$@" = "__bazel-test-terminal-surface" ] && [ -z "$(ORLIX_APP_TEST_ONLY_TESTING)" ]; then test_filters+=("-only-testing:OrlixUITests/TerminalProductionSSHUITests/testProductionSSHBackgroundPreservesSessionKeyboardAndTyping"); fi; \
 	if [ "$@" = "__bazel-test-runtime" ]; then test_filters+=("ORLIX_PROFILE=$(PROFILE)"); fi; \
 	if [ "$@" = "__bazel-test-mlibc" ]; then test_filters+=("ORLIX_PROFILE=$(PROFILE)" "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES"); fi; \
+	if [ "$@" = "__bazel-test-coreutils" ]; then test_filters+=("ORLIX_PROFILE=$(PROFILE)" "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES"); fi; \
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"; \
 	result_dir="$$(mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/proof/$(patsubst __bazel-test-%,%,$@).XXXXXX")"; \
 	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild \
