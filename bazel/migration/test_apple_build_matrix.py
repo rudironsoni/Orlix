@@ -91,6 +91,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertEqual(ops["test"]["bazel_shadow"], "__bazel-matrix-check")
         self.assertEqual(ops["rebuild"]["bazel_shadow"], "__bazel-orlix-app")
         self.assertEqual(ops["runtime-tests"]["bazel_shadow"], "__bazel-test-runtime")
+        self.assertEqual(ops["mlibc-tests"]["bazel_shadow"], "__bazel-test-mlibc")
         self.assertEqual(ops["ios15-simulator-gate"]["bazel_shadow"], "__bazel-ios15-simulator-gate")
         self.assertEqual(ops["beta-archive"]["bazel_shadow"], "__bazel-orlix-archive")
         self.assertIn("ADR 0037 cutover", ops["xcodeproj"]["now"])
@@ -98,6 +99,7 @@ class AppleBuildMatrixTests(unittest.TestCase):
         self.assertIn("ADR 0037 cutover", ops["test"]["now"])
         self.assertIn("ADR 0037 cutover", ops["rebuild"]["now"])
         self.assertIn("ADR 0037 cutover", ops["runtime-tests"]["now"])
+        self.assertIn("ADR 0037 cutover", ops["mlibc-tests"]["now"])
         self.assertIn("ADR 0037 cutover", ops["ios15-simulator-gate"]["now"])
         self.assertIn("ADR 0037 cutover", ops["beta-archive"]["now"])
 

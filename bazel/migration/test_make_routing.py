@@ -130,6 +130,34 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("test")
         self.assertIn("__bazel-matrix-check", output)
 
+    def test_mlibc_tests_use_bazel_conformance_scheme(self) -> None:
+        output = _dry_run("mlibc-tests")
+        self.assertIn("__bazel-test-mlibc", output)
+        self.assertNotIn("-project Orlix.xcodeproj", output)
+        launched = _dry_run("__bazel-test-mlibc")
+        self.assertIn("OrlixBazelFeasibility.xcodeproj", launched)
+        self.assertIn('test_scheme="OrlixMLibC Conformance"', launched)
+        self.assertIn(
+            'test_filter="OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"',
+            launched,
+        )
+        self.assertIn(
+            'test_filters+=("ORLIX_PROFILE=release" "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES")',
+            launched,
+        )
+        self.assertIn(
+            'test_filters+=("ORLIX_PROFILE=$(PROFILE)" "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES")',
+            (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8"),
+        )
+        kept = _dry_run("mlibc-tests", "ORLIX_BAZEL_AUTHORITY=0")
+        self.assertIn("-project Orlix.xcodeproj", kept)
+        self.assertIn('scheme "OrlixMLibC Conformance"', kept)
+        self.assertIn(
+            "-only-testing:OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession",
+            kept,
+        )
+        self.assertNotIn("__bazel-test-mlibc", kept)
+
     def test_runtime_tests_use_bazel_runtime_scheme(self) -> None:
         output = _dry_run("runtime-tests")
         self.assertIn("__bazel-test-runtime", output)
