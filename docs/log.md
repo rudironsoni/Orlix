@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-29] build | Bind rootfs proof to the locked artifact identity
+
+The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the locked `rootfs` artifact-identity-v2 digest for POSIX shell, jq, curl, and zsh. A live identity that disagrees with the lock is recorded and rejected. The semantic source-input marker is not that subject. Kernel, UAPI, and mlibc lock rejection stay in place. Product-integration stays unbound. Cache equivalence and `compare_trees` are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Version the public OrlixKit XCFramework
 
 The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) gives `//bazel/product:public_xcframework` the same `CFBundleShortVersionString` and `CFBundleVersion` as the Orlix app Info.plist. Apple CI still builds that target. Guest archives stay off the link. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
