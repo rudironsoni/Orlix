@@ -202,6 +202,90 @@ class GraphTests(unittest.TestCase):
                     "--destination", "iphonesimulator",
                 ])
 
+    def test_rootfs_uses_locked_artifact_identity(self) -> None:
+        uapi = "11" * 32
+        rootfs = "44" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "buildset": TOOLCHAIN,
+                "components": {
+                    "uapi": {"unsigned_digest": uapi},
+                    "mlibc": {"unsigned_digest": SUBJECT},
+                    "rootfs": {"unsigned_digest": rootfs},
+                    "kernel-release-iphonesimulator": {"unsigned_digest": SUBJECT},
+                },
+            }))
+            subjects = graph.subjects_from_lock(
+                str(lock), profile="release", destination="iphonesimulator"
+            )[0]
+            self.assertEqual(subjects["rootfs"], rootfs)
+            rootfs_live = root / "rootfs.artifact-identity-v2.sha256"
+            rootfs_mismatch = root / "rootfs-live-mismatch.json"
+            rootfs_live.write_text(("ee" * 32) + "\n")
+            with self.assertRaisesRegex(bind.BindError, "rootfs"):
+                graph.select_matching_live_digest(subjects, "rootfs", str(rootfs_live), str(rootfs_mismatch))
+            recorded = json.loads(rootfs_mismatch.read_text())
+            self.assertEqual(recorded["component"], "rootfs")
+            self.assertEqual(recorded["lock_unsigned_digest"], rootfs)
+            self.assertIsNone(graph.select_matching_live_digest(
+                subjects, "rootfs", str(root / "missing-rootfs.artifact-identity-v2.sha256")
+            ))
+            rootfs_live.write_text(rootfs + "\n")
+            uapi_live = root / "uapi.artifact-identity-v2.sha256"
+            uapi_live.write_text(uapi + "\n")
+            evidence = []
+            for tier, marker in (
+                ("kernel-dependency", "Run /init as init process\n"),
+                ("kunit", "ORLIX-KSELFTEST-END\n"),
+                ("kselftest", "ORLIX-KSELFTEST-END\n"),
+                ("orlixmlibc", "ORLIX-MLIBC-TEST-END\n"),
+                ("syscall-uapi", "ORLIX-KSELFTEST-END\n"),
+            ):
+                path = write_evidence(root, tier, marker, TOOLCHAIN)
+                evidence.extend(["--evidence", f"{tier}={path}"])
+            out = root / "reports"
+            self.assertEqual(graph.main([
+                "--out", str(out),
+                "--lock", str(lock),
+                "--uapi-digest", str(uapi_live),
+                "--kernel-digest", SUBJECT,
+                "--mlibc-digest", SUBJECT,
+                "--rootfs-digest", str(rootfs_live),
+                "--toolchain-digest", TOOLCHAIN,
+                "--profile", "release",
+                "--destination", "iphonesimulator",
+                *evidence,
+            ]), 0)
+            index = json.loads((out / "index.json").read_text())
+            self.assertEqual(index["reports"], [
+                "kernel-dependency:pass",
+                "kunit:pass",
+                "kselftest:pass",
+                "orlixmlibc:pass",
+                "syscall-uapi:pass",
+                "posix-shell:blocked",
+            ])
+            report = json.loads((out / "posix-shell.json").read_text())
+            self.assertEqual(report["subject_digest"], rootfs)
+            self.assertEqual(report["owner"], "OrlixOS")
+            self.assertEqual(report["result"], "blocked")
+            self.assertFalse((out / "jq.json").exists())
+            self.assertFalse((out / "product-integration.json").exists())
+            with self.assertRaisesRegex(bind.BindError, "rootfs"):
+                graph.main([
+                    "--out", str(root / "rejected-rootfs"),
+                    "--lock", str(lock),
+                    "--uapi-digest", uapi,
+                    "--kernel-digest", SUBJECT,
+                    "--mlibc-digest", SUBJECT,
+                    "--rootfs-digest", "ee" * 32,
+                    "--toolchain-digest", TOOLCHAIN,
+                    "--profile", "release",
+                    "--destination", "iphonesimulator",
+                ])
+
     def test_lock_rejects_kernel_identity_from_another_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
