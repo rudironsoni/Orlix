@@ -498,15 +498,27 @@ $(ORLIX_BUILD_ROOT)/Bazel/proof/promoted-components.json: $(CURDIR)/artifacts.lo
 	test "$$lock_before" = "$$lock_after" || { echo "promoted substitute mutated artifacts.lock.json" >&2; exit 1; }
 
 # Cold outputs name the identity by stem (uapi.artifact-identity-v2.json, and
-# the same for mlibc and rootfs). Reconstruction extracts the staged product,
-# whose identity file is artifact-identity-v2.json. Stage the cold tree, then
-# compare that product with compare_trees and no identity-format exception.
+# the same for mlibc and rootfs). Those manifests are separate actions. A
+# rootfs build does not request the UAPI or mlibc manifests. Request each
+# component label, stage that product, then compare_trees with no identity
+# format exception.
 __bazel-reconstruct-source: __bazel-feasibility-bootstrap __bazel-reconstruct
 	@set -euo pipefail; \
 	cold="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/reconstruct-source.XXXXXX")"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build //bazel/feasibility/rootfs:rootfs --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --disk_cache= --remote_cache= --remote_executor= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
+	components="uapi mlibc rootfs"; \
+	build_labels=""; \
+	label_count=0; \
+	for component in $$components; do \
+		label="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" label)"; \
+		test -n "$$label" || { echo "missing cold reconstruction label for $$component" >&2; exit 1; }; \
+		build_labels="$$build_labels $$label"; \
+		label_count="$$((label_count + 1))"; \
+	done; \
+	test "$$label_count" -eq 3 || { echo "cold reconstruction must build uapi, mlibc, and rootfs" >&2; exit 1; }; \
+	set -- $$build_labels; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$$cold/output-base" build "$$@" --nouse_action_cache --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --disk_cache= --remote_cache= --remote_executor= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildset"])' "$(CURDIR)/artifacts.lock.json")"; \
-	for component in uapi mlibc rootfs; do \
+	for component in $$components; do \
 		label="$$(python3 "$(CURDIR)/bazel/promotion/components.py" --field "$$component" label)"; \
 		eval "$$(python3 "$(CURDIR)/bazel/promotion/components.py" --shell "$$component")"; \
 		marker="$$(/usr/bin/basename "$$digest_path")"; \

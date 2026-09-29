@@ -636,6 +636,11 @@ test "$1" = --remote_upload_local_results=true
         recipe = makefile.split("__bazel-reconstruct-source:", 1)[1].split(
             "\n__bazel-mlibc-from-uapi:", 1
         )[0]
+        self.assertIn('components="uapi mlibc rootfs"', recipe)
+        self.assertIn('--field "$$component" label', recipe)
+        self.assertIn('build "$$@"', recipe)
+        self.assertIn('test "$$label_count" -eq 3', recipe)
+        self.assertNotIn("build //bazel/feasibility/rootfs:rootfs --nouse_action_cache", recipe)
         self.assertIn("stage_v2_product.py", recipe)
         self.assertIn('--cold-source "$$tree"', recipe)
         self.assertIn("--manifest-stem", recipe)
