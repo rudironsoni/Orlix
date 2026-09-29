@@ -7,6 +7,14 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-28] build | Version the public OrlixKit XCFramework
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) gives `//bazel/product:public_xcframework` the same `CFBundleShortVersionString` and `CFBundleVersion` as the Orlix app Info.plist. Apple CI still builds that target. Guest archives stay off the link. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-09-28] build | Package the public OrlixKit XCFramework
+
+The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds `//bazel/product:public_xcframework`. It packages `//bazel/product:OrlixKit` as `OrlixKit.xcframework` for iOS device and simulator arm64. Guest archives stay off that link. The Apple CI app build requests the target. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-28] build | Host one OrlixOS from OrlixEngine
 
 The [Apple product graph task](objects/task/doing/implement-bazel-apple-product-graph.md) adds `//bazel/product:OrlixEngine`. It links `OrlixBootloader`, the OrlixOS session module, and one Mach-O kernel archive. `//bazel/product:OrlixKit` links that target instead of naming the Bootloader or the kernel archive. Guest archives stay off the Engine link. The public XCFramework remains unbuilt. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

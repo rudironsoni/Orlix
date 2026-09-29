@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import plistlib
 import unittest
 from pathlib import Path
 
@@ -109,6 +110,35 @@ class OrlixKitEdgeTests(unittest.TestCase):
         self.assertNotIn('"undefined_kernel_symbols": []', makefile)
         composition = (ROOT / "bazel/product/composition.bzl").read_text(encoding="utf-8")
         self.assertIn('load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")', composition)
+
+    def test_public_xcframework_packages_the_kit_edge(self) -> None:
+        product = (ROOT / "bazel/product/BUILD.bazel").read_text(encoding="utf-8")
+        framework = _rule(product, 'apple_static_xcframework(\n    name = "public_xcframework",')
+        deps = _deps(framework)
+        self.assertEqual(deps.count("//bazel/product:OrlixKit"), 1)
+        for label in PRIVATE:
+            self.assertNotIn(label, deps)
+        for marker in GUEST:
+            self.assertNotIn(marker, framework)
+        self.assertIn('bundle_name = "OrlixKit"', framework)
+        self.assertIn('"device": ["arm64"]', framework)
+        self.assertIn('"simulator": ["arm64"]', framework)
+        self.assertNotIn("x86_64", framework)
+        self.assertIn('"ios": "15.0"', framework)
+        self.assertIn('infoplists = ["OrlixKitInfo.plist"]', framework)
+        app_info = plistlib.loads((ROOT / "Orlix/Orlix-iOS/BazelInfo.plist").read_bytes())
+        kit_info = plistlib.loads((ROOT / "bazel/product/OrlixKitInfo.plist").read_bytes())
+        self.assertEqual(kit_info["CFBundleShortVersionString"], app_info["CFBundleShortVersionString"])
+        self.assertEqual(kit_info["CFBundleVersion"], app_info["CFBundleVersion"])
+        header = (ROOT / "bazel/product/orlixkit_umbrella.h").read_text(encoding="utf-8")
+        self.assertNotIn("mmap", header)
+        self.assertNotIn(".elf", header)
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertNotIn("OrlixKit", makefile)
+        self.assertIn(
+            "build $(ORLIX_BAZEL_APP_TARGETS) //bazel/product:public_xcframework ",
+            makefile,
+        )
 
 
 if __name__ == "__main__":

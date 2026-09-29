@@ -1,0 +1,1 @@
+/* Public OrlixKit packaging surface. Guest ELF text stays host data. */
