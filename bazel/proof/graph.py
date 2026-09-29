@@ -36,7 +36,7 @@ def subjects_from_lock(
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     components = payload.get("components") or {}
     subjects: dict[str, str] = {}
-    for name in ("uapi", "mlibc", "rootfs"):
+    for name in ("uapi", "mlibc", "rootfs", "app"):
         entry = components.get(name) or {}
         unsigned = entry.get("unsigned_digest")
         if unsigned:

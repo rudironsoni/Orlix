@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -281,6 +283,101 @@ class GraphTests(unittest.TestCase):
                     "--kernel-digest", SUBJECT,
                     "--mlibc-digest", SUBJECT,
                     "--rootfs-digest", "ee" * 32,
+                    "--toolchain-digest", TOOLCHAIN,
+                    "--profile", "release",
+                    "--destination", "iphonesimulator",
+                ])
+
+    def test_product_integration_uses_ipa_artifact_identity(self) -> None:
+        uapi = "11" * 32
+        app = "55" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ipa = root / "Orlix.ipa"
+            ipa.write_bytes(b"ipa-bytes")
+            identity = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "content_digest.py"),
+                    "--consumer-file",
+                    "--logical-path",
+                    "Orlix.ipa",
+                    str(ipa),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertNotEqual(identity, hashlib.sha256(ipa.read_bytes()).hexdigest())
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({
+                "buildset": TOOLCHAIN,
+                "components": {
+                    "uapi": {"unsigned_digest": uapi},
+                    "mlibc": {"unsigned_digest": SUBJECT},
+                    "rootfs": {"unsigned_digest": SUBJECT},
+                    "app": {"unsigned_digest": identity},
+                    "kernel-release-iphonesimulator": {"unsigned_digest": SUBJECT},
+                },
+            }))
+            subjects = graph.subjects_from_lock(
+                str(lock), profile="release", destination="iphonesimulator"
+            )[0]
+            self.assertEqual(subjects["app"], identity)
+            app_live = root / "app.artifact-identity-v2.sha256"
+            app_mismatch = root / "app-live-mismatch.json"
+            app_live.write_text(app + "\n")
+            with self.assertRaisesRegex(bind.BindError, "app"):
+                graph.select_matching_live_digest(subjects, "app", str(app_live), str(app_mismatch))
+            recorded = json.loads(app_mismatch.read_text())
+            self.assertEqual(recorded["component"], "app")
+            self.assertEqual(recorded["lock_unsigned_digest"], identity)
+            self.assertIsNone(graph.select_matching_live_digest(
+                subjects, "app", str(root / "missing-app.artifact-identity-v2.sha256")
+            ))
+            app_live.write_text(identity + "\n")
+            evidence = []
+            for tier, marker in (
+                ("kernel-dependency", "Run /init as init process\n"),
+                ("kunit", "ORLIX-KSELFTEST-END\n"),
+                ("kselftest", "ORLIX-KSELFTEST-END\n"),
+                ("orlixmlibc", "ORLIX-MLIBC-TEST-END\n"),
+                ("syscall-uapi", "ORLIX-KSELFTEST-END\n"),
+                ("posix-shell", "ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=1\n"),
+                ("jq", "** TEST SUCCEEDED **\n"),
+                ("curl", "** TEST SUCCEEDED **\n"),
+                ("zsh", "** TEST SUCCEEDED **\n"),
+            ):
+                path = write_evidence(root, tier, marker, TOOLCHAIN)
+                evidence.extend(["--evidence", f"{tier}={path}"])
+            out = root / "reports"
+            self.assertEqual(graph.main([
+                "--out", str(out),
+                "--lock", str(lock),
+                "--uapi-digest", uapi,
+                "--kernel-digest", SUBJECT,
+                "--mlibc-digest", SUBJECT,
+                "--rootfs-digest", SUBJECT,
+                "--app-digest", str(app_live),
+                "--toolchain-digest", TOOLCHAIN,
+                "--profile", "release",
+                "--destination", "iphonesimulator",
+                *evidence,
+            ]), 0)
+            index = json.loads((out / "index.json").read_text())
+            self.assertEqual(index["reports"][-1], "product-integration:blocked")
+            self.assertFalse(index["complete"])
+            report = json.loads((out / "product-integration.json").read_text())
+            self.assertEqual(report["subject_digest"], identity)
+            self.assertEqual(report["owner"], "Orlix")
+            self.assertEqual(report["result"], "blocked")
+            with self.assertRaisesRegex(bind.BindError, "app"):
+                graph.main([
+                    "--out", str(root / "rejected-app"),
+                    "--lock", str(lock),
+                    "--uapi-digest", uapi,
+                    "--kernel-digest", SUBJECT,
+                    "--app-digest", app,
                     "--toolchain-digest", TOOLCHAIN,
                     "--profile", "release",
                     "--destination", "iphonesimulator",

@@ -717,7 +717,14 @@ __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	test -n "$$kernel_digest" || { echo "kernel artifact identity does not match the locked profile and destination" >&2; exit 1; }; \
 	if [ -n "$$mlibc_digest" ]; then extra+=(--mlibc-digest "$$mlibc_digest"); fi; \
 	if [ -n "$$rootfs_digest" ]; then extra+=(--rootfs-digest "$$rootfs_digest"); fi; \
-	if [ -s bazel-bin/Orlix/Orlix.ipa ]; then extra+=(--app-digest "$$(/usr/bin/shasum -a 256 bazel-bin/Orlix/Orlix.ipa | /usr/bin/awk '{print $$1}')"); fi; \
+	if [ -s bazel-bin/Orlix/Orlix.ipa ]; then \
+		app_identity="$(ORLIX_BUILD_ROOT)/Bazel/proof/app.artifact-identity-v2.sha256"; \
+		python3 "$(CURDIR)/bazel/content_digest.py" --consumer-file --logical-path Orlix.ipa bazel-bin/Orlix/Orlix.ipa > "$$app_identity"; \
+		test -s "$$app_identity" || { echo "missing app artifact-identity-v2 digest" >&2; exit 1; }; \
+		app_digest="$$(PYTHONPATH="$(CURDIR)/bazel/proof:$(CURDIR)/bazel/promotion" python3 -c 'import graph,sys; s,_=graph.subjects_from_lock(sys.argv[1]); p=graph.select_matching_live_digest(s,"app",sys.argv[2],sys.argv[3]); print(p or "")' "$(CURDIR)/artifacts.lock.json" "$$app_identity" "$(ORLIX_BUILD_ROOT)/Bazel/proof/app-live-mismatch.json")"; \
+		test -n "$$app_digest" || { echo "app artifact identity does not match the lock" >&2; exit 1; }; \
+		extra+=(--app-digest "$$app_digest"); \
+	fi; \
 	buildset="$$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("buildset") or "")' "$(CURDIR)/artifacts.lock.json")"; \
 	if [ -n "$$buildset" ]; then extra+=(--buildset-digest "$$buildset"); fi; \
 	for tier in kernel-dependency kunit kselftest orlixmlibc syscall-uapi posix-shell jq curl zsh product-integration; do \
