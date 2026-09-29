@@ -186,6 +186,12 @@
       "bazel_shadow": "__bazel-test-runtime"
     },
     {
+      "public_name": "mlibc-tests",
+      "later_bazel": "OrlixMLibC conformance through OrlixOS",
+      "now": "Make mlibc-tests runs the OrlixMLibC Conformance scheme from the Bazel-generated Xcode project when ORLIX_BAZEL_AUTHORITY=1. Default authority stays unchanged until the ADR 0037 cutover.",
+      "bazel_shadow": "__bazel-test-mlibc"
+    },
+    {
       "public_name": "ios15-simulator-gate",
       "later_bazel": "iOS 15.5 launch proof",
       "now": "Make ios15-simulator-gate AppLaunchSmoke on a local iOS 15.5 simulator after the ADR 0037 cutover.",

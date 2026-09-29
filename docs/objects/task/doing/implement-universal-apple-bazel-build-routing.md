@@ -37,9 +37,11 @@ required_skills:
 required_role: "orlix-implementer"
 required_proof:
   - "ORLIX_BAZEL_AUTHORITY=1 routes runtime-tests through the Bazel-generated OrlixOS Runtime Tests scheme"
-  - "default authority stays ?= 0 and the pre-cutover runtime-tests recipe stays in place"
+  - "ORLIX_BAZEL_AUTHORITY=1 routes mlibc-tests through the Bazel-generated OrlixMLibC Conformance scheme"
+  - "default authority stays ?= 0 and the pre-cutover runtime-tests and mlibc-tests recipes stay in place"
 build_intents:
   - "route runtime-tests through the Bazel-generated Xcode project"
+  - "route mlibc-tests through the Bazel-generated Xcode project"
 verification_intents:
   - "python unittest make routing"
   - "python unittest apple build matrix"
@@ -62,6 +64,6 @@ Do not make Bazel invoke the repository top-level or component wrapper Makefiles
 
 Acceptance requires a graph and workflow audit showing no Apple build surface bypasses Bazel, no Xcode phase owns product compilation, every supported matrix row selects the correct target and deployment setting, and private Kernel, Bootloader, HostAdapter, Engine implementation, mlibc, Coreutils, packages, and rootfs products are not exposed as direct app dependencies. Guest distribution artifacts are packaged or referenced through OrlixKit resources.
 
-With `ORLIX_BAZEL_AUTHORITY=1`, `make app-tests` selects the Bazel-owned native app suite and the existing architecture invariant suite through the shared Make test runner. `ORLIX_APP_TEST_ONLY_TESTING` can select an app test without changing the architecture checks. The same authority routes `make runtime-tests` through `__bazel-test-runtime`, which runs the OrlixOS Runtime Tests scheme from the Bazel-generated Xcode project and passes `ORLIX_PROFILE`. `orlix-tcti-kernel-tests` stays on the current Make path. The default authority remains unchanged until cutover.
+With `ORLIX_BAZEL_AUTHORITY=1`, `make app-tests` selects the Bazel-owned native app suite and the existing architecture invariant suite through the shared Make test runner. `ORLIX_APP_TEST_ONLY_TESTING` can select an app test without changing the architecture checks. The same authority routes `make runtime-tests` through `__bazel-test-runtime`, which runs the OrlixOS Runtime Tests scheme from the Bazel-generated Xcode project and passes `ORLIX_PROFILE`. It also routes `make mlibc-tests` through `__bazel-test-mlibc`, which runs the OrlixMLibC Conformance scheme, the existing only-testing filter, `ORLIX_PROFILE`, and `ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES`. The generated project has no OrlixHostAdapter Tests scheme, so `hostadapter-tests` stays on the current Make path. `orlix-tcti-kernel-tests` stays on the current Make path. The default authority remains unchanged until cutover.
 
 Make passes `ORLIX_PINNED_DEVELOPER_DIR` to custom component rules, which set `DEVELOPER_DIR` only for their own actions. Standard Apple actions select both compiler and SDK through Bazel's Xcode version setting. Global `DEVELOPER_DIR` action overrides must not mix the selected compiler with the system-default SDK.

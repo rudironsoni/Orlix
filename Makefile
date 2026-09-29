@@ -788,6 +788,10 @@ orlix-tcti-xcodebuild-watchdog-tests:
 
 ORLIX_MLIBC_TEST_ONLY_TESTING ?= OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession
 
+ifeq ($(ORLIX_BAZEL_AUTHORITY),1)
+mlibc-tests:
+	@$(MAKE) __bazel-test-mlibc
+else
 mlibc-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -798,6 +802,7 @@ mlibc-tests: xcodeproj
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
 		-only-testing:$(ORLIX_MLIBC_TEST_ONLY_TESTING) \
 		test
+endif
 
 coreutils-tests: xcodeproj
 	@$(COREUTILS_MAKE) build PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
