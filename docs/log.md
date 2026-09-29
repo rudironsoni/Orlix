@@ -7,6 +7,10 @@ updated: 2026-09-15
 ---
 # Orlix Knowledge Log
 
+## [2026-09-29] build | Bind product-integration to the IPA artifact identity
+
+The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the artifact-identity-v2 digest of `Orlix.ipa` as the product-integration subject. The raw IPA byte hash is not that subject. A live identity that disagrees with a locked `app` unsigned digest is recorded and rejected. Kernel, UAPI, mlibc, and rootfs lock rejection stay in place. Cache equivalence and `compare_trees` are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-09-29] build | Bind rootfs proof to the locked artifact identity
 
 The [digest-bound proof graph](objects/task/doing/implement-digest-bound-bazel-proof-graph.md) uses the locked `rootfs` artifact-identity-v2 digest for POSIX shell, jq, curl, and zsh. A live identity that disagrees with the lock is recorded and rejected. The semantic source-input marker is not that subject. Kernel, UAPI, and mlibc lock rejection stay in place. Product-integration stays unbound. Cache equivalence and `compare_trees` are unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

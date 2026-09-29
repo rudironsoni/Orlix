@@ -32,10 +32,13 @@ required_proof:
   - "a live uapi or mlibc identity that disagrees with the lock is rejected"
   - "rootfs proof uses the locked artifact-identity-v2 digest"
   - "a live rootfs identity that disagrees with the lock is rejected"
+  - "product-integration uses the artifact-identity-v2 digest of Orlix.ipa"
+  - "a live app identity that disagrees with the locked app digest is rejected"
 build_intents:
   - "bind kernel proof subjects to the locked profile and destination identity"
   - "bind uapi and mlibc proof subjects to the locked artifact-identity-v2 digests"
   - "bind the rootfs proof subject to the locked artifact-identity-v2 digest"
+  - "bind product-integration to the Orlix.ipa artifact-identity-v2 digest"
 verification_intents:
   - "python unittest for the proof graph lock binding"
 ---
@@ -48,4 +51,6 @@ Kernel-dependency, KUnit, and kselftest bind the locked `kernel-<profile>-<desti
 
 The UAPI proof input and the mlibc subject for orlixmlibc and syscall-uapi bind the locked `uapi` and `mlibc` artifact-identity-v2 digests. The live UAPI identity is required and must match the lock. The live mlibc identity, when that file is present, must match the lock. A mismatch is recorded and rejected. The semantic `uapi.sha256` and `sysroot.sha256` markers are not those subjects.
 
-POSIX shell, jq, curl, and zsh bind the locked `rootfs` artifact-identity-v2 digest. The live rootfs identity, when that file is present, must match the lock. A mismatch is recorded and rejected. The semantic `source-input.sha256` marker is not that subject. Product-integration stays unbound.
+POSIX shell, jq, curl, and zsh bind the locked `rootfs` artifact-identity-v2 digest. The live rootfs identity, when that file is present, must match the lock. A mismatch is recorded and rejected. The semantic `source-input.sha256` marker is not that subject.
+
+Product-integration binds the artifact-identity-v2 digest of `Orlix.ipa`. The raw IPA byte hash is not that subject. When the IPA is present, its live identity must match the locked `app` unsigned digest if that lock entry exists. A mismatch is recorded and rejected.

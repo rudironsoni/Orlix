@@ -762,7 +762,30 @@ test "$1" = --remote_upload_local_results=true
             "kernel artifact identity does not match the locked profile and destination",
             recipe,
         )
-        self.assertIn("shasum -a 256 bazel-bin/Orlix/Orlix.ipa", recipe)
+        equivalence = mk.split("__bazel-cache-equivalence:", 1)[1].split("__bazel-scenario-harness:", 1)[0]
+        self.assertIn('"/source-input.sha256"', equivalence)
+        self.assertIn("compare.compare_trees", equivalence)
+        self.assertIn('.cacheHit == true and .runner == "remote cache hit"', equivalence)
+
+    def test_proof_graph_binds_product_integration_identity(self) -> None:
+        mk = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        recipe = mk.split("__bazel-proof-graph:", 1)[1].split("__bazel-prove-matrix:", 1)[0]
+        self.assertIn("content_digest.py", recipe)
+        self.assertIn("--consumer-file", recipe)
+        self.assertIn("--logical-path Orlix.ipa", recipe)
+        self.assertIn("app.artifact-identity-v2.sha256", recipe)
+        self.assertIn('select_matching_live_digest(s,"app"', recipe)
+        self.assertIn("app-live-mismatch.json", recipe)
+        self.assertIn("app artifact identity does not match the lock", recipe)
+        self.assertNotIn("shasum -a 256 bazel-bin/Orlix/Orlix.ipa", recipe)
+        self.assertIn("kernel.artifact-identity-v2.sha256", recipe)
+        self.assertIn("uapi.artifact-identity-v2.sha256", recipe)
+        self.assertIn("sysroot.artifact-identity-v2.sha256", recipe)
+        self.assertIn("rootfs.artifact-identity-v2.sha256", recipe)
+        self.assertIn(
+            "kernel artifact identity does not match the locked profile and destination",
+            recipe,
+        )
         equivalence = mk.split("__bazel-cache-equivalence:", 1)[1].split("__bazel-scenario-harness:", 1)[0]
         self.assertIn('"/source-input.sha256"', equivalence)
         self.assertIn("compare.compare_trees", equivalence)
