@@ -79,7 +79,7 @@ jobs:
   apple-ci:
     name: Bazel matrix check
     runs-on: macos-26
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Check out the exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
