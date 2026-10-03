@@ -134,7 +134,7 @@ jobs:
       # Starts the simulator booting in the background (cached, so later runs
       # boot fast) while the app builds.
       - name: Install mobai-ci + boot simulator
-        uses: MobAI-App/mobai-ci@f551408608e57dec92693883c17189de9923c329 # v1
+        uses: MobAI-App/mobai-ci@8fa18398cc9ba1ab3b6155e67b5ae3587c374522 # v1
         with:
           boot-sim: true # UDID lands in $MOBAI_SIM_UDID
 
