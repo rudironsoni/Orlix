@@ -691,7 +691,7 @@ jobs:
 
       - name: Setup Gradle
         if: steps.detect.outputs.type == 'kmp'
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
 
       # A managed Expo project has no Podfile.lock before the prebuild above, so
       # hashFiles returns an empty string and the key degrades to the prefix.
