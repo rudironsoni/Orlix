@@ -51,12 +51,17 @@ members_make="$exec_root/$3"
 members_def="$exec_root/$4"
 serializer="$exec_root/$5"
 tree="$exec_root/$6"
+gmake="$exec_root/$7"
+awk_bin="$exec_root/$8"
 temporary="$(/usr/bin/mktemp -d "/tmp/orlix-tcti-isa-prepare.XXXXXX")"
 trap '/bin/rm -rf "$temporary"' EXIT
 test -s "$members_make"
 test -s "$members_def"
 test -s "$serializer"
-/opt/homebrew/bin/gmake --no-print-directory --no-builtin-rules \
+test -x "$gmake"
+test -x "$awk_bin"
+export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"
+"$gmake" --no-print-directory --no-builtin-rules \
   -f "$members_make" ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$members_def" \
   __orlix-tcti-isa-archive-members > "$temporary/members"
 /usr/bin/python3 "$serializer" extract "$archive" "$pin" "$tree" "$temporary/members"
@@ -68,11 +73,13 @@ test -s "$serializer"
             members_def.path,
             serializer.path,
             tree.path,
+            ctx.file.gmake.path,
+            ctx.file.awk.path,
         ],
-        inputs = [archive, pin, members_make, members_def, serializer],
+        inputs = [archive, pin, members_make, members_def, serializer, ctx.file.gmake, ctx.file.awk],
         outputs = [tree],
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1"},
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
     )
     return [DefaultInfo(files = depset([tree]))]
 
@@ -84,6 +91,8 @@ orlix_tcti_isa_prepare = rule(
         "members_make": attr.label(allow_single_file = True, mandatory = True),
         "members_def": attr.label(allow_single_file = True, mandatory = True),
         "serializer": attr.label(allow_single_file = True, mandatory = True),
+        "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "awk": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/awk")),
     },
 )
 

@@ -23,8 +23,6 @@ POLICY = {
 # not file inputs; PATH still selects gnu-sed, coreutils, and findutils;
 # make/tcti-proof-registry-provenance.mk is not an input; incremental state is
 # output_base/orlix-kernel-state.
-# OrlixTctiIsaRestore: /opt/homebrew/bin/gmake is not an input, and the members
-# makefile can run awk from PATH.
 # OrlixGuestPackage: ORLIX_PACKAGE_WORK_ROOT is output-base orlix-package-state
 # or a temp directory and is not an input; configure embeds that absolute path;
 # CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
@@ -34,10 +32,10 @@ REQUIRED_NO_REMOTE_CACHE = (
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
 )
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
@@ -81,7 +79,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
             {
                 "OrlixGuestPackage",
                 "OrlixKernelMachOArchive",
-                "OrlixTctiIsaRestore",
             },
         )
         for path, mnemonic in REQUIRED_NO_REMOTE_CACHE:
