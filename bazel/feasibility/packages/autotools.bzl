@@ -250,6 +250,7 @@ CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
   "code_model='$code_model'" \
   "ld_mode='$ld_mode'" \
   "work='$work'" \
+  "tool_bin='$tool_bin'" \
   'link=1' \
   'for arg in "$@"; do case "$arg" in -c|-E|-S) link=0 ;; esac; done' \
   'common=(--target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers" $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map="$work"=. -ffile-prefix-map="$tool_bin"=/orlix/tools)' \
@@ -258,14 +259,16 @@ CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
   'fi' \
   'exec ${launcher:+"$launcher"} "$cc" "${common[@]}" "$@"' > "$work/toolchain/aarch64-linux-gnu-gcc"
 /bin/chmod +x "$work/toolchain/aarch64-linux-gnu-gcc"
-export PATH="$work/toolchain:$PATH"
-export CC=aarch64-linux-gnu-gcc
+# The action environment is PATH=/usr/bin:/bin. Configure must see the staged
+# clang and the staged tools, and must not search Homebrew.
+export PATH="$tool_bin:$work/toolchain:/usr/bin:/bin"
+export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools"
 export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h -ffile-prefix-map=..=. -ffile-prefix-map=../..=. -ffile-prefix-map=../../..=. $CFLAGS_EXTRA"
 if [ "$MAKE_ONLY" = 1 ]; then
   export CFLAGS="$CFLAGS -MD -MP"
 fi
 export CPPFLAGS="$CPPFLAGS_EXTRA"
-export LDFLAGS=""
+export LDFLAGS="-fuse-ld=lld -nostdlib -Wl,--gc-sections $ld_mode $extra_libdir -L$libraries $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $libm $libpthread $libssp_ns $libssp $extra_archives $runtime -Wl,--end-group $libraries/crtn.o"
 export LIBS=""
 export AR="$ar_bin"
 export RANLIB="$ranlib_bin"

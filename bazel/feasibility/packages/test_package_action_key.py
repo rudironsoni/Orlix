@@ -64,6 +64,10 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertIn("ffile-prefix-map", text, name)
             self.assertIn("$work", text, name)
         autotools = (PACKAGES / "autotools.bzl").read_text(encoding="utf-8")
+        self.assertIn('export PATH="$tool_bin:$work/toolchain:/usr/bin:/bin"', autotools)
+        self.assertIn('export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu', autotools)
+        self.assertNotIn('export CC=aarch64-linux-gnu-gcc', autotools)
+        self.assertNotIn("/opt/homebrew/bin", autotools)
         blocks = _execution_requirements(autotools)
         guest = [block for block in blocks if "no-sandbox" in block]
         interface = [block for block in blocks if "no-sandbox" not in block]
