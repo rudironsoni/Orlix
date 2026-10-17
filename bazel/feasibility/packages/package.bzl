@@ -43,9 +43,11 @@ package_version="${9}"
 configure_rel="${10}"
 source_archive="$exec_root/${11}"
 source_stamp="$exec_root/${12}"
-tool_bin="$exec_root/${13}"
+gmake="$exec_root/${13}"
+tool_bin="$(/usr/bin/dirname "$gmake")"
 export PATH="$tool_bin:/usr/bin:/bin"
-export DYLD_LIBRARY_PATH="$(/usr/bin/dirname "$tool_bin")/lib:$(/usr/bin/dirname "$tool_bin")/llvm/lib"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
+export DYLD_LIBRARY_PATH="$tool_root/lib:$tool_root/llvm/lib"
 case "$configure_rel" in
   *OrlixOS/Sources/make*|*OrlixCoreUtils/Sources/make*|*OrlixKernel/Makefile*)
     echo "guest package must not invoke wrapper Makefiles: $configure_rel" >&2
