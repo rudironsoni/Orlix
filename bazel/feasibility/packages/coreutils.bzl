@@ -19,20 +19,16 @@ _COREUTILS_FEATURE_PATHS = {
 
 def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
-    if not developer_dir:
-        fail("coreutils package requires action_env ORLIX_PINNED_DEVELOPER_DIR")
     env = {
-        "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
         "LC_ALL": "C",
         "PYTHONDONTWRITEBYTECODE": "1",
         "CCACHE_CONFIGPATH": "/dev/null",
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
-        "PATH": "/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
     }
-    for name in ("CCACHE_DIR", "CCACHE_DISABLE", "ORLIX_COMPILER_LAUNCHER", "ORLIX_PACKAGE_INCREMENTAL"):
+    for name in ("CCACHE_DISABLE", "ORLIX_PACKAGE_INCREMENTAL"):
         if name in shell:
             env[name] = shell[name]
     return env
@@ -78,10 +74,11 @@ case "$configure" in
     exit 1
     ;;
 esac
-clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-ar_bin="$(/usr/bin/command -v llvm-ar)"
-ranlib_bin="$(/usr/bin/command -v llvm-ranlib)"
-strip_bin="$(/usr/bin/command -v llvm-strip)"
+tool_bin="${ORLIX_PACKAGE_TOOL_BIN:?}"
+clang="$tool_bin/clang"
+ar_bin="$tool_bin/llvm-ar"
+ranlib_bin="$tool_bin/llvm-ranlib"
+strip_bin="$tool_bin/llvm-strip"
 test -x "$clang"
 test -x "$ar_bin"
 test -x "$ranlib_bin"
@@ -108,31 +105,26 @@ feature_libs=(
 )
 for archive in "${feature_libs[@]}"; do test -s "$archive"; done
 /bin/mkdir -p "$work/build" "$work/dest/usr/bin"
-launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
-case "$launcher" in
-  /opt/homebrew/bin/ccache) if [ -z "${CCACHE_DIR:-}" ]; then launcher=""; fi ;;
-  "") ;;
-  *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
-esac
+launcher=""
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
 export CCACHE_STATSLOG="$work/compiler-cache.log"
 : > "$CCACHE_STATSLOG"
-gmake=/opt/homebrew/bin/gmake
+gmake="$tool_bin/gmake"
 export MAKE="$gmake"
 cd "$work/build"
 libm="$libraries/libc.a"
 libpthread="$libraries/libc.a"
 [ -s "$libraries/libm.a" ] && libm="$libraries/libm.a"
 [ -s "$libraries/libpthread.a" ] && libpthread="$libraries/libpthread.a"
-export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=."
+export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools"
 export CPPFLAGS="-I$feature_tree/usr/include"
-export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h -ffile-prefix-map=$work=. -ffile-prefix-map=..=."
+export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools -ffile-prefix-map=..=."
 export LDFLAGS="--target=aarch64-linux-gnu -L$feature_tree/usr/lib -fuse-ld=lld -nostdlib -static-pie -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $libraries/crt1.o $libraries/crti.o -Wl,--start-group"
 export LIBS="${feature_libs[*]} $libraries/libc.a $libm $libpthread $runtime -Wl,--end-group $libraries/crtn.o"
 export AR="$ar_bin"
 export RANLIB="$ranlib_bin"
-export BUILD_CC="/usr/bin/xcrun --sdk macosx cc -target arm64-apple-macosx"
+export BUILD_CC="$clang -isysroot ${ORLIX_PACKAGE_SDK:?} -target arm64-apple-macosx -ffile-prefix-map=${ORLIX_PACKAGE_SDK}=/orlix/macos-sdk"
 export gl_cv_header_working_fcntl_h=yes
 export gl_cv_func_getopt_gnu=yes
 export gl_cv_func_getopt_long_gnu=yes
@@ -157,7 +149,7 @@ while IFS= read -r program; do
   /usr/bin/printf 'src/%s: private .EXTRA_PREREQS := %s\n' "$source_program" "$link_inputs" >> "$work/build/orlix-link-inputs.mk"
 done < "$programs_file"
 "$gmake" -f Makefile -f orlix-link-inputs.mk -j1 "${program_targets[@]}" MANS= INFO_DEPS=
-nm_bin="$(/usr/bin/command -v nm)"
+nm_bin="$tool_bin/llvm-nm"
 test -x "$nm_bin"
 assert_symbol() {
   "$nm_bin" "$1" | /usr/bin/grep -E "[[:space:]][TtWw][[:space:]]$2$" >/dev/null
@@ -189,12 +181,13 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
         progress_message = "Building GNU Coreutils with incremental Make state",
-        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; arguments=sys.argv[5:]; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], arguments, extra_tree=arguments[-1]))' \"$@\"",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; arguments=sys.argv[6:]; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], arguments, extra_tree=arguments[-1], tool_bin=sys.argv[5]))' \"$@\"",
         arguments = [
             ctx.attr.package_name,
             script.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
+            ctx.file.gmake.path,
             ctx.file.configure.path,
             sysroot.headers.path,
             uapi.headers.path,
@@ -224,12 +217,13 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 feature_input,
-            ] + ctx.files.sources,
+                ctx.file.gmake,
+            ] + ctx.files.sources + ctx.files.host_tools,
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -267,6 +261,8 @@ orlix_coreutils_package = rule(
     attrs = {
         "toolchain_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:coreutils-identity.json"),
         "compiler_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:guest-compiler-identity.json"),
+        "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
         "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "sysroot": attr.label(mandatory = True, providers = [OrlixLibcSysrootInfo]),

@@ -135,10 +135,32 @@ def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tr
     print("Orlix package source: " + json.dumps(source_result, sort_keys=True), flush=True)
 
 
-def run(package: str, script: str, toolchain: str, compiler: str, arguments: list[str], *, configuration: str | None = None, in_tree: bool = False, make_only: bool = False, extra_tree: str | None = None) -> int:
+def _tool_environment(environment: dict[str, str], tool_bin: str) -> None:
+    """Run staged tools and keep absolute cache and Xcode paths out of the process."""
+    binary = Path(tool_bin)
+    if not binary.is_absolute():
+        binary = Path.cwd() / binary
+    binary = binary.resolve()
+    tools = binary.parent
+    root = tools.parent
+    environment.pop("CCACHE_DIR", None)
+    environment.pop("DEVELOPER_DIR", None)
+    environment.pop("TMPDIR", None)
+    environment.pop("SDKROOT", None)
+    environment.pop("ORLIX_PINNED_DEVELOPER_DIR", None)
+    environment["ORLIX_COMPILER_LAUNCHER"] = ""
+    environment["ORLIX_PACKAGE_TOOL_BIN"] = str(tools)
+    environment["ORLIX_PACKAGE_SDK"] = str(root / "sdk")
+    environment["PATH"] = str(tools) + ":/usr/bin:/bin"
+    environment["DYLD_LIBRARY_PATH"] = str(root / "lib") + ":" + str(root / "llvm" / "lib")
+
+
+def run(package: str, script: str, toolchain: str, compiler: str, arguments: list[str], *, configuration: str | None = None, in_tree: bool = False, make_only: bool = False, extra_tree: str | None = None, tool_bin: str | None = None) -> int:
     if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", package):
         raise ValueError(f"invalid package state name: {package}")
     environment = dict(os.environ)
+    if tool_bin:
+        _tool_environment(environment, tool_bin)
     identity = [Path(script), Path(toolchain), Path(compiler), Path(__file__), Path(state.__file__)]
     if configuration:
         identity.append(Path(configuration))
@@ -147,7 +169,7 @@ def run(package: str, script: str, toolchain: str, compiler: str, arguments: lis
     def build(root: Path) -> int:
         launcher = root / "compiler-launcher"
         state._remove(launcher)
-        launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", "/opt/homebrew/bin/ccache"))
+        launcher.write_text(environment.get("ORLIX_COMPILER_LAUNCHER", ""))
         identity_inputs = [*identity, launcher]
         if make_only and arguments:
             source_identity = root / "source-identity.json"
