@@ -19,16 +19,11 @@ POLICY = {
     "no_remote_exec": True,
 }
 # Remaining tags are missing inputs, not a cache preference:
-# OrlixKernelMachOArchive: gmake, target clang, llvm-ar, ld.lld, and ccache are
-# not file inputs; PATH still selects gnu-sed, coreutils, and findutils;
-# make/tcti-proof-registry-provenance.mk is not an input; incremental state is
-# output_base/orlix-kernel-state.
 # OrlixGuestPackage: ORLIX_PACKAGE_WORK_ROOT is output-base orlix-package-state
 # or a temp directory and is not an input; configure embeds that absolute path;
 # CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
 # not file inputs.
 REQUIRED_NO_REMOTE_CACHE = (
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
@@ -36,6 +31,7 @@ REQUIRED_NO_REMOTE_CACHE = (
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
@@ -78,7 +74,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
             seen,
             {
                 "OrlixGuestPackage",
-                "OrlixKernelMachOArchive",
             },
         )
         for path, mnemonic in REQUIRED_NO_REMOTE_CACHE:
@@ -92,7 +87,8 @@ class RemoteCachePolicyTests(unittest.TestCase):
         requirements = _requirements("bazel/feasibility/kernel/kernel_macho.bzl")["OrlixKernelMachOArchive"]
         self.assertEqual(len(requirements), 1)
         self.assertEqual(requirements[0].get("no-sandbox"), "1")
-        self.assertEqual(requirements[0].get("no-remote-cache"), "1")
+        self.assertNotIn("no-remote-cache", requirements[0])
+        self.assertEqual(requirements[0].get("no-remote-exec"), "1")
 
     def test_headers_payload_and_local_c_do_not_use_the_tag_as_cover(self) -> None:
         for path, mnemonic in FORBIDDEN_NO_REMOTE_CACHE:
