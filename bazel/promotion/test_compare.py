@@ -504,7 +504,9 @@ class PromotionCompareTests(unittest.TestCase):
         self.assertIn("@orlix_kernel_toolchain//:rootfs-identity.json", rootfs)
         self.assertIn('"rootfs-identity.json"', (root / "bazel/extensions/native_sources.bzl").read_text(encoding="utf-8"))
         artifact_rule = (root / "bazel/artifact_identity.bzl").read_text(encoding="utf-8")
-        self.assertIn('"no-sandbox": "1"', artifact_rule)
+        self.assertNotIn("no-remote-cache", artifact_rule)
+        self.assertNotIn("no-sandbox", artifact_rule)
+        self.assertIn('"no-remote-exec": "1"', artifact_rule)
         self.assertNotIn("tool_identity", artifact_rule)
         self.assertIn("kbuild-archive.tar", (root / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8"))
 

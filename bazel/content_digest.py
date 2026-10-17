@@ -91,29 +91,59 @@ def _entry(path: Path, relative: str, *, allow_directory: bool) -> dict:
     raise ValueError(f"unsupported artifact entry: {path}")
 
 
+def _follow_staging(path: Path) -> Path:
+    """Follow Bazel sandbox and execroot symlinks to the real file or directory.
+
+    An absolute target, or a parent-relative target, is staging. A product
+    relative symlink stays a symlink so its target remains the identity.
+    """
+    seen: set[str] = set()
+    current = path
+    while True:
+        try:
+            metadata = current.lstat()
+        except OSError:
+            return current
+        if not stat.S_ISLNK(metadata.st_mode):
+            return current
+        target = os.readlink(current)
+        if not _origin_staging_symlink(target):
+            return current
+        if target.startswith("/"):
+            resolved = Path(target)
+        else:
+            resolved = Path(os.path.normpath(os.path.join(os.fspath(current.parent), target)))
+        key = os.fspath(resolved)
+        if key in seen:
+            raise ValueError(f"artifact symlink cycle: {path}")
+        seen.add(key)
+        current = resolved
+
+
 def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
     try:
         root_metadata = root.lstat()
     except OSError as error:
         raise ValueError(f"missing artifact root: {root}") from error
-    if not stat.S_ISDIR(root_metadata.st_mode):
+    if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(root_metadata.st_mode):
         raise ValueError(f"artifact root is not a real directory: {root}")
 
     entries = []
-    pending = [root]
-    while pending:
-        current = pending.pop()
-        children = sorted(
-            current.iterdir(),
-            key=lambda child: child.relative_to(root).as_posix(),
-            reverse=True,
-        )
-        for child in children:
-            relative = child.relative_to(root).as_posix()
-            entry = _entry(child, relative, allow_directory=True)
+
+    def walk(directory: Path, prefix: str) -> None:
+        for child in sorted(directory.iterdir(), key=lambda item: item.name):
+            relative = child.name if not prefix else prefix + "/" + child.name
+            # File-only manifests are the cacheable product boundary. Bazel
+            # presents those tree entries as absolute symlinks; follow them so
+            # the absolute sandbox path is not the identity. A full manifest
+            # still records a product symlink, including an absolute target.
+            source = _follow_staging(child) if files_only else child
+            entry = _entry(source, relative, allow_directory=True)
             entries.append(entry)
             if entry["type"] == "directory":
-                pending.append(child)
+                walk(source, relative)
+
+    walk(root, "")
     if files_only:
         # Promotion manifests name files only: directories are implicit in
         # file paths, and the promotion validator rejects anything else.

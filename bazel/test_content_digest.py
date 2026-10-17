@@ -182,6 +182,30 @@ class ConsumerIdentityTests(unittest.TestCase):
             (other / "alias").symlink_to("bin/tool")
             self.assertEqual(artifact_identity_v2(root), artifact_identity_v2(other))
 
+    def test_tree_absolute_symlink_is_file_bytes_not_the_sandbox_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            real = base / "outside" / "unistd.h"
+            real.parent.mkdir()
+            real.write_bytes(b"int read(void);\n")
+            real.chmod(0o644)
+            sandboxed = base / "sandboxed" / "linux"
+            sandboxed.mkdir(parents=True)
+            link = sandboxed / "unistd.h"
+            link.symlink_to(real)
+            plain = base / "plain" / "linux"
+            plain.mkdir(parents=True)
+            copied = plain / "unistd.h"
+            copied.write_bytes(real.read_bytes())
+            copied.chmod(0o644)
+            from_sandbox = artifact_manifest_v2(base / "sandboxed", files_only=True)
+            from_plain = artifact_manifest_v2(base / "plain", files_only=True)
+            self.assertEqual(from_sandbox, from_plain)
+            text = from_sandbox.decode("ascii")
+            self.assertNotIn(str(real), text)
+            self.assertNotIn(str(tmp), text)
+            self.assertIn("linux/unistd.h", text)
+
     def test_consumer_tree_ignores_directory_mode_and_origin_and_misses_on_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
