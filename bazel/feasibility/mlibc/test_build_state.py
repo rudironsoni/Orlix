@@ -87,6 +87,70 @@ class MlibcStateTests(unittest.TestCase):
             self.assertEqual(ninja.read_bytes(), b"build.ninja\n")
             self.assertEqual(build_state.meson_setup_plan("clear", True), "--reconfigure --clearcache")
 
+    def test_followed_uapi_change_invalidates_without_deleting_ninja(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, uapi, runtime, work = self._fixture(base)
+            outside = base / "outside.h"
+            outside.write_bytes(b"int read(void);\n")
+            header = uapi / "include" / "linux" / "unistd.h"
+            header.unlink()
+            header.symlink_to(outside)
+            self._prepare(work, source, uapi, runtime)
+            self._prepare(work, source, uapi, runtime)
+            ninja = work / "build" / "build.ninja"
+            ninja.parent.mkdir()
+            ninja.write_bytes(b"rule c_COMPILER\n")
+            self.assertEqual((work / "inputs" / "configure-cache").read_text(), "keep")
+            outside.write_bytes(b"int write(void);\n")
+            self._prepare(work, source, uapi, runtime)
+            self.assertEqual((work / "inputs" / "configure-cache").read_text(), "clear")
+            self.assertEqual(ninja.read_bytes(), b"rule c_COMPILER\n")
+            self.assertEqual(build_state.meson_setup_plan("clear", True), "--reconfigure --clearcache")
+
+    def test_compatible_work_directory_is_not_deleted_before_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / "build.sh"
+            script.write_text(
+                r"""set -euo pipefail
+ninja="$ORLIX_MLIBC_WORK_ROOT/build/build.ninja"
+if [ -f "$ninja" ]; then
+  printf '%s\n' reused >> "$1"
+else
+  mkdir -p "$ORLIX_MLIBC_WORK_ROOT/build" "$ORLIX_MLIBC_WORK_ROOT/mlibc" "$ORLIX_MLIBC_WORK_ROOT/inputs" "$ORLIX_MLIBC_WORK_ROOT/arch"
+  printf '%s\n' 'rule c_COMPILER' > "$ninja"
+  printf '%s\n' fresh >> "$1"
+fi
+""",
+                encoding="utf-8",
+            )
+            toolchain = root / "toolchain.json"
+            compiler = root / "compiler.json"
+            toolchain.write_text("{}\n", encoding="utf-8")
+            compiler.write_text("{}\n", encoding="utf-8")
+            tools = root / "tools" / "bin"
+            tools.mkdir(parents=True)
+            sdk = root / "sdk"
+            sdk.mkdir()
+            (sdk / "SDKSettings.json").write_text("{}\n", encoding="utf-8")
+            marker = root / "marker"
+            work = root / "mlibc-work"
+
+            def invoke() -> int:
+                return build_state.run(
+                    str(script), str(toolchain), str(compiler), str(work), str(tools), str(sdk), [str(marker)],
+                )
+
+            self.assertEqual(invoke(), 0)
+            self.assertEqual(marker.read_text(encoding="utf-8").splitlines(), ["fresh"])
+            self.assertEqual(invoke(), 0)
+            self.assertEqual(marker.read_text(encoding="utf-8").splitlines(), ["fresh", "reused"])
+            self.assertEqual((work / "build" / "build.ninja").read_text(encoding="utf-8"), "rule c_COMPILER\n")
+            toolchain.write_text('{"compiler":"changed"}\n', encoding="utf-8")
+            self.assertEqual(invoke(), 0)
+            self.assertEqual(marker.read_text(encoding="utf-8").splitlines(), ["fresh", "reused", "fresh"])
+
     def test_meson_setup_is_skipped_only_when_graph_is_valid(self) -> None:
         self.assertEqual(build_state.meson_setup_plan("keep\n", True), "skip")
         self.assertEqual(build_state.meson_setup_plan("clear", True), "--reconfigure --clearcache")

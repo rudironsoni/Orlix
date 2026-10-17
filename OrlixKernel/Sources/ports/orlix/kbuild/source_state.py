@@ -72,9 +72,54 @@ def prepare(linux: Path, destination: Path, overlays: list[Path], patches: list[
         files[".orlix-port-profile"] = (
             f"linux_version=6.12.105\nprofile={profile}\nlinux_uapi_arch=arm64\nlinux_page_size=16384\n"
         ).encode()
+        previous = set(_files(destination)) if destination.exists() else set()
         result = sync(files, destination, boundary)
+        _prune_deleted_objects(destination, previous - set(files))
     print("Orlix prepared source: " + json.dumps(result, sort_keys=True), flush=True)
     return result
+
+
+def _kernel_object_root(destination: Path) -> Path | None:
+    source_parent = destination.parent
+    kernel = source_parent.parent
+    if source_parent.name == "src" and kernel.name == "OrlixKernel":
+        return kernel
+    return None
+
+
+def _prune_deleted_objects(destination: Path, removed: set[str]) -> None:
+    """Drop Kbuild objects for deleted sources without recreating the build tree."""
+    kernel = _kernel_object_root(destination)
+    if kernel is None:
+        return
+    sources = [name for name in removed if name.endswith((".c", ".S"))]
+    if not sources:
+        return
+    for tree_name in ("build", "release", "development"):
+        tree = kernel / tree_name
+        if not tree.is_dir() or tree.is_symlink():
+            continue
+        roots = [tree]
+        for child in tree.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                roots.append(child)
+        for root in roots:
+            for name in sources:
+                relative = PurePosixPath(name)
+                stem = relative.with_suffix("").as_posix()
+                stem_name = relative.name.rsplit(".", 1)[0]
+                parent = relative.parent.as_posix()
+                candidates = (
+                    root / f"{stem}.o",
+                    root / f"{stem}.o.cmd",
+                    root / parent / f".{stem_name}.o.cmd",
+                    root / f"{stem}.d",
+                    root / parent / f".{stem_name}.d",
+                    root / f"{stem}.su",
+                )
+                for candidate in candidates:
+                    if candidate.is_symlink() or candidate.is_file():
+                        candidate.unlink()
 
 
 _TREES = ("OrlixKernel/build", "OrlixKernel/release", "OrlixKernel/development")

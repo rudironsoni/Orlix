@@ -51,14 +51,17 @@ def prepare(root: Path, source: Path, patches: list[Path], subprojects: dict[str
         state._remove(previous)
         previous.write_text(configuration.hexdigest())
     uapi_result = state.sync(state._files(uapi), inputs / "uapi", root)
-    state._remove(inputs / "configure-cache")
-    (inputs / "configure-cache").write_text("clear" if not compatible or uapi_result["changed"] else "keep")
     header_root = inputs / "uapi" / "include"
     if not header_root.is_dir():
         header_root = inputs / "uapi"
     followed = inputs / "followed-header.sha256"
+    previous_followed = followed.read_text() if followed.is_file() else ""
+    digest = followed_tree_digest(header_root) + "\n"
+    uapi_changed = uapi_result["changed"] > 0 or previous_followed != digest
+    state._remove(inputs / "configure-cache")
+    (inputs / "configure-cache").write_text("clear" if not compatible or uapi_changed else "keep")
     state._remove(followed)
-    followed.write_text(followed_tree_digest(header_root) + "\n")
+    followed.write_text(digest)
     runtime_digest = hashlib.sha256(runtime.read_bytes()).hexdigest()
     state.sync({"libcompiler_rt-" + runtime_digest + ".a": runtime}, inputs / "runtime", root)
     print("Orlix mlibc source: " + json.dumps(result, sort_keys=True), flush=True)
@@ -251,10 +254,8 @@ def run(script: str, toolchain: str, compiler: str, work: str, tool_bin: str, sd
     root = _declared_work(work)
 
     def build(root: Path) -> int:
-        for child in list(root.iterdir()) if root.exists() else []:
-            if child.name != "build.lock":
-                state._remove(child)
         launcher = root / "compiler-launcher"
+        state._remove(launcher)
         launcher.write_text("")
         identity = resume_identity(Path(toolchain), Path(compiler), Path(script), launcher)
         valid = state.resume(root, identity, _TREES)
