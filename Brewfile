@@ -29,6 +29,7 @@ brew "ripgrep"
 brew "sccache"
 brew "texinfo"
 brew "xcodegen"
+# xcodes 2.1.0 from tap xcodesorg/homebrew-made@6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
 brew "xcodesorg/made/xcodes"
 brew "zig"
 brew "zstd"
