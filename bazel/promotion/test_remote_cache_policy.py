@@ -29,16 +29,15 @@ POLICY = {
 # or a temp directory and is not an input; configure embeds that absolute path;
 # CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
 # not file inputs.
-# OrlixArtifactIdentityV2: the sandbox presents tree entries as absolute symlinks.
 REQUIRED_NO_REMOTE_CACHE = (
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
-    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
 )
 FORBIDDEN_NO_REMOTE_CACHE = (
+    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
@@ -80,7 +79,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
         self.assertEqual(
             seen,
             {
-                "OrlixArtifactIdentityV2",
                 "OrlixGuestPackage",
                 "OrlixKernelMachOArchive",
                 "OrlixTctiIsaRestore",

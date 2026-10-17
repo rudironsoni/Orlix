@@ -3,7 +3,9 @@
 The manifest is artifact-identity-v2: logical path, type, mode, file bytes, and
 symlink target. Exec paths are how the action reads bytes. They are not part of
 the manifest, and source-input, proof, revision, profile, destination, and
-target-triple strings are not inputs of this action.
+target-triple strings are not inputs of this action. Bazel sandbox tree entries
+are absolute symlinks; the serializer follows those to the file bytes and does
+not record the absolute target.
 """
 
 def declare_artifact_identity(ctx, name, serializer, root = None, artifacts = None, recorded_manifest = None):
@@ -90,10 +92,7 @@ Path(digest_path).write_text(hashlib.sha256(manifest).hexdigest() + "\n", encodi
         use_default_shell_env = False,
         execution_requirements = {
             "block-network": "1",
-            "no-remote-cache": "1",
             "no-remote-exec": "1",
-            # Bazel's sandbox presents tree entries as absolute symlinks, changing their semantic type and target.
-            "no-sandbox": "1",
         },
     )
     return struct(manifest = manifest, digest = digest)
