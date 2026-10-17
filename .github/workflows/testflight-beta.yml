@@ -116,7 +116,7 @@ jobs:
           p12-password: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
 
       - name: Download app provisioning profile
-        uses: Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6.1.0
+        uses: Apple-Actions/download-provisioning-profiles@230860ab5f632551a5f9a5e1d98a774485463888 # v7.0.0
         with:
           bundle-id: com.rudironsoni.Orlix
           profile-type: IOS_APP_STORE
@@ -125,7 +125,7 @@ jobs:
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
 
       - name: Download Live Activity provisioning profile
-        uses: Apple-Actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6.1.0
+        uses: Apple-Actions/download-provisioning-profiles@230860ab5f632551a5f9a5e1d98a774485463888 # v7.0.0
         with:
           bundle-id: com.rudironsoni.Orlix.live-activity
           profile-type: IOS_APP_STORE
