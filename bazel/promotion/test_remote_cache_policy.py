@@ -18,18 +18,14 @@ POLICY = {
     "no_remote_cache_does_not_block": ("output_base_action_cache",),
     "no_remote_exec": True,
 }
-# Remaining tags are missing inputs, not a cache preference:
-# OrlixGuestPackage: ORLIX_PACKAGE_WORK_ROOT is output-base orlix-package-state
-# or a temp directory and is not an input; configure embeds that absolute path;
-# CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
-# not file inputs.
-REQUIRED_NO_REMOTE_CACHE = (
+# Host tools for these producers are staged files. no-remote-cache is not a
+# substitute for a missing input. Output-base package state stays local.
+REQUIRED_NO_REMOTE_CACHE = ()
+FORBIDDEN_NO_REMOTE_CACHE = (
+    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
-)
-FORBIDDEN_NO_REMOTE_CACHE = (
-    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
@@ -70,12 +66,7 @@ class RemoteCachePolicyTests(unittest.TestCase):
 
     def test_required_producers_keep_no_remote_cache(self) -> None:
         seen = {mnemonic for _path, mnemonic in REQUIRED_NO_REMOTE_CACHE}
-        self.assertEqual(
-            seen,
-            {
-                "OrlixGuestPackage",
-            },
-        )
+        self.assertEqual(seen, set())
         for path, mnemonic in REQUIRED_NO_REMOTE_CACHE:
             matches = _requirements(path)[mnemonic]
             self.assertTrue(matches, mnemonic)

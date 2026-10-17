@@ -6,15 +6,10 @@ load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 load(":source_key.bzl", "declare_source_key", "declare_tree_tar")
 
-def _pinned_env(ctx):
-    shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
-    if not developer_dir:
-        fail("local C package requires action_env ORLIX_PINNED_DEVELOPER_DIR")
+def _pinned_env(_ctx):
     return {
-        "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
-        "PATH": "/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
     }
 
 def _extract():
@@ -53,7 +48,10 @@ package_version="${11}"
 root_init_source="${12}"
 source_archive="$exec_root/${13}"
 source_stamp="$exec_root/${14}"
-shift 14
+tool_bin="$exec_root/${15}"
+shift 15
+export PATH="$tool_bin:/usr/bin:/bin"
+export DYLD_LIBRARY_PATH="$(/usr/bin/dirname "$tool_bin")/lib:$(/usr/bin/dirname "$tool_bin")/llvm/lib"
 test -s "$source_archive"
 test -s "$source_stamp"
 work="$(/usr/bin/mktemp -d /tmp/orlix-local.XXXXXX)"
@@ -76,9 +74,9 @@ for rel in "$@"; do
     *.c) c_srcs="$c_srcs $abs" ;;
   esac
 done
-clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-strip_bin="$(/usr/bin/command -v llvm-strip)"
-objdump_bin="$(/usr/bin/command -v llvm-objdump)"
+clang="$tool_bin/clang"
+strip_bin="$tool_bin/llvm-strip"
+objdump_bin="$tool_bin/llvm-objdump"
 test -x "$clang"
 test -x "$strip_bin"
 test -x "$objdump_bin"
@@ -96,7 +94,7 @@ out="$1"
 shift
 /bin/mkdir -p "$(/usr/bin/dirname "$out")"
 # shellcheck disable=SC2086
-"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" "$@" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
+"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -ffile-prefix-map="$tool_bin"=/orlix/tools -static-pie -fuse-ld="$tool_bin/ld.lld" -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" "$@" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
 "$strip_bin" "$out"
 /usr/bin/file "$out" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file "$out" >&2; exit 1; }
 "$objdump_bin" -p "$out" | /usr/bin/awk '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'
@@ -126,6 +124,7 @@ fi
             ctx.file.root_init.short_path if ctx.file.root_init else "",
             source_archive.path,
             source_stamp.path,
+            ctx.file._gmake.path,
         ] + [source.short_path for source in ctx.files.srcs],
         inputs = depset(
             direct = [
@@ -135,7 +134,8 @@ fi
                 sysroot.compiler_runtime,
                 source_archive,
                 source_stamp,
-            ] + source_files,
+                ctx.file._gmake,
+            ] + source_files + ctx.files._host_tools,
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
@@ -180,6 +180,8 @@ orlix_local_c_package = rule(
         "root_init": attr.label(allow_single_file = [".c"]),
         "package_name": attr.string(mandatory = True),
         "package_version": attr.string(default = "orlix"),
+        "_gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "_host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,
             default = Label("//bazel:content_digest.py"),
