@@ -36,7 +36,7 @@ def _starlark_extract_command(text: str) -> str:
 
 class PackageActionKeyTests(unittest.TestCase):
     def test_guest_packages_declare_staged_tools(self) -> None:
-        for name in ("coreutils.bzl", "bash.bzl", "autotools.bzl", "local.bzl", "package.bzl"):
+        for name in ("coreutils.bzl", "bash.bzl", "local.bzl", "package.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")
             self.assertNotIn("no-remote-cache", text, name)
             self.assertNotIn("use_default_shell_env = True", text, name)
@@ -46,6 +46,16 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertNotIn("CCACHE_DIR", text, name)
             self.assertNotIn("/opt/homebrew", text, name)
             self.assertIn("no-remote-exec", text, name)
+        for name in ("local.bzl", "package.bzl"):
+            text = (PACKAGES / name).read_text(encoding="utf-8")
+            self.assertIn('tool_bin="$(/usr/bin/dirname "$gmake")"', text, name)
+            self.assertIn('tool_root="$(/usr/bin/dirname "$tool_bin")"', text, name)
+            self.assertIn('DYLD_LIBRARY_PATH="$tool_root/lib:$tool_root/llvm/lib"', text, name)
+            self.assertNotIn('dirname "$tool_bin")/lib', text, name)
+        autotools_text = (PACKAGES / "autotools.bzl").read_text(encoding="utf-8")
+        self.assertIn("no-remote-cache", autotools_text)
+        self.assertNotIn("DEVELOPER_DIR", autotools_text)
+        self.assertNotIn("CCACHE_DIR", autotools_text)
         for name in ("coreutils.bzl", "bash.bzl", "autotools.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")
             self.assertIn("ORLIX_PACKAGE_TOOL_BIN", text, name)
@@ -59,7 +69,10 @@ class PackageActionKeyTests(unittest.TestCase):
         interface = [block for block in blocks if "no-sandbox" not in block]
         self.assertTrue(guest)
         self.assertTrue(interface)
+        for block in guest:
+            self.assertIn("no-remote-cache", block)
         for block in interface:
+            self.assertNotIn("no-remote-cache", block)
             self.assertIn("no-remote-exec", block)
 
     def test_local_c_key_is_tar_plus_stamp(self) -> None:

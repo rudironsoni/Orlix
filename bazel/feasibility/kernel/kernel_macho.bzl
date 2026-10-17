@@ -79,7 +79,9 @@ export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"
         inputs = [archive, pin, members_make, members_def, serializer, ctx.file.gmake, ctx.file.awk],
         outputs = [tree],
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+        # Staged gmake's non-system libraries and /usr/bin/python3 are not inputs,
+        # and DYLD_LIBRARY_PATH is unset. Keep the result out of the remote cache.
+        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1"},
     )
     return [DefaultInfo(files = depset([tree]))]
 
@@ -218,7 +220,8 @@ fi
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
 export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
-/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}"
+provenance="$exec_root/make/tcti-proof-registry-provenance.mk"
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$provenance"
 port="$work/OrlixKernel/src/linux-6.12.105-port"
 profile_config=""
 for rel in "${config_paths[@]}"; do
@@ -371,8 +374,10 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        # output-base Kbuild state is a local accelerator. It is not an input.
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        # The recipe still executes host gmake, Homebrew clang, Xcode HOSTCC, and
+        # xcrun. Dylibs and the SDK are not file inputs, so this result stays
+        # out of the remote cache. Output-base Kbuild state is not an output.
+        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
