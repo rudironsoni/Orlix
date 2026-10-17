@@ -10,20 +10,16 @@ def _shell_squote(value):
 
 def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
-    if not developer_dir:
-        fail("autotools package requires action_env ORLIX_PINNED_DEVELOPER_DIR")
     env = {
-        "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
         "LC_ALL": "C",
         "PYTHONDONTWRITEBYTECODE": "1",
         "CCACHE_CONFIGPATH": "/dev/null",
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
-        "PATH": "/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
     }
-    for name in ("CCACHE_DIR", "CCACHE_DISABLE", "ORLIX_COMPILER_LAUNCHER", "ORLIX_PACKAGE_INCREMENTAL"):
+    for name in ("CCACHE_DISABLE", "ORLIX_PACKAGE_INCREMENTAL"):
         if name in shell:
             env[name] = shell[name]
     return env
@@ -174,10 +170,11 @@ case "$configure" in
     exit 1
     ;;
 esac
-clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-ar_bin="$(/usr/bin/command -v llvm-ar)"
-ranlib_bin="$(/usr/bin/command -v llvm-ranlib)"
-strip_bin="$(/usr/bin/command -v llvm-strip)"
+tool_bin="${ORLIX_PACKAGE_TOOL_BIN:?}"
+clang="$tool_bin/clang"
+ar_bin="$tool_bin/llvm-ar"
+ranlib_bin="$tool_bin/llvm-ranlib"
+strip_bin="$tool_bin/llvm-strip"
 test -x "$clang"
 test -x "$ar_bin"
 test -x "$ranlib_bin"
@@ -194,17 +191,12 @@ libraries="$work/inputs/libraries"
 runtime="$work/inputs/runtime/libcompiler_rt.a"
 if [ -n "$extra_tree" ]; then extra_tree="$work/inputs/extra"; fi
 /bin/mkdir -p "$work/build" "$work/dest" "$work/toolchain"
-launcher="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
-case "$launcher" in
-  /opt/homebrew/bin/ccache) if [ -z "${CCACHE_DIR:-}" ]; then launcher=""; fi ;;
-  "") ;;
-  *) echo "unsupported compiler launcher: $launcher" >&2; exit 1 ;;
-esac
+launcher=""
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
 export CCACHE_STATSLOG="$work/compiler-cache.log"
 : > "$CCACHE_STATSLOG"
-export MAKE=/opt/homebrew/bin/gmake
+export MAKE="$tool_bin/gmake"
 libm="$libraries/libc.a"
 libpthread="$libraries/libc.a"
 libssp=""
@@ -258,27 +250,30 @@ CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
   "code_model='$code_model'" \
   "ld_mode='$ld_mode'" \
   "work='$work'" \
+  "tool_bin='$tool_bin'" \
   'link=1' \
   'for arg in "$@"; do case "$arg" in -c|-E|-S) link=0 ;; esac; done' \
-  'common=(--target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers" $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map="$work"=.)' \
+  'common=(--target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers" $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map="$work"=. -ffile-prefix-map="$tool_bin"=/orlix/tools)' \
   'if [ "$link" -eq 1 ]; then' \
   '  exec "$cc" "${common[@]}" "$@" -fuse-ld=lld -nostdlib -Wl,--gc-sections $ld_mode $extra_libdir -L"$libraries" "$libraries/crt1.o" "$libraries/crti.o" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" $extra_archives "$runtime" -Wl,--end-group "$libraries/crtn.o"' \
   'fi' \
   'exec ${launcher:+"$launcher"} "$cc" "${common[@]}" "$@"' > "$work/toolchain/aarch64-linux-gnu-gcc"
 /bin/chmod +x "$work/toolchain/aarch64-linux-gnu-gcc"
-export PATH="$work/toolchain:$PATH"
-export CC=aarch64-linux-gnu-gcc
+# The action environment is PATH=/usr/bin:/bin. Configure must see the staged
+# clang and the staged tools, and must not search Homebrew.
+export PATH="$tool_bin:$work/toolchain:/usr/bin:/bin"
+export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools"
 export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h -ffile-prefix-map=..=. -ffile-prefix-map=../..=. -ffile-prefix-map=../../..=. $CFLAGS_EXTRA"
 if [ "$MAKE_ONLY" = 1 ]; then
   export CFLAGS="$CFLAGS -MD -MP"
 fi
 export CPPFLAGS="$CPPFLAGS_EXTRA"
-export LDFLAGS=""
+export LDFLAGS="-fuse-ld=lld -nostdlib -Wl,--gc-sections $ld_mode $extra_libdir -L$libraries $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $libm $libpthread $libssp_ns $libssp $extra_archives $runtime -Wl,--end-group $libraries/crtn.o"
 export LIBS=""
 export AR="$ar_bin"
 export RANLIB="$ranlib_bin"
 export STRIP="$strip_bin"
-export CC_FOR_BUILD="/usr/bin/xcrun --sdk macosx cc -target arm64-apple-macosx"
+export CC_FOR_BUILD="$clang -isysroot ${ORLIX_PACKAGE_SDK:?} -target arm64-apple-macosx -ffile-prefix-map=${ORLIX_PACKAGE_SDK}=/orlix/macos-sdk"
 export BUILD_CC="$CC_FOR_BUILD"
 remaining="$CACHE_VARS"
 while [ -n "$remaining" ]; do
@@ -297,9 +292,9 @@ else
 fi
 if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
   if [ "$BOOTSTRAP" = 1 ]; then
-    export LIBTOOLIZE=/opt/homebrew/bin/glibtoolize
-    export M4=/opt/homebrew/opt/m4/bin/m4
-    /opt/homebrew/bin/autoreconf --force --install --verbose
+    export LIBTOOLIZE="$tool_bin/glibtoolize"
+    export M4="$tool_bin/m4"
+    "$tool_bin/autoreconf" --force --install --verbose
   fi
   if [ "$MAKE_ONLY" != 1 ]; then
     maintainer_mode=""
@@ -312,9 +307,9 @@ if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
     "$conf" $CONFIGURE_ARGS $maintainer_mode
   fi
 fi
-gmake_bin="$(/usr/bin/command -v gmake)"
+gmake_bin="$tool_bin/gmake"
 test -x "$gmake_bin"
-make_vars=(AUTOMAKE=/opt/homebrew/bin/automake ACLOCAL=/opt/homebrew/bin/aclocal AUTOCONF=/opt/homebrew/bin/autoconf AUTOHEADER=/opt/homebrew/bin/autoheader AUTOM4TE=/opt/homebrew/bin/autom4te AUTOPOINT=/opt/homebrew/bin/autopoint)
+make_vars=(AUTOMAKE="$tool_bin/automake" ACLOCAL="$tool_bin/aclocal" AUTOCONF="$tool_bin/autoconf" AUTOHEADER="$tool_bin/autoheader" AUTOM4TE="$tool_bin/autom4te" AUTOPOINT="$tool_bin/autopoint")
 remaining="$MAKE_VARS"
 while [ -n "$remaining" ]; do
   case "$remaining" in
@@ -428,12 +423,13 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
         progress_message = "Building %s with incremental upstream Make state" % ctx.attr.package_name,
-        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[8:], configuration=sys.argv[5], in_tree=sys.argv[6] == \"1\", make_only=sys.argv[7] == \"1\", extra_tree=sys.argv[-1] or None))' \"$@\"",
+        command = "PYTHONPATH=. /usr/bin/python3 -B -c 'from bazel.feasibility.packages import build_state; import sys; raise SystemExit(build_state.run(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[9:], configuration=sys.argv[6], in_tree=sys.argv[7] == \"1\", make_only=sys.argv[8] == \"1\", extra_tree=sys.argv[-1] or None, tool_bin=sys.argv[5]))' \"$@\"",
         arguments = [
             ctx.attr.package_name,
             script.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
+            ctx.file.gmake.path,
             recipe.path,
             "1" if ctx.attr.in_tree else "0",
             "1" if ctx.attr.make_only else "0",
@@ -462,12 +458,15 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 uapi.headers,
                 sysroot.libraries,
                 sysroot.compiler_runtime,
-            ] + ctx.files.sources + ([extra_input] if extra_input else []),
+                ctx.file.gmake,
+            ] + ctx.files.sources + ctx.files.host_tools + ([extra_input] if extra_input else []),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
+        # autoreconf, automake, aclocal, glibtoolize, and m4 still read
+        # /opt/homebrew share trees. Those trees are not action inputs.
+        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -507,6 +506,8 @@ orlix_autotools_package = rule(
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "toolchain_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:autotools-identity.json"),
         "compiler_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:guest-compiler-identity.json"),
+        "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
         "sysroot": attr.label(mandatory = True, providers = [OrlixLibcSysrootInfo]),
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
         "configure": attr.label(allow_single_file = True, mandatory = True),

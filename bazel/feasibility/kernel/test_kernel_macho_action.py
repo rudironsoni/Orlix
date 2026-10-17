@@ -9,10 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 RULE = ROOT / "bazel/feasibility/kernel/kernel_macho.bzl"
 BUILD = ROOT / "bazel/feasibility/kernel/BUILD.bazel"
-UNREAD = (
-    "make/tcti-proof-registry-provenance.mk",
-    "OrlixOS/Sources/distribution/target-settings.xcconfig",
-)
 
 
 def _action_tail(text: str, mnemonic: str) -> str:
@@ -49,18 +45,33 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertNotIn("extra_inputs", self.rule)
         self.assertNotIn("extra_inputs", self.build)
         self.assertNotIn("extra_files", self.rule)
-        for path in UNREAD:
-            self.assertNotIn(path, self.build)
+        self.assertNotIn("OrlixOS/Sources/distribution/target-settings.xcconfig", self.build)
         self.assertNotIn("target-settings.xcconfig", self.rule)
-        script_end = self.rule.index('""")', self.rule.index("ctx.actions.write(script"))
-        self.assertNotIn("tcti-proof-registry-provenance.mk", self.rule[script_end:])
+        self.assertNotIn("make/tcti-proof-registry-provenance.mk", self.build)
+        script = self.rule[self.rule.index("ctx.actions.write(script"):self.rule.index('""")', self.rule.index("ctx.actions.write(script"))]
+        self.assertNotIn("os.path.realpath", script)
+        self.assertIn("make/tcti-proof-registry-provenance.mk", script)
 
-    def test_remote_cache_stays_disabled(self) -> None:
+    def test_isa_restore_stays_uncached_without_tool_libraries(self) -> None:
+        restore = _action_tail(self.rule, "OrlixTctiIsaRestore")
+        self.assertIn('"no-remote-cache": "1"', restore)
+        self.assertIn('"no-remote-exec": "1"', restore)
+        self.assertIn("ctx.file.gmake", self.rule)
+        self.assertIn("ctx.file.awk", self.rule)
+        self.assertNotIn("/opt/homebrew/bin/gmake", restore)
+        self.assertNotIn("export DYLD_LIBRARY_PATH", restore)
+
+    def test_kernel_archive_does_not_publish_host_tool_results(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")
         self.assertIn('"no-remote-cache": "1"', archive)
         self.assertIn('"no-remote-exec": "1"', archive)
         self.assertIn('"no-sandbox": "1"', archive)
-        self.assertEqual(self.rule.count('"no-remote-cache": "1"'), 2)
+        self.assertIn("command -v gmake", self.rule)
+        self.assertIn("/opt/homebrew/opt/llvm/bin/clang", self.rule)
+        self.assertIn("xcrun", self.rule)
+        self.assertIn('"$gmake_staged"', self.rule)
+        self.assertIn('"$provenance"', self.rule)
+        self.assertIn("source_state.resume", self.rule)
 
     def test_orlixcc_log_is_failure_only(self) -> None:
         failure, success = self.rule.split('if [ "$kbuild_status" -ne 0 ]; then', 1)[1].split("\nfi\n", 1)

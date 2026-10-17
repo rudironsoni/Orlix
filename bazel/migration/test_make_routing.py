@@ -228,7 +228,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-current-simulator-gate", apple_ci)
         self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
         self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
-        self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 1)
+        self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 0)
+        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", apple_ci)
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
@@ -308,10 +309,10 @@ test "$3" = --noremote_accept_cached
         )
         self.assertNotIn("disk cache hit", equivalence)
         self.assertNotIn("--remote_cache=", equivalence)
-        self.assertIn("cache-equivalence seed cannot publish without BuildBuddy", equivalence)
-        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", equivalence)
-        self.assertIn("build --config=buildbuddy-write", equivalence)
-        self.assertIn("restore_seed_rc", equivalence)
+        self.assertIn("cache equivalence publishes only for a push of refs/heads/main", equivalence)
+        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", equivalence)
+        self.assertNotIn("buildbuddy-write", equivalence)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", equivalence)
         shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
         self.assertNotIn("--remote_upload_local_results", shared_flags)
         self.assertNotIn("--noremote_accept_cached", shared_flags)
@@ -323,9 +324,6 @@ test "$3" = --noremote_accept_cached
         build = next(line for line in equivalence.splitlines() if " build //bazel/feasibility/kernel:uapi " in line)
         self.assertIn('$${seed_flags[@]+"$${seed_flags[@]}"}', build)
         self.assertNotIn('"$${seed_flags[@]}"', build.replace('$${seed_flags[@]+"$${seed_flags[@]}"}', ""))
-        restored = equivalence.find("restore_seed_rc;")
-        self.assertLess(equivalence.find('$${seed_flags[@]+"$${seed_flags[@]}"}'), restored)
-        self.assertLess(restored, equivalence.find("required component cache behavior was not observed"))
         cached_jq = equivalence.split("execution.json", 1)[1]
         self.assertIn('.runner == "remote cache hit"', cached_jq)
         self.assertNotIn("buildbuddy-write", cached_jq)

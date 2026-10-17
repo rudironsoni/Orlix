@@ -477,10 +477,11 @@ def macho_linked_libraries(binary: Path) -> list[Path]:
 
 
 def _copy_file(source: Path, destination: Path) -> None:
+    """Copy bytes and permission bits. Do not copy BSD file flags."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.is_symlink() or destination.exists():
         destination.unlink()
-    shutil.copy2(source, destination, follow_symlinks=True)
+    shutil.copy(source, destination, follow_symlinks=True)
     if os.access(source, os.X_OK):
         destination.chmod(destination.stat().st_mode | 0o755)
 
@@ -495,7 +496,7 @@ def _copy_tree(source: Path, destination: Path) -> None:
             if name in {"__pycache__", "site-packages"} or name.endswith(".pyc")
         ]
 
-    shutil.copytree(source, destination, symlinks=False, ignore=ignore)
+    shutil.copytree(source, destination, symlinks=False, ignore=ignore, copy_function=shutil.copy)
 
 
 def stage_binary(source: Path, bin_dir: Path, lib_dir: Path, seen: set[Path]) -> Path:
@@ -544,8 +545,32 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
         Path("/opt/homebrew/bin/ninja"),
         Path("/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"),
         Path("/opt/homebrew/opt/e2fsprogs/sbin/debugfs"),
+        Path("/opt/homebrew/bin/gmake"),
+        Path("/opt/homebrew/bin/ccache"),
+        Path("/usr/bin/awk"),
+        Path("/opt/homebrew/opt/gnu-sed/libexec/gnubin/sed"),
+        Path("/opt/homebrew/opt/coreutils/libexec/gnubin/readlink"),
+        Path("/opt/homebrew/opt/findutils/libexec/gnubin/find"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-ranlib"),
+        Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),
+        Path("/opt/homebrew/opt/bison/bin/bison"),
+        Path("/opt/homebrew/opt/m4/bin/m4"),
+        Path("/opt/homebrew/bin/pkgconf"),
+        Path("/opt/homebrew/bin/glibtoolize"),
+        Path("/opt/homebrew/bin/autoreconf"),
+        Path("/opt/homebrew/bin/automake"),
+        Path("/opt/homebrew/bin/aclocal"),
+        Path("/opt/homebrew/bin/autoconf"),
+        Path("/opt/homebrew/bin/autoheader"),
+        Path("/opt/homebrew/bin/autom4te"),
+        Path("/opt/homebrew/bin/autopoint"),
     ):
         stage_binary(binary, bin_dir, lib_dir, seen)
+    for name in (
+        "env", "sort", "tr", "cat", "cp", "mv", "mkdir", "rm", "install",
+        "head", "uname", "expr", "basename", "wc", "touch", "chmod", "printf", "ln",
+    ):
+        stage_binary(Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name, bin_dir, lib_dir, seen)
     _copy_file(Path("/opt/homebrew/etc/mke2fs.conf"), dest / "mke2fs.conf")
     resource = developer / "Toolchains/XcodeDefault.xctoolchain/usr/lib/clang"
     if not resource.is_dir():

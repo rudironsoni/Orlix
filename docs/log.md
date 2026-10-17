@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-15
+updated: 2026-10-17
 ---
 # Orlix Knowledge Log
+
+## [2026-10-17] build | Make foreign actions and cache publication hermetic
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) stages host tools for guest packages. Coreutils, Bash, and the local C packages execute that directory. Kernel archive, ISA restore, and Autotools guest packages keep `no-remote-cache` because they still read host compilers, dylibs, `/usr/bin/python3`, or Homebrew share trees. File-only artifact identity follows an absolute symlink only when it names a regular file. A product symlink and an absolute directory symlink stay symlinks. Only a push of `refs/heads/main` may publish to BuildBuddy. A pull request, including a same-repo pull request, stays read-only and does not receive the write key. A disk hit or an output-base hit is not a remote cache hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-09-29] build | Route coreutils-tests through the Bazel Xcode project
 

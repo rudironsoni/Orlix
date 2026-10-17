@@ -420,20 +420,26 @@ class WorkflowPolicyTests(unittest.TestCase):
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
-        seed_step = workflow.split("Stage cache-equivalence seed upload credential", 1)[1].split(
-            "Prepare both simulator runtimes", 1
-        )[0]
-        self.assertIn("steps.buildbuddy.outputs.access == 'read'", seed_step)
-        self.assertIn("steps.buildbuddy.outputs.access == 'write'", seed_step)
-        self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", seed_step)
-        self.assertNotIn("ORLIX_BUILDBUDDY_ACCESS: write", seed_step)
-        self.assertIn("chmod 600", seed_step)
-        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", seed_step)
-        apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", workflow)
+        self.assertNotIn("Stage cache-equivalence seed upload credential", workflow)
+        publish = workflow.split("Publish the cache-equivalence seed", 1)[1].split(
             "Promoted-consumer proof", 1
+        )[0]
+        self.assertIn("steps.buildbuddy.outputs.access == 'write'", publish)
+        self.assertNotIn("access == 'read'", publish)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", publish)
+        self.assertIn("make __bazel-cache-equivalence", publish)
+        apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Publish the cache-equivalence seed", 1
         )[0]
         self.assertIn("steps.buildbuddy.outputs.access", apple_step)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", apple_step)
+        self.assertLess(
+            workflow.index("Run the Make-owned Apple CI operation"),
+            workflow.index("Publish the cache-equivalence seed"),
+        )
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertNotIn("github.event_name == 'push' && 'main'", workflow)
         write_step = workflow.split("Configure trusted BuildBuddy writes", 1)[1].split(
             "Configure read-only BuildBuddy access", 1
         )[0]
@@ -777,6 +783,7 @@ class RoutingContractTests(unittest.TestCase):
                 [{"duration_ms": 6000, "name": "action processing"}],
             )
             self.assertEqual(row["execution"]["cacheHit"], 1)
+            self.assertEqual(row["execution"]["remote_cache_hits"], 0)
             self.assertEqual(row["execution"]["label"], ["//pkg:bash", "//pkg:coreutils"])
             self.assertEqual(row["execution"]["runner"]["disk cache hit"], 1)
             self.assertEqual(row["execution"]["mnemonic"]["OrlixGuestPackage"], 2)

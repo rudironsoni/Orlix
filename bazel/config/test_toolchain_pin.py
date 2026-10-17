@@ -256,6 +256,22 @@ class ToolchainPinTests(unittest.TestCase):
             self.assertTrue(staged.stat().st_mode & 0o111)
             self.assertEqual(list((destination / "lib").glob("*")), [])
 
+    def test_copy_file_keeps_bytes_and_executable_mode_without_bsd_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "awk"
+            source.write_bytes(b"awk-bytes")
+            source.chmod(0o755)
+            destination = root / "out" / "awk"
+
+            def reject_flags(*_args, **_kwargs):
+                raise PermissionError(1, "Operation not permitted")
+
+            with mock.patch("toolchain_pin.shutil.copystat", side_effect=reject_flags):
+                pin._copy_file(source, destination)
+            self.assertEqual(destination.read_bytes(), b"awk-bytes")
+            self.assertTrue(destination.stat().st_mode & 0o111)
+
     def test_copy_tree_materializes_symlink_targets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

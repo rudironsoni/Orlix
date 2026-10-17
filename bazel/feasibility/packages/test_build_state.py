@@ -178,6 +178,43 @@ class PackageStateTests(unittest.TestCase):
                 self.assertEqual((root / "src/leaf.c").read_bytes(), b"int value = 2;\n")
                 self.assertEqual((root / "inputs/configure-required").read_text(), "1")
 
+    def test_staged_tools_drop_absolute_cache_and_xcode_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _source, arguments = self._package_arguments(base)
+            tool = base / "tools" / "bin" / "gmake"
+            tool.parent.mkdir(parents=True)
+            tool.write_bytes(b"gmake")
+            seen = {}
+
+            def build(*_args, **kwargs):
+                seen["env"] = kwargs["env"]
+                return 0
+
+            with patch.object(Path, "cwd", return_value=base / "execroot/_main"), \
+                 patch.dict(os.environ, {
+                     "CCACHE_DIR": "/var/folders/cache",
+                     "DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer",
+                     "ORLIX_COMPILER_LAUNCHER": "/opt/homebrew/bin/ccache",
+                 }, clear=False), \
+                 patch.object(build_state.subprocess, "call", side_effect=build):
+                self.assertEqual(
+                    build_state.run(
+                        "grep", str(tool), str(tool), str(tool), arguments,
+                        tool_bin=str(tool),
+                    ),
+                    0,
+                )
+            env = seen["env"]
+            self.assertNotIn("CCACHE_DIR", env)
+            self.assertNotIn("DEVELOPER_DIR", env)
+            self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], "")
+            self.assertEqual(
+                os.path.realpath(env["ORLIX_PACKAGE_TOOL_BIN"]),
+                os.path.realpath(tool.parent),
+            )
+            self.assertTrue(env["PATH"].startswith(os.path.realpath(tool.parent)))
+
     def test_package_name_cannot_escape_local_state(self):
         with self.assertRaisesRegex(ValueError, "invalid package state name"):
             build_state.run("../bash", "", "", "", [])

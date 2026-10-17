@@ -91,29 +91,55 @@ def _entry(path: Path, relative: str, *, allow_directory: bool) -> dict:
     raise ValueError(f"unsupported artifact entry: {path}")
 
 
+def _sandbox_regular_file(path: Path) -> Optional[Path]:
+    """Follow one absolute symlink when it names a regular file.
+
+    Bazel presents a sandboxed tree file as an absolute symlink to that file.
+    A product symlink such as ``usr/bin/foo -> ../../bin/foo`` stays a symlink.
+    An absolute symlink to a directory is not walked.
+    """
+    try:
+        if not stat.S_ISLNK(path.lstat().st_mode):
+            return None
+    except OSError:
+        return None
+    target = os.readlink(path)
+    if not target.startswith("/"):
+        return None
+    resolved = Path(target)
+    try:
+        metadata = resolved.lstat()
+    except OSError:
+        return None
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        return None
+    return resolved
+
+
 def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
     try:
         root_metadata = root.lstat()
     except OSError as error:
         raise ValueError(f"missing artifact root: {root}") from error
-    if not stat.S_ISDIR(root_metadata.st_mode):
+    if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(root_metadata.st_mode):
         raise ValueError(f"artifact root is not a real directory: {root}")
 
     entries = []
-    pending = [root]
-    while pending:
-        current = pending.pop()
-        children = sorted(
-            current.iterdir(),
-            key=lambda child: child.relative_to(root).as_posix(),
-            reverse=True,
-        )
-        for child in children:
-            relative = child.relative_to(root).as_posix()
-            entry = _entry(child, relative, allow_directory=True)
+
+    def walk(directory: Path, prefix: str) -> None:
+        for child in sorted(directory.iterdir(), key=lambda item: item.name):
+            relative = child.name if not prefix else prefix + "/" + child.name
+            source = child
+            if files_only:
+                followed = _sandbox_regular_file(child)
+                if followed is not None:
+                    source = followed
+            entry = _entry(source, relative, allow_directory=True)
             entries.append(entry)
             if entry["type"] == "directory":
-                pending.append(child)
+                walk(source, relative)
+
+    walk(root, "")
     if files_only:
         # Promotion manifests name files only: directories are implicit in
         # file paths, and the promotion validator rejects anything else.

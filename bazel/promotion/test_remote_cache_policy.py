@@ -18,27 +18,20 @@ POLICY = {
     "no_remote_cache_does_not_block": ("output_base_action_cache",),
     "no_remote_exec": True,
 }
-# Remaining tags are missing inputs, not a cache preference:
-# OrlixKernelMachOArchive: gmake, target clang, llvm-ar, ld.lld, and ccache are
-# not file inputs; PATH still selects gnu-sed, coreutils, and findutils;
-# make/tcti-proof-registry-provenance.mk is not an input; incremental state is
-# output_base/orlix-kernel-state.
-# OrlixTctiIsaRestore: /opt/homebrew/bin/gmake is not an input, and the members
-# makefile can run awk from PATH.
-# OrlixGuestPackage: ORLIX_PACKAGE_WORK_ROOT is output-base orlix-package-state
-# or a temp directory and is not an input; configure embeds that absolute path;
-# CCACHE_DIR is an absolute env input when set; Homebrew gmake and ccache are
-# not file inputs.
-# OrlixArtifactIdentityV2: the sandbox presents tree entries as absolute symlinks.
+# These stay uncached until the executed tools and their data are inputs:
+# OrlixKernelMachOArchive still runs host gmake, Homebrew clang, Xcode HOSTCC,
+# and xcrun. Dylibs and the SDK are not file inputs.
+# OrlixTctiIsaRestore does not input gmake's libraries or /usr/bin/python3.
+# Autotools OrlixGuestPackage still reads Homebrew share trees.
 REQUIRED_NO_REMOTE_CACHE = (
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
-    ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
-    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
+    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
 )
 FORBIDDEN_NO_REMOTE_CACHE = (
+    ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
+    ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
+    ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
@@ -80,7 +73,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
         self.assertEqual(
             seen,
             {
-                "OrlixArtifactIdentityV2",
                 "OrlixGuestPackage",
                 "OrlixKernelMachOArchive",
                 "OrlixTctiIsaRestore",
@@ -98,6 +90,7 @@ class RemoteCachePolicyTests(unittest.TestCase):
         self.assertEqual(len(requirements), 1)
         self.assertEqual(requirements[0].get("no-sandbox"), "1")
         self.assertEqual(requirements[0].get("no-remote-cache"), "1")
+        self.assertEqual(requirements[0].get("no-remote-exec"), "1")
 
     def test_headers_payload_and_local_c_do_not_use_the_tag_as_cover(self) -> None:
         for path, mnemonic in FORBIDDEN_NO_REMOTE_CACHE:

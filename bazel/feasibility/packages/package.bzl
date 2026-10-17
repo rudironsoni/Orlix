@@ -5,15 +5,10 @@ load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 load(":source_key.bzl", "declare_source_key", "declare_tree_tar")
 
-def _pinned_env(ctx):
-    shell = ctx.configuration.default_shell_env
-    developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
-    if not developer_dir:
-        fail("guest package requires action_env ORLIX_PINNED_DEVELOPER_DIR")
+def _pinned_env(_ctx):
     return {
-        "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
-        "PATH": "/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
     }
 
 def _extract():
@@ -48,6 +43,11 @@ package_version="${9}"
 configure_rel="${10}"
 source_archive="$exec_root/${11}"
 source_stamp="$exec_root/${12}"
+gmake="$exec_root/${13}"
+tool_bin="$(/usr/bin/dirname "$gmake")"
+export PATH="$tool_bin:/usr/bin:/bin"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
+export DYLD_LIBRARY_PATH="$tool_root/lib:$tool_root/llvm/lib"
 case "$configure_rel" in
   *OrlixOS/Sources/make*|*OrlixCoreUtils/Sources/make*|*OrlixKernel/Makefile*)
     echo "guest package must not invoke wrapper Makefiles: $configure_rel" >&2
@@ -57,7 +57,7 @@ esac
 test -s "$source_archive"
 test -s "$source_stamp"
 test -s "$runtime"
-clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+clang="$tool_bin/clang"
 test -x "$clang"
 work="$(/usr/bin/mktemp -d /tmp/orlix-package.XXXXXX)"
 trap '/bin/rm -rf "$work"' EXIT
@@ -77,11 +77,11 @@ configure_name="$(/usr/bin/basename "$configure_rel")"
 /bin/chmod +x "$src/$configure_name"
 cd "$src"
 CC="$clang" \
-CFLAGS="--target=aarch64-linux-gnu -isystem $headers -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=." \
-LDFLAGS="--target=aarch64-linux-gnu -fuse-ld=lld -nostdlib -static-pie -Wl,-z,max-page-size=0x4000 $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $runtime -Wl,--end-group $libraries/crtn.o" \
+CFLAGS="--target=aarch64-linux-gnu -isystem $headers -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools" \
+LDFLAGS="--target=aarch64-linux-gnu -fuse-ld=$tool_bin/ld.lld -nostdlib -static-pie -Wl,-z,max-page-size=0x4000 $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $runtime -Wl,--end-group $libraries/crtn.o" \
     "./$configure_name" --host=aarch64-linux-gnu --prefix=/usr
-/usr/bin/make -j1
-DESTDIR="$work/dest" /usr/bin/make -j1 install
+"$tool_bin/gmake" -j1
+DESTDIR="$work/dest" "$tool_bin/gmake" -j1 install
 test -x "$work/dest/usr/bin/true"
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
@@ -102,6 +102,7 @@ test -x "$work/dest/usr/bin/true"
             ctx.file.configure.short_path,
             source_archive.path,
             source_stamp.path,
+            ctx.file._gmake.path,
         ],
         inputs = depset(
             direct = [
@@ -112,7 +113,8 @@ test -x "$work/dest/usr/bin/true"
                 source_stamp,
                 ctx.file.configure,
                 ctx.file.source,
-            ] + source_files,
+                ctx.file._gmake,
+            ] + source_files + ctx.files._host_tools,
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
@@ -156,6 +158,8 @@ orlix_guest_package = rule(
         "source": attr.label(allow_single_file = True, mandatory = True),
         "package_name": attr.string(mandatory = True),
         "package_version": attr.string(mandatory = True),
+        "_gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "_host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,
             default = Label("//bazel:content_digest.py"),
