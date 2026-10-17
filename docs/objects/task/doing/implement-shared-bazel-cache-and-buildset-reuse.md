@@ -26,6 +26,7 @@ owned_paths:
   - ".github/workflows/bazel-ci.yml"
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"
+  - "OrlixKernel/Sources/ports/orlix/kbuild/source_state.py"
 read_only_paths:
   - "artifacts.lock.json"
   - "project.yml"
@@ -34,7 +35,6 @@ read_only_paths:
   - ".github/workflows/testflight-beta.yml"
 forbidden_paths:
   - "Orlix/**"
-  - "OrlixKernel/**"
 required_skills:
   - "orlix-bazel"
   - "orlix-implementation-boundaries"

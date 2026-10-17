@@ -3,6 +3,50 @@
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixLinuxArchiveInfo")
 
+# Linux 6.12.105 `headers_install` is a no-dot-config target. It reads UAPI
+# headers, Kbuild scripts, the top and arm64 Makefiles, and the arm64 syscall
+# tables. It does not read kernel, mm, fs, or driver .c files.
+_UAPI_TREE_PREFIXES = (
+    "include/uapi/",
+    "arch/arm64/include/uapi/",
+    "arch/arm64/tools/",
+    "scripts/",
+)
+_UAPI_EXACT = (
+    "Makefile",
+    "Kbuild",
+    "arch/arm64/Makefile",
+    "arch/arm64/kernel/Makefile.syscalls",
+)
+
+def _linux_relative(path):
+    marker = "orlix_linux_source/"
+    index = path.find(marker)
+    if index >= 0:
+        path = path[index + len(marker):]
+    if path.startswith("./"):
+        path = path[2:]
+    return path
+
+def _headers_install_source(path):
+    relative = _linux_relative(path)
+    for prefix in _UAPI_TREE_PREFIXES:
+        if relative.startswith(prefix):
+            return True
+    if relative.endswith(".c") or relative.endswith(".S"):
+        return False
+    for exact in _UAPI_EXACT:
+        if relative == exact:
+            return True
+    return False
+
+def _headers_install_sources(files):
+    selected = []
+    for file in files:
+        if _headers_install_source(file.path) or _headers_install_source(file.short_path):
+            selected.append(file)
+    return selected
+
 def _pinned_env(ctx):
     shell = ctx.configuration.default_shell_env
     developer_dir = shell.get("ORLIX_PINNED_DEVELOPER_DIR")
@@ -27,6 +71,21 @@ def _kernel_uapi_impl(ctx):
     patch_files = sorted(patch_files, key = lambda item: item.path)
     patch_list = ctx.actions.declare_file(ctx.label.name + "/patch-inputs.txt")
     ctx.actions.write(patch_list, "".join([item.path + "\n" for item in patch_files]))
+    pinned_inputs = [
+        ctx.file.linux_makefile,
+        ctx.file.archive_tool,
+        ctx.file.header_digest,
+        ctx.file.toolchain_identity,
+        patch_list,
+    ]
+    seen = {}
+    for item in pinned_inputs + patch_files:
+        seen[item.path] = True
+    linux_inputs = []
+    for file in _headers_install_sources(ctx.files.linux_source):
+        if file.path not in seen:
+            linux_inputs.append(file)
+            seen[file.path] = True
     ctx.actions.run_shell(
         mnemonic = "OrlixLinuxHeadersInstall",
         progress_message = "Installing upstream Linux arm64 UAPI headers",
@@ -119,16 +178,7 @@ digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"
             ctx.file.toolchain_identity.path,
             patch_list.path,
         ],
-        inputs = depset(
-            direct = [
-                ctx.file.linux_makefile,
-                ctx.file.archive_tool,
-                ctx.file.header_digest,
-                ctx.file.toolchain_identity,
-                patch_list,
-            ] + patch_files,
-            transitive = [ctx.attr.linux_source[DefaultInfo].files],
-        ),
+        inputs = depset(direct = pinned_inputs + patch_files + linux_inputs),
         outputs = [headers, archive, manifest, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,

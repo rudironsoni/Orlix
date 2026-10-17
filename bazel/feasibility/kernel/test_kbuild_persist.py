@@ -69,6 +69,54 @@ class KernelStateTests(unittest.TestCase):
                     self.assertEqual(child.wait(timeout=5), 0)
             self.assertEqual(marker.read_text(), "started")
 
+    def test_internal_c_edits_keep_the_kbuild_tree_and_drop_deleted_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            linux, isa = root / "linux", root / "isa"
+            port = root / "OrlixKernel" / "src" / "linux-6.12.105-port"
+            for name, data in {
+                "include/uapi/asm-generic/types.h": b"types\n",
+                "kernel/keep.c": b"int keep;\n",
+                "kernel/example.c": b"int example;\n",
+            }.items():
+                path = linux / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            isa.mkdir()
+            (isa / "manifest").write_bytes(b"isa\n")
+            config = root / "config"
+            config.write_bytes(b"CONFIG_PAGE_SIZE_4KB=y\n")
+            source_state.prepare(linux, port, [], [], config, isa, "release", root)
+            objects = root / "OrlixKernel" / "build" / "release"
+            keep_object = objects / "kernel" / "keep.o"
+            example_object = objects / "kernel" / "example.o"
+            example_cmd = objects / "kernel" / ".example.o.cmd"
+            sentinel = objects / "SENTINEL"
+            keep_object.parent.mkdir(parents=True)
+            keep_object.write_bytes(b"keep-object\n")
+            example_object.write_bytes(b"example-object\n")
+            example_cmd.write_bytes(b"cmd\n")
+            sentinel.write_bytes(b"tree\n")
+            (linux / "kernel" / "keep.c").write_bytes(b"int keep = 2;\n")
+            self.assertEqual(source_state.prepare(linux, port, [], [], config, isa, "release", root)["changed"], 1)
+            self.assertEqual((port / "kernel" / "keep.c").read_bytes(), b"int keep = 2;\n")
+            self.assertEqual(keep_object.read_bytes(), b"keep-object\n")
+            self.assertEqual(example_object.read_bytes(), b"example-object\n")
+            self.assertEqual(sentinel.read_bytes(), b"tree\n")
+            (linux / "kernel" / "example.c").unlink()
+            (linux / "kernel" / "added.c").write_bytes(b"int added;\n")
+            source_state.prepare(linux, port, [], [], config, isa, "release", root)
+            self.assertFalse((port / "kernel" / "example.c").exists())
+            self.assertEqual((port / "kernel" / "added.c").read_bytes(), b"int added;\n")
+            self.assertEqual((port / "kernel" / "keep.c").read_bytes(), b"int keep = 2;\n")
+            self.assertFalse(example_object.exists())
+            self.assertFalse(example_cmd.exists())
+            self.assertEqual(keep_object.read_bytes(), b"keep-object\n")
+            self.assertEqual(sentinel.read_bytes(), b"tree\n")
+            helper = Path(source_state.__file__).read_text(encoding="utf-8")
+            self.assertNotIn("make clean", helper)
+            self.assertNotIn("mrproper", helper)
+
     def test_corrupt_build_bytes_cannot_authorize_incremental_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
