@@ -209,8 +209,11 @@ class PackageStateTests(unittest.TestCase):
             self.assertNotIn("CCACHE_DIR", env)
             self.assertNotIn("DEVELOPER_DIR", env)
             self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], "")
-            self.assertEqual(env["ORLIX_PACKAGE_TOOL_BIN"], str(tool.parent))
-            self.assertTrue(env["PATH"].startswith(str(tool.parent)))
+            self.assertEqual(
+                os.path.realpath(env["ORLIX_PACKAGE_TOOL_BIN"]),
+                os.path.realpath(tool.parent),
+            )
+            self.assertTrue(env["PATH"].startswith(os.path.realpath(tool.parent)))
 
     def test_package_name_cannot_escape_local_state(self):
         with self.assertRaisesRegex(ValueError, "invalid package state name"):
