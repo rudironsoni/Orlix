@@ -159,6 +159,35 @@ while [ "$i" -lt "$engine_count" ]; do
   shift
   i=$((i + 1))
 done
+gmake_staged="$exec_root/$1"
+sed_staged="$exec_root/$2"
+llvm_ar_staged="$exec_root/$3"
+lld_staged="$exec_root/$4"
+llvm_nm_staged="$exec_root/$5"
+guest_clang_staged="$exec_root/$6"
+ccache_staged="$exec_root/$7"
+readlink_staged="$exec_root/$8"
+find_staged="$exec_root/$9"
+shift 9
+require_declared() {
+  staged="$1"
+  executed="$2"
+  test -s "$staged"
+  test -x "$executed"
+  /usr/bin/cmp -s "$staged" "$executed" || {
+    echo "host tool bytes are not the declared input: $executed" >&2
+    exit 1
+  }
+}
+require_declared "$gmake_staged" /opt/homebrew/bin/gmake
+require_declared "$sed_staged" /opt/homebrew/opt/gnu-sed/libexec/gnubin/sed
+require_declared "$llvm_ar_staged" /opt/homebrew/opt/llvm/bin/llvm-ar
+require_declared "$lld_staged" /opt/homebrew/opt/lld/bin/ld.lld
+require_declared "$llvm_nm_staged" /opt/homebrew/opt/llvm/bin/llvm-nm
+require_declared "$guest_clang_staged" /opt/homebrew/opt/llvm/bin/clang
+require_declared "$ccache_staged" /opt/homebrew/bin/ccache
+require_declared "$readlink_staged" /opt/homebrew/opt/coreutils/libexec/gnubin/readlink
+require_declared "$find_staged" /opt/homebrew/opt/findutils/libexec/gnubin/find
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -220,17 +249,7 @@ export ORLIX_KERNEL_HOST_SDKROOT="$sdkroot"
 export ORLIX_KERNEL_ARCHIVE_PLATFORMS
 export DEVELOPER_DIR
 cd "$exec_root"
-# kernel-rules.mk includes this file. It stays out of the action inputs.
-if [ "${#engine_paths[@]}" -gt 0 ]; then
-  provenance_root="$(/usr/bin/python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${engine_paths[0]}")"
-  while [ ! -f "$provenance_root/make/tcti-proof-registry-provenance.mk" ] && [ "$provenance_root" != "/" ]; do
-    provenance_root="$(/usr/bin/dirname "$provenance_root")"
-  done
-  if [ -f "$provenance_root/make/tcti-proof-registry-provenance.mk" ] && [ ! -e "$exec_root/make/tcti-proof-registry-provenance.mk" ]; then
-    /bin/mkdir -p "$exec_root/make"
-    /bin/ln -s "$provenance_root/make/tcti-proof-registry-provenance.mk" "$exec_root/make/tcti-proof-registry-provenance.mk"
-  fi
-fi
+test -s make/tcti-proof-registry-provenance.mk
 kbuild_log="$work/kbuild-make.log"
 kbuild_err="$work/kbuild-compiler.log"
 : > "$kbuild_log"
@@ -318,15 +337,42 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             product.path,
             ctx.file.toolchain_identity.path,
             ctx.file.compiler_identity.path,
-        ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files],
+        ] + [f.path for f in overlay_files] + [f.path for f in patch_files] + [f.path for f in config_files] + [f.path for f in engine_files] + [
+            ctx.file.gmake.path,
+            ctx.file.gnu_sed.path,
+            ctx.file.llvm_ar.path,
+            ctx.file.ld_lld.path,
+            ctx.file.llvm_nm.path,
+            ctx.file.guest_clang.path,
+            ctx.file.ccache.path,
+            ctx.file.gnu_readlink.path,
+            ctx.file.gnu_find.path,
+        ],
         inputs = depset(
-            direct = [script, ctx.file.linux_makefile, isa_tree, ctx.file.toolchain_identity, ctx.file.compiler_identity] + overlay_files + patch_files + config_files + engine_files,
+            direct = [
+                script,
+                ctx.file.linux_makefile,
+                isa_tree,
+                ctx.file.toolchain_identity,
+                ctx.file.compiler_identity,
+                ctx.file.provenance_makefile,
+                ctx.file.gmake,
+                ctx.file.gnu_sed,
+                ctx.file.llvm_ar,
+                ctx.file.ld_lld,
+                ctx.file.llvm_nm,
+                ctx.file.guest_clang,
+                ctx.file.ccache,
+                ctx.file.gnu_readlink,
+                ctx.file.gnu_find,
+            ] + overlay_files + patch_files + config_files + engine_files,
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-remote-cache": "1", "no-sandbox": "1"},
+        # output-base Kbuild state is a local accelerator. It is not an input.
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -388,6 +434,19 @@ orlix_kernel_macho_archive = rule(
         "isa_tree": attr.label(allow_single_file = True, mandatory = True),
         "toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "compiler_identity": attr.label(allow_single_file = True, mandatory = True),
+        "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
+        "gnu_sed": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/sed")),
+        "llvm_ar": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-ar")),
+        "ld_lld": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ld.lld")),
+        "llvm_nm": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-nm")),
+        "guest_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang")),
+        "ccache": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ccache")),
+        "gnu_readlink": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/readlink")),
+        "gnu_find": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/find")),
+        "provenance_makefile": attr.label(
+            allow_single_file = True,
+            default = Label("//:make/tcti-proof-registry-provenance.mk"),
+        ),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,
             default = Label("//bazel:content_digest.py"),
