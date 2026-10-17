@@ -161,7 +161,7 @@ jobs:
         run: make beta-upload-prerequisites
 
       - name: Upload and wait for TestFlight processing
-        uses: Apple-Actions/upload-testflight-build@65a84cdb671ee2ccfa93710cd58e8f7b5d251967 # v5.5.1
+        uses: Apple-Actions/upload-testflight-build@155ea93be9ee6d5186c71f660a612f5eddb14510 # v5.6.0
         with:
           app-path: Build/Release/Export/Orlix.ipa
           app-type: ios
