@@ -477,10 +477,11 @@ def macho_linked_libraries(binary: Path) -> list[Path]:
 
 
 def _copy_file(source: Path, destination: Path) -> None:
+    """Copy bytes and permission bits. Do not copy BSD file flags."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.is_symlink() or destination.exists():
         destination.unlink()
-    shutil.copy2(source, destination, follow_symlinks=True)
+    shutil.copy(source, destination, follow_symlinks=True)
     if os.access(source, os.X_OK):
         destination.chmod(destination.stat().st_mode | 0o755)
 
@@ -495,7 +496,7 @@ def _copy_tree(source: Path, destination: Path) -> None:
             if name in {"__pycache__", "site-packages"} or name.endswith(".pyc")
         ]
 
-    shutil.copytree(source, destination, symlinks=False, ignore=ignore)
+    shutil.copytree(source, destination, symlinks=False, ignore=ignore, copy_function=shutil.copy)
 
 
 def stage_binary(source: Path, bin_dir: Path, lib_dir: Path, seen: set[Path]) -> Path:
