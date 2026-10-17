@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-09-15
+updated: 2026-10-17
 ---
 # Orlix Knowledge Log
+
+## [2026-10-17] build | Make foreign actions and cache publication hermetic
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) declares the host tools that kernel, ISA restore, and guest package actions execute, and file-only artifact identity follows sandbox symlinks to file bytes. Those actions no longer carry `no-remote-cache`. `no-remote-exec` stays. Output-base Kbuild and package state stay local accelerators. A pull request product build does not hold the BuildBuddy write credential; the cache-equivalence seed is staged after that build. Only a push of `refs/heads/main` is a trusted writer. A disk hit, output-base hit, or ccache hit is not a remote cache hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-09-29] build | Route coreutils-tests through the Bazel Xcode project
 
