@@ -91,33 +91,29 @@ def _entry(path: Path, relative: str, *, allow_directory: bool) -> dict:
     raise ValueError(f"unsupported artifact entry: {path}")
 
 
-def _follow_staging(path: Path) -> Path:
-    """Follow Bazel sandbox and execroot symlinks to the real file or directory.
+def _sandbox_regular_file(path: Path) -> Optional[Path]:
+    """Follow one absolute symlink when it names a regular file.
 
-    An absolute target, or a parent-relative target, is staging. A product
-    relative symlink stays a symlink so its target remains the identity.
+    Bazel presents a sandboxed tree file as an absolute symlink to that file.
+    A product symlink such as ``usr/bin/foo -> ../../bin/foo`` stays a symlink.
+    An absolute symlink to a directory is not walked.
     """
-    seen: set[str] = set()
-    current = path
-    while True:
-        try:
-            metadata = current.lstat()
-        except OSError:
-            return current
-        if not stat.S_ISLNK(metadata.st_mode):
-            return current
-        target = os.readlink(current)
-        if not _origin_staging_symlink(target):
-            return current
-        if target.startswith("/"):
-            resolved = Path(target)
-        else:
-            resolved = Path(os.path.normpath(os.path.join(os.fspath(current.parent), target)))
-        key = os.fspath(resolved)
-        if key in seen:
-            raise ValueError(f"artifact symlink cycle: {path}")
-        seen.add(key)
-        current = resolved
+    try:
+        if not stat.S_ISLNK(path.lstat().st_mode):
+            return None
+    except OSError:
+        return None
+    target = os.readlink(path)
+    if not target.startswith("/"):
+        return None
+    resolved = Path(target)
+    try:
+        metadata = resolved.lstat()
+    except OSError:
+        return None
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        return None
+    return resolved
 
 
 def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
@@ -133,11 +129,11 @@ def _tree_entries(root: Path, *, files_only: bool = False) -> list[dict]:
     def walk(directory: Path, prefix: str) -> None:
         for child in sorted(directory.iterdir(), key=lambda item: item.name):
             relative = child.name if not prefix else prefix + "/" + child.name
-            # File-only manifests are the cacheable product boundary. Bazel
-            # presents those tree entries as absolute symlinks; follow them so
-            # the absolute sandbox path is not the identity. A full manifest
-            # still records a product symlink, including an absolute target.
-            source = _follow_staging(child) if files_only else child
+            source = child
+            if files_only:
+                followed = _sandbox_regular_file(child)
+                if followed is not None:
+                    source = followed
             entry = _entry(source, relative, allow_directory=True)
             entries.append(entry)
             if entry["type"] == "directory":

@@ -206,6 +206,46 @@ class ConsumerIdentityTests(unittest.TestCase):
             self.assertNotIn(str(tmp), text)
             self.assertIn("linux/unistd.h", text)
 
+    def test_files_only_does_not_replace_a_product_parent_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tree"
+            binary = root / "bin" / "foo"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"tool-bytes")
+            binary.chmod(0o755)
+            link_dir = root / "usr" / "bin"
+            link_dir.mkdir(parents=True)
+            link = link_dir / "foo"
+            link.symlink_to("../../bin/foo")
+            with self.assertRaisesRegex(ValueError, "cannot contain symlinks"):
+                artifact_manifest_v2(root, files_only=True)
+            manifest = json.loads(artifact_manifest_v2(root))
+            entry = next(item for item in manifest["entries"] if item["path"] == "usr/bin/foo")
+            self.assertEqual(entry["type"], "symlink")
+            self.assertEqual(entry["target"], "../../bin/foo")
+            self.assertNotIn("content_sha256", entry)
+
+    def test_files_only_does_not_walk_an_absolute_directory_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            outside = base / "outside"
+            outside.mkdir()
+            secret = outside / "secret"
+            secret.write_bytes(b"secret-bytes")
+            root = base / "tree"
+            root.mkdir()
+            (root / "kept").write_bytes(b"kept")
+            (root / "escape").symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, "cannot contain symlinks"):
+                artifact_manifest_v2(root, files_only=True)
+            recorded = artifact_manifest_v2(root)
+            self.assertNotIn(b"secret-bytes", recorded)
+            escape = next(
+                item for item in json.loads(recorded)["entries"] if item["path"] == "escape"
+            )
+            self.assertEqual(escape["type"], "symlink")
+            self.assertTrue(escape["target"].startswith("/"))
+
     def test_consumer_tree_ignores_directory_mode_and_origin_and_misses_on_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
