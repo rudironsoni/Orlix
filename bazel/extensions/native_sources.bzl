@@ -234,6 +234,14 @@ exports_files([
     "tools/bin/meson-python",
     "tools/bin/mke2fs",
     "tools/bin/debugfs",
+    "tools/bin/gmake",
+    "tools/bin/ccache",
+    "tools/bin/awk",
+    "tools/bin/sed",
+    "tools/bin/readlink",
+    "tools/bin/find",
+    "tools/bin/llvm-ranlib",
+    "tools/bin/llvm-objdump",
     "tools/sdk/SDKSettings.json",
 ], visibility = ["//visibility:public"])
 
