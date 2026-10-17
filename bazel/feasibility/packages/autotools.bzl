@@ -461,7 +461,9 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        # autoreconf, automake, aclocal, glibtoolize, and m4 still read
+        # /opt/homebrew share trees. Those trees are not action inputs.
+        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,

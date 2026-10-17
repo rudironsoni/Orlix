@@ -52,26 +52,26 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertNotIn("os.path.realpath", script)
         self.assertIn("make/tcti-proof-registry-provenance.mk", script)
 
-    def test_isa_restore_declares_gmake_and_awk(self) -> None:
+    def test_isa_restore_stays_uncached_without_tool_libraries(self) -> None:
         restore = _action_tail(self.rule, "OrlixTctiIsaRestore")
-        self.assertNotIn("no-remote-cache", restore)
+        self.assertIn('"no-remote-cache": "1"', restore)
         self.assertIn('"no-remote-exec": "1"', restore)
         self.assertIn("ctx.file.gmake", self.rule)
         self.assertIn("ctx.file.awk", self.rule)
         self.assertNotIn("/opt/homebrew/bin/gmake", restore)
-        self.assertIn('export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"', restore)
+        self.assertNotIn("export DYLD_LIBRARY_PATH", restore)
 
-    def test_kernel_archive_declares_host_tools(self) -> None:
+    def test_kernel_archive_does_not_publish_host_tool_results(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")
-        self.assertNotIn("no-remote-cache", archive)
+        self.assertIn('"no-remote-cache": "1"', archive)
         self.assertIn('"no-remote-exec": "1"', archive)
         self.assertIn('"no-sandbox": "1"', archive)
-        self.assertNotIn("no-remote-cache", self.rule)
-        self.assertIn("require_declared", self.rule)
-        self.assertIn("ctx.file.guest_clang", self.rule)
-        self.assertIn("ctx.file.provenance_makefile", self.rule)
-        self.assertIn("make/tcti-proof-registry-provenance.mk", self.rule)
-        self.assertNotIn("os.path.realpath", self.rule)
+        self.assertIn("command -v gmake", self.rule)
+        self.assertIn("/opt/homebrew/opt/llvm/bin/clang", self.rule)
+        self.assertIn("xcrun", self.rule)
+        self.assertIn('"$gmake_staged"', self.rule)
+        self.assertIn('"$provenance"', self.rule)
+        self.assertIn("source_state.resume", self.rule)
 
     def test_orlixcc_log_is_failure_only(self) -> None:
         failure, success = self.rule.split('if [ "$kbuild_status" -ne 0 ]; then', 1)[1].split("\nfi\n", 1)

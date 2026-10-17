@@ -18,16 +18,20 @@ POLICY = {
     "no_remote_cache_does_not_block": ("output_base_action_cache",),
     "no_remote_exec": True,
 }
-# Host tools for these producers are staged files. no-remote-cache is not a
-# substitute for a missing input. Output-base package state stays local.
-REQUIRED_NO_REMOTE_CACHE = ()
+# These stay uncached until the executed tools and their data are inputs:
+# OrlixKernelMachOArchive still runs host gmake, Homebrew clang, Xcode HOSTCC,
+# and xcrun. Dylibs and the SDK are not file inputs.
+# OrlixTctiIsaRestore does not input gmake's libraries or /usr/bin/python3.
+# Autotools OrlixGuestPackage still reads Homebrew share trees.
+REQUIRED_NO_REMOTE_CACHE = (
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
+    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
+)
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
@@ -66,7 +70,14 @@ class RemoteCachePolicyTests(unittest.TestCase):
 
     def test_required_producers_keep_no_remote_cache(self) -> None:
         seen = {mnemonic for _path, mnemonic in REQUIRED_NO_REMOTE_CACHE}
-        self.assertEqual(seen, set())
+        self.assertEqual(
+            seen,
+            {
+                "OrlixGuestPackage",
+                "OrlixKernelMachOArchive",
+                "OrlixTctiIsaRestore",
+            },
+        )
         for path, mnemonic in REQUIRED_NO_REMOTE_CACHE:
             matches = _requirements(path)[mnemonic]
             self.assertTrue(matches, mnemonic)
@@ -78,7 +89,7 @@ class RemoteCachePolicyTests(unittest.TestCase):
         requirements = _requirements("bazel/feasibility/kernel/kernel_macho.bzl")["OrlixKernelMachOArchive"]
         self.assertEqual(len(requirements), 1)
         self.assertEqual(requirements[0].get("no-sandbox"), "1")
-        self.assertNotIn("no-remote-cache", requirements[0])
+        self.assertEqual(requirements[0].get("no-remote-cache"), "1")
         self.assertEqual(requirements[0].get("no-remote-exec"), "1")
 
     def test_headers_payload_and_local_c_do_not_use_the_tag_as_cover(self) -> None:
