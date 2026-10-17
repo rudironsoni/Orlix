@@ -3,7 +3,7 @@
   "purpose": "Resolved workflow trigger, permission, environment, job, step, action, artifact, and release-operation inventory.",
   "workflows": {
     ".github/workflows/app-store-review.yml": {
-      "source_sha256": "76f4d6e96aa24fa75fbf87392c42fe9166a5ad09f481614c0936f9e9a5bae3ff",
+      "source_sha256": "5ae7be225f112befcebb4819f016768db694c70723f6015c167adbf5413299f4",
       "workflow": {
         "name": "Promote TestFlight beta to App Review",
         "on": {
@@ -67,7 +67,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@762794c140bbeda0f1224786aa33b4b46783a6c1",
+                "uses": "ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": true
@@ -948,7 +948,7 @@
       }
     },
     ".github/workflows/ios-build.yml": {
-      "source_sha256": "4d00de6334a469aeaad4d67fc425b447b5a53e635c77b14a8c82d783cd8fda39",
+      "source_sha256": "38f29805bc38543891b73d3f1aed36df9ab76bf2e61b8a36acc4d300924fc455",
       "workflow": {
         "name": "iOS Build",
         "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
@@ -1198,7 +1198,7 @@
               {
                 "name": "Setup Gradle",
                 "if": "steps.detect.outputs.type == 'kmp'",
-                "uses": "gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb"
+                "uses": "gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6"
               },
               {
                 "name": "Restore Pods cache",
@@ -1324,7 +1324,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "4ad5ef35c11345feece849812ebe5cbe026194c544f3762e8dae4d117bc33d36",
+      "source_sha256": "0aa123aea8823d697c4dda2398707e070bac723116a26a2622f259ba4ff73ac0",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1419,7 +1419,7 @@
               },
               {
                 "name": "Install mobai-ci + boot simulator",
-                "uses": "MobAI-App/mobai-ci@f551408608e57dec92693883c17189de9923c329",
+                "uses": "MobAI-App/mobai-ci@8fa18398cc9ba1ab3b6155e67b5ae3587c374522",
                 "with": {
                   "boot-sim": true
                 }
@@ -1547,7 +1547,7 @@
               {
                 "name": "Setup Gradle",
                 "if": "steps.detect.outputs.type == 'kmp'",
-                "uses": "gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb"
+                "uses": "gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6"
               },
               {
                 "name": "Capture Orlix toolchain manifest",
@@ -1850,7 +1850,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "d55ef83f4ce43f897ac5e25045d8f9d40f8f01b085d06c602ae5b602b47431e7",
+      "source_sha256": "e840e31bda7ccde76321e2a6d2d8df11d0afb6b92eec0b5b48e82a3a16010a16",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -1925,7 +1925,7 @@
               },
               {
                 "name": "Set up Ruby and pinned Fastlane",
-                "uses": "ruby/setup-ruby@762794c140bbeda0f1224786aa33b4b46783a6c1",
+                "uses": "ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8",
                 "with": {
                   "ruby-version": "3.4.8",
                   "bundler-cache": false
@@ -2010,7 +2010,7 @@
               },
               {
                 "name": "Upload and wait for TestFlight processing",
-                "uses": "Apple-Actions/upload-testflight-build@1fc69ca369a60b813eaaa2d936eda22794b52e17",
+                "uses": "Apple-Actions/upload-testflight-build@14df18fee5a4ff3b76971dd382f033494a0194e9",
                 "with": {
                   "app-path": "Build/Release/Export/Orlix.ipa",
                   "app-type": "ios",
