@@ -123,6 +123,7 @@ def _execution_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         "cacheHit": hits,
         "label": sorted(set(labels)),
         "mnemonic": dict(sorted(mnemonics.items())),
+        "remote_cache_hits": runners.get("remote cache hit", 0),
         "runner": dict(sorted(runners.items())),
     }
 

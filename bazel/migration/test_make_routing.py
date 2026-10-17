@@ -228,7 +228,8 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-current-simulator-gate", apple_ci)
         self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
         self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
-        self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 1)
+        self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 0)
+        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", apple_ci)
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]

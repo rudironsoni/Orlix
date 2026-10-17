@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-09-28
+updated: 2026-10-17
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -70,9 +70,11 @@ The cache-equivalence gate uses independent seed, cached, and uncached output
 bases. Seed and cached inherit BuildBuddy and do not use a private disk cache.
 Pull requests stay on the read key, which cannot publish those trees, so the
 seed invocation alone uses `ORLIX_CI_BUILDBUDDY_WRITE_API_KEY` on same-repo
-pull requests and main and sets `--remote_upload_local_results=true`. Forks
-do not receive that key and the seed fails closed. The rest of the pull-request
-job stays read-only. The cached side requires `cacheHit == true` and
+pull requests and main and sets `--remote_upload_local_results=true`. That
+credential is staged after the product build. A push is a trusted writer only
+when `github.ref` is `refs/heads/main`. Forks do not receive that key and the
+seed fails closed. The rest of the pull-request job stays read-only. The
+cached side requires `cacheHit == true` and
 `runner == "remote cache hit"` for UAPI, MLibC, and rootfs. A disk hit does
 not pass. The uncached side still disables the action cache, disk cache, and
 remote accept. Full component-tree comparison covers paths, modes, symlinks,

@@ -15,8 +15,8 @@ class CacheObservationTests(unittest.TestCase):
             execution = root / "execution.json"
             bep = root / "bep.json"
             execution.write_text(
-                ''.join(json.dumps({"runner": runner}, indent=2) for runner in (
-                    "remote cache hit", "disk cache hit", "local"
+                ''.join(json.dumps({"runner": runner, "cacheHit": runner != "local"}, indent=2) for runner in (
+                    "remote cache hit", "disk cache hit", "local", "output-base action cache"
                 ))
             )
             bep.write_text(json.dumps({"buildMetrics": {
