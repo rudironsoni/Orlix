@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
   "source_file": "project.yml",
-  "source_sha256": "cec53a0a64200cae40f3e2acebd4b1025cd08779b8787f5556f8fcc1b3bbf18f",
+  "source_sha256": "6a1b1541f54a169784f47ee1456ca6cbf79a120926393c1ba319583d1d63a1ad",
   "project": {
     "name": "Orlix",
     "options": {
@@ -59,19 +59,19 @@
     },
     "packages": {
       "MLXSwift": {
-        "url": "https://github.com/rudironsoni/mlx-swift",
+        "url": "https://github.com/ml-explore/mlx-swift",
         "revision": "7b6527f6eb6013c5221679ee08112c04aab6825e"
       },
       "SwiftCloudflared": {
-        "url": "https://github.com/rudironsoni/swift-cloudflared.git",
+        "url": "https://github.com/wiedymi/swift-cloudflared.git",
         "revision": "80eb5b73e00effe78c8d6d44d8aab8ffdd63e976"
       },
       "SwiftMosh": {
-        "url": "https://github.com/rudironsoni/swift-mosh",
+        "url": "https://github.com/wiedymi/swift-mosh",
         "revision": "e476c1e8745cc1d1a353bc72b8ee1d73eb35e197"
       },
       "SwiftET": {
-        "url": "https://github.com/rudironsoni/swift-et",
+        "url": "https://github.com/wiedymi/swift-et",
         "revision": "47cb48446af6565b5103ddaa431388c1d5bce366"
       },
       "SwiftNumerics": {

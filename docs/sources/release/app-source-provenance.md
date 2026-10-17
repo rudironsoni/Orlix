@@ -40,10 +40,10 @@ The pinned baseline `Package.resolved` records:
 
 | Package | Version or baseline declaration | Immutable revision |
 | --- | --- | --- |
-| `mlx-swift` | 0.29.1 iOS 15 compatibility fork | `7b6527f6eb6013c5221679ee08112c04aab6825e` |
-| `swift-cloudflared` | Orlix iOS 15 compatibility fork | `80eb5b73e00effe78c8d6d44d8aab8ffdd63e976` |
-| `swift-et` | Orlix iOS 15 compatibility fork | `47cb48446af6565b5103ddaa431388c1d5bce366` |
-| `swift-mosh` | Orlix iOS 15 compatibility fork | `e476c1e8745cc1d1a353bc72b8ee1d73eb35e197` |
+| `mlx-swift` | ml-explore/mlx-swift iOS 15 revision | `7b6527f6eb6013c5221679ee08112c04aab6825e` |
+| `swift-cloudflared` | wiedymi/swift-cloudflared iOS 15 revision | `80eb5b73e00effe78c8d6d44d8aab8ffdd63e976` |
+| `swift-et` | wiedymi/swift-et iOS 15 revision | `47cb48446af6565b5103ddaa431388c1d5bce366` |
+| `swift-mosh` | wiedymi/swift-mosh iOS 15 revision | `e476c1e8745cc1d1a353bc72b8ee1d73eb35e197` |
 | `swift-numerics` | 1.1.1 | `0c0290ff6b24942dadb83a929ffaaa1481df04a2` |
 | `tweetnacl-swiftwrap` | 1.1.0 | `f8fd111642bf2336b11ef9ea828510693106e954` |
 | `ZIPFoundation` | 0.9.9 | `edbeaa39b426e54702194b0a601342322f01e400` |

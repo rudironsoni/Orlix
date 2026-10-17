@@ -80,9 +80,14 @@ jobs:
       - name: Install declared build tools
         run: |
           set -euo pipefail
+          xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+          brew tap xcodesorg/made
+          git -C "$(brew --repo xcodesorg/made)" fetch origin "$xcodes_tap_revision"
+          git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
           brew trust --formula xcodesorg/made/xcodes
           brew bundle --file Brewfile
-          test "$(xcodes version)" = "2.0.3"
+          test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
+          test "$(xcodes version)" = "2.1.0"
 
       - name: Export the selected Xcode to Make
         run: |
