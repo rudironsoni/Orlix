@@ -55,12 +55,21 @@ class KernelMachOActionTests(unittest.TestCase):
         script_end = self.rule.index('""")', self.rule.index("ctx.actions.write(script"))
         self.assertNotIn("tcti-proof-registry-provenance.mk", self.rule[script_end:])
 
-    def test_remote_cache_stays_disabled(self) -> None:
+    def test_isa_restore_declares_gmake_and_awk(self) -> None:
+        restore = _action_tail(self.rule, "OrlixTctiIsaRestore")
+        self.assertNotIn("no-remote-cache", restore)
+        self.assertIn('"no-remote-exec": "1"', restore)
+        self.assertIn("ctx.file.gmake", self.rule)
+        self.assertIn("ctx.file.awk", self.rule)
+        self.assertNotIn("/opt/homebrew/bin/gmake", self.rule)
+        self.assertIn('export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"', self.rule)
+
+    def test_remote_cache_stays_disabled_until_kernel_tools_are_inputs(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")
         self.assertIn('"no-remote-cache": "1"', archive)
         self.assertIn('"no-remote-exec": "1"', archive)
         self.assertIn('"no-sandbox": "1"', archive)
-        self.assertEqual(self.rule.count('"no-remote-cache": "1"'), 2)
+        self.assertEqual(self.rule.count('"no-remote-cache": "1"'), 1)
 
     def test_orlixcc_log_is_failure_only(self) -> None:
         failure, success = self.rule.split('if [ "$kbuild_status" -ne 0 ]; then', 1)[1].split("\nfi\n", 1)
