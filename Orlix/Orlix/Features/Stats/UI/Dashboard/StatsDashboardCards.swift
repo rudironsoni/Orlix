@@ -553,11 +553,11 @@ package struct StorageCard: View {
 }
 
 package struct ProcessesCard: View {
-    package let processes: [ProcessInfo]
+    let processes: [ProcessInfo]
     package let processCount: Int
     package let style: StatsVisualStyle
-    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    let loadProcesses: (() async throws -> [ProcessInfo])?
     @State private var showingProcesses = false
 
     package var body: some View {

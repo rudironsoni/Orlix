@@ -13,7 +13,7 @@ final package class StatsPreferencesResolutionChannel:
 
     @discardableResult
     package func observeStatsPreferences(
-        _ observer: @escaping Observer
+        _ observer: @escaping (StatsPreferences) -> Void
     ) -> UUID {
         let id = UUID()
         observers[id] = observer

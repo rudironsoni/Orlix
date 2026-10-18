@@ -19,7 +19,7 @@ nonisolated package enum UnixProcessTelemetry {
     }
 
     package struct Collection {
-        package let processes: [ProcessInfo]
+        let processes: [ProcessInfo]
         package let totalCount: Int
     }
 
@@ -128,7 +128,7 @@ nonisolated package enum UnixProcessTelemetry {
         }
     }
 
-    static package func makeProcesses(
+    static func makeProcesses(
         from rows: [ProcessRow],
         intervalCPUPercentages: [Int: Double],
         memoryTotal: UInt64
