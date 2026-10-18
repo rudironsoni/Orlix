@@ -28,13 +28,16 @@ owned_paths:
   - ".github/workflows/bazel-nightly.yml"
   - ".github/workflows/bazel-promote.yml"
   - ".github/workflows/bazel-promoted-consumer-proof.yml"
+  - ".github/workflows/bazel-gc.yml"
+  - ".github/workflows/ios-build.yml"
+  - ".github/workflows/ios-share.yml"
+  - ".github/workflows/testflight-beta.yml"
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"
   - "OrlixKernel/Sources/ports/orlix/kbuild/source_state.py"
 read_only_paths:
   - "artifacts.lock.json"
   - "project.yml"
-  - ".github/workflows/testflight-beta.yml"
 forbidden_paths:
   - "Orlix/**"
 required_skills:
@@ -93,6 +96,6 @@ Rootfs uses its existing filesystem images as the cacheable product outputs.
 The producing action owns temporary assembly trees and validates their
 contents in the images. The provider and app consumers share this image boundary.
 
-GitHub Actions caches the slow setup that is outside Bazel action results. `xcodes runtimes install` for iOS 15.5 is skipped when that runtime is already available from the runner image. A restored `~/Library/Caches/Orlix/ios15-runtime` archive is installed from that directory and is not downloaded again. The iOS 26.5 runtime uses the same archive cache only when a job has to download it. The `macos-26` image is used directly when it already has that runtime. The Xcode named by `.xcode-version` is selected when it is already on the runner. Its download is cached only when `maxim-lobanov/setup-xcode` would not find that version. Homebrew source bottles for the Brewfile are cached, and the xcodes assertion stays `2.1.0`. `~/Library/Caches/Orlix/ccache` is cached with the pinned compiler identity. That directory is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. Kernel and Autotools keep `no-remote-cache`.
+GitHub Actions caches the slow setup that is outside Bazel action results. `prepare-runtime` asks `xcrun simctl list runtimes` before it installs anything. A runtime that command already lists is not installed again, whether the runner image or a restored cache provided it. A restored download archive is not an install. The installed `.simruntime` bundle is cached on its own and linked where simctl scans, so the next job lists it and skips `xcodes runtimes install`. The iOS 26.5 runtime is used directly when the image already lists it. Every workflow that selects Xcode skips the download when `.xcode-version` is already on the runner. Every workflow that runs Homebrew skips `brew bundle` when `brew bundle check` already passes. Homebrew source bottles stay cached, and the xcodes assertion stays `2.1.0`. `~/Library/Caches/Orlix/ccache` is cached with the pinned compiler identity on the product workflow. That directory is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. Kernel and Autotools keep `no-remote-cache`.
 
 `OrlixCompilerRuntime` is its own rule. The mlibc sysroot depends on that archive and does not compile the builtin sources. The recipe executes the staged clang, llvm-ar, mkdir, rm, and sort, and it does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

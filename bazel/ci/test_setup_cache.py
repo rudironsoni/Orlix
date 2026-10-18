@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import plistlib
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import setup_cache
 
@@ -115,6 +117,46 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertTrue(setup_cache.simctl_runtime_available("26.5", payload))
         self.assertFalse(setup_cache.simctl_runtime_available("15.5", payload))
         self.assertFalse(setup_cache.simctl_runtime_available("18.0", payload))
+        patched = {"runtimes": [{"version": "15.5.0", "isAvailable": True, "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5"}]}
+        self.assertTrue(setup_cache.simctl_runtime_available("15.5", patched))
+        self.assertEqual(
+            setup_cache.simctl_runtime_identifier("15.5", patched),
+            "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+        )
+
+    def test_listed_runtime_is_not_reinstalled_after_the_archive_restores(self) -> None:
+        payload = json.dumps({
+            "runtimes": [{
+                "version": "15.5",
+                "isAvailable": True,
+                "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                "bundlePath": "/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 15.5.simruntime",
+            }],
+        })
+
+        def fake_run(command, **kwargs):
+            if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary)
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
+        self.assertEqual(plan, "skip")
+
+    def test_restored_simruntime_is_linked_without_an_install_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "cache" / "iOS 15.5.simruntime" / "Contents"
+            bundle.mkdir(parents=True)
+            (bundle / "Info.plist").write_bytes(b"plist")
+            profiles = root / "Profiles" / "Runtimes"
+            linked = setup_cache.expose_restored_runtimes(root / "cache", profiles)
+            self.assertEqual(linked, [profiles / "iOS 15.5.simruntime"])
+            self.assertTrue((profiles / "iOS 15.5.simruntime").is_symlink())
+            self.assertEqual(setup_cache.runtime_commands("skip", "15.5", root / "cache"), [])
 
     def test_brewfile_formulae_keep_the_pinned_xcodes_tap(self) -> None:
         text = (ROOT / "Brewfile").read_text(encoding="utf-8")
@@ -205,8 +247,27 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             text = workflow_text(name)
             self.assertIn('prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"', text, name)
             self.assertIn('prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"', text, name)
+            self.assertIn('--runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"', text, name)
+            self.assertIn("orlix-installed-simruntimes-15.5-26.5", text, name)
+            self.assertIn("runtime-identifier --version 15.5", text, name)
+            self.assertIn("runtime-identifier --version 26.5", text, name)
             self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
             self.assertNotIn("sudo xcodes runtimes install", text, name)
+            self.assertNotIn('.version == "15.5"', text, name)
+
+    def test_every_installer_workflow_skips_xcode_and_homebrew_when_present(self) -> None:
+        for name in WORKFLOWS + (
+            "bazel-gc.yml",
+            "testflight-beta.yml",
+            "ios-build.yml",
+            "ios-share.yml",
+        ):
+            text = workflow_text(name)
+            self.assertIn("xcode-present", text, name)
+            self.assertIn("steps.xcode-present.outputs.installed == 'true'", text, name)
+            self.assertIn("steps.xcode-present.outputs.installed != 'true'", text, name)
+            self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
+            self.assertIn("skipping brew bundle", text, name)
         for name in WORKFLOWS:
             if name in RUNTIME_WORKFLOWS:
                 continue

@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Skip setup installers the runner already has
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) makes simulator preparation a no-op when `xcrun simctl list runtimes` already lists the required runtime. A restored download is not installed again. The installed `.simruntime` bundle is what the next job restores. Xcode download and `brew bundle` are skipped in every workflow that runs them when that installer is already satisfied. The Bazel output base stays out of `actions/cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Give compiler-rt its own Bazel rule
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves `OrlixCompilerRuntime` out of `orlix_mlibc_sysroot` into one rule the sysroot depends on. The recipe executes staged clang, llvm-ar, mkdir, rm, and sort, and declares the builtin sources, headers, clang resources, and tool libraries it opens. It does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

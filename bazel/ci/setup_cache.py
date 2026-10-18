@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -106,25 +107,140 @@ def archive_complete(directory: Path) -> bool:
     return False
 
 
+def runtime_matches(runtime: dict, version: str) -> bool:
+    """True when simctl lists this runtime, including a patch of a two-part version."""
+    observed = runtime.get("version")
+    if isinstance(observed, str):
+        if observed == version:
+            return True
+        try:
+            if version_satisfies(observed, version):
+                return True
+        except ValueError:
+            pass
+    if runtime.get("name") == f"iOS {version}":
+        return True
+    identifier = runtime.get("identifier")
+    suffix = "iOS-" + version.replace(".", "-")
+    return isinstance(identifier, str) and identifier.endswith(suffix)
+
+
 def simctl_runtime_available(version: str, payload: dict) -> bool:
     runtimes = payload.get("runtimes")
     if not isinstance(runtimes, list):
         return False
     for runtime in runtimes:
-        if not isinstance(runtime, dict):
+        if not isinstance(runtime, dict) or runtime.get("isAvailable") is False:
             continue
-        if runtime.get("version") == version and runtime.get("isAvailable") is True:
+        if runtime_matches(runtime, version):
             return True
     return False
+
+
+def simctl_runtime_identifier(version: str, payload: dict) -> str | None:
+    runtimes = payload.get("runtimes")
+    if not isinstance(runtimes, list):
+        return None
+    for runtime in runtimes:
+        if not isinstance(runtime, dict) or runtime.get("isAvailable") is False:
+            continue
+        if not runtime_matches(runtime, version):
+            continue
+        identifier = runtime.get("identifier")
+        if isinstance(identifier, str) and identifier.strip():
+            return identifier.strip()
+    return None
+
+
+def simctl_bundle_path(version: str, payload: dict) -> Path | None:
+    runtimes = payload.get("runtimes")
+    if not isinstance(runtimes, list):
+        return None
+    for runtime in runtimes:
+        if not isinstance(runtime, dict) or runtime.get("isAvailable") is False:
+            continue
+        if not runtime_matches(runtime, version):
+            continue
+        bundle = runtime.get("bundlePath")
+        if isinstance(bundle, str) and bundle.strip():
+            return Path(bundle.strip())
+    return None
+
+
+def simruntime_bundles(directory: Path) -> list[Path]:
+    if not directory.is_dir():
+        return []
+    found = []
+    for path in sorted(directory.rglob("*.simruntime")):
+        if path.is_dir() and (path / "Contents" / "Info.plist").is_file():
+            found.append(path)
+    return found
+
+
+def user_runtime_profiles() -> Path:
+    return Path.home() / "Library/Developer/CoreSimulator/Profiles/Runtimes"
+
+
+def expose_restored_runtimes(runtime_dir: Path, profiles_dir: Path | None = None) -> list[Path]:
+    """Link a restored installed runtime into the directory simctl scans.
+
+    Linking is not an install. ``xcodes runtimes install`` is not invoked.
+    """
+    profiles = user_runtime_profiles() if profiles_dir is None else profiles_dir
+    linked = []
+    for bundle in simruntime_bundles(runtime_dir):
+        if profiles.resolve() == bundle.parent.resolve():
+            linked.append(bundle)
+            continue
+        profiles.mkdir(parents=True, exist_ok=True)
+        dest = profiles / bundle.name
+        if not dest.exists() and not dest.is_symlink():
+            dest.symlink_to(bundle.resolve(), target_is_directory=True)
+        linked.append(dest)
+    return linked
+
+
+def read_simctl_runtimes() -> dict:
+    completed = subprocess.run(
+        ["xcrun", "simctl", "list", "runtimes", "-j"],
+        check=False, capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise SystemExit(f"simctl list runtimes failed: {detail}")
+    payload = json.loads(completed.stdout or "{}")
+    if not isinstance(payload, dict):
+        raise SystemExit("simctl list runtimes did not return an object")
+    return payload
+
+
+def publish_installed_runtime(version: str, payload: dict, runtime_dir: Path) -> bool:
+    """Copy an installed bundle into the cache directory after a cold install."""
+    source = simctl_bundle_path(version, payload)
+    if source is None or not source.is_dir():
+        return False
+    if source.parent.resolve() == runtime_dir.resolve():
+        return True
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    target = runtime_dir / source.name
+    if target.exists():
+        return True
+    try:
+        shutil.copytree(source, target, symlinks=True)
+    except OSError as error:
+        print(f"could not stage installed runtime {source}: {error}", file=sys.stderr)
+        return False
+    return target.is_dir()
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
     """Return skip, install-local, or download.
 
-    ``skip`` does not run ``xcodes runtimes install``: the runner image already
-    registered the runtime. ``install-local`` runs the install against a restored
-    archive, and xcodes reuses that file instead of downloading it. ``download``
-    is the cold path.
+    ``skip`` does not run ``xcodes runtimes install``. A runtime ``simctl list
+    runtimes`` already lists is skipped even when a download archive was
+    restored. Restoring that download is not an install. ``install-local`` is
+    only the cold path for an archive simctl does not list yet. ``download``
+    is the path with no archive.
     """
     if available:
         return "skip"
@@ -149,7 +265,10 @@ def runtime_commands(plan: str, version: str, archive_dir: Path) -> list[list[st
 
 def runtime_message(plan: str, version: str, archive_dir: Path) -> str:
     if plan == "skip":
-        return f"iOS {version} runtime is already available; skipping xcodes runtimes install"
+        return (
+            f"iOS {version} runtime is already listed by simctl; "
+            "skipping xcodes runtimes install"
+        )
     if plan == "install-local":
         return (
             f"iOS {version} runtime archive is restored at {archive_dir}; "
@@ -261,25 +380,42 @@ def capture_bottles(directory: Path, brewfile: Path) -> None:
             print(f"could not bottle {formula}", file=sys.stderr)
 
 
-def prepare_runtime(version: str, archive_dir: Path) -> str:
+def bundle_satisfied(brewfile: Path) -> bool:
     completed = subprocess.run(
-        ["xcrun", "simctl", "list", "runtimes", "-j"],
-        check=False, capture_output=True, text=True,
+        ["brew", "bundle", "check", "--file", str(brewfile)],
+        check=False,
     )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise SystemExit(f"simctl list runtimes failed: {detail}")
-    payload = json.loads(completed.stdout)
-    plan = runtime_plan(
-        available=simctl_runtime_available(version, payload),
-        archive_ready=archive_complete(archive_dir),
-    )
+    return completed.returncode == 0
+
+
+def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = None) -> str:
+    """Install a simulator runtime only when simctl does not already list it.
+
+    A restored installed bundle is exposed before the listing. A restored
+    download archive does not by itself run ``xcodes runtimes install``.
+    """
+    if runtime_dir is not None:
+        expose_restored_runtimes(runtime_dir)
+        if simruntime_bundles(runtime_dir):
+            # Select Xcode may have started CoreSimulator before the cache
+            # restore. Restart it so the restored bundle is listed.
+            subprocess.run(
+                ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"],
+                check=False,
+            )
+    if simctl_runtime_available(version, read_simctl_runtimes()):
+        print(runtime_message("skip", version, archive_dir))
+        return "skip"
+    plan = runtime_plan(available=False, archive_ready=archive_complete(archive_dir))
+    if simctl_runtime_available(version, read_simctl_runtimes()):
+        print(runtime_message("skip", version, archive_dir))
+        return "skip"
     print(runtime_message(plan, version, archive_dir))
-    if plan == "skip":
-        return plan
     archive_dir.mkdir(parents=True, exist_ok=True)
     for command in runtime_commands(plan, version, archive_dir):
         run_checked(command)
+    if runtime_dir is not None:
+        publish_installed_runtime(version, read_simctl_runtimes(), runtime_dir)
     return plan
 
 
@@ -293,9 +429,19 @@ def main(argv: list[str] | None = None) -> int:
     runtime = commands.add_parser("prepare-runtime")
     runtime.add_argument("--version", required=True)
     runtime.add_argument("--archive-dir", required=True, type=Path)
+    runtime.add_argument("--runtime-dir", type=Path)
 
     archive = commands.add_parser("archive-present")
     archive.add_argument("--archive-dir", required=True, type=Path)
+
+    staged = commands.add_parser("simruntime-present")
+    staged.add_argument("--runtime-dir", required=True, type=Path)
+
+    identifier = commands.add_parser("runtime-identifier")
+    identifier.add_argument("--version", required=True)
+
+    satisfied = commands.add_parser("bundle-satisfied")
+    satisfied.add_argument("--brewfile", required=True, type=Path)
 
     install = commands.add_parser("install-bottles")
     install.add_argument("--bottle-dir", required=True, type=Path)
@@ -313,10 +459,22 @@ def main(argv: list[str] | None = None) -> int:
         print("true" if found else "false")
         return 0 if found else 1
     if args.command == "prepare-runtime":
-        prepare_runtime(args.version, args.archive_dir)
+        prepare_runtime(args.version, args.archive_dir, args.runtime_dir)
         return 0
     if args.command == "archive-present":
         return 0 if archive_complete(args.archive_dir) else 1
+    if args.command == "simruntime-present":
+        return 0 if simruntime_bundles(args.runtime_dir) else 1
+    if args.command == "runtime-identifier":
+        found = simctl_runtime_identifier(args.version, read_simctl_runtimes())
+        if found is None:
+            raise SystemExit(f"iOS {args.version} runtime is not listed by simctl")
+        print(found)
+        return 0
+    if args.command == "bundle-satisfied":
+        ok = bundle_satisfied(args.brewfile)
+        print("true" if ok else "false")
+        return 0 if ok else 1
     if args.command == "install-bottles":
         install_bottles(args.bottle_dir)
         return 0
