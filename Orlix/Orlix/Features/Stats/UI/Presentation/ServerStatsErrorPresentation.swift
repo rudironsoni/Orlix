@@ -35,7 +35,7 @@ package extension ServerStatsCollector {
     }
 }
 
-nonisolated package extension ProcessControlError: LocalizedError {
+nonisolated extension ProcessControlError: LocalizedError {
     package var errorDescription: String? {
         switch self {
         case .notConnected:

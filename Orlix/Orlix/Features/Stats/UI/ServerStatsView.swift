@@ -19,15 +19,16 @@ package struct ServerStatsView: View {
     @ObservedObject private var volumeVisibilityStore: ServerVolumeVisibilityStore
     private let securityApprovalActions: ServerStatsSecurityApprovalActions
     private let isDockerUnlocked: Bool
+    private let presentDockerUpgrade: () -> Void
     @State private var isShowingAppearanceSettings = false
-    @State private var isShowingDockerUpgrade = false
 
     package init(
         server: Server,
         backgroundColor: Color,
         sharedClientProvider: @escaping () -> SSHClient? = { nil },
         dependencies: ServerStatsScreenDependencies,
-        isDockerUnlocked: Bool
+        isDockerUnlocked: Bool,
+        presentDockerUpgrade: @escaping () -> Void = {}
     ) {
         self.server = server
         self.backgroundColor = backgroundColor
@@ -39,6 +40,7 @@ package struct ServerStatsView: View {
         _volumeVisibilityStore = ObservedObject(wrappedValue: dependencies.volumeVisibilityStore)
         self.securityApprovalActions = dependencies.securityApprovalActions
         self.isDockerUnlocked = isDockerUnlocked
+        self.presentDockerUpgrade = presentDockerUpgrade
     }
 
     package var body: some View {
@@ -57,7 +59,7 @@ package struct ServerStatsView: View {
         ) {
             isShowingAppearanceSettings = true
         } showDockerUpgrade: {
-            isShowingDockerUpgrade = true
+            presentDockerUpgrade()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -67,7 +69,6 @@ package struct ServerStatsView: View {
                 colorScheme: resolvedColorScheme
             )
         )
-        .proUpgradePresentation(isPresented: $isShowingDockerUpgrade, source: .dockerStats)
         .statsDetailPresentation(isPresented: $isShowingAppearanceSettings, size: StatsPresentationSize.large) {
             StatsAppearanceSettingsSheet(store: preferencesStore)
         }
