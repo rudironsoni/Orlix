@@ -237,6 +237,7 @@ exports_files([
     "tools/bin/gmake",
     "tools/bin/ccache",
     "tools/bin/awk",
+    "tools/bin/printf",
     "tools/bin/sed",
     "tools/bin/readlink",
     "tools/bin/find",
@@ -264,6 +265,12 @@ filegroup(
 filegroup(
     name = "tool_libs",
     srcs = glob(["tools/lib/*.dylib"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "python_home",
+    srcs = glob(["tools/python-home/**"]),
     visibility = ["//visibility:public"],
 )
 

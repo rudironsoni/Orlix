@@ -52,14 +52,24 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertNotIn("os.path.realpath", script)
         self.assertIn("make/tcti-proof-registry-provenance.mk", script)
 
-    def test_isa_restore_stays_uncached_without_tool_libraries(self) -> None:
+    def test_isa_restore_executes_staged_tools(self) -> None:
         restore = _action_tail(self.rule, "OrlixTctiIsaRestore")
-        self.assertIn('"no-remote-cache": "1"', restore)
+        self.assertNotIn("no-remote-cache", restore)
         self.assertIn('"no-remote-exec": "1"', restore)
-        self.assertIn("ctx.file.gmake", self.rule)
-        self.assertIn("ctx.file.awk", self.rule)
-        self.assertNotIn("/opt/homebrew/bin/gmake", restore)
-        self.assertNotIn("export DYLD_LIBRARY_PATH", restore)
+        self.assertNotIn("/usr/bin", restore)
+        self.assertNotIn("/opt/homebrew", restore)
+        self.assertNotIn("xcrun", restore)
+        self.assertNotIn("mktemp", restore)
+        self.assertIn('export PATH="$tool_bin"', restore)
+        self.assertIn('export DYLD_LIBRARY_PATH="$tool_lib"', restore)
+        self.assertIn('export PYTHONHOME="$python_home"', restore)
+        self.assertIn('"$python_bin"', restore)
+        self.assertIn("source_state.resume", restore)
+        self.assertIn("ctx.files.tool_libs", restore)
+        self.assertIn("ctx.files.python_home", restore)
+        self.assertIn('"$printf_bin"', restore)
+        self.assertIn("tools/bin/meson-python", self.rule)
+        self.assertIn("tools/bin/printf", self.rule)
 
     def test_kernel_archive_executes_staged_tools(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")

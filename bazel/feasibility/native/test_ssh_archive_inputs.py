@@ -127,7 +127,11 @@ class SshArchiveInputTests(unittest.TestCase):
         autotools = (ROOT / "bazel/feasibility/packages/autotools.bzl").read_text(encoding="utf-8")
         coreutils = (ROOT / "bazel/feasibility/packages/coreutils.bzl").read_text(encoding="utf-8")
         bash = (ROOT / "bazel/feasibility/packages/bash.bzl").read_text(encoding="utf-8")
-        self.assertIn('"no-remote-cache": "1"', kernel)
+        for mnemonic in ("OrlixTctiIsaRestore", "OrlixKernelMachOArchive"):
+            start = kernel.index(f'mnemonic = "{mnemonic}"')
+            block = kernel[start:kernel.index("\n", kernel.index("execution_requirements = ", start))]
+            self.assertNotIn("no-remote-cache", block, mnemonic)
+            self.assertIn('"no-remote-exec": "1"', block, mnemonic)
         self.assertNotIn("no-remote-cache", autotools)
         self.assertNotIn("xcrun", autotools)
         self.assertNotIn("/opt/homebrew", autotools)
