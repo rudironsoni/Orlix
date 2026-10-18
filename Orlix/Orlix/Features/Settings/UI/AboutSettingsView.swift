@@ -233,4 +233,7 @@ package struct AboutSettingsView: View {
         guard let url = URL(string: urlString) else { return }
         openURL(url)
     }
+
+
+    package init() {}
 }

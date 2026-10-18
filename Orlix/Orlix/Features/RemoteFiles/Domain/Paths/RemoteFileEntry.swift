@@ -82,4 +82,39 @@ nonisolated package struct RemoteFileEntry: Identifiable, Hashable, Codable, Sen
             bits(0o004, 0o002, 0o001)
         ].joined()
     }
+
+
+    package init(
+
+        name: String,
+
+        path: String,
+
+        type: RemoteFileType,
+
+        size: UInt64? = nil,
+
+        modifiedAt: Date? = nil,
+
+        permissions: UInt32? = nil,
+
+        symlinkTarget: String? = nil
+
+    ) {
+
+        self.name = name
+
+        self.path = path
+
+        self.type = type
+
+        self.size = size
+
+        self.modifiedAt = modifiedAt
+
+        self.permissions = permissions
+
+        self.symlinkTarget = symlinkTarget
+
+    }
 }

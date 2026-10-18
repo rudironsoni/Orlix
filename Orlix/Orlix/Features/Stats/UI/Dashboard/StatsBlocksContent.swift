@@ -207,7 +207,34 @@ private struct StatsCardsGridLayout: Layout {
         package func width(forColumnSpan span: Int) -> CGFloat {
             columnWidth * CGFloat(span) + spacing * CGFloat(span - 1)
         }
-    }
+    
+
+        package init(
+
+            size: CGSize,
+
+            columnWidth: CGFloat,
+
+            items: [Item],
+
+            rowHeights: [CGFloat],
+
+            spacing: CGFloat
+
+        ) {
+
+            self.size = size
+
+            self.columnWidth = columnWidth
+
+            self.items = items
+
+            self.rowHeights = rowHeights
+
+            self.spacing = spacing
+
+        }
+}
 }
 
 package struct StatsBlocksContent: View {

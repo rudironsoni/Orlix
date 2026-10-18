@@ -126,6 +126,21 @@ nonisolated package enum TerminalOptionKeySide: Sendable {
 nonisolated package struct TerminalZoomResult: Hashable, Sendable {
     package let presentationOverrides: TerminalPresentationOverrides
     package let effectiveFontSize: Double
+
+
+    package init(
+
+        presentationOverrides: TerminalPresentationOverrides,
+
+        effectiveFontSize: Double
+
+    ) {
+
+        self.presentationOverrides = presentationOverrides
+
+        self.effectiveFontSize = effectiveFontSize
+
+    }
 }
 
 nonisolated package struct TerminalPresentationOverrides: Codable, Hashable, Sendable {

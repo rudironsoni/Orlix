@@ -58,6 +58,33 @@ nonisolated package struct PendingCloudKitPayloadEnvelope: Codable, Equatable, S
             throw PendingCloudKitPayloadEnvelopeError.invalidRoutingMetadata
         }
     }
+
+
+    package init(
+
+        entityType: String,
+
+        entityKey: String,
+
+        operation: PendingCloudKitMutationOperation,
+
+        drainPriority: Int,
+
+        encodedValue: Data
+
+    ) {
+
+        self.entityType = entityType
+
+        self.entityKey = entityKey
+
+        self.operation = operation
+
+        self.drainPriority = drainPriority
+
+        self.encodedValue = encodedValue
+
+    }
 }
 
 nonisolated package enum PendingCloudKitPayloadEnvelopeError: Error, Equatable {

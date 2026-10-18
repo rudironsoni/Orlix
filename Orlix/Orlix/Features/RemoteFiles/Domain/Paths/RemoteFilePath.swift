@@ -5,6 +5,21 @@ nonisolated package struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendabl
     package let path: String
 
     package var id: String { path }
+
+
+    package init(
+
+        title: String,
+
+        path: String
+
+    ) {
+
+        self.title = title
+
+        self.path = path
+
+    }
 }
 
 nonisolated package enum RemoteFilePath {

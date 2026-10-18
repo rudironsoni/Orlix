@@ -16,6 +16,9 @@ nonisolated final package class ReachabilityCompletionState: @unchecked Sendable
         didComplete = true
         return true
     }
+
+
+    package init() {}
 }
 
 @MainActor

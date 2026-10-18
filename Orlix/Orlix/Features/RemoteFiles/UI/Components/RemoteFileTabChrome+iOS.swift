@@ -81,6 +81,20 @@ package struct RemoteFileTabsBar: View {
         .padding(.horizontal, searchAlignedOuterHorizontalPadding)
         .padding(.vertical, 6)
     }
+
+    package init(
+        tabs: [RemoteFileTab],
+        selectedTabId: Binding<UUID?>,
+        titleForTab: @escaping (RemoteFileTab) -> String,
+        onSelect: @escaping (RemoteFileTab) -> Void,
+        onClose: @escaping (RemoteFileTab) -> Void
+    ) {
+        self.tabs = tabs
+        self._selectedTabId = selectedTabId
+        self.titleForTab = titleForTab
+        self.onSelect = onSelect
+        self.onClose = onClose
+    }
 }
 
 private struct RemoteFileTabButton: View {

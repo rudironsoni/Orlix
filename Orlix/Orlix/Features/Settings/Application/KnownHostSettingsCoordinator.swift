@@ -8,6 +8,25 @@ nonisolated package struct KnownHostSettingsItem: Identifiable, Equatable, Senda
 
     package var endpoint: String { "\(host):\(port)" }
     package var id: String { endpoint }
+
+
+    package init(
+
+        host: String,
+
+        port: Int,
+
+        lastSeenAt: Date
+
+    ) {
+
+        self.host = host
+
+        self.port = port
+
+        self.lastSeenAt = lastSeenAt
+
+    }
 }
 
 @MainActor

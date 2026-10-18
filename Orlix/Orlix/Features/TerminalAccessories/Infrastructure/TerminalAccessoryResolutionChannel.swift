@@ -29,4 +29,6 @@ final package class TerminalAccessoryResolutionChannel:
             observer(profile)
         }
     }
+
+    package init() {}
 }

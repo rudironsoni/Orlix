@@ -46,5 +46,8 @@ package struct TrustedHostsSettingsUITestHarness: View {
         .environmentObject(coordinator)
         .accessibilityIdentifier("orlix.trustedHostsSettingsTest.root")
     }
+
+
+    package init() {}
 }
 #endif

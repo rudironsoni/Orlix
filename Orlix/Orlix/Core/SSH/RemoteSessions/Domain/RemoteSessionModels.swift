@@ -13,6 +13,18 @@ nonisolated package struct RemoteSessionBackendMetadata: Hashable, Sendable {
     package let displayName: String
     package let installation: Installation
     package let managedStartupCommandSupport: ManagedStartupCommandSupport
+
+    package init(
+        identifier: RemoteSessionBackendIdentifier,
+        displayName: String,
+        installation: Installation,
+        managedStartupCommandSupport: ManagedStartupCommandSupport
+    ) {
+        self.identifier = identifier
+        self.displayName = displayName
+        self.installation = installation
+        self.managedStartupCommandSupport = managedStartupCommandSupport
+    }
 }
 
 nonisolated package enum ManagedStartupCommandSupport: Hashable, Sendable {
@@ -23,6 +35,21 @@ nonisolated package enum ManagedStartupCommandSupport: Hashable, Sendable {
 nonisolated package struct RemoteSessionThemeStyle: Hashable, Sendable {
     package let name: String
     package let modeStyle: String
+
+
+    package init(
+
+        name: String,
+
+        modeStyle: String
+
+    ) {
+
+        self.name = name
+
+        self.modeStyle = modeStyle
+
+    }
 }
 
 nonisolated package struct RemoteSessionSemanticVersion: Codable, Comparable, Hashable, Sendable {
@@ -209,6 +236,13 @@ nonisolated package struct RemoteSessionRuntime: Codable, Hashable, Sendable {
     package var backendIdentifier: RemoteSessionBackendIdentifier {
         probe.backendIdentifier
     }
+
+
+    package init(probe: RemoteSessionProbe) {
+
+        self.probe = probe
+
+    }
 }
 
 nonisolated package struct RemoteSessionIdentifier: Codable, Hashable, Sendable {
@@ -276,6 +310,21 @@ nonisolated package enum RemoteSessionOwnership: String, Codable, Hashable, Send
 nonisolated package struct RemoteSessionAttachment: Codable, Hashable, Sendable {
     package let identifier: RemoteSessionIdentifier
     package let ownership: RemoteSessionOwnership
+
+
+    package init(
+
+        identifier: RemoteSessionIdentifier,
+
+        ownership: RemoteSessionOwnership
+
+    ) {
+
+        self.identifier = identifier
+
+        self.ownership = ownership
+
+    }
 }
 
 nonisolated package struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sendable {
@@ -321,6 +370,33 @@ nonisolated package struct RemoteSessionLaunchRequest: Hashable, Sendable {
     package let themeStyle: RemoteSessionThemeStyle
 
     package var attachment: RemoteSessionAttachment { intent.attachment }
+
+
+    package init(
+
+        intent: RemoteSessionLaunchIntent,
+
+        workingDirectory: String,
+
+        lifecycleEnvelope: RemoteSessionLifecycleEnvelope,
+
+        transport: ShellTransport,
+
+        themeStyle: RemoteSessionThemeStyle
+
+    ) {
+
+        self.intent = intent
+
+        self.workingDirectory = workingDirectory
+
+        self.lifecycleEnvelope = lifecycleEnvelope
+
+        self.transport = transport
+
+        self.themeStyle = themeStyle
+
+    }
 }
 
 nonisolated package struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {

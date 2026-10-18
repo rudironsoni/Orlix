@@ -154,6 +154,41 @@ package struct TerminalFloatingControlButton: View {
             )
         )
     }
+
+
+    package init(
+
+        title: LocalizedStringKey,
+
+        systemImage: String,
+
+        accessibilityLabel: LocalizedStringKey,
+
+        accessibilityIdentifier: String,
+
+        showsTitle: Bool,
+
+        isPrimary: Bool = false,
+
+        action: @escaping () -> Void
+
+    ) {
+
+        self.title = title
+
+        self.systemImage = systemImage
+
+        self.accessibilityLabel = accessibilityLabel
+
+        self.accessibilityIdentifier = accessibilityIdentifier
+
+        self.showsTitle = showsTitle
+
+        self.isPrimary = isPrimary
+
+        self.action = action
+
+    }
 }
 
 private struct FloatingTerminalControlButtonStyle: ViewModifier {

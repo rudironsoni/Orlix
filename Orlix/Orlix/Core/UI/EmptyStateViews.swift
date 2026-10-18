@@ -49,6 +49,21 @@ package struct ServerConnectEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+
+    package init(
+
+        server: Server,
+
+        onConnect: @escaping () -> Void
+
+    ) {
+
+        self.server = server
+
+        self.onConnect = onConnect
+
+    }
 }
 
 package struct NoServerSelectedEmptyState: View {
@@ -77,6 +92,9 @@ package struct NoServerSelectedEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+
+    package init() {}
 }
 
 package struct NoServersEmptyState: View {
@@ -148,5 +166,20 @@ package struct NoServersEmptyState: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
+    }
+
+
+    package init(
+
+        onAddServer: @escaping () -> Void,
+
+        onAddWorkspace: (() -> Void)? = nil
+
+    ) {
+
+        self.onAddServer = onAddServer
+
+        self.onAddWorkspace = onAddWorkspace
+
     }
 }

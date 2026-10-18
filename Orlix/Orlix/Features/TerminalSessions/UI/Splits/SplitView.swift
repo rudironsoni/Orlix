@@ -296,5 +296,19 @@ package extension SplitView {
                 return String(localized: "Drag to resize the top and bottom panes")
             }
         }
-    }
+    
+        package init(
+            direction: SplitViewDirection,
+            visibleSize: CGFloat,
+            invisibleSize: CGFloat,
+            color: Color,
+            split: Binding<CGFloat>
+        ) {
+            self.direction = direction
+            self.visibleSize = visibleSize
+            self.invisibleSize = invisibleSize
+            self.color = color
+            self._split = split
+        }
+}
 }

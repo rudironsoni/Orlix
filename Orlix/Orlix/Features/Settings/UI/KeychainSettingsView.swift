@@ -214,6 +214,9 @@ package struct KeychainSettingsView: View {
             Label("Delete", systemImage: "trash")
         }
     }
+
+
+    package init() {}
 }
 
 // MARK: - SSH Key Row

@@ -31,4 +31,6 @@ final package class ConnectionViewSelectionStore: ObservableObject {
         selectionsByServer.removeAll()
     }
     #endif
+
+    package init() {}
 }

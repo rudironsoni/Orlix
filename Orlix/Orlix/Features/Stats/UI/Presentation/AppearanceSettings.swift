@@ -26,6 +26,10 @@ package struct StatsAppearanceSettingsSheet: View {
         .adaptiveSoftScrollEdges()
         #endif
     }
+
+    package init(store: PreferencesStore) {
+        self.store = store
+    }
 }
 
 package struct AppearanceSettings: View {
