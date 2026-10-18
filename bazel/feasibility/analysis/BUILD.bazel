@@ -143,6 +143,20 @@ bash_package_tree_test(
     ]
 ]
 
+[
+    guest_package_tree_test(
+        name = "%s_package_tree_test" % pkg,
+        expected_token = pkg,
+        require_configure = False,
+        target_under_test = "//bazel/feasibility/packages:%s" % pkg,
+    )
+    for pkg in [
+        "libcap",
+        "libselinux",
+        "libsepol",
+    ]
+]
+
 guest_package_tree_test(
     name = "getconf_package_tree_test",
     expected_token = "getconf.c",

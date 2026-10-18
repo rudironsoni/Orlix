@@ -6,6 +6,33 @@ load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
+_GUEST_SOURCE_MARKERS = [
+    "orlix_acl_source/",
+    "orlix_attr_source/",
+    "orlix_bash_source/",
+    "orlix_coreutils_source/",
+    "orlix_curl_source/",
+    "orlix_e2fsprogs_source/",
+    "orlix_findutils_source/",
+    "orlix_grep_source/",
+    "orlix_jq_source/",
+    "orlix_libcap_source/",
+    "orlix_libselinux_source/",
+    "orlix_libsepol_source/",
+    "orlix_musl_fts_source/",
+    "orlix_ncurses_source/",
+    "orlix_pcre2_source/",
+    "orlix_zsh_source/",
+]
+
+def _assert_package_configure_is_private(env, joined, owner):
+    asserts.false(env, "assembly_policy.txt" in joined, joined)
+    if owner:
+        asserts.true(env, owner in joined, owner)
+    for marker in _GUEST_SOURCE_MARKERS:
+        if marker != owner:
+            asserts.false(env, marker in joined, "foreign package source %s" % marker)
+
 def _uapi_providers_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
@@ -252,6 +279,7 @@ def _package_tree_test_impl(ctx):
             asserts.false(env, "OrlixMLibC/Makefile" in joined)
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.true(env, "packages/true/configure" in joined)
+            _assert_package_configure_is_private(env, joined, "")
     asserts.true(env, found)
     return analysistest.end(env)
 
@@ -279,6 +307,7 @@ def _coreutils_package_tree_test_impl(ctx):
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, "configure" in joined)
             asserts.true(env, "coreutils" in joined)
+            _assert_package_configure_is_private(env, joined, "orlix_coreutils_source/")
     asserts.true(env, found)
     return analysistest.end(env)
 
@@ -308,6 +337,7 @@ def _bash_package_tree_test_impl(ctx):
             asserts.true(env, "bash" in joined)
             asserts.false(env, "uapi.sha256" in joined)
             asserts.true(env, "bash-identity.json" in joined)
+            _assert_package_configure_is_private(env, joined, "orlix_bash_source/")
     asserts.true(env, found)
     return analysistest.end(env)
 
@@ -334,6 +364,10 @@ def _guest_package_tree_test_impl(ctx):
             asserts.false(env, "OrlixOS/Sources/make" in joined)
             asserts.false(env, "OrlixCoreUtils/Makefile" in joined)
             asserts.true(env, ctx.attr.expected_token in joined)
+            owner = ""
+            if "." not in ctx.attr.expected_token:
+                owner = "orlix_%s_source/" % ctx.attr.expected_token.replace("-", "_")
+            _assert_package_configure_is_private(env, joined, owner)
             if ctx.attr.require_configure:
                 asserts.true(env, "configure" in joined)
                 asserts.false(env, "uapi.sha256" in joined)
@@ -394,21 +428,14 @@ def _rootfs_info_test_impl(ctx):
             asserts.true(env, "getconf" in joined)
             asserts.true(env, "getent" in joined)
             asserts.true(env, "init" in joined)
+            asserts.true(env, "assembly_policy.txt" in joined)
+            for marker in _GUEST_SOURCE_MARKERS:
+                asserts.false(env, marker in joined, "package source %s is a rootfs input" % marker)
             command = " ".join(action.argv)
-            for tool in [
-                "getfattr",
-                "setfattr",
-                "getfacl",
-                "setfacl",
-                "getcap",
-                "setcap",
-                "getenforce",
-                "setenforce",
-                "selinuxenabled",
-                "policyvers",
-                "getpolicyload",
-            ]:
-                asserts.true(env, tool in command)
+            asserts.true(env, "copy_bin" in command)
+            asserts.true(env, "image_file" in command)
+            asserts.true(env, "image_link" in command)
+            asserts.true(env, "unknown rootfs policy" in command)
     asserts.true(env, found)
     return analysistest.end(env)
 

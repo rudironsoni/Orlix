@@ -838,7 +838,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_tcti_isa_pin
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
-	@python3 -m unittest bazel.feasibility.kernel.test_uapi_inputs bazel.feasibility.mlibc.test_build_state bazel.feasibility.mlibc.test_rule_text
+	@python3 -m unittest bazel.feasibility.kernel.test_uapi_inputs bazel.feasibility.mlibc.test_build_state bazel.feasibility.mlibc.test_rule_text bazel.feasibility.packages.test_action_inputs
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/packages" python3 -m unittest test_build_state
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_stage_v2_product
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare

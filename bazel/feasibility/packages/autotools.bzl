@@ -1,5 +1,6 @@
 """Pinned Autotools guest packages from OrlixMLibC sysroot and UAPI."""
 
+load(":action_inputs.bzl", "guest_configure_inputs")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
@@ -446,7 +447,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             extra_input.path if extra_input else "",
         ],
         inputs = depset(
-            direct = [
+            direct = guest_configure_inputs(ctx.attr.package_name, [
                 script,
                 ctx.file.toolchain_identity,
                 ctx.file.compiler_identity,
@@ -459,7 +460,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 ctx.file.gmake,
-            ] + ctx.files.sources + ctx.files.host_tools + ([extra_input] if extra_input else []),
+            ] + ctx.files.sources + ctx.files.host_tools + ([extra_input] if extra_input else [])),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),

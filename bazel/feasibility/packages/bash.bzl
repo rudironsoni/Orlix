@@ -1,5 +1,6 @@
 """Pinned GNU Bash Autotools package from OrlixMLibC sysroot and UAPI."""
 
+load(":action_inputs.bzl", "guest_configure_inputs")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
@@ -142,7 +143,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             ctx.attr.package_version,
         ],
         inputs = depset(
-            direct = [
+            direct = guest_configure_inputs(ctx.attr.package_name, [
                 script,
                 ctx.file.toolchain_identity,
                 ctx.file.compiler_identity,
@@ -154,7 +155,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 ctx.file.gmake,
-            ] + ctx.files.sources + ctx.files.host_tools,
+            ] + ctx.files.sources + ctx.files.host_tools),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),

@@ -4,6 +4,8 @@ load("//bazel/selection:boundary.bzl", "orlix_selected_rootfs")
 
 package(default_visibility = ["//visibility:private"])
 
+exports_files(["assembly_policy.txt"])
+
 cc_binary(
     name = "gen_init_cpio",
     srcs = ["@orlix_linux_source//:usr/gen_init_cpio.c"],
