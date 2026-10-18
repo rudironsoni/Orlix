@@ -104,23 +104,23 @@ export bash_cv_func_strchrnul_works=yes
 if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
   "$work/src/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses
 fi
-/usr/bin/printf '0\n' > .build
-/usr/bin/printf 'bash: %s %s %s %s %s %s %s %s %s\n' "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" "$libraries/crt1.o" "$libraries/crti.o" "$libraries/crtn.o" > orlix-link-inputs.mk
-/usr/bin/printf 'version.h: %s\npipesize.h: %s\nbuiltins/libbuiltins.a: %s\n' "$work/src/support/mkversion.sh" "$work/src/builtins/psize.sh" "$work/src/builtins/psize.sh" >> orlix-link-inputs.mk
+"$tool_bin/printf" '0\n' > .build
+"$tool_bin/printf" 'bash: %s %s %s %s %s %s %s %s %s\n' "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" "$libraries/crt1.o" "$libraries/crti.o" "$libraries/crtn.o" > orlix-link-inputs.mk
+"$tool_bin/printf" 'version.h: %s\npipesize.h: %s\nbuiltins/libbuiltins.a: %s\n' "$work/src/support/mkversion.sh" "$work/src/builtins/psize.sh" "$work/src/builtins/psize.sh" >> orlix-link-inputs.mk
 export MAKEFILES="$work/build/orlix-link-inputs.mk"
 "$MAKE" -f Makefile -f orlix-link-inputs.mk -j1 bash
-/usr/bin/install -m 0755 bash "$work/dest/usr/bin/bash"
+"$tool_bin/install" -m 0755 bash "$work/dest/usr/bin/bash"
 "$strip_bin" "$work/dest/usr/bin/bash"
 /usr/bin/file "$work/dest/usr/bin/bash" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || {
   /usr/bin/file "$work/dest/usr/bin/bash" >&2
   exit 1
 }
-"$objdump_bin" -p "$work/dest/usr/bin/bash" | /usr/bin/awk '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "Orlix Bash PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'
+"$objdump_bin" -p "$work/dest/usr/bin/bash" | "$tool_bin/awk" '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "Orlix Bash PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
 (cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
-/usr/bin/printf '%s\n' 'license=GPL-3.0-or-later' > "$license_manifest"
-/usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$package_name" "$package_version" > "$metadata"
+"$tool_bin/printf" '%s\n' 'license=GPL-3.0-or-later' > "$license_manifest"
+"$tool_bin/printf" 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$package_name" "$package_version" > "$metadata"
 if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 """.replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
     ctx.actions.run_shell(

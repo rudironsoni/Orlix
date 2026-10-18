@@ -150,7 +150,7 @@ while IFS= read -r program; do
   source_program="$program"
   if [ "$program" = install ]; then source_program=ginstall; fi
   program_targets+=("src/$source_program")
-  /usr/bin/printf 'src/%s: private .EXTRA_PREREQS := %s\n' "$source_program" "$link_inputs" >> "$work/build/orlix-link-inputs.mk"
+  "$tool_bin/printf" 'src/%s: private .EXTRA_PREREQS := %s\n' "$source_program" "$link_inputs" >> "$work/build/orlix-link-inputs.mk"
 done < "$programs_file"
 "$gmake" -f Makefile -f orlix-link-inputs.mk -j1 "${program_targets[@]}" MANS= INFO_DEPS=
 nm_bin="$tool_bin/llvm-nm"
@@ -167,7 +167,7 @@ while IFS= read -r program; do
   source_program="$program"
   if [ "$program" = "install" ]; then source_program=ginstall; fi
   if [ "$program" = "[" ]; then source_program='['; fi
-  /usr/bin/install -m 0755 "src/$source_program" "$work/dest/usr/bin/$program"
+  "$tool_bin/install" -m 0755 "src/$source_program" "$work/dest/usr/bin/$program"
   "$strip_bin" "$work/dest/usr/bin/$program"
   /usr/bin/file "$work/dest/usr/bin/$program" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || {
     /usr/bin/file "$work/dest/usr/bin/$program" >&2
@@ -179,8 +179,8 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
 (cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
-/usr/bin/printf '%s\n' 'license=GPL-3.0-or-later' > "$license_manifest"
-/usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\ngit_commit=%s\ngnulib_git_url=https://github.com/coreutils/gnulib.git\n' "$package_name" "$package_version" "$git_commit" > "$metadata"
+"$tool_bin/printf" '%s\n' 'license=GPL-3.0-or-later' > "$license_manifest"
+"$tool_bin/printf" 'name=%s\nversion=%s\nengine=configure-make-destdir\ngit_commit=%s\ngnulib_git_url=https://github.com/coreutils/gnulib.git\n' "$package_name" "$package_version" "$git_commit" > "$metadata"
 """.replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
