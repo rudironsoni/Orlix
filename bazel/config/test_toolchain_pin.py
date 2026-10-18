@@ -300,6 +300,7 @@ class ToolchainPinTests(unittest.TestCase):
             library.mkdir()
             (library / "libSystem.tbd").write_text("tbd\n", encoding="utf-8")
             (sdk / "SDKSettings.json").write_text("{}\n", encoding="utf-8")
+            (sdk / "SDKSettings.plist").write_text("<plist/>\n", encoding="utf-8")
             headers = sdk / "System" / "Library" / "Frameworks" / "Ruby.framework" / "Versions" / "2.6" / "Headers"
             headers.mkdir(parents=True)
             (headers / "ruby").symlink_to(headers)
@@ -311,6 +312,7 @@ class ToolchainPinTests(unittest.TestCase):
             self.assertEqual((destination / "usr/include/stdio.h").read_text(encoding="utf-8"), "int printf(const char *, ...);\n")
             self.assertEqual((destination / "usr/lib/libSystem.tbd").read_text(encoding="utf-8"), "tbd\n")
             self.assertTrue((destination / "SDKSettings.json").is_file())
+            self.assertEqual((destination / "SDKSettings.plist").read_text(encoding="utf-8"), "<plist/>\n")
             self.assertFalse((destination / "usr/include/ruby").exists())
             self.assertFalse((destination / "usr/include/escape.h").exists())
             self.assertFalse((destination / "System").exists())

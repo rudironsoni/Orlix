@@ -195,6 +195,9 @@ done
 test -d "$tool_lib"
 test -d "$guest_lib"
 test -s "$sdkroot/SDKSettings.json"
+test -s "$sdkroot/SDKSettings.plist"
+bison_share="$tool_root/share/bison"
+test -s "$bison_share/m4sugar/m4sugar.m4"
 case "$linux_makefile" in
   *orlix_linux_source*/Makefile) ;;
   *) echo "kernel Mach-O must consume upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
@@ -217,7 +220,7 @@ work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
 export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
 provenance="$exec_root/make/tcti-proof-registry-provenance.mk"
-/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$host_clang" "$provenance" "$tool_lib" "$guest_lib" "$sdkroot"
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$host_clang" "$provenance" "$tool_lib" "$guest_lib" "$sdkroot" "$bison_share"
 port="$work/OrlixKernel/src/linux-6.12.105-port"
 profile_config=""
 for rel in "${config_paths[@]}"; do
@@ -366,7 +369,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
                 ctx.file.gnu_readlink,
                 ctx.file.gnu_find,
                 ctx.file.host_clang,
-            ] + overlay_files + patch_files + config_files + engine_files + ctx.files.tool_libs + ctx.files.guest_clang_support + ctx.files.clang_resources + ctx.files.macos_sdk,
+            ] + overlay_files + patch_files + config_files + engine_files + ctx.files.tool_libs + ctx.files.guest_clang_support + ctx.files.clang_resources + ctx.files.macos_sdk + ctx.files.bison_share + [ctx.file.sdk_settings_plist],
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
@@ -451,6 +454,8 @@ orlix_kernel_macho_archive = rule(
         "guest_clang_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:guest_clang_support")),
         "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
         "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
+        "sdk_settings_plist": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/sdk/SDKSettings.plist")),
+        "bison_share": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:bison_share")),
         "provenance_makefile": attr.label(
             allow_single_file = True,
             default = Label("//:make/tcti-proof-registry-provenance.mk"),
