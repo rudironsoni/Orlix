@@ -6,14 +6,14 @@ import OrlixModels
 import OrlixSSH
 #endif
 nonisolated package enum ServerConnectionTestFailureReason: Equatable, Sendable {
-    package case message(String)
-    package case tailscale(String)
-    package case eternalTerminal(
+    case message(String)
+    case tailscale(String)
+    case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
         port: Int
     )
-    package case hostKeyApprovalExpired
+    case hostKeyApprovalExpired
 }
 
 nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
@@ -23,9 +23,9 @@ nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
 }
 
 nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {
-    package case success
-    package case failure(ServerConnectionTestFailure)
-    package case cancelled
+    case success
+    case failure(ServerConnectionTestFailure)
+    case cancelled
 }
 
 nonisolated package protocol ServerConnectionTesting: Sendable {

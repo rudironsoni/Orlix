@@ -1,13 +1,13 @@
 import Foundation
 
 nonisolated package enum RemoteSessionEvent: String, Codable, CaseIterable, Hashable, Sendable {
-    package case attached
-    package case detached
-    package case terminated
-    package case creationFailed
-    package case attachFailed
-    package case transportInterrupted
-    package case observationAmbiguous
+    case attached
+    case detached
+    case terminated
+    case creationFailed
+    case attachFailed
+    case transportInterrupted
+    case observationAmbiguous
 }
 
 nonisolated package struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {

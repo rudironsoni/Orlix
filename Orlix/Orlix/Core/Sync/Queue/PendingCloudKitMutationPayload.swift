@@ -1,8 +1,8 @@
 import Foundation
 
 nonisolated package enum PendingCloudKitMutationOperation: String, Codable, Equatable, Sendable {
-    package case upsert
-    package case delete
+    case upsert
+    case delete
 }
 
 nonisolated package struct PendingCloudKitPayloadEnvelope: Codable, Equatable, Sendable {

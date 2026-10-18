@@ -1,9 +1,9 @@
 import Foundation
 
 nonisolated package enum TranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
-    package case system
-    package case mlxWhisper
-    package case mlxParakeet
+    case system
+    case mlxWhisper
+    case mlxParakeet
 
     nonisolated package var id: String { rawValue }
 }

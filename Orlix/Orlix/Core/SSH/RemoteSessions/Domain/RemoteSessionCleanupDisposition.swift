@@ -4,9 +4,9 @@ import Foundation
 /// This is separate from client counts because some backends expose lifecycle
 /// state without exposing an attached-client count.
 nonisolated package enum RemoteSessionCleanupDisposition: String, Codable, Hashable, Sendable {
-    package case inUse
-    package case safeToDelete
-    package case unknown
+    case inUse
+    case safeToDelete
+    case unknown
 
     package init(attachedClientCount: Int?) {
         guard let attachedClientCount else {

@@ -13,9 +13,9 @@ import UIKit
 #endif
 
 package enum AppearanceMode: String, CaseIterable {
-    package case system = "system"
-    package case light = "light"
-    package case dark = "dark"
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
 
     package var label: String {
         switch self {

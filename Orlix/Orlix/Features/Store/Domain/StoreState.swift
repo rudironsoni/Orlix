@@ -7,25 +7,25 @@ nonisolated package struct StoreProduct: Identifiable, Equatable, Sendable {
 }
 
 nonisolated package enum StorePurchaseResult: Equatable, Sendable {
-    package case verified(productId: String)
-    package case unverified(productId: String)
-    package case userCancelled
-    package case pending
-    package case unknown
+    case verified(productId: String)
+    case unverified(productId: String)
+    case userCancelled
+    case pending
+    case unknown
 }
 
 nonisolated package enum StoreTransactionUpdate: Equatable, Sendable {
-    package case verified(productId: String)
-    package case unverified(productId: String)
+    case verified(productId: String)
+    case unverified(productId: String)
 }
 
 nonisolated package enum StoreSubscriptionState: Equatable, Sendable {
-    package case subscribed
-    package case inGracePeriod
-    package case inBillingRetryPeriod
-    package case expired
-    package case revoked
-    package case unknown
+    case subscribed
+    case inGracePeriod
+    case inBillingRetryPeriod
+    case expired
+    case revoked
+    case unknown
 }
 
 nonisolated package struct StoreSubscriptionEntitlement: Equatable, Sendable {
@@ -34,8 +34,8 @@ nonisolated package struct StoreSubscriptionEntitlement: Equatable, Sendable {
 }
 
 nonisolated package enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
-    package case verified(Value)
-    package case unverified
+    case verified(Value)
+    case unverified
 }
 
 nonisolated package struct StoreSubscriptionTransaction: Equatable, Sendable {
@@ -54,10 +54,10 @@ nonisolated package struct StoreSubscriptionStatus: Equatable, Sendable {
 }
 
 nonisolated package enum PurchaseState: Equatable {
-    package case idle
-    package case purchasing
-    package case purchased
-    package case failed(String)
+    case idle
+    case purchasing
+    case purchased
+    case failed(String)
 
     static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
         switch (lhs, rhs) {
@@ -72,10 +72,10 @@ nonisolated package enum PurchaseState: Equatable {
 }
 
 nonisolated package enum RestoreState: Equatable {
-    package case idle
-    package case restoring
-    package case restored(hasAccess: Bool)
-    package case failed(String)
+    case idle
+    case restoring
+    case restored(hasAccess: Bool)
+    case failed(String)
 
     static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
         switch (lhs, rhs) {
@@ -92,18 +92,18 @@ nonisolated package enum RestoreState: Equatable {
 }
 
 nonisolated package enum PaywallSource: String, Equatable, Sendable {
-    package case general
-    package case serverLimit = "server_limit"
-    package case workspaceLimit = "workspace_limit"
-    package case tabLimit = "tab_limit"
-    package case fileTabLimit = "file_tab_limit"
-    package case splitPane = "split_pane"
-    package case customEnvironment = "custom_environment"
-    package case snippetLimit = "snippet_limit"
-    package case welcome
-    package case settings
-    package case sidebarBanner = "sidebar_banner"
-    package case dockerStats = "docker_stats"
+    case general
+    case serverLimit = "server_limit"
+    case workspaceLimit = "workspace_limit"
+    case tabLimit = "tab_limit"
+    case fileTabLimit = "file_tab_limit"
+    case splitPane = "split_pane"
+    case customEnvironment = "custom_environment"
+    case snippetLimit = "snippet_limit"
+    case welcome
+    case settings
+    case sidebarBanner = "sidebar_banner"
+    case dockerStats = "docker_stats"
 }
 
 nonisolated package enum OrlixProducts {
@@ -116,7 +116,7 @@ nonisolated package enum OrlixProducts {
 }
 
 nonisolated package enum StoreError: Error {
-    package case verificationFailed
-    package case productNotFound
-    package case purchaseFailed(String)
+    case verificationFailed
+    case productNotFound
+    case purchaseFailed(String)
 }

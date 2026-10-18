@@ -1,15 +1,15 @@
 import Foundation
 
 nonisolated package enum TerminalThemeValidationError: Error {
-    package case emptyContent
-    package case invalidLine(line: Int)
-    package case invalidHex(line: Int)
-    package case invalidPalette(line: Int)
-    package case invalidValue(line: Int, key: String)
-    package case unsupportedKey(line: Int, key: String)
-    package case missingRequiredKey(String)
-    package case invalidName
-    package case themeNotFound
+    case emptyContent
+    case invalidLine(line: Int)
+    case invalidHex(line: Int)
+    case invalidPalette(line: Int)
+    case invalidValue(line: Int, key: String)
+    case unsupportedKey(line: Int, key: String)
+    case missingRequiredKey(String)
+    case invalidName
+    case themeNotFound
 
 }
 

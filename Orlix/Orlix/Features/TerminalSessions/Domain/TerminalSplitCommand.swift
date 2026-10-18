@@ -1,21 +1,21 @@
 import Foundation
 
 nonisolated package enum TerminalSplitCommand: Equatable, Sendable {
-    package case splitRight
-    package case splitDown
-    package case closeFocusedPane
-    package case toggleZoom
-    package case selectPrevious
-    package case selectNext
-    package case selectAbove
-    package case selectBelow
-    package case selectLeft
-    package case selectRight
-    package case equalize
-    package case moveDividerUp
-    package case moveDividerDown
-    package case moveDividerLeft
-    package case moveDividerRight
+    case splitRight
+    case splitDown
+    case closeFocusedPane
+    case toggleZoom
+    case selectPrevious
+    case selectNext
+    case selectAbove
+    case selectBelow
+    case selectLeft
+    case selectRight
+    case equalize
+    case moveDividerUp
+    case moveDividerDown
+    case moveDividerLeft
+    case moveDividerRight
 
     package var createsPane: Bool {
         self == .splitRight || self == .splitDown
@@ -23,10 +23,10 @@ nonisolated package enum TerminalSplitCommand: Equatable, Sendable {
 }
 
 package enum TerminalSplitCommandOutcome: Equatable {
-    package case performed
-    package case unavailable
-    package case requiresUpgrade
-    package case requiresCloseConfirmation
+    case performed
+    case unavailable
+    case requiresUpgrade
+    case requiresCloseConfirmation
 }
 
 nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
@@ -39,11 +39,11 @@ nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
 }
 
 nonisolated package enum TerminalSplitShortcutKey: Equatable, Sendable {
-    package case character(String)
-    package case upArrow
-    package case downArrow
-    package case leftArrow
-    package case rightArrow
+    case character(String)
+    case upArrow
+    case downArrow
+    case leftArrow
+    case rightArrow
 }
 
 nonisolated package enum TerminalSplitShortcutRouting {

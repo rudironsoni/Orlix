@@ -5,8 +5,8 @@ import Security
 // MARK: - SSH Key Type
 
 package enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
-    package case ed25519
-    package case rsa4096
+    case ed25519
+    case rsa4096
 
     package var id: String { rawValue }
 
@@ -44,10 +44,10 @@ struct GeneratedSSHKey {
 // MARK: - SSH Key Generator
 
 package enum SSHKeyGeneratorError: LocalizedError {
-    package case keyGenerationFailed
-    package case encodingFailed
-    package case rsaExportFailed
-    package case invalidKeyData
+    case keyGenerationFailed
+    case encodingFailed
+    case rsaExportFailed
+    case invalidKeyData
 
     package var errorDescription: String? {
         switch self {

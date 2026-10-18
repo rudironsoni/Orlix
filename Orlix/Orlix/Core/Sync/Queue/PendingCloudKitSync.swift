@@ -111,10 +111,10 @@ nonisolated package struct PendingCloudKitMutation: Codable, Equatable, Identifi
 }
 
 nonisolated package enum PendingCloudKitMutationQuarantineReason: String, Codable, Equatable, Error, Sendable {
-    package case unreadableLegacyRecord
-    package case missingOrConflictingPayload
-    package case mismatchedEntityKey
-    package case unsupportedOperation
+    case unreadableLegacyRecord
+    case missingOrConflictingPayload
+    case mismatchedEntityKey
+    case unsupportedOperation
 }
 
 nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable, Sendable {
@@ -126,8 +126,8 @@ nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identi
 }
 
 nonisolated package enum PendingCloudKitQueueHealth: Equatable, Sendable {
-    package case ready
-    package case migrationBlocked
+    case ready
+    case migrationBlocked
 }
 
 nonisolated package struct PendingCloudKitQueueSummary: Equatable, Sendable {

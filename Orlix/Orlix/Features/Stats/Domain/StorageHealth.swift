@@ -15,13 +15,13 @@ nonisolated package struct StorageDeviceIdentity: Hashable, Sendable {
 }
 
 nonisolated package enum StorageHealthUnavailableReason: String, Hashable, Sendable {
-    package case unsupported
-    package case toolMissing
-    package case permissionDenied
-    package case unmapped
-    package case virtualDevice
-    package case networkVolume
-    package case invalidResponse
+    case unsupported
+    case toolMissing
+    case permissionDenied
+    case unmapped
+    case virtualDevice
+    case networkVolume
+    case invalidResponse
 }
 
 nonisolated enum StorageHealthCapability: Hashable, Sendable {
@@ -30,26 +30,26 @@ nonisolated enum StorageHealthCapability: Hashable, Sendable {
 }
 
 nonisolated package enum StorageHealthState: Int, Hashable, Sendable {
-    package case unknown = 0
-    package case healthy = 1
-    package case warning = 2
-    package case failing = 3
+    case unknown = 0
+    case healthy = 1
+    case warning = 2
+    case failing = 3
 }
 
 nonisolated package enum StorageHealthSource: String, Hashable, Sendable {
-    package case smartctl
-    package case emmc
-    package case btrfs
-    package case zfs
-    package case darwinDiskUtility
-    package case windowsStorage
-    package case bsdNative
+    case smartctl
+    case emmc
+    case btrfs
+    case zfs
+    case darwinDiskUtility
+    case windowsStorage
+    case bsdNative
 }
 
 nonisolated package enum StorageHealthFindingSeverity: Int, Hashable, Sendable {
-    package case information = 0
-    package case warning = 1
-    package case critical = 2
+    case information = 0
+    case warning = 1
+    case critical = 2
 }
 
 nonisolated enum StorageHealthFindingTiming: Hashable, Sendable {
@@ -123,10 +123,10 @@ nonisolated package struct StorageHealthFinding: Hashable, Sendable, Identifiabl
 }
 
 nonisolated package enum StorageHealthAttributeValue: Hashable, Sendable {
-    package case integer(UInt64)
-    package case decimal(Double)
-    package case text(String)
-    package case boolean(Bool)
+    case integer(UInt64)
+    case decimal(Double)
+    case text(String)
+    case boolean(Bool)
 }
 
 /// A whitelisted platform-specific value that is safe to display.
@@ -151,10 +151,10 @@ nonisolated package struct StorageHealthAttribute: Hashable, Sendable {
 }
 
 nonisolated package enum EMMCPreEOLStatus: UInt8, Hashable, Sendable {
-    package case unknown = 0
-    package case normal = 1
-    package case warning = 2
-    package case urgent = 3
+    case unknown = 0
+    case normal = 1
+    case warning = 2
+    case urgent = 3
 }
 
 /// JEDEC reports lifetime consumption as a coarse bucket, not an exact
@@ -254,8 +254,8 @@ nonisolated package struct StorageHealthReport: Hashable, Sendable {
 }
 
 nonisolated package enum StorageDeviceHealthResult: Hashable, Sendable {
-    package case report(StorageHealthReport)
-    package case unavailable(StorageHealthUnavailableReason)
+    case report(StorageHealthReport)
+    case unavailable(StorageHealthUnavailableReason)
 
     package var capability: StorageHealthCapability {
         switch self {
@@ -268,22 +268,22 @@ nonisolated package enum StorageDeviceHealthResult: Hashable, Sendable {
 }
 
 nonisolated package enum StorageTopologyKind: Hashable, Sendable {
-    package case physicalDevice
-    package case btrfs
-    package case zfs
+    case physicalDevice
+    case btrfs
+    case zfs
 }
 
 nonisolated package enum StorageHealthMemberRole: Hashable, Sendable {
-    package case data
-    package case cache
-    package case log
-    package case spare
-    package case special
+    case data
+    case cache
+    case log
+    case spare
+    case special
 }
 
 nonisolated package enum StorageHealthCoverage: Hashable, Sendable {
-    package case complete
-    package case partial
+    case complete
+    case partial
 }
 
 nonisolated package struct StorageHealthMemberReport: Hashable, Sendable, Identifiable {
@@ -349,8 +349,8 @@ nonisolated package struct StorageHealthVolumeReport: Hashable, Sendable {
 }
 
 nonisolated package enum StorageHealthResult: Hashable, Sendable {
-    package case report(StorageHealthVolumeReport)
-    package case unavailable(StorageHealthUnavailableReason)
+    case report(StorageHealthVolumeReport)
+    case unavailable(StorageHealthUnavailableReason)
 
     package var capability: StorageHealthCapability {
         switch self {
