@@ -5,15 +5,15 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated public enum ServerConnectionTestFailureReason: Equatable, Sendable {
-    public case message(String)
-    public case tailscale(String)
-    public case eternalTerminal(
+nonisolated package enum ServerConnectionTestFailureReason: Equatable, Sendable {
+    package case message(String)
+    package case tailscale(String)
+    package case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
         port: Int
     )
-    public case hostKeyApprovalExpired
+    package case hostKeyApprovalExpired
 }
 
 nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
@@ -22,10 +22,10 @@ nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
     package let hostKeyChallenge: KnownHostsManager.Challenge?
 }
 
-nonisolated public enum ServerConnectionTestResult: Equatable, Sendable {
-    public case success
-    public case failure(ServerConnectionTestFailure)
-    public case cancelled
+nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {
+    package case success
+    package case failure(ServerConnectionTestFailure)
+    package case cancelled
 }
 
 nonisolated package protocol ServerConnectionTesting: Sendable {

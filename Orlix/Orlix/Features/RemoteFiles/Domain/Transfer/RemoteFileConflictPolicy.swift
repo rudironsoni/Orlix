@@ -1,8 +1,8 @@
 import Foundation
 
-nonisolated public enum RemoteFileConflictPolicy: String, Sendable {
-    public case replaceExisting
-    public case keepBoth
+nonisolated package enum RemoteFileConflictPolicy: String, Sendable {
+    package case replaceExisting
+    package case keepBoth
 }
 
 nonisolated package struct RemoteFileConflictResolution: Equatable, Sendable {

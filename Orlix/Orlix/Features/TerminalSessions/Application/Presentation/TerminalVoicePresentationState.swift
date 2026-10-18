@@ -1,4 +1,4 @@
-nonisolated public enum TerminalVoicePresentationState: Equatable, Sendable {
+nonisolated package enum TerminalVoicePresentationState: Equatable, Sendable {
     nonisolated package enum Event: Equatable, Sendable {
         case recordingStarted
         case recordingStopped
@@ -6,14 +6,14 @@ nonisolated public enum TerminalVoicePresentationState: Equatable, Sendable {
         case pendingReturnDismissed
     }
 
-    public case idle
-    public case recording
-    public case pendingReturn
+    package case idle
+    package case recording
+    package case pendingReturn
 
-    public var isRecording: Bool { self == .recording }
-    public var isPendingReturn: Bool { self == .pendingReturn }
+    package var isRecording: Bool { self == .recording }
+    package var isPendingReturn: Bool { self == .pendingReturn }
 
-    public func applying(_ event: Event) -> Self {
+    package func applying(_ event: Event) -> Self {
         switch event {
         case .recordingStarted:
             return .recording

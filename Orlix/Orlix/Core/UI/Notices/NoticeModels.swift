@@ -5,17 +5,17 @@ enum NoticeLane {
     case bottomOperation
 }
 
-public enum NoticeLevel {
-    public case info
-    public case success
-    public case warning
-    public case error
+package enum NoticeLevel {
+    package case info
+    package case success
+    package case warning
+    package case error
 }
 
-public enum NoticeLeading {
-    public case none
-    public case icon(String)
-    public case activity
+package enum NoticeLeading {
+    package case none
+    package case icon(String)
+    package case activity
 }
 
 enum NoticeLifetime {
