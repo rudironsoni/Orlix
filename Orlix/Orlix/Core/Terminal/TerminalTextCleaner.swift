@@ -5,15 +5,15 @@
 
 import Foundation
 
-struct TerminalCopySettings {
-    var trimTrailingWhitespace: Bool = true
-    var collapseBlankLines: Bool = false
-    var stripShellPrompts: Bool = false
-    var flattenCommands: Bool = false
-    var removeBoxDrawing: Bool = false
-    var stripAnsiCodes: Bool = true
+package struct TerminalCopySettings {
+    package var trimTrailingWhitespace: Bool = true
+    package var collapseBlankLines: Bool = false
+    package var stripShellPrompts: Bool = false
+    package var flattenCommands: Bool = false
+    package var removeBoxDrawing: Bool = false
+    package var stripAnsiCodes: Bool = true
 
-    static func current(userDefaults: UserDefaults = .standard) -> TerminalCopySettings {
+    static package func current(userDefaults: UserDefaults = .standard) -> TerminalCopySettings {
         TerminalCopySettings(
             trimTrailingWhitespace: userDefaults.object(forKey: "terminalCopyTrimTrailingWhitespace") as? Bool ?? true,
             collapseBlankLines: userDefaults.bool(forKey: "terminalCopyCollapseBlankLines"),

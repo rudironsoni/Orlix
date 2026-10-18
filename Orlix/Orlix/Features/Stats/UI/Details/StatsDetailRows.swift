@@ -1,11 +1,11 @@
 import SwiftUI
 
-struct ProcessSheetMetric: View {
-    let title: String
-    let value: Double
-    let color: Color
+package struct ProcessSheetMetric: View {
+    package let title: String
+    package let value: Double
+    package let color: Color
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(formatPercent(value))
@@ -28,11 +28,11 @@ struct ProcessSheetMetric: View {
     }
 }
 
-struct InfoRow: View {
-    let title: String
-    let value: String
+package struct InfoRow: View {
+    package let title: String
+    package let value: String
 
-    var body: some View {
+    package var body: some View {
         if !value.isEmpty {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)

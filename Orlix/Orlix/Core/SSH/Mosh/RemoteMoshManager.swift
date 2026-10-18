@@ -364,8 +364,8 @@ package actor RemoteMoshManager {
     }
 }
 
-actor RemoteMoshServerLease {
-    typealias Terminate = @Sendable (Int32) async -> Void
+package actor RemoteMoshServerLease {
+    package typealias Terminate = @Sendable (Int32) async -> Void
 
     private enum State {
         case bootstrapping
@@ -379,11 +379,11 @@ actor RemoteMoshServerLease {
     private var state: State = .bootstrapping
     private var cleanupWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
-    init(terminate: @escaping Terminate) {
+    package init(terminate: @escaping Terminate) {
         self.terminate = terminate
     }
 
-    func activate(serverPID: Int32?) async {
+    package func activate(serverPID: Int32?) async {
         switch state {
         case .bootstrapping:
             state = .active(serverPID)
@@ -394,7 +394,7 @@ actor RemoteMoshServerLease {
         }
     }
 
-    func bootstrapFailed() {
+    package func bootstrapFailed() {
         switch state {
         case .bootstrapping, .cleanupPending:
             state = .cleaned
@@ -404,7 +404,7 @@ actor RemoteMoshServerLease {
         }
     }
 
-    func cleanup() async {
+    package func cleanup() async {
         switch state {
         case .bootstrapping:
             state = .cleanupPending
@@ -419,7 +419,7 @@ actor RemoteMoshServerLease {
     }
 
     #if DEBUG
-    func cleanupIsPendingForTesting() -> Bool {
+    package func cleanupIsPendingForTesting() -> Bool {
         if case .cleanupPending = state { return true }
         return false
     }

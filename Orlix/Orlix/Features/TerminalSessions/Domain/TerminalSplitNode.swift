@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - Split Direction
 
-nonisolated enum TerminalSplitDirection: String, Codable, Equatable, Sendable {
+nonisolated package enum TerminalSplitDirection: String, Codable, Equatable, Sendable {
     case horizontal  // left | right
     case vertical    // top / bottom
 }
@@ -81,10 +81,10 @@ nonisolated indirect package enum TerminalSplitNode: Equatable, Codable, Sendabl
     case split(Split)
 
     nonisolated package struct Split: Equatable, Codable, Sendable {
-        let direction: TerminalSplitDirection
-        let ratio: Double  // 0.0 to 1.0, left/top percentage
-        let left: TerminalSplitNode
-        let right: TerminalSplitNode
+        package let direction: TerminalSplitDirection
+        package let ratio: Double  // 0.0 to 1.0, left/top percentage
+        package let left: TerminalSplitNode
+        package let right: TerminalSplitNode
     }
 
     nonisolated private enum CodingKeys: String, CodingKey {
@@ -443,32 +443,32 @@ nonisolated indirect package enum TerminalSplitNode: Equatable, Codable, Sendabl
 }
 
 nonisolated private struct PaneFrame: Sendable {
-    static let unit = PaneFrame(minX: 0, minY: 0, width: 1, height: 1)
+    static package let unit = PaneFrame(minX: 0, minY: 0, width: 1, height: 1)
 
-    let minX: Double
-    let minY: Double
-    let width: Double
-    let height: Double
+    package let minX: Double
+    package let minY: Double
+    package let width: Double
+    package let height: Double
 
-    var maxX: Double { minX + width }
-    var maxY: Double { minY + height }
-    var midX: Double { minX + width / 2 }
-    var midY: Double { minY + height / 2 }
+    package var maxX: Double { minX + width }
+    package var maxY: Double { minY + height }
+    package var midX: Double { minX + width / 2 }
+    package var midY: Double { minY + height / 2 }
 }
 
 nonisolated private struct NeighborCandidate: Sendable {
-    let paneId: UUID
-    let score: NeighborScore
+    package let paneId: UUID
+    package let score: NeighborScore
 }
 
 nonisolated private struct NeighborScore: Comparable, Sendable {
-    let primaryGap: Double
-    let perpendicularGap: Double
-    let perpendicularCenterDistance: Double
-    let primaryCenterDistance: Double
-    let order: Int
+    package let primaryGap: Double
+    package let perpendicularGap: Double
+    package let perpendicularCenterDistance: Double
+    package let primaryCenterDistance: Double
+    package let order: Int
 
-    init?(
+    package init?(
         source: PaneFrame,
         candidate: PaneFrame,
         direction: TerminalSplitFocusDirection,

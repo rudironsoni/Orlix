@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-extension ThemeBuilderSheet {
-    func platformThemeNameField(name: Binding<String>) -> some View {
+package extension ThemeBuilderSheet {
+    package func platformThemeNameField(name: Binding<String>) -> some View {
         HStack(spacing: 10) {
             Text("Name")
             Spacer(minLength: 8)
@@ -11,7 +11,7 @@ extension ThemeBuilderSheet {
         }
     }
 
-    func platformColorField<Swatch: View>(
+    package func platformColorField<Swatch: View>(
         _ label: String,
         text: Binding<String>,
         placeholder: String,
@@ -34,7 +34,7 @@ extension ThemeBuilderSheet {
         }
     }
 
-    var platformBody: some View {
+    package var platformBody: some View {
         NavigationView {
             formContent
                 .environment(\.defaultMinListRowHeight, 34)
@@ -74,7 +74,7 @@ extension ThemeBuilderSheet {
 }
 
 private struct ThemeBuilderCompactListSectionSpacingModifier: ViewModifier {
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
             content.listSectionSpacing(.compact)
         } else {
@@ -84,7 +84,7 @@ private struct ThemeBuilderCompactListSectionSpacingModifier: ViewModifier {
 }
 
 private struct ThemeBuilderTransparentNavigationBarModifier: ViewModifier {
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
             content.orlixNavigationBarBackgroundHidden()
         } else {

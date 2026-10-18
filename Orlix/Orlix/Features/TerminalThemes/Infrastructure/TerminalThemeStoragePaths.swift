@@ -3,8 +3,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalThemeStoragePaths {
-    nonisolated static func customThemesDirectoryURL() -> URL {
+nonisolated package enum TerminalThemeStoragePaths {
+    nonisolated static package func customThemesDirectoryURL() -> URL {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
@@ -14,11 +14,11 @@ nonisolated enum TerminalThemeStoragePaths {
             .appendingPathComponent("CustomThemes", isDirectory: true)
     }
 
-    nonisolated static func customThemesDirectoryPath() -> String {
+    nonisolated static package func customThemesDirectoryPath() -> String {
         customThemesDirectoryURL().path
     }
 
-    nonisolated static func customThemeFileURL(for themeName: String) -> URL? {
+    nonisolated static package func customThemeFileURL(for themeName: String) -> URL? {
         guard let name = try? TerminalThemeValidator.validateAndNormalizeThemeName(themeName) else {
             return nil
         }
@@ -31,7 +31,7 @@ nonisolated enum TerminalThemeStoragePaths {
         return fileURL
     }
 
-    nonisolated static func customThemeFilePath(for themeName: String) -> String? {
+    nonisolated static package func customThemeFilePath(for themeName: String) -> String? {
         customThemeFileURL(for: themeName)?.path
     }
 }
@@ -77,7 +77,7 @@ nonisolated package struct TerminalThemeFileStore: Sendable {
     }
 }
 
-package extension TerminalThemeFileStore: TerminalThemeFileSynchronizing {
+extension TerminalThemeFileStore: TerminalThemeFileSynchronizing {
     package func synchronize(_ themes: [TerminalTheme]) throws {
         try synchronize(themes, fileManager: .default)
     }

@@ -6,21 +6,21 @@ import OrlixSSH
 
 /// Owns transport identities, queued I/O, and cleanup for one terminal manager.
 @MainActor
-final class TerminalTransportLifetime {
-    struct SSHResizeState {
-        let clientIdentity: ObjectIdentifier
-        let shellId: UUID
-        let cols: Int
-        let rows: Int
-        let pixelSize: TerminalPixelSize?
+final package class TerminalTransportLifetime {
+    package struct SSHResizeState {
+        package let clientIdentity: ObjectIdentifier
+        package let shellId: UUID
+        package let cols: Int
+        package let rows: Int
+        package let pixelSize: TerminalPixelSize?
     }
 
-    let registry: TerminalTransportRegistry<EternalTerminalRuntime>
+    package let registry: TerminalTransportRegistry<EternalTerminalRuntime>
 
     private var writeQueuesByPane: [UUID: TerminalTransportWriteQueue] = [:]
     private var lastSSHResizeByPane: [UUID: SSHResizeState] = [:]
 
-    init(staleShellStartThreshold: TimeInterval = 120) {
+    package init(staleShellStartThreshold: TimeInterval = 120) {
         registry = TerminalTransportRegistry(
             staleShellStartThreshold: staleShellStartThreshold
         )
@@ -36,7 +36,7 @@ final class TerminalTransportLifetime {
         }
     }
 
-    func writeQueue(for paneId: UUID) -> TerminalTransportWriteQueue {
+    package func writeQueue(for paneId: UUID) -> TerminalTransportWriteQueue {
         if let queue = writeQueuesByPane[paneId] {
             return queue
         }
@@ -45,7 +45,7 @@ final class TerminalTransportLifetime {
         return queue
     }
 
-    func shouldScheduleResize(
+    package func shouldScheduleResize(
         for paneId: UUID,
         client: SSHClient,
         shellId: UUID,
@@ -72,12 +72,12 @@ final class TerminalTransportLifetime {
         return true
     }
 
-    func cancelQueuedIO(for paneId: UUID) {
+    package func cancelQueuedIO(for paneId: UUID) {
         writeQueuesByPane.removeValue(forKey: paneId)?.cancel()
         lastSSHResizeByPane.removeValue(forKey: paneId)
     }
 
-    func unregisterShell(
+    package func unregisterShell(
         for paneId: UUID,
         ifOwnedBy registration: TerminalRemoteSessionShellRegistration
     ) async {
@@ -102,7 +102,7 @@ final class TerminalTransportLifetime {
     }
 
     @discardableResult
-    func unregisterRuntime(
+    package func unregisterRuntime(
         for paneId: UUID,
         ifOwnedBy runtime: EternalTerminalRuntime
     ) async -> Bool {
@@ -111,7 +111,7 @@ final class TerminalTransportLifetime {
         return true
     }
 
-    func drain() -> TerminalTransportRegistry<EternalTerminalRuntime>.DrainResult {
+    package func drain() -> TerminalTransportRegistry<EternalTerminalRuntime>.DrainResult {
         let drainedTransports = registry.drain()
         let queues = Array(writeQueuesByPane.values)
         writeQueuesByPane.removeAll()

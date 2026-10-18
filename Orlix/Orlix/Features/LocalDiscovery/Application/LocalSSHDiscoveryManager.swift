@@ -4,25 +4,25 @@ import Combine
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct LocalSSHDiscoveryState: Equatable {
-    enum Permission: Equatable {
+package struct LocalSSHDiscoveryState: Equatable {
+    package enum Permission: Equatable {
         case unknown
         case granted
         case denied
     }
 
-    struct Scan: Equatable {
-        enum Source: Hashable {
+    package struct Scan: Equatable {
+        package enum Source: Hashable {
             case bonjour
             case probe
         }
 
-        let id: UUID
-        var activeSources: Set<Source> = []
-        var permission: Permission = .unknown
+        package let id: UUID
+        package var activeSources: Set<Source> = []
+        package var permission: Permission = .unknown
     }
 
-    enum Phase: Equatable {
+    package enum Phase: Equatable {
         case idle
         case scanning(Scan)
         case completed(Permission)
@@ -31,12 +31,12 @@ struct LocalSSHDiscoveryState: Equatable {
 
     private(set) var phase: Phase = .idle
 
-    var isScanning: Bool {
+    package var isScanning: Bool {
         if case .scanning = phase { return true }
         return false
     }
 
-    var permission: Permission {
+    package var permission: Permission {
         switch phase {
         case .scanning(let scan):
             return scan.permission
@@ -47,20 +47,20 @@ struct LocalSSHDiscoveryState: Equatable {
         }
     }
 
-    func isSourceActive(_ source: Scan.Source) -> Bool {
+    package func isSourceActive(_ source: Scan.Source) -> Bool {
         guard case .scanning(let scan) = phase else { return false }
         return scan.activeSources.contains(source)
     }
 
-    mutating func start(id: UUID) {
+    mutating package func start(id: UUID) {
         phase = .scanning(Scan(id: id))
     }
 
-    mutating func rejectUnsupportedNetwork() {
+    mutating package func rejectUnsupportedNetwork() {
         phase = .unsupportedNetwork
     }
 
-    mutating func stop(clearResults: Bool) {
+    mutating package func stop(clearResults: Bool) {
         guard !clearResults else {
             phase = .idle
             return
@@ -72,7 +72,7 @@ struct LocalSSHDiscoveryState: Equatable {
     }
 
     @discardableResult
-    mutating func handle(_ event: LocalSSHDiscoveryEvent, scanID: UUID) -> Bool {
+    mutating package func handle(_ event: LocalSSHDiscoveryEvent, scanID: UUID) -> Bool {
         switch phase {
         case .scanning(var scan) where scan.id == scanID:
             switch event {

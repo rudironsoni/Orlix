@@ -25,7 +25,7 @@ package extension ServerConnectionTestFailure {
     }
 }
 
-package extension OrlixError: LocalizedError {
+extension OrlixError: LocalizedError {
     nonisolated package var errorDescription: String? {
         switch self {
         case .proRequired(let requirement):

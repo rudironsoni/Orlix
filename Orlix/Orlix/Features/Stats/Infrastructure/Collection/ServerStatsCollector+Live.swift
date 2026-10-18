@@ -6,26 +6,26 @@ import OrlixSSH
 #endif
 @MainActor
 private struct LiveServerStatsTarget: ServerStatsCollectionTarget {
-    let server: Server
+    package let server: Server
 
-    var serverID: UUID { server.id }
+    package var serverID: UUID { server.id }
 }
 
 @MainActor
 private struct LiveServerStatsConnection: ServerStatsConnectionReference {
-    let client: SSHClient
+    package let client: SSHClient
 
-    var identity: ServerStatsConnectionIdentity {
+    package var identity: ServerStatsConnectionIdentity {
         ServerStatsConnectionIdentity(client)
     }
 }
 
 @MainActor
-final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
-    let rawValue: ServerSecurityApprovalRequest
-    let request: ServerStatsApprovalRequest
+final package class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
+    package let rawValue: ServerSecurityApprovalRequest
+    package let request: ServerStatsApprovalRequest
 
-    init(_ rawValue: ServerSecurityApprovalRequest, serverID: UUID) {
+    package init(_ rawValue: ServerSecurityApprovalRequest, serverID: UUID) {
         self.rawValue = rawValue
         request = ServerStatsApprovalRequest(
             id: rawValue.id,
@@ -113,7 +113,7 @@ package extension ServerStatsCollector {
 private enum LiveServerStatsAdapterError: LocalizedError {
     case incompatibleReference
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         String(localized: "Stats received an incompatible connection reference.")
     }
 }

@@ -1,13 +1,13 @@
 import Foundation
 
-enum TerminalPointerButton: Equatable {
+package enum TerminalPointerButton: Equatable {
     case left
     case right
     case middle
 }
 
-enum TerminalPointerInputRoutingPolicy {
-    static func shouldSendDirectTouchClick(
+package enum TerminalPointerInputRoutingPolicy {
+    static package func shouldSendDirectTouchClick(
         terminalMouseCaptured: Bool,
         terminalInputAvailable: Bool,
         selectionInteractionActive: Bool
@@ -15,7 +15,7 @@ enum TerminalPointerInputRoutingPolicy {
         terminalMouseCaptured && terminalInputAvailable && !selectionInteractionActive
     }
 
-    static func pointerButton(
+    static package func pointerButton(
         isPrimaryPressed: Bool,
         isSecondaryPressed: Bool,
         isMiddlePressed: Bool,
@@ -36,7 +36,7 @@ enum TerminalPointerInputRoutingPolicy {
         return nil
     }
 
-    static func shouldShowHostContextMenu(
+    static package func shouldShowHostContextMenu(
         button: TerminalPointerButton,
         terminalHandledButtonPress: Bool,
         terminalMouseCaptured: Bool
@@ -46,7 +46,7 @@ enum TerminalPointerInputRoutingPolicy {
             && !terminalMouseCaptured
     }
 
-    static func shouldAllowScrollGesture(
+    static package func shouldAllowScrollGesture(
         isIndirectPointer: Bool,
         isPointerButtonPressed: Bool,
         hasActiveTerminalPointerButton: Bool
@@ -56,8 +56,8 @@ enum TerminalPointerInputRoutingPolicy {
     }
 }
 
-enum TerminalSelectionRoutingPolicy {
-    static func shouldAllowHostSelection(
+package enum TerminalSelectionRoutingPolicy {
+    static package func shouldAllowHostSelection(
         terminalMouseCaptured: Bool,
         selectionInteractionActive: Bool
     ) -> Bool {
@@ -65,18 +65,18 @@ enum TerminalSelectionRoutingPolicy {
     }
 }
 
-struct TerminalSelectionAutoscrollDecision: Equatable {
-    enum Edge: Equatable {
+package struct TerminalSelectionAutoscrollDecision: Equatable {
+    package enum Edge: Equatable {
         case top
         case bottom
     }
 
-    let edge: Edge
-    let scrollDelta: Double
+    package let edge: Edge
+    package let scrollDelta: Double
 }
 
-enum TerminalSelectionAutoscrollPolicy {
-    static func decision(
+package enum TerminalSelectionAutoscrollPolicy {
+    static package func decision(
         locationY: Double,
         viewportHeight: Double,
         edgeInset: Double,
@@ -112,8 +112,8 @@ enum TerminalSelectionAutoscrollPolicy {
 #if os(iOS)
 import UIKit
 
-extension TerminalPointerButton {
-    var ghosttyMouseButton: Ghostty.Input.MouseButton {
+package extension TerminalPointerButton {
+    package var ghosttyMouseButton: Ghostty.Input.MouseButton {
         switch self {
         case .left:
             .left
@@ -125,12 +125,12 @@ extension TerminalPointerButton {
     }
 }
 
-extension TerminalPointerInputRoutingPolicy {
-    static func ghosttyModifiers(from flags: UIKeyModifierFlags) -> Ghostty.Input.Mods {
+package extension TerminalPointerInputRoutingPolicy {
+    static package func ghosttyModifiers(from flags: UIKeyModifierFlags) -> Ghostty.Input.Mods {
         Ghostty.Input.Mods(uiKeyModifiers: flags)
     }
 
-    static func pointerButton(
+    static package func pointerButton(
         for buttonMask: UIEvent.ButtonMask,
         modifiers: UIKeyModifierFlags
     ) -> TerminalPointerButton? {

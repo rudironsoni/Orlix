@@ -4,8 +4,8 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension SSHSession {
-    func failAllExecRequests(error: Error) {
+package extension SSHSession {
+    package func failAllExecRequests(error: Error) {
         let requests = execRequests
         execRequests.removeAll()
         for request in requests.values {
@@ -14,7 +14,7 @@ extension SSHSession {
         }
     }
 
-    func ensureExecChannelReady(_ request: ExecRequest) async -> Bool {
+    package func ensureExecChannelReady(_ request: ExecRequest) async -> Bool {
         guard let session = libssh2Session else {
             await finishExecRequest(request.id, error: SSHError.notConnected)
             return false
@@ -63,12 +63,12 @@ extension SSHSession {
         return true
     }
 
-    func cancelExecRequest(_ requestId: UUID, error: Error) async {
+    package func cancelExecRequest(_ requestId: UUID, error: Error) async {
         guard execRequests[requestId] != nil else { return }
         await finishExecRequest(requestId, error: error)
     }
 
-    func finishExecRequest(_ requestId: UUID, error: Error?) async {
+    package func finishExecRequest(_ requestId: UUID, error: Error?) async {
         guard let request = execRequests.removeValue(forKey: requestId) else { return }
 
         if let channel = request.channel {
@@ -109,7 +109,7 @@ extension SSHSession {
 
     // MARK: - Execute Command
 
-    func execute(
+    package func execute(
         _ command: String,
         maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes
     ) async throws -> String {

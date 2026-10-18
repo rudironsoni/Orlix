@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct TerminalKeyboardInputSettingsView: View {
-    var body: some View {
+package struct TerminalKeyboardInputSettingsView: View {
+    package var body: some View {
         TerminalKeyboardInputPlatformSettingsView()
             .accessibilityIdentifier("orlix.settings.page.keyboardAndInput")
     }

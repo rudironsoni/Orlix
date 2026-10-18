@@ -1,14 +1,14 @@
 import Foundation
 
-nonisolated enum ZellijSocketNamespace: Sendable {
+nonisolated package enum ZellijSocketNamespace: Sendable {
     case user
     case managed
 
-    init(ownership: RemoteSessionOwnership) {
+    package init(ownership: RemoteSessionOwnership) {
         self = ownership == .managed ? .managed : .user
     }
 
-    var setupScript: String {
+    package var setupScript: String {
         switch self {
         case .user:
             return ""

@@ -6,7 +6,7 @@ import OrlixModels
 import OrlixSSH
 #endif
 @MainActor
-final class RemoteSessionAttachResolver: ObservableObject {
+final package class RemoteSessionAttachResolver: ObservableObject {
     private let configuration: TerminalRemoteSessionConfiguration
     private let remoteSessions: any TerminalRemoteSessionServicing
     private(set) var attachments: [UUID: TerminalRemoteSessionAttachmentState] = [:]
@@ -17,7 +17,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
         UUID: CheckedContinuation<RemoteSessionAttachSelection, Never>
     ] = [:]
 
-    init(
+    package init(
         configuration: TerminalRemoteSessionConfiguration,
         remoteSessions: any TerminalRemoteSessionServicing
     ) {
@@ -25,40 +25,40 @@ final class RemoteSessionAttachResolver: ObservableObject {
         self.remoteSessions = remoteSessions
     }
 
-    var enabledByDefault: Bool {
+    package var enabledByDefault: Bool {
         configuration.enabledByDefault()
     }
 
-    var backendIdentifierByDefault: RemoteSessionBackendIdentifier {
+    package var backendIdentifierByDefault: RemoteSessionBackendIdentifier {
         configuration.backendIdentifierByDefault()
     }
 
-    var startupBehaviorByDefault: RemoteSessionStartupBehavior {
+    package var startupBehaviorByDefault: RemoteSessionStartupBehavior {
         configuration.startupBehaviorByDefault()
     }
 
-    func isEnabled(for serverID: UUID) -> Bool {
+    package func isEnabled(for serverID: UUID) -> Bool {
         guard isKnownBackend(backendIdentifier(for: serverID)) else {
             return false
         }
         return configuration.serverSettings(serverID)?.enabledOverride ?? enabledByDefault
     }
 
-    func backendIdentifier(for serverID: UUID) -> RemoteSessionBackendIdentifier {
+    package func backendIdentifier(for serverID: UUID) -> RemoteSessionBackendIdentifier {
         configuration.serverSettings(serverID)?.backendIdentifier
             ?? backendIdentifierByDefault
     }
 
-    func startupBehavior(for serverID: UUID) -> RemoteSessionStartupBehavior {
+    package func startupBehavior(for serverID: UUID) -> RemoteSessionStartupBehavior {
         configuration.serverSettings(serverID)?.startupBehaviorOverride
             ?? startupBehaviorByDefault
     }
 
-    func isKnownBackend(_ identifier: RemoteSessionBackendIdentifier) -> Bool {
+    package func isKnownBackend(_ identifier: RemoteSessionBackendIdentifier) -> Bool {
         remoteSessions.backendMetadata.contains { $0.identifier == identifier }
     }
 
-    func managedIdentifier(
+    package func managedIdentifier(
         for entityID: UUID,
         serverID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier
@@ -71,26 +71,26 @@ final class RemoteSessionAttachResolver: ObservableObject {
         )
     }
 
-    func attachment(for entityID: UUID) -> TerminalRemoteSessionAttachmentState? {
+    package func attachment(for entityID: UUID) -> TerminalRemoteSessionAttachmentState? {
         attachments[entityID]
     }
 
-    func restoreAttachments(_ restored: [UUID: TerminalRemoteSessionAttachmentState]) {
+    package func restoreAttachments(_ restored: [UUID: TerminalRemoteSessionAttachmentState]) {
         attachments = restored
     }
 
-    func setAttachment(
+    package func setAttachment(
         _ state: TerminalRemoteSessionAttachmentState,
         for entityID: UUID
     ) {
         attachments[entityID] = state
     }
 
-    func clearAttachmentState(for entityID: UUID) {
+    package func clearAttachmentState(for entityID: UUID) {
         attachments.removeValue(forKey: entityID)
     }
 
-    func confirmManagedSession(for entityID: UUID) {
+    package func confirmManagedSession(for entityID: UUID) {
         guard var state = attachments[entityID],
               state.attachment.ownership == .managed else {
             return
@@ -99,11 +99,11 @@ final class RemoteSessionAttachResolver: ObservableObject {
         attachments[entityID] = state
     }
 
-    func clearAllAttachmentState() {
+    package func clearAllAttachmentState() {
         attachments.removeAll()
     }
 
-    func clearRuntimeState(for entityID: UUID) {
+    package func clearRuntimeState(for entityID: UUID) {
         clearAttachmentState(for: entityID)
         let requestIDs = ([currentPrompt].compactMap { $0 } + promptQueue)
             .filter { $0.paneId == entityID }
@@ -113,7 +113,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
         }
     }
 
-    func updateAttachmentState(
+    package func updateAttachmentState(
         for entityID: UUID,
         serverID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier,
@@ -153,7 +153,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
         }
     }
 
-    func resolveSelection(
+    package func resolveSelection(
         for entityID: UUID,
         serverID: UUID,
         client: SSHClient,
@@ -200,7 +200,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
         }
     }
 
-    func resolvePrompt(
+    package func resolvePrompt(
         requestID: UUID,
         selection: RemoteSessionAttachSelection
     ) {
@@ -216,22 +216,22 @@ final class RemoteSessionAttachResolver: ObservableObject {
         continuation.resume(returning: selection)
     }
 
-    func cancelPrompt(requestID: UUID) {
+    package func cancelPrompt(requestID: UUID) {
         resolvePrompt(requestID: requestID, selection: .plainShell)
     }
 
-    func hasPendingPrompt(requestID: UUID) -> Bool {
+    package func hasPendingPrompt(requestID: UUID) -> Bool {
         promptContinuations[requestID] != nil
     }
 
-    func cancelAllPrompts() {
+    package func cancelAllPrompts() {
         let requestIDs = ([currentPrompt].compactMap { $0 } + promptQueue).map(\.id)
         for requestID in requestIDs {
             cancelPrompt(requestID: requestID)
         }
     }
 
-    func selectionInfo(
+    package func selectionInfo(
         from sessions: [RemoteSessionDescriptor]
     ) -> [RemoteSessionSelectionInfo] {
         let filtered = sessions.filter {
@@ -248,7 +248,7 @@ final class RemoteSessionAttachResolver: ObservableObject {
         }
     }
 
-    func requestSelection(
+    package func requestSelection(
         requestID: UUID,
         entityID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier,

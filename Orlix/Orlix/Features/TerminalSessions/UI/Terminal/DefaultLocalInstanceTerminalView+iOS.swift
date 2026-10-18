@@ -88,12 +88,12 @@ package struct DefaultLocalInstanceTerminalView: View {
 }
 
 private struct DefaultLocalInstanceTerminalRepresentable: View {
-    let paneId: UUID
-    let tabManager: TerminalTabManager
-    let size: CGSize
-    let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
+    package let paneId: UUID
+    package let tabManager: TerminalTabManager
+    package let size: CGSize
+    package let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
 
-    var body: some View {
+    package var body: some View {
         TerminalPaneSurface(
             paneId: paneId.uuidString,
             size: size,
@@ -117,7 +117,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: View {
         )
     }
 
-    final class Coordinator: @unchecked Sendable {
+    final package class Coordinator: @unchecked Sendable {
         private let paneId: UUID
         private let tabManager: TerminalTabManager
         private weak var terminal: GhosttyTerminalView?
@@ -129,13 +129,13 @@ private struct DefaultLocalInstanceTerminalRepresentable: View {
         private var lastForwardedGridSize: (rows: UInt32, columns: UInt32)?
 
         @MainActor
-        init(paneId: UUID, tabManager: TerminalTabManager) {
+        package init(paneId: UUID, tabManager: TerminalTabManager) {
             self.paneId = paneId
             self.tabManager = tabManager
         }
 
         @MainActor
-        func attach(to terminal: GhosttyTerminalView) {
+        package func attach(to terminal: GhosttyTerminalView) {
             self.terminal = terminal
             tabManager.registerTerminalSurface(terminal, for: paneId, inputEligible: true)
             terminal.writeCallback = { [weak self] data in
@@ -153,7 +153,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: View {
         }
 
         @MainActor
-        func terminalDidBecomeReady(_ terminal: GhosttyTerminalView) {
+        package func terminalDidBecomeReady(_ terminal: GhosttyTerminalView) {
             isTerminalReady = true
             if let size = terminal.terminalSize(), size.rows > 0, size.columns > 0 {
                 recordGridSize(rows: UInt32(size.rows), columns: UInt32(size.columns))
@@ -240,7 +240,7 @@ private struct DefaultLocalInstanceTerminalRepresentable: View {
         }
 
         @MainActor
-        func stop() {
+        package func stop() {
             if let session {
                 session.send(Data([0x04]))
                 OrlixOS.shared.closeTerminal(

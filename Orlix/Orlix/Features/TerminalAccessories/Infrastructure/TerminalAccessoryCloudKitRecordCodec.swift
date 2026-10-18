@@ -4,22 +4,22 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalAccessoryCloudKitRecordCodecError: Error, Equatable, Sendable {
+nonisolated package enum TerminalAccessoryCloudKitRecordCodecError: Error, Equatable, Sendable {
     case encodingFailed
 }
 
-nonisolated enum TerminalAccessoryCloudKitRecordCodec {
-    static let recordType = "UserPreference"
-    static let recordName = TerminalAccessoryProfile.recordName
-    static let recordKeys = [
+nonisolated package enum TerminalAccessoryCloudKitRecordCodec {
+    static package let recordType = "UserPreference"
+    static package let recordName = TerminalAccessoryProfile.recordName
+    static package let recordKeys = [
         "schemaVersion", "payload", "updatedAt", "lastWriterDeviceId"
     ]
 
-    static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
+    static package func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
         CKRecord.ID(recordName: recordName, zoneID: zoneID)
     }
 
-    static func profile(from record: CKRecord) -> TerminalAccessoryProfile? {
+    static package func profile(from record: CKRecord) -> TerminalAccessoryProfile? {
         guard let payload = record["payload"] as? Data,
               var profile = try? JSONDecoder().decode(
                   TerminalAccessoryProfile.self,
@@ -42,7 +42,7 @@ nonisolated enum TerminalAccessoryCloudKitRecordCodec {
         return profile.normalized()
     }
 
-    static func record(
+    static package func record(
         for profile: TerminalAccessoryProfile,
         recordID: CKRecord.ID,
         existingRecord: CKRecord? = nil
@@ -63,7 +63,7 @@ nonisolated enum TerminalAccessoryCloudKitRecordCodec {
         return record
     }
 
-    static func merge(
+    static package func merge(
         local: TerminalAccessoryProfile,
         remote: TerminalAccessoryProfile
     ) -> TerminalAccessoryProfile {

@@ -29,12 +29,12 @@ final package class GhosttyRuntime: ObservableObject {
         )
         case stopped
 
-        var app: ghostty_app_t? {
+        package var app: ghostty_app_t? {
             guard case .ready(let app, _) = self else { return nil }
             return app
         }
 
-        var readiness: Readiness {
+        package var readiness: Readiness {
             switch self {
             case .idle:
                 return .idle

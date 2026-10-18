@@ -5,20 +5,20 @@ import OrlixModels
 import OrlixSSH
 #endif
 @MainActor
-final class TerminalConnectionTaskStore {
+final package class TerminalConnectionTaskStore {
     private struct Entry {
-        let id: UUID
-        let task: Task<Void, Never>
+        package let id: UUID
+        package let task: Task<Void, Never>
     }
 
     private var entries: [UUID: Entry] = [:]
 
-    var paneIds: Set<UUID> {
+    package var paneIds: Set<UUID> {
         Set(entries.keys)
     }
 
     @discardableResult
-    func start(
+    package func start(
         for paneId: UUID,
         operation: @escaping @Sendable (_ taskId: UUID) async -> Void
     ) -> UUID? {
@@ -33,18 +33,18 @@ final class TerminalConnectionTaskStore {
         return taskId
     }
 
-    func isCurrent(taskId: UUID, for paneId: UUID) -> Bool {
+    package func isCurrent(taskId: UUID, for paneId: UUID) -> Bool {
         entries[paneId]?.id == taskId
     }
 
     @discardableResult
-    func cancel(for paneId: UUID) -> Bool {
+    package func cancel(for paneId: UUID) -> Bool {
         guard let entry = entries.removeValue(forKey: paneId) else { return false }
         entry.task.cancel()
         return true
     }
 
-    func cancelAll() {
+    package func cancelAll() {
         let tasks = entries.values.map(\.task)
         entries.removeAll()
         for task in tasks {
@@ -58,23 +58,23 @@ final class TerminalConnectionTaskStore {
     }
 }
 
-struct TerminalSSHConnectionContext {
-    let isCurrent: @MainActor @Sendable () -> Bool
-    let updateConnectionState: @MainActor @Sendable (ConnectionState) -> Void
-    let startupPlan: @MainActor @Sendable () async throws -> TerminalShellStartupPlan
-    let restoreMoshShell: @MainActor @Sendable (
+package struct TerminalSSHConnectionContext {
+    package let isCurrent: @MainActor @Sendable () -> Bool
+    package let updateConnectionState: @MainActor @Sendable (ConnectionState) -> Void
+    package let startupPlan: @MainActor @Sendable () async throws -> TerminalShellStartupPlan
+    package let restoreMoshShell: @MainActor @Sendable (
         _ cols: Int,
         _ rows: Int
     ) async -> SSHConnectionRestoredShell?
-    let registerShell: @MainActor @Sendable (ShellHandle) async -> Bool
-    let setStartupActionReplayPending: @MainActor @Sendable (Bool) -> Void
-    let remoteSessionAttached: @MainActor @Sendable () -> Void
-    let persistMoshCheckpoint: @MainActor @Sendable (_ shellId: UUID) async -> Void
-    let updateTitle: @MainActor @Sendable (String) -> Void
-    let hasOtherRegistrations: @MainActor @Sendable () async -> Bool
-    let handleShellEnd: @MainActor @Sendable (_ shellId: UUID, _ reason: TerminalShellEndReason) -> Void
-    let handleFailure: @MainActor @Sendable (TerminalConnectionFailure) -> Void
-    let workingDirectory: @MainActor @Sendable () -> String?
+    package let registerShell: @MainActor @Sendable (ShellHandle) async -> Bool
+    package let setStartupActionReplayPending: @MainActor @Sendable (Bool) -> Void
+    package let remoteSessionAttached: @MainActor @Sendable () -> Void
+    package let persistMoshCheckpoint: @MainActor @Sendable (_ shellId: UUID) async -> Void
+    package let updateTitle: @MainActor @Sendable (String) -> Void
+    package let hasOtherRegistrations: @MainActor @Sendable () async -> Bool
+    package let handleShellEnd: @MainActor @Sendable (_ shellId: UUID, _ reason: TerminalShellEndReason) -> Void
+    package let handleFailure: @MainActor @Sendable (TerminalConnectionFailure) -> Void
+    package let workingDirectory: @MainActor @Sendable () -> String?
 }
 
 nonisolated package extension TerminalConnectionFailure {

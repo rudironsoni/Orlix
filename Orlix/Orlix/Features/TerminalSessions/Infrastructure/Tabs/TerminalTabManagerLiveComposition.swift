@@ -101,10 +101,10 @@ package enum TerminalTabManagerLiveComposition {
     }
 }
 
-package extension RemoteMoshManager: TerminalRemoteMoshServicing {}
+extension RemoteMoshManager: TerminalRemoteMoshServicing {}
 
 private extension TerminalNetworkReadiness {
-    init(_ readiness: NetworkMonitor.Readiness) {
+    package init(_ readiness: NetworkMonitor.Readiness) {
         switch readiness {
         case .unknown:
             self = .unknown

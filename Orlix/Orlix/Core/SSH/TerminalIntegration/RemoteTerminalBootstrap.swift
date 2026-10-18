@@ -1,22 +1,22 @@
 import Foundation
 
-nonisolated struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
-    let name: String
-    let value: String
+nonisolated package struct RemoteTerminalEnvironmentVariable: Hashable, Sendable {
+    package let name: String
+    package let value: String
 }
 
 /// Derives Kitty image-protocol availability from the active remote transport.
 /// SSH already exposes genuine `SSH_*` variables. ET is SSH-compatible from the
 /// application's perspective but needs Snacks' documented opt-in because its PTY
 /// is not created by sshd. Mosh does not preserve Kitty graphics sequences.
-nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
-    nonisolated static let compatibilityEnvironmentName = "SNACKS_SSH"
+nonisolated package enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
+    nonisolated static package let compatibilityEnvironmentName = "SNACKS_SSH"
 
     case genuineSSH
     case eternalTerminal
     case unsupported
 
-    nonisolated init(transport: ShellTransport) {
+    nonisolated package init(transport: ShellTransport) {
         switch transport {
         case .ssh, .sshFallback:
             self = .genuineSSH
@@ -27,7 +27,7 @@ nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
         }
     }
 
-    nonisolated var environment: [RemoteTerminalEnvironmentVariable] {
+    nonisolated package var environment: [RemoteTerminalEnvironmentVariable] {
         switch self {
         case .genuineSSH, .unsupported:
             []
@@ -36,7 +36,7 @@ nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
         }
     }
 
-    nonisolated var supportsKittyGraphics: Bool {
+    nonisolated package var supportsKittyGraphics: Bool {
         self != .unsupported
     }
 }
@@ -46,19 +46,19 @@ nonisolated package enum RemoteTerminalType: String, Hashable, Sendable {
     case xtermGhostty = "xterm-ghostty"
 }
 
-nonisolated enum RemoteShellLaunchPlan: Hashable, Sendable {
+nonisolated package enum RemoteShellLaunchPlan: Hashable, Sendable {
     case shell
     case exec(String)
     case unsupportedStartupCommand
 }
 
-nonisolated enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
+nonisolated package enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, Sendable {
     case emptyPath
     case unsupportedShell
     case invalidWindowsPath
     case literalCmdPathRequiresPowerShell
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .emptyPath:
             return String(localized: "The saved working directory is empty.")
@@ -72,11 +72,11 @@ nonisolated enum RemoteWorkingDirectoryRestoreFailure: String, LocalizedError, S
     }
 }
 
-nonisolated enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
+nonisolated package enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
     case command(String)
     case keepDefault(RemoteWorkingDirectoryRestoreFailure)
 
-    var command: String? {
+    package var command: String? {
         guard case .command(let command) = self else { return nil }
         return command
     }

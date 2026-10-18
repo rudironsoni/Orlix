@@ -4,21 +4,21 @@ import UniformTypeIdentifiers
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-enum RemoteFileItemProviderAdapter {
-    static let acceptedTypeIdentifiers = [
+package enum RemoteFileItemProviderAdapter {
+    static package let acceptedTypeIdentifiers = [
         UTType.orlixRemoteFileEntry.identifier,
         UTType.fileURL.identifier
     ]
 
-    static func acceptsRemoteItems(_ providers: [NSItemProvider]) -> Bool {
+    static package func acceptsRemoteItems(_ providers: [NSItemProvider]) -> Bool {
         providers.contains { $0.hasItemConformingToTypeIdentifier(UTType.orlixRemoteFileEntry.identifier) }
     }
 
-    static func acceptsLocalItems(_ providers: [NSItemProvider]) -> Bool {
+    static package func acceptsLocalItems(_ providers: [NSItemProvider]) -> Bool {
         providers.contains { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
     }
 
-    static func loadLocalItems(
+    static package func loadLocalItems(
         from providers: [NSItemProvider],
         completion: @escaping @MainActor (Result<[URL], Error>) -> Void
     ) {
@@ -36,7 +36,7 @@ enum RemoteFileItemProviderAdapter {
         }
     }
 
-    static func loadRemotePayloads(from providers: [NSItemProvider]) async throws -> [RemoteFileDragPayload] {
+    static package func loadRemotePayloads(from providers: [NSItemProvider]) async throws -> [RemoteFileDragPayload] {
         let matchingProviders = providers.filter {
             $0.hasItemConformingToTypeIdentifier(UTType.orlixRemoteFileEntry.identifier)
         }
@@ -53,7 +53,7 @@ enum RemoteFileItemProviderAdapter {
         return payloads
     }
 
-    static func makeProvider(
+    static package func makeProvider(
         payload: RemoteFileDragPayload,
         entry: RemoteFileEntry,
         export: @escaping @MainActor @Sendable (RemoteFileEntry) async throws -> URL
@@ -106,7 +106,7 @@ enum RemoteFileItemProviderAdapter {
         }
     }
 
-    static func loadLocalURLs(from providers: [NSItemProvider]) async throws -> [URL] {
+    static package func loadLocalURLs(from providers: [NSItemProvider]) async throws -> [URL] {
         var urls: [URL] = []
         urls.reserveCapacity(providers.count)
         for provider in providers {
@@ -162,7 +162,7 @@ enum RemoteFileItemProviderAdapter {
         }
     }
 
-    static func fileTypeIdentifier(for entry: RemoteFileEntry) -> String {
+    static package func fileTypeIdentifier(for entry: RemoteFileEntry) -> String {
         guard entry.type != .directory else { return UTType.folder.identifier }
         let pathExtension = URL(fileURLWithPath: entry.name).pathExtension
         return UTType(filenameExtension: pathExtension)?.identifier ?? UTType.data.identifier
@@ -177,6 +177,6 @@ enum RemoteFileItemProviderAdapter {
     }
 }
 
-extension UTType {
-    static let orlixRemoteFileEntry = UTType(exportedAs: "com.rudironsoni.orlix.remote-file-entry")
+package extension UTType {
+    static package let orlixRemoteFileEntry = UTType(exportedAs: "com.rudironsoni.orlix.remote-file-entry")
 }

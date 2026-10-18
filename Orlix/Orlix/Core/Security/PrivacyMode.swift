@@ -29,20 +29,20 @@ nonisolated package enum AppContentProtectionPolicy {
     }
 }
 
-nonisolated enum SensitiveContentMask {
-    static let placeholder = "••••••••"
+nonisolated package enum SensitiveContentMask {
+    static package let placeholder = "••••••••"
 
-    static func value(_ value: String, privacyModeEnabled: Bool) -> String {
+    static package func value(_ value: String, privacyModeEnabled: Bool) -> String {
         privacyModeEnabled ? placeholder : value
     }
 }
 
 private struct PrivacyModeEnabledEnvironmentKey: EnvironmentKey {
-    static let defaultValue = false
+    static package let defaultValue = false
 }
 
-extension EnvironmentValues {
-    var privacyModeEnabled: Bool {
+package extension EnvironmentValues {
+    package var privacyModeEnabled: Bool {
         get { self[PrivacyModeEnabledEnvironmentKey.self] }
         set { self[PrivacyModeEnabledEnvironmentKey.self] = newValue }
     }

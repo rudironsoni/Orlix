@@ -4,10 +4,10 @@ import AVFoundation
 import Speech
 
 @MainActor
-class AudioPermissionManager: ObservableObject {
-    @Published var permissionStatus: PermissionStatus = .notDetermined
+package class AudioPermissionManager: ObservableObject {
+    @Published package var permissionStatus: PermissionStatus = .notDetermined
 
-    enum PermissionStatus {
+    package enum PermissionStatus {
         case notDetermined
         case authorized
         case denied
@@ -15,7 +15,7 @@ class AudioPermissionManager: ObservableObject {
 
     // MARK: - Permission Requests
 
-    func requestPermissions(includeSpeech: Bool = true) async -> Bool {
+    package func requestPermissions(includeSpeech: Bool = true) async -> Bool {
         let granted = await Self.requestPermissionSequence(
             includeSpeech: includeSpeech,
             requestMicrophone: { [weak self] in
@@ -30,7 +30,7 @@ class AudioPermissionManager: ObservableObject {
         return granted
     }
 
-    static func requestPermissionSequence(
+    static package func requestPermissionSequence(
         includeSpeech: Bool,
         requestMicrophone: @escaping @MainActor () async -> Bool,
         requestSpeech: @escaping @MainActor () async -> Bool
@@ -42,7 +42,7 @@ class AudioPermissionManager: ObservableObject {
         return microphoneGranted && speechGranted
     }
 
-    func checkPermissions(includeSpeech: Bool = true) -> Bool {
+    package func checkPermissions(includeSpeech: Bool = true) -> Bool {
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         let speechStatus = includeSpeech ? SFSpeechRecognizer.authorizationStatus() : .authorized
 

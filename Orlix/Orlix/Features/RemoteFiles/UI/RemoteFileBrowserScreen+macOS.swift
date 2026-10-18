@@ -13,7 +13,7 @@ package extension RemoteFileBrowserScreen {
         case createFolder(parentPath: String, proposedName: String, isSubmitting: Bool)
         case rename(entryPath: String, originalName: String, proposedName: String, isSubmitting: Bool)
 
-        var proposedName: String {
+        package var proposedName: String {
             switch self {
             case .createFolder(_, let proposedName, _),
                  .rename(_, _, let proposedName, _):
@@ -21,7 +21,7 @@ package extension RemoteFileBrowserScreen {
             }
         }
 
-        var isSubmitting: Bool {
+        package var isSubmitting: Bool {
             switch self {
             case .createFolder(_, _, let isSubmitting),
                  .rename(_, _, _, let isSubmitting):
@@ -29,12 +29,12 @@ package extension RemoteFileBrowserScreen {
             }
         }
 
-        var createFolderParentPath: String? {
+        package var createFolderParentPath: String? {
             guard case .createFolder(let parentPath, _, _) = self else { return nil }
             return parentPath
         }
 
-        var renameEntryPath: String? {
+        package var renameEntryPath: String? {
             guard case .rename(let entryPath, _, _, _) = self else { return nil }
             return entryPath
         }
@@ -42,10 +42,10 @@ package extension RemoteFileBrowserScreen {
 }
 
 @MainActor
-final class RemoteFileBrowserPlatformState: ObservableObject {
-    @Published var inlineEditor: RemoteFileBrowserScreen.InlineEditor?
-    @Published var selectedPaths: Set<String> = []
-    @Published var titlebarHeight: CGFloat = 0
+final package class RemoteFileBrowserPlatformState: ObservableObject {
+    @Published package var inlineEditor: RemoteFileBrowserScreen.InlineEditor?
+    @Published package var selectedPaths: Set<String> = []
+    @Published package var titlebarHeight: CGFloat = 0
 }
 
 package extension RemoteFileBrowserScreen {

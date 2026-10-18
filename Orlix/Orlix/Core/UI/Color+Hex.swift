@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-extension Color {
-    nonisolated static func fromHex(_ value: String) -> Color {
+package extension Color {
+    nonisolated static package func fromHex(_ value: String) -> Color {
         let hex = value.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)

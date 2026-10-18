@@ -1,11 +1,11 @@
 import Foundation
 
 #if arch(arm64)
-nonisolated enum MLXModelConfigurationError: Error, Equatable, LocalizedError {
+nonisolated package enum MLXModelConfigurationError: Error, Equatable, LocalizedError {
     case invalid(String)
     case allocationBudgetExceeded
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .invalid(let field):
             return "Invalid model configuration: \(field)"
@@ -15,11 +15,11 @@ nonisolated enum MLXModelConfigurationError: Error, Equatable, LocalizedError {
     }
 }
 
-nonisolated enum MLXModelConfigurationValidator {
+nonisolated package enum MLXModelConfigurationValidator {
     private static let maximumEstimatedParameterBytes: UInt64 = 8 * 1_024 * 1_024 * 1_024
     private static let maximumTensorBytes: UInt64 = 2 * 1_024 * 1_024 * 1_024
 
-    static func validateWhisper(_ dimensions: WhisperModelDimensions) throws {
+    static package func validateWhisper(_ dimensions: WhisperModelDimensions) throws {
         try require(dimensions.n_mels, in: 1...512, field: "n_mels")
         try require(dimensions.n_audio_ctx, in: 1...32_768, field: "n_audio_ctx")
         try validateAttention(
@@ -62,7 +62,7 @@ nonisolated enum MLXModelConfigurationValidator {
         try require(estimatedBytes <= maximumEstimatedParameterBytes, field: "estimated parameters")
     }
 
-    static func validateParakeet(_ config: ParakeetTDTConfig) throws {
+    static package func validateParakeet(_ config: ParakeetTDTConfig) throws {
         try require(config.decoding.modelType == "tdt", field: "decoding.model_type")
         try validatePreprocessor(config.preprocessor)
         try validateConformer(config.encoder, featureCount: config.preprocessor.features)

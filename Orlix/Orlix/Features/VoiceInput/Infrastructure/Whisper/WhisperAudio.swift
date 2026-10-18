@@ -3,20 +3,20 @@ import Foundation
 import MLX
 import MLXFFT
 
-nonisolated enum WhisperAudioConstants {
-    nonisolated static let sampleRate = 16_000
-    nonisolated static let nFFT = 400
-    nonisolated static let hopLength = 160
-    nonisolated static let chunkLength = 30
-    nonisolated static let nSamples = chunkLength * sampleRate
-    nonisolated static let nFrames = nSamples / hopLength
+nonisolated package enum WhisperAudioConstants {
+    nonisolated static package let sampleRate = 16_000
+    nonisolated static package let nFFT = 400
+    nonisolated static package let hopLength = 160
+    nonisolated static package let chunkLength = 30
+    nonisolated static package let nSamples = chunkLength * sampleRate
+    nonisolated static package let nFrames = nSamples / hopLength
 }
 
-nonisolated enum WhisperAudioError: LocalizedError {
+nonisolated package enum WhisperAudioError: LocalizedError {
     case missingMelFilters
     case invalidNpy
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .missingMelFilters:
             return "Missing mel filter resource"
@@ -26,10 +26,10 @@ nonisolated enum WhisperAudioError: LocalizedError {
     }
 }
 
-nonisolated final class WhisperAudioProcessor {
+nonisolated final package class WhisperAudioProcessor {
     private static let melFiltersCache = WhisperMelFilterCache()
 
-    static func logMelSpectrogram(_ samples: [Float], nMels: Int = 80, padding: Int = 0) throws -> MLXArray {
+    static package func logMelSpectrogram(_ samples: [Float], nMels: Int = 80, padding: Int = 0) throws -> MLXArray {
         var audio = MLXArray(samples, [samples.count])
         if padding > 0 {
             audio = padded(audio, widths: [IntOrPair((0, padding))])
@@ -52,7 +52,7 @@ nonisolated final class WhisperAudioProcessor {
         return logSpec
     }
 
-    static func padOrTrim(_ array: MLXArray, length: Int, axis: Int = -1) -> MLXArray {
+    static package func padOrTrim(_ array: MLXArray, length: Int, axis: Int = -1) -> MLXArray {
         let resolvedAxis = axis < 0 ? array.ndim + axis : axis
         let current = array.dim(resolvedAxis)
         if current > length {
@@ -186,7 +186,7 @@ private nonisolated final class WhisperMelFilterCache: @unchecked Sendable {
     private let lock = NSLock()
     private var values: [Int: MLXArray] = [:]
 
-    func value(for key: Int, load: () throws -> MLXArray) rethrows -> MLXArray {
+    package func value(for key: Int, load: () throws -> MLXArray) rethrows -> MLXArray {
         lock.lock()
         defer { lock.unlock() }
 

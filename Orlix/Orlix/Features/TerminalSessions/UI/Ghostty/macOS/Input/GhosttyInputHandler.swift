@@ -11,7 +11,7 @@ import OSLog
 
 /// Manages input event forwarding (keyboard, mouse, scroll) to Ghostty terminal
 @MainActor
-class GhosttyInputHandler {
+package class GhosttyInputHandler {
     // MARK: - Properties
 
     private weak var view: NSView?
@@ -22,7 +22,7 @@ class GhosttyInputHandler {
 
     // MARK: - Initialization
 
-    init(view: NSView, surface: Ghostty.Surface?, imeHandler: GhosttyIMEHandler) {
+    package init(view: NSView, surface: Ghostty.Surface?, imeHandler: GhosttyIMEHandler) {
         self.view = view
         self.surface = surface
         self.imeHandler = imeHandler
@@ -31,13 +31,13 @@ class GhosttyInputHandler {
     // MARK: - Public API
 
     /// Update surface reference
-    func updateSurface(_ surface: Ghostty.Surface?) {
+    package func updateSurface(_ surface: Ghostty.Surface?) {
         self.surface = surface
     }
 
     // MARK: - Keyboard Input
 
-    func handleKeyDown(with event: NSEvent, interpretKeyEvents: @escaping ([NSEvent]) -> Void) {
+    package func handleKeyDown(with event: NSEvent, interpretKeyEvents: @escaping ([NSEvent]) -> Void) {
         guard let surface = surface else {
             Self.logger.warning("keyDown: no surface")
             // Even without surface, call interpretKeyEvents for IME support
@@ -106,7 +106,7 @@ class GhosttyInputHandler {
         }
     }
 
-    func handleKeyUp(with event: NSEvent) {
+    package func handleKeyUp(with event: NSEvent) {
         guard let surface = surface else { return }
 
         var keyEvent = event.ghosttyKeyEvent(GHOSTTY_ACTION_RELEASE)
@@ -117,7 +117,7 @@ class GhosttyInputHandler {
         }
     }
 
-    func handleFlagsChanged(with event: NSEvent) {
+    package func handleFlagsChanged(with event: NSEvent) {
         guard let surface = surface?.unsafeCValue else { return }
 
         // Determine which modifier key changed
@@ -146,7 +146,7 @@ class GhosttyInputHandler {
 
     // MARK: - Mouse Input
 
-    func handleMouseDown(with event: NSEvent) {
+    package func handleMouseDown(with event: NSEvent) {
         guard let surface = surface else { return }
 
         let mouseEvent = Ghostty.Input.MouseButtonEvent(
@@ -157,7 +157,7 @@ class GhosttyInputHandler {
         surface.sendMouseButton(mouseEvent)
     }
 
-    func handleMouseUp(with event: NSEvent) {
+    package func handleMouseUp(with event: NSEvent) {
         guard let surface = surface else { return }
 
         let mouseEvent = Ghostty.Input.MouseButtonEvent(
@@ -168,7 +168,7 @@ class GhosttyInputHandler {
         surface.sendMouseButton(mouseEvent)
     }
 
-    func handleRightMouseDown(with event: NSEvent) -> Bool {
+    package func handleRightMouseDown(with event: NSEvent) -> Bool {
         guard let surface = surface else { return false }
 
         let mouseEvent = Ghostty.Input.MouseButtonEvent(
@@ -179,7 +179,7 @@ class GhosttyInputHandler {
         return surface.sendMouseButton(mouseEvent)
     }
 
-    func handleRightMouseUp(with event: NSEvent) -> Bool {
+    package func handleRightMouseUp(with event: NSEvent) -> Bool {
         guard let surface = surface else { return false }
 
         let mouseEvent = Ghostty.Input.MouseButtonEvent(
@@ -190,7 +190,7 @@ class GhosttyInputHandler {
         return surface.sendMouseButton(mouseEvent)
     }
 
-    func handleOtherMouseDown(with event: NSEvent) {
+    package func handleOtherMouseDown(with event: NSEvent) {
         guard event.buttonNumber == 2 else { return }
         guard let surface = surface else { return }
 
@@ -202,7 +202,7 @@ class GhosttyInputHandler {
         surface.sendMouseButton(mouseEvent)
     }
 
-    func handleOtherMouseUp(with event: NSEvent) {
+    package func handleOtherMouseUp(with event: NSEvent) {
         guard event.buttonNumber == 2 else { return }
         guard let surface = surface else { return }
 
@@ -214,7 +214,7 @@ class GhosttyInputHandler {
         surface.sendMouseButton(mouseEvent)
     }
 
-    func handleMouseMoved(with event: NSEvent, viewFrame: NSRect, convertPoint: (NSPoint, NSView?) -> NSPoint) {
+    package func handleMouseMoved(with event: NSEvent, viewFrame: NSRect, convertPoint: (NSPoint, NSView?) -> NSPoint) {
         guard let surface = surface else { return }
 
         // Convert window coords to view coords
@@ -228,7 +228,7 @@ class GhosttyInputHandler {
         surface.sendMousePos(mouseEvent)
     }
 
-    func handleMouseEntered(with event: NSEvent, viewFrame: NSRect, convertPoint: (NSPoint, NSView?) -> NSPoint) {
+    package func handleMouseEntered(with event: NSEvent, viewFrame: NSRect, convertPoint: (NSPoint, NSView?) -> NSPoint) {
         guard let surface = surface else { return }
 
         // Report mouse entering the viewport
@@ -241,7 +241,7 @@ class GhosttyInputHandler {
         surface.sendMousePos(mouseEvent)
     }
 
-    func handleMouseExited(with event: NSEvent) {
+    package func handleMouseExited(with event: NSEvent) {
         guard let surface = surface else { return }
 
         // Negative values signal cursor left viewport
@@ -255,7 +255,7 @@ class GhosttyInputHandler {
 
     // MARK: - Scroll Input
 
-    func handleScrollWheel(with event: NSEvent) {
+    package func handleScrollWheel(with event: NSEvent) {
         guard let surface = surface else { return }
 
         var x = event.scrollingDeltaX
@@ -282,9 +282,9 @@ class GhosttyInputHandler {
 
 // MARK: - NSEvent Extensions
 
-extension NSEvent {
+package extension NSEvent {
     /// Create a Ghostty key event from NSEvent
-    func ghosttyKeyEvent(_ action: ghostty_input_action_e) -> ghostty_input_key_s {
+    package func ghosttyKeyEvent(_ action: ghostty_input_action_e) -> ghostty_input_key_s {
         var keyEvent = ghostty_input_key_s()
         keyEvent.action = action
         keyEvent.keycode = UInt32(keyCode)
@@ -309,7 +309,7 @@ extension NSEvent {
     }
 
     /// Get characters appropriate for Ghostty (excluding control chars and PUA)
-    var ghosttyCharacters: String? {
+    package var ghosttyCharacters: String? {
         guard let characters = characters else { return nil }
 
         if characters.count == 1,

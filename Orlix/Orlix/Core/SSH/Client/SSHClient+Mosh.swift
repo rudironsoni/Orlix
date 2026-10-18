@@ -8,20 +8,20 @@ import OrlixModels
 #endif
 package extension SSHClient {
     package struct MoshShellRuntime {
-        let session: MoshClientSession
-        let output: TerminalOutputChannel
-        let streamTask: Task<Void, Never>
+        package let session: MoshClientSession
+        package let output: TerminalOutputChannel
+        package let streamTask: Task<Void, Never>
     }
 
     package struct PreparedMoshShell: Sendable {
-        let session: MoshClientSession
-        let pendingOps: [MoshHostOp]
+        package let session: MoshClientSession
+        package let pendingOps: [MoshHostOp]
     }
 
     package struct PreparedMoshBootstrap: Sendable {
-        let shell: PreparedMoshShell
-        let leaseID: UUID
-        let lease: RemoteMoshServerLease
+        package let shell: PreparedMoshShell
+        package let leaseID: UUID
+        package let lease: RemoteMoshServerLease
     }
 
     package func prepareMoshShellForApplicationBackground(

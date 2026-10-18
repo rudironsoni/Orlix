@@ -4,19 +4,19 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum StatsPreferencesCloudKitRecordCodecError: Error, Equatable, Sendable {
+nonisolated package enum StatsPreferencesCloudKitRecordCodecError: Error, Equatable, Sendable {
     case encodingFailed
 }
 
-nonisolated enum StatsPreferencesCloudKitRecordCodec {
-    static let recordType = "UserPreference"
-    static let recordName = StatsPreferences.recordName
+nonisolated package enum StatsPreferencesCloudKitRecordCodec {
+    static package let recordType = "UserPreference"
+    static package let recordName = StatsPreferences.recordName
 
-    static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
+    static package func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
         CKRecord.ID(recordName: recordName, zoneID: zoneID)
     }
 
-    static func preferences(from record: CKRecord) -> StatsPreferences? {
+    static package func preferences(from record: CKRecord) -> StatsPreferences? {
         guard let payload = record["payload"] as? Data,
               var preferences = try? JSONDecoder().decode(
                   StatsPreferences.self,
@@ -40,7 +40,7 @@ nonisolated enum StatsPreferencesCloudKitRecordCodec {
         return preferences.normalized()
     }
 
-    static func record(
+    static package func record(
         for preferences: StatsPreferences,
         recordID: CKRecord.ID,
         existingRecord: CKRecord? = nil
@@ -61,7 +61,7 @@ nonisolated enum StatsPreferencesCloudKitRecordCodec {
         return record
     }
 
-    static func merge(
+    static package func merge(
         local: StatsPreferences,
         remote: StatsPreferences
     ) -> StatsPreferences {

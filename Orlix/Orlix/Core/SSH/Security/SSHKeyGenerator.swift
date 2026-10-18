@@ -34,11 +34,11 @@ package enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - Generated Key Result
 
-struct GeneratedSSHKey {
-    let privateKey: Data
-    let publicKey: String
-    let keyType: SSHKeyType
-    let fingerprint: String
+package struct GeneratedSSHKey {
+    package let privateKey: Data
+    package let publicKey: String
+    package let keyType: SSHKeyType
+    package let fingerprint: String
 }
 
 // MARK: - SSH Key Generator

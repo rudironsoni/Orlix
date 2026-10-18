@@ -3,7 +3,7 @@ import Combine
 import Foundation
 
 @MainActor
-protocol TerminalIdleTimerControlling: AnyObject {
+package protocol TerminalIdleTimerControlling: AnyObject {
     func setIdleTimerDisabled(_ isDisabled: Bool)
 }
 

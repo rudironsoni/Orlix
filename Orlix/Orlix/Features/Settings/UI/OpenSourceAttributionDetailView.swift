@@ -3,10 +3,10 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct OpenSourceAttributionDetailView: View {
-    let document: OpenSourceAttribution.Document
+package struct OpenSourceAttributionDetailView: View {
+    package let document: OpenSourceAttribution.Document
 
-    var body: some View {
+    package var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {

@@ -18,8 +18,8 @@ import AppKit
 #if ORLIX_MODULAR_APP
 import OrlixTerminal
 #endif
-nonisolated enum MacShellContentReplacementPolicy {
-    static func shouldReplace(current: AnyHashable?, next: AnyHashable) -> Bool {
+nonisolated package enum MacShellContentReplacementPolicy {
+    static package func shouldReplace(current: AnyHashable?, next: AnyHashable) -> Bool {
         current != next
     }
 }
@@ -28,24 +28,24 @@ nonisolated enum MacShellContentReplacementPolicy {
 /// SwiftUI `WindowGroup`. The hosted SwiftUI panes are passed in already
 /// wrapped with the required environment, since environment values do not flow
 /// across an `NSHostingController` boundary automatically.
-struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresentable {
-    let isSidebarCollapsed: Bool
-    let sidebarContentIdentity: AnyHashable
-    let detailContentIdentity: AnyHashable
-    var onToggleSidebar: () -> Void = {}
+package struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresentable {
+    package let isSidebarCollapsed: Bool
+    package let sidebarContentIdentity: AnyHashable
+    package let detailContentIdentity: AnyHashable
+    package var onToggleSidebar: () -> Void = {}
     /// Hides the window toolbar (zen mode) and restores it on exit.
-    var isToolbarHidden: Bool = false
-    var sidebarMinWidth: CGFloat = 200
-    var sidebarIdealWidth: CGFloat = 250
-    var sidebarMaxWidth: CGFloat = 300
-    @ViewBuilder var sidebar: () -> Sidebar
-    @ViewBuilder var detail: () -> Detail
+    package var isToolbarHidden: Bool = false
+    package var sidebarMinWidth: CGFloat = 200
+    package var sidebarIdealWidth: CGFloat = 250
+    package var sidebarMaxWidth: CGFloat = 300
+    @ViewBuilder package var sidebar: () -> Sidebar
+    @ViewBuilder package var detail: () -> Detail
 
-    func makeCoordinator() -> MacShellSplitHostCoordinator {
+    package func makeCoordinator() -> MacShellSplitHostCoordinator {
         MacShellSplitHostCoordinator()
     }
 
-    func makeNSViewController(context: Context) -> NSSplitViewController {
+    package func makeNSViewController(context: Context) -> NSSplitViewController {
         let coordinator = context.coordinator
 
         let sidebarHC = NSHostingController(rootView: AnyView(sidebar()))
@@ -82,7 +82,7 @@ struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresent
         return splitVC
     }
 
-    func updateNSViewController(_ nsViewController: NSSplitViewController, context: Context) {
+    package func updateNSViewController(_ nsViewController: NSSplitViewController, context: Context) {
         let coordinator = context.coordinator
         if MacShellContentReplacementPolicy.shouldReplace(
             current: coordinator.sidebarContentIdentity,
@@ -107,26 +107,26 @@ struct MacShellSplitHost<Sidebar: View, Detail: View>: NSViewControllerRepresent
     }
 }
 
-final class MacShellSplitHostCoordinator {
-    var splitViewController: NSSplitViewController?
-    var sidebarHostingController: NSHostingController<AnyView>?
-    var detailHostingController: NSHostingController<AnyView>?
-    var sidebarItem: NSSplitViewItem?
-    var sidebarContentIdentity: AnyHashable?
-    var detailContentIdentity: AnyHashable?
+final package class MacShellSplitHostCoordinator {
+    package var splitViewController: NSSplitViewController?
+    package var sidebarHostingController: NSHostingController<AnyView>?
+    package var detailHostingController: NSHostingController<AnyView>?
+    package var sidebarItem: NSSplitViewItem?
+    package var sidebarContentIdentity: AnyHashable?
+    package var detailContentIdentity: AnyHashable?
 }
 
 /// NSSplitViewController that applies an initial sidebar width once, since
 /// NSSplitViewItem has no "ideal" thickness.
-final class ShellSplitViewController: NSSplitViewController {
-    var initialSidebarWidth: CGFloat = 250
-    var onToggleSidebar: (() -> Void)?
-    var isToolbarHidden = false
+final package class ShellSplitViewController: NSSplitViewController {
+    package var initialSidebarWidth: CGFloat = 250
+    package var onToggleSidebar: (() -> Void)?
+    package var isToolbarHidden = false
     private var didApplyInitialWidth = false
     private var bridgeObserver: AnyCancellable?
 
     /// Hide/show the window toolbar for zen mode.
-    func updateToolbarHidden(_ hidden: Bool) {
+    package func updateToolbarHidden(_ hidden: Bool) {
         isToolbarHidden = hidden
         view.window?.toolbar?.isVisible = !hidden
     }
@@ -135,7 +135,7 @@ final class ShellSplitViewController: NSSplitViewController {
     /// the SwiftUI columnVisibility (single source of truth) instead of letting
     /// NSSplitViewController collapse the item directly, which would fight the
     /// SwiftUI-driven collapse state.
-    override func toggleSidebar(_ sender: Any?) {
+    override package func toggleSidebar(_ sender: Any?) {
         if let onToggleSidebar {
             onToggleSidebar()
         } else {
@@ -160,7 +160,7 @@ final class ShellSplitViewController: NSSplitViewController {
         }
     }
 
-    override func viewDidAppear() {
+    override package func viewDidAppear() {
         super.viewDidAppear()
         installToolbarIfNeeded()
         if bridgeObserver == nil {

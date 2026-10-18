@@ -3,11 +3,11 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ServerMutation: Equatable, Sendable {
+nonisolated package enum ServerMutation: Equatable, Sendable {
     case create(Server)
     case update(Server)
 
-    var server: Server {
+    package var server: Server {
         switch self {
         case .create(let server), .update(let server):
             return server
@@ -16,7 +16,7 @@ nonisolated enum ServerMutation: Equatable, Sendable {
 }
 
 @MainActor
-protocol ServerMutationRepository: AnyObject {
+package protocol ServerMutationRepository: AnyObject {
     func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws
     func server(id: UUID) -> Server?
     func apply(
@@ -26,31 +26,31 @@ protocol ServerMutationRepository: AnyObject {
 }
 
 @MainActor
-protocol ServerCredentialStoring: AnyObject {
+package protocol ServerCredentialStoring: AnyObject {
     func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws
 }
 
 @MainActor
 package protocol ServerCredentialTransactionRepository: ServerCredentialStoring {
-    package func getCredentials(for server: Server) throws -> ServerCredentials
-    package func deleteCredentials(for serverID: UUID) throws
+    func getCredentials(for server: Server) throws -> ServerCredentials
+    func deleteCredentials(for serverID: UUID) throws
 }
 
 @MainActor
 package protocol ServerCredentialRepository: ServerCredentialTransactionRepository {
-    package func getStoredSSHKeys() -> [SSHKeyEntry]
-    package func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)?
+    func getStoredSSHKeys() -> [SSHKeyEntry]
+    func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)?
 }
 
 @MainActor
-struct ServerSaveUseCase {
+package struct ServerSaveUseCase {
     private let mutations: any ServerMutationRepository
 
-    init(mutations: any ServerMutationRepository) {
+    package init(mutations: any ServerMutationRepository) {
         self.mutations = mutations
     }
 
-    func execute(
+    package func execute(
         _ mutation: ServerMutation,
         credentials newCredentials: ServerCredentials,
         hasProAccess: Bool

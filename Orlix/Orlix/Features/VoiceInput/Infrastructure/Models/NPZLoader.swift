@@ -2,8 +2,8 @@ import Foundation
 import MLX
 import ZIPFoundation
 
-enum NPZLoader {
-    nonisolated enum NPZError: Error, Equatable {
+package enum NPZLoader {
+    nonisolated package enum NPZError: Error, Equatable {
         case invalidArchive
         case missingArrays
         case unsupportedEntry
@@ -16,27 +16,27 @@ enum NPZLoader {
         case insufficientTemporaryStorage
     }
 
-    nonisolated struct ArrayLayout: Equatable {
-        let shape: [Int64]
-        let elementByteWidth: Int64
-        let payloadBytes: Int64
+    nonisolated package struct ArrayLayout: Equatable {
+        package let shape: [Int64]
+        package let elementByteWidth: Int64
+        package let payloadBytes: Int64
     }
 
-    nonisolated enum ExpansionBudget {
-        nonisolated static let maximumMemberCount = 4_096
-        nonisolated static let maximumEntryBytes: Int64 = 1 * 1_024 * 1_024 * 1_024
-        nonisolated static let maximumAggregateBytes: Int64 = 6 * 1_024 * 1_024 * 1_024
-        nonisolated static let maximumCompressionRatio: Int64 = 200
-        nonisolated static let requiredFreeSpaceReserve: Int64 = 512 * 1_024 * 1_024
+    nonisolated package enum ExpansionBudget {
+        nonisolated static package let maximumMemberCount = 4_096
+        nonisolated static package let maximumEntryBytes: Int64 = 1 * 1_024 * 1_024 * 1_024
+        nonisolated static package let maximumAggregateBytes: Int64 = 6 * 1_024 * 1_024 * 1_024
+        nonisolated static package let maximumCompressionRatio: Int64 = 200
+        nonisolated static package let requiredFreeSpaceReserve: Int64 = 512 * 1_024 * 1_024
 
-        nonisolated static func validateMemberCount(_ count: Int) throws {
+        nonisolated static package func validateMemberCount(_ count: Int) throws {
             guard count > 0 else { return }
             guard count <= maximumMemberCount else {
                 throw NPZError.memberCountLimitExceeded
             }
         }
 
-        nonisolated static func validateEntry(
+        nonisolated static package func validateEntry(
             compressedBytes: Int64,
             expandedBytes: Int64
         ) throws {
@@ -54,7 +54,7 @@ enum NPZLoader {
             }
         }
 
-        nonisolated static func addingExpandedBytes(_ bytes: Int64, to total: Int64) throws -> Int64 {
+        nonisolated static package func addingExpandedBytes(_ bytes: Int64, to total: Int64) throws -> Int64 {
             let (newTotal, overflow) = total.addingReportingOverflow(bytes)
             guard !overflow, newTotal <= maximumAggregateBytes else {
                 throw NPZError.aggregateSizeLimitExceeded
@@ -62,7 +62,7 @@ enum NPZLoader {
             return newTotal
         }
 
-        nonisolated static func validateTemporaryStorage(
+        nonisolated static package func validateTemporaryStorage(
             largestEntryBytes: Int64,
             availableCapacity: Int64
         ) throws {
@@ -76,21 +76,21 @@ enum NPZLoader {
     }
 
     nonisolated private struct ArchiveMember {
-        let entry: Entry
-        let key: String
+        package let entry: Entry
+        package let key: String
     }
 
     nonisolated private static let maximumHeaderBytes = 64 * 1_024
     nonisolated private static let maximumDimensionCount = 8
     nonisolated private static let maximumDimension: Int64 = 1_000_000
 
-    nonisolated static func loadArrays(from url: URL) throws -> [String: MLXArray] {
+    nonisolated static package func loadArrays(from url: URL) throws -> [String: MLXArray] {
         try loadValidatedEntries(from: url) { entryURL in
             try loadArray(url: entryURL)
         }
     }
 
-    nonisolated static func loadValidatedEntries<Value>(
+    nonisolated static package func loadValidatedEntries<Value>(
         from url: URL,
         loader: (URL) throws -> Value
     ) throws -> [String: Value] {
@@ -132,7 +132,7 @@ enum NPZLoader {
         return arrays
     }
 
-    nonisolated static func validateArrayHeader(
+    nonisolated static package func validateArrayHeader(
         _ data: Data,
         totalBytes: Int64
     ) throws -> ArrayLayout {
@@ -369,8 +369,8 @@ enum NPZLoader {
     }
 }
 
-extension NPZLoader.NPZError: LocalizedError {
-    var errorDescription: String? {
+package extension NPZLoader.NPZError: LocalizedError {
+    package var errorDescription: String? {
         switch self {
         case .invalidArchive:
             return String(localized: "The model archive is invalid.")

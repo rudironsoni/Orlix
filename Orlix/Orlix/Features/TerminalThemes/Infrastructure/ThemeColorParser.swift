@@ -9,13 +9,13 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct TerminalThemePreviewPalette {
-    let background: Color
-    let foreground: Color
-    let cursor: Color
-    let cursorText: Color
+package struct TerminalThemePreviewPalette {
+    package let background: Color
+    package let foreground: Color
+    package let cursor: Color
+    package let cursorText: Color
 
-    static let fallback = TerminalThemePreviewPalette(
+    static package let fallback = TerminalThemePreviewPalette(
         background: Color.fromHex("#101418"),
         foreground: Color.fromHex("#D8E0EA"),
         cursor: Color.fromHex("#F8B26A"),
@@ -24,11 +24,11 @@ struct TerminalThemePreviewPalette {
 }
 
 /// Parses terminal theme files to extract colors
-struct ThemeColorParser {
+package struct ThemeColorParser {
     /// Extracts background color from a Ghostty theme file
     /// - Parameter themeName: The name of the theme (e.g., "Orlix Dark")
     /// - Returns: The background Color if found, nil otherwise
-    static func backgroundColor(for themeName: String) -> Color? {
+    static package func backgroundColor(for themeName: String) -> Color? {
         guard let content = themeContent(for: themeName),
               let colorHex = value(for: "background", in: content) else {
             return nil
@@ -37,7 +37,7 @@ struct ThemeColorParser {
         return Color.fromHex(colorHex)
     }
 
-    static func previewPalette(for themeName: String) -> TerminalThemePreviewPalette {
+    static package func previewPalette(for themeName: String) -> TerminalThemePreviewPalette {
         let palette = appearancePalette(for: themeName)
 
         return TerminalThemePreviewPalette(
@@ -48,7 +48,7 @@ struct ThemeColorParser {
         )
     }
 
-    nonisolated static func appearancePalette(for themeName: String) -> TerminalThemePalette {
+    nonisolated static package func appearancePalette(for themeName: String) -> TerminalThemePalette {
         guard let content = themeContent(for: themeName) else {
             return .fallback
         }
@@ -56,7 +56,7 @@ struct ThemeColorParser {
         return appearancePalette(themeContent: content)
     }
 
-    nonisolated static func appearancePalette(themeContent content: String) -> TerminalThemePalette {
+    nonisolated static package func appearancePalette(themeContent content: String) -> TerminalThemePalette {
         let fallback = TerminalThemePalette.fallback
         let background = normalizedHexValue(for: "background", in: content) ?? fallback.backgroundHex
         let foreground = normalizedHexValue(for: "foreground", in: content) ?? fallback.foregroundHex
@@ -71,7 +71,7 @@ struct ThemeColorParser {
         )
     }
 
-    nonisolated static func splitDividerComponents(
+    nonisolated static package func splitDividerComponents(
         for backgroundHex: String
     ) -> (red: Double, green: Double, blue: Double, alpha: Double)? {
         let hex = backgroundHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -121,7 +121,7 @@ struct ThemeColorParser {
 
     /// Returns tmux mode-style string for selection highlighting.
     /// Format: "fg=#RRGGBB,bg=#RRGGBB"
-    nonisolated static func tmuxModeStyle(for themeName: String) -> String {
+    nonisolated static package func tmuxModeStyle(for themeName: String) -> String {
         let fallbackForegroundHex = "cdd6f4"
         let fallbackSelectionBackgroundHex = "45475a"
         guard let content = themeContent(for: themeName) else {
@@ -141,15 +141,15 @@ struct ThemeColorParser {
     }
 
     private nonisolated struct CachedThemeContent: Sendable {
-        let path: String
-        let modificationDate: Date?
-        let content: String
+        package let path: String
+        package let modificationDate: Date?
+        package let content: String
     }
 
     private nonisolated(unsafe) static var contentCache: [String: CachedThemeContent] = [:]
     private nonisolated static let contentCacheLock = NSLock()
 
-    nonisolated static func invalidateCache() {
+    nonisolated static package func invalidateCache() {
         contentCacheLock.lock()
         contentCache.removeAll()
         contentCacheLock.unlock()

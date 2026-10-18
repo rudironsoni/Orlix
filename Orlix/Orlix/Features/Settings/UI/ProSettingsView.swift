@@ -187,11 +187,11 @@ package struct ProSettingsView: View {
 }
 
 private struct ProSettingsFeatureRow: View {
-    let title: String
-    let systemImage: String
-    let value: String
+    package let title: String
+    package let systemImage: String
+    package let value: String
 
-    var body: some View {
+    package var body: some View {
         OrlixLabeledContent {
             Text(value)
                 .foregroundStyle(.secondary)
@@ -202,9 +202,9 @@ private struct ProSettingsFeatureRow: View {
 }
 
 #if os(iOS)
-extension View {
+package extension View {
     @ViewBuilder
-    func manageSubscriptionsSheetCompat(
+    package func manageSubscriptionsSheetCompat(
         isPresented: Binding<Bool>,
         subscriptionGroupID: String
     ) -> some View {

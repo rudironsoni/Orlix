@@ -4,26 +4,26 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-protocol TerminalThemeCloudClient: AnyObject {
+package protocol TerminalThemeCloudClient: AnyObject {
     func fetchTerminalThemes() async throws -> [TerminalTheme]
     func fetchTerminalThemePreference() async throws -> TerminalThemePreference?
 }
 
 @MainActor
 package protocol TerminalThemeCloudMutationClient: AnyObject {
-    package func saveTerminalTheme(_ theme: TerminalTheme) async throws
-    package func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws
+    func saveTerminalTheme(_ theme: TerminalTheme) async throws
+    func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws
 }
 
 @MainActor
-protocol TerminalThemeMutationQueue: AnyObject {
+package protocol TerminalThemeMutationQueue: AnyObject {
     func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws
     func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws
     func drainPendingMutations() async
 }
 
 @MainActor
-protocol TerminalThemeSyncLifecycle: AnyObject {
+package protocol TerminalThemeSyncLifecycle: AnyObject {
     func observe(
         _ observer: @escaping (CloudKitSyncLifecycleEvent) -> Void
     ) -> UUID
@@ -31,7 +31,7 @@ protocol TerminalThemeSyncLifecycle: AnyObject {
 }
 
 @MainActor
-protocol TerminalThemePreferenceChangeSource: AnyObject {
+package protocol TerminalThemePreferenceChangeSource: AnyObject {
     func observeChanges(
         _ observer: @escaping @MainActor @Sendable () -> Void
     ) -> NSObjectProtocol
@@ -39,7 +39,7 @@ protocol TerminalThemePreferenceChangeSource: AnyObject {
 }
 
 @MainActor
-protocol TerminalThemePersistence: AnyObject {
+package protocol TerminalThemePersistence: AnyObject {
     func loadCustomThemes() throws -> [TerminalTheme]
     func saveCustomThemes(_ themes: [TerminalTheme]) throws
     func loadSelection() -> TerminalThemeSelection
@@ -50,34 +50,34 @@ protocol TerminalThemePersistence: AnyObject {
 }
 
 @MainActor
-protocol TerminalThemeFileSynchronizing {
+package protocol TerminalThemeFileSynchronizing {
     func synchronize(_ themes: [TerminalTheme]) throws
 }
 
 @MainActor
-protocol BuiltInTerminalThemeCatalog {
+package protocol BuiltInTerminalThemeCatalog {
     func themeNames() -> [String]
 }
 
 @MainActor
-protocol TerminalThemePaletteResolving {
+package protocol TerminalThemePaletteResolving {
     func palette(forThemeNamed name: String) -> TerminalThemePalette
     func palette(forThemeContent content: String) -> TerminalThemePalette
     func invalidateCache()
 }
 
 @MainActor
-struct TerminalThemeManagerDependencies {
-    let persistence: any TerminalThemePersistence
-    let cloud: any TerminalThemeCloudClient
-    let mutationQueue: any TerminalThemeMutationQueue
-    let syncLifecycle: any TerminalThemeSyncLifecycle
-    let preferenceChanges: any TerminalThemePreferenceChangeSource
-    let themeFiles: any TerminalThemeFileSynchronizing
-    let builtInThemeCatalog: any BuiltInTerminalThemeCatalog
-    let paletteResolver: any TerminalThemePaletteResolving
-    let isSyncEnabled: () -> Bool
-    let now: () -> Date
-    let waitForPreferenceSyncDebounce: () async throws -> Void
-    let startsSynchronization: Bool
+package struct TerminalThemeManagerDependencies {
+    package let persistence: any TerminalThemePersistence
+    package let cloud: any TerminalThemeCloudClient
+    package let mutationQueue: any TerminalThemeMutationQueue
+    package let syncLifecycle: any TerminalThemeSyncLifecycle
+    package let preferenceChanges: any TerminalThemePreferenceChangeSource
+    package let themeFiles: any TerminalThemeFileSynchronizing
+    package let builtInThemeCatalog: any BuiltInTerminalThemeCatalog
+    package let paletteResolver: any TerminalThemePaletteResolving
+    package let isSyncEnabled: () -> Bool
+    package let now: () -> Date
+    package let waitForPreferenceSyncDebounce: () async throws -> Void
+    package let startsSynchronization: Bool
 }

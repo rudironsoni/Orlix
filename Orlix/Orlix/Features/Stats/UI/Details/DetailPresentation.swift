@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum StatsSheetClosePlacement {
+package enum StatsSheetClosePlacement {
     case automatic
     case leading
     case trailing

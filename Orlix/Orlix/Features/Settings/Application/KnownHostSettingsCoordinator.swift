@@ -12,9 +12,9 @@ nonisolated package struct KnownHostSettingsItem: Identifiable, Equatable, Senda
 
 @MainActor
 package protocol KnownHostSettingsRepository: AnyObject {
-    package func loadKnownHosts() -> [KnownHostSettingsItem]
-    package func removeKnownHost(host: String, port: Int)
-    package func removeAllKnownHosts()
+    func loadKnownHosts() -> [KnownHostSettingsItem]
+    func removeKnownHost(host: String, port: Int)
+    func removeAllKnownHosts()
 }
 
 @MainActor

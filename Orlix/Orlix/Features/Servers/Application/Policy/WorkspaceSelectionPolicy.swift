@@ -3,12 +3,12 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct WorkspaceEnvironmentFilters: Equatable, Sendable {
-    static let empty = Self()
+nonisolated package struct WorkspaceEnvironmentFilters: Equatable, Sendable {
+    static package let empty = Self()
 
-    let selectionsByWorkspace: [UUID: Set<UUID>]
+    package let selectionsByWorkspace: [UUID: Set<UUID>]
 
-    init(selectionsByWorkspace: [UUID: Set<UUID>] = [:]) {
+    package init(selectionsByWorkspace: [UUID: Set<UUID>] = [:]) {
         self.selectionsByWorkspace = selectionsByWorkspace
     }
 }
@@ -93,7 +93,7 @@ package enum WorkspaceSelectionPolicy {
     }
 }
 
-nonisolated enum ServerCreationPresentationStep: Equatable, Sendable {
+nonisolated package enum ServerCreationPresentationStep: Equatable, Sendable {
     case createWorkspace
     case createServer
 }

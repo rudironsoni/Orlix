@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated struct SSHExecOutputBudget: Sendable {
-    static let defaultMaximumBytes = 1 * 1_024 * 1_024
+nonisolated package struct SSHExecOutputBudget: Sendable {
+    static package let defaultMaximumBytes = 1 * 1_024 * 1_024
 
-    let maximumBytes: Int
+    package let maximumBytes: Int
     private(set) var retainedBytes = 0
 
-    init(maximumBytes: Int = Self.defaultMaximumBytes) {
+    package init(maximumBytes: Int = Self.defaultMaximumBytes) {
         self.maximumBytes = max(0, maximumBytes)
     }
 
-    mutating func reserve(_ byteCount: Int) -> Bool {
+    mutating package func reserve(_ byteCount: Int) -> Bool {
         guard byteCount >= 0,
               byteCount <= maximumBytes - retainedBytes else {
             return false

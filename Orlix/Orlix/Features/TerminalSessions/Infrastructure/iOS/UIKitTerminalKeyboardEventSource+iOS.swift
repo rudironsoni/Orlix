@@ -6,13 +6,13 @@ import UIKit
 import OrlixModels
 #endif
 @MainActor
-final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
+final package class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
     private let center: NotificationCenter
     private let includesDiagnostics: Bool
     private var handler: (@MainActor @Sendable (TerminalKeyboardEvent) -> Void)?
     private var observers: [NSObjectProtocol] = []
 
-    init(
+    package init(
         center: NotificationCenter,
         includesDiagnostics: Bool
     ) {
@@ -20,7 +20,7 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
         self.includesDiagnostics = includesDiagnostics
     }
 
-    func start(
+    package func start(
         handler: @escaping @MainActor @Sendable (TerminalKeyboardEvent) -> Void
     ) {
         stop()
@@ -44,7 +44,7 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
         }
     }
 
-    func stop() {
+    package func stop() {
         for observer in observers {
             center.removeObserver(observer)
         }

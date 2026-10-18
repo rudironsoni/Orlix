@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum WakeOnLANConfigurationError: Error, Equatable, Sendable {
+nonisolated package enum WakeOnLANConfigurationError: Error, Equatable, Sendable {
     case invalidMACAddress
     case invalidIPv4Address
 }

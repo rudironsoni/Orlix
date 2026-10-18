@@ -218,10 +218,10 @@ final package class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMu
     }
 }
 
-nonisolated enum ServerCloudKitDecodingError: LocalizedError, Equatable, Sendable {
+nonisolated package enum ServerCloudKitDecodingError: LocalizedError, Equatable, Sendable {
     case malformedKnownRecord(recordType: String, recordName: String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .malformedKnownRecord(let recordType, let recordName):
             return "The iCloud \(recordType) record \(recordName) is malformed. Sync will retry without advancing its checkpoint."

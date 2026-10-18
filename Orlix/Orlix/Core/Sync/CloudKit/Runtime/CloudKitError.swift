@@ -2,13 +2,13 @@ import Foundation
 
 // MARK: - CloudKit Error
 
-enum CloudKitError: LocalizedError {
+package enum CloudKitError: LocalizedError {
     case notAvailable
     case recordNotFound
     case encodingFailed
     case decodingFailed
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .notAvailable: return "iCloud is not available"
         case .recordNotFound: return "Record not found"

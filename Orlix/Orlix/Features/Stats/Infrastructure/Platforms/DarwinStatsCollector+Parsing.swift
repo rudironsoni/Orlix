@@ -3,10 +3,10 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated extension DarwinStatsCollector {
+nonisolated package extension DarwinStatsCollector {
     // MARK: - Parsers
 
-    func parseProcessorLoadOutput(
+    package func parseProcessorLoadOutput(
         _ output: String,
         previousValues: [String: LinuxCpuValues]
     ) -> (samples: [CPUCoreSample], newValues: [String: LinuxCpuValues]) {
@@ -107,7 +107,7 @@ nonisolated extension DarwinStatsCollector {
         lhs >= rhs ? lhs - rhs : 0
     }
 
-    func parseBootTime(_ output: String) -> TimeInterval {
+    package func parseBootTime(_ output: String) -> TimeInterval {
         // Format: { sec = 1234567890, usec = 123456 } ...
         if let secRange = output.range(of: "sec = "),
            let commaRange = output.range(of: ",", range: secRange.upperBound..<output.endIndex) {
@@ -119,7 +119,7 @@ nonisolated extension DarwinStatsCollector {
         return 0
     }
 
-    func parseVmStat(_ output: String, totalMemory: UInt64) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64) {
+    package func parseVmStat(_ output: String, totalMemory: UInt64) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64) {
         var pagesFree: UInt64 = 0
         var pagesActive: UInt64 = 0
         var pagesInactive: UInt64 = 0
@@ -166,7 +166,7 @@ nonisolated extension DarwinStatsCollector {
         return (total, used, free, cached)
     }
 
-    func parseNetstat(_ output: String) -> (rx: UInt64, tx: UInt64) {
+    package func parseNetstat(_ output: String) -> (rx: UInt64, tx: UInt64) {
         var totalRx: UInt64 = 0
         var totalTx: UInt64 = 0
 
@@ -196,7 +196,7 @@ nonisolated extension DarwinStatsCollector {
         return !excludedPrefixes.contains { iface.hasPrefix($0) }
     }
 
-    func parsePs(_ output: String) -> [ProcessInfo] {
+    package func parsePs(_ output: String) -> [ProcessInfo] {
         var processes: [ProcessInfo] = []
 
         let lines = output.components(separatedBy: .newlines)
@@ -235,7 +235,7 @@ nonisolated extension DarwinStatsCollector {
         return processes
     }
 
-    func parseTopCpu(_ output: String) -> (user: Double, system: Double, idle: Double) {
+    package func parseTopCpu(_ output: String) -> (user: Double, system: Double, idle: Double) {
         var user = 0.0
         var system = 0.0
         var idle = 100.0
@@ -264,7 +264,7 @@ nonisolated extension DarwinStatsCollector {
         return (user, system, idle)
     }
 
-    func parseDf(
+    package func parseDf(
         _ output: String,
         metadataBySource: [String: VolumeCollectionMetadata] = [:]
     ) -> [VolumeInfo] {
@@ -325,7 +325,7 @@ nonisolated extension DarwinStatsCollector {
         return volumes
     }
 
-    func parseDiskutilVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
+    package func parseDiskutilVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
         guard let data = output.data(using: .utf8),
               let propertyList = try? PropertyListSerialization.propertyList(from: data, format: nil) else {
             return [:]
@@ -362,7 +362,7 @@ nonisolated extension DarwinStatsCollector {
         return metadata
     }
 
-    func dfSources(_ output: String) -> [String] {
+    package func dfSources(_ output: String) -> [String] {
         var seen = Set<String>()
         return output.components(separatedBy: .newlines).compactMap { line in
             guard let source = line.components(separatedBy: .whitespaces)
@@ -372,7 +372,7 @@ nonisolated extension DarwinStatsCollector {
         }
     }
 
-    func isSafeDarwinDevicePath(_ source: String) -> Bool {
+    package func isSafeDarwinDevicePath(_ source: String) -> Bool {
         source.range(of: #"^/dev/[A-Za-z0-9._-]+$"#, options: .regularExpression) != nil
     }
 
@@ -385,12 +385,12 @@ nonisolated extension DarwinStatsCollector {
         mountPoint.hasPrefix("/System/Volumes/")
     }
 
-    func section(_ sections: [String], _ index: Int) -> String {
+    package func section(_ sections: [String], _ index: Int) -> String {
         guard sections.indices.contains(index) else { return "" }
         return sections[index].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func parseDisplayProfile(_ output: String) -> [GPUDevice] {
+    package func parseDisplayProfile(_ output: String) -> [GPUDevice] {
         var devices: [GPUDevice] = []
         var currentName: String?
         var currentVendor = ""
@@ -463,7 +463,7 @@ nonisolated extension DarwinStatsCollector {
         return devices
     }
 
-    func parseDisplayProfileJSON(_ output: String) -> [GPUDevice] {
+    package func parseDisplayProfileJSON(_ output: String) -> [GPUDevice] {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let data = trimmed.data(using: .utf8),

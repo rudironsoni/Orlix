@@ -104,12 +104,12 @@ package extension MoveServerSheet {
     }
 }
 
-extension View {
-    func serverFormPlatformStyle(title: String) -> some View {
+package extension View {
+    package func serverFormPlatformStyle(title: String) -> some View {
         self
     }
 
-    func serverFormPlatformActions(
+    package func serverFormPlatformActions(
         isEditing: Bool,
         isSaving: Bool,
         saveButtonDisabled: Bool,
@@ -119,7 +119,7 @@ extension View {
         self
     }
 
-    func moveServerPlatformActions(
+    package func moveServerPlatformActions(
         isMoving: Bool,
         moveButtonDisabled: Bool,
         onCancel: @escaping () -> Void,

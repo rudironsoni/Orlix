@@ -6,18 +6,18 @@ import os.log
 import OrlixModels
 #endif
 @MainActor
-struct ServerStateStoreDependencies {
-    let localRepository: any ServerLocalRepository
-    let preferences: any ServerManagerPreferences
-    let freePlanTracker: any FreePlanAssignmentTracking
-    let isSyncEnabled: () -> Bool
-    let now: () -> Date
-    let makeID: () -> UUID
-    let defaultWorkspaceName: () -> String
-    let canonicalDefaultWorkspaceNames: () -> Set<String>
+package struct ServerStateStoreDependencies {
+    package let localRepository: any ServerLocalRepository
+    package let preferences: any ServerManagerPreferences
+    package let freePlanTracker: any FreePlanAssignmentTracking
+    package let isSyncEnabled: () -> Bool
+    package let now: () -> Date
+    package let makeID: () -> UUID
+    package let defaultWorkspaceName: () -> String
+    package let canonicalDefaultWorkspaceNames: () -> Set<String>
 }
 
-nonisolated enum ServerStateStoreError: Error, Equatable, Sendable {
+nonisolated package enum ServerStateStoreError: Error, Equatable, Sendable {
     case proAccessRequiredForCustomEnvironment
 }
 
@@ -844,7 +844,7 @@ final package class ServerStateStore: ObservableObject {
 }
 
 private extension Array {
-    mutating func moveElements(fromOffsets source: IndexSet, toOffset destination: Int) {
+    mutating package func moveElements(fromOffsets source: IndexSet, toOffset destination: Int) {
         guard !source.isEmpty, source.allSatisfy(indices.contains) else { return }
         let originalCount = count
         let movingElements = source.map { self[$0] }

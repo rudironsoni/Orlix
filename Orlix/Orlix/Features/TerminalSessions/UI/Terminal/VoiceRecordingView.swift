@@ -7,14 +7,14 @@
 
 import SwiftUI
 
-struct VoiceRecordingView: View {
-    @ObservedObject var audioService: AudioService
-    let onStop: () -> Void
-    let onCancel: () -> Void
-    let isProcessing: Bool
+package struct VoiceRecordingView: View {
+    @ObservedObject package var audioService: AudioService
+    package let onStop: () -> Void
+    package let onCancel: () -> Void
+    package let isProcessing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    package var body: some View {
         voiceChrome {
             VStack(spacing: 10) {
                 if isProcessing {
@@ -150,11 +150,11 @@ struct VoiceRecordingView: View {
 
 // MARK: - Pulsing Recording Indicator
 
-struct PulsingRecordingIndicator: View {
+package struct PulsingRecordingIndicator: View {
     @State private var isPulsing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    package var body: some View {
         Circle()
             .fill(Color.red)
             .frame(width: 7, height: 7)
@@ -170,11 +170,11 @@ struct PulsingRecordingIndicator: View {
 
 // MARK: - Animated Waveform View
 
-struct AnimatedWaveformView: View {
-    let audioLevel: Float
-    let isRecording: Bool
-    let width: CGFloat
-    let height: CGFloat
+package struct AnimatedWaveformView: View {
+    package let audioLevel: Float
+    package let isRecording: Bool
+    package let width: CGFloat
+    package let height: CGFloat
 
     @State private var cachedHeights: [CGFloat] = []
     @State private var targetHeights: [CGFloat] = []
@@ -184,7 +184,7 @@ struct AnimatedWaveformView: View {
         max(10, Int(width / 3))
     }
 
-    var body: some View {
+    package var body: some View {
         TimelineView(.animation(minimumInterval: 0.05, paused: !isRecording || reduceMotion)) { timeline in
             HStack(alignment: .center, spacing: 1) {
                 ForEach(0..<min(barCount, cachedHeights.count), id: \.self) { index in
@@ -247,7 +247,7 @@ struct AnimatedWaveformView: View {
 private struct ProcessingMeterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    package var body: some View {
         TimelineView(.animation(minimumInterval: 0.12, paused: reduceMotion)) { timeline in
             let phase = timeline.date.timeIntervalSinceReferenceDate
 
@@ -268,12 +268,12 @@ private struct ProcessingMeterView: View {
 }
 
 private struct VoiceActionButton: View {
-    let systemName: String
-    let tint: Color
-    let accessibilityLabel: String
-    let action: () -> Void
+    package let systemName: String
+    package let tint: Color
+    package let accessibilityLabel: String
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
@@ -289,7 +289,7 @@ private struct VoiceActionButton: View {
 
 private extension View {
     @ViewBuilder
-    func voiceGlassCircle(tint: Color) -> some View {
+    package func voiceGlassCircle(tint: Color) -> some View {
         if #available(iOS 26, macOS 26, *) {
             self
                 .glassEffect(.regular.tint(tint.opacity(0.18)).interactive(), in: Circle())
@@ -299,7 +299,7 @@ private extension View {
     }
 
     @ViewBuilder
-    func voiceGlassCapsule(tint: Color) -> some View {
+    package func voiceGlassCapsule(tint: Color) -> some View {
         if #available(iOS 26, macOS 26, *) {
             self
                 .glassEffect(.regular.tint(tint.opacity(0.12)), in: Capsule())
@@ -309,7 +309,7 @@ private extension View {
     }
 
     @ViewBuilder
-    func voiceGlassRect(tint: Color, cornerRadius: CGFloat) -> some View {
+    package func voiceGlassRect(tint: Color, cornerRadius: CGFloat) -> some View {
         if #available(iOS 26, macOS 26, *) {
             self
                 .glassEffect(

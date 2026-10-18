@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated protocol RemoteSessionBackend: Sendable {
+nonisolated package protocol RemoteSessionBackend: Sendable {
     var metadata: RemoteSessionBackendMetadata { get }
 
     func managedIdentifier(
@@ -47,7 +47,7 @@ nonisolated protocol RemoteSessionBackend: Sendable {
     ) async -> String?
 }
 
-extension RemoteSessionBackend {
+package extension RemoteSessionBackend {
     nonisolated func managedIdentifier(
         deviceID: String,
         entityID: UUID,

@@ -12,7 +12,7 @@ import OSLog
 
 /// Manages IME (Input Method Editor) state and text input handling for Ghostty terminal
 @MainActor
-class GhosttyIMEHandler {
+package class GhosttyIMEHandler {
     // MARK: - Properties
 
     private weak var view: NSView?
@@ -41,7 +41,7 @@ class GhosttyIMEHandler {
 
     // MARK: - Initialization
 
-    init(view: NSView, surface: Ghostty.Surface?) {
+    package init(view: NSView, surface: Ghostty.Surface?) {
         self.view = view
         self.surface = surface
     }
@@ -49,30 +49,30 @@ class GhosttyIMEHandler {
     // MARK: - Public API
 
     /// Update surface reference
-    func updateSurface(_ surface: Ghostty.Surface?) {
+    package func updateSurface(_ surface: Ghostty.Surface?) {
         self.surface = surface
         renderedPreeditText = nil
         syncPreedit(markedText)
     }
 
     /// Check if currently composing marked text
-    var hasMarkedText: Bool {
+    package var hasMarkedText: Bool {
         !markedText.isEmpty
     }
 
     /// Start accumulating text from insertText calls (call before interpretKeyEvents)
-    func beginKeyTextAccumulation() {
+    package func beginKeyTextAccumulation() {
         keyTextAccumulator = []
     }
 
     /// End accumulation and return accumulated texts (call after interpretKeyEvents)
-    func endKeyTextAccumulation() -> [String]? {
+    package func endKeyTextAccumulation() -> [String]? {
         defer { keyTextAccumulator = nil }
         return keyTextAccumulator
     }
 
     /// Clear marked text state
-    func clearMarkedText() {
+    package func clearMarkedText() {
         if !markedText.isEmpty {
             markedText = ""
             markedSelectedRange = NSRange(location: 0, length: 0)
@@ -83,7 +83,7 @@ class GhosttyIMEHandler {
 
     // MARK: - NSTextInputClient Methods
 
-    func insertText(_ string: Any, replacementRange: NSRange) {
+    package func insertText(_ string: Any, replacementRange: NSRange) {
         guard let text = anyToString(string) else { return }
 
         // Clear any marked text when committing
@@ -100,7 +100,7 @@ class GhosttyIMEHandler {
         surface?.sendText(text)
     }
 
-    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+    package func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         guard let text = anyToString(string) else { return }
 
         // Update marked text state before refreshing inline preedit.
@@ -116,13 +116,13 @@ class GhosttyIMEHandler {
         Self.logger.debug("IME marked text: \(text)")
     }
 
-    func unmarkText() {
+    package func unmarkText() {
         // NSTextInputClient commits through insertText; unmarkText only ends composition.
         // Sending marked text here can emit partial Jamo/phonetic fragments.
         clearMarkedText()
     }
 
-    func selectedRange() -> NSRange {
+    package func selectedRange() -> NSRange {
         if !markedText.isEmpty {
             return NSRange(
                 location: markedSelectedRange.location,
@@ -132,7 +132,7 @@ class GhosttyIMEHandler {
         return NSRange(location: 0, length: 0)
     }
 
-    func markedRange() -> NSRange {
+    package func markedRange() -> NSRange {
         // Return range of marked text if we have any
         if markedText.isEmpty {
             return NSRange(location: NSNotFound, length: 0)
@@ -140,7 +140,7 @@ class GhosttyIMEHandler {
         return NSRange(location: 0, length: markedText.utf16.count)
     }
 
-    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+    package func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
         // Return attributed marked text for IME window
         guard !markedText.isEmpty else { return nil }
 
@@ -156,7 +156,7 @@ class GhosttyIMEHandler {
         return attributedString
     }
 
-    func validAttributesForMarkedText() -> [NSAttributedString.Key] {
+    package func validAttributesForMarkedText() -> [NSAttributedString.Key] {
         return [
             .underlineStyle,
             .underlineColor,
@@ -165,7 +165,7 @@ class GhosttyIMEHandler {
         ]
     }
 
-    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?, viewFrame: NSRect, window: NSWindow?, surface: ghostty_surface_t?) -> NSRect {
+    package func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?, viewFrame: NSRect, window: NSWindow?, surface: ghostty_surface_t?) -> NSRect {
         // Get cursor position from Ghostty for IME window placement
         guard let surface = surface else {
             return NSRect(x: viewFrame.origin.x, y: viewFrame.origin.y, width: 0, height: 0)
@@ -197,7 +197,7 @@ class GhosttyIMEHandler {
         return window.convertToScreen(windowRect)
     }
 
-    func characterIndex(for point: NSPoint) -> Int {
+    package func characterIndex(for point: NSPoint) -> Int {
         return NSNotFound
     }
 

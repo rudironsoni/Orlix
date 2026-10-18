@@ -5,8 +5,8 @@ import OrlixModels
 import OrlixSSH
 #endif
 @MainActor
-final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
-    let ownership: ServerStatsClientOwnership
+final package class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
+    package let ownership: ServerStatsClientOwnership
 
     private let server: Server
     private let credentials: ServerCredentials
@@ -19,7 +19,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
     private var platformCollector: (any PlatformStatsCollector)?
     private var didDisconnect = false
 
-    init(
+    package init(
         server: Server,
         credentials: ServerCredentials,
         client: SSHClient,
@@ -35,11 +35,11 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         self.knownHostsManager = knownHostsManager
     }
 
-    var connectionIdentity: ServerStatsConnectionIdentity {
+    package var connectionIdentity: ServerStatsConnectionIdentity {
         ServerStatsConnectionIdentity(client)
     }
 
-    func runCollection(
+    package func runCollection(
         _ operation: @MainActor @Sendable @escaping () async throws -> Void
     ) async throws {
         do {
@@ -71,13 +71,13 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         }
     }
 
-    func disconnect() async {
+    package func disconnect() async {
         guard ownership.disconnectWhenDone, !didDisconnect else { return }
         didDisconnect = true
         await client.disconnect()
     }
 
-    func prepareIfNeeded() async -> ServerStatsCollectionPreparation? {
+    package func prepareIfNeeded() async -> ServerStatsCollectionPreparation? {
         guard remotePlatform == .unknown else { return nil }
 
         remotePlatform = await client.remotePlatform()
@@ -116,7 +116,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         )
     }
 
-    func collectStats(collectDocker: Bool) async throws -> ServerStats {
+    package func collectStats(collectDocker: Bool) async throws -> ServerStats {
         _ = await prepareIfNeeded()
         guard let platformCollector else { return ServerStats() }
 
@@ -141,7 +141,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         return stats
     }
 
-    func terminateProcess(_ process: ProcessInfo) async throws {
+    package func terminateProcess(_ process: ProcessInfo) async throws {
         _ = await prepareIfNeeded()
         let command: String
         switch remotePlatform {
@@ -153,7 +153,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         _ = try await client.execute(command, timeout: .seconds(5))
     }
 
-    func loadProcesses(fallback: [ProcessInfo]) async throws -> [ProcessInfo] {
+    package func loadProcesses(fallback: [ProcessInfo]) async throws -> [ProcessInfo] {
         _ = await prepareIfNeeded()
         guard let platformCollector else { return fallback }
         let processes = try await platformCollector.collectProcesses(
@@ -163,7 +163,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         return processes.isEmpty ? fallback : processes
     }
 
-    func loadDockerStats(fallback: DockerStats) async -> DockerStats {
+    package func loadDockerStats(fallback: DockerStats) async -> DockerStats {
         _ = await prepareIfNeeded()
         let dockerStats = await dockerCollector.collect(
             client: client,
@@ -175,7 +175,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         return dockerStats
     }
 
-    func performDockerAction(
+    package func performDockerAction(
         _ action: DockerContainerAction,
         on container: DockerContainer,
         fallback: DockerStats
@@ -198,7 +198,7 @@ final class LiveServerStatsCollectionSession: ServerStatsCollectionSession {
         return dockerStats
     }
 
-    func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
+    package func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
         _ = await prepareIfNeeded()
         guard remotePlatform != .unknown,
               let platformCollector else {

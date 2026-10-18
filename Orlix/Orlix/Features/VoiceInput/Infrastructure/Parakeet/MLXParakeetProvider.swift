@@ -1,13 +1,13 @@
 import Foundation
 
-final class MLXParakeetProvider {
-    static var isSupported: Bool {
+final package class MLXParakeetProvider {
+    static package var isSupported: Bool {
         MLXAudioSupport.isSupported
     }
 
-    init() {}
+    package init() {}
 
-    func transcribe(samples: [Float], modelID: String) async throws -> String {
+    package func transcribe(samples: [Float], modelID: String) async throws -> String {
         #if arch(arm64)
         guard Self.isSupported else {
             throw NSError(
@@ -52,8 +52,8 @@ import MLX
 
 /// MLX model loading and inference are serialized by `lock`. No model value
 /// escapes this object, so the lock is the complete mutable-state boundary.
-nonisolated final class ParakeetModelLoader: @unchecked Sendable {
-    static let shared = ParakeetModelLoader()
+nonisolated final package class ParakeetModelLoader: @unchecked Sendable {
+    static package let shared = ParakeetModelLoader()
 
     private var cachedModel: ParakeetTDT?
     private var cachedModelURL: URL?
@@ -61,7 +61,7 @@ nonisolated final class ParakeetModelLoader: @unchecked Sendable {
 
     private init() {}
 
-    func transcribe(samples: [Float], modelDirectory: URL) throws -> String {
+    package func transcribe(samples: [Float], modelDirectory: URL) throws -> String {
         lock.lock()
         defer { lock.unlock() }
 

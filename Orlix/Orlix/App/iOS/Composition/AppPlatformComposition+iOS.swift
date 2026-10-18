@@ -6,11 +6,11 @@ import OrlixModels
 import OrlixTerminal
 #endif
 @MainActor
-struct AppPlatformComposition {
-    let applicationIsActive: @MainActor @Sendable () -> Bool
-    let lifecycleDependencies: AppLifecycleDependencies
+package struct AppPlatformComposition {
+    package let applicationIsActive: @MainActor @Sendable () -> Bool
+    package let lifecycleDependencies: AppLifecycleDependencies
 
-    static func live(
+    static package func live(
         cloudKitManager: CloudKitManager,
         networkMonitor: NetworkMonitor,
         liveActivityManager: LiveActivityManager

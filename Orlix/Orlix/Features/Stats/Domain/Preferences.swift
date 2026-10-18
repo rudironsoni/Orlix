@@ -26,7 +26,7 @@ nonisolated package struct StatsPreferences: Codable, Equatable, Sendable {
         case cardsDetailed
         case classic
 
-        var id: String { rawValue }
+        package var id: String { rawValue }
     }
 
     package enum BlockID: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -39,14 +39,14 @@ nonisolated package struct StatsPreferences: Codable, Equatable, Sendable {
         case processes
         case docker
 
-        var id: String { rawValue }
+        package var id: String { rawValue }
     }
 
     package struct Block: Codable, Equatable, Identifiable, Sendable {
-        var id: BlockID
-        var isVisible: Bool
-        var order: Int
-        var updatedAt: Date
+        package var id: BlockID
+        package var isVisible: Bool
+        package var order: Int
+        package var updatedAt: Date
     }
 }
 

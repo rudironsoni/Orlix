@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum TerminalHardwareTextInputRoutingPolicy {
-    nonisolated static func inputModeAllowsOneToOneHardwareText(
+nonisolated package enum TerminalHardwareTextInputRoutingPolicy {
+    nonisolated static package func inputModeAllowsOneToOneHardwareText(
         _ primaryLanguage: String?
     ) -> Bool {
         guard let language = primaryLanguage?
@@ -25,7 +25,7 @@ nonisolated enum TerminalHardwareTextInputRoutingPolicy {
     /// input while preventing the text system from retaining the hold for its
     /// alternate-character UI. Inputs that may participate in dead keys,
     /// shortcuts, or candidate-based IMEs remain on the system text path.
-    nonisolated static func directlyRoutableText(
+    nonisolated static package func directlyRoutableText(
         _ characters: String,
         primaryLanguage: String?,
         hasControlModifier: Bool,
@@ -53,7 +53,7 @@ nonisolated enum TerminalHardwareTextInputRoutingPolicy {
         return normalized
     }
 
-    static func shouldRoutePressToSystemTextInput(
+    static package func shouldRoutePressToSystemTextInput(
         hasControlModifier: Bool,
         hasAlternateModifier: Bool,
         usesAlternateModifierAsTerminalAlt: Bool = false,
@@ -94,7 +94,7 @@ nonisolated enum TerminalHardwareTextInputRoutingPolicy {
         return false
     }
 
-    static func shouldRouteBackwardDeleteToSystemTextInput(
+    static package func shouldRouteBackwardDeleteToSystemTextInput(
         inputModeAllowsOneToOneText: Bool,
         hasLocalTextInputSession: Bool,
         hasControlModifier: Bool,
@@ -108,7 +108,7 @@ nonisolated enum TerminalHardwareTextInputRoutingPolicy {
             && !hasCommandModifier
     }
 
-    static func shouldRecordPendingInterpretedHardwareKey(
+    static package func shouldRecordPendingInterpretedHardwareKey(
         keyProducesText: Bool,
         hasControlModifier: Bool,
         hasAlternateModifier: Bool,
@@ -126,19 +126,19 @@ nonisolated enum TerminalHardwareTextInputRoutingPolicy {
             && !isSystemTextInputToggleKey
     }
 
-    static func shouldMirrorSystemTextInputModifierPressToTerminal(
+    static package func shouldMirrorSystemTextInputModifierPressToTerminal(
         isTextInputModifierOnlyKey: Bool
     ) -> Bool {
         isTextInputModifierOnlyKey
     }
 }
 
-nonisolated enum TerminalHardwareKeyRepeatSource: Sendable {
+nonisolated package enum TerminalHardwareKeyRepeatSource: Sendable {
     case directTerminal
     case layoutResolvedText
     case systemInterpretedText
 
-    var lifecycleDescription: String {
+    package var lifecycleDescription: String {
         switch self {
         case .directTerminal: "directTerminal"
         case .layoutResolvedText: "layoutResolvedText"
@@ -147,8 +147,8 @@ nonisolated enum TerminalHardwareKeyRepeatSource: Sendable {
     }
 }
 
-nonisolated enum TerminalHardwareKeyRepeatPolicy {
-    static func shouldRepeat(
+nonisolated package enum TerminalHardwareKeyRepeatPolicy {
+    static package func shouldRepeat(
         source: TerminalHardwareKeyRepeatSource,
         isPrintableKey: Bool,
         isRepeatableSpecialKey: Bool,
@@ -171,8 +171,8 @@ nonisolated enum TerminalHardwareKeyRepeatPolicy {
     }
 }
 
-nonisolated enum TerminalKeyInputModifierPolicy {
-    static func consumedModifiers(for mods: Ghostty.Input.Mods) -> Ghostty.Input.Mods {
+nonisolated package enum TerminalKeyInputModifierPolicy {
+    static package func consumedModifiers(for mods: Ghostty.Input.Mods) -> Ghostty.Input.Mods {
         mods.subtracting([.ctrl, .super])
     }
 }

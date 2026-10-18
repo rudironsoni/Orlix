@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated struct WorkspaceSelectionPreferencesCodec: Sendable {
-    static let maximumStoredByteCount = 65_536
+nonisolated package struct WorkspaceSelectionPreferencesCodec: Sendable {
+    static package let maximumStoredByteCount = 65_536
 
-    func decodeEnvironmentFilters(
+    package func decodeEnvironmentFilters(
         _ stored: String?
     ) -> StoredWorkspaceEnvironmentFilters {
         guard let stored, !stored.isEmpty else { return .absent }
@@ -25,7 +25,7 @@ nonisolated struct WorkspaceSelectionPreferencesCodec: Sendable {
             : .requiresNormalization(filters)
     }
 
-    func encodeEnvironmentFilters(
+    package func encodeEnvironmentFilters(
         _ filters: WorkspaceEnvironmentFilters
     ) -> String? {
         guard !filters.selectionsByWorkspace.isEmpty else { return "" }
@@ -44,7 +44,7 @@ nonisolated struct WorkspaceSelectionPreferencesCodec: Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
-    func decodeLegacyEnvironmentFilters(
+    package func decodeLegacyEnvironmentFilters(
         _ stored: String?
     ) -> LegacyWorkspaceEnvironmentFilters {
         guard let stored, !stored.isEmpty else {
@@ -71,14 +71,14 @@ nonisolated struct WorkspaceSelectionPreferencesCodec: Sendable {
 }
 
 @MainActor
-final class WorkspaceSelectionUserDefaultsPersistence: WorkspaceSelectionPersisting {
-    static let environmentFiltersKey = "environmentFilters.v2"
-    static let legacyEnvironmentFiltersKey = "environmentFilters"
+final package class WorkspaceSelectionUserDefaultsPersistence: WorkspaceSelectionPersisting {
+    static package let environmentFiltersKey = "environmentFilters.v2"
+    static package let legacyEnvironmentFiltersKey = "environmentFilters"
 
     private let defaults: UserDefaults
     private let codec: WorkspaceSelectionPreferencesCodec
 
-    init(
+    package init(
         defaults: UserDefaults,
         codec: WorkspaceSelectionPreferencesCodec = WorkspaceSelectionPreferencesCodec()
     ) {
@@ -86,13 +86,13 @@ final class WorkspaceSelectionUserDefaultsPersistence: WorkspaceSelectionPersist
         self.codec = codec
     }
 
-    func loadEnvironmentFilters() -> StoredWorkspaceEnvironmentFilters {
+    package func loadEnvironmentFilters() -> StoredWorkspaceEnvironmentFilters {
         codec.decodeEnvironmentFilters(
             defaults.string(forKey: Self.environmentFiltersKey)
         )
     }
 
-    func saveEnvironmentFilters(_ filters: WorkspaceEnvironmentFilters) -> Bool {
+    package func saveEnvironmentFilters(_ filters: WorkspaceEnvironmentFilters) -> Bool {
         guard let encoded = codec.encodeEnvironmentFilters(filters) else {
             return false
         }
@@ -100,13 +100,13 @@ final class WorkspaceSelectionUserDefaultsPersistence: WorkspaceSelectionPersist
         return true
     }
 
-    func loadLegacyEnvironmentFilters() -> LegacyWorkspaceEnvironmentFilters {
+    package func loadLegacyEnvironmentFilters() -> LegacyWorkspaceEnvironmentFilters {
         codec.decodeLegacyEnvironmentFilters(
             defaults.string(forKey: Self.legacyEnvironmentFiltersKey)
         )
     }
 
-    func clearLegacyEnvironmentFilters() {
+    package func clearLegacyEnvironmentFilters() {
         defaults.removeObject(forKey: Self.legacyEnvironmentFiltersKey)
     }
 }

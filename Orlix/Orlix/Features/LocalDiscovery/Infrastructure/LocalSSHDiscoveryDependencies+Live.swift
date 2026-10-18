@@ -3,10 +3,10 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension LocalSSHDiscoveryService: LocalSSHDiscovering {}
+package extension LocalSSHDiscoveryService: LocalSSHDiscovering {}
 
-extension LocalSSHDiscoveryDependencies {
-    static func live(
+package extension LocalSSHDiscoveryDependencies {
+    static package func live(
         networkConnectionType: @escaping () -> NetworkMonitor.ConnectionType,
         makeScanID: @escaping () -> UUID
     ) -> Self {

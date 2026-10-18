@@ -4,8 +4,8 @@ import SwiftUI
 import OrlixModels
 import OrlixSSH
 #endif
-extension ServerTransportSelection {
-    var displayName: String {
+package extension ServerTransportSelection {
+    package var displayName: String {
         switch self {
         case .standard:
             return String(localized: "SSH")
@@ -20,7 +20,7 @@ extension ServerTransportSelection {
         }
     }
 
-    var icon: String {
+    package var icon: String {
         switch self {
         case .standard:
             return "terminal"

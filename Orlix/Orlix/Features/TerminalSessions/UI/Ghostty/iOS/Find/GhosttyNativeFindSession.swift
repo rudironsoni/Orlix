@@ -3,10 +3,10 @@ import UIKit
 
 @available(iOS 16.0, *)
 @MainActor
-final class GhosttyNativeFindSession: UIFindSession {
-    typealias SearchHandler = (_ query: String, _ options: UITextSearchOptions?) -> Void
-    typealias NavigateHandler = (_ direction: UITextStorageDirection) -> Void
-    typealias InvalidateHandler = () -> Void
+final package class GhosttyNativeFindSession: UIFindSession {
+    package typealias SearchHandler = (_ query: String, _ options: UITextSearchOptions?) -> Void
+    package typealias NavigateHandler = (_ direction: UITextStorageDirection) -> Void
+    package typealias InvalidateHandler = () -> Void
 
     private let onSearch: SearchHandler
     private let onNavigate: NavigateHandler
@@ -16,23 +16,23 @@ final class GhosttyNativeFindSession: UIFindSession {
     private var reportedHighlightedResultIndex = NSNotFound
     private(set) var currentQuery = ""
 
-    override var resultCount: Int {
+    override package var resultCount: Int {
         reportedResultCount
     }
 
-    override var highlightedResultIndex: Int {
+    override package var highlightedResultIndex: Int {
         reportedHighlightedResultIndex
     }
 
-    override var supportsReplacement: Bool {
+    override package var supportsReplacement: Bool {
         false
     }
 
-    override var allowsReplacementForCurrentlyHighlightedResult: Bool {
+    override package var allowsReplacementForCurrentlyHighlightedResult: Bool {
         false
     }
 
-    init(
+    package init(
         onSearch: @escaping SearchHandler,
         onNavigate: @escaping NavigateHandler,
         onInvalidate: @escaping InvalidateHandler
@@ -44,27 +44,27 @@ final class GhosttyNativeFindSession: UIFindSession {
         searchResultDisplayStyle = .currentAndTotal
     }
 
-    override func performSearch(query: String, options: UITextSearchOptions?) {
+    override package func performSearch(query: String, options: UITextSearchOptions?) {
         currentQuery = query
         resetReportedResults()
         onSearch(query, options)
     }
 
-    override func highlightNextResult(in direction: UITextStorageDirection) {
+    override package func highlightNextResult(in direction: UITextStorageDirection) {
         onNavigate(direction)
     }
 
-    override func invalidateFoundResults() {
+    override package func invalidateFoundResults() {
         currentQuery = ""
         resetReportedResults()
         onInvalidate()
     }
 
-    func applyExternalQuery(_ query: String) {
+    package func applyExternalQuery(_ query: String) {
         currentQuery = query
     }
 
-    func updateReportedResults(total: Int?, highlightedIndex: Int?) -> Bool {
+    package func updateReportedResults(total: Int?, highlightedIndex: Int?) -> Bool {
         let normalizedTotal = max(total ?? 0, 0)
         let normalizedHighlighted: Int
         if let highlightedIndex,
@@ -86,7 +86,7 @@ final class GhosttyNativeFindSession: UIFindSession {
         return true
     }
 
-    func resetReportedResults() {
+    package func resetReportedResults() {
         _ = updateReportedResults(total: 0, highlightedIndex: nil)
     }
 }

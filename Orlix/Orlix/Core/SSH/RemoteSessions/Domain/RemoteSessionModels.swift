@@ -15,7 +15,7 @@ nonisolated package struct RemoteSessionBackendMetadata: Hashable, Sendable {
     package let managedStartupCommandSupport: ManagedStartupCommandSupport
 }
 
-nonisolated enum ManagedStartupCommandSupport: Hashable, Sendable {
+nonisolated package enum ManagedStartupCommandSupport: Hashable, Sendable {
     case supported
     case unsupported
 }
@@ -25,18 +25,18 @@ nonisolated package struct RemoteSessionThemeStyle: Hashable, Sendable {
     package let modeStyle: String
 }
 
-nonisolated struct RemoteSessionSemanticVersion: Codable, Comparable, Hashable, Sendable {
-    let major: Int
-    let minor: Int
-    let patch: Int
+nonisolated package struct RemoteSessionSemanticVersion: Codable, Comparable, Hashable, Sendable {
+    package let major: Int
+    package let minor: Int
+    package let patch: Int
 
-    init(major: Int, minor: Int, patch: Int) {
+    package init(major: Int, minor: Int, patch: Int) {
         self.major = max(0, major)
         self.minor = max(0, minor)
         self.patch = max(0, patch)
     }
 
-    init?(_ rawValue: String) {
+    package init?(_ rawValue: String) {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let start = trimmed.firstIndex(where: \.isNumber) else { return nil }
         let versionPrefix = trimmed[start...].prefix { $0.isNumber || $0 == "." }
@@ -56,23 +56,23 @@ nonisolated struct RemoteSessionSemanticVersion: Codable, Comparable, Hashable, 
     }
 }
 
-nonisolated struct RemoteSessionExecutable: Codable, Hashable, Sendable {
-    enum ValidationError: Error, Equatable, Sendable {
+nonisolated package struct RemoteSessionExecutable: Codable, Hashable, Sendable {
+    package enum ValidationError: Error, Equatable, Sendable {
         case empty
         case notAbsolute
         case tooLong
         case containsControlCharacters
     }
 
-    static let maximumLength = 4_096
+    static package let maximumLength = 4_096
 
     private enum CodingKeys: String, CodingKey {
         case path
     }
 
-    let path: String
+    package let path: String
 
-    init(validating path: String) throws {
+    package init(validating path: String) throws {
         guard !path.isEmpty else { throw ValidationError.empty }
         guard path.utf8.count <= Self.maximumLength else { throw ValidationError.tooLong }
         guard path.rangeOfCharacter(from: .controlCharacters) == nil else {
@@ -97,7 +97,7 @@ nonisolated struct RemoteSessionExecutable: Codable, Hashable, Sendable {
         self.path = path
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let path = try container.decode(String.self, forKey: .path)
         do {
@@ -111,23 +111,23 @@ nonisolated struct RemoteSessionExecutable: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(path, forKey: .path)
     }
 }
 
-nonisolated struct RemoteSessionProbe: Codable, Hashable, Sendable {
-    let backendIdentifier: RemoteSessionBackendIdentifier
-    let executable: RemoteSessionExecutable
-    let implementationVariant: String
-    let rawVersion: String
-    let semanticVersion: RemoteSessionSemanticVersion?
-    let shellFamily: RemoteShellFamily
-    let shellExecutable: String?
+nonisolated package struct RemoteSessionProbe: Codable, Hashable, Sendable {
+    package let backendIdentifier: RemoteSessionBackendIdentifier
+    package let executable: RemoteSessionExecutable
+    package let implementationVariant: String
+    package let rawVersion: String
+    package let semanticVersion: RemoteSessionSemanticVersion?
+    package let shellFamily: RemoteShellFamily
+    package let shellExecutable: String?
 }
 
-nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
+nonisolated package enum RemoteSessionProbeFailure: Hashable, Sendable {
     case cancelled
     case timeout
     case disconnected
@@ -137,7 +137,7 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
     case invalidResponse
     case commandFailed(String)
 
-    var retryError: Error {
+    package var retryError: Error {
         switch self {
         case .cancelled:
             CancellationError()
@@ -158,7 +158,7 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
         }
     }
 
-    static func resolve(_ error: Error) -> Self {
+    static package func resolve(_ error: Error) -> Self {
         if error is CancellationError {
             return .cancelled
         }
@@ -181,7 +181,7 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
         }
     }
 
-    var logDescription: String {
+    package var logDescription: String {
         switch self {
         case .cancelled: "cancelled"
         case .timeout: "timeout"
@@ -323,12 +323,12 @@ nonisolated package struct RemoteSessionLaunchRequest: Hashable, Sendable {
     package var attachment: RemoteSessionAttachment { intent.attachment }
 }
 
-nonisolated struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {
-    let command: String
-    let existsMarker: String
-    let missingMarker: String
+nonisolated package struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {
+    package let command: String
+    package let existsMarker: String
+    package let missingMarker: String
 
-    func sessionExists(in output: String) -> Bool? {
+    package func sessionExists(in output: String) -> Bool? {
         let reportsExists = output.contains(existsMarker)
         let reportsMissing = output.contains(missingMarker)
         switch (reportsExists, reportsMissing) {

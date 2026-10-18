@@ -86,7 +86,7 @@ private struct NoticeDiagnosticDetailHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(topBanner: diagnosticNotice) {
             terminalBackdrop { EmptyView() }
         }
@@ -97,7 +97,7 @@ private struct NoticeDiagnosticDetailHarness: View {
 private struct InactiveConnectionBannerHarness: View {
     private let connectionAttemptID = UUID()
 
-    var body: some View {
+    package var body: some View {
         terminalBackdrop {
             ZStack {
                 TerminalConnectionStatusView(
@@ -130,7 +130,7 @@ private struct ConnectionBannerHandoffHarness: View {
     private let paneId = UUID()
     private let connectionAttemptID = UUID()
 
-    var body: some View {
+    package var body: some View {
         terminalBackdrop {
             TerminalConnectionStatusView(
                 presentation: remoteSessionPrompt == nil
@@ -166,7 +166,7 @@ private struct ConnectionBannerHandoffHarness: View {
 private struct NoticeOperationStackHarness: View {
     @StateObject private var noticeHost = NoticeHostModel()
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(
             bottomOperations: noticeHost.bottomOperations,
             bottomInsetBehavior: .contentBottom
@@ -205,7 +205,7 @@ private struct NoticeOperationStackHarness: View {
 private struct NoticeConnectingHarness: View {
     private let connectionAttemptID = UUID()
 
-    var body: some View {
+    package var body: some View {
         terminalBackdrop {
             TerminalConnectionStatusView(
                 presentation: .connecting(serverName: "production"),
@@ -230,7 +230,7 @@ private struct NoticeReconnectBannerHarness: View {
         lifetime: .persistent
     )
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(
             topBanner: reconnectNotice,
             bannerSurfaceStyle: terminalSurfaceStyle
@@ -268,12 +268,12 @@ private func terminalBackdrop<Overlay: View>(
 }
 
 private struct NoticeConnectionStatusHarness: View {
-    enum Scenario {
+    package enum Scenario {
         case failure
         case disconnected
         case hostKeyFailure
 
-        var presentation: TerminalConnectionStatusPresentation {
+        package var presentation: TerminalConnectionStatusPresentation {
             switch self {
             case .failure:
                 return .failed(
@@ -291,18 +291,18 @@ private struct NoticeConnectionStatusHarness: View {
         }
     }
 
-    let scenario: Scenario
+    package let scenario: Scenario
 
     @State private var path = ["terminal"]
     @State private var presentation: TerminalConnectionStatusPresentation
     @State private var connectionAttemptID = UUID()
 
-    init(scenario: Scenario) {
+    package init(scenario: Scenario) {
         self.scenario = scenario
         _presentation = State(initialValue: scenario.presentation)
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Text("Server List")
                 .accessibilityIdentifier("orlix.noticeTest.serverList")
@@ -359,7 +359,7 @@ private struct NoticeFilesPreviewHarness: View {
     @State private var showsPreview = false
     @StateObject private var noticeHost = NoticeHostModel()
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             List {
                 Button {

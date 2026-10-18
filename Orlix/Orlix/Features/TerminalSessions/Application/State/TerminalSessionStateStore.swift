@@ -8,7 +8,7 @@ import OrlixSSH
 import OrlixSettings
 #endif
 @MainActor
-enum TerminalSessionPaneRemoval {
+package enum TerminalSessionPaneRemoval {
     case closeTab(TerminalTab)
     case removed(
         paneId: UUID,
@@ -660,29 +660,29 @@ final package class TerminalSessionStateStore: ObservableObject {
     #endif
 }
 
-struct TerminalServerSessionSnapshot: Equatable {
-    let tabs: [TerminalTab]
-    let selectedTabId: UUID?
-    let connectionStatesByPane: [UUID: ConnectionState]
+package struct TerminalServerSessionSnapshot: Equatable {
+    package let tabs: [TerminalTab]
+    package let selectedTabId: UUID?
+    package let connectionStatesByPane: [UUID: ConnectionState]
 }
 
-struct TerminalSessionNavigationState: Equatable {
-    let tabCountsByServer: [UUID: Int]
-    let connectedServerIds: Set<UUID>
+package struct TerminalSessionNavigationState: Equatable {
+    package let tabCountsByServer: [UUID: Int]
+    package let connectedServerIds: Set<UUID>
 
-    var serverIdsWithTabs: Set<UUID> {
+    package var serverIdsWithTabs: Set<UUID> {
         Set(tabCountsByServer.keys)
     }
 }
 
-struct TerminalPanePresentationState: Equatable {
-    let connectionState: ConnectionState
-    let disconnectReason: TerminalDisconnectReason?
-    let hasEstablishedConnection: Bool
-    let remoteSessionStatus: RemoteSessionStatus
-    let transportState: ShellTransportState
+package struct TerminalPanePresentationState: Equatable {
+    package let connectionState: ConnectionState
+    package let disconnectReason: TerminalDisconnectReason?
+    package let hasEstablishedConnection: Bool
+    package let remoteSessionStatus: RemoteSessionStatus
+    package let transportState: ShellTransportState
 
-    init(_ state: TerminalPaneState) {
+    package init(_ state: TerminalPaneState) {
         connectionState = state.connectionState
         disconnectReason = state.disconnectReason
         hasEstablishedConnection = state.hasEstablishedConnection
@@ -690,34 +690,34 @@ struct TerminalPanePresentationState: Equatable {
         transportState = state.transportState
     }
 
-    var activeTransport: ShellTransport { transportState.transport }
-    var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
-    var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
+    package var activeTransport: ShellTransport { transportState.transport }
+    package var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    package var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 }
 
 private struct TerminalTabsSnapshot: Codable {
     private static let currentVersion = 3
 
-    struct ServerSnapshot: Codable {
-        let serverId: UUID
-        let tabs: [TabSnapshot]
-        let selectedTabId: UUID?
-        let selectedView: String?
+    package struct ServerSnapshot: Codable {
+        package let serverId: UUID
+        package let tabs: [TabSnapshot]
+        package let selectedTabId: UUID?
+        package let selectedView: String?
     }
 
-    struct TabSnapshot: Codable {
-        let id: UUID
-        let serverId: UUID
-        let title: String
-        let createdAt: Date
-        let layout: TerminalSplitNode?
-        let focusedPaneId: UUID
-        let rootPaneId: UUID
-        let panePresentationOverrides: [UUID: TerminalPresentationOverrides]?
-        let paneDisconnectReasons: [UUID: TerminalDisconnectReason]?
-        let remoteSessionResumeContexts: [UUID: RemoteSessionLifecycleContext]?
-        let startupActionReplayPendingPaneIds: Set<UUID>?
-        let remoteSessionAttachments: [UUID: TerminalRemoteSessionAttachmentState]?
+    package struct TabSnapshot: Codable {
+        package let id: UUID
+        package let serverId: UUID
+        package let title: String
+        package let createdAt: Date
+        package let layout: TerminalSplitNode?
+        package let focusedPaneId: UUID
+        package let rootPaneId: UUID
+        package let panePresentationOverrides: [UUID: TerminalPresentationOverrides]?
+        package let paneDisconnectReasons: [UUID: TerminalDisconnectReason]?
+        package let remoteSessionResumeContexts: [UUID: RemoteSessionLifecycleContext]?
+        package let startupActionReplayPendingPaneIds: Set<UUID>?
+        package let remoteSessionAttachments: [UUID: TerminalRemoteSessionAttachmentState]?
 
         private enum CodingKeys: String, CodingKey {
             case id
@@ -737,17 +737,17 @@ private struct TerminalTabsSnapshot: Codable {
         }
 
         private struct LegacyTmuxAttachment: Decodable {
-            let sessionName: String
-            let ownership: RemoteSessionOwnership
-            let managedSessionConfirmed: Bool?
+            package let sessionName: String
+            package let ownership: RemoteSessionOwnership
+            package let managedSessionConfirmed: Bool?
         }
 
         private struct LegacyTmuxResumeContext: Decodable {
-            let ownership: RemoteSessionOwnership
-            let markerToken: String
+            package let ownership: RemoteSessionOwnership
+            package let markerToken: String
         }
 
-        init(
+        package init(
             from tab: TerminalTab,
             paneStates: [UUID: TerminalPaneState],
             remoteSessionResolver: RemoteSessionAttachResolver
@@ -795,7 +795,7 @@ private struct TerminalTabsSnapshot: Codable {
             remoteSessionAttachments = attachments.isEmpty ? nil : attachments
         }
 
-        init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(UUID.self, forKey: .id)
             serverId = try container.decode(UUID.self, forKey: .serverId)
@@ -874,7 +874,7 @@ private struct TerminalTabsSnapshot: Codable {
             }
         }
 
-        func encode(to encoder: Encoder) throws {
+        package func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(id, forKey: .id)
             try container.encode(serverId, forKey: .serverId)
@@ -905,7 +905,7 @@ private struct TerminalTabsSnapshot: Codable {
             )
         }
 
-        func toTerminalTab() -> TerminalTab {
+        package func toTerminalTab() -> TerminalTab {
             TerminalTab(
                 id: id,
                 serverId: serverId,
@@ -918,20 +918,20 @@ private struct TerminalTabsSnapshot: Codable {
         }
     }
 
-    let version: Int
-    let servers: [ServerSnapshot]
+    package let version: Int
+    package let servers: [ServerSnapshot]
 
     private enum CodingKeys: String, CodingKey {
         case version
         case servers
     }
 
-    init(servers: [ServerSnapshot]) {
+    package init(servers: [ServerSnapshot]) {
         version = Self.currentVersion
         self.servers = servers
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
         guard (1...Self.currentVersion).contains(version) else {

@@ -4,12 +4,12 @@ import SwiftUI
 import OrlixModels
 import OrlixSettings
 #endif
-struct TerminalCustomActionFormView: View {
+package struct TerminalCustomActionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @EnvironmentObject private var storeManager: StoreManager
 
-    let action: TerminalAccessoryCustomAction?
+    package let action: TerminalAccessoryCustomAction?
 
     @State private var title: String
     @State private var kind: TerminalAccessoryCustomActionKind
@@ -46,7 +46,7 @@ struct TerminalCustomActionFormView: View {
         shortcutModifiers.displayTitle(for: shortcutKey.title)
     }
 
-    init(action: TerminalAccessoryCustomAction? = nil) {
+    package init(action: TerminalAccessoryCustomAction? = nil) {
         self.action = action
         _title = State(initialValue: action?.title ?? "")
         _kind = State(initialValue: action?.kind ?? .command)
@@ -59,7 +59,7 @@ struct TerminalCustomActionFormView: View {
         _shortcutShift = State(initialValue: action?.shortcutModifiers.shift ?? false)
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 Section {

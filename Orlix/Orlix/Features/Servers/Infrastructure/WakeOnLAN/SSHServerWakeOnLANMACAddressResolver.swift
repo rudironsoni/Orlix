@@ -5,13 +5,13 @@ import OrlixModels
 import OrlixSSH
 import OrlixSettings
 #endif
-nonisolated enum WakeOnLANMACAddressResolutionError: Error, Equatable, Sendable {
+nonisolated package enum WakeOnLANMACAddressResolutionError: Error, Equatable, Sendable {
     case unsupportedRemoteShell
     case addressNotFound
 }
 
-nonisolated enum RemoteWakeOnLANMACAddressDiscovery {
-    static func command(
+nonisolated package enum RemoteWakeOnLANMACAddressDiscovery {
+    static package func command(
         for environment: RemoteEnvironment
     ) throws -> String {
         guard environment.platform == .windows else {
@@ -35,7 +35,7 @@ nonisolated enum RemoteWakeOnLANMACAddressDiscovery {
         return wrapped
     }
 
-    static func parse(_ output: String) throws -> WakeOnLANMACAddress {
+    static package func parse(_ output: String) throws -> WakeOnLANMACAddress {
         let punctuation = CharacterSet(charactersIn: "'\",;[]()")
         for token in output.split(whereSeparator: { $0.isWhitespace }) {
             let candidate = String(token).trimmingCharacters(in: punctuation)
@@ -116,7 +116,7 @@ nonisolated package struct SSHServerWakeOnLANMACAddressResolver: WakeOnLANMACAdd
 private actor ResolvedWakeOnLANMACAddress {
     private(set) var value: WakeOnLANMACAddress?
 
-    func store(_ value: WakeOnLANMACAddress) {
+    package func store(_ value: WakeOnLANMACAddress) {
         self.value = value
     }
 }

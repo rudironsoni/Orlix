@@ -10,7 +10,7 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-protocol ConnectionViewTabConfigurationPersisting {
+package protocol ConnectionViewTabConfigurationPersisting {
     func load() -> ConnectionViewTabConfiguration
     func save(_ configuration: ConnectionViewTabConfiguration)
 }

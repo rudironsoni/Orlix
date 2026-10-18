@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum MoshRestoreStartup {
-    static func run<Session: Sendable>(
+nonisolated package enum MoshRestoreStartup {
+    static package func run<Session: Sendable>(
         restore: @escaping @Sendable () async throws -> Session,
         start: @escaping @Sendable (Session) async throws -> Void,
         resize: @escaping @Sendable (Session) async throws -> Void,

@@ -3,37 +3,37 @@ import Foundation
 import MLX
 import MLXNN
 
-nonisolated struct WhisperModelDimensions: Codable {
-    let n_mels: Int
-    let n_audio_ctx: Int
-    let n_audio_state: Int
-    let n_audio_head: Int
-    let n_audio_layer: Int
-    let n_vocab: Int
-    let n_text_ctx: Int
-    let n_text_state: Int
-    let n_text_head: Int
-    let n_text_layer: Int
+nonisolated package struct WhisperModelDimensions: Codable {
+    package let n_mels: Int
+    package let n_audio_ctx: Int
+    package let n_audio_state: Int
+    package let n_audio_head: Int
+    package let n_audio_layer: Int
+    package let n_vocab: Int
+    package let n_text_ctx: Int
+    package let n_text_state: Int
+    package let n_text_head: Int
+    package let n_text_layer: Int
 }
 
-nonisolated struct WhisperKVCache {
-    let key: MLXArray
-    let value: MLXArray
+nonisolated package struct WhisperKVCache {
+    package let key: MLXArray
+    package let value: MLXArray
 }
 
-nonisolated struct WhisperBlockCache {
-    var selfKV: WhisperKVCache?
-    var crossKV: WhisperKVCache?
+nonisolated package struct WhisperBlockCache {
+    package var selfKV: WhisperKVCache?
+    package var crossKV: WhisperKVCache?
 }
 
-nonisolated final class WhisperMultiHeadAttention: Module {
-    let nHead: Int
-    let query: Linear
-    let key: Linear
-    let value: Linear
-    let out: Linear
+nonisolated final package class WhisperMultiHeadAttention: Module {
+    package let nHead: Int
+    package let query: Linear
+    package let key: Linear
+    package let value: Linear
+    package let out: Linear
 
-    init(nState: Int, nHead: Int) {
+    package init(nState: Int, nHead: Int) {
         self.nHead = nHead
         self.query = Linear(nState, nState)
         self.key = Linear(nState, nState, bias: false)
@@ -42,7 +42,7 @@ nonisolated final class WhisperMultiHeadAttention: Module {
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         NestedDictionary(values: [
             "query": .value(.module(query)),
             "key": .value(.module(key)),
@@ -51,7 +51,7 @@ nonisolated final class WhisperMultiHeadAttention: Module {
         ])
     }
 
-    func callAsFunction(
+    package func callAsFunction(
         _ x: MLXArray,
         xa: MLXArray? = nil,
         mask: MLXArray? = nil,
@@ -106,14 +106,14 @@ nonisolated final class WhisperMultiHeadAttention: Module {
     }
 }
 
-nonisolated final class WhisperEncoderBlock: Module {
-    let attn: WhisperMultiHeadAttention
-    let attnLn: LayerNorm
-    let mlp1: Linear
-    let mlp2: Linear
-    let mlpLn: LayerNorm
+nonisolated final package class WhisperEncoderBlock: Module {
+    package let attn: WhisperMultiHeadAttention
+    package let attnLn: LayerNorm
+    package let mlp1: Linear
+    package let mlp2: Linear
+    package let mlpLn: LayerNorm
 
-    init(nState: Int, nHead: Int) {
+    package init(nState: Int, nHead: Int) {
         self.attn = WhisperMultiHeadAttention(nState: nState, nHead: nHead)
         self.attnLn = LayerNorm(dimensions: nState)
         self.mlp1 = Linear(nState, nState * 4)
@@ -122,7 +122,7 @@ nonisolated final class WhisperEncoderBlock: Module {
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         NestedDictionary(values: [
             "attn": .value(.module(attn)),
             "attn_ln": .value(.module(attnLn)),
@@ -132,7 +132,7 @@ nonisolated final class WhisperEncoderBlock: Module {
         ])
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    package func callAsFunction(_ x: MLXArray) -> MLXArray {
         var x = x
         let (y, _) = attn(attnLn(x), mask: nil, kvCache: nil)
         x = x + y
@@ -141,16 +141,16 @@ nonisolated final class WhisperEncoderBlock: Module {
     }
 }
 
-nonisolated final class WhisperDecoderBlock: Module {
-    let attn: WhisperMultiHeadAttention
-    let attnLn: LayerNorm
-    let crossAttn: WhisperMultiHeadAttention
-    let crossAttnLn: LayerNorm
-    let mlp1: Linear
-    let mlp2: Linear
-    let mlpLn: LayerNorm
+nonisolated final package class WhisperDecoderBlock: Module {
+    package let attn: WhisperMultiHeadAttention
+    package let attnLn: LayerNorm
+    package let crossAttn: WhisperMultiHeadAttention
+    package let crossAttnLn: LayerNorm
+    package let mlp1: Linear
+    package let mlp2: Linear
+    package let mlpLn: LayerNorm
 
-    init(nState: Int, nHead: Int) {
+    package init(nState: Int, nHead: Int) {
         self.attn = WhisperMultiHeadAttention(nState: nState, nHead: nHead)
         self.attnLn = LayerNorm(dimensions: nState)
         self.crossAttn = WhisperMultiHeadAttention(nState: nState, nHead: nHead)
@@ -161,7 +161,7 @@ nonisolated final class WhisperDecoderBlock: Module {
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         NestedDictionary(values: [
             "attn": .value(.module(attn)),
             "attn_ln": .value(.module(attnLn)),
@@ -173,7 +173,7 @@ nonisolated final class WhisperDecoderBlock: Module {
         ])
     }
 
-    func callAsFunction(
+    package func callAsFunction(
         _ x: MLXArray,
         xa: MLXArray,
         mask: MLXArray?,
@@ -193,14 +193,14 @@ nonisolated final class WhisperDecoderBlock: Module {
     }
 }
 
-nonisolated final class WhisperAudioEncoder: Module {
-    let conv1: Conv1d
-    let conv2: Conv1d
-    let positionalEmbedding: MLXArray
-    let blocks: [WhisperEncoderBlock]
-    let lnPost: LayerNorm
+nonisolated final package class WhisperAudioEncoder: Module {
+    package let conv1: Conv1d
+    package let conv2: Conv1d
+    package let positionalEmbedding: MLXArray
+    package let blocks: [WhisperEncoderBlock]
+    package let lnPost: LayerNorm
 
-    init(dims: WhisperModelDimensions) throws {
+    package init(dims: WhisperModelDimensions) throws {
         self.conv1 = Conv1d(inputChannels: dims.n_mels, outputChannels: dims.n_audio_state, kernelSize: 3, padding: 1)
         self.conv2 = Conv1d(inputChannels: dims.n_audio_state, outputChannels: dims.n_audio_state, kernelSize: 3, stride: 2, padding: 1)
         self.positionalEmbedding = try WhisperModel.sinusoids(length: dims.n_audio_ctx, channels: dims.n_audio_state)
@@ -212,7 +212,7 @@ nonisolated final class WhisperAudioEncoder: Module {
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         let blockItems = blocks.map { NestedItem<String, ModuleValue>.value(.module($0)) }
         return NestedDictionary(values: [
             "conv1": .value(.module(conv1)),
@@ -222,7 +222,7 @@ nonisolated final class WhisperAudioEncoder: Module {
         ])
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    package func callAsFunction(_ x: MLXArray) -> MLXArray {
         var x = gelu(conv1(x))
         x = gelu(conv2(x))
         x = x + positionalEmbedding
@@ -235,14 +235,14 @@ nonisolated final class WhisperAudioEncoder: Module {
     }
 }
 
-nonisolated final class WhisperTextDecoder: Module {
-    let tokenEmbedding: Embedding
-    let positionalEmbedding: MLXArray
-    let blocks: [WhisperDecoderBlock]
-    let ln: LayerNorm
-    let mask: MLXArray
+nonisolated final package class WhisperTextDecoder: Module {
+    package let tokenEmbedding: Embedding
+    package let positionalEmbedding: MLXArray
+    package let blocks: [WhisperDecoderBlock]
+    package let ln: LayerNorm
+    package let mask: MLXArray
 
-    init(dims: WhisperModelDimensions, dtype: DType) {
+    package init(dims: WhisperModelDimensions, dtype: DType) {
         self.tokenEmbedding = Embedding(embeddingCount: dims.n_vocab, dimensions: dims.n_text_state)
         self.positionalEmbedding = MLXArray.zeros([dims.n_text_ctx, dims.n_text_state], dtype: dtype)
         self.blocks = (0 ..< dims.n_text_layer).map { _ in
@@ -253,7 +253,7 @@ nonisolated final class WhisperTextDecoder: Module {
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         let blockItems = blocks.map { NestedItem<String, ModuleValue>.value(.module($0)) }
         return NestedDictionary(values: [
             "token_embedding": .value(.module(tokenEmbedding)),
@@ -263,7 +263,7 @@ nonisolated final class WhisperTextDecoder: Module {
         ])
     }
 
-    func callAsFunction(
+    package func callAsFunction(
         _ tokens: MLXArray,
         audioFeatures: MLXArray,
         kvCache: [WhisperBlockCache]?
@@ -295,26 +295,26 @@ nonisolated final class WhisperTextDecoder: Module {
     }
 }
 
-nonisolated final class WhisperModel: Module {
-    let dims: WhisperModelDimensions
-    let encoder: WhisperAudioEncoder
-    let decoder: WhisperTextDecoder
+nonisolated final package class WhisperModel: Module {
+    package let dims: WhisperModelDimensions
+    package let encoder: WhisperAudioEncoder
+    package let decoder: WhisperTextDecoder
 
-    init(dims: WhisperModelDimensions, dtype: DType) throws {
+    package init(dims: WhisperModelDimensions, dtype: DType) throws {
         self.dims = dims
         self.encoder = try WhisperAudioEncoder(dims: dims)
         self.decoder = WhisperTextDecoder(dims: dims, dtype: dtype)
         super.init()
     }
 
-    override func items() -> ModuleItems {
+    override package func items() -> ModuleItems {
         NestedDictionary(values: [
             "encoder": .value(.module(encoder)),
             "decoder": .value(.module(decoder))
         ])
     }
 
-    static func sinusoids(length: Int, channels: Int, maxTimescale: Double = 10_000) throws -> MLXArray {
+    static package func sinusoids(length: Int, channels: Int, maxTimescale: Double = 10_000) throws -> MLXArray {
         guard length > 0, channels >= 4, channels.isMultiple(of: 2) else {
             throw MLXModelConfigurationError.invalid("Whisper sinusoid dimensions")
         }
@@ -327,6 +327,6 @@ nonisolated final class WhisperModel: Module {
         return concatenated([sinValues, cosValues], axis: 1)
     }
 
-    var isMultilingual: Bool { dims.n_vocab >= 51865 }
+    package var isMultilingual: Bool { dims.n_vocab >= 51865 }
 }
 #endif

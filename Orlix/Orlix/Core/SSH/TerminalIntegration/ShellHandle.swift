@@ -23,7 +23,7 @@ nonisolated package struct ShellHandle: Sendable {
     }
 }
 
-nonisolated enum ShellStartOrigin: Equatable, Sendable {
+nonisolated package enum ShellStartOrigin: Equatable, Sendable {
     case fresh
     case restored
 }

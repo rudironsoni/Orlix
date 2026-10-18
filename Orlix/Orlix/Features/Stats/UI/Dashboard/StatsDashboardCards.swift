@@ -5,13 +5,13 @@ import OrlixModels
 
 // MARK: - Summary
 
-struct SystemOverviewCard: View {
-    let serverName: String
-    let stats: ServerStats
-    let style: StatsVisualStyle
+package struct SystemOverviewCard: View {
+    package let serverName: String
+    package let stats: ServerStats
+    package let style: StatsVisualStyle
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         AppleCard(style: style, minHeight: style.overviewMinHeight) {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 12) {
@@ -103,13 +103,13 @@ struct SystemOverviewCard: View {
 
 // MARK: - Metric Cards
 
-struct CPUCard: View {
-    let stats: ServerStats
-    let history: [StatsPoint]
-    let style: StatsVisualStyle
+package struct CPUCard: View {
+    package let stats: ServerStats
+    package let history: [StatsPoint]
+    package let style: StatsVisualStyle
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -165,12 +165,12 @@ struct CPUCard: View {
     }
 }
 
-struct MemoryCard: View {
-    let stats: ServerStats
-    let history: [StatsPoint]
-    let style: StatsVisualStyle
+package struct MemoryCard: View {
+    package let stats: ServerStats
+    package let history: [StatsPoint]
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         AppleMetricCard(
             icon: "memorychip",
             title: String(localized: "Memory"),
@@ -197,10 +197,10 @@ struct MemoryCard: View {
     }
 }
 
-struct GPUCard: View {
-    let stats: ServerStats
-    let histories: [String: [StatsPoint]]
-    let style: StatsVisualStyle
+package struct GPUCard: View {
+    package let stats: ServerStats
+    package let histories: [String: [StatsPoint]]
+    package let style: StatsVisualStyle
     @State private var showingDetails = false
 
     private var devices: [GPUDevice] {
@@ -238,7 +238,7 @@ struct GPUCard: View {
         return histories[sample.deviceID] ?? []
     }
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -369,11 +369,11 @@ struct GPUCard: View {
 }
 
 private struct GPUDeviceRow: View {
-    let device: GPUDevice
-    let sample: GPUSample?
-    let style: StatsVisualStyle
+    package let device: GPUDevice
+    package let sample: GPUSample?
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(device.displayName)
@@ -418,13 +418,13 @@ private struct GPUDeviceRow: View {
     }
 }
 
-struct NetworkCard: View {
-    let stats: ServerStats
-    let rxHistory: [StatsPoint]
-    let txHistory: [StatsPoint]
-    let style: StatsVisualStyle
+package struct NetworkCard: View {
+    package let stats: ServerStats
+    package let rxHistory: [StatsPoint]
+    package let txHistory: [StatsPoint]
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         AppleCard(style: style, minHeight: style.networkMinHeight) {
             VStack(alignment: .leading, spacing: 18) {
                 CardHeader(
@@ -485,17 +485,17 @@ struct NetworkCard: View {
 
 // MARK: - Detail Cards
 
-struct StorageCard: View {
-    let volumes: [VolumeInfo]
-    let visibleVolumes: [VolumeInfo]
-    let hiddenVolumeIDs: Set<VolumeIdentity>
-    let style: StatsVisualStyle
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
+package struct StorageCard: View {
+    package let volumes: [VolumeInfo]
+    package let visibleVolumes: [VolumeInfo]
+    package let hiddenVolumeIDs: Set<VolumeIdentity>
+    package let style: StatsVisualStyle
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -552,15 +552,15 @@ struct StorageCard: View {
     }
 }
 
-struct ProcessesCard: View {
-    let processes: [ProcessInfo]
-    let processCount: Int
-    let style: StatsVisualStyle
-    let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    let loadProcesses: (() async throws -> [ProcessInfo])?
+package struct ProcessesCard: View {
+    package let processes: [ProcessInfo]
+    package let processCount: Int
+    package let style: StatsVisualStyle
+    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    package let loadProcesses: (() async throws -> [ProcessInfo])?
     @State private var showingProcesses = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             if !processes.isEmpty {
                 showingProcesses = true
@@ -605,16 +605,16 @@ struct ProcessesCard: View {
     }
 }
 
-struct DockerCard: View {
-    let docker: DockerStats
-    let cpuHistory: [StatsPoint]
-    let memoryHistory: [StatsPoint]
-    let style: StatsVisualStyle
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+package struct DockerCard: View {
+    package let docker: DockerStats
+    package let cpuHistory: [StatsPoint]
+    package let memoryHistory: [StatsPoint]
+    package let style: StatsVisualStyle
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -734,14 +734,14 @@ struct DockerCard: View {
     }
 }
 
-struct LockedDockerCard: View {
-    static let wideLayoutMinimumWidth: CGFloat = 560
+package struct LockedDockerCard: View {
+    static package let wideLayoutMinimumWidth: CGFloat = 560
 
-    let style: StatsVisualStyle
-    let action: () -> Void
+    package let style: StatsVisualStyle
+    package let action: () -> Void
 
     @ViewBuilder
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             AppleCard(style: style) {
                 Group {
@@ -910,13 +910,13 @@ struct LockedDockerCard: View {
 }
 
 private struct LockedDockerFeature: View {
-    let systemImage: String
-    let title: String
-    let subtitle: String
-    let color: Color
-    let style: StatsVisualStyle
+    package let systemImage: String
+    package let title: String
+    package let subtitle: String
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .center, spacing: 11) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
@@ -940,10 +940,10 @@ private struct LockedDockerFeature: View {
 }
 
 private struct DockerContainerCardRow: View {
-    let container: DockerContainer
-    let style: StatsVisualStyle
+    package let container: DockerContainer
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 14) {
             Circle()
                 .fill(dockerStatusColor(container))

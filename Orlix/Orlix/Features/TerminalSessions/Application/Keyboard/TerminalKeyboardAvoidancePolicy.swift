@@ -1,28 +1,28 @@
 import CoreGraphics
 
-enum TerminalKeyboardAvoidancePolicy {
-    nonisolated enum KeyboardGeometry: Equatable {
+package enum TerminalKeyboardAvoidancePolicy {
+    nonisolated package enum KeyboardGeometry: Equatable {
         case hidden
         case docked(frame: CGRect)
         case floating(frame: CGRect)
     }
 
-    nonisolated struct Layout: Equatable {
-        var bottomInset: CGFloat
-        var verticalOffset: CGFloat
-        var preservesTerminalSurfaceSize: Bool
+    nonisolated package struct Layout: Equatable {
+        package var bottomInset: CGFloat
+        package var verticalOffset: CGFloat
+        package var preservesTerminalSurfaceSize: Bool
 
-        static let unobstructed = Layout(
+        static package let unobstructed = Layout(
             bottomInset: 0,
             verticalOffset: 0,
             preservesTerminalSurfaceSize: false
         )
     }
 
-    nonisolated static let defaultCursorClearance: CGFloat = 12
-    nonisolated static let minimumVisibleHeight: CGFloat = 1
+    nonisolated static package let defaultCursorClearance: CGFloat = 12
+    nonisolated static package let minimumVisibleHeight: CGFloat = 1
 
-    nonisolated static func resolvedGeometry(
+    nonisolated static package func resolvedGeometry(
         screenFrame: CGRect,
         terminalFrame: CGRect,
         keyboardFrame: CGRect?
@@ -49,7 +49,7 @@ enum TerminalKeyboardAvoidancePolicy {
             : .floating(frame: keyboardFrame)
     }
 
-    nonisolated static func verticalOffset(
+    nonisolated static package func verticalOffset(
         terminalFrame: CGRect,
         cursorFrame: CGRect,
         keyboardFrame: CGRect?,
@@ -82,7 +82,7 @@ enum TerminalKeyboardAvoidancePolicy {
         return -min(requiredLift, maximumLift)
     }
 
-    nonisolated static func layout(
+    nonisolated static package func layout(
         preservesTerminalSize: Bool,
         geometry: KeyboardGeometry,
         terminalFrame: CGRect,

@@ -1,11 +1,11 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalKeyboardSafeAreaModifier: ViewModifier {
-    let isEnabled: Bool
+package struct TerminalKeyboardSafeAreaModifier: ViewModifier {
+    package let isEnabled: Bool
 
     @ViewBuilder
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if isEnabled {
             content.ignoresSafeArea(.keyboard, edges: .bottom)
         } else {

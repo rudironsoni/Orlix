@@ -5,37 +5,37 @@ import UIKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
-    let paneId: String
-    let size: CGSize
-    let isActive: Bool
-    let presentationOverrides: TerminalPresentationOverrides
-    let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
-    let makeBackend: () -> Backend
-    let reusableTerminal: (Backend) -> GhosttyTerminalView?
-    let configure: (GhosttyTerminalView, Backend, Bool) -> Void
-    let update: (GhosttyTerminalView, Backend) -> Void
-    let dismantle: (GhosttyTerminalView, Backend) -> Void
+package struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
+    package let paneId: String
+    package let size: CGSize
+    package let isActive: Bool
+    package let presentationOverrides: TerminalPresentationOverrides
+    package let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
+    package let makeBackend: () -> Backend
+    package let reusableTerminal: (Backend) -> GhosttyTerminalView?
+    package let configure: (GhosttyTerminalView, Backend, Bool) -> Void
+    package let update: (GhosttyTerminalView, Backend) -> Void
+    package let dismantle: (GhosttyTerminalView, Backend) -> Void
 
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @Environment(\.scenePhase) private var scenePhase
 
-    final class Coordinator {
-        let backend: Backend
-        var lastReportedSize: CGSize = .zero
-        var dismantle: (GhosttyTerminalView, Backend) -> Void
+    final package class Coordinator {
+        package let backend: Backend
+        package var lastReportedSize: CGSize = .zero
+        package var dismantle: (GhosttyTerminalView, Backend) -> Void
 
-        init(backend: Backend, dismantle: @escaping (GhosttyTerminalView, Backend) -> Void) {
+        package init(backend: Backend, dismantle: @escaping (GhosttyTerminalView, Backend) -> Void) {
             self.backend = backend
             self.dismantle = dismantle
         }
     }
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(backend: makeBackend(), dismantle: dismantle)
     }
 
-    func makeUIView(context: Context) -> UIView {
+    package func makeUIView(context: Context) -> UIView {
         guard let app = ghosttyApp.app else { return UIView(frame: .zero) }
         let existing = reusableTerminal(context.coordinator.backend)
         let initialSize = size.width > 0 && size.height > 0
@@ -67,7 +67,7 @@ struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
         return terminal
     }
 
-    func updateUIView(_ view: UIView, context: Context) {
+    package func updateUIView(_ view: UIView, context: Context) {
         guard let terminal = view as? GhosttyTerminalView else { return }
         context.coordinator.dismantle = dismantle
         let windowScene = terminal.window?.windowScene
@@ -103,7 +103,7 @@ struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
         update(terminal, context.coordinator.backend)
     }
 
-    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+    static package func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
         guard let terminal = view as? GhosttyTerminalView else { return }
         coordinator.dismantle(terminal, coordinator.backend)
     }
@@ -157,11 +157,11 @@ package struct TerminalFloatingControlButton: View {
 }
 
 private struct FloatingTerminalControlButtonStyle: ViewModifier {
-    let isPrimary: Bool
-    let colorScheme: ColorScheme
+    package let isPrimary: Bool
+    package let colorScheme: ColorScheme
 
     @ViewBuilder
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if #available(iOS 26, *) {
             if isPrimary {
                 content

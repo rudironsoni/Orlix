@@ -12,7 +12,7 @@ package struct TerminalKeyboardUITestHarness: View {
     private final class MetadataChurnCounter: ObservableObject {
         private(set) var value = 0
 
-        func next() -> Int {
+        package func next() -> Int {
             guard value < Int.max else { return value }
             value += 1
             return value
@@ -71,7 +71,7 @@ package struct TerminalKeyboardUITestHarness: View {
         case observing(accessoryOnlyObserved: Bool)
         case completed(accessoryOnlyObserved: Bool)
 
-        var status: String {
+        package var status: String {
             switch self {
             case .idle:
                 "idle"
@@ -82,7 +82,7 @@ package struct TerminalKeyboardUITestHarness: View {
             }
         }
 
-        var observedAccessoryOnly: Bool {
+        package var observedAccessoryOnly: Bool {
             switch self {
             case .idle:
                 false
@@ -1330,25 +1330,25 @@ package struct TerminalSplitKeyboardUITestHarness: View {
     }
 }
 
-struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
+package struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
-    let tabManager: TerminalTabManager
-    @Binding var terminalView: GhosttyTerminalView?
-    @Binding var terminalReady: Bool
-    let focusRequestID: Int
-    let paneId: UUID
-    var surfaceIdentifier = "orlix.keyboardTest.terminalSurface"
-    var surfaceLabel = "Terminal Keyboard Test Surface"
-    let onInput: (Data) -> Void
-    let onZoomAction: (TerminalZoomAction) -> Void
-    let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
-    let onPaneFocus: () -> Void
+    package let tabManager: TerminalTabManager
+    @Binding package var terminalView: GhosttyTerminalView?
+    @Binding package var terminalReady: Bool
+    package let focusRequestID: Int
+    package let paneId: UUID
+    package var surfaceIdentifier = "orlix.keyboardTest.terminalSurface"
+    package var surfaceLabel = "Terminal Keyboard Test Surface"
+    package let onInput: (Data) -> Void
+    package let onZoomAction: (TerminalZoomAction) -> Void
+    package let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
+    package let onPaneFocus: () -> Void
 
-    func makeUIView(context: Context) -> TerminalKeyboardHarnessContainerView {
+    package func makeUIView(context: Context) -> TerminalKeyboardHarnessContainerView {
         TerminalKeyboardHarnessContainerView()
     }
 
-    func updateUIView(_ uiView: TerminalKeyboardHarnessContainerView, context: Context) {
+    package func updateUIView(_ uiView: TerminalKeyboardHarnessContainerView, context: Context) {
         uiView.tabManager = tabManager
         uiView.paneId = paneId
         uiView.onInput = onInput
@@ -1368,7 +1368,7 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
         }
     }
 
-    static func dismantleUIView(_ uiView: TerminalKeyboardHarnessContainerView, coordinator: ()) {
+    static package func dismantleUIView(_ uiView: TerminalKeyboardHarnessContainerView, coordinator: ()) {
         uiView.releaseTerminalInput()
         guard let terminal = uiView.terminalView,
               let tabManager = uiView.tabManager,
@@ -1379,7 +1379,7 @@ struct TerminalKeyboardHarnessRepresentable: UIViewRepresentable {
     }
 }
 
-final class TerminalKeyboardHarnessContainerView: UIView {
+final package class TerminalKeyboardHarnessContainerView: UIView {
     private(set) weak var terminalView: GhosttyTerminalView?
     // This retained sibling must track every terminal layout change so XCUITest
     // gets exact terminal geometry without becoming the UIKit hit-test owner.
@@ -1392,29 +1392,29 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         view.accessibilityLabel = "Terminal Gesture Test Surface"
         return view
     }()
-    weak var tabManager: TerminalTabManager?
-    var paneId: UUID?
-    var onInput: ((Data) -> Void)?
-    var onZoomAction: ((TerminalZoomAction) -> Void)?
-    var onPaneKeyboardShortcut: ((TerminalSplitCommand) -> Void)?
-    var onPaneFocus: (() -> Void)?
-    var surfaceIdentifier = "orlix.keyboardTest.terminalSurface"
-    var surfaceLabel = "Terminal Keyboard Test Surface"
+    weak package var tabManager: TerminalTabManager?
+    package var paneId: UUID?
+    package var onInput: ((Data) -> Void)?
+    package var onZoomAction: ((TerminalZoomAction) -> Void)?
+    package var onPaneKeyboardShortcut: ((TerminalSplitCommand) -> Void)?
+    package var onPaneFocus: (() -> Void)?
+    package var surfaceIdentifier = "orlix.keyboardTest.terminalSurface"
+    package var surfaceLabel = "Terminal Keyboard Test Surface"
     private var lastHandledFocusRequestID: Int?
     private var pendingFocusRequestID = 0
 
-    override init(frame: CGRect) {
+    override package init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .black
         accessibilityIdentifier = "orlix.keyboardTest.containerView"
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func installTerminalIfNeeded(app: ghostty_app_t?, appWrapper: GhosttyRuntime) {
+    package func installTerminalIfNeeded(app: ghostty_app_t?, appWrapper: GhosttyRuntime) {
         guard terminalView == nil, let app else { return }
 
         let initialSize = bounds.size == .zero ? CGSize(width: 390, height: 844) : bounds.size
@@ -1481,12 +1481,12 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         }
     }
 
-    func requestKeyboardFocusIfNeeded(focusRequestID: Int) {
+    package func requestKeyboardFocusIfNeeded(focusRequestID: Int) {
         pendingFocusRequestID = focusRequestID
         requestKeyboardFocusIfNeeded()
     }
 
-    func requestKeyboardFocusIfNeeded() {
+    package func requestKeyboardFocusIfNeeded() {
         guard window != nil, let terminalView else { return }
         guard lastHandledFocusRequestID != pendingFocusRequestID else { return }
         lastHandledFocusRequestID = pendingFocusRequestID
@@ -1494,18 +1494,18 @@ final class TerminalKeyboardHarnessContainerView: UIView {
         _ = terminalView.requestKeyboardFocus(for: .initialActivation)
     }
 
-    func releaseTerminalInput() {
+    package func releaseTerminalInput() {
         terminalView?.releaseTerminalInput()
     }
 
-    override func didMoveToWindow() {
+    override package func didMoveToWindow() {
         super.didMoveToWindow()
         DispatchQueue.main.async { [weak self] in
             self?.requestKeyboardFocusIfNeeded()
         }
     }
 
-    override func layoutSubviews() {
+    override package func layoutSubviews() {
         super.layoutSubviews()
         guard let terminalView else { return }
         terminalView.frame = bounds

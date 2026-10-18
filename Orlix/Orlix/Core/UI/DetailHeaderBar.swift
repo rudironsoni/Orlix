@@ -7,13 +7,13 @@
 
 import SwiftUI
 
-struct DetailHeaderBar<Leading: View, Trailing: View>: View {
-    let showsBackground: Bool
-    let padding: EdgeInsets?
-    let leading: Leading
-    let trailing: Trailing
+package struct DetailHeaderBar<Leading: View, Trailing: View>: View {
+    package let showsBackground: Bool
+    package let padding: EdgeInsets?
+    package let leading: Leading
+    package let trailing: Trailing
 
-    init(
+    package init(
         showsBackground: Bool = true,
         padding: EdgeInsets? = nil,
         @ViewBuilder leading: () -> Leading,
@@ -25,7 +25,7 @@ struct DetailHeaderBar<Leading: View, Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    init(
+    package init(
         showsBackground: Bool = true,
         padding: EdgeInsets? = nil,
         @ViewBuilder leading: () -> Leading
@@ -36,7 +36,7 @@ struct DetailHeaderBar<Leading: View, Trailing: View>: View {
         self.trailing = EmptyView()
     }
 
-    var body: some View {
+    package var body: some View {
         let content = HStack {
             leading
             Spacer()
@@ -71,9 +71,9 @@ package struct DetailCloseButton: View {
 }
 
 private struct DetailHeaderBackground: ViewModifier {
-    let enabled: Bool
+    package let enabled: Bool
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if enabled {
             content.background(.ultraThinMaterial)
         } else {

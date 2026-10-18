@@ -22,6 +22,6 @@ package enum SyncSettings {
     }
 }
 
-nonisolated enum SyncSettingsPersistenceError: Error, Sendable {
+nonisolated package enum SyncSettingsPersistenceError: Error, Sendable {
     case persistenceFailed
 }

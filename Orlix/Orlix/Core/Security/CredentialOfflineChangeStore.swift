@@ -1,24 +1,24 @@
 import Foundation
 
-nonisolated enum CredentialOfflineChange: String, Codable, Equatable, Sendable {
+nonisolated package enum CredentialOfflineChange: String, Codable, Equatable, Sendable {
     case unchanged
     case updated
     case deleted
 }
 
-nonisolated enum CredentialReconciliationPhase: String, Codable, Equatable, Sendable {
+nonisolated package enum CredentialReconciliationPhase: String, Codable, Equatable, Sendable {
     case preparingOfflineSnapshot
     case remoteChanges
     case localCleanup
 }
 
-nonisolated enum CredentialSyncUnit: Hashable, Sendable {
+nonisolated package enum CredentialSyncUnit: Hashable, Sendable {
     case server(UUID)
     case sshKey(UUID)
     case legacySSHLibrary
     case oauth(String)
 
-    var storageKey: String {
+    package var storageKey: String {
         switch self {
         case .server(let id):
             return "server:\(id.uuidString)"
@@ -31,7 +31,7 @@ nonisolated enum CredentialSyncUnit: Hashable, Sendable {
         }
     }
 
-    init?(storageKey: String) {
+    package init?(storageKey: String) {
         if storageKey == "ssh-library" {
             self = .legacySSHLibrary
             return
@@ -54,14 +54,14 @@ nonisolated enum CredentialSyncUnit: Hashable, Sendable {
     }
 }
 
-nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
-    static let shared = CredentialOfflineChangeStore()
+nonisolated final package class CredentialOfflineChangeStore: @unchecked Sendable {
+    static package let shared = CredentialOfflineChangeStore()
 
     private struct PersistedState: Codable, Equatable {
-        var phase: CredentialReconciliationPhase
-        var changes: [String: String]
-        var changeDates: [String: Double]
-        var requiresSyncDisableCommit: Bool?
+        package var phase: CredentialReconciliationPhase
+        package var changes: [String: String]
+        package var changeDates: [String: Double]
+        package var requiresSyncDisableCommit: Bool?
     }
 
     private static let reconciliationStateKey = "orlix.keychain.offlineReconciliation.v3"
@@ -73,27 +73,27 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let lock = NSLock()
 
-    init(defaults: UserDefaults = .standard) {
+    package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
-    var isTrackingOfflineChanges: Bool {
+    package var isTrackingOfflineChanges: Bool {
         reconciliationPhase != nil
     }
 
-    var reconciliationPhase: CredentialReconciliationPhase? {
+    package var reconciliationPhase: CredentialReconciliationPhase? {
         withLock {
             storedState()?.phase
         }
     }
 
-    var requiresSyncDisableCommit: Bool {
+    package var requiresSyncDisableCommit: Bool {
         withLock {
             storedState()?.requiresSyncDisableCommit == true
         }
     }
 
-    func beginOfflineSnapshotPreparation() throws {
+    package func beginOfflineSnapshotPreparation() throws {
         try withLock {
             try persist(
                 PersistedState(
@@ -106,7 +106,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func completeOfflineSnapshot(
+    package func completeOfflineSnapshot(
         changes: [CredentialSyncUnit: CredentialOfflineChange]
     ) throws {
         try withLock {
@@ -129,7 +129,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func finishSyncDisableCommit() throws {
+    package func finishSyncDisableCommit() throws {
         try withLock {
             guard var state = storedState(),
                   state.phase == .remoteChanges,
@@ -141,7 +141,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func beginOfflineTracking(
+    package func beginOfflineTracking(
         changes: [CredentialSyncUnit: CredentialOfflineChange]
     ) throws {
         try withLock {
@@ -167,7 +167,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func record(_ change: CredentialOfflineChange, for unit: CredentialSyncUnit) throws {
+    package func record(_ change: CredentialOfflineChange, for unit: CredentialSyncUnit) throws {
         try withLock {
             var state = storedState() ?? PersistedState(
                 phase: .remoteChanges,
@@ -186,7 +186,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func recordCloudRemovalRestoreIntent(for units: Set<CredentialSyncUnit>) throws {
+    package func recordCloudRemovalRestoreIntent(for units: Set<CredentialSyncUnit>) throws {
         guard !units.isEmpty else { return }
         try withLock {
             guard var state = storedState(),
@@ -210,21 +210,21 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func change(for unit: CredentialSyncUnit) -> CredentialOfflineChange? {
+    package func change(for unit: CredentialSyncUnit) -> CredentialOfflineChange? {
         withLock {
             storedState()?.changes[unit.storageKey]
                 .flatMap(CredentialOfflineChange.init(rawValue:))
         }
     }
 
-    func changeDate(for unit: CredentialSyncUnit) -> Date? {
+    package func changeDate(for unit: CredentialSyncUnit) -> Date? {
         withLock {
             storedState()?.changeDates[unit.storageKey]
                 .map(Date.init(timeIntervalSinceReferenceDate:))
         }
     }
 
-    func snapshot() -> [CredentialSyncUnit: CredentialOfflineChange] {
+    package func snapshot() -> [CredentialSyncUnit: CredentialOfflineChange] {
         withLock {
             Dictionary(
                 uniqueKeysWithValues: (storedState()?.changes ?? [:]).compactMap { key, value in
@@ -238,7 +238,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func markRemoteChangesApplied() throws {
+    package func markRemoteChangesApplied() throws {
         try withLock {
             guard var state = storedState() else {
                 throw CredentialOfflineChangeStoreError.persistenceFailed
@@ -249,7 +249,7 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
         }
     }
 
-    func finishOnlineReconciliation() throws {
+    package func finishOnlineReconciliation() throws {
         try withLock {
             defaults.removeObject(forKey: Self.reconciliationStateKey)
             defaults.removeObject(forKey: Self.stateKey)
@@ -369,30 +369,30 @@ nonisolated final class CredentialOfflineChangeStore: @unchecked Sendable {
     }
 }
 
-nonisolated struct CredentialOfflineWriteOperation: Sendable {
-    let targetKey: String
-    let value: Data?
+nonisolated package struct CredentialOfflineWriteOperation: Sendable {
+    package let targetKey: String
+    package let value: Data?
 }
 
 nonisolated fileprivate struct CredentialOfflineWritePlan: Codable, Equatable, Sendable {
-    struct Operation: Codable, Equatable, Sendable {
-        let targetKey: String
-        let stagingKey: String?
+    package struct Operation: Codable, Equatable, Sendable {
+        package let targetKey: String
+        package let stagingKey: String?
     }
 
-    let unitStorageKey: String
-    let operations: [Operation]
+    package let unitStorageKey: String
+    package let operations: [Operation]
 }
 
 /// Stages secrets in device-only Keychain storage before making their change intent durable.
 /// UserDefaults contains only target and staging key names, never credential values.
-nonisolated final class CredentialOfflineWriteTransaction: @unchecked Sendable {
+nonisolated final package class CredentialOfflineWriteTransaction: @unchecked Sendable {
     private static let stagingPrefix = "orlix.offline-write-stage."
 
     private let store: KeychainStore
     private let offlineChanges: CredentialOfflineChangeStore
 
-    init(
+    package init(
         store: KeychainStore,
         offlineChanges: CredentialOfflineChangeStore
     ) {
@@ -400,11 +400,11 @@ nonisolated final class CredentialOfflineWriteTransaction: @unchecked Sendable {
         self.offlineChanges = offlineChanges
     }
 
-    var hasPendingWrite: Bool {
+    package var hasPendingWrite: Bool {
         offlineChanges.hasOfflineWritePlan(service: store.service)
     }
 
-    func commitUpdate(
+    package func commitUpdate(
         for unit: CredentialSyncUnit,
         operations: [CredentialOfflineWriteOperation]
     ) throws {
@@ -449,7 +449,7 @@ nonisolated final class CredentialOfflineWriteTransaction: @unchecked Sendable {
         try resumePendingWrite()
     }
 
-    func resumePendingWrite() throws {
+    package func resumePendingWrite() throws {
         guard let plan = try offlineChanges.loadOfflineWritePlan(service: store.service) else {
             try removeOrphanedStagingValues()
             return
@@ -490,15 +490,15 @@ nonisolated final class CredentialOfflineWriteTransaction: @unchecked Sendable {
     }
 }
 
-nonisolated enum CredentialOfflineChangeStoreError: Error, Equatable, Sendable {
+nonisolated package enum CredentialOfflineChangeStoreError: Error, Equatable, Sendable {
     case persistenceFailed
 }
 
-nonisolated enum CredentialSyncError: LocalizedError, Equatable, Sendable {
+nonisolated package enum CredentialSyncError: LocalizedError, Equatable, Sendable {
     case offlineReconciliationPending
     case syncMustBeDisabled
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .offlineReconciliationPending:
             "Credential reconciliation must finish before credentials can change."

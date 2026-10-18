@@ -1,19 +1,19 @@
 import Foundation
 
-nonisolated struct SSHHostKeyTrustPresentation {
-    let title: String
-    let message: String
-    let approvalButtonTitle: String
-    let isDestructive: Bool
+nonisolated package struct SSHHostKeyTrustPresentation {
+    package let title: String
+    package let message: String
+    package let approvalButtonTitle: String
+    package let isDestructive: Bool
 
-    init(request: ServerSecurityApprovalRequest) {
+    package init(request: ServerSecurityApprovalRequest) {
         switch request {
         case .hostKey(let challenge):
             self.init(challenge: challenge)
         }
     }
 
-    init(challenge: KnownHostsManager.Challenge) {
+    package init(challenge: KnownHostsManager.Challenge) {
         let endpoint = "\(challenge.host):\(challenge.port)"
         let presented = String(
             format: String(localized: "Host: %@\nKey type: %@\nFingerprint: %@"),

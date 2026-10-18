@@ -3,16 +3,16 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, Equatable, Sendable {
+nonisolated package enum ServerTransportSelection: String, CaseIterable, Identifiable, Equatable, Sendable {
     case standard
     case tailscale
     case mosh
     case eternalTerminal
     case cloudflare
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var connectionMode: SSHConnectionMode {
+    package var connectionMode: SSHConnectionMode {
         switch self {
         case .standard:
             return .standard
@@ -27,7 +27,7 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
         }
     }
 
-    init(server: Server) {
+    package init(server: Server) {
         switch server.connectionMode {
         case .standard:
             self = .standard
@@ -43,56 +43,56 @@ nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, E
     }
 }
 
-nonisolated struct ServerFormModel: Equatable, Sendable {
-    nonisolated enum WakeOnLANSavePlan: Equatable, Sendable {
+nonisolated package struct ServerFormModel: Equatable, Sendable {
+    nonisolated package enum WakeOnLANSavePlan: Equatable, Sendable {
         case clearConfiguration
         case configured(WakeOnLANConfiguration)
         case resolveAutomatically
     }
 
-    nonisolated struct ConnectionSnapshot: Equatable, Sendable {
-        let host: String
-        let port: String
-        let eternalTerminalPort: String
-        let username: String
-        let transportSelection: ServerTransportSelection
-        let authMethod: AuthMethod
-        let password: String
-        let sshKey: String
-        let sshPassphrase: String
-        let sshPublicKey: String
-        let cloudflareAccessMode: CloudflareAccessMode
-        let cloudflareClientID: String
-        let cloudflareClientSecret: String
-        let cloudflareTeamDomainOverride: String
+    nonisolated package struct ConnectionSnapshot: Equatable, Sendable {
+        package let host: String
+        package let port: String
+        package let eternalTerminalPort: String
+        package let username: String
+        package let transportSelection: ServerTransportSelection
+        package let authMethod: AuthMethod
+        package let password: String
+        package let sshKey: String
+        package let sshPassphrase: String
+        package let sshPublicKey: String
+        package let cloudflareAccessMode: CloudflareAccessMode
+        package let cloudflareClientID: String
+        package let cloudflareClientSecret: String
+        package let cloudflareTeamDomainOverride: String
     }
 
-    var name: String
-    var host: String
-    var port: String
-    var eternalTerminalPort: String
-    var username: String
-    var transportSelection: ServerTransportSelection
-    var authMethod: AuthMethod
-    var password: String
-    var sshKey: String
-    var sshPassphrase: String
-    var sshPublicKey: String
-    var cloudflareAccessMode: CloudflareAccessMode
-    var cloudflareClientID: String
-    var cloudflareClientSecret: String
-    var cloudflareTeamDomainOverride: String
-    var autoWakeOnLANEnabled: Bool
-    var workspaceID: UUID?
-    var environment: ServerEnvironment
-    var notes: String
-    var requiresBiometricUnlock: Bool
-    var remoteSessionEnabled: Bool
-    var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
-    var remoteSessionStartupBehavior: RemoteSessionStartupBehavior
-    var remoteShellStartupAction: RemoteShellStartupActionFormModel
+    package var name: String
+    package var host: String
+    package var port: String
+    package var eternalTerminalPort: String
+    package var username: String
+    package var transportSelection: ServerTransportSelection
+    package var authMethod: AuthMethod
+    package var password: String
+    package var sshKey: String
+    package var sshPassphrase: String
+    package var sshPublicKey: String
+    package var cloudflareAccessMode: CloudflareAccessMode
+    package var cloudflareClientID: String
+    package var cloudflareClientSecret: String
+    package var cloudflareTeamDomainOverride: String
+    package var autoWakeOnLANEnabled: Bool
+    package var workspaceID: UUID?
+    package var environment: ServerEnvironment
+    package var notes: String
+    package var requiresBiometricUnlock: Bool
+    package var remoteSessionEnabled: Bool
+    package var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
+    package var remoteSessionStartupBehavior: RemoteSessionStartupBehavior
+    package var remoteShellStartupAction: RemoteShellStartupActionFormModel
 
-    init(
+    package init(
         server: Server? = nil,
         workspaceID: UUID? = nil,
         defaultRemoteSessionEnabled: Bool,
@@ -130,7 +130,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         )
     }
 
-    var isValid: Bool {
+    package var isValid: Bool {
         !name.isEmpty
             && !host.isEmpty
             && validPort(port)
@@ -139,12 +139,12 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
             && remoteShellStartupAction.isValid
     }
 
-    var effectiveUsername: String {
+    package var effectiveUsername: String {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "root" : trimmed
     }
 
-    var connectionSnapshot: ConnectionSnapshot {
+    package var connectionSnapshot: ConnectionSnapshot {
         ConnectionSnapshot(
             host: host,
             port: port,
@@ -163,7 +163,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         )
     }
 
-    func wakeOnLANSavePlan(existingServer: Server?) -> WakeOnLANSavePlan {
+    package func wakeOnLANSavePlan(existingServer: Server?) -> WakeOnLANSavePlan {
         if let existingServer,
            Self.normalizedHost(existingServer.host) == Self.normalizedHost(host),
            let configuration = existingServer.wakeOnLANConfiguration {
@@ -172,7 +172,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         return autoWakeOnLANEnabled ? .resolveAutomatically : .clearConfiguration
     }
 
-    mutating func applyPrefill(
+    mutating package func applyPrefill(
         name: String,
         host: String,
         port: Int,
@@ -186,7 +186,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         }
     }
 
-    mutating func apply(_ credentials: ServerCredentials, for server: Server) {
+    mutating package func apply(_ credentials: ServerCredentials, for server: Server) {
         if server.connectionMode != .tailscale {
             switch server.authMethod {
             case .password:
@@ -207,7 +207,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         cloudflareClientSecret = credentials.cloudflareClientSecret ?? ""
     }
 
-    func makeServer(
+    package func makeServer(
         id: UUID,
         workspaceID: UUID,
         createdAt: Date
@@ -239,7 +239,7 @@ nonisolated struct ServerFormModel: Equatable, Sendable {
         )
     }
 
-    func makeCredentials(serverID: UUID) -> ServerCredentials {
+    package func makeCredentials(serverID: UUID) -> ServerCredentials {
         var credentials = ServerCredentials(serverId: serverID)
 
         guard transportSelection != .tailscale else {

@@ -3,8 +3,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum OpenSourceAttributionCatalog {
-    enum CatalogError: Error, Equatable {
+nonisolated package enum OpenSourceAttributionCatalog {
+    package enum CatalogError: Error, Equatable {
         case missingManifest
         case unsupportedSchemaVersion(Int)
         case emptyManifest
@@ -14,7 +14,7 @@ nonisolated enum OpenSourceAttributionCatalog {
         case emptyLicenseResource(String)
     }
 
-    static let bundled: [OpenSourceAttribution.Document] = {
+    static package let bundled: [OpenSourceAttribution.Document] = {
         do {
             return try load(from: .main)
         } catch {
@@ -23,7 +23,7 @@ nonisolated enum OpenSourceAttributionCatalog {
         }
     }()
 
-    static func load(from bundle: Bundle) throws -> [OpenSourceAttribution.Document] {
+    static package func load(from bundle: Bundle) throws -> [OpenSourceAttribution.Document] {
         guard let manifestURL = resourceURL(
             named: "Attributions",
             extension: "json",
@@ -43,7 +43,7 @@ nonisolated enum OpenSourceAttributionCatalog {
         }
     }
 
-    static func load(
+    static package func load(
         manifestURL: URL,
         licenseDirectoryURL: URL
     ) throws -> [OpenSourceAttribution.Document] {
@@ -102,7 +102,7 @@ nonisolated enum OpenSourceAttributionCatalog {
 
     private static func resourceURL(
         named name: String,
-        extension fileExtension: String,
+        package extension fileExtension: String,
         subdirectories: [String],
         in bundle: Bundle
     ) -> URL? {
@@ -120,6 +120,6 @@ nonisolated enum OpenSourceAttributionCatalog {
 }
 
 private nonisolated struct Manifest: Decodable {
-    let schemaVersion: Int
-    let attributions: [OpenSourceAttribution]
+    package let schemaVersion: Int
+    package let attributions: [OpenSourceAttribution]
 }

@@ -5,31 +5,31 @@ import os.log
 import OrlixModels
 #endif
 @MainActor
-struct ServerRemoteSyncCoordinatorDependencies {
-    let stateStore: ServerStateStore
-    let remoteRepository: any ServerRemoteRepository
-    let syncRepository: any ServerSyncRepository
-    let credentialRepository: any ServerManagerCredentialRepository
-    let knownHosts: any ServerKnownHostRepository
-    let didDeleteServerLocalData: (UUID) -> Void
-    let isRemoteSchemaError: (Error) -> Bool
-    let now: () -> Date
-    let makeID: () -> UUID
+package struct ServerRemoteSyncCoordinatorDependencies {
+    package let stateStore: ServerStateStore
+    package let remoteRepository: any ServerRemoteRepository
+    package let syncRepository: any ServerSyncRepository
+    package let credentialRepository: any ServerManagerCredentialRepository
+    package let knownHosts: any ServerKnownHostRepository
+    package let didDeleteServerLocalData: (UUID) -> Void
+    package let isRemoteSchemaError: (Error) -> Bool
+    package let now: () -> Date
+    package let makeID: () -> UUID
 }
 
 @MainActor
-final class ServerRemoteSyncCoordinator {
+final package class ServerRemoteSyncCoordinator {
     private nonisolated final class LoadGeneration: Sendable {}
 
     private nonisolated struct ActiveLoad: Sendable {
-        let operationID: UUID
-        let generation: LoadGeneration
-        let task: Task<Void, Never>
+        package let operationID: UUID
+        package let generation: LoadGeneration
+        package let task: Task<Void, Never>
     }
 
     private struct FullFetchBackfillResult {
-        let changes: ServerRemoteChanges
-        let canReplaceLocalState: Bool
+        package let changes: ServerRemoteChanges
+        package let canReplaceLocalState: Bool
     }
 
     private let dependencies: ServerRemoteSyncCoordinatorDependencies
@@ -41,7 +41,7 @@ final class ServerRemoteSyncCoordinator {
     private var activeLoad: ActiveLoad?
     private var startupTask: Task<Void, Never>?
 
-    init(dependencies: ServerRemoteSyncCoordinatorDependencies) {
+    package init(dependencies: ServerRemoteSyncCoordinatorDependencies) {
         self.dependencies = dependencies
         stateStore = dependencies.stateStore
     }
@@ -51,7 +51,7 @@ final class ServerRemoteSyncCoordinator {
         activeLoad?.task.cancel()
     }
 
-    func startAutomaticLoad() {
+    package func startAutomaticLoad() {
         guard startupTask == nil else { return }
 
         let stateStore = dependencies.stateStore
@@ -69,12 +69,12 @@ final class ServerRemoteSyncCoordinator {
         }
     }
 
-    func loadData() async {
+    package func loadData() async {
         guard let task = beginLoadingIfNeeded() else { return }
         await task.value
     }
 
-    func handleSyncDisabled() {
+    package func handleSyncDisabled() {
         startupTask?.cancel()
         startupTask = nil
         invalidateActiveLoad()
@@ -84,7 +84,7 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
-    func clearLocalDataAndResync() async throws {
+    package func clearLocalDataAndResync() async throws {
         logger.info("Replacing local server data from an authoritative CloudKit fetch...")
 
         try stateStore.requireNoPendingServerDataMutation()
@@ -135,7 +135,7 @@ final class ServerRemoteSyncCoordinator {
         )
     }
 
-    func resolveAmbiguousCloudRecovery(
+    package func resolveAmbiguousCloudRecovery(
         _ choice: AmbiguousCloudRecoveryChoice
     ) async throws {
         if let activeLoad {
@@ -202,12 +202,12 @@ final class ServerRemoteSyncCoordinator {
         }
     }
 
-    func drainPendingMutations() async {
+    package func drainPendingMutations() async {
         guard stateStore.isSyncEnabled, !stateStore.hasPendingServerDataMutation else { return }
         await dependencies.syncRepository.drainPendingMutations()
     }
 
-    func removeKnownHostIfUnused(
+    package func removeKnownHostIfUnused(
         for server: Server,
         excluding deletedServerIDs: Set<UUID> = []
     ) {
@@ -703,7 +703,7 @@ private enum AuthoritativeServerResyncError: LocalizedError {
     case remoteUnavailable
     case incompleteSnapshot
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .remoteUnavailable:
             return "iCloud is not available for a full server data refresh."

@@ -43,49 +43,49 @@ package struct ToolbarMenuEntry: Equatable {
 
 package struct ToolbarViewPickerData: Equatable {
     package struct Segment: Equatable {
-        let id: String
-        let systemImage: String
-        let help: String
+        package let id: String
+        package let systemImage: String
+        package let help: String
     }
 
     package var segments: [Segment]
     package var selectedId: String
 }
 
-struct MacToolbarSnapshot: Equatable {
-    var ownerId: String?
-    var showsViewPicker = false
-    var showsTabStrip = false
-    var showsFilesMenu = false
-    var isZenMode = false
-    var zenTitle = ""
-    var zenIcon = ""
-    var zenSubtitle = ""
-    var viewPicker: ToolbarViewPickerData?
-    var filesMenu: [ToolbarMenuEntry] = []
-    var serverMenu: [ToolbarMenuEntry] = []
+package struct MacToolbarSnapshot: Equatable {
+    package var ownerId: String?
+    package var showsViewPicker = false
+    package var showsTabStrip = false
+    package var showsFilesMenu = false
+    package var isZenMode = false
+    package var zenTitle = ""
+    package var zenIcon = ""
+    package var zenSubtitle = ""
+    package var viewPicker: ToolbarViewPickerData?
+    package var filesMenu: [ToolbarMenuEntry] = []
+    package var serverMenu: [ToolbarMenuEntry] = []
 
-    var isActive: Bool { ownerId != nil }
-    static let inactive = MacToolbarSnapshot()
+    package var isActive: Bool { ownerId != nil }
+    static package let inactive = MacToolbarSnapshot()
 }
 
 @MainActor
-final class MacToolbarCommandDispatcher {
+final package class MacToolbarCommandDispatcher {
     private var ownerId: String?
     private var handler: (MacToolbarCommandID) -> Void = { _ in }
 
-    func install(ownerId: String, handler: @escaping (MacToolbarCommandID) -> Void) {
+    package func install(ownerId: String, handler: @escaping (MacToolbarCommandID) -> Void) {
         self.ownerId = ownerId
         self.handler = handler
     }
 
-    func clear(ownerId: String) {
+    package func clear(ownerId: String) {
         guard self.ownerId == ownerId else { return }
         self.ownerId = nil
         handler = { _ in }
     }
 
-    func dispatch(_ command: MacToolbarCommandID) {
+    package func dispatch(_ command: MacToolbarCommandID) {
         handler(command)
     }
 }

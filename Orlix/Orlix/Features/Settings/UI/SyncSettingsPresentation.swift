@@ -1,12 +1,12 @@
 import SwiftUI
 
-enum SyncSettingsPrimaryAction: Equatable {
+package enum SyncSettingsPrimaryAction: Equatable {
     case syncNow
     case tryAgain
     case checkAgain
     case syncing
 
-    var title: String {
+    package var title: String {
         switch self {
         case .syncNow: String(localized: "Sync Now")
         case .tryAgain: String(localized: "Try Again")
@@ -15,17 +15,17 @@ enum SyncSettingsPrimaryAction: Equatable {
         }
     }
 
-    var isRunning: Bool {
+    package var isRunning: Bool {
         self == .syncing
     }
 }
 
-enum SyncSettingsContentSyncState: Equatable {
+package enum SyncSettingsContentSyncState: Equatable {
     case synced
     case included
     case notSyncing
 
-    init(
+    package init(
         syncEnabled: Bool,
         userState: SyncSettingsUserState,
         lastSuccessfulSyncDate: Date?
@@ -39,7 +39,7 @@ enum SyncSettingsContentSyncState: Equatable {
         }
     }
 
-    var sectionTitle: String {
+    package var sectionTitle: String {
         switch self {
         case .synced: String(localized: "Synced with iCloud")
         case .included: String(localized: "Included in iCloud Sync")
@@ -47,7 +47,7 @@ enum SyncSettingsContentSyncState: Equatable {
         }
     }
 
-    var rowTitle: String {
+    package var rowTitle: String {
         switch self {
         case .synced: String(localized: "Synced")
         case .included: String(localized: "Included")
@@ -56,8 +56,8 @@ enum SyncSettingsContentSyncState: Equatable {
     }
 }
 
-extension SyncSettingsUserState {
-    var title: String {
+package extension SyncSettingsUserState {
+    package var title: String {
         switch self {
         case .readyToSync: String(localized: "Ready to Sync")
         case .upToDate: String(localized: "Up to Date")
@@ -69,7 +69,7 @@ extension SyncSettingsUserState {
         }
     }
 
-    var recoveryGuidance: String? {
+    package var recoveryGuidance: String? {
         switch self {
         case .waitingForNetwork:
             String(localized: "Check your network connection.")
@@ -93,8 +93,8 @@ package extension SyncSettingsCredentialState {
     }
 }
 
-extension SyncSettingsErrorCategory {
-    var title: String {
+package extension SyncSettingsErrorCategory {
+    package var title: String {
         switch self {
         case .account: String(localized: "Account")
         case .cloudData: String(localized: "App Data")
@@ -104,8 +104,8 @@ extension SyncSettingsErrorCategory {
     }
 }
 
-extension SyncSettingsManualSyncState {
-    var announcement: String? {
+package extension SyncSettingsManualSyncState {
+    package var announcement: String? {
         switch self {
         case .success:
             String(localized: "iCloud Sync completed.")

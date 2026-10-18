@@ -1,8 +1,8 @@
 import CryptoKit
 import Foundation
 
-nonisolated enum MLXModelStorageLayout {
-    static func currentDirectory(
+nonisolated package enum MLXModelStorageLayout {
+    static package func currentDirectory(
         root: URL,
         kind: MLXModelKind,
         modelID: String
@@ -18,8 +18,8 @@ nonisolated enum MLXModelStorageLayout {
     }
 }
 
-nonisolated enum MLXModelStorageInstaller {
-    static func install(
+nonisolated package enum MLXModelStorageInstaller {
+    static package func install(
         stagingDirectory: URL,
         finalDirectory: URL,
         fileManager: FileManager = .default

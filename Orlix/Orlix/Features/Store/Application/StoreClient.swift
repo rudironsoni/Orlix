@@ -3,20 +3,20 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct StoreEntitlementResult: Equatable, Sendable {
-    static let free = StoreEntitlementResult(
+nonisolated package struct StoreEntitlementResult: Equatable, Sendable {
+    static package let free = StoreEntitlementResult(
         verifiedProductIds: [],
         subscriptionEntitlements: [],
         subscriptionStatus: nil
     )
 
-    let verifiedProductIds: Set<String>
-    let subscriptionEntitlements: [StoreSubscriptionEntitlement]
-    let subscriptionStatus: StoreSubscriptionStatus?
+    package let verifiedProductIds: Set<String>
+    package let subscriptionEntitlements: [StoreSubscriptionEntitlement]
+    package let subscriptionStatus: StoreSubscriptionStatus?
 }
 
 @MainActor
-protocol StoreClient: AnyObject, Sendable {
+package protocol StoreClient: AnyObject, Sendable {
     func products(for identifiers: [String]) async throws -> [StoreProduct]
     func purchase(productId: String) async throws -> StorePurchaseResult
     func sync() async throws
