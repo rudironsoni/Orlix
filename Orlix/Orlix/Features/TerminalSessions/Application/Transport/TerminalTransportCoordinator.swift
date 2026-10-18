@@ -1,24 +1,28 @@
 import Foundation
 import os.log
 
-nonisolated enum TerminalTransportEndOwnership: Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package enum TerminalTransportEndOwnership: Sendable {
     case ssh(client: SSHClient, shellId: UUID)
     case eternalTerminal(runtimeToken: UUID)
 }
 
 @MainActor
-struct TerminalTransportSessionAccess {
-    let paneState: (UUID) -> TerminalPaneState?
-    let allPaneStates: () -> [TerminalPaneState]
-    let selectedTab: (UUID) -> TerminalTab?
-    let tabs: (UUID) -> [TerminalTab]
-    let containsPane: (UUID) -> Bool
-    let workingDirectory: (UUID) -> String?
-    let shouldApplyWorkingDirectory: (UUID) -> Bool
-    let send: (TerminalTransportSessionEvent) -> Void
+package struct TerminalTransportSessionAccess {
+    package let paneState: (UUID) -> TerminalPaneState?
+    package let allPaneStates: () -> [TerminalPaneState]
+    package let selectedTab: (UUID) -> TerminalTab?
+    package let tabs: (UUID) -> [TerminalTab]
+    package let containsPane: (UUID) -> Bool
+    package let workingDirectory: (UUID) -> String?
+    package let shouldApplyWorkingDirectory: (UUID) -> Bool
+    package let send: (TerminalTransportSessionEvent) -> Void
 }
 
-nonisolated enum TerminalTransportSessionEvent: Sendable {
+nonisolated package enum TerminalTransportSessionEvent: Sendable {
     case activeTransport(UUID, ShellTransportState)
     case eternalTerminalResumeContext(UUID, RemoteSessionLifecycleContext?)
     case startupActionReplayPending(UUID, Bool)
@@ -29,7 +33,7 @@ nonisolated enum TerminalTransportSessionEvent: Sendable {
 
 /// Owns terminal transport identities, tasks, resumable state, and cleanup.
 @MainActor
-final class TerminalTransportCoordinator {
+final package class TerminalTransportCoordinator {
     private typealias SSHOwnership = (
         registration: SSHShellRegistry.Registration?,
         pendingStart: SSHShellRegistry.StartContext?
@@ -56,7 +60,7 @@ final class TerminalTransportCoordinator {
         category: "TerminalTransportCoordinator"
     )
 
-    init(
+    package init(
         lifetime: TerminalTransportLifetime,
         sshClientFactory: SSHClientFactory,
         eternalTerminalResumeStore: any EternalTerminalResumeStoring,
@@ -79,24 +83,24 @@ final class TerminalTransportCoordinator {
         self.remoteSessionCoordinator = remoteSessionCoordinator
     }
 
-    var ownedPaneIds: Set<UUID> {
+    package var ownedPaneIds: Set<UUID> {
         registry.ownedPaneIds
     }
 
-    func makeSSHClient() -> SSHClient {
+    package func makeSSHClient() -> SSHClient {
         sshClientFactory.makeClient()
     }
 
-    func hasLiveTransport(for paneId: UUID) -> Bool {
+    package func hasLiveTransport(for paneId: UUID) -> Bool {
         registry.hasLiveTransport(for: paneId)
     }
 
-    func activeSSHRoute(for paneId: UUID) -> (client: SSHClient, shellId: UUID)? {
+    package func activeSSHRoute(for paneId: UUID) -> (client: SSHClient, shellId: UUID)? {
         guard let route = registry.shellRoute(for: paneId) else { return nil }
         return (route.client, route.shellId)
     }
 
-    func handleShellEnd(
+    package func handleShellEnd(
         for paneId: UUID,
         client: SSHClient,
         shellId: UUID,
@@ -113,11 +117,11 @@ final class TerminalTransportCoordinator {
         ))
     }
 
-    func connectionOwnershipToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
+    package func connectionOwnershipToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
         registry.connectionStartToken(for: paneId)
     }
 
-    func sendSSHInput(_ data: Data, for paneId: UUID) {
+    package func sendSSHInput(_ data: Data, for paneId: UUID) {
         guard let route = registry.shellRoute(for: paneId) else { return }
         let queue = lifetime.writeQueue(for: paneId)
         let registry = registry
@@ -136,7 +140,7 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func resizeSSH(
+    package func resizeSSH(
         for paneId: UUID,
         cols: Int,
         rows: Int,
@@ -173,11 +177,11 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func hasEternalTerminalRuntime(for paneId: UUID) -> Bool {
+    package func hasEternalTerminalRuntime(for paneId: UUID) -> Bool {
         registry.runtime(for: paneId) != nil
     }
 
-    func eternalTerminalRuntime(
+    package func eternalTerminalRuntime(
         for paneId: UUID,
         server: Server,
         credentials: ServerCredentials
@@ -198,11 +202,11 @@ final class TerminalTransportCoordinator {
         return runtime
     }
 
-    func sendEternalTerminalInput(_ data: Data, for paneId: UUID) {
+    package func sendEternalTerminalInput(_ data: Data, for paneId: UUID) {
         registry.runtime(for: paneId)?.send(data)
     }
 
-    func resizeEternalTerminal(
+    package func resizeEternalTerminal(
         for paneId: UUID,
         cols: Int,
         rows: Int,
@@ -213,14 +217,14 @@ final class TerminalTransportCoordinator {
         runtime.startIfNeeded()
     }
 
-    func isCurrentEternalTerminalRuntime(
+    package func isCurrentEternalTerminalRuntime(
         _ runtime: EternalTerminalRuntime,
         for paneId: UUID
     ) -> Bool {
         registry.isCurrentRuntime(runtime, for: paneId)
     }
 
-    func unregisterEternalTerminalRuntime(
+    package func unregisterEternalTerminalRuntime(
         for paneId: UUID,
         killingManagedRemoteSession identifier: RemoteSessionIdentifier? = nil
     ) async {
@@ -232,14 +236,14 @@ final class TerminalTransportCoordinator {
         await runtime.close()
     }
 
-    func unregisterEternalTerminalRuntimeIfPaneWasRemoved(for paneId: UUID) {
+    package func unregisterEternalTerminalRuntimeIfPaneWasRemoved(for paneId: UUID) {
         guard !sessionAccess.containsPane(paneId),
               let runtime = registry.runtime(for: paneId),
               registry.detachRuntime(runtime, for: paneId) else { return }
         Task { await runtime.close() }
     }
 
-    func unregisterEternalTerminalRuntime(
+    package func unregisterEternalTerminalRuntime(
         for paneId: UUID,
         ifOwnedBy runtime: EternalTerminalRuntime
     ) async {
@@ -247,7 +251,7 @@ final class TerminalTransportCoordinator {
         await runtime.close()
     }
 
-    func unregisterEternalTerminalRuntime(
+    package func unregisterEternalTerminalRuntime(
         for paneId: UUID,
         ifOwnedByToken token: UUID
     ) async {
@@ -257,7 +261,7 @@ final class TerminalTransportCoordinator {
     }
 
     @discardableResult
-    func detachEternalTerminalRuntime(
+    package func detachEternalTerminalRuntime(
         for paneId: UUID,
         ifOwnedBy runtime: EternalTerminalRuntime
     ) -> Bool {
@@ -268,16 +272,16 @@ final class TerminalTransportCoordinator {
         return true
     }
 
-    func beginEternalTerminalNetworkRecoveryProbe(for paneId: UUID) async -> UUID? {
+    package func beginEternalTerminalNetworkRecoveryProbe(for paneId: UUID) async -> UUID? {
         await registry.runtime(for: paneId)?.beginNetworkRecoveryProbe()
     }
 
-    func notifyEternalTerminalNetworkPathChanged(for paneId: UUID) {
+    package func notifyEternalTerminalNetworkPathChanged(for paneId: UUID) {
         guard let runtime = registry.runtime(for: paneId) else { return }
         Task { await runtime.notifyNetworkPathChanged() }
     }
 
-    func completedEternalTerminalNetworkRecoveryProbe(
+    package func completedEternalTerminalNetworkRecoveryProbe(
         _ probeId: UUID,
         for paneId: UUID
     ) -> Bool {
@@ -285,7 +289,7 @@ final class TerminalTransportCoordinator {
     }
 
     #if os(macOS)
-    func hasVerifiedLiveTransport(
+    package func hasVerifiedLiveTransport(
         for paneId: UUID,
         eternalTerminalProbeID: UUID? = nil
     ) async -> Bool {
@@ -323,15 +327,15 @@ final class TerminalTransportCoordinator {
     }
     #endif
 
-    func hasEternalTerminalCheckpoint(for paneId: UUID) -> Bool {
+    package func hasEternalTerminalCheckpoint(for paneId: UUID) -> Bool {
         eternalTerminalResumeStore.hasCheckpoint(for: paneId)
     }
 
-    func hasMoshCheckpoint(for paneId: UUID) -> Bool {
+    package func hasMoshCheckpoint(for paneId: UUID) -> Bool {
         moshRecovery.hasCheckpoint(for: paneId)
     }
 
-    func prepareResumableSessionsForApplicationBackground() async {
+    package func prepareResumableSessionsForApplicationBackground() async {
         await registry.forEachRuntime { runtime in
             await runtime.prepareForApplicationBackground()
         }
@@ -351,7 +355,7 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func resumeResumableSessionsFromApplicationBackground() async {
+    package func resumeResumableSessionsFromApplicationBackground() async {
         await registry.forEachRuntime { runtime in
             await runtime.resumeFromApplicationBackground()
         }
@@ -371,7 +375,7 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func prepareTransportForReconnect(_ paneId: UUID) async {
+    package func prepareTransportForReconnect(_ paneId: UUID) async {
         logger.info("Reconnect transport cleanup pane=\(paneId.uuidString, privacy: .public)")
         registry.cancelConnectionTask(for: paneId)
         let client = registry.connectionClient(for: paneId)
@@ -404,7 +408,7 @@ final class TerminalTransportCoordinator {
     }
 
     @discardableResult
-    func registerSSHClient(
+    package func registerSSHClient(
         _ client: SSHClient,
         shellId: UUID,
         startToken: SSHShellRegistry.StartToken,
@@ -434,7 +438,7 @@ final class TerminalTransportCoordinator {
         return true
     }
 
-    func unregisterSSHClient(for paneId: UUID) async {
+    package func unregisterSSHClient(for paneId: UUID) async {
         await unregisterSSHClient(
             for: paneId,
             killingManagedRemoteSession: nil,
@@ -442,7 +446,7 @@ final class TerminalTransportCoordinator {
         )
     }
 
-    func unregisterSSHClient(
+    package func unregisterSSHClient(
         for paneId: UUID,
         ifOwnedBy client: SSHClient,
         shellId: UUID
@@ -451,7 +455,7 @@ final class TerminalTransportCoordinator {
         await unregisterSSHClient(for: paneId)
     }
 
-    func unregisterSSHClient(
+    package func unregisterSSHClient(
         for paneId: UUID,
         ifOwnedBy startToken: SSHShellRegistry.StartToken
     ) async {
@@ -460,7 +464,7 @@ final class TerminalTransportCoordinator {
     }
 
     @discardableResult
-    func startSSHConnectionTask(
+    package func startSSHConnectionTask(
         for paneId: UUID,
         server: Server,
         client: SSHClient,
@@ -500,7 +504,7 @@ final class TerminalTransportCoordinator {
         return true
     }
 
-    func isTransportStartInFlight(for paneId: UUID) -> Bool {
+    package func isTransportStartInFlight(for paneId: UUID) -> Bool {
         let result = registry.shellStartStatus(for: paneId)
         handleStaleShellStartContext(
             result.staleContext,
@@ -510,7 +514,7 @@ final class TerminalTransportCoordinator {
         return result.inFlight || registry.runtime(for: paneId)?.isStartInFlight == true
     }
 
-    func isCurrentShellOwner(
+    package func isCurrentShellOwner(
         for paneId: UUID,
         client: SSHClient,
         startToken: SSHShellRegistry.StartToken
@@ -523,19 +527,19 @@ final class TerminalTransportCoordinator {
             )
     }
 
-    func sshClient(for serverId: UUID) -> SSHClient? {
+    package func sshClient(for serverId: UUID) -> SSHClient? {
         preferredSSHClient(for: serverId, allowPendingStart: true)
     }
 
-    func sharedStatsClient(for serverId: UUID) -> SSHClient? {
+    package func sharedStatsClient(for serverId: UUID) -> SSHClient? {
         selectedTransport(for: serverId) == .mosh ? nil : sshClient(for: serverId)
     }
 
-    func cancelConnectionTask(for paneId: UUID) {
+    package func cancelConnectionTask(for paneId: UUID) {
         registry.cancelConnectionTask(for: paneId)
     }
 
-    func removePane(
+    package func removePane(
         _ paneId: UUID,
         deletingResumableState: Bool,
         killingManagedRemoteSession identifier: RemoteSessionIdentifier?
@@ -568,7 +572,7 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func beginApplicationTermination(paneIds: Set<UUID>) -> Task<Void, Never> {
+    package func beginApplicationTermination(paneIds: Set<UUID>) -> Task<Void, Never> {
         let ownedPaneIds = paneIds.union(registry.ownedPaneIds)
         for paneId in ownedPaneIds {
             registry.cancelConnectionTask(for: paneId)
@@ -584,7 +588,7 @@ final class TerminalTransportCoordinator {
         }
     }
 
-    func installMoshServer(for paneId: UUID) async throws {
+    package func installMoshServer(for paneId: UUID) async throws {
         guard let registration = registry.shellRegistration(for: paneId) else {
             throw SSHError.notConnected
         }
@@ -592,13 +596,13 @@ final class TerminalTransportCoordinator {
     }
 
     #if DEBUG
-    func setEternalTerminalResumeStoreForTesting(
+    package func setEternalTerminalResumeStoreForTesting(
         _ store: any EternalTerminalResumeStoring
     ) {
         eternalTerminalResumeStore = store
     }
 
-    func resetForTesting() async {
+    package func resetForTesting() async {
         let drainedTransports = lifetime.drain()
         eternalTerminalResumeStore = defaultEternalTerminalResumeStore
         for client in drainedTransports.clients {
@@ -675,7 +679,7 @@ final class TerminalTransportCoordinator {
         )
     }
 
-    func beginShellStart(
+    package func beginShellStart(
         for paneId: UUID,
         client: SSHClient
     ) -> SSHShellRegistry.StartToken? {
@@ -693,7 +697,7 @@ final class TerminalTransportCoordinator {
         return result.token
     }
 
-    func finishShellStart(
+    package func finishShellStart(
         for paneId: UUID,
         client: SSHClient,
         startToken: SSHShellRegistry.StartToken

@@ -1,12 +1,18 @@
 import Foundation
 
-nonisolated struct StoreProduct: Identifiable, Equatable, Sendable {
-    let id: String
-    let displayName: String
-    let displayPrice: String
+nonisolated package struct StoreProduct: Identifiable, Equatable, Sendable {
+    package let id: String
+    package let displayName: String
+    package let displayPrice: String
+
+    package init(id: String, displayName: String, displayPrice: String) {
+        self.id = id
+        self.displayName = displayName
+        self.displayPrice = displayPrice
+    }
 }
 
-nonisolated enum StorePurchaseResult: Equatable, Sendable {
+nonisolated package enum StorePurchaseResult: Equatable, Sendable {
     case verified(productId: String)
     case unverified(productId: String)
     case userCancelled
@@ -14,12 +20,12 @@ nonisolated enum StorePurchaseResult: Equatable, Sendable {
     case unknown
 }
 
-nonisolated enum StoreTransactionUpdate: Equatable, Sendable {
+nonisolated package enum StoreTransactionUpdate: Equatable, Sendable {
     case verified(productId: String)
     case unverified(productId: String)
 }
 
-nonisolated enum StoreSubscriptionState: Equatable, Sendable {
+nonisolated package enum StoreSubscriptionState: Equatable, Sendable {
     case subscribed
     case inGracePeriod
     case inBillingRetryPeriod
@@ -28,38 +34,66 @@ nonisolated enum StoreSubscriptionState: Equatable, Sendable {
     case unknown
 }
 
-nonisolated struct StoreSubscriptionEntitlement: Equatable, Sendable {
-    let state: StoreSubscriptionState
-    let isVerified: Bool
+nonisolated package struct StoreSubscriptionEntitlement: Equatable, Sendable {
+    package let state: StoreSubscriptionState
+    package let isVerified: Bool
+
+    package init(state: StoreSubscriptionState, isVerified: Bool) {
+        self.state = state
+        self.isVerified = isVerified
+    }
 }
 
-nonisolated enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
+nonisolated package enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
     case verified(Value)
     case unverified
 }
 
-nonisolated struct StoreSubscriptionTransaction: Equatable, Sendable {
-    let productID: String
-    let expirationDate: Date?
+nonisolated package struct StoreSubscriptionTransaction: Equatable, Sendable {
+    package let productID: String
+    package let expirationDate: Date?
+
+
+    package init(
+
+        productID: String,
+
+        expirationDate: Date? = nil
+
+    ) {
+
+        self.productID = productID
+
+        self.expirationDate = expirationDate
+
+    }
 }
 
-nonisolated struct StoreSubscriptionStatus: Equatable, Sendable {
-    let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
-    let state: StoreSubscriptionState
+nonisolated package struct StoreSubscriptionStatus: Equatable, Sendable {
+    package let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
+    package let state: StoreSubscriptionState
 
-    var expirationDate: Date? {
+    package init(
+        transaction: StoreVerificationResult<StoreSubscriptionTransaction>,
+        state: StoreSubscriptionState
+    ) {
+        self.transaction = transaction
+        self.state = state
+    }
+
+    package var expirationDate: Date? {
         guard case .verified(let transaction) = transaction else { return nil }
         return transaction.expirationDate
     }
 }
 
-nonisolated enum PurchaseState: Equatable {
+nonisolated package enum PurchaseState: Equatable {
     case idle
     case purchasing
     case purchased
     case failed(String)
 
-    static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
+    package static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.purchasing, .purchasing), (.purchased, .purchased):
             return true
@@ -71,13 +105,13 @@ nonisolated enum PurchaseState: Equatable {
     }
 }
 
-nonisolated enum RestoreState: Equatable {
+nonisolated package enum RestoreState: Equatable {
     case idle
     case restoring
     case restored(hasAccess: Bool)
     case failed(String)
 
-    static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
+    package static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.restoring, .restoring):
             return true
@@ -91,7 +125,7 @@ nonisolated enum RestoreState: Equatable {
     }
 }
 
-nonisolated enum PaywallSource: String, Equatable, Sendable {
+nonisolated package enum PaywallSource: String, Equatable, Sendable {
     case general
     case serverLimit = "server_limit"
     case workspaceLimit = "workspace_limit"
@@ -106,16 +140,16 @@ nonisolated enum PaywallSource: String, Equatable, Sendable {
     case dockerStats = "docker_stats"
 }
 
-nonisolated enum OrlixProducts {
-    static let proMonthly = "com.rudironsoni.orlix.pro.monthly"
-    static let proYearly = "com.rudironsoni.orlix.pro.yearly"
-    static let proLifetime = "com.rudironsoni.orlix.pro.lifetime"
+nonisolated package enum OrlixProducts {
+    static package let proMonthly = "com.rudironsoni.orlix.pro.monthly"
+    static package let proYearly = "com.rudironsoni.orlix.pro.yearly"
+    static package let proLifetime = "com.rudironsoni.orlix.pro.lifetime"
 
-    static let subscriptionGroupId = "orlix_pro"
-    static let allProducts = [proMonthly, proYearly, proLifetime]
+    static package let subscriptionGroupId = "orlix_pro"
+    static package let allProducts = [proMonthly, proYearly, proLifetime]
 }
 
-nonisolated enum StoreError: Error {
+nonisolated package enum StoreError: Error {
     case verificationFailed
     case productNotFound
     case purchaseFailed(String)

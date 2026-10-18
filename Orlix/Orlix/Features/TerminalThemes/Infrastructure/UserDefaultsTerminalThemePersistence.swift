@@ -1,14 +1,17 @@
 import Foundation
 
-nonisolated struct TerminalThemeUserDefaultsKeys: Equatable, Sendable {
-    let customThemes: String
-    let darkTheme: String
-    let lightTheme: String
-    let usesPerAppearanceTheme: String
-    let preferenceUpdatedAt: String
-    let activeBackgroundCache: String
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct TerminalThemeUserDefaultsKeys: Equatable, Sendable {
+    package let customThemes: String
+    package let darkTheme: String
+    package let lightTheme: String
+    package let usesPerAppearanceTheme: String
+    package let preferenceUpdatedAt: String
+    package let activeBackgroundCache: String
 
-    static let live = Self(
+    static package let live = Self(
         customThemes: "terminalCustomThemesV1",
         darkTheme: "terminalThemeName",
         lightTheme: "terminalThemeNameLight",
@@ -19,11 +22,11 @@ nonisolated struct TerminalThemeUserDefaultsKeys: Equatable, Sendable {
 }
 
 @MainActor
-final class UserDefaultsTerminalThemePersistence: TerminalThemePersistence {
+final package class UserDefaultsTerminalThemePersistence: TerminalThemePersistence {
     private let defaults: UserDefaults
     private let keys: TerminalThemeUserDefaultsKeys
 
-    init(
+    package init(
         defaults: UserDefaults,
         keys: TerminalThemeUserDefaultsKeys
     ) {
@@ -31,16 +34,16 @@ final class UserDefaultsTerminalThemePersistence: TerminalThemePersistence {
         self.keys = keys
     }
 
-    func loadCustomThemes() throws -> [TerminalTheme] {
+    package func loadCustomThemes() throws -> [TerminalTheme] {
         guard let data = defaults.data(forKey: keys.customThemes) else { return [] }
         return try JSONDecoder().decode([TerminalTheme].self, from: data)
     }
 
-    func saveCustomThemes(_ themes: [TerminalTheme]) throws {
+    package func saveCustomThemes(_ themes: [TerminalTheme]) throws {
         defaults.set(try JSONEncoder().encode(themes), forKey: keys.customThemes)
     }
 
-    func loadSelection() -> TerminalThemeSelection {
+    package func loadSelection() -> TerminalThemeSelection {
         TerminalThemeSelection(
             darkThemeName: defaults.string(forKey: keys.darkTheme) ?? "Orlix Dark",
             lightThemeName: defaults.string(forKey: keys.lightTheme) ?? "Orlix Light",
@@ -48,7 +51,7 @@ final class UserDefaultsTerminalThemePersistence: TerminalThemePersistence {
         )
     }
 
-    func saveSelection(_ selection: TerminalThemeSelection) {
+    package func saveSelection(_ selection: TerminalThemeSelection) {
         if defaults.string(forKey: keys.darkTheme) != selection.darkThemeName {
             defaults.set(selection.darkThemeName, forKey: keys.darkTheme)
         }
@@ -60,17 +63,17 @@ final class UserDefaultsTerminalThemePersistence: TerminalThemePersistence {
         }
     }
 
-    func loadPreferenceUpdatedAt() -> Date {
+    package func loadPreferenceUpdatedAt() -> Date {
         let value = defaults.double(forKey: keys.preferenceUpdatedAt)
         guard value > 0 else { return .distantPast }
         return Date(timeIntervalSince1970: value)
     }
 
-    func savePreferenceUpdatedAt(_ date: Date) {
+    package func savePreferenceUpdatedAt(_ date: Date) {
         defaults.set(date.timeIntervalSince1970, forKey: keys.preferenceUpdatedAt)
     }
 
-    func cacheActiveBackgroundHex(_ hex: String) {
+    package func cacheActiveBackgroundHex(_ hex: String) {
         guard defaults.string(forKey: keys.activeBackgroundCache) != hex else { return }
         defaults.set(hex, forKey: keys.activeBackgroundCache)
     }

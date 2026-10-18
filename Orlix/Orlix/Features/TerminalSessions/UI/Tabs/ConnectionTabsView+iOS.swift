@@ -1,14 +1,20 @@
 #if os(iOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+#endif
 private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
     private var preservesTerminalSizeForKeyboard = false
 
-    let isTerminalSelected: Bool
-    let content: Content
+    package let isTerminalSelected: Bool
+    package let content: Content
 
-    init(
+    package init(
         isTerminalSelected: Bool,
         @ViewBuilder content: () -> Content
     ) {
@@ -16,7 +22,7 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         content.modifier(
             TerminalKeyboardSafeAreaModifier(
                 isEnabled: preservesTerminalSizeForKeyboard && isTerminalSelected
@@ -25,8 +31,8 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     }
 }
 
-extension ConnectionTerminalContainer {
-    var platformBody: some View {
+package extension ConnectionTerminalContainer {
+    package var platformBody: some View {
         sharedBody
             .alert(
                 disconnectAlertTitle,
@@ -63,7 +69,7 @@ extension ConnectionTerminalContainer {
             }
     }
 
-    func platformChrome(backgroundColor: Color) -> some View {
+    package func platformChrome(backgroundColor: Color) -> some View {
         TerminalKeyboardSafeAreaHost(isTerminalSelected: selectedView == .terminal) {
             VStack(spacing: 0) {
                 if !isZenModeEnabled {
@@ -117,14 +123,16 @@ extension ConnectionTerminalContainer {
                 backgroundColor: backgroundColor,
                 sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
-                isDockerUnlocked: storeManager.allowsProFeatures
+                isDockerUnlocked: storeManager.allowsProFeatures,
+                presentDockerUpgrade: { isShowingDockerUpgrade = true }
             )
+            .proUpgradePresentation(isPresented: $isShowingDockerUpgrade, source: .dockerStats)
             .zIndex(1)
         }
     }
 
     @ViewBuilder
-    var terminalLayer: some View {
+    package var terminalLayer: some View {
         if selectedView == .terminal, let tab = selectedTab {
             let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
             TerminalTabView(
@@ -185,7 +193,7 @@ extension ConnectionTerminalContainer {
         fileTabManager.disconnect(serverId: server.id)
     }
 
-    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
+    package func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
         guard selectedView != .terminal else { return }
         for tab in serverTabs {
             for paneId in tab.allPaneIds {
@@ -194,7 +202,7 @@ extension ConnectionTerminalContainer {
         }
     }
 
-    func platformPrepareForPaneClose() {
+    package func platformPrepareForPaneClose() {
         tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 
@@ -294,14 +302,14 @@ extension ConnectionTerminalContainer {
 }
 
 private struct SharedTerminalTabsBar: View {
-    let tabs: [TerminalTab]
-    @Binding var selectedTabId: UUID?
-    @ObservedObject var projection: TerminalServerToolbarTabStripProjection
-    let onClose: (TerminalTab) -> Void
+    package let tabs: [TerminalTab]
+    @Binding package var selectedTabId: UUID?
+    @ObservedObject package var projection: TerminalServerToolbarTabStripProjection
+    package let onClose: (TerminalTab) -> Void
 
     private let minTabWidth: CGFloat = 120
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let count = max(tabs.count, 1)
             let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)
@@ -386,14 +394,14 @@ private struct SharedTerminalTabsBar: View {
 }
 
 private struct SharedTerminalTabButton: View {
-    let title: String
-    let statusColor: Color
-    let isSelected: Bool
-    let fixedWidth: CGFloat?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package let title: String
+    package let statusColor: Color
+    package let isSelected: Bool
+    package let fixedWidth: CGFloat?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(statusColor)

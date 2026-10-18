@@ -1,21 +1,21 @@
 import Foundation
 
-nonisolated enum TerminalAccessoryResolvedItem: Equatable, Sendable {
+nonisolated package enum TerminalAccessoryResolvedItem: Equatable, Sendable {
     case system(TerminalAccessorySystemActionID)
     case custom(TerminalAccessoryCustomAction)
 }
 
-nonisolated enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
+nonisolated package enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
     case none
     case leadingButtons
     case itemsAndLeadingButtons
 }
 
-nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
-    let resolvedItems: [TerminalAccessoryResolvedItem]
-    let showsDismissKeyboardButton: Bool
+nonisolated package struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
+    package let resolvedItems: [TerminalAccessoryResolvedItem]
+    package let showsDismissKeyboardButton: Bool
 
-    init(
+    package init(
         profile: TerminalAccessoryProfile,
         showsDismissKeyboardButton: Bool
     ) {
@@ -35,7 +35,7 @@ nonisolated struct TerminalAccessoryInputSnapshot: Equatable, Sendable {
         self.showsDismissKeyboardButton = showsDismissKeyboardButton
     }
 
-    func change(from current: Self) -> TerminalAccessoryInputSnapshotChange {
+    package func change(from current: Self) -> TerminalAccessoryInputSnapshotChange {
         if resolvedItems != current.resolvedItems {
             return .itemsAndLeadingButtons
         }

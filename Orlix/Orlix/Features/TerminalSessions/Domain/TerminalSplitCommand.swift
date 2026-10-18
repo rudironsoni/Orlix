@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum TerminalSplitCommand: Equatable, Sendable {
+nonisolated package enum TerminalSplitCommand: Equatable, Sendable {
     case splitRight
     case splitDown
     case closeFocusedPane
@@ -17,28 +17,32 @@ nonisolated enum TerminalSplitCommand: Equatable, Sendable {
     case moveDividerLeft
     case moveDividerRight
 
-    var createsPane: Bool {
+    package var createsPane: Bool {
         self == .splitRight || self == .splitDown
     }
 }
 
-enum TerminalSplitCommandOutcome: Equatable {
+package enum TerminalSplitCommandOutcome: Equatable {
     case performed
     case unavailable
     case requiresUpgrade
     case requiresCloseConfirmation
 }
 
-nonisolated struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
-    let rawValue: UInt8
+nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
+    package let rawValue: UInt8
 
-    static let command = Self(rawValue: 1 << 0)
-    static let shift = Self(rawValue: 1 << 1)
-    static let control = Self(rawValue: 1 << 2)
-    static let alternate = Self(rawValue: 1 << 3)
+    package init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+
+    static package let command = Self(rawValue: 1 << 0)
+    static package let shift = Self(rawValue: 1 << 1)
+    static package let control = Self(rawValue: 1 << 2)
+    static package let alternate = Self(rawValue: 1 << 3)
 }
 
-nonisolated enum TerminalSplitShortcutKey: Equatable, Sendable {
+nonisolated package enum TerminalSplitShortcutKey: Equatable, Sendable {
     case character(String)
     case upArrow
     case downArrow
@@ -46,20 +50,20 @@ nonisolated enum TerminalSplitShortcutKey: Equatable, Sendable {
     case rightArrow
 }
 
-nonisolated enum TerminalSplitShortcutRouting {
-    static let upArrow = "\u{F700}"
-    static let downArrow = "\u{F701}"
-    static let leftArrow = "\u{F702}"
-    static let rightArrow = "\u{F703}"
+nonisolated package enum TerminalSplitShortcutRouting {
+    static package let upArrow = "\u{F700}"
+    static package let downArrow = "\u{F701}"
+    static package let leftArrow = "\u{F702}"
+    static package let rightArrow = "\u{F703}"
 
-    nonisolated static func command(
+    nonisolated static package func command(
         for input: String,
         modifiers: TerminalSplitShortcutModifiers
     ) -> TerminalSplitCommand? {
         command(for: key(for: input), modifiers: modifiers)
     }
 
-    nonisolated static func command(
+    nonisolated static package func command(
         for key: TerminalSplitShortcutKey,
         modifiers: TerminalSplitShortcutModifiers
     ) -> TerminalSplitCommand? {

@@ -1,9 +1,13 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
-extension TerminalRemoteSessionCoordinator {
-    func startupPlan(
+package extension TerminalRemoteSessionCoordinator {
+    package func startupPlan(
         for paneID: UUID,
         serverID: UUID,
         client: SSHClient,
@@ -35,7 +39,7 @@ extension TerminalRemoteSessionCoordinator {
         )
     }
 
-    func eternalTerminalStartupPlan(
+    package func eternalTerminalStartupPlan(
         for paneID: UUID,
         serverID: UUID,
         client: SSHClient,
@@ -270,7 +274,7 @@ extension TerminalRemoteSessionCoordinator {
         updateStatus(status, for: paneID)
     }
 
-    func clearResumeContext(for paneID: UUID) {
+    package func clearResumeContext(for paneID: UUID) {
         sessionState.updatePane(paneID, persist: true) {
             $0.remoteSessionResumeContext = nil
         }
@@ -335,7 +339,7 @@ extension TerminalRemoteSessionCoordinator {
         )
     }
 
-    func resolveWorkingDirectory(
+    package func resolveWorkingDirectory(
         for paneID: UUID,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?

@@ -5,15 +5,15 @@
 
 import Foundation
 
-nonisolated struct TerminalTitleSequenceParser {
+nonisolated package struct TerminalTitleSequenceParser {
     private var buffer: [UInt8] = []
     private let maxBufferLength: Int
 
-    init(maxBufferLength: Int = 4096) {
+    package init(maxBufferLength: Int = 4096) {
         self.maxBufferLength = maxBufferLength
     }
 
-    mutating func parse(_ data: Data) -> [String] {
+    mutating package func parse(_ data: Data) -> [String] {
         buffer.append(contentsOf: data)
 
         var titles: [String] = []

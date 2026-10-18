@@ -1,36 +1,42 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @MainActor
-struct CloudKitSyncClients {
-    let serverCloud: any ServerRemoteMutationClient
-    let terminalThemeCloud: any TerminalThemeCloudMutationClient
-    let terminalFontCloud: any TerminalFontCloudMutationClient
-    let terminalAccessoryCloud: any TerminalAccessoryCloudClient
-    let statsPreferencesCloud: any StatsPreferencesCloudClient
+package struct CloudKitSyncClients {
+    package let serverCloud: any ServerRemoteMutationClient
+    package let terminalThemeCloud: any TerminalThemeCloudMutationClient
+    package let terminalFontCloud: any TerminalFontCloudMutationClient
+    package let terminalAccessoryCloud: any TerminalAccessoryCloudClient
+    package let statsPreferencesCloud: any StatsPreferencesCloudClient
 }
 
 @MainActor
-struct CloudKitSyncComposition {
-    let coordinator: CloudKitSyncCoordinator
-    let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
-    let statsPreferencesResolutions: StatsPreferencesResolutionChannel
+package struct CloudKitSyncComposition {
+    package let coordinator: CloudKitSyncCoordinator
+    package let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
+    package let statsPreferencesResolutions: StatsPreferencesResolutionChannel
 }
 
 @MainActor
-struct CloudKitLiveSyncComposition {
-    let coordinator: CloudKitSyncCoordinator
-    let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
-    let statsPreferencesResolutions: StatsPreferencesResolutionChannel
-    let serverCloud: ServerCloudKitClient
-    let terminalThemeCloud: TerminalThemeCloudKitClient
-    let terminalFontCloud: TerminalFontCloudKitClient
-    let terminalAccessoryCloud: TerminalAccessoryCloudKitClient
-    let statsPreferencesCloud: StatsPreferencesCloudKitClient
+package struct CloudKitLiveSyncComposition {
+    package let coordinator: CloudKitSyncCoordinator
+    package let terminalAccessoryResolutions: TerminalAccessoryResolutionChannel
+    package let statsPreferencesResolutions: StatsPreferencesResolutionChannel
+    package let serverCloud: ServerCloudKitClient
+    package let terminalThemeCloud: TerminalThemeCloudKitClient
+    package let terminalFontCloud: TerminalFontCloudKitClient
+    package let terminalAccessoryCloud: TerminalAccessoryCloudKitClient
+    package let statsPreferencesCloud: StatsPreferencesCloudKitClient
 }
 
 @MainActor
-enum CloudKitSyncLiveComposition {
-    static func make(
+package enum CloudKitSyncLiveComposition {
+    static package func make(
         clients: CloudKitSyncClients,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
@@ -67,7 +73,7 @@ enum CloudKitSyncLiveComposition {
         )
     }
 
-    static func makeLive(
+    static package func makeLive(
         transport: any CloudKitRecordChangeTransport,
         terminalFontRepository: any TerminalFontAssetRepository,
         defaults: UserDefaults,

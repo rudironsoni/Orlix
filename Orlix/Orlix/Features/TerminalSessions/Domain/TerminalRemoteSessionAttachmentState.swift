@@ -1,6 +1,21 @@
 import Foundation
 
-nonisolated struct TerminalRemoteSessionAttachmentState: Codable, Equatable, Sendable {
-    let attachment: RemoteSessionAttachment
-    var managedSessionConfirmed: Bool
+nonisolated package struct TerminalRemoteSessionAttachmentState: Codable, Equatable, Sendable {
+    package let attachment: RemoteSessionAttachment
+    package var managedSessionConfirmed: Bool
+
+
+    package init(
+
+        attachment: RemoteSessionAttachment,
+
+        managedSessionConfirmed: Bool
+
+    ) {
+
+        self.attachment = attachment
+
+        self.managedSessionConfirmed = managedSessionConfirmed
+
+    }
 }

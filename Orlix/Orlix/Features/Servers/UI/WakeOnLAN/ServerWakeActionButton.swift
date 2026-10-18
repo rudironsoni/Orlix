@@ -1,15 +1,30 @@
 import SwiftUI
 
-struct ServerWakeActionButton: View {
-    let serverID: UUID
-    let onAction: () -> Void
+package struct ServerWakeActionButton: View {
+    package let serverID: UUID
+    package let onAction: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: onAction) {
             Label("Wake Server", systemImage: "power")
         }
         .accessibilityIdentifier(
             "orlix.serverList.wake.\(serverID.uuidString)"
         )
+    }
+
+
+    package init(
+
+        serverID: UUID,
+
+        onAction: @escaping () -> Void
+
+    ) {
+
+        self.serverID = serverID
+
+        self.onAction = onAction
+
     }
 }

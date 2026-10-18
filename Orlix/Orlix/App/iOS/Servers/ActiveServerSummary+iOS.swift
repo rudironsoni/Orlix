@@ -6,7 +6,13 @@
 import Foundation
 
 #if os(iOS)
-nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
+nonisolated package enum ActiveConnectionPresentationStatus: Equatable, Sendable {
     case disconnected
     case connecting
     case connected
@@ -14,7 +20,7 @@ nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
     case resumable
     case failed(String)
 
-    init(
+    package init(
         connectionState: ConnectionState,
         connectionMode: SSHConnectionMode?,
         hasResumeCheckpoint: Bool
@@ -39,7 +45,7 @@ nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
         }
     }
 
-    var label: String {
+    package var label: String {
         switch self {
         case .disconnected:
             String(localized: "Disconnected")
@@ -60,17 +66,17 @@ nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
     }
 }
 
-struct ActiveServerSummary: Identifiable {
-    let id: UUID
-    let terminalTab: TerminalTab?
-    let title: String
-    let status: ActiveConnectionPresentationStatus
-    let remoteSessionStatus: RemoteSessionStatus
-    let remoteSessionBackendName: String
-    let tabCount: Int
-    let targetView: ConnectionViewTabID
+package struct ActiveServerSummary: Identifiable {
+    package let id: UUID
+    package let terminalTab: TerminalTab?
+    package let title: String
+    package let status: ActiveConnectionPresentationStatus
+    package let remoteSessionStatus: RemoteSessionStatus
+    package let remoteSessionBackendName: String
+    package let tabCount: Int
+    package let targetView: ConnectionViewTabID
 
-    static func makeAll(
+    static package func makeAll(
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
         server: (UUID) -> Server?,

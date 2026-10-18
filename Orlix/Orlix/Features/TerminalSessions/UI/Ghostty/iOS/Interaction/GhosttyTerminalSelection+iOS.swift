@@ -7,11 +7,14 @@
 
 #if os(iOS)
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Native Text Selection
 
 extension GhosttyTerminalView: UITextInteractionDelegate {
-    func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
+    package func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
         guard hasActiveSelectionInteraction else { return false }
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)
         refreshNativeSelectionSnapshot()
@@ -22,7 +25,7 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
         return true
     }
 
-    func interactionWillBegin(_ interaction: UITextInteraction) {
+    package func interactionWillBegin(_ interaction: UITextInteraction) {
         let terminalInputWasActive = isTerminalTextInputActive
         nativeSelectionLifecycle.beginInteraction(restoreTerminalInput: terminalInputWasActive)
         if !isTerminalTextInputActive {
@@ -31,15 +34,15 @@ extension GhosttyTerminalView: UITextInteractionDelegate {
         refreshNativeSelectionSnapshot()
     }
 
-    func interactionDidEnd(_ interaction: UITextInteraction) {
+    package func interactionDidEnd(_ interaction: UITextInteraction) {
         let restorationID = nativeSelectionLifecycle.endInteraction()
         refreshNativeSelectionSnapshot()
         scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
 }
 
-extension GhosttyTerminalView {
-    @objc func handleNativeSelectionLongPress(_ recognizer: UILongPressGestureRecognizer) {
+package extension GhosttyTerminalView {
+    @objc package func handleNativeSelectionLongPress(_ recognizer: UILongPressGestureRecognizer) {
         switch recognizer.state {
         case .began:
             beginNativeSelection(at: recognizer.location(in: self))
@@ -140,7 +143,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func setupNativeTextSelectionInteractions() {
+    package func setupNativeTextSelectionInteractions() {
         let interaction = UITextInteraction(for: .editable)
         interaction.delegate = self
         interaction.textInput = imeProxyTextView
@@ -192,7 +195,7 @@ extension GhosttyTerminalView {
         imeProxyTextView.inputDelegate?.selectionDidChange(imeProxyTextView)
     }
 
-    func refreshNativeSelectionSnapshot(resetSelection: Bool = false) {
+    package func refreshNativeSelectionSnapshot(resetSelection: Bool = false) {
         nativeSelectionSnapshot = buildNativeSelectionSnapshot()
         updateNativeFindOverlay()
         if resetSelection {
@@ -269,7 +272,7 @@ extension GhosttyTerminalView {
         return line
     }
 
-    func setNativeSelectedRange(_ range: NSRange?) {
+    package func setNativeSelectedRange(_ range: NSRange?) {
         let clampedRange = range.map { nativeSelectionSnapshot.clampedRange($0) }
         if nativeSelectionLifecycle.selection == clampedRange {
             notifyNativeSelectionLayoutChange()
@@ -282,7 +285,7 @@ extension GhosttyTerminalView {
         scheduleNativeSelectionTerminalInputRestoration(restorationID)
     }
 
-    func scheduleNativeSelectionTerminalInputRestoration(_ restorationID: UUID?) {
+    package func scheduleNativeSelectionTerminalInputRestoration(_ restorationID: UUID?) {
         guard let restorationID else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self,
@@ -296,7 +299,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
+    package func isPointOnNativeSelectionHandleHitArea(_ point: CGPoint) -> Bool {
         guard let nativeSelectedRange = nativeSelectionLifecycle.selection,
               nativeSelectedRange.length > 0 else {
             return false
@@ -319,12 +322,12 @@ extension GhosttyTerminalView {
               nativeSelectedRange.length > 0 else { return nil }
         return nativeSelectionSnapshot.text(in: nativeSelectedRange)
     }
-    var usesNativeTouchSelection: Bool {
+    package var usesNativeTouchSelection: Bool {
         return UIDevice.current.userInterfaceIdiom == .phone
             || UIDevice.current.userInterfaceIdiom == .pad
     }
 
-    func selectionGridMetrics() -> (cols: Int, rows: Int, cellSize: CGSize)? {
+    package func selectionGridMetrics() -> (cols: Int, rows: Int, cellSize: CGSize)? {
         guard let terminalSize = terminalSize() else { return nil }
         let cols = max(Int(terminalSize.columns), 1)
         let rows = max(Int(terminalSize.rows), 1)
@@ -333,7 +336,7 @@ extension GhosttyTerminalView {
         return (cols, rows, CGSize(width: resolvedCellWidth, height: resolvedCellHeight))
     }
 
-    func currentSelectionText() -> String? {
+    package func currentSelectionText() -> String? {
         guard allowsHostTextSelection else { return nil }
 
         if let nativeSelectionText = selectedNativeSelectionText() {
@@ -359,12 +362,12 @@ extension GhosttyTerminalView {
         return String(decoding: buffer, as: UTF8.self)
     }
 
-    func copyTextToClipboard(_ text: String) {
+    package func copyTextToClipboard(_ text: String) {
         let cleaned = TerminalTextCleaner.cleanText(text, settings: .current())
         Clipboard.copy(cleaned)
     }
 
-    func selectAllVisibleText() {
+    package func selectAllVisibleText() {
         guard allowsHostTextSelection else { return }
 
         refreshNativeSelectionSnapshot()
@@ -372,7 +375,7 @@ extension GhosttyTerminalView {
         setNativeSelectedRange(NSRange(location: 0, length: nativeSelectionSnapshot.length))
     }
 
-    func clearSelectionAfterPaste() {
+    package func clearSelectionAfterPaste() {
         if nativeSelectedRange != nil {
             setNativeSelectedRange(nil)
         }

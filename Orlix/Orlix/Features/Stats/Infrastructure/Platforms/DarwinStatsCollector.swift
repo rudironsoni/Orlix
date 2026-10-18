@@ -1,12 +1,16 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Darwin/macOS Stats Collector
 
 /// Stats collector for macOS/Darwin systems using sysctl, vm_stat, etc.
-nonisolated struct DarwinStatsCollector: PlatformStatsCollector {
+nonisolated package struct DarwinStatsCollector: PlatformStatsCollector {
     private static let periodicProcessLimit = 24
 
-    func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
+    package func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
         let cmd = "uname -srm; echo '---SEP---'; hostname; echo '---SEP---'; sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1"
         let output = try await client.execute(cmd)
         let parts = output.components(separatedBy: "---SEP---")
@@ -18,7 +22,7 @@ nonisolated struct DarwinStatsCollector: PlatformStatsCollector {
         return (hostname, osInfo, cpuCores)
     }
 
-    func collectProfile(client: SSHClient) async throws -> HardwareProfile {
+    package func collectProfile(client: SSHClient) async throws -> HardwareProfile {
         let profileScript = """
             LC_ALL=C LANG=C; \
             hostname 2>/dev/null; echo '---SEP---'; \
@@ -65,7 +69,7 @@ nonisolated struct DarwinStatsCollector: PlatformStatsCollector {
         )
     }
 
-    func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
+    package func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
         var stats = ServerStats()
 
         // Batch commands for macOS
@@ -162,7 +166,7 @@ nonisolated struct DarwinStatsCollector: PlatformStatsCollector {
         return stats
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         let systemInfo = try await getSystemInfo(client: client)
         let totalMemoryOutput = try await client.execute("sysctl -n hw.memsize 2>/dev/null")
         let totalMemory = UInt64(totalMemoryOutput.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0

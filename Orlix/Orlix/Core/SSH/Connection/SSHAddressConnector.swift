@@ -1,12 +1,15 @@
 import Darwin
 import Foundation
 
-nonisolated enum SSHAddressFamily: String, Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum SSHAddressFamily: String, Equatable, Sendable {
     case ipv4
     case ipv6
     case other
 
-    init(rawValue: Int32) {
+    package init(rawValue: Int32) {
         switch rawValue {
         case AF_INET:
             self = .ipv4
@@ -18,21 +21,21 @@ nonisolated enum SSHAddressFamily: String, Equatable, Sendable {
     }
 }
 
-nonisolated enum SSHAddressCandidatePolicy {
-    static let fallbackDelay: Duration = .milliseconds(250)
-    static let maximumCandidateCount = 8
+nonisolated package enum SSHAddressCandidatePolicy {
+    static package let fallbackDelay: Duration = .milliseconds(250)
+    static package let maximumCandidateCount = 8
 
-    static func interleavedFamilies(_ families: [SSHAddressFamily]) -> [SSHAddressFamily] {
+    static package func interleavedFamilies(_ families: [SSHAddressFamily]) -> [SSHAddressFamily] {
         interleaved(families) { $0 }
     }
 
-    static func launchOffsets(candidateCount: Int) -> [Duration] {
+    static package func launchOffsets(candidateCount: Int) -> [Duration] {
         guard candidateCount > 0 else { return [] }
         let boundedCount = min(candidateCount, maximumCandidateCount)
         return (0..<boundedCount).map { fallbackDelay * $0 }
     }
 
-    static func interleaved<Value>(
+    static package func interleaved<Value>(
         _ values: [Value],
         family: (Value) -> SSHAddressFamily
     ) -> [Value] {
@@ -58,21 +61,21 @@ nonisolated enum SSHAddressCandidatePolicy {
     }
 }
 
-nonisolated enum SSHAddressConnector {
-    struct Candidate: Sendable {
-        let family: SSHAddressFamily
-        let socketFamily: Int32
-        let socketType: Int32
-        let protocolNumber: Int32
-        let address: Data
-        let addressLength: socklen_t
+nonisolated package enum SSHAddressConnector {
+    package struct Candidate: Sendable {
+        package let family: SSHAddressFamily
+        package let socketFamily: Int32
+        package let socketType: Int32
+        package let protocolNumber: Int32
+        package let address: Data
+        package let addressLength: socklen_t
     }
 
     private struct PendingSocket {
-        let descriptor: Int32
-        let family: SSHAddressFamily
-        let originalFlags: Int32
-        let attemptToken: SSHStartupTrace.Token?
+        package let descriptor: Int32
+        package let family: SSHAddressFamily
+        package let originalFlags: Int32
+        package let attemptToken: SSHStartupTrace.Token?
     }
 
     private final class ResolutionState: @unchecked Sendable {
@@ -85,7 +88,7 @@ nonisolated enum SSHAddressConnector {
         private let lock = NSLock()
         private var status = Status.waiting
 
-        func install(_ continuation: CheckedContinuation<[Candidate], Error>) -> Bool {
+        package func install(_ continuation: CheckedContinuation<[Candidate], Error>) -> Bool {
             let wasCancelled = lock.withLock { () -> Bool in
                 guard case .waiting = status else { return true }
                 status = .suspended(continuation)
@@ -97,7 +100,7 @@ nonisolated enum SSHAddressConnector {
             return !wasCancelled
         }
 
-        func complete(_ result: Result<[Candidate], Error>) {
+        package func complete(_ result: Result<[Candidate], Error>) {
             let continuation = lock.withLock { () -> CheckedContinuation<[Candidate], Error>? in
                 guard case .suspended(let continuation) = status else { return nil }
                 status = .finished
@@ -106,7 +109,7 @@ nonisolated enum SSHAddressConnector {
             continuation?.resume(with: result)
         }
 
-        func cancel() {
+        package func cancel() {
             let continuation = lock.withLock { () -> CheckedContinuation<[Candidate], Error>? in
                 switch status {
                 case .waiting:
@@ -123,7 +126,7 @@ nonisolated enum SSHAddressConnector {
         }
     }
 
-    static func connect(
+    static package func connect(
         host: String,
         port: Int,
         trace: SSHStartupTrace?
@@ -141,7 +144,7 @@ nonisolated enum SSHAddressConnector {
         return try await connect(candidates: candidates, trace: trace)
     }
 
-    static func connect(
+    static package func connect(
         candidates: [Candidate],
         trace: SSHStartupTrace?,
         timeout: Duration = .seconds(8)
@@ -275,7 +278,7 @@ nonisolated enum SSHAddressConnector {
         throw SSHError.connectionFailed("Failed to connect: \(message)")
     }
 
-    static func resolvedCandidates(host: String, port: Int) throws -> [Candidate] {
+    static package func resolvedCandidates(host: String, port: Int) throws -> [Candidate] {
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
         hints.ai_socktype = SOCK_STREAM
@@ -309,7 +312,7 @@ nonisolated enum SSHAddressConnector {
         return candidates
     }
 
-    static func resolutionFlags(for host: String) -> Int32 {
+    static package func resolutionFlags(for host: String) -> Int32 {
         var ipv4Address = in_addr()
         if host.withCString({ inet_pton(AF_INET, $0, &ipv4Address) }) == 1 {
             return AI_NUMERICHOST | AI_NUMERICSERV

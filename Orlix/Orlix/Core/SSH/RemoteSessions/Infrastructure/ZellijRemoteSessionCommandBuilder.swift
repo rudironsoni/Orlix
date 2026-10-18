@@ -1,9 +1,12 @@
 import Foundation
 
-nonisolated enum ZellijRemoteSessionCommandBuilder {
-    static let availableMarker = "__VVTERM_ZELLIJ_OK__"
-    static let missingMarker = "__VVTERM_ZELLIJ_NO__"
-    static let pathMarker = "__VVTERM_ZELLIJ_PATH__"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ZellijRemoteSessionCommandBuilder {
+    static package let availableMarker = "__VVTERM_ZELLIJ_OK__"
+    static package let missingMarker = "__VVTERM_ZELLIJ_NO__"
+    static package let pathMarker = "__VVTERM_ZELLIJ_PATH__"
 
     private static let maximumLaunchCommandBytes = 96 * 1_024
     private static let clearedEnvironment: Set<String> = [
@@ -14,7 +17,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         "ZELLIJ_SESSION_NAME"
     ]
 
-    static func availabilityProbeCommand() -> String {
+    static package func availabilityProbeCommand() -> String {
         let script = """
         \(RemoteTerminalBootstrap.shellPathExport());
         orlixZellij="$(command -v zellij 2>/dev/null || true)";
@@ -41,7 +44,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func listCommand(
+    static package func listCommand(
         scope: RemoteSessionListScope,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -175,7 +178,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         return try wrappedBoundedLaunchScript(script)
     }
 
-    static func listPanesCommand(
+    static package func listPanesCommand(
         attachment: RemoteSessionAttachment,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -205,7 +208,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func launchCommand(
+    static package func launchCommand(
         request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -367,7 +370,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         return try wrappedBoundedLaunchScript(script)
     }
 
-    static func presenceProbe(
+    static package func presenceProbe(
         attachment: RemoteSessionAttachment,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionPresenceProbe {
@@ -424,7 +427,7 @@ nonisolated enum ZellijRemoteSessionCommandBuilder {
         )
     }
 
-    static func killManagedCommand(
+    static package func killManagedCommand(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> String {

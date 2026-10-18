@@ -1,10 +1,13 @@
 import CloudKit
 import Foundation
 
-nonisolated enum TerminalFontCloudKitRecordCodec {
-    static let recordType = "TerminalFont"
-    static let assetKey = "asset"
-    static let metadataKeys = [
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum TerminalFontCloudKitRecordCodec {
+    static package let recordType = "TerminalFont"
+    static package let assetKey = "asset"
+    static package let metadataKeys = [
         "familyNames",
         "originalFilename",
         "fileSize",
@@ -12,7 +15,7 @@ nonisolated enum TerminalFontCloudKitRecordCodec {
         "deletedAt"
     ]
 
-    static func font(from record: CKRecord) -> TerminalFont? {
+    static package func font(from record: CKRecord) -> TerminalFont? {
         guard let familyNames = record["familyNames"] as? [String],
               let originalFilename = record["originalFilename"] as? String,
               let fileSize = (record["fileSize"] as? NSNumber)?.int64Value else {
@@ -34,11 +37,11 @@ nonisolated enum TerminalFontCloudKitRecordCodec {
         return font
     }
 
-    static func assetURL(from record: CKRecord) -> URL? {
+    static package func assetURL(from record: CKRecord) -> URL? {
         (record[assetKey] as? CKAsset)?.fileURL
     }
 
-    static func record(
+    static package func record(
         for font: TerminalFont,
         assetURL: URL?,
         in zoneID: CKRecordZone.ID
@@ -62,11 +65,11 @@ nonisolated enum TerminalFontCloudKitRecordCodec {
     }
 }
 
-nonisolated enum TerminalFontPreferenceCloudKitRecordCodec {
-    static let recordType = "TerminalFontPreference"
-    static let recordName = "terminal-font-preference.v1"
+nonisolated package enum TerminalFontPreferenceCloudKitRecordCodec {
+    static package let recordType = "TerminalFontPreference"
+    static package let recordName = "terminal-font-preference.v1"
 
-    static func preference(from record: CKRecord) -> TerminalFontPreference? {
+    static package func preference(from record: CKRecord) -> TerminalFontPreference? {
         guard let primaryFamily = record["primaryFamilyName"] as? String else {
             return nil
         }
@@ -79,11 +82,11 @@ nonisolated enum TerminalFontPreferenceCloudKitRecordCodec {
         )
     }
 
-    static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
+    static package func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
         CKRecord.ID(recordName: recordName, zoneID: zoneID)
     }
 
-    static func record(
+    static package func record(
         for preference: TerminalFontPreference,
         in zoneID: CKRecordZone.ID
     ) -> CKRecord {

@@ -7,9 +7,9 @@ import UIKit
 #endif
 
 #if os(macOS)
-extension SwiftUI.EventModifiers {
+package extension SwiftUI.EventModifiers {
     /// Initialize EventModifiers from NSEvent.ModifierFlags
-    init(nsFlags: NSEvent.ModifierFlags) {
+    package init(nsFlags: NSEvent.ModifierFlags) {
         var modifiers = SwiftUI.EventModifiers()
         if nsFlags.contains(.shift) { modifiers.insert(.shift) }
         if nsFlags.contains(.control) { modifiers.insert(.control) }
@@ -20,9 +20,9 @@ extension SwiftUI.EventModifiers {
 }
 #endif
 
-extension Ghostty {
+package extension Ghostty {
     // Input types split into separate files: Ghostty.Key.swift, Ghostty.MouseEvent.swift, Ghostty.KeyEvent.swift, Ghostty.Mods.swift
-    struct Input {}
+    package struct Input {}
 
     #if os(macOS)
     // MARK: Keyboard Shortcuts
@@ -35,7 +35,7 @@ extension Ghostty {
     /// (F1, F2, ...) with a KeyboardShortcut. This doesn't represent a practical issue because input
     /// handling for Ghostty is handled at a lower level (usually). This function should generally only
     /// be used for things like NSMenu that only support keyboard shortcuts anyways.
-    static func keyboardShortcut(for trigger: ghostty_input_trigger_s) -> KeyboardShortcut? {
+    static package func keyboardShortcut(for trigger: ghostty_input_trigger_s) -> KeyboardShortcut? {
         let key: KeyEquivalent
         switch (trigger.tag) {
         case GHOSTTY_TRIGGER_PHYSICAL:
@@ -63,7 +63,7 @@ extension Ghostty {
     // MARK: Mods
 
     /// Returns the event modifier flags set for the Ghostty mods enum.
-    nonisolated static func eventModifierFlags(mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
+    nonisolated static package func eventModifierFlags(mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
         var flags = NSEvent.ModifierFlags(rawValue: 0);
         if (mods.rawValue & GHOSTTY_MODS_SHIFT.rawValue != 0) { flags.insert(.shift) }
         if (mods.rawValue & GHOSTTY_MODS_CTRL.rawValue != 0) { flags.insert(.control) }
@@ -73,7 +73,7 @@ extension Ghostty {
     }
 
     /// Translate event modifier flags to a ghostty mods enum.
-    nonisolated static func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+    nonisolated static package func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
         var mods: UInt32 = GHOSTTY_MODS_NONE.rawValue
 
         if (flags.contains(.shift)) { mods |= GHOSTTY_MODS_SHIFT.rawValue }
@@ -96,7 +96,7 @@ extension Ghostty {
     /// A map from the Ghostty key enum to the keyEquivalent string for shortcuts. Note that
     /// not all ghostty key enum values are represented here because not all of them can be
     /// mapped to a KeyEquivalent.
-    static let keyToEquivalent: [UInt32 : KeyEquivalent] = [
+    static package let keyToEquivalent: [UInt32 : KeyEquivalent] = [
         // Function keys
         GHOSTTY_KEY_ARROW_UP.rawValue: .upArrow,
         GHOSTTY_KEY_ARROW_DOWN.rawValue: .downArrow,
@@ -117,7 +117,7 @@ extension Ghostty {
     // MARK: iOS Modifier Conversion
 
     /// Translate UIKeyModifierFlags to a ghostty mods enum.
-    nonisolated static func ghosttyMods(_ flags: UIKeyModifierFlags) -> ghostty_input_mods_e {
+    nonisolated static package func ghosttyMods(_ flags: UIKeyModifierFlags) -> ghostty_input_mods_e {
         var mods: UInt32 = GHOSTTY_MODS_NONE.rawValue
 
         if flags.contains(.shift) { mods |= GHOSTTY_MODS_SHIFT.rawValue }

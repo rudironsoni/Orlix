@@ -5,14 +5,14 @@
 
 import Foundation
 
-nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var name: String
-    var content: String
-    var updatedAt: Date
-    var deletedAt: Date?
+nonisolated package struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
+    package let id: UUID
+    package var name: String
+    package var content: String
+    package var updatedAt: Date
+    package var deletedAt: Date?
 
-    init(
+    package init(
         id: UUID = UUID(),
         name: String,
         content: String,
@@ -26,11 +26,11 @@ nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
         self.deletedAt = deletedAt
     }
 
-    var isDeleted: Bool {
+    package var isDeleted: Bool {
         deletedAt != nil
     }
 
-    var validationState: TerminalThemeValidationState {
+    package var validationState: TerminalThemeValidationState {
         do {
             let content = try TerminalThemeValidator.validateAndNormalizeThemeContent(content)
             _ = try TerminalThemeValidator.validateAndNormalizeThemeName(name)
@@ -40,19 +40,19 @@ nonisolated struct TerminalTheme: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
-    var canApply: Bool {
+    package var canApply: Bool {
         if case .ready = validationState { return true }
         return false
     }
 }
 
-nonisolated enum TerminalThemeValidationState: Equatable, Sendable {
+nonisolated package enum TerminalThemeValidationState: Equatable, Sendable {
     case ready(normalizedContent: String)
     case needsRepair
 }
 
-nonisolated enum TerminalThemeMergePolicy {
-    static func merge(local: [TerminalTheme], remote: [TerminalTheme]) -> [TerminalTheme] {
+nonisolated package enum TerminalThemeMergePolicy {
+    static package func merge(local: [TerminalTheme], remote: [TerminalTheme]) -> [TerminalTheme] {
         var themesByID: [UUID: TerminalTheme] = [:]
         for theme in local {
             if let existing = themesByID[theme.id], existing.updatedAt >= theme.updatedAt {
@@ -74,9 +74,32 @@ nonisolated enum TerminalThemeMergePolicy {
     }
 }
 
-nonisolated struct TerminalThemePreference: Codable, Equatable, Sendable {
-    var darkThemeName: String
-    var lightThemeName: String
-    var usePerAppearanceTheme: Bool
-    var updatedAt: Date
+nonisolated package struct TerminalThemePreference: Codable, Equatable, Sendable {
+    package var darkThemeName: String
+    package var lightThemeName: String
+    package var usePerAppearanceTheme: Bool
+    package var updatedAt: Date
+
+
+    package init(
+
+        darkThemeName: String,
+
+        lightThemeName: String,
+
+        usePerAppearanceTheme: Bool,
+
+        updatedAt: Date
+
+    ) {
+
+        self.darkThemeName = darkThemeName
+
+        self.lightThemeName = lightThemeName
+
+        self.usePerAppearanceTheme = usePerAppearanceTheme
+
+        self.updatedAt = updatedAt
+
+    }
 }

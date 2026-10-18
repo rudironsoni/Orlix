@@ -2,8 +2,11 @@ import Foundation
 import Network
 import Darwin
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class LocalSSHDiscoveryService: NSObject {
+final package class LocalSSHDiscoveryService: NSObject {
     private let bonjourTypes = ["_ssh._tcp.", "_sftp-ssh._tcp."]
     private let scanDuration: TimeInterval = 6
     private let serviceResolveTimeout: TimeInterval = 2
@@ -21,18 +24,18 @@ final class LocalSSHDiscoveryService: NSObject {
     private var serviceRunIDs: [ObjectIdentifier: UUID] = [:]
     private let makeRunID: () -> UUID
 
-    init(makeRunID: @escaping () -> UUID = UUID.init) {
+    package init(makeRunID: @escaping () -> UUID = UUID.init) {
         self.makeRunID = makeRunID
         super.init()
     }
 
-    var ownerReleaseStopRequest: LocalSSHDiscoveryStopRequest {
+    package var ownerReleaseStopRequest: LocalSSHDiscoveryStopRequest {
         LocalSSHDiscoveryStopRequest {
             self.stopScan()
         }
     }
 
-    func startScan() -> AsyncStream<LocalSSHDiscoveryEvent> {
+    package func startScan() -> AsyncStream<LocalSSHDiscoveryEvent> {
         stopScan()
         let runID = makeRunID()
 
@@ -53,7 +56,7 @@ final class LocalSSHDiscoveryService: NSObject {
         }
     }
 
-    func stopScan() {
+    package func stopScan() {
         guard let runID = runOwnership.activeRunID else { return }
         stopScan(runID: runID)
     }
@@ -278,7 +281,7 @@ final class LocalSSHDiscoveryService: NSObject {
         return enumerateHosts(address: address, netmask: mask)
     }
 
-    nonisolated static func enumerateHosts(address: UInt32, netmask: UInt32) -> [String] {
+    nonisolated static package func enumerateHosts(address: UInt32, netmask: UInt32) -> [String] {
         let prefixLength = netmask.nonzeroBitCount
 
         if prefixLength < 24 {
@@ -292,7 +295,7 @@ final class LocalSSHDiscoveryService: NSObject {
         return hosts(in: network, broadcast: broadcast, excluding: address)
     }
 
-    nonisolated static func hosts(
+    nonisolated static package func hosts(
         in network: UInt32,
         broadcast: UInt32,
         excluding currentAddress: UInt32
@@ -354,9 +357,9 @@ final class LocalSSHDiscoveryService: NSObject {
 // MARK: - NetServiceBrowserDelegate
 
 extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
-    func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {}
+    package func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {}
 
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+    package func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         guard let runID = browserRunIDs[ObjectIdentifier(browser)],
               runOwnership.owns(runID: runID) else {
             return
@@ -368,7 +371,7 @@ extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
         }
     }
 
-    func netServiceBrowser(
+    package func netServiceBrowser(
         _ browser: NetServiceBrowser,
         didFind service: NetService,
         moreComing: Bool
@@ -390,7 +393,7 @@ extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
 // MARK: - NetServiceDelegate
 
 extension LocalSSHDiscoveryService: NetServiceDelegate {
-    func netServiceDidResolveAddress(_ sender: NetService) {
+    package func netServiceDidResolveAddress(_ sender: NetService) {
         guard let runID = serviceRunIDs[ObjectIdentifier(sender)],
               runOwnership.owns(runID: runID) else {
             sender.delegate = nil
@@ -425,7 +428,7 @@ extension LocalSSHDiscoveryService: NetServiceDelegate {
         sender.stop()
     }
 
-    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
+    package func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
         guard let runID = serviceRunIDs[ObjectIdentifier(sender)],
               runOwnership.owns(runID: runID) else {
             sender.delegate = nil

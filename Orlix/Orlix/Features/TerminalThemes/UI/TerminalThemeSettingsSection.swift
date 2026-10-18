@@ -1,6 +1,9 @@
 import SwiftUI
 
-struct TerminalThemeSettingsSection: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalThemeSettingsSection: View {
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
 
     @State private var customThemeErrorMessage: String?
@@ -83,7 +86,7 @@ struct TerminalThemeSettingsSection: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         Section("Theme") {
             Toggle(
                 "Separate Light and Dark Themes",

@@ -1,8 +1,11 @@
 #if os(macOS)
 import SwiftUI
 
-extension ManageCustomThemesSheet {
-    var platformBody: some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension ManageCustomThemesSheet {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Custom Themes") {
                 onClose()

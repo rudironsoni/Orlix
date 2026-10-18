@@ -1,31 +1,34 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private struct PendingCustomThemeSource: Identifiable {
-    let id = UUID()
-    var suggestedName: String
-    var content: String
+    package let id = UUID()
+    package var suggestedName: String
+    package var content: String
 }
 
-struct ManageCustomThemesSheet: View {
-    let customThemes: [TerminalTheme]
-    let themeSelection: TerminalThemeSelection
-    let onClose: () -> Void
-    let onSuggestThemeName: (String) -> String
-    let onCreateTheme: (String, String, TerminalThemeSelectionTarget) throws -> Void
-    let onApplyTheme: (String, TerminalThemeSelectionTarget) -> Void
-    let onDelete: (UUID) -> Void
-    let onSaveEdit: (UUID, String, String) throws -> Void
+package struct ManageCustomThemesSheet: View {
+    package let customThemes: [TerminalTheme]
+    package let themeSelection: TerminalThemeSelection
+    package let onClose: () -> Void
+    package let onSuggestThemeName: (String) -> String
+    package let onCreateTheme: (String, String, TerminalThemeSelectionTarget) throws -> Void
+    package let onApplyTheme: (String, TerminalThemeSelectionTarget) -> Void
+    package let onDelete: (UUID) -> Void
+    package let onSaveEdit: (UUID, String, String) throws -> Void
 
     @State private var showingThemeImporter = false
     @State private var showingThemeBuilder = false
     @State private var pendingCustomThemeSource: PendingCustomThemeSource?
     @State private var customThemeErrorMessage: String?
-    @State var themePendingDeletion: TerminalTheme?
-    @State var themePendingEdit: TerminalTheme?
-    @State var hoveredThemeID: UUID?
+    @State package var themePendingDeletion: TerminalTheme?
+    @State package var themePendingEdit: TerminalTheme?
+    @State package var hoveredThemeID: UUID?
 
-    var sortedThemes: [TerminalTheme] {
+    package var sortedThemes: [TerminalTheme] {
         customThemes.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -58,7 +61,7 @@ struct ManageCustomThemesSheet: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
         .sheet(item: editThemeSheetBinding) { theme in
             ThemeBuilderSheet(
@@ -130,7 +133,7 @@ struct ManageCustomThemesSheet: View {
         .adaptiveSoftScrollEdges()
     }
 
-    var customThemesEmptyState: some View {
+    package var customThemesEmptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "paintpalette")
                 .font(.system(size: 44))
@@ -152,13 +155,13 @@ struct ManageCustomThemesSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    var customThemeCompatibilityNote: some View {
+    package var customThemeCompatibilityNote: some View {
         Text("Clipboard content or imported files must be Ghostty-compatible theme text.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
 
-    func assignmentLabel(for theme: String) -> String? {
+    package func assignmentLabel(for theme: String) -> String? {
         if themeSelection.usePerAppearanceTheme {
             let usesDark = themeSelection.darkThemeName == theme
             let usesLight = themeSelection.lightThemeName == theme
@@ -179,7 +182,7 @@ struct ManageCustomThemesSheet: View {
     }
 
     @ViewBuilder
-    func applyMenuItems(themeName: String) -> some View {
+    package func applyMenuItems(themeName: String) -> some View {
         if let theme = customThemes.first(where: { $0.name == themeName }), !theme.canApply {
             Button("Repair Theme") {
                 themePendingEdit = theme
@@ -202,7 +205,7 @@ struct ManageCustomThemesSheet: View {
     }
 
     @ViewBuilder
-    var createThemeMenuItems: some View {
+    package var createThemeMenuItems: some View {
         Button("Paste from Clipboard") {
             importThemeFromClipboard()
         }
@@ -263,7 +266,7 @@ struct ManageCustomThemesSheet: View {
         }
     }
 
-    func applyThemeSelection(
+    package func applyThemeSelection(
         themeName: String,
         applyTarget: TerminalThemeSelectionTarget
     ) {

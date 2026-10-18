@@ -2,16 +2,16 @@
 import SwiftUI
 import UIKit
 
-enum TerminalRouteModalPresentationPreferenceKey: PreferenceKey {
-    static let defaultValue = false
+package enum TerminalRouteModalPresentationPreferenceKey: PreferenceKey {
+    static package let defaultValue = false
 
-    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+    static package func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = value || nextValue()
     }
 }
 
-extension View {
-    func terminalCloseConfirmationAlert(
+package extension View {
+    package func terminalCloseConfirmationAlert(
         isPresented: Binding<Bool>,
         message: String,
         onCancel: @escaping () -> Void = {},
@@ -34,16 +34,16 @@ extension View {
 }
 
 private struct TerminalCloseConfirmationPresenter: UIViewControllerRepresentable {
-    @Binding var isPresented: Bool
-    let message: String
-    let onCancel: () -> Void
-    let onClose: () -> Void
+    @Binding package var isPresented: Bool
+    package let message: String
+    package let onCancel: () -> Void
+    package let onClose: () -> Void
 
-    func makeUIViewController(context: Context) -> TerminalCloseAlertHostController {
+    package func makeUIViewController(context: Context) -> TerminalCloseAlertHostController {
         TerminalCloseAlertHostController()
     }
 
-    func updateUIViewController(
+    package func updateUIViewController(
         _ controller: TerminalCloseAlertHostController,
         context: Context
     ) {
@@ -67,7 +67,7 @@ private struct TerminalCloseConfirmationPresenter: UIViewControllerRepresentable
         )
     }
 
-    static func dismantleUIViewController(
+    static package func dismantleUIViewController(
         _ controller: TerminalCloseAlertHostController,
         coordinator: ()
     ) {
@@ -76,13 +76,13 @@ private struct TerminalCloseConfirmationPresenter: UIViewControllerRepresentable
 }
 
 private struct TerminalCloseAlertRequest {
-    let message: String
-    let cancel: () -> Void
-    let close: () -> Void
+    package let message: String
+    package let cancel: () -> Void
+    package let close: () -> Void
 }
 
-enum TerminalCloseAlertFactory {
-    static func make(
+package enum TerminalCloseAlertFactory {
+    static package func make(
         message: String,
         onCancel: @escaping () -> Void,
         onClose: @escaping () -> Void
@@ -113,7 +113,7 @@ private final class TerminalCloseAlertHostController: UIViewController {
     private var request: TerminalCloseAlertRequest?
     private var closeAlert: UIAlertController?
 
-    override func viewDidAppear(_ animated: Bool) {
+    override package func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if
             let request,
@@ -128,7 +128,7 @@ private final class TerminalCloseAlertHostController: UIViewController {
         synchronizePresentation()
     }
 
-    func update(request: TerminalCloseAlertRequest?) {
+    package func update(request: TerminalCloseAlertRequest?) {
         self.request = request
         synchronizePresentation()
     }

@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated extension DarwinStatsCollector {
-    static var statsBatchCommand: String {
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
+nonisolated package extension DarwinStatsCollector {
+    static package var statsBatchCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand("""
         export LC_ALL=C LANG=C
         sysctl -n vm.loadavg 2>/dev/null || uptime | sed 's/.*load average[s]*: //'; echo '---SEP---'
@@ -13,19 +16,19 @@ nonisolated extension DarwinStatsCollector {
         """)
     }
 
-    static var topCommand: String {
+    static package var topCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(
             "export LC_ALL=C LANG=C; top -l 1 -n 0 -s 0 2>/dev/null | grep 'CPU usage' || echo 'CPU usage: 0% user, 0% sys, 100% idle'"
         )
     }
 
-    static var dfCommand: String {
+    static package var dfCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(
             "export LC_ALL=C LANG=C; df -m 2>/dev/null | grep -E '^/dev'"
         )
     }
 
-    static var diskutilListCommand: String {
+    static package var diskutilListCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(
             "export LC_ALL=C LANG=C; /usr/sbin/diskutil list -plist 2>/dev/null"
         )
@@ -128,7 +131,7 @@ nonisolated extension DarwinStatsCollector {
         """
     }
 
-    static var processorLoadCommand: String {
+    static package var processorLoadCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(processorLoadScript)
     }
 }

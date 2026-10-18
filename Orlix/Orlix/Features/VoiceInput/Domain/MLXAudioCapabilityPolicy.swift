@@ -1,11 +1,11 @@
-nonisolated enum MLXAudioPlatform: Sendable {
+nonisolated package enum MLXAudioPlatform: Sendable {
     case appleMobile
     case macOS
     case unsupported
 }
 
-nonisolated enum MLXAudioCapabilityPolicy {
-    static func isSupported(
+nonisolated package enum MLXAudioCapabilityPolicy {
+    static package func isSupported(
         platform: MLXAudioPlatform,
         supportsNonuniformThreadgroups: Bool?
     ) -> Bool {

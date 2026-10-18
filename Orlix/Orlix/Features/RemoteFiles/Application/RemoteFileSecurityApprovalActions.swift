@@ -1,21 +1,35 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
-struct RemoteFileSecurityApprovalActions {
-    typealias PendingRequest = @MainActor (
+package struct RemoteFileSecurityApprovalActions {
+    package typealias PendingRequest = @MainActor (
         _ error: Error,
         _ server: Server
     ) -> ServerSecurityApprovalRequest?
-    typealias Approve = @MainActor (_ request: ServerSecurityApprovalRequest) -> Bool
-    typealias Reject = @MainActor (_ request: ServerSecurityApprovalRequest) -> Void
+    package typealias Approve = @MainActor (_ request: ServerSecurityApprovalRequest) -> Bool
+    package typealias Reject = @MainActor (_ request: ServerSecurityApprovalRequest) -> Void
 
-    let pendingRequest: PendingRequest
-    let approve: Approve
-    let reject: Reject
+    package let pendingRequest: PendingRequest
+    package let approve: Approve
+    package let reject: Reject
 
-    static let unavailable = RemoteFileSecurityApprovalActions(
+    static package let unavailable = RemoteFileSecurityApprovalActions(
         pendingRequest: { _, _ in nil },
         approve: { _ in false },
         reject: { _ in }
     )
+
+    package init(
+        pendingRequest: @escaping PendingRequest,
+        approve: @escaping Approve,
+        reject: @escaping Reject
+    ) {
+        self.pendingRequest = pendingRequest
+        self.approve = approve
+        self.reject = reject
+    }
 }

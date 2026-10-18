@@ -1,6 +1,9 @@
 import Foundation
 
-nonisolated protocol RemoteSessionBackend: Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package protocol RemoteSessionBackend: Sendable {
     var metadata: RemoteSessionBackendMetadata { get }
 
     func managedIdentifier(
@@ -44,7 +47,7 @@ nonisolated protocol RemoteSessionBackend: Sendable {
     ) async -> String?
 }
 
-extension RemoteSessionBackend {
+package extension RemoteSessionBackend {
     nonisolated func managedIdentifier(
         deviceID: String,
         entityID: UUID,
@@ -59,10 +62,10 @@ extension RemoteSessionBackend {
     }
 }
 
-nonisolated struct RemoteSessionBackendRegistry: Sendable {
+nonisolated package struct RemoteSessionBackendRegistry: Sendable {
     private let backends: [RemoteSessionBackendIdentifier: any RemoteSessionBackend]
 
-    init(backends: [any RemoteSessionBackend]) {
+    package init(backends: [any RemoteSessionBackend]) {
         var indexed: [RemoteSessionBackendIdentifier: any RemoteSessionBackend] = [:]
         for backend in backends {
             precondition(indexed[backend.metadata.identifier] == nil)
@@ -71,31 +74,31 @@ nonisolated struct RemoteSessionBackendRegistry: Sendable {
         self.backends = indexed
     }
 
-    var metadata: [RemoteSessionBackendMetadata] {
+    package var metadata: [RemoteSessionBackendMetadata] {
         backends.values.map(\.metadata).sorted {
             $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
     }
 
-    func backend(
+    package func backend(
         for identifier: RemoteSessionBackendIdentifier
     ) -> (any RemoteSessionBackend)? {
         backends[identifier]
     }
 }
 
-actor RemoteSessionClient {
-    nonisolated let registry: RemoteSessionBackendRegistry
+package actor RemoteSessionClient {
+    nonisolated package let registry: RemoteSessionBackendRegistry
 
-    init(registry: RemoteSessionBackendRegistry) {
+    package init(registry: RemoteSessionBackendRegistry) {
         self.registry = registry
     }
 
-    nonisolated var backendMetadata: [RemoteSessionBackendMetadata] {
+    nonisolated package var backendMetadata: [RemoteSessionBackendMetadata] {
         registry.metadata
     }
 
-    nonisolated func managedIdentifier(
+    nonisolated package func managedIdentifier(
         deviceID: String,
         entityID: UUID,
         serverName: String,
@@ -111,7 +114,7 @@ actor RemoteSessionClient {
         )
     }
 
-    func availability(
+    package func availability(
         for backendIdentifier: RemoteSessionBackendIdentifier,
         using client: SSHClient
     ) async -> RemoteSessionAvailability {
@@ -121,7 +124,7 @@ actor RemoteSessionClient {
         return await backend.availability(using: client)
     }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -136,7 +139,7 @@ actor RemoteSessionClient {
         )
     }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -151,7 +154,7 @@ actor RemoteSessionClient {
         )
     }
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) async throws -> RemoteSessionBackendLaunchPlan {
@@ -169,7 +172,7 @@ actor RemoteSessionClient {
         return try backend.launchPlan(for: request, runtime: runtime)
     }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -190,13 +193,13 @@ actor RemoteSessionClient {
         )
     }
 
-    func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
+    package func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
         let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
         guard let data = payload.data(using: .utf8) else { return }
         try await client.write(data, to: shellId)
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime explicitRuntime: RemoteSessionRuntime? = nil
@@ -214,7 +217,7 @@ actor RemoteSessionClient {
         await backend.killSession(identifier, using: client, runtime: runtime)
     }
 
-    func cleanupSessions(
+    package func cleanupSessions(
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -236,7 +239,7 @@ actor RemoteSessionClient {
         }
     }
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime explicitRuntime: RemoteSessionRuntime? = nil

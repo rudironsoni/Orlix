@@ -1,10 +1,13 @@
 import SwiftUI
 
-struct TerminalEmptyStateView: View {
-    let server: Server?
-    let onNewTerminal: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalEmptyStateView: View {
+    package let server: Server?
+    package let onNewTerminal: () -> Void
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -40,5 +43,13 @@ struct TerminalEmptyStateView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    package init(
+        server: Server? = nil,
+        onNewTerminal: @escaping () -> Void
+    ) {
+        self.server = server
+        self.onNewTerminal = onNewTerminal
     }
 }

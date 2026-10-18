@@ -1,21 +1,24 @@
 import Foundation
 
-nonisolated enum EternalTerminalRuntimeEvent: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
+nonisolated package enum EternalTerminalRuntimeEvent: Equatable, Sendable {
     case connectionAttempted
     case connectionReconnecting
     case connectionFailed(reason: String)
 }
 
-nonisolated protocol EternalTerminalRemoteSessionKilling: Sendable {
+nonisolated package protocol EternalTerminalRemoteSessionKilling: Sendable {
     func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async
 }
 
-nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
+nonisolated package struct EternalTerminalRuntimeDependencies: Sendable {
     private let recordEvent: @MainActor @Sendable (EternalTerminalRuntimeEvent) -> Void
     private let remoteSessionKiller: any EternalTerminalRemoteSessionKilling
-    let sessionPreparer: any EternalTerminalSessionPreparing
+    package let sessionPreparer: any EternalTerminalSessionPreparing
 
-    init(
+    package init(
         recordEvent: @MainActor @Sendable @escaping (EternalTerminalRuntimeEvent) -> Void,
         remoteSessionKiller: any EternalTerminalRemoteSessionKilling,
         sessionPreparer: any EternalTerminalSessionPreparing
@@ -26,11 +29,11 @@ nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
     }
 
     @MainActor
-    func record(_ event: EternalTerminalRuntimeEvent) {
+    package func record(_ event: EternalTerminalRuntimeEvent) {
         recordEvent(event)
     }
 
-    func killRemoteSession(
+    package func killRemoteSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient
     ) async {
@@ -39,8 +42,8 @@ nonisolated struct EternalTerminalRuntimeDependencies: Sendable {
 }
 
 #if DEBUG
-extension EternalTerminalRuntimeDependencies {
-    static var testing: Self {
+package extension EternalTerminalRuntimeDependencies {
+    static package var testing: Self {
         Self(
             recordEvent: { _ in },
             remoteSessionKiller: NoOpEternalTerminalRemoteSessionKiller(),
@@ -50,12 +53,12 @@ extension EternalTerminalRuntimeDependencies {
 }
 
 private actor NoOpEternalTerminalRemoteSessionKiller: EternalTerminalRemoteSessionKilling {
-    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {}
+    package func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {}
 }
 
 @MainActor
 private struct UnavailableEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
-    func prepareSession(
+    package func prepareSession(
         request: EternalTerminalSessionRequest,
         startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
         isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
@@ -63,6 +66,6 @@ private struct UnavailableEternalTerminalSessionPreparer: EternalTerminalSession
         throw CancellationError()
     }
 
-    func discardResumeState(for paneId: UUID) throws {}
+    package func discardResumeState(for paneId: UUID) throws {}
 }
 #endif

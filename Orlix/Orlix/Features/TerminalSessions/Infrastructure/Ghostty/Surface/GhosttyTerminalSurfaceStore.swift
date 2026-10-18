@@ -6,28 +6,28 @@ import UIKit
 
 /// Owns the one current terminal surface identity for each pane.
 @MainActor
-final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
-    @Published private(set) var latestChange: TerminalSurfaceStoreChange?
+final package class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
+    @Published package private(set) var latestChange: TerminalSurfaceStoreChange?
 
     private var surfacesByPane: [UUID: any TerminalSurface] = [:]
 
-    var changes: AnyPublisher<TerminalSurfaceStoreChange, Never> {
+    package var changes: AnyPublisher<TerminalSurfaceStoreChange, Never> {
         $latestChange
             .compactMap { $0 }
             .eraseToAnyPublisher()
     }
 
-    func surface(for paneId: UUID) -> (any TerminalSurface)? {
+    package func surface(for paneId: UUID) -> (any TerminalSurface)? {
         surfacesByPane[paneId]
     }
 
-    func isRegistered(_ surface: any TerminalSurface, for paneId: UUID) -> Bool {
+    package func isRegistered(_ surface: any TerminalSurface, for paneId: UUID) -> Bool {
         guard let current = surfacesByPane[paneId] else { return false }
         return current === surface
     }
 
     @discardableResult
-    func register(_ surface: any TerminalSurface, for paneId: UUID) -> Bool {
+    package func register(_ surface: any TerminalSurface, for paneId: UUID) -> Bool {
         if isRegistered(surface, for: paneId) {
             return false
         }
@@ -47,7 +47,7 @@ final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
     }
 
     @discardableResult
-    func remove(
+    package func remove(
         for paneId: UUID,
         prepareForRemoval: (any TerminalSurface) -> Void
     ) -> (any TerminalSurface)? {
@@ -62,7 +62,7 @@ final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
     }
 
     @discardableResult
-    func unregister(
+    package func unregister(
         _ surface: any TerminalSurface,
         for paneId: UUID,
         prepareForRemoval: (any TerminalSurface) -> Void,
@@ -84,7 +84,7 @@ final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
         return removedCurrentSurface
     }
 
-    func drain(
+    package func drain(
         prepareForRemoval: (UUID, any TerminalSurface) -> Void,
         cleanup: (any TerminalSurface) -> Void
     ) {
@@ -102,16 +102,18 @@ final class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
             surfaceIdentitiesByPane: drained.mapValues(ObjectIdentifier.init)
         )
     }
+
+    package init() {}
 }
 
-extension TerminalSurfaceStoring {
-    func ghosttySurface(for paneId: UUID) -> GhosttyTerminalView? {
+package extension TerminalSurfaceStoring {
+    package func ghosttySurface(for paneId: UUID) -> GhosttyTerminalView? {
         surface(for: paneId) as? GhosttyTerminalView
     }
 }
 
 extension GhosttyTerminalView: TerminalSurface {
-    var terminalGeometry: TerminalSurfaceGeometry? {
+    package var terminalGeometry: TerminalSurfaceGeometry? {
         guard let size = terminalSize() else { return nil }
         let columns = Int(size.columns)
         let rows = Int(size.rows)
@@ -123,7 +125,7 @@ extension GhosttyTerminalView: TerminalSurface {
         )
     }
 
-    var isHostingSceneActive: Bool? {
+    package var isHostingSceneActive: Bool? {
         #if os(iOS)
         guard let scene = window?.windowScene else { return nil }
         return scene.activationState == .foregroundActive
@@ -132,15 +134,15 @@ extension GhosttyTerminalView: TerminalSurface {
         #endif
     }
 
-    func installRichPasteInterceptor(_ interceptor: @escaping () -> Bool) {
+    package func installRichPasteInterceptor(_ interceptor: @escaping () -> Bool) {
         richPasteInterceptor = { _ in interceptor() }
     }
 
     #if os(iOS)
-    var keyboardInputSession: any TerminalKeyboardInputSession { self }
-    var isAttachedToWindow: Bool { window != nil }
+    package var keyboardInputSession: any TerminalKeyboardInputSession { self }
+    package var isAttachedToWindow: Bool { window != nil }
 
-    func setLifecycleCallbacks(_ callbacks: TerminalSurfaceLifecycleCallbacks?) {
+    package func setLifecycleCallbacks(_ callbacks: TerminalSurfaceLifecycleCallbacks?) {
         onWindowAttachmentChange = callbacks?.windowAttachmentChanged
         onTerminalDirectTouch = callbacks?.directTouch
         onKeyboardAccessoryHideRequested = callbacks?.keyboardAccessoryHideRequested

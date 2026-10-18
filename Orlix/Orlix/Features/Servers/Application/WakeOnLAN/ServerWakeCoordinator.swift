@@ -1,7 +1,10 @@
 import Combine
 import Foundation
 
-nonisolated enum WakeOnLANSendError: Error, Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum WakeOnLANSendError: Error, Equatable, Sendable {
     case localNetworkAccessDenied
     case interfaceEnumerationFailed(code: Int32)
     case noEligibleNetworkInterface
@@ -12,32 +15,46 @@ nonisolated enum WakeOnLANSendError: Error, Equatable, Sendable {
     case incompleteDatagram(address: String, expected: Int, actual: Int)
 }
 
-nonisolated protocol WakeOnLANPacketSending: Sendable {
+nonisolated package protocol WakeOnLANPacketSending: Sendable {
     func send(configuration: WakeOnLANConfiguration) async throws
 }
 
 @MainActor
-struct ServerWakeDependencies {
-    let sender: any WakeOnLANPacketSending
-    let macAddressResolver: any WakeOnLANMACAddressResolving
-    let mutations: any ServerMutationRepository
-    let credentials: any ServerCredentialRepository
-    let makeID: @Sendable () -> UUID
+package struct ServerWakeDependencies {
+    package let sender: any WakeOnLANPacketSending
+    package let macAddressResolver: any WakeOnLANMACAddressResolving
+    package let mutations: any ServerMutationRepository
+    package let credentials: any ServerCredentialRepository
+    package let makeID: @Sendable () -> UUID
+
+    package init(
+        sender: any WakeOnLANPacketSending,
+        macAddressResolver: any WakeOnLANMACAddressResolving,
+        mutations: any ServerMutationRepository,
+        credentials: any ServerCredentialRepository,
+        makeID: @escaping @Sendable () -> UUID
+    ) {
+        self.sender = sender
+        self.macAddressResolver = macAddressResolver
+        self.mutations = mutations
+        self.credentials = credentials
+        self.makeID = makeID
+    }
 }
 
-nonisolated enum ServerWakeFailure: Equatable, Sendable {
+nonisolated package enum ServerWakeFailure: Equatable, Sendable {
     case macAddressUnavailable
     case send(WakeOnLANSendError)
     case unexpected
 }
 
-nonisolated enum ServerWakePhase: Equatable, Sendable {
+nonisolated package enum ServerWakePhase: Equatable, Sendable {
     case idle
     case sending(id: UUID)
     case succeeded(id: UUID)
     case failed(id: UUID, ServerWakeFailure)
 
-    var operationID: UUID? {
+    package var operationID: UUID? {
         switch self {
         case .idle:
             return nil
@@ -50,13 +67,13 @@ nonisolated enum ServerWakePhase: Equatable, Sendable {
 }
 
 @MainActor
-final class ServerWakeCoordinator: ObservableObject {
+final package class ServerWakeCoordinator: ObservableObject {
     @Published private(set) var phase: ServerWakePhase = .idle
 
     private let dependencies: ServerWakeDependencies
     private var task: Task<Void, Never>?
 
-    init(dependencies: ServerWakeDependencies) {
+    package init(dependencies: ServerWakeDependencies) {
         self.dependencies = dependencies
     }
 
@@ -64,7 +81,7 @@ final class ServerWakeCoordinator: ObservableObject {
         task?.cancel()
     }
 
-    func start(for server: Server) {
+    package func start(for server: Server) {
         task?.cancel()
 
         let operationID = dependencies.makeID()
@@ -101,12 +118,12 @@ final class ServerWakeCoordinator: ObservableObject {
         }
     }
 
-    func startAutomaticallyIfEnabled(for server: Server) {
+    package func startAutomaticallyIfEnabled(for server: Server) {
         guard server.autoWakeOnLANEnabled else { return }
         start(for: server)
     }
 
-    func cancel(operationID: UUID? = nil) {
+    package func cancel(operationID: UUID? = nil) {
         if let operationID, phase.operationID != operationID {
             return
         }
@@ -115,7 +132,7 @@ final class ServerWakeCoordinator: ObservableObject {
         phase = .idle
     }
 
-    func dismissOutcome(operationID: UUID) {
+    package func dismissOutcome(operationID: UUID) {
         guard phase.operationID == operationID else { return }
         switch phase {
         case .succeeded, .failed:

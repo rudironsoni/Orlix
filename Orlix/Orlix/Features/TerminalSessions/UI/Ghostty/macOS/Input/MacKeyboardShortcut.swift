@@ -1,21 +1,24 @@
 #if os(macOS)
 import AppKit
 
-nonisolated struct MacKeyboardShortcut: Sendable {
-    let keyCode: UInt16
-    let modifiers: NSEvent.ModifierFlags
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct MacKeyboardShortcut: Sendable {
+    package let keyCode: UInt16
+    package let modifiers: NSEvent.ModifierFlags
 
-    init?(key: Ghostty.Input.Key, modifiers: NSEvent.ModifierFlags) {
+    package init?(key: Ghostty.Input.Key, modifiers: NSEvent.ModifierFlags) {
         guard let keyCode = key.keyCode else { return nil }
         self.keyCode = keyCode
         self.modifiers = Self.normalize(modifiers)
     }
 
-    func matches(_ event: NSEvent) -> Bool {
+    package func matches(_ event: NSEvent) -> Bool {
         matches(keyCode: event.keyCode, modifiers: event.modifierFlags)
     }
 
-    func matches(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
+    package func matches(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
         keyCode == self.keyCode && Self.normalize(modifiers) == self.modifiers
     }
 
@@ -26,15 +29,15 @@ nonisolated struct MacKeyboardShortcut: Sendable {
     }
 }
 
-nonisolated enum MacTerminalShortcut {
-    static let copy = MacKeyboardShortcut(key: .c, modifiers: .command)!
-    static let paste = MacKeyboardShortcut(key: .v, modifiers: .command)!
-    static let richPaste = MacKeyboardShortcut(key: .v, modifiers: .control)!
-    static let toggleVoiceRecording = MacKeyboardShortcut(key: .m, modifiers: [.command, .shift])!
+nonisolated package enum MacTerminalShortcut {
+    static package let copy = MacKeyboardShortcut(key: .c, modifiers: .command)!
+    static package let paste = MacKeyboardShortcut(key: .v, modifiers: .command)!
+    static package let richPaste = MacKeyboardShortcut(key: .v, modifiers: .control)!
+    static package let toggleVoiceRecording = MacKeyboardShortcut(key: .m, modifiers: [.command, .shift])!
 }
 
-nonisolated enum MacTerminalShortcutRouting {
-    static func shouldHandle(
+nonisolated package enum MacTerminalShortcutRouting {
+    static package func shouldHandle(
         _ shortcut: MacKeyboardShortcut,
         keyCode: UInt16,
         modifiers: NSEvent.ModifierFlags,
@@ -43,7 +46,7 @@ nonisolated enum MacTerminalShortcutRouting {
         isFirstResponder && shortcut.matches(keyCode: keyCode, modifiers: modifiers)
     }
 
-    static func zoomAction(
+    static package func zoomAction(
         keyCode: UInt16,
         characters: String?,
         modifiers: NSEvent.ModifierFlags,

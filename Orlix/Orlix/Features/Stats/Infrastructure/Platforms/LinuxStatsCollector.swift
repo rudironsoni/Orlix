@@ -1,17 +1,21 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Linux Stats Collector
 
 /// Stats collector for Linux systems using /proc filesystem
-nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
-    let bytesPerKiB: UInt64 = 1_024
-    let bytesPerMiB: UInt64 = 1_048_576
-    let bytesPerGiB: UInt64 = 1_073_741_824
-    let bytesPerTiB: UInt64 = 1_099_511_627_776
-    let bytesPerPiB: UInt64 = 1_125_899_906_842_624
+nonisolated package struct LinuxStatsCollector: PlatformStatsCollector {
+    package let bytesPerKiB: UInt64 = 1_024
+    package let bytesPerMiB: UInt64 = 1_048_576
+    package let bytesPerGiB: UInt64 = 1_073_741_824
+    package let bytesPerTiB: UInt64 = 1_099_511_627_776
+    package let bytesPerPiB: UInt64 = 1_125_899_906_842_624
     private let periodicProcessLimit = 24
 
-    func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
+    package func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
         let output = try await client.execute(Self.systemInfoCommand)
         let parts = output.components(separatedBy: "---SEP---")
 
@@ -22,7 +26,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
         return (hostname, osInfo, cpuCores)
     }
 
-    func collectProfile(client: SSHClient) async throws -> HardwareProfile {
+    package func collectProfile(client: SSHClient) async throws -> HardwareProfile {
         let output = try await client.execute(Self.profileCommand, timeout: .seconds(5))
         let sections = output.components(separatedBy: "---SEP---")
         let hostname = sections[safe: 0]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -49,7 +53,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
         )
     }
 
-    func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
+    package func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
         var stats = ServerStats()
 
         let batchOutput = try await client.execute(Self.statsBatchCommand)
@@ -248,7 +252,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
         return stats
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         let systemInfo = try await getSystemInfo(client: client)
         let memoryOutput = try await client.execute(Self.memoryInfoCommand)
         let memory = parseProcMeminfo(memoryOutput)
@@ -262,7 +266,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
         ).processes
     }
 
-    func collectGPUSamplesIfNeeded(client: SSHClient, context: StatsCollectionContext) async -> [GPUSample] {
+    package func collectGPUSamplesIfNeeded(client: SSHClient, context: StatsCollectionContext) async -> [GPUSample] {
         guard context.shouldCollectGPU() else {
             return context.getGPUSamples()
         }
@@ -282,7 +286,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
         return samples
     }
 
-    func volumeMetadata(
+    package func volumeMetadata(
         client: SSHClient,
         context: StatsCollectionContext
     ) async -> [String: VolumeCollectionMetadata] {
@@ -298,7 +302,7 @@ nonisolated struct LinuxStatsCollector: PlatformStatsCollector {
 }
 
 nonisolated private extension Array {
-    subscript(safe index: Int) -> Element? {
+    package subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
 }

@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension TerminalAccessoryValidationError: LocalizedError {
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .customActionLimitReached:
             return String(

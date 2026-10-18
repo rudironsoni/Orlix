@@ -2,18 +2,21 @@
 import AdServices
 import Foundation
 
-nonisolated struct AppleAdsAttributionRecord: Codable, Equatable, Sendable {
-    let isAttributed: Bool
-    let organizationID: Int64?
-    let campaignID: Int64?
-    let adGroupID: Int64?
-    let keywordID: Int64?
-    let adID: Int64?
-    let countryOrRegion: String?
-    let claimType: String?
-    let conversionType: String?
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct AppleAdsAttributionRecord: Codable, Equatable, Sendable {
+    package let isAttributed: Bool
+    package let organizationID: Int64?
+    package let campaignID: Int64?
+    package let adGroupID: Int64?
+    package let keywordID: Int64?
+    package let adID: Int64?
+    package let countryOrRegion: String?
+    package let claimType: String?
+    package let conversionType: String?
 
-    init(
+    package init(
         isAttributed: Bool,
         organizationID: Int64? = nil,
         campaignID: Int64? = nil,
@@ -35,7 +38,7 @@ nonisolated struct AppleAdsAttributionRecord: Codable, Equatable, Sendable {
         self.conversionType = isAttributed ? conversionType?.lowercased() : nil
     }
 
-    var analyticsPayload: [String: JSONValue] {
+    package var analyticsPayload: [String: JSONValue] {
         var payload: [String: JSONValue] = [
             "is_apple_ads_attributed": .bool(isAttributed)
         ]
@@ -69,41 +72,41 @@ nonisolated struct AppleAdsAttributionRecord: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated protocol AppleAdsAttributionStorage: Sendable {
+nonisolated package protocol AppleAdsAttributionStorage: Sendable {
     func isAnalyticsEnabled() async -> Bool
     func cachedRecord() async -> AppleAdsAttributionRecord?
     func save(_ record: AppleAdsAttributionRecord) async throws
 }
 
-nonisolated protocol AppleAdsAttributionTokenProviding: Sendable {
+nonisolated package protocol AppleAdsAttributionTokenProviding: Sendable {
     func attributionToken() async throws -> String
 }
 
-nonisolated protocol AppleAdsAttributionHTTPClient: Sendable {
+nonisolated package protocol AppleAdsAttributionHTTPClient: Sendable {
     func exchange(token: String) async throws -> AppleAdsAttributionHTTPResponse
 }
 
-nonisolated protocol AppleAdsAttributionSleeping: Sendable {
+nonisolated package protocol AppleAdsAttributionSleeping: Sendable {
     func sleep(for duration: Duration) async throws
 }
 
-nonisolated struct AppleAdsAttributionHTTPResponse: Sendable {
-    let data: Data
-    let statusCode: Int
+nonisolated package struct AppleAdsAttributionHTTPResponse: Sendable {
+    package let data: Data
+    package let statusCode: Int
 }
 
 private nonisolated struct AppleAdsAttributionPayload: Decodable, Sendable {
-    let attribution: Bool
-    let orgId: Int64?
-    let campaignId: Int64?
-    let adGroupId: Int64?
-    let keywordId: Int64?
-    let adId: Int64?
-    let countryOrRegion: String?
-    let claimType: String?
-    let conversionType: String?
+    package let attribution: Bool
+    package let orgId: Int64?
+    package let campaignId: Int64?
+    package let adGroupId: Int64?
+    package let keywordId: Int64?
+    package let adId: Int64?
+    package let countryOrRegion: String?
+    package let claimType: String?
+    package let conversionType: String?
 
-    var record: AppleAdsAttributionRecord {
+    package var record: AppleAdsAttributionRecord {
         AppleAdsAttributionRecord(
             isAttributed: attribution,
             organizationID: orgId,
@@ -128,16 +131,16 @@ private nonisolated enum AppleAdsAttributionResolutionState: Sendable {
     case finished(AppleAdsAttributionRecord?)
 }
 
-nonisolated struct UserDefaultsAppleAdsAttributionStorage: AppleAdsAttributionStorage {
-    static let recordKey = "analytics.appleAdsAttribution"
+nonisolated package struct UserDefaultsAppleAdsAttributionStorage: AppleAdsAttributionStorage {
+    static package let recordKey = "analytics.appleAdsAttribution"
 
     private let suiteName: String?
 
-    init(suiteName: String? = nil) {
+    package init(suiteName: String? = nil) {
         self.suiteName = suiteName
     }
 
-    func isAnalyticsEnabled() async -> Bool {
+    package func isAnalyticsEnabled() async -> Bool {
         let defaults = defaults()
         guard defaults.object(forKey: AnalyticsTracker.enabledKey) != nil else {
             return true
@@ -145,12 +148,12 @@ nonisolated struct UserDefaultsAppleAdsAttributionStorage: AppleAdsAttributionSt
         return defaults.bool(forKey: AnalyticsTracker.enabledKey)
     }
 
-    func cachedRecord() async -> AppleAdsAttributionRecord? {
+    package func cachedRecord() async -> AppleAdsAttributionRecord? {
         guard let data = defaults().data(forKey: Self.recordKey) else { return nil }
         return try? JSONDecoder().decode(AppleAdsAttributionRecord.self, from: data)
     }
 
-    func save(_ record: AppleAdsAttributionRecord) async throws {
+    package func save(_ record: AppleAdsAttributionRecord) async throws {
         let data = try JSONEncoder().encode(record)
         defaults().set(data, forKey: Self.recordKey)
     }
@@ -160,8 +163,8 @@ nonisolated struct UserDefaultsAppleAdsAttributionStorage: AppleAdsAttributionSt
     }
 }
 
-nonisolated struct SystemAppleAdsAttributionTokenProvider: AppleAdsAttributionTokenProviding {
-    func attributionToken() async throws -> String {
+nonisolated package struct SystemAppleAdsAttributionTokenProvider: AppleAdsAttributionTokenProviding {
+    package func attributionToken() async throws -> String {
         // Apple's token API is synchronous and may perform system work. Keep it
         // off the main actor without making the attribution service MainActor-bound.
         try await Task.detached(priority: .utility) {
@@ -170,10 +173,10 @@ nonisolated struct SystemAppleAdsAttributionTokenProvider: AppleAdsAttributionTo
     }
 }
 
-nonisolated struct SystemAppleAdsAttributionHTTPClient: AppleAdsAttributionHTTPClient {
+nonisolated package struct SystemAppleAdsAttributionHTTPClient: AppleAdsAttributionHTTPClient {
     private static let endpoint = URL(string: "https://api-adservices.apple.com/api/v1/")!
 
-    func exchange(token: String) async throws -> AppleAdsAttributionHTTPResponse {
+    package func exchange(token: String) async throws -> AppleAdsAttributionHTTPResponse {
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.httpBody = Data(token.utf8)
@@ -191,14 +194,14 @@ nonisolated struct SystemAppleAdsAttributionHTTPClient: AppleAdsAttributionHTTPC
     }
 }
 
-nonisolated struct AppleAdsAttributionTaskSleeper: AppleAdsAttributionSleeping {
-    func sleep(for duration: Duration) async throws {
+nonisolated package struct AppleAdsAttributionTaskSleeper: AppleAdsAttributionSleeping {
+    package func sleep(for duration: Duration) async throws {
         try await Task.sleep(for: duration)
     }
 }
 
-actor AppleAdsAttributionService {
-    static let shared = AppleAdsAttributionService()
+package actor AppleAdsAttributionService {
+    static package let shared = AppleAdsAttributionService()
 
     private let storage: any AppleAdsAttributionStorage
     private let tokenProvider: any AppleAdsAttributionTokenProviding
@@ -208,7 +211,7 @@ actor AppleAdsAttributionService {
     private let maximumAttempts: Int
     private var resolutionState = AppleAdsAttributionResolutionState.idle
 
-    init(
+    package init(
         storage: any AppleAdsAttributionStorage = UserDefaultsAppleAdsAttributionStorage(),
         tokenProvider: any AppleAdsAttributionTokenProviding = SystemAppleAdsAttributionTokenProvider(),
         httpClient: any AppleAdsAttributionHTTPClient = SystemAppleAdsAttributionHTTPClient(),
@@ -224,11 +227,11 @@ actor AppleAdsAttributionService {
         self.maximumAttempts = max(1, maximumAttempts)
     }
 
-    func prepare() async {
+    package func prepare() async {
         _ = await attributionRecord()
     }
 
-    func attributionRecord() async -> AppleAdsAttributionRecord? {
+    package func attributionRecord() async -> AppleAdsAttributionRecord? {
         guard await storage.isAnalyticsEnabled() else { return nil }
         if let cached = await storage.cachedRecord() {
             return cached

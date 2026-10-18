@@ -1,16 +1,35 @@
 import Foundation
 
-nonisolated enum RemoteFileConflictPolicy: String, Sendable {
+nonisolated package enum RemoteFileConflictPolicy: String, Sendable {
     case replaceExisting
     case keepBoth
 }
 
-nonisolated struct RemoteFileConflictResolution: Equatable, Sendable {
-    let originalName: String
-    let resolvedName: String
-    let existingEntry: RemoteFileEntry?
+nonisolated package struct RemoteFileConflictResolution: Equatable, Sendable {
+    package let originalName: String
+    package let resolvedName: String
+    package let existingEntry: RemoteFileEntry?
 
-    var hasConflict: Bool {
+    package var hasConflict: Bool {
         existingEntry != nil
+    }
+
+
+    package init(
+
+        originalName: String,
+
+        resolvedName: String,
+
+        existingEntry: RemoteFileEntry? = nil
+
+    ) {
+
+        self.originalName = originalName
+
+        self.resolvedName = resolvedName
+
+        self.existingEntry = existingEntry
+
     }
 }

@@ -1,8 +1,12 @@
 import SwiftUI
 
-struct RemoteSessionAttachPromptSheet: View {
-    let prompt: RemoteSessionAttachPrompt
-    let onConfirm: (RemoteSessionAttachSelection) -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package struct RemoteSessionAttachPromptSheet: View {
+    package let prompt: RemoteSessionAttachPrompt
+    package let onConfirm: (RemoteSessionAttachSelection) -> Void
 
     private var hasSessions: Bool {
         !prompt.existingSessions.isEmpty
@@ -12,7 +16,7 @@ struct RemoteSessionAttachPromptSheet: View {
         String(format: String(localized: "Choose %@ session"), prompt.backendName)
     }
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             contentBody

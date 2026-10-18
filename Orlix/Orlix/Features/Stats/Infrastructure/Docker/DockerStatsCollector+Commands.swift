@@ -1,7 +1,11 @@
 import Foundation
 
-nonisolated extension DockerStatsCollector {
-    func psCommands(platform: RemotePlatform, environment: RemoteEnvironment, limit: Int?) -> [String] {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package extension DockerStatsCollector {
+    package func psCommands(platform: RemotePlatform, environment: RemoteEnvironment, limit: Int?) -> [String] {
         if let limit {
             return [
                 psCommand(platform: platform, environment: environment, limit: nil, allContainers: false),
@@ -13,7 +17,7 @@ nonisolated extension DockerStatsCollector {
         ]
     }
 
-    func psCommand(
+    package func psCommand(
         platform: RemotePlatform,
         environment: RemoteEnvironment,
         limit: Int?,
@@ -31,12 +35,12 @@ nonisolated extension DockerStatsCollector {
         return parts.joined(separator: " ")
     }
 
-    func statsCommand(platform: RemotePlatform, environment: RemoteEnvironment, containerIDs: [String]) -> String {
+    package func statsCommand(platform: RemotePlatform, environment: RemoteEnvironment, containerIDs: [String]) -> String {
         let ids = containerIDs.map(safeContainerArgument).joined(separator: " ")
         return "docker stats --no-stream --format \(dockerFormatArgument(platform: platform, environment: environment)) \(ids) 2>&1"
     }
 
-    func actionCommand(_ action: DockerContainerAction, container: DockerContainer) throws -> String {
+    package func actionCommand(_ action: DockerContainerAction, container: DockerContainer) throws -> String {
         let id = safeContainerArgument(container.id)
         guard !id.isEmpty else {
             throw DockerControlError.missingContainerID
@@ -51,7 +55,7 @@ nonisolated extension DockerStatsCollector {
         }
     }
 
-    func shellCommand(
+    package func shellCommand(
         for dockerCommand: String,
         platform: RemotePlatform,
         environment: RemoteEnvironment

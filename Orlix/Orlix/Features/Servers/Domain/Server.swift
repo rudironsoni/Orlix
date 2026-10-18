@@ -2,36 +2,36 @@ import Foundation
 
 // MARK: - Server Model
 
-nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
-    let id: UUID
-    var workspaceId: UUID
-    var environment: ServerEnvironment
-    var name: String
-    var host: String
-    var port: Int
+nonisolated package struct Server: Identifiable, Codable, Hashable, Sendable {
+    package let id: UUID
+    package var workspaceId: UUID
+    package var environment: ServerEnvironment
+    package var name: String
+    package var host: String
+    package var port: Int
     /// TCP port exposed by etserver. SSH still uses `port` for bootstrap.
-    var eternalTerminalPort: Int
-    var username: String
-    var connectionMode: SSHConnectionMode
-    var authMethod: AuthMethod
-    var cloudflareAccessMode: CloudflareAccessMode?
-    var cloudflareTeamDomainOverride: String?
-    var cloudflareAppDomainOverride: String?
-    var wakeOnLANConfiguration: WakeOnLANConfiguration?
-    var autoWakeOnLANEnabled: Bool
-    var tags: [String]
-    var notes: String?
-    var lastConnected: Date?
-    var isFavorite: Bool
-    var requiresBiometricUnlock: Bool
-    var remoteSessionEnabledOverride: Bool?
-    var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
-    var remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior?
-    var remoteShellStartupAction: RemoteShellStartupAction?
-    var createdAt: Date
-    var updatedAt: Date
+    package var eternalTerminalPort: Int
+    package var username: String
+    package var connectionMode: SSHConnectionMode
+    package var authMethod: AuthMethod
+    package var cloudflareAccessMode: CloudflareAccessMode?
+    package var cloudflareTeamDomainOverride: String?
+    package var cloudflareAppDomainOverride: String?
+    package var wakeOnLANConfiguration: WakeOnLANConfiguration?
+    package var autoWakeOnLANEnabled: Bool
+    package var tags: [String]
+    package var notes: String?
+    package var lastConnected: Date?
+    package var isFavorite: Bool
+    package var requiresBiometricUnlock: Bool
+    package var remoteSessionEnabledOverride: Bool?
+    package var remoteSessionBackendIdentifier: RemoteSessionBackendIdentifier
+    package var remoteSessionStartupBehaviorOverride: RemoteSessionStartupBehavior?
+    package var remoteShellStartupAction: RemoteShellStartupAction?
+    package var createdAt: Date
+    package var updatedAt: Date
 
-    init(
+    package init(
         id: UUID = UUID(),
         workspaceId: UUID,
         environment: ServerEnvironment = .production,
@@ -91,7 +91,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         self.updatedAt = updatedAt
     }
 
-    var displayAddress: String {
+    package var displayAddress: String {
         if port == 22 {
             return "\(username)@\(host)"
         }
@@ -129,7 +129,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         case updatedAt
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         workspaceId = try container.decode(UUID.self, forKey: .workspaceId)
@@ -193,7 +193,7 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(workspaceId, forKey: .workspaceId)
@@ -239,81 +239,120 @@ nonisolated struct Server: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-nonisolated enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated package enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case standard
     case tailscale
     case mosh
     case eternalTerminal
     case cloudflare
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = (try? container.decode(String.self)) ?? Self.standard.rawValue
         self = Self(rawValue: rawValue) ?? .standard
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
 }
 
-nonisolated enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated package enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case oauth
     case serviceToken
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
 }
 
 // MARK: - Authentication Method
 
-nonisolated enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated package enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
     case password
     case sshKey
     case sshKeyWithPassphrase
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
 }
 
 // MARK: - Server Credentials (for authentication)
 
-nonisolated struct ServerCredentials: Sendable {
-    let serverId: UUID
-    var credentialBinding: ServerCredentialBinding?
-    var password: String?
-    var privateKey: Data?
-    var publicKey: Data?
-    var passphrase: String?
-    var cloudflareClientID: String?
-    var cloudflareClientSecret: String?
+nonisolated package struct ServerCredentials: Sendable {
+    package let serverId: UUID
+    package var credentialBinding: ServerCredentialBinding?
+    package var password: String?
+    package var privateKey: Data?
+    package var publicKey: Data?
+    package var passphrase: String?
+    package var cloudflareClientID: String?
+    package var cloudflareClientSecret: String?
 
-    var sshKey: Data? {
+    package var sshKey: Data? {
         get { privateKey }
         set { privateKey = newValue }
     }
 
-    var sshPassphrase: String? {
+    package var sshPassphrase: String? {
         get { passphrase }
         set { passphrase = newValue }
+    }
+
+
+    package init(
+
+        serverId: UUID,
+
+        credentialBinding: ServerCredentialBinding? = nil,
+
+        password: String? = nil,
+
+        privateKey: Data? = nil,
+
+        publicKey: Data? = nil,
+
+        passphrase: String? = nil,
+
+        cloudflareClientID: String? = nil,
+
+        cloudflareClientSecret: String? = nil
+
+    ) {
+
+        self.serverId = serverId
+
+        self.credentialBinding = credentialBinding
+
+        self.password = password
+
+        self.privateKey = privateKey
+
+        self.publicKey = publicKey
+
+        self.passphrase = passphrase
+
+        self.cloudflareClientID = cloudflareClientID
+
+        self.cloudflareClientSecret = cloudflareClientSecret
+
     }
 }
 
 // MARK: - Stored SSH Key Entry (reusable keys in Keychain)
 
-struct SSHKeyEntry: Identifiable, Codable, Hashable {
-    let id: UUID
-    var name: String
-    var hasPassphrase: Bool
-    var createdAt: Date
-    var updatedAt: Date
-    var keyType: SSHKeyType?
-    var publicKey: String?
+package struct SSHKeyEntry: Identifiable, Codable, Hashable {
+    package let id: UUID
+    package var name: String
+    package var hasPassphrase: Bool
+    package var createdAt: Date
+    package var updatedAt: Date
+    package var keyType: SSHKeyType?
+    package var publicKey: String?
 
-    init(
+    package init(
         id: UUID = UUID(),
         name: String,
         hasPassphrase: Bool = false,
@@ -341,7 +380,7 @@ struct SSHKeyEntry: Identifiable, Codable, Hashable {
         case publicKey
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)

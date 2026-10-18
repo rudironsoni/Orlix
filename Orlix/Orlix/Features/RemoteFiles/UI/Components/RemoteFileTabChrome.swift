@@ -1,15 +1,18 @@
 import SwiftUI
 
-struct RemoteFileTabsEmptyState: View {
-    let server: Server?
-    let onNewTab: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileTabsEmptyState: View {
+    package let server: Server?
+    package let onNewTab: () -> Void
 
-    init(server: Server? = nil, onNewTab: @escaping () -> Void) {
+    package init(server: Server? = nil, onNewTab: @escaping () -> Void) {
         self.server = server
         self.onNewTab = onNewTab
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 

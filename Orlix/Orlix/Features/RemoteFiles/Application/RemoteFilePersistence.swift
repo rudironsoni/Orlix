@@ -1,8 +1,11 @@
 import Combine
 import Foundation
 
-extension RemoteFileBrowserStore {
-    func loadPersistedStates() {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension RemoteFileBrowserStore {
+    package func loadPersistedStates() {
         if defaults.object(forKey: legacyPersistenceKey) != nil {
             defaults.removeObject(forKey: legacyPersistenceKey)
         }
@@ -15,11 +18,11 @@ extension RemoteFileBrowserStore {
         persistedStates = decoded
     }
 
-    func persistedState(for tabId: UUID) -> RemoteFileBrowserPersistedState {
+    package func persistedState(for tabId: UUID) -> RemoteFileBrowserPersistedState {
         persistedStates[tabId.uuidString] ?? .init()
     }
 
-    func persistState(for tabId: UUID) {
+    package func persistState(for tabId: UUID) {
         let fallback = persistedState(for: tabId)
         let state = states[tabId]
         persistedStates[tabId.uuidString] = RemoteFileBrowserPersistedState(
@@ -32,7 +35,7 @@ extension RemoteFileBrowserStore {
         persistStates()
     }
 
-    func persistStates() {
+    package func persistStates() {
         guard let data = try? JSONEncoder().encode(persistedStates) else { return }
         defaults.set(data, forKey: persistenceKey)
     }

@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum JSONValue: Hashable, Sendable {
+nonisolated package enum JSONValue: Hashable, Sendable {
     case string(String)
     case integer(Int)
     case bool(Bool)
 
-    var telemetryValue: String {
+    package var telemetryValue: String {
         switch self {
         case .string(let value): value
         case .integer(let value): String(value)
@@ -14,18 +14,18 @@ nonisolated enum JSONValue: Hashable, Sendable {
     }
 }
 
-nonisolated enum AnalyticsSource: Hashable, Sendable {
+nonisolated package enum AnalyticsSource: Hashable, Sendable {
     case website(String)
 }
 
-nonisolated struct TrackEventRequest: Hashable, Sendable {
-    let source: AnalyticsSource
-    let data: [String: JSONValue]?
-    let title: String?
-    let url: String?
-    let name: String
+nonisolated package struct TrackEventRequest: Hashable, Sendable {
+    package let source: AnalyticsSource
+    package let data: [String: JSONValue]?
+    package let title: String?
+    package let url: String?
+    package let name: String
 
-    init(
+    package init(
         source: AnalyticsSource,
         data: [String: JSONValue]? = nil,
         title: String? = nil,
@@ -40,7 +40,7 @@ nonisolated struct TrackEventRequest: Hashable, Sendable {
     }
 }
 
-nonisolated enum AnalyticsEvent: Hashable, Sendable {
+nonisolated package enum AnalyticsEvent: Hashable, Sendable {
     case appLaunched(isPro: Bool)
     case connectionSucceeded(transport: String)
     case connectionAttempted(transport: String)
@@ -61,10 +61,10 @@ nonisolated enum AnalyticsEvent: Hashable, Sendable {
     case reviewPromptRequested
     case analyticsDisabled
 
-    static let maximumStringLength = 128
-    static let maximumCount = 1_000_000
+    static package let maximumStringLength = 128
+    static package let maximumCount = 1_000_000
 
-    var definition: AnalyticsEventDefinition {
+    package var definition: AnalyticsEventDefinition {
         switch self {
         case .appLaunched(let isPro):
             return .init(name: "app_launched", url: "/app/launch", data: [
@@ -125,7 +125,7 @@ nonisolated enum AnalyticsEvent: Hashable, Sendable {
         }
     }
 
-    var name: String { definition.name }
+    package var name: String { definition.name }
 
     private func connection(name: String, transport: String) -> AnalyticsEventDefinition {
         .init(name: name, url: "/app/connection", data: [
@@ -156,24 +156,24 @@ nonisolated enum AnalyticsEvent: Hashable, Sendable {
     }
 }
 
-nonisolated struct AnalyticsEventDefinition: Sendable {
-    let name: String
-    let url: String
-    var data: [String: JSONValue] = [:]
+nonisolated package struct AnalyticsEventDefinition: Sendable {
+    package let name: String
+    package let url: String
+    package var data: [String: JSONValue] = [:]
 }
 
-nonisolated struct AnalyticsAdmissionController {
-    static let deduplicationInterval: TimeInterval = 2
-    static let rateLimitWindow: TimeInterval = 60
-    static let maximumEventsPerWindow = 60
-    static let maximumEventsPerNamePerWindow = 6
+nonisolated package struct AnalyticsAdmissionController {
+    static package let deduplicationInterval: TimeInterval = 2
+    static package let rateLimitWindow: TimeInterval = 60
+    static package let maximumEventsPerWindow = 60
+    static package let maximumEventsPerNamePerWindow = 6
 
     private var windowStart: TimeInterval?
     private var totalCount = 0
     private var countsByName: [String: Int] = [:]
     private var lastEmissionByEvent: [AnalyticsEvent: TimeInterval] = [:]
 
-    static func admitsPersistentLaunch(
+    static package func admitsPersistentLaunch(
         lastEmission: TimeInterval?,
         at timestamp: TimeInterval,
         minimumInterval: TimeInterval
@@ -182,7 +182,7 @@ nonisolated struct AnalyticsAdmissionController {
         return timestamp - lastEmission >= minimumInterval
     }
 
-    mutating func admits(_ event: AnalyticsEvent, at timestamp: TimeInterval) -> Bool {
+    mutating package func admits(_ event: AnalyticsEvent, at timestamp: TimeInterval) -> Bool {
         resetWindowIfNeeded(at: timestamp)
 
         if let lastEmission = lastEmissionByEvent[event],

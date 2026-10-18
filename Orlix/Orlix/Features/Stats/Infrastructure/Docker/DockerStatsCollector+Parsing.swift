@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated extension DockerStatsCollector {
-    func parseContainers(psOutput: String, statsOutput: String, timestamp: Date = Date()) -> DockerStats {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package extension DockerStatsCollector {
+    package func parseContainers(psOutput: String, statsOutput: String, timestamp: Date = Date()) -> DockerStats {
         let psRows = parseJSONLines(psOutput, as: DockerPSRow.self)
         let statsRows = parseJSONLines(statsOutput, as: DockerStatsRow.self)
         let statsByKey = makeStatsLookup(statsRows)
@@ -47,7 +50,7 @@ nonisolated extension DockerStatsCollector {
         )
     }
 
-    func parseSize(_ rawValue: String) -> UInt64? {
+    package func parseSize(_ rawValue: String) -> UInt64? {
         let cleaned = rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: ",", with: ".")
@@ -224,17 +227,17 @@ nonisolated extension DockerStatsCollector {
 }
 
 nonisolated private struct DockerPSRow: Decodable, Sendable {
-    let id: String?
-    let names: String?
-    let image: String?
-    let command: String?
-    let createdAt: String?
-    let runningFor: String?
-    let ports: String?
-    let status: String?
-    let state: String?
+    package let id: String?
+    package let names: String?
+    package let image: String?
+    package let command: String?
+    package let createdAt: String?
+    package let runningFor: String?
+    package let ports: String?
+    package let status: String?
+    package let state: String?
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case id = "ID"
         case names = "Names"
         case image = "Image"
@@ -248,17 +251,17 @@ nonisolated private struct DockerPSRow: Decodable, Sendable {
 }
 
 nonisolated private struct DockerStatsRow: Decodable, Sendable {
-    let blockIO: String?
-    let container: String?
-    let cpuPercent: String?
-    let id: String?
-    let memoryPercent: String?
-    let memoryUsage: String?
-    let name: String?
-    let networkIO: String?
-    let pids: String?
+    package let blockIO: String?
+    package let container: String?
+    package let cpuPercent: String?
+    package let id: String?
+    package let memoryPercent: String?
+    package let memoryUsage: String?
+    package let name: String?
+    package let networkIO: String?
+    package let pids: String?
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case blockIO = "BlockIO"
         case container = "Container"
         case cpuPercent = "CPUPerc"
@@ -272,7 +275,7 @@ nonisolated private struct DockerStatsRow: Decodable, Sendable {
 }
 
 nonisolated private extension String {
-    var trimmedNonEmpty: String? {
+    package var trimmedNonEmpty: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

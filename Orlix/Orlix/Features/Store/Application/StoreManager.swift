@@ -2,30 +2,33 @@ import Foundation
 import Combine
 import os.log
 
-nonisolated enum StoreAccessState: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StoreAccessState: Equatable, Sendable {
     case checking
     case free
     case pro
 }
 
-nonisolated struct StoreEntitlementSnapshot: Equatable, Sendable {
-    static let checking = StoreEntitlementSnapshot(
+nonisolated package struct StoreEntitlementSnapshot: Equatable, Sendable {
+    static package let checking = StoreEntitlementSnapshot(
         accessState: .checking,
         hasLifetimeAccess: false,
         subscriptionStatus: nil
     )
 
-    static let free = StoreEntitlementSnapshot(
+    static package let free = StoreEntitlementSnapshot(
         accessState: .free,
         hasLifetimeAccess: false,
         subscriptionStatus: nil
     )
 
-    let accessState: StoreAccessState
-    let hasLifetimeAccess: Bool
-    let subscriptionStatus: StoreSubscriptionStatus?
+    package let accessState: StoreAccessState
+    package let hasLifetimeAccess: Bool
+    package let subscriptionStatus: StoreSubscriptionStatus?
 
-    var hasStoreAccess: Bool {
+    package var hasStoreAccess: Bool {
         accessState == .pro
     }
 }
@@ -33,7 +36,7 @@ nonisolated struct StoreEntitlementSnapshot: Equatable, Sendable {
 // MARK: - Store Manager
 
 @MainActor
-final class StoreManager: ObservableObject {
+final package class StoreManager: ObservableObject {
     private final class StartupToken {}
     private final class TransactionListenerToken {}
 
@@ -60,44 +63,44 @@ final class StoreManager: ObservableObject {
         category: "Store"
     )
 
-    var isPro: Bool {
+    package var isPro: Bool {
         entitlementSnapshot.hasStoreAccess
     }
 
-    var accessState: StoreAccessState {
+    package var accessState: StoreAccessState {
         entitlementSnapshot.accessState
     }
 
     /// Do not enforce Free limits before StoreKit resolves entitlements.
-    var allowsProFeatures: Bool {
+    package var allowsProFeatures: Bool {
         accessState != .free
     }
 
-    var isLifetime: Bool {
+    package var isLifetime: Bool {
         entitlementSnapshot.hasLifetimeAccess
     }
 
-    var subscriptionStatus: StoreSubscriptionStatus? {
+    package var subscriptionStatus: StoreSubscriptionStatus? {
         entitlementSnapshot.subscriptionStatus
     }
 
     // MARK: - Sorted Products
 
-    var monthlyProduct: StoreProduct? {
+    package var monthlyProduct: StoreProduct? {
         products.first { $0.id == OrlixProducts.proMonthly }
     }
 
-    var yearlyProduct: StoreProduct? {
+    package var yearlyProduct: StoreProduct? {
         products.first { $0.id == OrlixProducts.proYearly }
     }
 
-    var lifetimeProduct: StoreProduct? {
+    package var lifetimeProduct: StoreProduct? {
         products.first { $0.id == OrlixProducts.proLifetime }
     }
 
     // MARK: - Initialization
 
-    init(
+    package init(
         client: any StoreClient,
         effects: StoreManagerEffects
     ) {
@@ -105,7 +108,7 @@ final class StoreManager: ObservableObject {
         self.effects = effects
     }
 
-    func start() {
+    package func start() {
         guard startupTask == nil, updateListenerTask == nil else { return }
         startTransactionListener()
         let token = StartupToken()
@@ -137,7 +140,7 @@ final class StoreManager: ObservableObject {
         }
     }
 
-    func stop() {
+    package func stop() {
         startupToken = nil
         transactionListenerToken = nil
         productOperationID = nil
@@ -157,7 +160,7 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Load Products
 
-    func loadProducts() async {
+    package func loadProducts() async {
         let operationID = UUID()
         productOperationID = operationID
         guard let loadedProducts = await Self.loadProducts(using: client, logger: logger) else {
@@ -202,24 +205,24 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Paywall Presentation
 
-    func notePaywallPresented(source: PaywallSource) {
+    package func notePaywallPresented(source: PaywallSource) {
         activePaywallSource = source
         hasPresentedPaywallThisLaunch = true
         effects.record(.paywallPresented(source: source))
     }
 
-    func notePaywallCTATapped(product: StoreProduct) {
+    package func notePaywallCTATapped(product: StoreProduct) {
         effects.record(.paywallCTATapped(
             source: activePaywallSource,
             productID: product.id
         ))
     }
 
-    func requestReviewAfterPurchase() {
+    package func requestReviewAfterPurchase() {
         effects.record(.reviewRequestedAfterPurchase)
     }
 
-    func noteLimitHit(
+    package func noteLimitHit(
         source: PaywallSource,
         generation: FreePlanGeneration,
         current: Int,
@@ -233,13 +236,13 @@ final class StoreManager: ObservableObject {
         ))
     }
 
-    func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
+    package func introductoryOfferState(for product: StoreProduct) async -> ProPlanIntroductoryOfferState {
         await client.introductoryOfferState(productId: product.id)
     }
 
     // MARK: - Purchase
 
-    func purchase(_ product: StoreProduct) async {
+    package func purchase(_ product: StoreProduct) async {
         let operationID = UUID()
         purchaseOperationID = operationID
         defer {
@@ -303,7 +306,7 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Restore Purchases
 
-    func restorePurchases() async {
+    package func restorePurchases() async {
         let operationID = UUID()
         restoreOperationID = operationID
         defer {
@@ -328,7 +331,7 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Check Entitlements
 
-    func checkEntitlements() async {
+    package func checkEntitlements() async {
         let operationID = UUID()
         entitlementOperationID = operationID
         let result = await client.entitlements(
@@ -345,7 +348,7 @@ final class StoreManager: ObservableObject {
         entitlementOperationID = nil
     }
 
-    func dismissRestoreResult() {
+    package func dismissRestoreResult() {
         guard restoreState != .restoring else { return }
         restoreState = .idle
     }
@@ -435,16 +438,16 @@ final class StoreManager: ObservableObject {
 
     // MARK: - Subscription Info
 
-    var subscriptionExpirationDate: Date? {
+    package var subscriptionExpirationDate: Date? {
         subscriptionStatus?.expirationDate
     }
 
-    var isSubscriptionActive: Bool {
+    package var isSubscriptionActive: Bool {
         guard let status = subscriptionStatus else { return isLifetime }
         return status.state == .subscribed || status.state == .inGracePeriod
     }
 
-    var hasActiveSubscriptionWithLifetime: Bool {
+    package var hasActiveSubscriptionWithLifetime: Bool {
         guard isLifetime, let status = subscriptionStatus else { return false }
         return status.state == .subscribed || status.state == .inGracePeriod
     }

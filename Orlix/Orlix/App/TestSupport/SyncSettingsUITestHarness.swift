@@ -2,11 +2,15 @@
 import Combine
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 @MainActor
 private final class SyncSettingsUITestCloud: SyncSettingsCloudSyncing {
     private let states: CurrentValueSubject<SyncSettingsCloudState, Never>
 
-    init(isEnabled: Bool) {
+    package init(isEnabled: Bool) {
         states = CurrentValueSubject(
             SyncSettingsCloudState(
                 status: isEnabled ? .idle : .disabled,
@@ -19,12 +23,12 @@ private final class SyncSettingsUITestCloud: SyncSettingsCloudSyncing {
         )
     }
 
-    var currentState: SyncSettingsCloudState { states.value }
-    var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
+    package var currentState: SyncSettingsCloudState { states.value }
+    package var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
         states.eraseToAnyPublisher()
     }
 
-    func setSyncEnabled(_ enabled: Bool) {
+    package func setSyncEnabled(_ enabled: Bool) {
         states.send(
             SyncSettingsCloudState(
                 status: enabled ? .idle : .disabled,
@@ -37,35 +41,35 @@ private final class SyncSettingsUITestCloud: SyncSettingsCloudSyncing {
         )
     }
 
-    func checkAccountStatus() async {}
+    package func checkAccountStatus() async {}
 }
 
 @MainActor
 private final class SyncSettingsUITestCredentials: SyncSettingsCredentialSyncing {
-    private(set) var currentState: SyncSettingsCredentialState
+    package private(set) var currentState: SyncSettingsCredentialState
 
-    init(isEnabled: Bool) {
+    package init(isEnabled: Bool) {
         currentState = isEnabled ? .storedInICloudKeychain : .storedOnThisDevice
     }
 
-    func prepareCredentialStorage(isSyncEnabled: Bool) throws {
+    package func prepareCredentialStorage(isSyncEnabled: Bool) throws {
         currentState = isSyncEnabled ? .storedInICloudKeychain : .storedOnThisDevice
     }
 
-    func removeCredentialsFromICloud() throws {
+    package func removeCredentialsFromICloud() throws {
         currentState = .storedOnThisDevice
     }
 }
 
 @MainActor
 private final class SyncSettingsUITestData: SyncSettingsDataRefreshing {
-    func handleSyncDisabled() {}
-    func syncNow() async throws {}
+    package func handleSyncDisabled() {}
+    package func syncNow() async throws {}
 }
 
 @MainActor
 private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
-    let currentSummary = SyncSettingsContentSummary(
+    package let currentSummary = SyncSettingsContentSummary(
         workspaceCount: 2,
         serverCount: 7,
         customThemeCount: 3,
@@ -77,17 +81,17 @@ private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
 
 @MainActor
 private final class SyncSettingsUITestHistory: SyncSettingsHistoryStoring {
-    private(set) var lastSuccessfulSyncDate: Date? = Date()
+    package private(set) var lastSuccessfulSyncDate: Date? = Date()
 
-    func recordSuccessfulSync(at date: Date) throws {
+    package func recordSuccessfulSync(at date: Date) throws {
         lastSuccessfulSyncDate = date
     }
 }
 
-struct SyncSettingsUITestHarness: View {
+package struct SyncSettingsUITestHarness: View {
     @StateObject private var coordinator: SyncSettingsCoordinator
 
-    init() {
+    package init() {
         let isEnabled = !Foundation.ProcessInfo.processInfo.arguments.contains(
             "--orlix-ui-test-sync-settings-disabled"
         )
@@ -108,7 +112,7 @@ struct SyncSettingsUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             SyncSettingsView()
                 .navigationTitle("iCloud Sync")

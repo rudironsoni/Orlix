@@ -9,6 +9,9 @@
 #if os(macOS)
 import AppKit
 import Combine
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// Wraps a Ghostty terminal view in an NSScrollView to provide native macOS scrollbar support.
 ///
@@ -21,11 +24,11 @@ import Combine
 /// - `scrollView`: The outermost NSScrollView that manages scrollbar rendering and behavior
 /// - `documentView`: A blank NSView whose height represents total scrollback (in pixels)
 /// - `surfaceView`: The actual Ghostty terminal renderer, positioned to fill the visible rect
-class TerminalScrollView: NSView, NSUserInterfaceValidations {
+package class TerminalScrollView: NSView, NSUserInterfaceValidations {
     private let scrollView: NSScrollView
     private let documentView: NSView
-    let surfaceView: GhosttyTerminalView
-    var shouldOwnFirstResponder = false {
+    package let surfaceView: GhosttyTerminalView
+    package var shouldOwnFirstResponder = false {
         didSet {
             guard oldValue != shouldOwnFirstResponder else { return }
             reconcileFirstResponderOwnership()
@@ -39,7 +42,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     /// on the same row.
     private var lastSentRow: Int?
 
-    init(contentSize: CGSize, surfaceView: GhosttyTerminalView) {
+    package init(contentSize: CGSize, surfaceView: GhosttyTerminalView) {
         self.surfaceView = surfaceView
 
         // The scroll view is our outermost view that controls all our scrollbar
@@ -147,7 +150,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         })
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) not implemented")
     }
 
@@ -156,26 +159,26 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
     }
 
     // The entire bounds is a safe area, so we override any default insets.
-    override var safeAreaInsets: NSEdgeInsets { return NSEdgeInsetsZero }
+    override package var safeAreaInsets: NSEdgeInsets { return NSEdgeInsetsZero }
 
-    override var acceptsFirstResponder: Bool { surfaceView.acceptsFirstResponder }
+    override package var acceptsFirstResponder: Bool { surfaceView.acceptsFirstResponder }
 
-    override func becomeFirstResponder() -> Bool {
+    override package func becomeFirstResponder() -> Bool {
         guard let window else { return false }
         return window.makeFirstResponder(surfaceView)
     }
 
-    override func viewDidMoveToWindow() {
+    override package func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         reconcileFirstResponderOwnership()
     }
 
-    override func keyDown(with event: NSEvent) {
+    override package func keyDown(with event: NSEvent) {
         ensureSurfaceViewIsFirstResponder()
         surfaceView.keyDown(with: event)
     }
 
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    override package func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard surfaceViewOwnsFirstResponder else {
             return super.performKeyEquivalent(with: event)
         }
@@ -185,21 +188,21 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         return super.performKeyEquivalent(with: event)
     }
 
-    @objc func copy(_ sender: Any?) {
+    @objc package func copy(_ sender: Any?) {
         guard surfaceViewOwnsFirstResponder else { return }
         surfaceView.copy(sender)
     }
 
-    @objc func paste(_ sender: Any?) {
+    @objc package func paste(_ sender: Any?) {
         guard surfaceViewOwnsFirstResponder else { return }
         surfaceView.paste(sender)
     }
 
-    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+    package func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
         surfaceView.validateUserInterfaceItem(item)
     }
 
-    override func layout() {
+    override package func layout() {
         super.layout()
 
         // Fill entire bounds with scroll view
@@ -348,7 +351,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
 
     // MARK: - Mouse events
 
-    override func mouseMoved(with: NSEvent) {
+    override package func mouseMoved(with: NSEvent) {
         // When the OS preferred style is .legacy, the user should be able to
         // click and drag the scroller without using scroll wheels or gestures,
         // so we flash it when the mouse is moved over the scrollbar area.
@@ -356,7 +359,7 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
         scrollView.flashScrollers()
     }
 
-    override func updateTrackingAreas() {
+    override package func updateTrackingAreas() {
         // To update our tracking area we just recreate it all.
         trackingAreas.forEach { removeTrackingArea($0) }
 
@@ -377,9 +380,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
 
 // MARK: - GhosttyTerminalView Extension
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
     /// Notify the terminal of a size change (used by scroll view wrapper)
-    func sizeDidChange(_ size: CGSize) {
+    package func sizeDidChange(_ size: CGSize) {
         guard let surface = surface?.unsafeCValue else { return }
         let scaledSize = convertToBacking(size)
         guard let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(

@@ -8,8 +8,11 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = []) {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package func sendToolbarKey(_ key: TerminalKey, accumulatedMods: Ghostty.Input.Mods = []) {
         if case .modified(let baseKey, let mods) = key {
             sendToolbarKey(baseKey, accumulatedMods: accumulatedMods.union(mods))
             return
@@ -106,7 +109,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func sendToolbarGhosttyKey(
+    package func sendToolbarGhosttyKey(
         _ key: Ghostty.Input.Key,
         mods: Ghostty.Input.Mods,
         text: String? = nil,
@@ -134,7 +137,7 @@ extension GhosttyTerminalView {
         sendToolbarGhosttyKey(key, mods: mergedMods, text: nil, unshiftedCodepoint: codepoint)
     }
 
-    func handleToolbarCustomAction(_ action: TerminalAccessoryCustomAction) {
+    package func handleToolbarCustomAction(_ action: TerminalAccessoryCustomAction) {
         switch action.kind {
         case .command:
             sendText(action.commandContent)
@@ -166,7 +169,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func ghosttyKeyMapping(for character: Character) -> (key: Ghostty.Input.Key, text: String?, codepoint: UInt32, requiresShift: Bool)? {
+    package func ghosttyKeyMapping(for character: Character) -> (key: Ghostty.Input.Key, text: String?, codepoint: UInt32, requiresShift: Bool)? {
         let string = String(character)
 
         for shortcutKey in TerminalAccessoryShortcutKey.allCases {
@@ -187,8 +190,8 @@ extension GhosttyTerminalView {
     }
 }
 
-extension TerminalAccessoryShortcutModifiers {
-    var ghosttyModifiers: Ghostty.Input.Mods {
+package extension TerminalAccessoryShortcutModifiers {
+    package var ghosttyModifiers: Ghostty.Input.Mods {
         var mods: Ghostty.Input.Mods = []
         if control {
             mods.insert(.ctrl)
@@ -207,7 +210,7 @@ extension TerminalAccessoryShortcutModifiers {
 }
 
 private extension TerminalKey {
-    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+    package var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
         switch self {
         case .enter:
             return .character("\r")

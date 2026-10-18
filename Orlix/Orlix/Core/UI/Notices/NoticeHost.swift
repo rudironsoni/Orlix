@@ -1,32 +1,32 @@
 import SwiftUI
 import Combine
 
-enum NoticeTopInsetBehavior {
+package enum NoticeTopInsetBehavior {
     case contentTop
     case safeAreaTop
 }
 
-enum NoticeBottomInsetBehavior {
+package enum NoticeBottomInsetBehavior {
     case contentBottom
     case safeAreaBottom
 }
 
 @MainActor
-final class NoticeHostModel: ObservableObject {
-    @Published var topBanner: NoticeItem?
-    @Published private(set) var bottomOperations: [NoticeItem] = []
+final package class NoticeHostModel: ObservableObject {
+    @Published package var topBanner: NoticeItem?
+    @Published package private(set) var bottomOperations: [NoticeItem] = []
 
     private var dismissalTasks: [String: Task<Void, Never>] = [:]
 
-    var bottomOperation: NoticeItem? {
+    package var bottomOperation: NoticeItem? {
         bottomOperations.last
     }
 
-    func show(_ item: NoticeItem) {
+    package func show(_ item: NoticeItem) {
         set(item, for: item.lane)
     }
 
-    func set(_ item: NoticeItem?, for lane: NoticeLane) {
+    package func set(_ item: NoticeItem?, for lane: NoticeLane) {
         switch lane {
         case .topBanner:
             if let currentID = topBanner?.id, currentID != item?.id {
@@ -69,7 +69,7 @@ final class NoticeHostModel: ObservableObject {
         dismissalTasks.removeValue(forKey: id)?.cancel()
     }
 
-    func update(
+    package func update(
         id: String,
         title: String? = nil,
         message: String? = nil,
@@ -118,7 +118,7 @@ final class NoticeHostModel: ObservableObject {
         }
     }
 
-    func dismiss(id: String) {
+    package func dismiss(id: String) {
         if topBanner?.id == id {
             cancelDismissal(for: id)
             set(nil, for: .topBanner)
@@ -127,20 +127,22 @@ final class NoticeHostModel: ObservableObject {
             bottomOperations.remove(at: index)
         }
     }
+
+    package init() {}
 }
 
-struct NoticeHost<Content: View>: View {
-    let topBanner: NoticeItem?
-    let bottomOperations: [NoticeItem]
-    var topInsetBehavior: NoticeTopInsetBehavior = .contentTop
-    var bottomInsetBehavior: NoticeBottomInsetBehavior = .safeAreaBottom
-    var bannerSurfaceStyle: NoticeSurfaceStyle = .standard
-    var operationSurfaceStyle: NoticeSurfaceStyle = .standard
-    let content: Content
+package struct NoticeHost<Content: View>: View {
+    package let topBanner: NoticeItem?
+    package let bottomOperations: [NoticeItem]
+    package var topInsetBehavior: NoticeTopInsetBehavior = .contentTop
+    package var bottomInsetBehavior: NoticeBottomInsetBehavior = .safeAreaBottom
+    package var bannerSurfaceStyle: NoticeSurfaceStyle = .standard
+    package var operationSurfaceStyle: NoticeSurfaceStyle = .standard
+    package let content: Content
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    init(
+    package init(
         topBanner: NoticeItem? = nil,
         bottomOperation: NoticeItem? = nil,
         bottomOperations: [NoticeItem]? = nil,
@@ -159,7 +161,7 @@ struct NoticeHost<Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {

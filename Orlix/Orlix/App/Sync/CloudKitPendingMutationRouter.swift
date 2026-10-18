@@ -1,14 +1,20 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @MainActor
-final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
+final package class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
     private let serverCloud: any ServerRemoteMutationClient
     private let terminalThemeCloud: any TerminalThemeCloudMutationClient
     private let terminalFontCloud: any TerminalFontCloudMutationClient
     private let terminalAccessoryHandler: TerminalAccessoryPendingMutationHandler
     private let statsPreferencesHandler: StatsPreferencesPendingMutationHandler
 
-    init(
+    package init(
         serverCloud: any ServerRemoteMutationClient,
         terminalThemeCloud: any TerminalThemeCloudMutationClient,
         terminalFontCloud: any TerminalFontCloudMutationClient,
@@ -22,7 +28,7 @@ final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
         self.statsPreferencesHandler = statsPreferencesHandler
     }
 
-    func handle(_ mutation: PendingCloudKitMutation) async throws {
+    package func handle(_ mutation: PendingCloudKitMutation) async throws {
         if let payload = try ServerPendingCloudKitPayloadCodec.decode(mutation.payload) {
             switch payload {
             case .serverUpsert(let server):
@@ -84,7 +90,7 @@ private enum CloudKitPendingMutationRoutingError: LocalizedError {
         operation: PendingCloudKitMutationOperation
     )
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .unsupportedPayload(let entityType, let operation):
             return "Unsupported pending CloudKit mutation: \(entityType) \(operation.rawValue)."

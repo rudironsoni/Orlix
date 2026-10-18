@@ -1,9 +1,12 @@
 import Foundation
 
-struct RemoteFileConflictResolver {
-    nonisolated init() {}
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileConflictResolver {
+    nonisolated package init() {}
 
-    func resolveName(
+    package func resolveName(
         for originalName: String,
         in remoteDirectoryPath: String,
         policy: RemoteFileConflictPolicy,

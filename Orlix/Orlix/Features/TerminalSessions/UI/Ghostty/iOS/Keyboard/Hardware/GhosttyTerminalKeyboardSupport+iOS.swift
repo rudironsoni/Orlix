@@ -2,10 +2,13 @@
 import OSLog
 import UIKit
 
-nonisolated struct IMEProxySnapshot: Equatable, Sendable {
-    var text: String
-    var selectedRange: NSRange
-    var markedRange: NSRange?
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct IMEProxySnapshot: Equatable, Sendable {
+    package var text: String
+    package var selectedRange: NSRange
+    package var markedRange: NSRange?
 }
 
 /// Replaces the software keyboard while the terminal keeps first-responder
@@ -13,34 +16,34 @@ nonisolated struct IMEProxySnapshot: Equatable, Sendable {
 /// UIInputView's self-sizing contract instead of installing a required
 /// zero-height constraint that conflicts with InputUI's own inputHeight
 /// constraint during iPad responder handoffs.
-final class TerminalSuppressedKeyboardInputView: UIInputView {
-    init() {
+final package class TerminalSuppressedKeyboardInputView: UIInputView {
+    package init() {
         super.init(frame: .zero, inputViewStyle: .keyboard)
         allowsSelfSizing = true
         isUserInteractionEnabled = false
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var intrinsicContentSize: CGSize {
+    override package var intrinsicContentSize: CGSize {
         .zero
     }
 
-    override func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
+    override package func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
         .zero
     }
 }
 
-enum TerminalEditMenuPresentation {
+package enum TerminalEditMenuPresentation {
     case selection
     case pointerContext
 }
 
-extension UIViewController {
-    var topMostPresentedViewController: UIViewController {
+package extension UIViewController {
+    package var topMostPresentedViewController: UIViewController {
         var controller = self
         while let presented = controller.presentedViewController {
             controller = presented
@@ -49,12 +52,12 @@ extension UIViewController {
     }
 }
 
-nonisolated struct TerminalFindNavigatorLifecycle: Sendable {
+nonisolated package struct TerminalFindNavigatorLifecycle: Sendable {
     private(set) var isActive = false
     private(set) var suppressedGhosttySearchEndCount = 0
     private var restoreTerminalFocusAfterEnd = false
 
-    mutating func begin(restoreTerminalFocus: Bool) {
+    mutating package func begin(restoreTerminalFocus: Bool) {
         if isActive {
             restoreTerminalFocusAfterEnd = restoreTerminalFocusAfterEnd || restoreTerminalFocus
         } else {
@@ -63,23 +66,23 @@ nonisolated struct TerminalFindNavigatorLifecycle: Sendable {
         isActive = true
     }
 
-    mutating func end() -> Bool {
+    mutating package func end() -> Bool {
         isActive = false
         let shouldRestoreFocus = restoreTerminalFocusAfterEnd
         restoreTerminalFocusAfterEnd = false
         return shouldRestoreFocus
     }
 
-    mutating func suppressNextGhosttySearchEnd() {
+    mutating package func suppressNextGhosttySearchEnd() {
         suppressedGhosttySearchEndCount += 1
     }
 
-    mutating func cancelSuppressedGhosttySearchEnd() {
+    mutating package func cancelSuppressedGhosttySearchEnd() {
         guard suppressedGhosttySearchEndCount > 0 else { return }
         suppressedGhosttySearchEndCount -= 1
     }
 
-    mutating func consumeSuppressedGhosttySearchEnd() -> Bool {
+    mutating package func consumeSuppressedGhosttySearchEnd() -> Bool {
         guard suppressedGhosttySearchEndCount > 0 else { return false }
         suppressedGhosttySearchEndCount -= 1
         return true
@@ -87,7 +90,7 @@ nonisolated struct TerminalFindNavigatorLifecycle: Sendable {
 }
 
 @MainActor
-func makeTerminalZoomKeyCommands(action: Selector) -> [UIKeyCommand] {
+package func makeTerminalZoomKeyCommands(action: Selector) -> [UIKeyCommand] {
     let shortcuts: [(input: String, modifiers: UIKeyModifierFlags)] = [
         ("=", .command),
         ("=", [.command, .shift]),
@@ -113,7 +116,7 @@ func makeTerminalZoomKeyCommands(action: Selector) -> [UIKeyCommand] {
 }
 
 @MainActor
-func makeTerminalSplitKeyCommands(action: Selector) -> [UIKeyCommand] {
+package func makeTerminalSplitKeyCommands(action: Selector) -> [UIKeyCommand] {
     let shortcuts: [(input: String, modifiers: UIKeyModifierFlags, title: String)] = [
         ("d", .command, String(localized: "Split Right")),
         ("d", [.command, .shift], String(localized: "Split Down")),
@@ -148,8 +151,8 @@ func makeTerminalSplitKeyCommands(action: Selector) -> [UIKeyCommand] {
     }
 }
 
-extension UIKeyModifierFlags {
-    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+package extension UIKeyModifierFlags {
+    package var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
         var result: TerminalSplitShortcutModifiers = []
         if contains(.command) { result.insert(.command) }
         if contains(.shift) { result.insert(.shift) }
@@ -159,8 +162,8 @@ extension UIKeyModifierFlags {
     }
 }
 
-extension Ghostty.Input.Mods {
-    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+package extension Ghostty.Input.Mods {
+    package var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
         var result: TerminalSplitShortcutModifiers = []
         if contains(.super) { result.insert(.command) }
         if contains(.shift) { result.insert(.shift) }
@@ -170,8 +173,8 @@ extension Ghostty.Input.Mods {
     }
 }
 
-extension TerminalAccessoryShortcutModifiers {
-    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+package extension TerminalAccessoryShortcutModifiers {
+    package var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
         var result: TerminalSplitShortcutModifiers = []
         if command { result.insert(.command) }
         if shift { result.insert(.shift) }
@@ -181,8 +184,8 @@ extension TerminalAccessoryShortcutModifiers {
     }
 }
 
-extension TerminalAccessoryShortcutKey {
-    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+package extension TerminalAccessoryShortcutKey {
+    package var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
         switch self {
         case .enter:
             return .character("\r")

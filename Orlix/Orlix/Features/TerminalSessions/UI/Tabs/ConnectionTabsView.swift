@@ -5,11 +5,18 @@
 
 import SwiftUI
 
-struct TerminalServerToolbarProjectionHost<Content: View>: View {
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+#endif
+package struct TerminalServerToolbarProjectionHost<Content: View>: View {
     @StateObject private var projection: TerminalServerToolbarProjection
     private let content: (TerminalServerToolbarProjection) -> Content
 
-    init(
+    package init(
         serverId: UUID,
         tabManager: TerminalTabManager,
         @ViewBuilder content: @escaping (TerminalServerToolbarProjection) -> Content
@@ -23,54 +30,55 @@ struct TerminalServerToolbarProjectionHost<Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         content(projection)
     }
 }
 
 // MARK: - Connection Terminal Container
 
-struct ConnectionTerminalContainer: View {
-    let tabManager: TerminalTabManager
-    let terminalToolbarProjection: TerminalServerToolbarProjection
-    @ObservedObject var terminalContent: TerminalServerContentProjection
+package struct ConnectionTerminalContainer: View {
+    package let tabManager: TerminalTabManager
+    package let terminalToolbarProjection: TerminalServerToolbarProjection
+    @ObservedObject package var terminalContent: TerminalServerContentProjection
     @ObservedObject private var remoteSessionCoordinator: TerminalRemoteSessionCoordinator
-    @ObservedObject var fileTabManager: RemoteFileTabManager
-    let serverManager: ServerManager
-    let fileBrowser: RemoteFileBrowserStore
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
-    let statsDependencies: ServerStatsScreenDependencies
-    let terminalSecurityActions: TerminalSecurityActions
-    let serverFormDependencies: ServerFormDependencies
-    let voiceInputRuntimeStore: VoiceInputRuntimeStore
-    let server: Server
-    @Binding var isZenModeEnabled: Bool
-    let isSidebarVisible: Bool
-    let onToggleSidebar: () -> Void
-    let onOpenSettings: (() -> Void)?
-    let onLeaveRoute: (() -> Void)?
-    let onDisconnectRoute: (() -> Void)?
+    @ObservedObject package var fileTabManager: RemoteFileTabManager
+    package let serverManager: ServerManager
+    package let fileBrowser: RemoteFileBrowserStore
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let statsDependencies: ServerStatsScreenDependencies
+    package let terminalSecurityActions: TerminalSecurityActions
+    package let serverFormDependencies: ServerFormDependencies
+    package let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    package let server: Server
+    @Binding package var isZenModeEnabled: Bool
+    package let isSidebarVisible: Bool
+    package let onToggleSidebar: () -> Void
+    package let onOpenSettings: (() -> Void)?
+    package let onLeaveRoute: (() -> Void)?
+    package let onDisconnectRoute: (() -> Void)?
 
-    @EnvironmentObject var ghosttyApp: GhosttyRuntime
-    @EnvironmentObject var storeManager: StoreManager
+    @EnvironmentObject package var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject package var storeManager: StoreManager
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
 
     /// Disconnect confirmation
-    @State var showingDisconnectConfirmation = false
+    @State package var showingDisconnectConfirmation = false
     /// Confirmation before closing the focused split pane via a command/panel
     /// (the in-pane close button has its own confirmation in TerminalTabView).
-    @State var showingPaneCloseConfirmation = false
-    @State var serverFormIntent: ServerFormIntent?
+    @State package var showingPaneCloseConfirmation = false
+    @State package var serverFormIntent: ServerFormIntent?
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
-    @State var showingFileTabLimitAlert = false
-    @State var showingSplitPaneUpgradeAlert = false
-    @State var showingZenPanel = false
+    @State package var isShowingDockerUpgrade = false
+    @State package var showingFileTabLimitAlert = false
+    @State package var showingSplitPaneUpgradeAlert = false
+    @State package var showingZenPanel = false
 
-    init(
+    package init(
         tabManager: TerminalTabManager,
         terminalToolbarProjection: TerminalServerToolbarProjection,
         fileTabManager: RemoteFileTabManager,
@@ -111,29 +119,29 @@ struct ConnectionTerminalContainer: View {
     }
 
     /// Selected view type - persisted per server
-    var selectedView: ConnectionViewTabID {
+    package var selectedView: ConnectionViewTabID {
         viewTabConfig.effectiveView(
             for: terminalContent.state.selectedView
         )
     }
 
-    var visibleViewTabs: [ConnectionViewTabID] {
+    package var visibleViewTabs: [ConnectionViewTabID] {
         viewTabConfig.currentVisibleTabs
     }
 
-    var shouldShowViewPicker: Bool {
+    package var shouldShowViewPicker: Bool {
         visibleViewTabs.count > 1
     }
 
-    var terminalAppearance: TerminalColorAppearance {
+    package var terminalAppearance: TerminalColorAppearance {
         colorScheme == .dark ? .dark : .light
     }
 
-    var terminalAppearanceSnapshot: TerminalAppearanceSnapshot {
+    package var terminalAppearanceSnapshot: TerminalAppearanceSnapshot {
         terminalThemeManager.appearanceSnapshot(for: terminalAppearance)
     }
 
-    var selectedViewBinding: Binding<ConnectionViewTabID> {
+    package var selectedViewBinding: Binding<ConnectionViewTabID> {
         Binding(
             get: {
                 viewTabConfig.effectiveView(
@@ -156,12 +164,12 @@ struct ConnectionTerminalContainer: View {
     }
 
     /// Tabs for THIS server only
-    var serverTabs: [TerminalTab] {
+    package var serverTabs: [TerminalTab] {
         terminalContent.state.tabs
     }
 
     /// Effective selected tab ID for this server.
-    var selectedTabId: UUID? {
+    package var selectedTabId: UUID? {
         if let selectedId = terminalContent.state.selectedTabId,
            serverTabs.contains(where: { $0.id == selectedId }) {
             return selectedId
@@ -169,7 +177,7 @@ struct ConnectionTerminalContainer: View {
         return serverTabs.first?.id
     }
 
-    var selectedTabIdBinding: Binding<UUID?> {
+    package var selectedTabIdBinding: Binding<UUID?> {
         Binding(
             get: { selectedTabId },
             set: { newValue in
@@ -183,20 +191,20 @@ struct ConnectionTerminalContainer: View {
     }
 
     /// Currently selected tab
-    var selectedTab: TerminalTab? {
+    package var selectedTab: TerminalTab? {
         guard let id = selectedTabId else { return serverTabs.first }
         return serverTabs.first { $0.id == id } ?? serverTabs.first
     }
 
-    var serverFileTabs: [RemoteFileTab] {
+    package var serverFileTabs: [RemoteFileTab] {
         fileTabManager.tabs(for: server.id)
     }
 
-    var selectedFileTabId: UUID? {
+    package var selectedFileTabId: UUID? {
         fileTabManager.selectedTab(for: server.id)?.id
     }
 
-    var selectedFileTabIdBinding: Binding<UUID?> {
+    package var selectedFileTabIdBinding: Binding<UUID?> {
         Binding(
             get: { selectedFileTabId },
             set: { newValue in
@@ -211,7 +219,7 @@ struct ConnectionTerminalContainer: View {
         )
     }
 
-    var selectedFileTab: RemoteFileTab? {
+    package var selectedFileTab: RemoteFileTab? {
         fileTabManager.selectedTab(for: server.id)
     }
 
@@ -235,7 +243,7 @@ struct ConnectionTerminalContainer: View {
         Color.fromHex(terminalAppearanceSnapshot.activeTheme.palette.backgroundHex)
     }
 
-    var sharedBody: some View {
+    package var sharedBody: some View {
         let backgroundColor = liveTerminalBackgroundColor
 
         return platformChrome(backgroundColor: backgroundColor)
@@ -277,7 +285,7 @@ struct ConnectionTerminalContainer: View {
     }
 
     @ViewBuilder
-    var filesLayer: some View {
+    package var filesLayer: some View {
         if let selectedFileTab {
             RemoteFileBrowserScreen(
                 browser: fileBrowser,
@@ -298,7 +306,7 @@ struct ConnectionTerminalContainer: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
             .sheet(item: remoteSessionAttachPromptBinding) { prompt in
                 RemoteSessionAttachPromptSheet(
@@ -314,7 +322,7 @@ struct ConnectionTerminalContainer: View {
             }
     }
 
-    func handleNewTabCommand() {
+    package func handleNewTabCommand() {
         if selectedView == .files {
             openNewFileTab(selectFilesViewOnSuccess: true)
         } else {
@@ -346,7 +354,7 @@ struct ConnectionTerminalContainer: View {
         tabManager.sessionState.selectTab(repairedId, for: server.id)
     }
 
-    func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
+    package func openNewTab(selectTerminalViewOnSuccess: Bool = false) {
         guard tabManager.sessionState.canOpenNewTab(hasProAccess: storeManager.allowsProFeatures) else {
             showingTabLimitAlert = true
             return
@@ -370,7 +378,7 @@ struct ConnectionTerminalContainer: View {
         }
     }
 
-    func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
+    package func openNewFileTab(selectFilesViewOnSuccess: Bool = false) {
         guard fileTabManager.canOpenNewTab(
             for: server.id,
             hasProAccess: storeManager.allowsProFeatures
@@ -407,25 +415,25 @@ struct ConnectionTerminalContainer: View {
         }
     }
 
-    func selectPreviousTab() {
+    package func selectPreviousTab() {
         guard let currentId = selectedTabId,
               let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
               currentIndex > 0 else { return }
         selectedTabIdBinding.wrappedValue = serverTabs[currentIndex - 1].id
     }
 
-    func selectNextTab() {
+    package func selectNextTab() {
         guard let currentId = selectedTabId,
               let currentIndex = serverTabs.firstIndex(where: { $0.id == currentId }),
               currentIndex < serverTabs.count - 1 else { return }
         selectedTabIdBinding.wrappedValue = serverTabs[currentIndex + 1].id
     }
 
-    func selectPreviousFileTab() {
+    package func selectPreviousFileTab() {
         fileTabManager.selectPreviousTab(for: server.id)
     }
 
-    func selectNextFileTab() {
+    package func selectNextFileTab() {
         fileTabManager.selectNextTab(for: server.id)
     }
 
@@ -446,7 +454,7 @@ struct ConnectionTerminalContainer: View {
         return RemoteFilePath.breadcrumbs(for: normalizedPath).last?.title ?? (server.name.nonEmptyString ?? "/")
     }
 
-    func displayedFileTabTitle(for tab: RemoteFileTab) -> String {
+    package func displayedFileTabTitle(for tab: RemoteFileTab) -> String {
         let baseTitles = Dictionary(
             uniqueKeysWithValues: serverFileTabs.map { ($0.id, baseFileTabTitle(for: $0)) }
         )
@@ -476,7 +484,7 @@ struct ConnectionTerminalContainer: View {
         fileBrowser.removeState(for: removedTab.id)
     }
 
-    func serverViewTabActions() -> ServerViewTabActions {
+    package func serverViewTabActions() -> ServerViewTabActions {
         ServerViewTabActions(
             openNew: handleNewTabCommand,
             closeSelected: {
@@ -529,13 +537,13 @@ struct ConnectionTerminalContainer: View {
 
     /// Ask before closing the focused pane (terminates its SSH connection),
     /// matching the in-pane close button's confirmation.
-    func requestCloseFocusedPane() {
+    package func requestCloseFocusedPane() {
         guard selectedTab != nil else { return }
         platformPrepareForPaneClose()
         showingPaneCloseConfirmation = true
     }
 
-    func closeFocusedPaneConfirmed() {
+    package func closeFocusedPaneConfirmed() {
         guard let selectedTab else { return }
         tabManager.closePane(tab: selectedTab, paneId: selectedTab.focusedPaneId)
     }

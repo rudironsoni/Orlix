@@ -7,19 +7,19 @@
 import SwiftUI
 import UIKit
 
-struct NavigationBarAppearanceConfigurator: UIViewControllerRepresentable {
-    let backgroundColor: UIColor
-    var isTranslucent: Bool = false
-    var shadowColor: UIColor? = nil
-    var onDisappearBackgroundColor: UIColor? = nil
-    var onDisappearIsTranslucent: Bool? = nil
-    var onDisappearShadowColor: UIColor? = nil
+package struct NavigationBarAppearanceConfigurator: UIViewControllerRepresentable {
+    package let backgroundColor: UIColor
+    package var isTranslucent: Bool = false
+    package var shadowColor: UIColor? = nil
+    package var onDisappearBackgroundColor: UIColor? = nil
+    package var onDisappearIsTranslucent: Bool? = nil
+    package var onDisappearShadowColor: UIColor? = nil
 
-    func makeUIViewController(context: Context) -> AppearanceController {
+    package func makeUIViewController(context: Context) -> AppearanceController {
         AppearanceController()
     }
 
-    func updateUIViewController(_ uiViewController: AppearanceController, context: Context) {
+    package func updateUIViewController(_ uiViewController: AppearanceController, context: Context) {
         uiViewController.updateConfig(
             backgroundColor: backgroundColor,
             isTranslucent: isTranslucent,
@@ -32,13 +32,13 @@ struct NavigationBarAppearanceConfigurator: UIViewControllerRepresentable {
     }
 }
 
-final class AppearanceController: UIViewController {
+final package class AppearanceController: UIViewController {
     private struct AppearanceConfig: Equatable {
-        let backgroundColor: UIColor
-        let isTranslucent: Bool
-        let shadowColor: UIColor?
+        package let backgroundColor: UIColor
+        package let isTranslucent: Bool
+        package let shadowColor: UIColor?
 
-        static func == (lhs: AppearanceConfig, rhs: AppearanceConfig) -> Bool {
+        package static func == (lhs: AppearanceConfig, rhs: AppearanceConfig) -> Bool {
             lhs.isTranslucent == rhs.isTranslucent &&
             lhs.backgroundColor.isEqual(rhs.backgroundColor) &&
             ((lhs.shadowColor == nil && rhs.shadowColor == nil) ||
@@ -55,7 +55,7 @@ final class AppearanceController: UIViewController {
     private var lastAppliedConfig: AppearanceConfig?
     private var lastAppliedNavigationBarID: ObjectIdentifier?
 
-    func updateConfig(
+    package func updateConfig(
         backgroundColor: UIColor,
         isTranslucent: Bool,
         shadowColor: UIColor?,
@@ -71,12 +71,12 @@ final class AppearanceController: UIViewController {
         self.onDisappearShadowColor = onDisappearShadowColor
     }
 
-    override func viewWillAppear(_ animated: Bool) {
+    override package func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         applyAppearance()
     }
 
-    override func viewWillDisappear(_ animated: Bool) {
+    override package func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         guard let bg = onDisappearBackgroundColor else { return }
         applyAppearance(
@@ -87,7 +87,7 @@ final class AppearanceController: UIViewController {
         )
     }
 
-    func applyAppearance() {
+    package func applyAppearance() {
         applyAppearance(
             backgroundColor: backgroundColor,
             isTranslucent: isTranslucent,
@@ -145,8 +145,8 @@ final class AppearanceController: UIViewController {
     }
 }
 
-extension View {
-    func navigationBarAppearance(
+package extension View {
+    package func navigationBarAppearance(
         backgroundColor: UIColor,
         isTranslucent: Bool = false,
         shadowColor: UIColor? = nil,

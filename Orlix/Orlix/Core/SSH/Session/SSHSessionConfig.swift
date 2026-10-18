@@ -1,21 +1,24 @@
 import Foundation
 
-nonisolated struct SSHSessionConfig: Sendable {
-    let host: String
-    let port: Int
-    let dialHost: String
-    let dialPort: Int
-    let hostKeyHost: String
-    let hostKeyPort: Int
-    let username: String
-    let connectionMode: SSHConnectionMode
-    let authMethod: AuthMethod
-    let credentials: ServerCredentials
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct SSHSessionConfig: Sendable {
+    package let host: String
+    package let port: Int
+    package let dialHost: String
+    package let dialPort: Int
+    package let hostKeyHost: String
+    package let hostKeyPort: Int
+    package let username: String
+    package let connectionMode: SSHConnectionMode
+    package let authMethod: AuthMethod
+    package let credentials: ServerCredentials
 
-    var connectionTimeout: TimeInterval = 30
-    let keepAlive: SSHKeepAlivePolicy
+    package var connectionTimeout: TimeInterval = 30
+    package let keepAlive: SSHKeepAlivePolicy
 
-    init(
+    package init(
         host: String,
         port: Int,
         dialHost: String? = nil,

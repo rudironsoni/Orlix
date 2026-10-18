@@ -1,19 +1,22 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalPaneTitleStore: ObservableObject {
-    @Published private(set) var runtimeTitles: [UUID: String] = [:]
+final package class TerminalPaneTitleStore: ObservableObject {
+    @Published package private(set) var runtimeTitles: [UUID: String] = [:]
     @Published private(set) var overrides: [UUID: String] = [:]
 
     @discardableResult
-    func setRuntimeTitle(_ title: String, for paneId: UUID) -> Bool {
+    package func setRuntimeTitle(_ title: String, for paneId: UUID) -> Bool {
         guard runtimeTitles[paneId] != title else { return false }
         runtimeTitles[paneId] = title
         return true
     }
 
-    func setOverride(_ title: String?, for paneId: UUID) {
+    package func setOverride(_ title: String?, for paneId: UUID) {
         if let title, !title.isEmpty {
             guard overrides[paneId] != title else { return }
             overrides[paneId] = title
@@ -22,7 +25,7 @@ final class TerminalPaneTitleStore: ObservableObject {
         }
     }
 
-    func removePane(_ paneId: UUID) {
+    package func removePane(_ paneId: UUID) {
         if runtimeTitles[paneId] != nil {
             runtimeTitles.removeValue(forKey: paneId)
         }
@@ -31,12 +34,12 @@ final class TerminalPaneTitleStore: ObservableObject {
         }
     }
 
-    func removeAllRuntimeTitles() {
+    package func removeAllRuntimeTitles() {
         guard !runtimeTitles.isEmpty else { return }
         runtimeTitles.removeAll()
     }
 
-    func reset() {
+    package func reset() {
         if !runtimeTitles.isEmpty {
             runtimeTitles.removeAll()
         }
@@ -45,11 +48,11 @@ final class TerminalPaneTitleStore: ObservableObject {
         }
     }
 
-    func displayTitle(forPane paneId: UUID, fallback: String? = nil) -> String? {
+    package func displayTitle(forPane paneId: UUID, fallback: String? = nil) -> String? {
         overrides[paneId] ?? runtimeTitles[paneId] ?? fallback
     }
 
-    func displayTitle(for tab: TerminalTab) -> String {
+    package func displayTitle(for tab: TerminalTab) -> String {
         overrides[tab.focusedPaneId]
             ?? runtimeTitles[tab.focusedPaneId]
             ?? overrides[tab.rootPaneId]
@@ -59,11 +62,11 @@ final class TerminalPaneTitleStore: ObservableObject {
 }
 
 @MainActor
-final class TerminalSessionNavigationProjection: ObservableObject {
-    @Published private(set) var state: TerminalSessionNavigationState
+final package class TerminalSessionNavigationProjection: ObservableObject {
+    @Published package private(set) var state: TerminalSessionNavigationState
     private var cancellable: AnyCancellable?
 
-    init(sessionState: TerminalSessionStateStore) {
+    package init(sessionState: TerminalSessionStateStore) {
         state = sessionState.navigationState
         cancellable = sessionState.navigationChanges
             .sink { [weak self] state in
@@ -74,11 +77,11 @@ final class TerminalSessionNavigationProjection: ObservableObject {
 }
 
 @MainActor
-final class TerminalPanePresentationProjection: ObservableObject {
+final package class TerminalPanePresentationProjection: ObservableObject {
     @Published private(set) var state: TerminalPanePresentationState?
     private var cancellable: AnyCancellable?
 
-    init(paneId: UUID, sessionState: TerminalSessionStateStore) {
+    package init(paneId: UUID, sessionState: TerminalSessionStateStore) {
         state = sessionState.presentationState(for: paneId)
         cancellable = sessionState.presentationChanges(for: paneId)
             .sink { [weak self] state in
@@ -88,38 +91,38 @@ final class TerminalPanePresentationProjection: ObservableObject {
     }
 }
 
-struct TerminalServerContentState: Equatable {
-    let tabs: [TerminalTab]
-    let selectedTabId: UUID?
-    let selectedView: ConnectionViewTabID?
-    let splitZoomedTabIds: Set<UUID>
+package struct TerminalServerContentState: Equatable {
+    package let tabs: [TerminalTab]
+    package let selectedTabId: UUID?
+    package let selectedView: ConnectionViewTabID?
+    package let splitZoomedTabIds: Set<UUID>
 }
 
-struct TerminalServerToolbarTabItem: Equatable, Identifiable {
-    let id: UUID
-    let title: String
-    let connectionState: ConnectionState?
-    let paneCount: Int
+package struct TerminalServerToolbarTabItem: Equatable, Identifiable {
+    package let id: UUID
+    package let title: String
+    package let connectionState: ConnectionState?
+    package let paneCount: Int
 }
 
-struct TerminalServerToolbarTabStripState: Equatable {
-    let items: [TerminalServerToolbarTabItem]
-    let selectedTabId: UUID?
+package struct TerminalServerToolbarTabStripState: Equatable {
+    package let items: [TerminalServerToolbarTabItem]
+    package let selectedTabId: UUID?
 }
 
 #if os(iOS)
-struct TerminalServerFloatingControlState: Equatable {
-    let focusedPaneId: UUID?
-    let findNavigatorIsVisible: Bool
-    let voicePresentation: TerminalVoicePresentationState
+package struct TerminalServerFloatingControlState: Equatable {
+    package let focusedPaneId: UUID?
+    package let findNavigatorIsVisible: Bool
+    package let voicePresentation: TerminalVoicePresentationState
 }
 #endif
 
 @MainActor
-final class TerminalServerContentProjection: ObservableObject {
-    @Published private(set) var state: TerminalServerContentState
+final package class TerminalServerContentProjection: ObservableObject {
+    @Published package private(set) var state: TerminalServerContentState
 
-    init(state: TerminalServerContentState) {
+    package init(state: TerminalServerContentState) {
         self.state = state
     }
 
@@ -130,10 +133,10 @@ final class TerminalServerContentProjection: ObservableObject {
 }
 
 @MainActor
-final class TerminalServerToolbarTabStripProjection: ObservableObject {
+final package class TerminalServerToolbarTabStripProjection: ObservableObject {
     @Published private(set) var state: TerminalServerToolbarTabStripState
 
-    init(state: TerminalServerToolbarTabStripState) {
+    package init(state: TerminalServerToolbarTabStripState) {
         self.state = state
     }
 
@@ -145,10 +148,10 @@ final class TerminalServerToolbarTabStripProjection: ObservableObject {
 
 #if os(iOS)
 @MainActor
-final class TerminalServerFloatingControlProjection: ObservableObject {
-    @Published private(set) var state: TerminalServerFloatingControlState
+final package class TerminalServerFloatingControlProjection: ObservableObject {
+    @Published package private(set) var state: TerminalServerFloatingControlState
 
-    init(state: TerminalServerFloatingControlState) {
+    package init(state: TerminalServerFloatingControlState) {
         self.state = state
     }
 
@@ -163,11 +166,11 @@ final class TerminalServerFloatingControlProjection: ObservableObject {
 /// Title and connection-status changes redraw only the tab strip. They do not
 /// invalidate route chrome or an open menu.
 @MainActor
-final class TerminalServerToolbarProjection: ObservableObject {
-    let content: TerminalServerContentProjection
-    let tabStrip: TerminalServerToolbarTabStripProjection
+final package class TerminalServerToolbarProjection: ObservableObject {
+    package let content: TerminalServerContentProjection
+    package let tabStrip: TerminalServerToolbarTabStripProjection
     #if os(iOS)
-    let floatingControls: TerminalServerFloatingControlProjection
+    package let floatingControls: TerminalServerFloatingControlProjection
     #endif
 
     private var sessionSnapshot: TerminalServerSessionSnapshot
@@ -181,7 +184,7 @@ final class TerminalServerToolbarProjection: ObservableObject {
     #endif
     private var cancellables: Set<AnyCancellable> = []
 
-    init(serverId: UUID, tabManager: TerminalTabManager) {
+    package init(serverId: UUID, tabManager: TerminalTabManager) {
         sessionSnapshot = tabManager.sessionState.snapshot(for: serverId)
         selectedView = tabManager.connectionViewSelections.selection(for: serverId)
         runtimeTitles = tabManager.titleStore.runtimeTitles

@@ -1,39 +1,45 @@
 import SwiftUI
 
-struct SettingsView: View {
-    let statsPreferencesStore: PreferencesStore
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let analyticsOptOutAction: AnalyticsOptOutAction
-    let remoteSessionBackends: [RemoteSessionBackendMetadata]
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+#endif
+package struct SettingsView: View {
+    package let statsPreferencesStore: PreferencesStore
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let analyticsOptOutAction: AnalyticsOptOutAction
+    package let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
-    @AppStorage(TerminalDefaults.fontSizeKey) var terminalFontSize = TerminalDefaults.defaultFontSize
+    @AppStorage(TerminalDefaults.fontSizeKey) package var terminalFontSize = TerminalDefaults.defaultFontSize
     @AppStorage(SettingsRoutePersistence.selectedRouteKey)
-    var selectedRouteRaw = SettingsRoute.defaultRoute.rawValue
-    @State var searchText = ""
+    package var selectedRouteRaw = SettingsRoute.defaultRoute.rawValue
+    @State package var searchText = ""
 
-    @EnvironmentObject var storeManager: StoreManager
-    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject package var storeManager: StoreManager
+    @Environment(\.dismiss) package var dismiss
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 
-    var selectedRoute: SettingsRoute {
+    package var selectedRoute: SettingsRoute {
         SettingsRoutePersistence.route(for: selectedRouteRaw)
     }
 
-    func visibleRoutes(in group: SettingsGroup) -> [SettingsRoute] {
+    package func visibleRoutes(in group: SettingsGroup) -> [SettingsRoute] {
         SettingsRouteCatalog.visibleRoutes(
             from: SettingsRouteCatalog.routes(in: group),
             matching: searchText
         )
     }
 
-    func visibleRoutes(from routes: [SettingsRoute]) -> [SettingsRoute] {
+    package func visibleRoutes(from routes: [SettingsRoute]) -> [SettingsRoute] {
         SettingsRouteCatalog.visibleRoutes(from: routes, matching: searchText)
     }
 
-    var visibleDetailRoute: SettingsRoute? {
+    package var visibleDetailRoute: SettingsRoute? {
         SettingsRouteCatalog.visibleDetailRoute(
             selectedRoute: selectedRoute,
             matching: searchText
@@ -41,7 +47,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    func destination(for route: SettingsRoute) -> some View {
+    package func destination(for route: SettingsRoute) -> some View {
         switch route {
         case .pro:
             ProSettingsView()
@@ -73,7 +79,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    func routeLabel(for route: SettingsRoute) -> some View {
+    package func routeLabel(for route: SettingsRoute) -> some View {
         HStack(spacing: 10) {
             Label(route.title, systemImage: route.icon)
             Spacer(minLength: 8)
@@ -87,7 +93,7 @@ struct SettingsView: View {
         .accessibilityIdentifier("orlix.settings.route.\(route.rawValue)")
     }
 
-    var storeStatusLabel: String {
+    package var storeStatusLabel: String {
         switch storeManager.accessState {
         case .checking:
             String(localized: "Checking...")
@@ -96,5 +102,17 @@ struct SettingsView: View {
         case .pro:
             String(localized: "PRO")
         }
+    }
+
+    package init(
+        statsPreferencesStore: PreferencesStore,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
+        analyticsOptOutAction: AnalyticsOptOutAction,
+        remoteSessionBackends: [RemoteSessionBackendMetadata]
+    ) {
+        self.statsPreferencesStore = statsPreferencesStore
+        self.voiceModelManagers = voiceModelManagers
+        self.analyticsOptOutAction = analyticsOptOutAction
+        self.remoteSessionBackends = remoteSessionBackends
     }
 }

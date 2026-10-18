@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct TrustedHostsSettingsView: View {
+package struct TrustedHostsSettingsView: View {
     @EnvironmentObject private var coordinator: KnownHostSettingsCoordinator
     @State private var resetTarget: TrustedHostResetTarget?
 
-    var body: some View {
+    package var body: some View {
         Group {
             if coordinator.knownHosts.isEmpty {
                 TrustedHostsEmptyView()
@@ -58,7 +58,7 @@ struct TrustedHostsSettingsView: View {
     }
 
     @ViewBuilder
-    func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
+    package func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
         Button(role: .destructive) {
             resetTarget = .host(knownHost)
         } label: {
@@ -78,10 +78,13 @@ struct TrustedHostsSettingsView: View {
         }
         resetTarget = nil
     }
+
+
+    package init() {}
 }
 
 private struct TrustedHostsEmptyView: View {
-    var body: some View {
+    package var body: some View {
         if #available(iOS 17.0, macOS 14.0, *) {
             ContentUnavailableView(
                 "No Trusted Hosts",
@@ -102,10 +105,10 @@ private struct TrustedHostsEmptyView: View {
     }
 }
 
-struct TrustedHostSettingsRow: View {
-    let knownHost: KnownHostSettingsItem
+package struct TrustedHostSettingsRow: View {
+    package let knownHost: KnownHostSettingsItem
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.shield.fill")
                 .font(.title2)
@@ -147,7 +150,7 @@ private enum TrustedHostResetTarget: Identifiable {
     case host(KnownHostSettingsItem)
     case all
 
-    var id: String {
+    package var id: String {
         switch self {
         case .host(let knownHost):
             knownHost.id
@@ -156,7 +159,7 @@ private enum TrustedHostResetTarget: Identifiable {
         }
     }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .host:
             String(localized: "Reset Trusted Host")
@@ -165,7 +168,7 @@ private enum TrustedHostResetTarget: Identifiable {
         }
     }
 
-    var message: String {
+    package var message: String {
         switch self {
         case .host(let knownHost):
             String(

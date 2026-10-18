@@ -1,9 +1,12 @@
 import SwiftUI
 
-struct StatsAppearanceSettingsSheet: View {
-    let store: PreferencesStore
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct StatsAppearanceSettingsSheet: View {
+    package let store: PreferencesStore
 
-    var body: some View {
+    package var body: some View {
         #if os(macOS)
         StatsDetailShell(
             String(localized: "Stats Appearance"),
@@ -23,21 +26,25 @@ struct StatsAppearanceSettingsSheet: View {
         .adaptiveSoftScrollEdges()
         #endif
     }
+
+    package init(store: PreferencesStore) {
+        self.store = store
+    }
 }
 
-struct AppearanceSettings: View {
+package struct AppearanceSettings: View {
     @ObservedObject private var store: PreferencesStore
     @State private var preferences: StatsPreferences
     #if os(iOS)
     @State private var editMode: EditMode = .inactive
     #endif
 
-    init(store: PreferencesStore) {
+    package init(store: PreferencesStore) {
         _store = ObservedObject(wrappedValue: store)
         _preferences = State(initialValue: store.preferences)
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Picker(String(localized: "Presentation"), selection: styleBinding) {
@@ -135,11 +142,11 @@ struct AppearanceSettings: View {
 }
 
 private struct StatsBlockLayoutRow: View {
-    let block: StatsPreferences.Block
-    @Binding var isVisible: Bool
-    let subtitle: String
+    package let block: StatsPreferences.Block
+    @Binding package var isVisible: Bool
+    package let subtitle: String
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: block.id.systemImage)
                 .font(.system(size: 22, weight: .medium))
@@ -166,7 +173,7 @@ private struct StatsBlockLayoutRow: View {
 }
 
 private extension StatsPreferences.Style {
-    var title: String {
+    package var title: String {
         switch self {
         case .cardsCompact:
             return String(localized: "Cards Compact")
@@ -179,7 +186,7 @@ private extension StatsPreferences.Style {
 }
 
 private extension StatsPreferences.BlockID {
-    var title: String {
+    package var title: String {
         switch self {
         case .system:
             return String(localized: "System")
@@ -200,7 +207,7 @@ private extension StatsPreferences.BlockID {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .system:
             return "server.rack"
@@ -221,7 +228,7 @@ private extension StatsPreferences.BlockID {
         }
     }
 
-    var tint: Color {
+    package var tint: Color {
         switch self {
         case .system:
             return .cyan

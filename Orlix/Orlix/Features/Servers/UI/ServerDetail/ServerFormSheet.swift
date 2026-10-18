@@ -1,7 +1,11 @@
 import SwiftUI
 
-extension ServerTransportSelection {
-    var displayName: String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package extension ServerTransportSelection {
+    package var displayName: String {
         switch self {
         case .standard:
             return String(localized: "SSH")
@@ -16,7 +20,7 @@ extension ServerTransportSelection {
         }
     }
 
-    var icon: String {
+    package var icon: String {
         switch self {
         case .standard:
             return "terminal"
@@ -35,17 +39,17 @@ extension ServerTransportSelection {
 
 // MARK: - Server Form Sheet
 
-struct ServerFormSheet: View {
-    let serverManager: ServerManager
+package struct ServerFormSheet: View {
+    package let serverManager: ServerManager
     @ObservedObject private var stateStore: ServerStateStore
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
-    let workspace: Workspace?
-    let intent: ServerFormIntent
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
-    let onSave: (Server) -> Void
+    package let workspace: Workspace?
+    package let intent: ServerFormIntent
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let onSave: (Server) -> Void
 
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) package var dismiss
 
     @State private var form: ServerFormModel
     @StateObject private var operations: ServerFormOperationController
@@ -62,7 +66,7 @@ struct ServerFormSheet: View {
     private let makeID: @Sendable () -> UUID
     private let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
-    var isEditing: Bool { intent.isEditing }
+    package var isEditing: Bool { intent.isEditing }
 
     private var sourceServer: Server? { intent.sourceServer }
 
@@ -70,7 +74,7 @@ struct ServerFormSheet: View {
         operations.hostKeyChallenge.map(ServerSecurityApprovalRequest.hostKey)
     }
 
-    init(
+    package init(
         serverManager: ServerManager,
         workspace: Workspace?,
         intent: ServerFormIntent,
@@ -231,13 +235,13 @@ struct ServerFormSheet: View {
         return backend
     }
 
-    var isSaving: Bool { operations.isSaving }
+    package var isSaving: Bool { operations.isSaving }
 
     private var isLoadingCredentials: Bool { operations.isLoadingCredentials }
 
     private var isTestingConnection: Bool { operations.isTestingConnection }
 
-    var saveButtonDisabled: Bool {
+    package var saveButtonDisabled: Bool {
         !form.isValid || isSaving || isAtLimit
             || isLoadingCredentials || isTestingConnection
             || unsupportedManagedStartupBackend != nil
@@ -260,7 +264,7 @@ struct ServerFormSheet: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             platformBody
                 .opacity(hasAuthorizedSourceAccess ? 1 : 0)
@@ -399,7 +403,7 @@ struct ServerFormSheet: View {
             .onChange(of: form.authMethod) { _ in handleCredentialIntentChange() }
     }
 
-    var formContent: some View {
+    package var formContent: some View {
         lifecycleFormContent
             .onChange(of: form.workspaceID) { _ in
                 reconcileAssignmentWorkspace()
@@ -950,7 +954,7 @@ struct ServerFormSheet: View {
         }
     }
 
-    func saveServer() {
+    package func saveServer() {
         let serverID = intent.serverID(makeID: makeID)
         let wakeOnLANSavePlan = form.wakeOnLANSavePlan(
             existingServer: intent.editedServer
@@ -1008,24 +1012,24 @@ struct ServerFormSheet: View {
     }
 }
 
-struct MoveServerSheet: View {
-    let serverManager: ServerManager
+package struct MoveServerSheet: View {
+    package let serverManager: ServerManager
     @ObservedObject private var stateStore: ServerStateStore
     @EnvironmentObject private var storeManager: StoreManager
-    let server: Server
-    let preferredDestination: Workspace?
-    let onMove: (Server) -> Void
+    package let server: Server
+    package let preferredDestination: Workspace?
+    package let onMove: (Server) -> Void
 
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) package var dismiss
 
     @State private var selectedWorkspaceId: UUID?
     @State private var selectedEnvironment: ServerEnvironment
-    @State var isMoving = false
+    @State package var isMoving = false
     @State private var error: String?
     @State private var showingUpgrade = false
     @State private var showingCreateWorkspace = false
 
-    init(
+    package init(
         serverManager: ServerManager,
         server: Server,
         preferredDestination: Workspace? = nil,
@@ -1070,7 +1074,7 @@ struct MoveServerSheet: View {
         return destinationWorkspaces.first
     }
 
-    var moveButtonDisabled: Bool {
+    package var moveButtonDisabled: Bool {
         isMoving || selectedDestination == nil
     }
 
@@ -1106,11 +1110,11 @@ struct MoveServerSheet: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 
-    var formContent: some View {
+    package var formContent: some View {
         Form {
             Section {
                 OrlixLabeledContent("Server") {
@@ -1220,7 +1224,7 @@ struct MoveServerSheet: View {
         )
     }
 
-    func moveServer() {
+    package func moveServer() {
         guard let destination = selectedDestination else { return }
 
         isMoving = true

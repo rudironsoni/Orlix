@@ -2,19 +2,23 @@ import Combine
 import Darwin
 import Foundation
 
-extension RemoteFileBrowserStore {
-    struct LocalUploadItemInfo: Sendable {
-        let name: String
-        let identity: LocalFileIdentity
-        let kind: LocalUploadPlanNode.Kind
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package extension RemoteFileBrowserStore {
+    package struct LocalUploadItemInfo: Sendable {
+        package let name: String
+        package let identity: LocalFileIdentity
+        package let kind: LocalUploadPlanNode.Kind
     }
 
-    final class TransferProgressTracker {
+    final package class TransferProgressTracker {
         private(set) var completedUnitCount = 0
-        let totalUnitCount: Int
-        let onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
+        package let totalUnitCount: Int
+        package let onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
 
-        init(
+        package init(
             totalUnitCount: Int,
             onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
         ) {
@@ -23,7 +27,7 @@ extension RemoteFileBrowserStore {
         }
 
         @MainActor
-        func reportCurrentItem(_ currentItemName: String) {
+        package func reportCurrentItem(_ currentItemName: String) {
             onProgress?(
                 TransferProgress(
                     completedUnitCount: min(completedUnitCount, totalUnitCount),
@@ -34,7 +38,7 @@ extension RemoteFileBrowserStore {
         }
 
         @MainActor
-        func advance(currentItemName: String) {
+        package func advance(currentItemName: String) {
             completedUnitCount += 1
             onProgress?(
                 TransferProgress(
@@ -46,7 +50,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func upload(
+    package func upload(
         data: Data,
         to remotePath: String,
         server: Server,
@@ -63,7 +67,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func createDirectory(
+    package func createDirectory(
         at remotePath: String,
         in tab: RemoteFileTab,
         server: Server,
@@ -74,7 +78,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func createDirectory(
+    package func createDirectory(
         named directoryName: String,
         in remoteDirectoryPath: String,
         tab: RemoteFileTab,
@@ -86,7 +90,7 @@ extension RemoteFileBrowserStore {
         try await createDirectory(at: remotePath, in: tab, server: server, permissions: permissions)
     }
 
-    func renameItem(
+    package func renameItem(
         at sourcePath: String,
         to destinationPath: String,
         in tab: RemoteFileTab,
@@ -97,7 +101,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func deleteFile(
+    package func deleteFile(
         at remotePath: String,
         in tab: RemoteFileTab,
         server: Server
@@ -107,7 +111,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func deleteDirectory(
+    package func deleteDirectory(
         at remotePath: String,
         in tab: RemoteFileTab,
         server: Server
@@ -117,7 +121,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func deleteItem(
+    package func deleteItem(
         at remotePath: String,
         in tab: RemoteFileTab,
         server: Server,
@@ -131,7 +135,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func setPermissions(
+    package func setPermissions(
         _ entry: RemoteFileEntry,
         permissions: UInt32,
         in tab: RemoteFileTab,
@@ -178,7 +182,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func uploadFilesResolvingConflicts(
+    package func uploadFilesResolvingConflicts(
         at urls: [URL],
         to directoryPath: String,
         in tab: RemoteFileTab,
@@ -247,7 +251,7 @@ extension RemoteFileBrowserStore {
         await refresh(server: server, tab: tab)
     }
 
-    func copyEntries(
+    package func copyEntries(
         _ entries: [RemoteFileEntry],
         from sourceServerId: UUID,
         to destinationDirectoryPath: String,
@@ -313,7 +317,7 @@ extension RemoteFileBrowserStore {
         await refresh(server: destinationServer, tab: destinationTab)
     }
 
-    func downloadFile(
+    package func downloadFile(
         at remotePath: String,
         to localURL: URL,
         server: Server
@@ -341,7 +345,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func downloadItem(
+    package func downloadItem(
         _ entry: RemoteFileEntry,
         to localURL: URL,
         server: Server
@@ -374,7 +378,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func listDirectories(
+    package func listDirectories(
         at path: String,
         server: Server
     ) async throws -> [RemoteFileEntry] {
@@ -387,7 +391,7 @@ extension RemoteFileBrowserStore {
             .sortedForBrowser(using: .name, direction: .ascending)
     }
 
-    func performMutation(
+    package func performMutation(
         in tab: RemoteFileTab,
         server: Server,
         operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> Void
@@ -402,7 +406,7 @@ extension RemoteFileBrowserStore {
         await refresh(server: server, tab: tab)
     }
 
-    func deleteDirectoryRecursively(
+    package func deleteDirectoryRecursively(
         at remotePath: String,
         using service: any RemoteFileService
     ) async throws {
@@ -431,7 +435,7 @@ extension RemoteFileBrowserStore {
         try await deleteRemoteTransferPlan(plan, using: service)
     }
 
-    func localItemInfo(at url: URL) async throws -> LocalUploadItemInfo {
+    package func localItemInfo(at url: URL) async throws -> LocalUploadItemInfo {
         try await Task.detached(priority: .utility) {
             try Task.checkCancellation()
             var fileStatus = Darwin.stat()
@@ -473,7 +477,7 @@ extension RemoteFileBrowserStore {
         }.value
     }
 
-    func localDirectoryContents(at url: URL, maxEntries: Int) async throws -> [URL] {
+    package func localDirectoryContents(at url: URL, maxEntries: Int) async throws -> [URL] {
         try await Task.detached(priority: .utility) {
             let fileManager = FileManager.default
             var enumerationFailed = false
@@ -506,7 +510,7 @@ extension RemoteFileBrowserStore {
         }.value
     }
 
-    func makeLocalUploadPlan(
+    package func makeLocalUploadPlan(
         at localURL: URL,
         depth: Int,
         traversalBudget: inout RemoteFileTraversalBudget,
@@ -558,7 +562,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func uploadLocalTransferPlan(
+    package func uploadLocalTransferPlan(
         _ plan: LocalUploadPlanNode,
         to remoteDirectoryPath: String,
         remoteName: String? = nil,
@@ -612,12 +616,12 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    enum TransferSymlinkPolicy: Equatable {
+    package enum TransferSymlinkPolicy: Equatable {
         case preserve
         case resolveFiles
     }
 
-    func makeRemoteTransferPlan(
+    package func makeRemoteTransferPlan(
         for entry: RemoteFileEntry,
         using service: any RemoteFileService,
         symlinkPolicy: TransferSymlinkPolicy,
@@ -677,7 +681,7 @@ extension RemoteFileBrowserStore {
         return RemoteFileTransferPlanNode(entry: effectiveEntry, children: children)
     }
 
-    func downloadRemoteTransferPlan(
+    package func downloadRemoteTransferPlan(
         _ plan: RemoteFileTransferPlanNode,
         to localURL: URL,
         operationRootURL: URL,
@@ -720,7 +724,7 @@ extension RemoteFileBrowserStore {
         try byteBudget.record(downloadedBytes)
     }
 
-    func copyRemoteTransferPlan(
+    package func copyRemoteTransferPlan(
         _ plan: RemoteFileTransferPlanNode,
         to remoteDirectoryPath: String,
         operationRootPath: String,
@@ -779,7 +783,7 @@ extension RemoteFileBrowserStore {
         progressTracker?.advance(currentItemName: plan.entry.name)
     }
 
-    func deleteRemoteTransferPlan(
+    package func deleteRemoteTransferPlan(
         _ plan: RemoteFileTransferPlanNode,
         using service: any RemoteFileService
     ) async throws {
@@ -793,7 +797,7 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func countRemoteTransferUnits(
+    package func countRemoteTransferUnits(
         for entries: [RemoteFileEntry],
         using client: any RemoteFileService
     ) async throws -> Int {
@@ -812,14 +816,14 @@ extension RemoteFileBrowserStore {
         return max(1, totalUnitCount)
     }
 
-    func countRemoteTransferUnits(
+    package func countRemoteTransferUnits(
         for entry: RemoteFileEntry,
         using client: any RemoteFileService
     ) async throws -> Int {
         try await countRemoteTransferUnits(for: [entry], using: client)
     }
 
-    func validatedTransferEntry(
+    package func validatedTransferEntry(
         _ entry: RemoteFileEntry,
         parentPath: String? = nil
     ) throws -> RemoteFileEntry {
@@ -843,12 +847,12 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    func downloadedFileSize(at url: URL) throws -> UInt64 {
+    package func downloadedFileSize(at url: URL) throws -> UInt64 {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.size] as? NSNumber)?.uint64Value ?? 0
     }
 
-    func downloadFileAtomically(
+    package func downloadFileAtomically(
         at remotePath: String,
         to localURL: URL,
         maxBytes: UInt64,
@@ -872,7 +876,7 @@ extension RemoteFileBrowserStore {
         return downloadedBytes
     }
 
-    func reportedByteCount(for plans: [RemoteFileTransferPlanNode]) throws -> UInt64? {
+    package func reportedByteCount(for plans: [RemoteFileTransferPlanNode]) throws -> UInt64? {
         var total: UInt64 = 0
         var hasUnknownSize = false
 
@@ -899,7 +903,7 @@ extension RemoteFileBrowserStore {
         return hasUnknownSize ? nil : total
     }
 
-    func downloadLimit(
+    package func downloadLimit(
         reportedBytes: UInt64?,
         to localURL: URL,
         byteBudget: RemoteFileTransferByteBudget
@@ -910,7 +914,7 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    func availableDownloadCapacity(at localURL: URL) throws -> UInt64 {
+    package func availableDownloadCapacity(at localURL: URL) throws -> UInt64 {
         let directoryURL = localURL.deletingLastPathComponent()
         let values = try directoryURL.resourceValues(
             forKeys: [.volumeAvailableCapacityForImportantUsageKey]
@@ -929,7 +933,7 @@ extension RemoteFileBrowserStore {
         return capacity
     }
 
-    func ensureRemoteDirectoryExists(
+    package func ensureRemoteDirectoryExists(
         at remotePath: String,
         permissions: Int32,
         using client: any RemoteFileService
@@ -952,18 +956,18 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func uniqueTransferEntries(_ entries: [RemoteFileEntry]) -> [RemoteFileEntry] {
+    package func uniqueTransferEntries(_ entries: [RemoteFileEntry]) -> [RemoteFileEntry] {
         var seenPaths: Set<String> = []
         return entries.filter { seenPaths.insert($0.path).inserted }
     }
 
-    func createLocalDirectory(at url: URL) async throws {
+    package func createLocalDirectory(at url: URL) async throws {
         try await Task.detached(priority: .utility) {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }.value
     }
 
-    func withSecurityScopedAccess<T>(
+    package func withSecurityScopedAccess<T>(
         to urls: [URL],
         operation: () async throws -> T
     ) async throws -> T {

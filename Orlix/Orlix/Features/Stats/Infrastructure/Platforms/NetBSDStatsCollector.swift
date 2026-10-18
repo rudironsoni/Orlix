@@ -1,12 +1,16 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - NetBSD Stats Collector
 
 /// Stats collector for NetBSD systems
-nonisolated struct NetBSDStatsCollector: PlatformStatsCollector {
+nonisolated package struct NetBSDStatsCollector: PlatformStatsCollector {
     private let periodicProcessLimit = 24
 
-    func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
+    package func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
         let cmd = "uname -srm; echo '---SEP---'; hostname; echo '---SEP---'; sysctl -n hw.ncpu 2>/dev/null || echo 1"
         let output = try await client.execute(cmd)
         let parts = output.components(separatedBy: "---SEP---")
@@ -18,7 +22,7 @@ nonisolated struct NetBSDStatsCollector: PlatformStatsCollector {
         return (hostname, osInfo, cpuCores)
     }
 
-    func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
+    package func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
         var stats = ServerStats()
 
         // Batch commands for NetBSD
@@ -114,7 +118,7 @@ nonisolated struct NetBSDStatsCollector: PlatformStatsCollector {
         return stats
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         let systemInfo = try await getSystemInfo(client: client)
         let memoryOutput = try await client.execute("sysctl -n hw.physmem64 2>/dev/null || sysctl -n hw.physmem 2>/dev/null")
         let memoryTotal = UInt64(memoryOutput.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
@@ -228,7 +232,7 @@ nonisolated struct NetBSDStatsCollector: PlatformStatsCollector {
         return processes
     }
 
-    func parseDf(
+    package func parseDf(
         _ output: String,
         metadataBySource: [String: VolumeCollectionMetadata] = [:]
     ) -> [VolumeInfo] {

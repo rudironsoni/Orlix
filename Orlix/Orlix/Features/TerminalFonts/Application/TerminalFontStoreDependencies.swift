@@ -1,38 +1,41 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-protocol TerminalFontCloudClient: AnyObject {
+package protocol TerminalFontCloudClient: AnyObject {
     func fetchTerminalFonts() async throws -> [TerminalFont]
     func fetchTerminalFontPreference() async throws -> TerminalFontPreference?
 }
 
 @MainActor
-protocol TerminalFontCloudMutationClient: AnyObject {
+package protocol TerminalFontCloudMutationClient: AnyObject {
     func saveTerminalFont(_ font: TerminalFont) async throws
     func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws
 }
 
 @MainActor
-protocol TerminalFontMutationQueue: AnyObject {
+package protocol TerminalFontMutationQueue: AnyObject {
     func enqueueTerminalFontUpsert(_ font: TerminalFont) throws
     func enqueueTerminalFontPreferenceUpsert(_ preference: TerminalFontPreference) throws
     func drainPendingMutations() async
 }
 
 @MainActor
-protocol TerminalFontSyncLifecycle: AnyObject {
+package protocol TerminalFontSyncLifecycle: AnyObject {
     func observe(_ observer: @escaping (CloudKitSyncLifecycleEvent) -> Void) -> UUID
     func removeObserver(_ id: UUID)
 }
 
 @MainActor
-struct TerminalFontStoreDependencies {
-    let repository: any TerminalFontRepository
-    let cloud: any TerminalFontCloudClient
-    let mutationQueue: any TerminalFontMutationQueue
-    let syncLifecycle: any TerminalFontSyncLifecycle
-    let loadCatalog: ([TerminalFontFamily]) -> TerminalFontCatalog
-    let isSyncEnabled: () -> Bool
-    let now: () -> Date
-    let startsSynchronization: Bool
+package struct TerminalFontStoreDependencies {
+    package let repository: any TerminalFontRepository
+    package let cloud: any TerminalFontCloudClient
+    package let mutationQueue: any TerminalFontMutationQueue
+    package let syncLifecycle: any TerminalFontSyncLifecycle
+    package let loadCatalog: ([TerminalFontFamily]) -> TerminalFontCatalog
+    package let isSyncEnabled: () -> Bool
+    package let now: () -> Date
+    package let startsSynchronization: Bool
 }

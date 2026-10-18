@@ -1,13 +1,13 @@
 import Foundation
 
-typealias VoiceInputRuntimeFactory = @MainActor () -> VoiceInputRuntimeOwner
+package typealias VoiceInputRuntimeFactory = @MainActor () -> VoiceInputRuntimeOwner
 
 @MainActor
-final class VoiceInputRuntimeOwner {
-    let audioService: AudioService
-    let recordingOperation: VoiceRecordingOperationCoordinator
+final package class VoiceInputRuntimeOwner {
+    package let audioService: AudioService
+    package let recordingOperation: VoiceRecordingOperationCoordinator
 
-    init(
+    package init(
         audioService: AudioService,
         recordingOperation: VoiceRecordingOperationCoordinator
     ) {
@@ -15,7 +15,7 @@ final class VoiceInputRuntimeOwner {
         self.recordingOperation = recordingOperation
     }
 
-    func cancel() {
+    package func cancel() {
         recordingOperation.cancel()
         audioService.cancelRecording()
     }
@@ -26,13 +26,13 @@ final class VoiceInputRuntimeOwner {
 }
 
 @MainActor
-final class VoiceInputRuntimeStore {
-    let settingsStore: VoiceSettingsStore
+final package class VoiceInputRuntimeStore {
+    package let settingsStore: VoiceSettingsStore
     private let makeRuntime: VoiceInputRuntimeFactory
     private var runtimesByTabID: [UUID: VoiceInputRuntimeOwner] = [:]
     private var tabIDsByServerID: [UUID: Set<UUID>] = [:]
 
-    init(
+    package init(
         settingsStore: VoiceSettingsStore,
         makeRuntime: @escaping VoiceInputRuntimeFactory
     ) {
@@ -40,7 +40,7 @@ final class VoiceInputRuntimeStore {
         self.makeRuntime = makeRuntime
     }
 
-    func runtime(for tabID: UUID) -> VoiceInputRuntimeOwner {
+    package func runtime(for tabID: UUID) -> VoiceInputRuntimeOwner {
         if let runtime = runtimesByTabID[tabID] {
             return runtime
         }
@@ -49,7 +49,7 @@ final class VoiceInputRuntimeStore {
         return runtime
     }
 
-    func synchronize(tabIDs: Set<UUID>, for serverID: UUID) {
+    package func synchronize(tabIDs: Set<UUID>, for serverID: UUID) {
         let removedTabIDs = (tabIDsByServerID[serverID] ?? []).subtracting(tabIDs)
         for tabID in removedTabIDs {
             runtimesByTabID.removeValue(forKey: tabID)?.cancel()
@@ -61,14 +61,14 @@ final class VoiceInputRuntimeStore {
         }
     }
 
-    func removeAll() {
+    package func removeAll() {
         let runtimes = Array(runtimesByTabID.values)
         runtimesByTabID.removeAll(keepingCapacity: false)
         tabIDsByServerID.removeAll(keepingCapacity: false)
         runtimes.forEach { $0.cancel() }
     }
 
-    var runtimeCount: Int {
+    package var runtimeCount: Int {
         runtimesByTabID.count
     }
 
@@ -78,8 +78,8 @@ final class VoiceInputRuntimeStore {
 }
 
 @MainActor
-enum VoiceInputRuntimeLiveComposition {
-    static func makeFactory(
+package enum VoiceInputRuntimeLiveComposition {
+    static package func makeFactory(
         settingsStore: VoiceSettingsStore
     ) -> VoiceInputRuntimeFactory {
         {

@@ -1,26 +1,29 @@
 import Foundation
 
-nonisolated enum MoshSSHFallbackDecision: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum MoshSSHFallbackDecision: Equatable, Sendable {
     case allow
     case rejectToPreventStartupCommandReplay
 }
 
-nonisolated enum MoshStartupDispatchStage: Equatable, Sendable {
+nonisolated package enum MoshStartupDispatchStage: Equatable, Sendable {
     case beforeUDPClient
     case udpClientStartingOrStarted
 }
 
-nonisolated struct MoshStartupFailure: LocalizedError, Sendable {
-    let stage: MoshStartupDispatchStage
-    let underlying: SSHError
+nonisolated package struct MoshStartupFailure: LocalizedError, Sendable {
+    package let stage: MoshStartupDispatchStage
+    package let underlying: SSHError
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         underlying.errorDescription
     }
 }
 
-nonisolated enum MoshSSHFallbackPolicy {
-    static func decision(
+nonisolated package enum MoshSSHFallbackPolicy {
+    static package func decision(
         after error: Error,
         startupCommand: String?,
         mayExecuteUserStartupAction: Bool
@@ -36,7 +39,7 @@ nonisolated enum MoshSSHFallbackPolicy {
             : .rejectToPreventStartupCommandReplay
     }
 
-    static func fallbackFailure(
+    static package func fallbackFailure(
         moshError _: Error,
         fallbackError: Error
     ) -> SSHError {

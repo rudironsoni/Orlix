@@ -1,10 +1,10 @@
 import Foundation
 
-enum RemoteClipboardTransferPlan: Sendable {
+package enum RemoteClipboardTransferPlan: Sendable {
     case posix(uploadStrategy: SSHUploadStrategy)
     case windows(powerShellExecutable: String, terminalShell: RemoteShellFamily)
 
-    nonisolated static func resolve(for environment: RemoteEnvironment) throws -> Self {
+    nonisolated static package func resolve(for environment: RemoteEnvironment) throws -> Self {
         if environment.platform == .windows {
             guard environment.shellProfile.family == .powershell
                     || environment.shellProfile.family == .cmd
@@ -33,14 +33,14 @@ enum RemoteClipboardTransferPlan: Sendable {
         return .posix(uploadStrategy: strategy)
     }
 
-    nonisolated var usesSFTP: Bool {
+    nonisolated package var usesSFTP: Bool {
         if case .windows = self {
             return true
         }
         return false
     }
 
-    nonisolated func temporaryPathCommand(fileExtension: String) -> String {
+    nonisolated package func temporaryPathCommand(fileExtension: String) -> String {
         let sanitizedExtension = Self.sanitizeExtension(fileExtension)
         switch self {
         case .posix:
@@ -67,7 +67,7 @@ enum RemoteClipboardTransferPlan: Sendable {
         }
     }
 
-    nonisolated func parseTemporaryPath(_ output: String) throws -> String {
+    nonisolated package func parseTemporaryPath(_ output: String) throws -> String {
         let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty,
               path.rangeOfCharacter(from: .newlines) == nil,
@@ -90,7 +90,7 @@ enum RemoteClipboardTransferPlan: Sendable {
         return path
     }
 
-    nonisolated func transferPath(for nativePath: String) throws -> String {
+    nonisolated package func transferPath(for nativePath: String) throws -> String {
         switch self {
         case .posix:
             return nativePath
@@ -102,7 +102,7 @@ enum RemoteClipboardTransferPlan: Sendable {
         }
     }
 
-    nonisolated func pastedPathToken(for nativePath: String) throws -> String {
+    nonisolated package func pastedPathToken(for nativePath: String) throws -> String {
         switch self {
         case .posix:
             return RemoteTerminalBootstrap.posixPastedPath(nativePath)
@@ -118,7 +118,7 @@ enum RemoteClipboardTransferPlan: Sendable {
         }
     }
 
-    nonisolated func deleteCommand(for nativePath: String) -> String {
+    nonisolated package func deleteCommand(for nativePath: String) -> String {
         switch self {
         case .posix:
             let quotedPath = RemoteTerminalBootstrap.shellQuoted(nativePath)
@@ -132,7 +132,7 @@ enum RemoteClipboardTransferPlan: Sendable {
         }
     }
 
-    nonisolated var staleSweepCommand: String {
+    nonisolated package var staleSweepCommand: String {
         switch self {
         case .posix:
             return RemoteTerminalBootstrap.wrapPOSIXShellCommand(

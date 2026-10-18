@@ -1,4 +1,4 @@
-nonisolated enum CloudKitAccountState: Equatable, Sendable {
+nonisolated package enum CloudKitAccountState: Equatable, Sendable {
     case checking
     case available
     case noAccount

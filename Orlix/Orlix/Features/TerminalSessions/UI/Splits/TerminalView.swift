@@ -14,27 +14,32 @@ import AppKit
 #elseif os(iOS)
 import UIKit
 #endif
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 
 // MARK: - Terminal Tab View
 
 /// Renders a single terminal tab with its split layout
-struct TerminalTabView: View {
-    let tab: TerminalTab
-    let server: Server
-    let tabManager: TerminalTabManager
-    let securityActions: TerminalSecurityActions
-    let isSelected: Bool
-    let isSplitZoomed: Bool
-    let appearance: TerminalAppearanceSnapshot
-    @ObservedObject var voiceSettingsStore: VoiceSettingsStore
-    @ObservedObject var audioService: AudioService
-    @ObservedObject var voiceRecordingOperation: VoiceRecordingOperationCoordinator
+package struct TerminalTabView: View {
+    package let tab: TerminalTab
+    package let server: Server
+    package let tabManager: TerminalTabManager
+    package let securityActions: TerminalSecurityActions
+    package let isSelected: Bool
+    package let isSplitZoomed: Bool
+    package let appearance: TerminalAppearanceSnapshot
+    @ObservedObject package var voiceSettingsStore: VoiceSettingsStore
+    @ObservedObject package var audioService: AudioService
+    @ObservedObject package var voiceRecordingOperation: VoiceRecordingOperationCoordinator
 
     @State private var layoutVersion: Int = 0
     @State private var showingCloseConfirmation = false
     @State private var showingSplitPaneUpgradeAlert = false
 
-    @EnvironmentObject var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject package var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.scenePhase) private var scenePhase
 
@@ -100,7 +105,7 @@ struct TerminalTabView: View {
         #endif
     }
 
-    var body: some View {
+    package var body: some View {
         withTerminalKeyboardAvoidance(ZStack {
             // Refresh when terminals register/unregister so overlays can update immediately.
             let _ = tabManager.terminalSurfaceStore.latestChange
@@ -305,7 +310,7 @@ struct TerminalTabView: View {
         )
     }
 
-    func closeCurrentPane() {
+    package func closeCurrentPane() {
         tabManager.closePane(tab: tab, paneId: tab.focusedPaneId)
     }
 
@@ -531,25 +536,25 @@ struct TerminalTabView: View {
 // MARK: - Terminal Pane View
 
 /// Renders a single terminal pane (leaf in split tree)
-struct TerminalPaneView: View {
-    let paneId: UUID
-    let server: Server
-    let tabManager: TerminalTabManager
+package struct TerminalPaneView: View {
+    package let paneId: UUID
+    package let server: Server
+    package let tabManager: TerminalTabManager
     @StateObject private var panePresentation: TerminalPanePresentationProjection
     @ObservedObject private var reconnectCoordinator: TerminalReconnectCoordinator
     @ObservedObject private var remoteSessionCoordinator: TerminalRemoteSessionCoordinator
-    let securityActions: TerminalSecurityActions
-    let isFocused: Bool
-    let isTabSelected: Bool
-    let onFocus: () -> Void
-    let onProcessExit: () -> Void
-    let terminalContextMenuActions: TerminalContextMenuActions
-    let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
-    let appearance: TerminalAppearanceSnapshot
-    let showsVoiceButton: Bool
-    let onVoiceTrigger: () -> Void
+    package let securityActions: TerminalSecurityActions
+    package let isFocused: Bool
+    package let isTabSelected: Bool
+    package let onFocus: () -> Void
+    package let onProcessExit: () -> Void
+    package let terminalContextMenuActions: TerminalContextMenuActions
+    package let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
+    package let appearance: TerminalAppearanceSnapshot
+    package let showsVoiceButton: Bool
+    package let onVoiceTrigger: () -> Void
 
-    @EnvironmentObject var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject package var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
@@ -568,7 +573,7 @@ struct TerminalPaneView: View {
 
     @AppStorage(TerminalDefaults.sshAutoReconnectKey) private var autoReconnectEnabled = true
 
-    init(
+    package init(
         paneId: UUID,
         server: Server,
         tabManager: TerminalTabManager,
@@ -882,7 +887,7 @@ struct TerminalPaneView: View {
         bottomOperationNotice == nil ? 0 : 104
     }
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(
             topBanner: topBannerNotice,
             bottomOperation: bottomOperationNotice,

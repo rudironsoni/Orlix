@@ -2,19 +2,22 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class ServerManager: ObservableObject, ServerMutationRepository {
-    let stateStore: ServerStateStore
+final package class ServerManager: ObservableObject, ServerMutationRepository {
+    package let stateStore: ServerStateStore
 
-    var servers: [Server] {
+    package var servers: [Server] {
         stateStore.servers
     }
 
-    var workspaces: [Workspace] {
+    package var workspaces: [Workspace] {
         stateStore.workspaces
     }
 
-    var freePlanGeneration: FreePlanGeneration {
+    package var freePlanGeneration: FreePlanGeneration {
         stateStore.freePlanGeneration
     }
 
@@ -26,7 +29,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         dependencies.remoteSyncCoordinator
     }
 
-    init(
+    package init(
         dependencies: ServerManagerDependencies,
         startsAutomatically: Bool = true
     ) {
@@ -43,11 +46,11 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
     // MARK: - Pending Remote Sync
 
     /// Clear all local data and re-download from CloudKit
-    func clearLocalDataAndResync() async throws {
+    package func clearLocalDataAndResync() async throws {
         try await remoteSyncCoordinator.clearLocalDataAndResync()
     }
 
-    func resolveAmbiguousCloudRecovery(
+    package func resolveAmbiguousCloudRecovery(
         _ choice: AmbiguousCloudRecoveryChoice
     ) async throws {
         try await remoteSyncCoordinator.resolveAmbiguousCloudRecovery(choice)
@@ -55,17 +58,17 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     // MARK: - Data Loading
 
-    func loadData() async {
+    package func loadData() async {
         await remoteSyncCoordinator.loadData()
     }
 
-    func handleSyncDisabled() {
+    package func handleSyncDisabled() {
         remoteSyncCoordinator.handleSyncDisabled()
     }
 
     // MARK: - Server CRUD
 
-    func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {
+    package func validate(_ mutation: ServerMutation, hasProAccess: Bool) throws {
         switch mutation {
         case .create:
             guard stateStore.canAddServer(hasProAccess: hasProAccess) else {
@@ -78,7 +81,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
     }
 
-    func apply(
+    package func apply(
         _ mutation: ServerMutation,
         credentials: ServerCredentials
     ) async throws -> Server {
@@ -154,7 +157,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         return savedServer
     }
 
-    func deleteServer(_ server: Server) async throws {
+    package func deleteServer(_ server: Server) async throws {
         guard let storedServer = servers.first(where: { $0.id == server.id }) else { return }
         guard await dependencies.actionAuthorizer.authorize(
             storedServer,
@@ -200,13 +203,13 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         )
     }
 
-    func updateLastConnected(for server: Server) async throws {
+    package func updateLastConnected(for server: Server) async throws {
         try stateStore.updateLastConnected(for: server.id, at: dependencies.now())
     }
 
     // MARK: - Workspace CRUD
 
-    func addWorkspace(_ workspace: Workspace, hasProAccess: Bool) async throws {
+    package func addWorkspace(_ workspace: Workspace, hasProAccess: Bool) async throws {
         guard stateStore.canAddWorkspace(hasProAccess: hasProAccess) else {
             throw OrlixError.proRequired(.unlimitedWorkspaces)
         }
@@ -241,7 +244,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         logger.info("Added workspace: \(workspace.name)")
     }
 
-    func updateWorkspace(_ workspace: Workspace) async throws {
+    package func updateWorkspace(_ workspace: Workspace) async throws {
         let previousServers = servers
         let previousWorkspaces = workspaces
         let result = try stateStore.planMutation(
@@ -275,7 +278,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         logger.info("Updated workspace: \(workspace.name)")
     }
 
-    func deleteWorkspace(_ workspace: Workspace) async throws {
+    package func deleteWorkspace(_ workspace: Workspace) async throws {
         let initialDeletedServers = servers.filter { $0.workspaceId == workspace.id }
         guard let plan = WorkspaceDeletionPlan(
             workspaceID: workspace.id,
@@ -323,7 +326,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         logger.info("Deleted workspace: \(plan.workspace.name)")
     }
 
-    func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
+    package func reorderWorkspaces(from source: IndexSet, to destination: Int) async throws {
         let reordered = try stateStore.planWorkspaceReorder(
             from: source,
             to: destination,
@@ -353,19 +356,19 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     // MARK: - Queries
 
-    func servers(in workspace: Workspace, environment: ServerEnvironment?) -> [Server] {
+    package func servers(in workspace: Workspace, environment: ServerEnvironment?) -> [Server] {
         stateStore.servers(in: workspace, environment: environment)
     }
 
-    func workspace(withId id: UUID?) -> Workspace? {
+    package func workspace(withId id: UUID?) -> Workspace? {
         stateStore.workspace(withID: id)
     }
 
-    func server(id: UUID) -> Server? {
+    package func server(id: UUID) -> Server? {
         stateStore.server(withID: id)
     }
 
-    func moveServer(
+    package func moveServer(
         _ server: Server,
         to destination: Workspace,
         preferredEnvironment: ServerEnvironment? = nil,
@@ -409,17 +412,17 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
 
     // MARK: - Pro Limits
 
-    var freeServerLimit: Int {
+    package var freeServerLimit: Int {
         stateStore.freeServerLimit
     }
 
     /// Check if a specific server is locked (over free tier limit)
-    func isServerLocked(_ server: Server, hasProAccess: Bool) -> Bool {
+    package func isServerLocked(_ server: Server, hasProAccess: Bool) -> Bool {
         stateStore.isServerLocked(server, hasProAccess: hasProAccess)
     }
 
     /// Check if a specific workspace is locked (over free tier limit)
-    func isWorkspaceLocked(_ workspace: Workspace, hasProAccess: Bool) -> Bool {
+    package func isWorkspaceLocked(_ workspace: Workspace, hasProAccess: Bool) -> Bool {
         stateStore.isWorkspaceLocked(workspace, hasProAccess: hasProAccess)
     }
 
@@ -464,7 +467,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         }
     }
 
-    func updateEnvironment(_ environment: ServerEnvironment, in workspace: Workspace) async throws -> Workspace {
+    package func updateEnvironment(_ environment: ServerEnvironment, in workspace: Workspace) async throws -> Workspace {
         var updatedWorkspace = workspace
         if let envIndex = updatedWorkspace.environments.firstIndex(where: { $0.id == environment.id }) {
             updatedWorkspace.environments[envIndex] = environment
@@ -487,14 +490,14 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         return updatedWorkspace
     }
 
-    func deleteEnvironment(
+    package func deleteEnvironment(
         _ environment: ServerEnvironment,
         in workspace: Workspace
     ) async throws -> EnvironmentDeletionResult {
         try await deleteEnvironment(environment, in: workspace, fallback: .production)
     }
 
-    func deleteEnvironment(
+    package func deleteEnvironment(
         _ environment: ServerEnvironment,
         in workspace: Workspace,
         fallback: ServerEnvironment
@@ -530,7 +533,7 @@ final class ServerManager: ObservableObject, ServerMutationRepository {
         )
     }
 
-    func handleAppLanguageChange() {
+    package func handleAppLanguageChange() {
         stateStore.handleAppLanguageChange()
     }
 

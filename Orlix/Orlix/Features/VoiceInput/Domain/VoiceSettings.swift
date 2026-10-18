@@ -1,17 +1,44 @@
 import Foundation
 
-nonisolated enum TranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
+nonisolated package enum TranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
     case system
     case mlxWhisper
     case mlxParakeet
 
-    nonisolated var id: String { rawValue }
+    nonisolated package var id: String { rawValue }
 }
 
-nonisolated struct VoiceSettings: Equatable, Sendable {
-    var provider: TranscriptionProvider
-    var whisperModelID: String
-    var parakeetModelID: String
-    var languageCode: String
-    var terminalVoiceButtonEnabled: Bool
+nonisolated package struct VoiceSettings: Equatable, Sendable {
+    package var provider: TranscriptionProvider
+    package var whisperModelID: String
+    package var parakeetModelID: String
+    package var languageCode: String
+    package var terminalVoiceButtonEnabled: Bool
+
+
+    package init(
+
+        provider: TranscriptionProvider,
+
+        whisperModelID: String,
+
+        parakeetModelID: String,
+
+        languageCode: String,
+
+        terminalVoiceButtonEnabled: Bool
+
+    ) {
+
+        self.provider = provider
+
+        self.whisperModelID = whisperModelID
+
+        self.parakeetModelID = parakeetModelID
+
+        self.languageCode = languageCode
+
+        self.terminalVoiceButtonEnabled = terminalVoiceButtonEnabled
+
+    }
 }

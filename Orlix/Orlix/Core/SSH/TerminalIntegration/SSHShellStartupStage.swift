@@ -1,5 +1,5 @@
-extension SSHSession {
-    enum ShellStartupStage: Equatable, Sendable {
+package extension SSHSession {
+    package enum ShellStartupStage: Equatable, Sendable {
         case channelOpenRetry
         case ptyRequest
         case shellRequest

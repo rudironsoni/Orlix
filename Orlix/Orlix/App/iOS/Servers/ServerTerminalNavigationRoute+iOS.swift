@@ -1,8 +1,11 @@
 import Foundation
 
 #if os(iOS)
-nonisolated enum ServerTerminalNavigationRoute: Equatable, Sendable {
-    nonisolated enum ConnectionResolution: Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerTerminalNavigationRoute: Equatable, Sendable {
+    nonisolated package enum ConnectionResolution: Sendable {
         case succeeded
         case failed
     }
@@ -10,7 +13,7 @@ nonisolated enum ServerTerminalNavigationRoute: Equatable, Sendable {
     case connecting(server: Server, attemptID: UUID)
     case active(serverId: UUID)
 
-    var serverId: UUID {
+    package var serverId: UUID {
         switch self {
         case .connecting(let server, _):
             server.id
@@ -19,21 +22,21 @@ nonisolated enum ServerTerminalNavigationRoute: Equatable, Sendable {
         }
     }
 
-    var connectingServer: Server? {
+    package var connectingServer: Server? {
         guard case .connecting(let server, _) = self else { return nil }
         return server
     }
 
-    var connectionAttemptID: UUID? {
+    package var connectionAttemptID: UUID? {
         guard case .connecting(_, let attemptID) = self else { return nil }
         return attemptID
     }
 
-    var isConnecting: Bool {
+    package var isConnecting: Bool {
         connectingServer != nil
     }
 
-    func resolvingConnection(
+    package func resolvingConnection(
         for attemptID: UUID,
         as resolution: ConnectionResolution
     ) -> Self? {

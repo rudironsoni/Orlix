@@ -1,15 +1,18 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalAccessoryResolutionChannel:
+final package class TerminalAccessoryResolutionChannel:
     TerminalAccessoryResolutionSource,
     TerminalAccessoryResolutionPublishing {
-    typealias Observer = (TerminalAccessoryProfile) -> Void
+    package typealias Observer = (TerminalAccessoryProfile) -> Void
 
     private var observers: [UUID: Observer] = [:]
 
     @discardableResult
-    func observeTerminalAccessoryProfile(
+    package func observeTerminalAccessoryProfile(
         _ observer: @escaping Observer
     ) -> UUID {
         let id = UUID()
@@ -17,13 +20,15 @@ final class TerminalAccessoryResolutionChannel:
         return id
     }
 
-    func removeTerminalAccessoryProfileObserver(_ id: UUID) {
+    package func removeTerminalAccessoryProfileObserver(_ id: UUID) {
         observers.removeValue(forKey: id)
     }
 
-    func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) {
+    package func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile) {
         for observer in Array(observers.values) {
             observer(profile)
         }
     }
+
+    package init() {}
 }

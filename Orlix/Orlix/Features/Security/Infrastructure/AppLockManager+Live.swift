@@ -1,7 +1,7 @@
 import Foundation
 
-extension AppLockManager {
-    convenience init(
+package extension AppLockManager {
+    convenience package init(
         defaults: UserDefaults = .standard,
         authService: (any BiometricAuthServing)? = nil,
         now: @escaping () -> Date = Date.init,

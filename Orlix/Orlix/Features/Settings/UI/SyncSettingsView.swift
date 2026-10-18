@@ -1,12 +1,15 @@
 import SwiftUI
 
-struct SyncSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct SyncSettingsView: View {
     @EnvironmentObject private var coordinator: SyncSettingsCoordinator
     @State private var syncEnabled = SyncSettings.isEnabled
     @State private var ignoresNextSyncToggleChange = false
     @State private var isConfirmingCredentialRemoval = false
 
-    var body: some View {
+    package var body: some View {
         Form {
             statusHeroSection
             syncToggleSection
@@ -139,4 +142,6 @@ struct SyncSettingsView: View {
             Task { await coordinator.syncNow() }
         }
     }
+
+    package init() {}
 }

@@ -1,17 +1,20 @@
 import Foundation
 
-nonisolated struct WorkspaceEnvironmentFilters: Equatable, Sendable {
-    static let empty = Self()
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct WorkspaceEnvironmentFilters: Equatable, Sendable {
+    static package let empty = Self()
 
-    let selectionsByWorkspace: [UUID: Set<UUID>]
+    package let selectionsByWorkspace: [UUID: Set<UUID>]
 
-    init(selectionsByWorkspace: [UUID: Set<UUID>] = [:]) {
+    package init(selectionsByWorkspace: [UUID: Set<UUID>] = [:]) {
         self.selectionsByWorkspace = selectionsByWorkspace
     }
 }
 
-enum WorkspaceSelectionPolicy {
-    static func workspace(
+package enum WorkspaceSelectionPolicy {
+    static package func workspace(
         current: Workspace?,
         available: [Workspace]
     ) -> Workspace? {
@@ -19,7 +22,7 @@ enum WorkspaceSelectionPolicy {
         return available.first { $0.id == current.id } ?? available.first
     }
 
-    static func environment(
+    static package func environment(
         current: ServerEnvironment?,
         workspace: Workspace?
     ) -> ServerEnvironment? {
@@ -27,7 +30,7 @@ enum WorkspaceSelectionPolicy {
         return workspace.environment(withId: current.id)
     }
 
-    static func environment(
+    static package func environment(
         current: ServerEnvironment?,
         afterDeleting environmentID: UUID,
         result: EnvironmentDeletionResult
@@ -39,12 +42,12 @@ enum WorkspaceSelectionPolicy {
         return result.workspace.environment(withId: current.id)
     }
 
-    static func server(current: Server?, available: [Server]) -> Server? {
+    static package func server(current: Server?, available: [Server]) -> Server? {
         guard let current else { return nil }
         return available.first { $0.id == current.id }
     }
 
-    static func environmentFilterIDs(
+    static package func environmentFilterIDs(
         in filters: WorkspaceEnvironmentFilters,
         workspace: Workspace?
     ) -> Set<UUID> {
@@ -53,7 +56,7 @@ enum WorkspaceSelectionPolicy {
         return selected.intersection(workspace.environments.map(\.id))
     }
 
-    static func updatingEnvironmentFilterIDs(
+    static package func updatingEnvironmentFilterIDs(
         _ selected: Set<UUID>,
         for workspace: Workspace?,
         in filters: WorkspaceEnvironmentFilters
@@ -73,7 +76,7 @@ enum WorkspaceSelectionPolicy {
         return WorkspaceEnvironmentFilters(selectionsByWorkspace: selections)
     }
 
-    static func reconciledEnvironmentFilters(
+    static package func reconciledEnvironmentFilters(
         _ filters: WorkspaceEnvironmentFilters,
         workspaces: [Workspace]
     ) -> WorkspaceEnvironmentFilters {
@@ -90,17 +93,17 @@ enum WorkspaceSelectionPolicy {
     }
 }
 
-nonisolated enum ServerCreationPresentationStep: Equatable, Sendable {
+nonisolated package enum ServerCreationPresentationStep: Equatable, Sendable {
     case createWorkspace
     case createServer
 }
 
-nonisolated enum ServerCreationPresentationPolicy {
-    static func initialStep(canAddServer: Bool) -> ServerCreationPresentationStep {
+nonisolated package enum ServerCreationPresentationPolicy {
+    static package func initialStep(canAddServer: Bool) -> ServerCreationPresentationStep {
         canAddServer ? .createServer : .createWorkspace
     }
 
-    static func shouldResumePrefilledServer(
+    static package func shouldResumePrefilledServer(
         hasPrefill: Bool,
         canAddServer: Bool,
         isPresentingServer: Bool

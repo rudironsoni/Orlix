@@ -1,68 +1,72 @@
 import Combine
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 /// Owns asynchronous operations for one Remote Files tab.
 @MainActor
-final class RemoteFileOperationCoordinator: ObservableObject {
-    enum PreparedFilePurpose: Hashable {
+final package class RemoteFileOperationCoordinator: ObservableObject {
+    package enum PreparedFilePurpose: Hashable {
         case downloadExport
         case share
     }
 
-    struct PreparedFile: Identifiable {
-        let id: UUID
-        let purpose: PreparedFilePurpose
-        let url: URL
-        let filename: String
+    package struct PreparedFile: Identifiable {
+        package let id: UUID
+        package let purpose: PreparedFilePurpose
+        package let url: URL
+        package let filename: String
     }
 
-    enum Kind: Equatable {
+    package enum Kind: Equatable {
         case upload
         case transfer
     }
 
-    enum Phase: Equatable {
+    package enum Phase: Equatable {
         case running(message: String, completedUnitCount: Int?, totalUnitCount: Int?)
         case awaitingSecurityApproval(message: String)
         case succeeded(message: String)
         case failed(message: String)
     }
 
-    struct Completion: Equatable {
-        let fileURL: URL?
-        let fileName: String?
-        let filePath: String?
+    package struct Completion: Equatable {
+        package let fileURL: URL?
+        package let fileName: String?
+        package let filePath: String?
 
-        init(fileURL: URL? = nil, fileName: String? = nil, filePath: String? = nil) {
+        package init(fileURL: URL? = nil, fileName: String? = nil, filePath: String? = nil) {
             self.fileURL = fileURL
             self.fileName = fileName
             self.filePath = filePath
         }
     }
 
-    struct Operation: Identifiable, Equatable {
-        let id: UUID
-        let kind: Kind
-        let title: String
-        var phase: Phase
-        var completion: Completion?
+    package struct Operation: Identifiable, Equatable {
+        package let id: UUID
+        package let kind: Kind
+        package let title: String
+        package var phase: Phase
+        package var completion: Completion?
     }
 
-    typealias ProgressHandler = @MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void
-    typealias TransferOperation = @MainActor (@escaping ProgressHandler) async throws -> Void
+    package typealias ProgressHandler = @MainActor @Sendable (RemoteFileBrowserStore.TransferProgress) -> Void
+    package typealias TransferOperation = @MainActor (@escaping ProgressHandler) async throws -> Void
 
     private struct PreparedFileRecord {
-        let file: PreparedFile
-        let cleanup: @MainActor () -> Void
+        package let file: PreparedFile
+        package let cleanup: @MainActor () -> Void
     }
 
     private struct PendingApproval {
-        let taskID: UUID?
-        let visibleOperationID: UUID?
-        let request: ServerSecurityApprovalRequest
-        let retry: @MainActor () -> Void
-        let cancellation: @MainActor () -> Void
-        let approvalFailure: @MainActor (Error) -> Void
+        package let taskID: UUID?
+        package let visibleOperationID: UUID?
+        package let request: ServerSecurityApprovalRequest
+        package let retry: @MainActor () -> Void
+        package let cancellation: @MainActor () -> Void
+        package let approvalFailure: @MainActor (Error) -> Void
     }
 
     @Published private(set) var operations: [Operation] = []
@@ -75,17 +79,17 @@ final class RemoteFileOperationCoordinator: ObservableObject {
     private var preparedFilesByID: [UUID: PreparedFileRecord] = [:]
     private var latestPreparedFileRequestByPurpose: [PreparedFilePurpose: UUID] = [:]
 
-    var securityApprovalRequest: ServerSecurityApprovalRequest? {
+    package var securityApprovalRequest: ServerSecurityApprovalRequest? {
         pendingApproval?.request
     }
 
-    init(server: Server, securityApprovalActions: RemoteFileSecurityApprovalActions) {
+    package init(server: Server, securityApprovalActions: RemoteFileSecurityApprovalActions) {
         self.server = server
         self.securityApprovalActions = securityApprovalActions
     }
 
     @discardableResult
-    func start(
+    package func start(
         id: UUID = UUID(),
         kind: Kind,
         title: String,
@@ -122,7 +126,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
     }
 
     @discardableResult
-    func run<Result>(
+    package func run<Result>(
         operation: @escaping @MainActor () async throws -> Result,
         onSuccess: @escaping @MainActor (Result) -> Void,
         onFailure: @escaping @MainActor (Error) -> Void
@@ -139,7 +143,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
     }
 
     @discardableResult
-    func requestSecurityApproval(
+    package func requestSecurityApproval(
         for error: Error,
         retry: @escaping @MainActor () -> Void,
         onCancellation: @escaping @MainActor () -> Void = {}
@@ -152,11 +156,11 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         )
     }
 
-    func contains(_ id: UUID) -> Bool {
+    package func contains(_ id: UUID) -> Bool {
         tasksByID[id] != nil || operations.contains { $0.id == id }
     }
 
-    func cancel(_ id: UUID) {
+    package func cancel(_ id: UUID) {
         tasksByID.removeValue(forKey: id)?.cancel()
         dismissalTasksByID.removeValue(forKey: id)?.cancel()
         if pendingApproval?.taskID == id {
@@ -166,13 +170,13 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         removeOperation(id)
     }
 
-    func dismiss(_ id: UUID) {
+    package func dismiss(_ id: UUID) {
         guard tasksByID[id] == nil else { return }
         dismissalTasksByID.removeValue(forKey: id)?.cancel()
         removeOperation(id)
     }
 
-    func releasePreparedFile(_ id: UUID) {
+    package func releasePreparedFile(_ id: UUID) {
         guard let record = preparedFilesByID.removeValue(forKey: id) else { return }
         if latestPreparedFileRequestByPurpose[record.file.purpose] == id {
             latestPreparedFileRequestByPurpose[record.file.purpose] = nil
@@ -180,7 +184,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         record.cleanup()
     }
 
-    func beginPreparedFileRequest(_ id: UUID, purpose: PreparedFilePurpose) {
+    package func beginPreparedFileRequest(_ id: UUID, purpose: PreparedFilePurpose) {
         if let previousID = latestPreparedFileRequestByPurpose[purpose], previousID != id {
             cancel(previousID)
             releasePreparedFile(previousID)
@@ -188,7 +192,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         latestPreparedFileRequestByPurpose[purpose] = id
     }
 
-    func publishPreparedFile(
+    package func publishPreparedFile(
         _ file: PreparedFile,
         cleanup: @escaping @MainActor () -> Void,
         onPrepared: @escaping @MainActor (PreparedFile) -> Void
@@ -201,7 +205,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         onPrepared(file)
     }
 
-    func approveSecurityRequest() -> Error? {
+    package func approveSecurityRequest() -> Error? {
         guard let pendingApproval else { return nil }
         guard securityApprovalActions.approve(pendingApproval.request) else {
             if let operationID = pendingApproval.visibleOperationID {
@@ -220,7 +224,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         return nil
     }
 
-    func cancelSecurityRequest() -> Error? {
+    package func cancelSecurityRequest() -> Error? {
         guard let pendingApproval else { return nil }
         rejectPendingApproval()
         if let operationID = pendingApproval.visibleOperationID {
@@ -235,7 +239,7 @@ final class RemoteFileOperationCoordinator: ObservableObject {
         return error
     }
 
-    func cancelAll() {
+    package func cancelAll() {
         let tasks = Array(tasksByID.values) + Array(dismissalTasksByID.values)
         tasksByID.removeAll(keepingCapacity: false)
         dismissalTasksByID.removeAll(keepingCapacity: false)

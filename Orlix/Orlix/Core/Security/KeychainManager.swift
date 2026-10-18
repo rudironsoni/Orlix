@@ -4,12 +4,12 @@ import os.log
 // MARK: - Keychain Manager
 
 @MainActor
-final class KeychainManager {
-    nonisolated static let credentialService = "com.rudironsoni.orlix"
-    nonisolated static let cloudflareTokenService = "com.rudironsoni.orlix.cloudflare.tokens"
-    nonisolated static let iCloudMigrationKey = "orlix.keychain.iCloudMigration.v1"
+final package class KeychainManager {
+    nonisolated static package let credentialService = "com.rudironsoni.orlix"
+    nonisolated static package let cloudflareTokenService = "com.rudironsoni.orlix.cloudflare.tokens"
+    nonisolated static package let iCloudMigrationKey = "orlix.keychain.iCloudMigration.v1"
 
-    static let shared = KeychainManager(performsInitialMigration: true)
+    static package let shared = KeychainManager(performsInitialMigration: true)
 
     private let store: KeychainStore
     private let cloudflareTokenStore: KeychainStore
@@ -21,16 +21,16 @@ final class KeychainManager {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Keychain")
 
     private struct CredentialBundle: Codable, Equatable {
-        let serverID: UUID
-        let binding: ServerCredentialBinding
-        let password: String?
-        let privateKey: Data?
-        let publicKey: Data?
-        let passphrase: String?
-        let cloudflareClientID: String?
-        let cloudflareClientSecret: String?
+        package let serverID: UUID
+        package let binding: ServerCredentialBinding
+        package let password: String?
+        package let privateKey: Data?
+        package let publicKey: Data?
+        package let passphrase: String?
+        package let cloudflareClientID: String?
+        package let cloudflareClientSecret: String?
 
-        init(credentials: ServerCredentials, server: Server) {
+        package init(credentials: ServerCredentials, server: Server) {
             serverID = server.id
             binding = ServerCredentialBinding(server: server)
             password = credentials.password
@@ -43,17 +43,17 @@ final class KeychainManager {
     }
 
     private struct StagedServerCredentialTransaction: Codable {
-        struct Previous: Codable {
-            let bundle: CredentialBundle
-            let scope: KeychainStorageScope
+        package struct Previous: Codable {
+            package let bundle: CredentialBundle
+            package let scope: KeychainStorageScope
         }
 
-        let previous: Previous?
-        let replacement: CredentialBundle
-        let replacementScope: KeychainStorageScope
+        package let previous: Previous?
+        package let replacement: CredentialBundle
+        package let replacementScope: KeychainStorageScope
     }
 
-    init(
+    package init(
         store: KeychainStore = KeychainStore(service: credentialService),
         cloudflareTokenStore: KeychainStore = KeychainStore(
             service: cloudflareTokenService
@@ -176,7 +176,7 @@ final class KeychainManager {
 
     // MARK: - Full Credentials
 
-    func getCredentials(for server: Server) throws -> ServerCredentials {
+    package func getCredentials(for server: Server) throws -> ServerCredentials {
         var credentials = ServerCredentials(
             serverId: server.id,
             credentialBinding: ServerCredentialBinding(server: server)
@@ -224,7 +224,7 @@ final class KeychainManager {
         return credentials
     }
 
-    func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {
+    package func storeCredentials(_ credentials: ServerCredentials, for server: Server) throws {
         guard credentials.serverId == server.id else {
             throw KeychainError.credentialServerMismatch
         }
@@ -276,7 +276,7 @@ final class KeychainManager {
         }
     }
 
-    func prepareServerCredentialTransaction(
+    package func prepareServerCredentialTransaction(
         id: UUID,
         previousServer: Server?,
         server: Server,
@@ -313,7 +313,7 @@ final class KeychainManager {
         }
     }
 
-    func commitServerCredentialTransaction(
+    package func commitServerCredentialTransaction(
         id: UUID,
         previousServer: Server?,
         server: Server
@@ -358,7 +358,7 @@ final class KeychainManager {
         }
     }
 
-    func discardServerCredentialTransaction(id: UUID) throws {
+    package func discardServerCredentialTransaction(id: UUID) throws {
         let key = serverCredentialTransactionKey(id)
         try store.delete(key, scope: .deviceOnly)
         guard try !store.contains(key, scope: .deviceOnly) else {
@@ -366,7 +366,7 @@ final class KeychainManager {
         }
     }
 
-    func hasCredentials(for server: Server) throws -> Bool {
+    package func hasCredentials(for server: Server) throws -> Bool {
         try credentialStorageResolution(for: server) != nil
     }
 
@@ -432,7 +432,7 @@ final class KeychainManager {
 
     // MARK: - Delete Operations
 
-    func deleteCredentials(for serverId: UUID) throws {
+    package func deleteCredentials(for serverId: UUID) throws {
         if !isSyncEnabled() {
             try offlineChanges.record(.deleted, for: .server(serverId))
         }
@@ -581,8 +581,8 @@ final class KeychainManager {
     }
 
     private struct CredentialStorageResolution {
-        let scope: KeychainStorageScope
-        let bindingMatches: Bool
+        package let scope: KeychainStorageScope
+        package let bindingMatches: Bool
     }
 
     private var preferredStorageScope: KeychainStorageScope {
@@ -641,7 +641,7 @@ final class KeychainManager {
         }
     }
 
-    func synchronizeCredentialStorage(isEnabled: Bool) throws {
+    package func synchronizeCredentialStorage(isEnabled: Bool) throws {
         try credentialOfflineWrites.resumePendingWrite()
         try oauthOfflineWrites.resumePendingWrite()
         if isEnabled {
@@ -681,18 +681,18 @@ final class KeychainManager {
         )
     }
 
-    func handleSyncToggle(isEnabled: Bool) throws {
+    package func handleSyncToggle(isEnabled: Bool) throws {
         try synchronizeCredentialStorage(isEnabled: isEnabled)
         if isEnabled {
             UserDefaults.standard.set(true, forKey: Self.iCloudMigrationKey)
         }
     }
 
-    var hasPendingCredentialSyncWork: Bool {
+    package var hasPendingCredentialSyncWork: Bool {
         shouldResumeCredentialStorageOnLaunch
     }
 
-    func removeCredentialsFromICloud() throws {
+    package func removeCredentialsFromICloud() throws {
         guard !isSyncEnabled() else {
             throw CredentialSyncError.syncMustBeDisabled
         }
@@ -1052,7 +1052,7 @@ final class KeychainManager {
         return .server(id)
     }
 
-    nonisolated static func isSynchronizableCredentialKey(_ key: String) -> Bool {
+    nonisolated static package func isSynchronizableCredentialKey(_ key: String) -> Bool {
         if key == "orlix.sshkeys.index" {
             return true
         }
@@ -1076,7 +1076,7 @@ final class KeychainManager {
     private let sshKeysIndexKey = "orlix.sshkeys.index"
 
     /// Get all stored SSH key entries (metadata only, not the actual keys)
-    func getStoredSSHKeys() -> [SSHKeyEntry] {
+    package func getStoredSSHKeys() -> [SSHKeyEntry] {
         for scope in readScopes {
             if let data = try? store.get(sshKeysIndexKey, scope: scope),
                let keys = try? JSONDecoder().decode([SSHKeyEntry].self, from: data) {
@@ -1093,7 +1093,7 @@ final class KeychainManager {
     }
 
     /// Store a new SSH key in the keychain library
-    func storeSSHKeyEntry(
+    package func storeSSHKeyEntry(
         name: String,
         privateKey: Data,
         passphrase: String?,
@@ -1147,7 +1147,7 @@ final class KeychainManager {
     }
 
     /// Get the actual key data for a stored SSH key
-    func getStoredSSHKeyData(for keyId: UUID) throws -> (key: Data, passphrase: String?)? {
+    package func getStoredSSHKeyData(for keyId: UUID) throws -> (key: Data, passphrase: String?)? {
         var storedScope: KeychainStorageScope?
         var storedKeyData: Data?
         for scope in readScopes {
@@ -1171,7 +1171,7 @@ final class KeychainManager {
     }
 
     /// Delete a stored SSH key from the library
-    func deleteStoredSSHKey(_ keyId: UUID) throws {
+    package func deleteStoredSSHKey(_ keyId: UUID) throws {
         if !isSyncEnabled() {
             try offlineChanges.record(.deleted, for: .sshKey(keyId))
         }
@@ -1193,7 +1193,7 @@ final class KeychainManager {
     }
 
     /// Update a stored SSH key's name
-    func updateStoredSSHKeyName(_ keyId: UUID, name: String) throws {
+    package func updateStoredSSHKeyName(_ keyId: UUID, name: String) throws {
         var keys = getStoredSSHKeys()
         guard let index = keys.firstIndex(where: { $0.id == keyId }) else {
             throw KeychainError.itemNotFound
@@ -1221,11 +1221,11 @@ final class KeychainManager {
     }
 }
 
-nonisolated struct ServerCredentialTransactionCommitError: Error, Sendable {
-    let originalErrorDescription: String
-    let rollbackErrorDescription: String
+nonisolated package struct ServerCredentialTransactionCommitError: Error, Sendable {
+    package let originalErrorDescription: String
+    package let rollbackErrorDescription: String
 
-    init(originalError: Error, rollbackError: Error) {
+    package init(originalError: Error, rollbackError: Error) {
         originalErrorDescription = String(describing: originalError)
         rollbackErrorDescription = String(describing: rollbackError)
     }

@@ -9,10 +9,13 @@
 import CoreImage
 import SwiftUI
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Native UIKit Input Accessory View with Glass Effect
 
-final class TerminalInputAccessoryView: UIInputView {
+final package class TerminalInputAccessoryView: UIInputView {
     private static let preferredHeight: CGFloat = 48
 
     private weak var terminalOwner: GhosttyTerminalView?
@@ -20,7 +23,7 @@ final class TerminalInputAccessoryView: UIInputView {
     private let onCustomAction: (TerminalAccessoryCustomAction) -> Void
     private let onDismissKeyboard: () -> Void
     private var inputSnapshot: TerminalAccessoryInputSnapshot
-    var onVoice: (() -> Void)? {
+    package var onVoice: (() -> Void)? {
         didSet {
             updateLeadingButtonsState()
         }
@@ -46,36 +49,36 @@ final class TerminalInputAccessoryView: UIInputView {
     private var repeatingKey: TerminalKey?
 
     #if DEBUG
-    var diagnosticBackgroundAppearance: String {
+    package var diagnosticBackgroundAppearance: String {
         guard let color = backgroundEffectView?.backgroundColor else { return "missing" }
         let resolved = color.resolvedColor(with: traitCollection)
         return isDarkBackgroundColor(resolved) == true ? "dark" : "light"
     }
 
-    var diagnosticOwnerInterfaceStyle: String {
+    package var diagnosticOwnerInterfaceStyle: String {
         interfaceStyleDescription(terminalOwner?.traitCollection.userInterfaceStyle ?? .unspecified)
     }
 
-    var diagnosticHostInterfaceStyle: String {
+    package var diagnosticHostInterfaceStyle: String {
         interfaceStyleDescription(hostInterfaceStyle)
     }
 
-    var diagnosticResolvedInterfaceStyle: String {
+    package var diagnosticResolvedInterfaceStyle: String {
         interfaceStyleDescription(resolvedInterfaceStyle)
     }
 
-    var diagnosticHeight: CGFloat {
+    package var diagnosticHeight: CGFloat {
         bounds.height
     }
 
-    var diagnosticFittingHeight: CGFloat {
+    package var diagnosticFittingHeight: CGFloat {
         systemLayoutSizeFitting(
             CGSize(width: max(bounds.width, 1), height: 0)
         ).height
     }
     #endif
 
-    init(
+    package init(
         terminalOwner: GhosttyTerminalView,
         inputSnapshot: TerminalAccessoryInputSnapshot,
         onKey: @escaping (TerminalKey) -> Void,
@@ -101,20 +104,20 @@ final class TerminalInputAccessoryView: UIInputView {
         observeResolvedAppearanceChanges()
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) not supported")
     }
 
-    override var intrinsicContentSize: CGSize {
+    override package var intrinsicContentSize: CGSize {
         CGSize(width: UIView.noIntrinsicMetric, height: Self.preferredHeight)
     }
 
-    override func layoutSubviews() {
+    override package func layoutSubviews() {
         super.layoutSubviews()
         terminalOwner?.notifyKeyboardAvoidanceAccessoryFrameChange()
     }
 
-    override func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
+    override package func systemLayoutSizeFitting(_ targetSize: CGSize) -> CGSize {
         systemLayoutSizeFitting(
             targetSize,
             withHorizontalFittingPriority: .fittingSizeLevel,
@@ -128,7 +131,7 @@ final class TerminalInputAccessoryView: UIInputView {
     // fallback vs. intrinsic size) lets the keyboard host reserve a slot
     // that disagrees with the accessory's frame, which after a floating-to-
     // docked re-attach leaves the accessory's bottom edge below the key top.
-    override func systemLayoutSizeFitting(
+    override package func systemLayoutSizeFitting(
         _ targetSize: CGSize,
         withHorizontalFittingPriority _: UILayoutPriority,
         verticalFittingPriority _: UILayoutPriority
@@ -273,14 +276,14 @@ final class TerminalInputAccessoryView: UIInputView {
         updateLeadingButtonsState()
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    override package func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
             updateBackgroundEffect()
         }
     }
 
-    override func didMoveToWindow() {
+    override package func didMoveToWindow() {
         super.didMoveToWindow()
         updateBackgroundEffect()
         terminalOwner?.notifyKeyboardAvoidanceAccessoryFrameChange()
@@ -297,12 +300,12 @@ final class TerminalInputAccessoryView: UIInputView {
         backgroundEffectView.backgroundColor = backgroundColor
     }
 
-    func refreshAppearance() {
+    package func refreshAppearance() {
         updateBackgroundEffect()
         updateLeadingButtonsState()
     }
 
-    func apply(_ snapshot: TerminalAccessoryInputSnapshot) {
+    package func apply(_ snapshot: TerminalAccessoryInputSnapshot) {
         let change = snapshot.change(from: inputSnapshot)
         guard change != .none else { return }
         inputSnapshot = snapshot
@@ -810,7 +813,7 @@ final class TerminalInputAccessoryView: UIInputView {
         repeatingKey = nil
     }
 
-    func consumeModifiers() -> (ctrl: Bool, alt: Bool, command: Bool, shift: Bool) {
+    package func consumeModifiers() -> (ctrl: Bool, alt: Bool, command: Bool, shift: Bool) {
         let ctrl = ctrlActive
         let alt = altActive
         let command = commandActive
@@ -826,7 +829,7 @@ final class TerminalInputAccessoryView: UIInputView {
     }
 
     #if DEBUG
-    func keyboardUITestSetModifiers(_ modifiers: TerminalAccessoryShortcutModifiers) {
+    package func keyboardUITestSetModifiers(_ modifiers: TerminalAccessoryShortcutModifiers) {
         ctrlActive = modifiers.control
         altActive = modifiers.alternate
         commandActive = modifiers.command
@@ -844,7 +847,7 @@ final class TerminalInputAccessoryView: UIInputView {
         }
     }
 
-    func setMouseReportingSuppressed(_ isSuppressed: Bool) {
+    package func setMouseReportingSuppressed(_ isSuppressed: Bool) {
         updateMouseCaptureButton(isSuppressed: isSuppressed)
     }
 
@@ -914,7 +917,7 @@ final class TerminalInputAccessoryView: UIInputView {
 }
 
 private final class RepeatableKeyButton: UIButton {
-    var key: TerminalKey = .backspace
+    package var key: TerminalKey = .backspace
 }
 
 #endif

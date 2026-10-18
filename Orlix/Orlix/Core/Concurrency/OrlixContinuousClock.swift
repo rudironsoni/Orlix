@@ -1,41 +1,41 @@
 import Dispatch
 import Foundation
 
-nonisolated struct Duration: Sendable, Hashable, Comparable {
-    nonisolated struct Components: Sendable, Hashable {
-        let seconds: Int64
-        let attoseconds: Int64
+nonisolated package struct Duration: Sendable, Hashable, Comparable {
+    nonisolated package struct Components: Sendable, Hashable {
+        package let seconds: Int64
+        package let attoseconds: Int64
     }
 
     fileprivate let nanoseconds: Int64
 
-    static let zero = Duration(nanoseconds: 0)
+    static package let zero = Duration(nanoseconds: 0)
 
-    static func seconds(_ value: Int) -> Duration {
+    static package func seconds(_ value: Int) -> Duration {
         seconds(Int64(value))
     }
 
-    static func seconds(_ value: Int64) -> Duration {
+    static package func seconds(_ value: Int64) -> Duration {
         Duration(nanoseconds: multipliedClamping(value, by: 1_000_000_000))
     }
 
-    static func seconds(_ value: Double) -> Duration {
+    static package func seconds(_ value: Double) -> Duration {
         fromFloatingPoint(value, scale: 1_000_000_000)
     }
 
-    static func milliseconds(_ value: Int) -> Duration {
+    static package func milliseconds(_ value: Int) -> Duration {
         milliseconds(Int64(value))
     }
 
-    static func milliseconds(_ value: Int64) -> Duration {
+    static package func milliseconds(_ value: Int64) -> Duration {
         Duration(nanoseconds: multipliedClamping(value, by: 1_000_000))
     }
 
-    static func milliseconds(_ value: Double) -> Duration {
+    static package func milliseconds(_ value: Double) -> Duration {
         fromFloatingPoint(value, scale: 1_000_000)
     }
 
-    var components: Components {
+    package var components: Components {
         let seconds = nanoseconds / 1_000_000_000
         let remainingNanoseconds = nanoseconds % 1_000_000_000
         return Components(
@@ -44,11 +44,11 @@ nonisolated struct Duration: Sendable, Hashable, Comparable {
         )
     }
 
-    static func < (lhs: Duration, rhs: Duration) -> Bool {
+    package static func < (lhs: Duration, rhs: Duration) -> Bool {
         lhs.nanoseconds < rhs.nanoseconds
     }
 
-    static func * (lhs: Duration, rhs: Int) -> Duration {
+    package static func * (lhs: Duration, rhs: Int) -> Duration {
         Duration(nanoseconds: multipliedClamping(lhs.nanoseconds, by: Int64(rhs)))
     }
 
@@ -69,15 +69,15 @@ nonisolated struct Duration: Sendable, Hashable, Comparable {
     }
 }
 
-nonisolated struct ContinuousClock: Sendable {
-    nonisolated struct Instant: Sendable, Hashable, Comparable {
+nonisolated package struct ContinuousClock: Sendable {
+    nonisolated package struct Instant: Sendable, Hashable, Comparable {
         fileprivate let uptimeNanoseconds: UInt64
 
-        static var now: Instant {
+        static package var now: Instant {
             Instant(uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds)
         }
 
-        func advanced(by duration: Duration) -> Instant {
+        package func advanced(by duration: Duration) -> Instant {
             if duration.nanoseconds >= 0 {
                 let delta = UInt64(duration.nanoseconds)
                 let value = uptimeNanoseconds.addingReportingOverflow(delta)
@@ -89,7 +89,7 @@ nonisolated struct ContinuousClock: Sendable {
             return Instant(uptimeNanoseconds: uptimeNanoseconds > delta ? uptimeNanoseconds - delta : 0)
         }
 
-        func duration(to other: Instant) -> Duration {
+        package func duration(to other: Instant) -> Duration {
             if other.uptimeNanoseconds >= uptimeNanoseconds {
                 let delta = other.uptimeNanoseconds - uptimeNanoseconds
                 return Duration(nanoseconds: delta > UInt64(Int64.max) ? .max : Int64(delta))
@@ -98,26 +98,26 @@ nonisolated struct ContinuousClock: Sendable {
             return Duration(nanoseconds: delta > UInt64(Int64.max) ? .min : -Int64(delta))
         }
 
-        static func < (lhs: Instant, rhs: Instant) -> Bool {
+        package static func < (lhs: Instant, rhs: Instant) -> Bool {
             lhs.uptimeNanoseconds < rhs.uptimeNanoseconds
         }
 
-        static func - (lhs: Instant, rhs: Instant) -> Duration {
+        package static func - (lhs: Instant, rhs: Instant) -> Duration {
             rhs.duration(to: lhs)
         }
     }
 
-    static var now: Instant {
+    static package var now: Instant {
         .now
     }
 
-    var now: Instant {
+    package var now: Instant {
         Self.now
     }
 }
 
-extension Task where Success == Never, Failure == Never {
-    static func sleep(for duration: Duration) async throws {
+package extension Task where Success == Never, Failure == Never {
+    static package func sleep(for duration: Duration) async throws {
         guard duration.nanoseconds > 0 else {
             try Task.checkCancellation()
             return

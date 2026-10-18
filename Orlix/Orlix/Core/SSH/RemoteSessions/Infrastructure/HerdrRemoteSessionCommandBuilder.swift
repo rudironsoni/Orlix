@@ -1,10 +1,13 @@
 import Foundation
 
-nonisolated enum HerdrRemoteSessionCommandBuilder {
-    static let availableMarker = "__VVTERM_HERDR_OK__"
-    static let missingMarker = "__VVTERM_HERDR_NO__"
-    static let pathMarker = "__VVTERM_HERDR_PATH__"
-    static let managedOwnershipMarkerPrefix = "__VVTERM_HERDR_MANAGED__:"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum HerdrRemoteSessionCommandBuilder {
+    static package let availableMarker = "__VVTERM_HERDR_OK__"
+    static package let missingMarker = "__VVTERM_HERDR_NO__"
+    static package let pathMarker = "__VVTERM_HERDR_PATH__"
+    static package let managedOwnershipMarkerPrefix = "__VVTERM_HERDR_MANAGED__:"
 
     private static let ownershipFileName = ".orlix-managed"
     private static let maximumLaunchCommandBytes = 64 * 1_024
@@ -23,7 +26,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         "HERDR_WORKSPACE_ID"
     ]
 
-    static func availabilityProbeCommand() -> String {
+    static package func availabilityProbeCommand() -> String {
         let script = """
         \(RemoteTerminalBootstrap.shellPathExport());
         orlixHerdr="$(command -v herdr 2>/dev/null || true)";
@@ -50,7 +53,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func listCommand(runtime: RemoteSessionRuntime) throws -> String {
+    static package func listCommand(runtime: RemoteSessionRuntime) throws -> String {
         let list = try render(arguments: ["session", "list", "--json"], runtime: runtime)
         let script = """
         \(list) 2>/dev/null || exit $?
@@ -66,7 +69,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func currentPaneCommand(
+    static package func currentPaneCommand(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -77,7 +80,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         )
     }
 
-    static func launchCommand(
+    static package func launchCommand(
         request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -188,7 +191,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func presenceProbe(
+    static package func presenceProbe(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionPresenceProbe {
@@ -212,7 +215,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         )
     }
 
-    static func stopCommand(
+    static package func stopCommand(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -223,7 +226,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         )
     }
 
-    static func deleteCommand(
+    static package func deleteCommand(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -237,7 +240,7 @@ nonisolated enum HerdrRemoteSessionCommandBuilder {
         )
     }
 
-    static func sessionStatusClassificationScript(statusCommand: String) -> String {
+    static package func sessionStatusClassificationScript(statusCommand: String) -> String {
         """
         orlixHerdrRuntimeState=unknown
         orlixHerdrStatusPayload="$(

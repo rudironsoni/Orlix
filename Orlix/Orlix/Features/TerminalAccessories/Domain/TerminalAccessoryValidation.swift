@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalAccessoryValidationError: Error {
+package enum TerminalAccessoryValidationError: Error {
     case customActionLimitReached
     case customActionProRequired
     case emptyTitle

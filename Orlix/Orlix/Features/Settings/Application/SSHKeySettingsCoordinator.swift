@@ -1,20 +1,23 @@
 import Combine
 import Foundation
 
-nonisolated struct ImportedSSHKeyRequest: Equatable {
-    let name: String
-    let privateKey: Data
-    let passphrase: String?
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ImportedSSHKeyRequest: Equatable {
+    package let name: String
+    package let privateKey: Data
+    package let passphrase: String?
 }
 
-nonisolated struct GeneratedSSHKeyRequest: Equatable {
-    let name: String
-    let comment: String
-    let passphrase: String?
-    let keyType: SSHKeyType
+nonisolated package struct GeneratedSSHKeyRequest: Equatable {
+    package let name: String
+    package let comment: String
+    package let passphrase: String?
+    package let keyType: SSHKeyType
 }
 
-nonisolated enum SSHKeySettingsFailure: Error, Equatable, Sendable {
+nonisolated package enum SSHKeySettingsFailure: Error, Equatable, Sendable {
     case keychain(status: Int32)
     case keychainEncodingFailed
     case keychainDecodingFailed
@@ -29,7 +32,7 @@ nonisolated enum SSHKeySettingsFailure: Error, Equatable, Sendable {
 }
 
 @MainActor
-protocol SSHKeySettingsRepository: AnyObject {
+package protocol SSHKeySettingsRepository: AnyObject {
     func loadKeys() -> [SSHKeyEntry]
     func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry
     func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry
@@ -37,8 +40,8 @@ protocol SSHKeySettingsRepository: AnyObject {
 }
 
 @MainActor
-final class SSHKeySettingsCoordinator: ObservableObject {
-    nonisolated enum Operation: Hashable, Sendable {
+final package class SSHKeySettingsCoordinator: ObservableObject {
+    nonisolated package enum Operation: Hashable, Sendable {
         case importKey
         case generateKey
         case deleteKey
@@ -49,23 +52,23 @@ final class SSHKeySettingsCoordinator: ObservableObject {
 
     private let repository: any SSHKeySettingsRepository
 
-    init(repository: any SSHKeySettingsRepository) {
+    package init(repository: any SSHKeySettingsRepository) {
         self.repository = repository
     }
 
-    func loadKeys() {
+    package func loadKeys() {
         keys = repository.loadKeys()
     }
 
-    func failure(for operation: Operation) -> SSHKeySettingsFailure? {
+    package func failure(for operation: Operation) -> SSHKeySettingsFailure? {
         operationFailures[operation]
     }
 
-    func clearFailure(for operation: Operation) {
+    package func clearFailure(for operation: Operation) {
         operationFailures.removeValue(forKey: operation)
     }
 
-    func storeImportedKey(
+    package func storeImportedKey(
         name: String,
         privateKey: Data,
         passphrase: String?
@@ -85,7 +88,7 @@ final class SSHKeySettingsCoordinator: ObservableObject {
         }
     }
 
-    func generateAndStoreKey(
+    package func generateAndStoreKey(
         name: String,
         passphrase: String?,
         keyType: SSHKeyType
@@ -106,7 +109,7 @@ final class SSHKeySettingsCoordinator: ObservableObject {
         }
     }
 
-    func deleteKey(_ key: SSHKeyEntry) {
+    package func deleteKey(_ key: SSHKeyEntry) {
         do {
             try repository.deleteKey(id: key.id)
             clearFailure(for: .deleteKey)

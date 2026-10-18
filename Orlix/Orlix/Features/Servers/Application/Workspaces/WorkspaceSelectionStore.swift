@@ -1,12 +1,15 @@
 import Combine
 import Foundation
 
-nonisolated enum StoredWorkspaceEnvironmentFilters: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StoredWorkspaceEnvironmentFilters: Equatable, Sendable {
     case absent
     case current(WorkspaceEnvironmentFilters)
     case requiresNormalization(WorkspaceEnvironmentFilters)
 
-    var filters: WorkspaceEnvironmentFilters {
+    package var filters: WorkspaceEnvironmentFilters {
         switch self {
         case .absent:
             .empty
@@ -15,7 +18,7 @@ nonisolated enum StoredWorkspaceEnvironmentFilters: Equatable, Sendable {
         }
     }
 
-    var hasStoredValue: Bool {
+    package var hasStoredValue: Bool {
         switch self {
         case .absent:
             false
@@ -24,7 +27,7 @@ nonisolated enum StoredWorkspaceEnvironmentFilters: Equatable, Sendable {
         }
     }
 
-    var requiresNormalization: Bool {
+    package var requiresNormalization: Bool {
         if case .requiresNormalization = self {
             return true
         }
@@ -32,13 +35,13 @@ nonisolated enum StoredWorkspaceEnvironmentFilters: Equatable, Sendable {
     }
 }
 
-nonisolated struct LegacyWorkspaceEnvironmentFilters: Equatable, Sendable {
-    let selectedIDs: Set<UUID>
-    let hasStoredValue: Bool
+nonisolated package struct LegacyWorkspaceEnvironmentFilters: Equatable, Sendable {
+    package let selectedIDs: Set<UUID>
+    package let hasStoredValue: Bool
 }
 
 @MainActor
-protocol WorkspaceSelectionPersisting: AnyObject {
+package protocol WorkspaceSelectionPersisting: AnyObject {
     func loadEnvironmentFilters() -> StoredWorkspaceEnvironmentFilters
     @discardableResult
     func saveEnvironmentFilters(_ filters: WorkspaceEnvironmentFilters) -> Bool
@@ -47,24 +50,24 @@ protocol WorkspaceSelectionPersisting: AnyObject {
 }
 
 @MainActor
-final class WorkspaceSelectionStore: ObservableObject {
+final package class WorkspaceSelectionStore: ObservableObject {
     @Published private var storedFilters: StoredWorkspaceEnvironmentFilters
 
     private let persistence: any WorkspaceSelectionPersisting
 
-    init(persistence: any WorkspaceSelectionPersisting) {
+    package init(persistence: any WorkspaceSelectionPersisting) {
         self.persistence = persistence
         storedFilters = persistence.loadEnvironmentFilters()
     }
 
-    func environmentFilterIDs(for workspace: Workspace?) -> Set<UUID> {
+    package func environmentFilterIDs(for workspace: Workspace?) -> Set<UUID> {
         WorkspaceSelectionPolicy.environmentFilterIDs(
             in: storedFilters.filters,
             workspace: workspace
         )
     }
 
-    func updateEnvironmentFilterIDs(
+    package func updateEnvironmentFilterIDs(
         _ selected: Set<UUID>,
         for workspace: Workspace?
     ) {
@@ -76,7 +79,7 @@ final class WorkspaceSelectionStore: ObservableObject {
         persist(updated)
     }
 
-    func reconcile(
+    package func reconcile(
         workspaces: [Workspace],
         legacyMigrationWorkspace: Workspace?
     ) {

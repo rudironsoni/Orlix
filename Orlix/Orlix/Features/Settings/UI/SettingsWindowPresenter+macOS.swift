@@ -2,27 +2,33 @@
 import AppKit
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+#endif
 @MainActor
-protocol SettingsWindowHandling: AnyObject {
+package protocol SettingsWindowHandling: AnyObject {
     var isVisible: Bool { get }
     func presentSettingsWindow()
 }
 
 extension NSWindow: SettingsWindowHandling {
-    func presentSettingsWindow() {
+    package func presentSettingsWindow() {
         makeKeyAndOrderFront(nil)
     }
 }
 
 /// Owns the macOS settings window and reuses it while it remains visible.
 @MainActor
-final class SettingsWindowPresenter {
-    typealias MakeWindow = @MainActor () -> any SettingsWindowHandling
+final package class SettingsWindowPresenter {
+    package typealias MakeWindow = @MainActor () -> any SettingsWindowHandling
 
     private let makeWindow: MakeWindow
     private var settingsWindow: (any SettingsWindowHandling)?
 
-    init(
+    package init(
         appLockManager: AppLockManager,
         serverManager: ServerManager,
         terminalFontStore: TerminalFontStore,
@@ -59,11 +65,11 @@ final class SettingsWindowPresenter {
         }
     }
 
-    init(makeWindow: @escaping MakeWindow) {
+    package init(makeWindow: @escaping MakeWindow) {
         self.makeWindow = makeWindow
     }
 
-    func show() {
+    package func show() {
         if let settingsWindow, settingsWindow.isVisible {
             settingsWindow.presentSettingsWindow()
             return
@@ -101,22 +107,22 @@ final class SettingsWindowPresenter {
 private struct LocalizedSettingsView: View {
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
     @State private var applicationPhase: ScenePhase = NSApplication.shared.isActive ? .active : .inactive
-    @ObservedObject var appLockManager: AppLockManager
-    @ObservedObject var serverManager: ServerManager
-    @ObservedObject var terminalFontStore: TerminalFontStore
-    @ObservedObject var terminalThemeManager: TerminalThemeManager
-    @ObservedObject var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
-    @ObservedObject var viewTabConfigurationManager: ViewTabConfigurationManager
-    @ObservedObject var storeManager: StoreManager
-    @ObservedObject var syncSettingsCoordinator: SyncSettingsCoordinator
-    @ObservedObject var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
-    @ObservedObject var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
-    let statsPreferencesStore: PreferencesStore
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let analyticsOptOutAction: AnalyticsOptOutAction
-    let remoteSessionBackends: [RemoteSessionBackendMetadata]
+    @ObservedObject package var appLockManager: AppLockManager
+    @ObservedObject package var serverManager: ServerManager
+    @ObservedObject package var terminalFontStore: TerminalFontStore
+    @ObservedObject package var terminalThemeManager: TerminalThemeManager
+    @ObservedObject package var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    @ObservedObject package var viewTabConfigurationManager: ViewTabConfigurationManager
+    @ObservedObject package var storeManager: StoreManager
+    @ObservedObject package var syncSettingsCoordinator: SyncSettingsCoordinator
+    @ObservedObject package var sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+    @ObservedObject package var knownHostSettingsCoordinator: KnownHostSettingsCoordinator
+    package let statsPreferencesStore: PreferencesStore
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let analyticsOptOutAction: AnalyticsOptOutAction
+    package let remoteSessionBackends: [RemoteSessionBackendMetadata]
 
-    var body: some View {
+    package var body: some View {
         let locale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
         AppLockContainer {
             SettingsView(

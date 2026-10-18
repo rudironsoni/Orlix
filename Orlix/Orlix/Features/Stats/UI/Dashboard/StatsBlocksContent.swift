@@ -1,9 +1,12 @@
 import SwiftUI
 
-struct StatsAppearancePreviewContent: View {
-    let preferences: StatsPreferences
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct StatsAppearancePreviewContent: View {
+    package let preferences: StatsPreferences
 
-    var body: some View {
+    package var body: some View {
         let snapshot = StatsPreviewFixture.presentationSnapshot
 
         StatsBlocksContent(
@@ -33,8 +36,8 @@ struct StatsAppearancePreviewContent: View {
     }
 }
 
-nonisolated enum StatsGridLayoutPolicy {
-    static func minimumGridWidth(
+nonisolated package enum StatsGridLayoutPolicy {
+    static package func minimumGridWidth(
         for columnCount: Int,
         minimumColumnWidth: CGFloat,
         spacing: CGFloat
@@ -44,7 +47,7 @@ nonisolated enum StatsGridLayoutPolicy {
             + CGFloat(safeColumnCount - 1) * max(0, spacing)
     }
 
-    static func columnCount(
+    static package func columnCount(
         for availableWidth: CGFloat,
         minimumColumnWidth: CGFloat,
         spacing: CGFloat
@@ -70,19 +73,19 @@ nonisolated enum StatsGridLayoutPolicy {
 
 @available(iOS 16.0, macOS 13.0, *)
 private struct StatsCardsGridLayout: Layout {
-    let minimumColumnWidth: CGFloat
-    let spacing: CGFloat
-    let preferredColumnSpans: [Int]
+    package let minimumColumnWidth: CGFloat
+    package let spacing: CGFloat
+    package let preferredColumnSpans: [Int]
 
-    func makeCache(subviews: Subviews) -> Cache {
+    package func makeCache(subviews: Subviews) -> Cache {
         Cache()
     }
 
-    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+    package func updateCache(_ cache: inout Cache, subviews: Subviews) {
         cache.measurement = nil
     }
 
-    func sizeThatFits(
+    package func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
         cache: inout Cache
@@ -92,7 +95,7 @@ private struct StatsCardsGridLayout: Layout {
         return measurement.size
     }
 
-    func placeSubviews(
+    package func placeSubviews(
         in bounds: CGRect,
         proposal: ProposedViewSize,
         subviews: Subviews,
@@ -183,56 +186,127 @@ private struct StatsCardsGridLayout: Layout {
         return max(0, proposedWidth)
     }
 
-    struct Item {
-        let index: Int
-        let row: Int
-        let column: Int
-        let columnSpan: Int
+    package struct Item {
+        package let index: Int
+        package let row: Int
+        package let column: Int
+        package let columnSpan: Int
     }
 
-    struct Cache {
-        var measurement: Measurement?
+    package struct Cache {
+        package var measurement: Measurement?
     }
 
-    struct Measurement {
-        let size: CGSize
-        let columnWidth: CGFloat
-        let items: [Item]
-        let rowHeights: [CGFloat]
-        let spacing: CGFloat
+    package struct Measurement {
+        package let size: CGSize
+        package let columnWidth: CGFloat
+        package let items: [Item]
+        package let rowHeights: [CGFloat]
+        package let spacing: CGFloat
 
-        func width(forColumnSpan span: Int) -> CGFloat {
+        package func width(forColumnSpan span: Int) -> CGFloat {
             columnWidth * CGFloat(span) + spacing * CGFloat(span - 1)
         }
-    }
+    
+
+        package init(
+
+            size: CGSize,
+
+            columnWidth: CGFloat,
+
+            items: [Item],
+
+            rowHeights: [CGFloat],
+
+            spacing: CGFloat
+
+        ) {
+
+            self.size = size
+
+            self.columnWidth = columnWidth
+
+            self.items = items
+
+            self.rowHeights = rowHeights
+
+            self.spacing = spacing
+
+        }
+}
 }
 
-struct StatsBlocksContent: View {
+package struct StatsBlocksContent: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(StatsResolvedAppearance.storageKey) private var appearanceMode = "system"
 
-    let serverName: String
-    let snapshot: ServerStatsPresentationSnapshot
-    let preferences: StatsPreferences
-    let storageVolumes: [VolumeInfo]
-    let hiddenStorageVolumeIDs: Set<VolumeIdentity>
-    let backgroundColor: Color
-    let surface: StatsVisualStyle.Surface
-    let constrainsWidth: Bool
-    let usesPagePadding: Bool
-    let isDockerUnlocked: Bool
-    let showsCustomizationEntryPoint: Bool
-    let customizeAction: (() -> Void)?
-    let dockerUpgradeAction: (() -> Void)?
-    let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    let loadProcesses: (() async throws -> [ProcessInfo])?
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
+    package let serverName: String
+    package let snapshot: ServerStatsPresentationSnapshot
+    package let preferences: StatsPreferences
+    package let storageVolumes: [VolumeInfo]
+    package let hiddenStorageVolumeIDs: Set<VolumeIdentity>
+    package let backgroundColor: Color
+    package let surface: StatsVisualStyle.Surface
+    package let constrainsWidth: Bool
+    package let usesPagePadding: Bool
+    package let isDockerUnlocked: Bool
+    package let showsCustomizationEntryPoint: Bool
+    package let customizeAction: (() -> Void)?
+    package let dockerUpgradeAction: (() -> Void)?
+    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
-    static func pageBackground(
+    package init(
+        serverName: String,
+        snapshot: ServerStatsPresentationSnapshot,
+        preferences: StatsPreferences,
+        storageVolumes: [VolumeInfo],
+        hiddenStorageVolumeIDs: Set<VolumeIdentity>,
+        backgroundColor: Color,
+        surface: StatsVisualStyle.Surface,
+        constrainsWidth: Bool,
+        usesPagePadding: Bool,
+        isDockerUnlocked: Bool,
+        showsCustomizationEntryPoint: Bool,
+        customizeAction: (() -> Void)?,
+        dockerUpgradeAction: (() -> Void)?,
+        terminateProcess: ((ProcessInfo) async throws -> Void)?,
+        loadProcesses: (() async throws -> [ProcessInfo])?,
+        loadDockerStats: (() async throws -> DockerStats)?,
+        performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?,
+        loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?,
+        setStorageVolumeVisibility: @escaping (VolumeInfo, Bool) -> Void,
+        setStorageVolumesVisibility: @escaping ([VolumeInfo], Bool) -> Void
+    ) {
+        self.serverName = serverName
+        self.snapshot = snapshot
+        self.preferences = preferences
+        self.storageVolumes = storageVolumes
+        self.hiddenStorageVolumeIDs = hiddenStorageVolumeIDs
+        self.backgroundColor = backgroundColor
+        self.surface = surface
+        self.constrainsWidth = constrainsWidth
+        self.usesPagePadding = usesPagePadding
+        self.isDockerUnlocked = isDockerUnlocked
+        self.showsCustomizationEntryPoint = showsCustomizationEntryPoint
+        self.customizeAction = customizeAction
+        self.dockerUpgradeAction = dockerUpgradeAction
+        self.terminateProcess = terminateProcess
+        self.loadProcesses = loadProcesses
+        self.loadDockerStats = loadDockerStats
+        self.performDockerAction = performDockerAction
+        self.loadStorageHealth = loadStorageHealth
+        self.setStorageVolumeVisibility = setStorageVolumeVisibility
+        self.setStorageVolumesVisibility = setStorageVolumesVisibility
+    }
+
+    static package func pageBackground(
         for preferencesStyle: StatsPreferences.Style,
         backgroundColor: Color,
         colorScheme: ColorScheme = .dark
@@ -249,7 +323,7 @@ struct StatsBlocksContent: View {
         #endif
     }
 
-    var body: some View {
+    package var body: some View {
         let resolvedColorScheme = StatsResolvedAppearance.colorScheme(from: appearanceMode, fallback: colorScheme)
         let style = StatsVisualStyle(
             preferencesStyle: preferences.style,

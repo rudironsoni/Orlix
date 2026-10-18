@@ -5,13 +5,17 @@
 
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 private struct CursorStyleOptionView: View {
-    let style: TerminalCursorStyle
-    let isSelected: Bool
-    let blinks: Bool
-    let palette: TerminalThemePreviewPalette
+    package let style: TerminalCursorStyle
+    package let isSelected: Bool
+    package let blinks: Bool
+    package let palette: TerminalThemePreviewPalette
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 8) {
             TerminalCursorPreview(style: style, blinks: blinks, palette: palette)
                 .frame(maxWidth: .infinity)
@@ -44,11 +48,11 @@ private struct CursorStyleOptionView: View {
 }
 
 private struct TerminalCursorPreview: View {
-    let style: TerminalCursorStyle
-    let blinks: Bool
-    let palette: TerminalThemePreviewPalette
+    package let style: TerminalCursorStyle
+    package let blinks: Bool
+    package let palette: TerminalThemePreviewPalette
 
-    var body: some View {
+    package var body: some View {
         if blinks {
             TimelineView(.periodic(from: .now, by: 0.55)) { timeline in
                 previewContent(isVisible: cursorIsVisible(at: timeline.date))
@@ -117,8 +121,8 @@ private struct TerminalCursorPreview: View {
     }
 }
 
-struct TerminalAppearanceSettingsView: View {
-    @Binding var fontSize: Double
+package struct TerminalAppearanceSettingsView: View {
+    @Binding package var fontSize: Double
 
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage(TerminalDefaults.cursorStyleKey) private var cursorStyleRaw = TerminalDefaults.defaultCursorStyle.rawValue
@@ -156,7 +160,7 @@ struct TerminalAppearanceSettingsView: View {
         ThemeColorParser.previewPalette(for: cursorPreviewThemeName)
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             TerminalFontSettingsSection(
                 fontSize: $fontSize

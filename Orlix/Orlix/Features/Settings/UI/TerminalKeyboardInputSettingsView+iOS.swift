@@ -1,7 +1,10 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalKeyboardInputPlatformSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
@@ -13,7 +16,7 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {

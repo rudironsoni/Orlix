@@ -12,39 +12,39 @@ import AppKit
 #endif
 
 /// Direction of the split
-enum SplitViewDirection: Codable {
+package enum SplitViewDirection: Codable {
     case horizontal, vertical
 }
 
 /// A split view shows a left and right (or top and bottom) view with a divider in the middle to do resizing.
-struct SplitView<L: View, R: View>: View {
+package struct SplitView<L: View, R: View>: View {
     /// Direction of the split
-    let direction: SplitViewDirection
+    package let direction: SplitViewDirection
 
     /// Divider color
-    let dividerColor: Color
+    package let dividerColor: Color
 
     /// Minimum increment (in points) that this split can be resized by
-    let resizeIncrements: CGSize
+    package let resizeIncrements: CGSize
 
     /// The left and right views to render.
-    let left: L
-    let right: R
+    package let left: L
+    package let right: R
 
     /// Called when the divider is double-tapped to equalize splits.
-    let onEqualize: () -> Void
+    package let onEqualize: () -> Void
 
     /// The minimum size (in points) of a split
-    let minSize: CGFloat = 10
+    package let minSize: CGFloat = 10
 
     /// The current fractional width of the split view. 0.5 means L/R are equally sized.
-    @Binding var split: CGFloat
+    @Binding package var split: CGFloat
 
     /// The visible size of the splitter, in points.
     private let splitterVisibleSize: CGFloat = 1
     private let splitterInvisibleSize: CGFloat = 6
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { geo in
             let leftRect = self.leftRect(for: geo.size)
             let rightRect = self.rightRect(for: geo.size, leftRect: leftRect)
@@ -77,7 +77,7 @@ struct SplitView<L: View, R: View>: View {
         }
     }
 
-    init(
+    package init(
         _ direction: SplitViewDirection,
         _ split: Binding<CGFloat>,
         dividerColor: Color,
@@ -186,14 +186,14 @@ struct SplitView<L: View, R: View>: View {
 
 // MARK: - Divider
 
-extension SplitView {
+package extension SplitView {
     /// The split divider that is rendered and can be used to resize a split view.
-    struct Divider: View {
-        let direction: SplitViewDirection
-        let visibleSize: CGFloat
-        let invisibleSize: CGFloat
-        let color: Color
-        @Binding var split: CGFloat
+    package struct Divider: View {
+        package let direction: SplitViewDirection
+        package let visibleSize: CGFloat
+        package let invisibleSize: CGFloat
+        package let color: Color
+        @Binding package var split: CGFloat
 
         private var visibleWidth: CGFloat? {
             switch (direction) {
@@ -232,7 +232,7 @@ extension SplitView {
         }
 
         @ViewBuilder
-        var body: some View {
+        package var body: some View {
             #if os(macOS)
             accessibleContent
                 .onHover { isHovered in
@@ -296,5 +296,19 @@ extension SplitView {
                 return String(localized: "Drag to resize the top and bottom panes")
             }
         }
-    }
+    
+        package init(
+            direction: SplitViewDirection,
+            visibleSize: CGFloat,
+            invisibleSize: CGFloat,
+            color: Color,
+            split: Binding<CGFloat>
+        ) {
+            self.direction = direction
+            self.visibleSize = visibleSize
+            self.invisibleSize = invisibleSize
+            self.color = color
+            self._split = split
+        }
+}
 }

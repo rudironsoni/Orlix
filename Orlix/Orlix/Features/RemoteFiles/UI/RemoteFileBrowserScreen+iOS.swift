@@ -4,23 +4,26 @@ import SwiftUI
 import Combine
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class RemoteFileBrowserPlatformState: ObservableObject {
-    @Published var searchQuery = ""
+final package class RemoteFileBrowserPlatformState: ObservableObject {
+    @Published package var searchQuery = ""
 }
 
-extension RemoteFileBrowserScreen {
+package extension RemoteFileBrowserScreen {
     @ViewBuilder
-    func platformContent(_ snapshot: Snapshot) -> some View {
+    package func platformContent(_ snapshot: Snapshot) -> some View {
         browserContent(snapshot)
     }
 
-    func platformSearchPresentation<Content: View>(_ content: Content) -> some View {
+    package func platformSearchPresentation<Content: View>(_ content: Content) -> some View {
         content
             .searchable(text: $platformState.searchQuery, prompt: String(localized: "Search Files"))
     }
 
-    func platformPresentation<Content: View>(_ content: Content) -> some View {
+    package func platformPresentation<Content: View>(_ content: Content) -> some View {
         content
             .sheet(item: iosSheetPresentationBinding, onDismiss: dismissPresentation) { route in
                 iosSheet(for: route)
@@ -28,7 +31,7 @@ extension RemoteFileBrowserScreen {
             }
     }
 
-    var iosSheetPresentationBinding: Binding<RemoteFileBrowserPresentation?> {
+    package var iosSheetPresentationBinding: Binding<RemoteFileBrowserPresentation?> {
         Binding(
             get: {
                 guard presentation?.isIOSSheet == true else { return nil }
@@ -45,7 +48,7 @@ extension RemoteFileBrowserScreen {
     }
 
     @ViewBuilder
-    func iosSheet(for route: RemoteFileBrowserPresentation) -> some View {
+    package func iosSheet(for route: RemoteFileBrowserPresentation) -> some View {
         switch route {
         case .upload(let destinationPath):
             RemoteFileImportPicker { result in
@@ -76,43 +79,43 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    func platformDropPresentation<Content: View>(_ content: Content, snapshot: Snapshot) -> some View {
+    package func platformDropPresentation<Content: View>(_ content: Content, snapshot: Snapshot) -> some View {
         content
             .onDrop(of: remoteRowDropTypeIdentifiers, isTargeted: $isDropTargeted) { providers in
                 handleCurrentDirectoryDrop(providers, to: snapshot.currentPath)
             }
     }
 
-    func platformCurrentPathDidChange() {}
+    package func platformCurrentPathDidChange() {}
 
-    func platformSelectionTrackingPresentation<Content: View>(
+    package func platformSelectionTrackingPresentation<Content: View>(
         _ content: Content,
         snapshot: Snapshot
     ) -> some View {
         content
     }
 
-    func platformRenameSheetSizing<Content: View>(_ content: Content) -> some View {
+    package func platformRenameSheetSizing<Content: View>(_ content: Content) -> some View {
         content
     }
 
-    func platformMoveSheetSizing<Content: View>(_ content: Content) -> some View {
+    package func platformMoveSheetSizing<Content: View>(_ content: Content) -> some View {
         content
     }
 
-    func platformPermissionSheetSizing<Content: View>(_ content: Content) -> some View {
+    package func platformPermissionSheetSizing<Content: View>(_ content: Content) -> some View {
         content
     }
 
-    func platformTransferCompletionAction(fileURL: URL?) -> NoticeAction? {
+    package func platformTransferCompletionAction(fileURL: URL?) -> NoticeAction? {
         nil
     }
 
-    func platformBeginUpload(to remotePath: String) {
+    package func platformBeginUpload(to remotePath: String) {
         presentation = .upload(destinationPath: remotePath)
     }
 
-    func platformBeginDownload(_ entry: RemoteFileEntry) {
+    package func platformBeginDownload(_ entry: RemoteFileEntry) {
         cleanupDownloadExport()
         operationCoordinator.prepareFile(
             entry,
@@ -129,15 +132,15 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    func platformBeginCreateFolder(in remotePath: String) {
+    package func platformBeginCreateFolder(in remotePath: String) {
         presentation = .createFolder(.init(destinationPath: remotePath))
     }
 
-    func platformBeginRename(_ entry: RemoteFileEntry) {
+    package func platformBeginRename(_ entry: RemoteFileEntry) {
         presentation = .rename(.init(entry: entry, name: entry.name))
     }
 
-    func platformDidActivatePreviewEntry(_ entry: RemoteFileEntry) async {
+    package func platformDidActivatePreviewEntry(_ entry: RemoteFileEntry) async {
         guard browser.selectedEntryPath(for: fileTab) == entry.path else { return }
 
         await MainActor.run {
@@ -145,13 +148,13 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    func platformRequestDelete(_ entries: [RemoteFileEntry]) {
+    package func platformRequestDelete(_ entries: [RemoteFileEntry]) {
         guard entries.count == 1, let entry = entries.first else { return }
         presentation = .delete(entry)
     }
 
     @ViewBuilder
-    func browserContent(_ snapshot: Snapshot) -> some View {
+    package func browserContent(_ snapshot: Snapshot) -> some View {
         let displayedEntries = filteredEntries(snapshot)
         let emptyState = makeEmptyStateContent(snapshot, displayedEntries: displayedEntries)
 
@@ -296,7 +299,7 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    var previewBinding: Binding<Bool> {
+    package var previewBinding: Binding<Bool> {
         Binding(
             get: { presentedPreviewPath != nil },
             set: { isPresented in
@@ -307,7 +310,7 @@ extension RemoteFileBrowserScreen {
         )
     }
 
-    func handleIOSEntryTap(_ entry: RemoteFileEntry) {
+    package func handleIOSEntryTap(_ entry: RemoteFileEntry) {
         Task {
             await browser.activate(entry, in: fileTab, server: server)
             if browser.selectedEntryPath(for: fileTab) == entry.path {
@@ -318,7 +321,7 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    func filteredEntries(_ snapshot: Snapshot) -> [RemoteFileEntry] {
+    package func filteredEntries(_ snapshot: Snapshot) -> [RemoteFileEntry] {
         guard !trimmedSearchQuery.isEmpty else { return snapshot.entries }
 
         return snapshot.entries.filter { entry in
@@ -327,11 +330,11 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    var trimmedSearchQuery: String {
+    package var trimmedSearchQuery: String {
         platformState.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func makeEmptyStateContent(
+    package func makeEmptyStateContent(
         _ snapshot: Snapshot,
         displayedEntries: [RemoteFileEntry]
     ) -> EmptyStateContent? {
@@ -373,7 +376,7 @@ extension RemoteFileBrowserScreen {
         return nil
     }
 
-    func browserMenu() -> some View {
+    package func browserMenu() -> some View {
         Menu {
             Toggle(
                 String(localized: "Show Hidden Files"),
@@ -401,7 +404,7 @@ extension RemoteFileBrowserScreen {
         }
     }
 
-    func toolbarButton(
+    package func toolbarButton(
         systemName: String,
         isDisabled: Bool = false,
         action: @escaping () -> Void
@@ -418,7 +421,7 @@ extension RemoteFileBrowserScreen {
 
 private extension View {
     @ViewBuilder
-    func orlixRemoteFileBrowserToolbar(
+    package func orlixRemoteFileBrowserToolbar(
         goUp: AnyView,
         upload: AnyView,
         createFolder: AnyView,

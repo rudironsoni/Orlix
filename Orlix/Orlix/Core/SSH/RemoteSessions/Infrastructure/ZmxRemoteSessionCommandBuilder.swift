@@ -1,17 +1,20 @@
 import Foundation
 
-nonisolated enum ZmxRemoteSessionCommandBuilder {
-    static let availableMarker = "__VVTERM_ZMX_OK__"
-    static let missingMarker = "__VVTERM_ZMX_NO__"
-    static let pathMarker = "__VVTERM_ZMX_PATH__"
-    static let managedOwnershipLabel = "orlix_owner=managed"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ZmxRemoteSessionCommandBuilder {
+    static package let availableMarker = "__VVTERM_ZMX_OK__"
+    static package let missingMarker = "__VVTERM_ZMX_NO__"
+    static package let pathMarker = "__VVTERM_ZMX_PATH__"
+    static package let managedOwnershipLabel = "orlix_owner=managed"
 
     private static let clearedEnvironment: Set<String> = [
         "ZMX_SESSION",
         "ZMX_SESSION_PREFIX"
     ]
 
-    static func availabilityProbeCommand() -> String {
+    static package func availabilityProbeCommand() -> String {
         let script = """
         \(RemoteTerminalBootstrap.shellPathExport());
         orlixZmx="$(command -v zmx 2>/dev/null || true)";
@@ -38,7 +41,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func listCommand(
+    static package func listCommand(
         scope: RemoteSessionListScope,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -51,7 +54,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         return try render(arguments: arguments, runtime: runtime)
     }
 
-    static func launchCommand(
+    static package func launchCommand(
         request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> String {
@@ -148,7 +151,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func presenceProbe(
+    static package func presenceProbe(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionPresenceProbe {
@@ -174,7 +177,7 @@ nonisolated enum ZmxRemoteSessionCommandBuilder {
         )
     }
 
-    static func killCommand(
+    static package func killCommand(
         identifier: RemoteSessionIdentifier,
         runtime: RemoteSessionRuntime
     ) throws -> String {

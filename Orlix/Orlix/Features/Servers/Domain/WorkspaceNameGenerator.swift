@@ -7,7 +7,7 @@
 
 import Foundation
 
-nonisolated struct WorkspaceNameGenerator {
+nonisolated package struct WorkspaceNameGenerator {
     private static let japaneseCities = [
         "Tokyo", "Kyoto", "Osaka", "Yokohama", "Nagoya", "Sapporo",
         "Fukuoka", "Kobe", "Hiroshima", "Sendai", "Nara", "Kamakura",
@@ -41,7 +41,7 @@ nonisolated struct WorkspaceNameGenerator {
 
     private static let allNames: [String] = japaneseCities + chineseCities + animeNames + fictionalPlaces + chiikawaCharacters
 
-    static func generateUniqueName(excluding existingNames: [String]) -> String {
+    static package func generateUniqueName(excluding existingNames: [String]) -> String {
         // Filter out already used names
         let available = allNames.filter { !existingNames.contains($0) }
 
@@ -61,7 +61,7 @@ nonisolated struct WorkspaceNameGenerator {
         }
     }
 
-    static func getRandomName() -> String {
+    static package func getRandomName() -> String {
         return allNames.randomElement() ?? "Tokyo"
     }
 }

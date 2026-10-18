@@ -5,15 +5,15 @@ import UIKit
 import AppKit
 #endif
 
-nonisolated enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
+nonisolated package enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
     case foreground
     case syncEnabled
     case syncDisabled
 }
 
 @MainActor
-final class CloudKitSyncLifecycleDriver {
-    typealias Observer = (CloudKitSyncLifecycleEvent) -> Void
+final package class CloudKitSyncLifecycleDriver {
+    package typealias Observer = (CloudKitSyncLifecycleEvent) -> Void
 
     private let defaults: UserDefaults
     private let notificationCenter: NotificationCenter
@@ -25,7 +25,7 @@ final class CloudKitSyncLifecycleDriver {
     private var lastForegroundEventAt: Date = .distantPast
     private var lastKnownSyncEnabled: Bool
 
-    init(
+    package init(
         defaults: UserDefaults = .standard,
         notificationCenter: NotificationCenter = .default,
         foregroundNotification: Notification.Name? = nil,
@@ -69,13 +69,13 @@ final class CloudKitSyncLifecycleDriver {
     }
 
     @discardableResult
-    func observe(_ observer: @escaping Observer) -> UUID {
+    package func observe(_ observer: @escaping Observer) -> UUID {
         let id = UUID()
         observers[id] = observer
         return id
     }
 
-    func removeObserver(_ id: UUID) {
+    package func removeObserver(_ id: UUID) {
         observers.removeValue(forKey: id)
     }
 

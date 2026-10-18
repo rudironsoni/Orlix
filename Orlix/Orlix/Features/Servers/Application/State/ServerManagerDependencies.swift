@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-protocol ServerRemoteRepository: AnyObject {
+package protocol ServerRemoteRepository: AnyObject {
     var isAvailable: Bool { get }
     func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges
     func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws
@@ -10,7 +13,7 @@ protocol ServerRemoteRepository: AnyObject {
 }
 
 @MainActor
-protocol ServerRemoteMutationClient: AnyObject {
+package protocol ServerRemoteMutationClient: AnyObject {
     func saveServer(_ server: Server) async throws
     func deleteServer(_ server: Server) async throws
     func saveWorkspace(_ workspace: Workspace) async throws
@@ -18,7 +21,7 @@ protocol ServerRemoteMutationClient: AnyObject {
 }
 
 @MainActor
-protocol ServerSyncRepository:
+package protocol ServerSyncRepository:
     ServerDataMutationEnqueuing,
     AnyObject {
     func pendingServerMutations() throws -> [ServerPendingMutation]
@@ -28,19 +31,19 @@ protocol ServerSyncRepository:
 }
 
 @MainActor
-protocol ServerManagerCredentialRepository:
+package protocol ServerManagerCredentialRepository:
     ServerCredentialTransactionRepository,
     ServerMutationCredentialTransacting,
     AnyObject {
     func deleteCredentials(for serverId: UUID) throws
 }
 
-nonisolated enum ServerProtectedAction: Equatable, Sendable {
+nonisolated package enum ServerProtectedAction: Equatable, Sendable {
     case delete
 }
 
 @MainActor
-protocol ProtectedServerActionAuthorizing: AnyObject {
+package protocol ProtectedServerActionAuthorizing: AnyObject {
     func authorize(
         _ server: Server,
         for action: ServerProtectedAction
@@ -48,12 +51,12 @@ protocol ProtectedServerActionAuthorizing: AnyObject {
 }
 
 @MainActor
-protocol ServerKnownHostRepository: AnyObject {
+package protocol ServerKnownHostRepository: AnyObject {
     func remove(host: String, port: Int)
 }
 
 @MainActor
-protocol FreePlanAssignmentTracking: AnyObject {
+package protocol FreePlanAssignmentTracking: AnyObject {
     func trackFreePlanGenerationAssigned(
         generation: String,
         serverCount: Int,
@@ -62,17 +65,17 @@ protocol FreePlanAssignmentTracking: AnyObject {
 }
 
 @MainActor
-struct ServerManagerDependencies {
-    let stateStore: ServerStateStore
-    let remoteSyncCoordinator: ServerRemoteSyncCoordinator
-    let syncRepository: any ServerSyncRepository
-    let credentialRepository: any ServerManagerCredentialRepository
-    let actionAuthorizer: any ProtectedServerActionAuthorizing
-    let didDeleteServerLocalData: (UUID) -> Void
-    let now: () -> Date
-    let makeID: () -> UUID
+package struct ServerManagerDependencies {
+    package let stateStore: ServerStateStore
+    package let remoteSyncCoordinator: ServerRemoteSyncCoordinator
+    package let syncRepository: any ServerSyncRepository
+    package let credentialRepository: any ServerManagerCredentialRepository
+    package let actionAuthorizer: any ProtectedServerActionAuthorizing
+    package let didDeleteServerLocalData: (UUID) -> Void
+    package let now: () -> Date
+    package let makeID: () -> UUID
 
-    init(
+    package init(
         stateStore: ServerStateStore,
         remoteRepository: any ServerRemoteRepository,
         syncRepository: any ServerSyncRepository,

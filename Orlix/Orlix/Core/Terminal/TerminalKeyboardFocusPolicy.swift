@@ -1,4 +1,4 @@
-nonisolated enum TerminalKeyboardFocusReason: Sendable {
+nonisolated package enum TerminalKeyboardFocusReason: Sendable {
     case explicitUserRequest
     case initialActivation
     case reconnectRestore
@@ -7,7 +7,7 @@ nonisolated enum TerminalKeyboardFocusReason: Sendable {
     case hardwareKeyboard
 }
 
-nonisolated struct TerminalKeyboardFocusPolicy: Sendable {
+nonisolated package struct TerminalKeyboardFocusPolicy: Sendable {
     nonisolated private enum Mode: Sendable {
         case automaticTyping(restoreOnReconnect: Bool)
         case forcedSoftwareTyping
@@ -16,21 +16,21 @@ nonisolated struct TerminalKeyboardFocusPolicy: Sendable {
 
     private var mode: Mode = .automaticTyping(restoreOnReconnect: false)
 
-    var allowsAutomaticFocus: Bool {
+    package var allowsAutomaticFocus: Bool {
         if case .browse = mode {
             return false
         }
         return true
     }
 
-    var isBrowsing: Bool {
+    package var isBrowsing: Bool {
         if case .browse = mode {
             return true
         }
         return false
     }
 
-    var shouldRestoreOnReconnect: Bool {
+    package var shouldRestoreOnReconnect: Bool {
         switch mode {
         case .automaticTyping(let restoreOnReconnect):
             return restoreOnReconnect
@@ -41,18 +41,18 @@ nonisolated struct TerminalKeyboardFocusPolicy: Sendable {
         }
     }
 
-    var forcesSoftwareKeyboardPresentation: Bool {
+    package var forcesSoftwareKeyboardPresentation: Bool {
         if case .forcedSoftwareTyping = mode {
             return true
         }
         return false
     }
 
-    func shouldSuppressSoftwareKeyboard(hasHardwareKeyboardAttached: Bool) -> Bool {
+    package func shouldSuppressSoftwareKeyboard(hasHardwareKeyboardAttached: Bool) -> Bool {
         isBrowsing || (hasHardwareKeyboardAttached && !forcesSoftwareKeyboardPresentation)
     }
 
-    mutating func requestFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
+    mutating package func requestFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
         switch reason {
         case .explicitUserRequest:
             mode = .forcedSoftwareTyping
@@ -72,7 +72,10 @@ nonisolated struct TerminalKeyboardFocusPolicy: Sendable {
         }
     }
 
-    mutating func dismissForUser() {
+    mutating package func dismissForUser() {
         mode = .browse
     }
+
+
+    package init() {}
 }

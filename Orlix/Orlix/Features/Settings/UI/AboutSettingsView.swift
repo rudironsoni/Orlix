@@ -13,15 +13,15 @@ import UIKit
 // MARK: - Contact Option
 
 private struct ContactOption: Identifiable {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let iconImage: String?
-    let iconText: String?
-    let color: Color
-    let url: String
+    package let title: String
+    package let subtitle: String
+    package let icon: String
+    package let iconImage: String?
+    package let iconText: String?
+    package let color: Color
+    package let url: String
 
-    var id: String { url }
+    package var id: String { url }
 }
 
 private let contactOptions: [ContactOption] = [
@@ -32,7 +32,7 @@ private let contactOptions: [ContactOption] = [
 
 // MARK: - About Settings View
 
-struct AboutSettingsView: View {
+package struct AboutSettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var isShowingOpenSourceLicenses = false
 
@@ -83,7 +83,7 @@ struct AboutSettingsView: View {
         return "© \(year) Orlix"
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 VStack(spacing: 16) {
@@ -233,4 +233,7 @@ struct AboutSettingsView: View {
         guard let url = URL(string: urlString) else { return }
         openURL(url)
     }
+
+
+    package init() {}
 }

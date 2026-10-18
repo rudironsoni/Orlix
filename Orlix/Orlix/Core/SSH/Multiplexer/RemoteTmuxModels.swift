@@ -1,14 +1,17 @@
 import Foundation
 
-nonisolated struct RemoteTmuxSession: Hashable, Sendable {
-    let name: String
-    let attachedClients: Int
-    let windowCount: Int
-    let ownership: RemoteSessionOwnership
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct RemoteTmuxSession: Hashable, Sendable {
+    package let name: String
+    package let attachedClients: Int
+    package let windowCount: Int
+    package let ownership: RemoteSessionOwnership
 }
 
-nonisolated struct RemoteTmuxBackend: Hashable, Sendable {
-    enum Variant: Hashable, Sendable {
+nonisolated package struct RemoteTmuxBackend: Hashable, Sendable {
+    package enum Variant: Hashable, Sendable {
         case unixTmux
         case windowsPsmux(
             shellFamily: RemoteShellFamily,
@@ -16,17 +19,17 @@ nonisolated struct RemoteTmuxBackend: Hashable, Sendable {
         )
     }
 
-    static let unixTmux = Self(
+    static package let unixTmux = Self(
         variant: .unixTmux,
         executablePath: "tmux",
         rawVersion: ""
     )
 
-    let variant: Variant
-    let executablePath: String
-    let rawVersion: String
+    package let variant: Variant
+    package let executablePath: String
+    package let rawVersion: String
 
-    static func unixTmux(executablePath: String, rawVersion: String) -> Self {
+    static package func unixTmux(executablePath: String, rawVersion: String) -> Self {
         Self(
             variant: .unixTmux,
             executablePath: executablePath,
@@ -34,7 +37,7 @@ nonisolated struct RemoteTmuxBackend: Hashable, Sendable {
         )
     }
 
-    static func windowsPsmux(
+    static package func windowsPsmux(
         commandName: String,
         shellFamily: RemoteShellFamily,
         powerShellExecutable: String?,
@@ -51,29 +54,29 @@ nonisolated struct RemoteTmuxBackend: Hashable, Sendable {
         )
     }
 
-    var isWindows: Bool {
+    package var isWindows: Bool {
         if case .windowsPsmux = variant {
             return true
         }
         return false
     }
 
-    var commandName: String {
+    package var commandName: String {
         executablePath
     }
 
-    var shellFamily: RemoteShellFamily? {
+    package var shellFamily: RemoteShellFamily? {
         guard case .windowsPsmux(let shellFamily, _) = variant else { return nil }
         return shellFamily
     }
 
-    var powerShellExecutable: String? {
+    package var powerShellExecutable: String? {
         guard case .windowsPsmux(_, let executable) = variant else { return nil }
         return executable
     }
 }
 
-nonisolated enum RemoteTmuxProbeFailure: Hashable, Sendable {
+nonisolated package enum RemoteTmuxProbeFailure: Hashable, Sendable {
     case cancelled
     case timeout
     case disconnected
@@ -83,7 +86,7 @@ nonisolated enum RemoteTmuxProbeFailure: Hashable, Sendable {
     case invalidResponse
     case commandFailed(String)
 
-    var retryError: Error {
+    package var retryError: Error {
         switch self {
         case .cancelled:
             return CancellationError()
@@ -104,7 +107,7 @@ nonisolated enum RemoteTmuxProbeFailure: Hashable, Sendable {
         }
     }
 
-    static func resolve(_ error: Error) -> Self {
+    static package func resolve(_ error: Error) -> Self {
         if error is CancellationError {
             return .cancelled
         }
@@ -127,7 +130,7 @@ nonisolated enum RemoteTmuxProbeFailure: Hashable, Sendable {
         }
     }
 
-    var logDescription: String {
+    package var logDescription: String {
         switch self {
         case .cancelled: return "cancelled"
         case .timeout: return "timeout"
@@ -141,18 +144,18 @@ nonisolated enum RemoteTmuxProbeFailure: Hashable, Sendable {
     }
 }
 
-nonisolated enum RemoteTmuxAvailability: Hashable, Sendable {
+nonisolated package enum RemoteTmuxAvailability: Hashable, Sendable {
     case unsupported
     case available(RemoteTmuxBackend)
     case confirmedMissing
     case indeterminate(RemoteTmuxProbeFailure)
 
-    var backend: RemoteTmuxBackend? {
+    package var backend: RemoteTmuxBackend? {
         guard case .available(let backend) = self else { return nil }
         return backend
     }
 
-    var logDescription: String {
+    package var logDescription: String {
         switch self {
         case .unsupported: return "unsupported"
         case .available(let backend): return "available (\(String(describing: backend)))"

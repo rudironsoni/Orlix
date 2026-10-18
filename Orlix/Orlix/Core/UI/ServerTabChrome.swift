@@ -4,14 +4,14 @@ import SwiftUI
 import AppKit
 #endif
 
-struct ServerViewTabNavigationButton: View {
-    let icon: String
-    let action: () -> Void
-    var help: String = ""
+package struct ServerViewTabNavigationButton: View {
+    package let icon: String
+    package let action: () -> Void
+    package var help: String = ""
 
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -36,13 +36,13 @@ struct ServerViewTabNavigationButton: View {
     }
 }
 
-struct ServerViewNewTabButton: View {
-    let help: String
-    let action: () -> Void
+package struct ServerViewNewTabButton: View {
+    package let help: String
+    package let action: () -> Void
 
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.system(size: 11))
@@ -67,45 +67,45 @@ struct ServerViewNewTabButton: View {
     }
 }
 
-enum ServerViewTopTabBarMetrics {
-    static let tabHeight: CGFloat = 36
-    static let tabVerticalPadding: CGFloat = 7
-    static let barVerticalInset: CGFloat = 4
-    static let tabSpacing: CGFloat = 4
-    static let horizontalPadding: CGFloat = 4
-    static let outerHorizontalPadding: CGFloat = 12
+package enum ServerViewTopTabBarMetrics {
+    static package let tabHeight: CGFloat = 36
+    static package let tabVerticalPadding: CGFloat = 7
+    static package let barVerticalInset: CGFloat = 4
+    static package let tabSpacing: CGFloat = 4
+    static package let horizontalPadding: CGFloat = 4
+    static package let outerHorizontalPadding: CGFloat = 12
     #if os(macOS)
-    static let toolbarTabCapsuleHeight: CGFloat = 28
+    static package let toolbarTabCapsuleHeight: CGFloat = 28
     /// Outer height of a toolbar tab cell. Kept close to the native toolbar
     /// control height so the tab strip isn't taller than the other items.
-    static let toolbarTabStripHeight: CGFloat = 30
-    static let toolbarTabStripIdealWidth: CGFloat = 640
-    static let toolbarTabStripFallbackWidth: CGFloat = 1_600
+    static package let toolbarTabStripHeight: CGFloat = 30
+    static package let toolbarTabStripIdealWidth: CGFloat = 640
+    static package let toolbarTabStripFallbackWidth: CGFloat = 1_600
     /// Per-tab sizing shared by terminal and file tabs (browser-like).
-    static let toolbarTabMinimumWidth: CGFloat = 120
-    static let toolbarTabMaximumWidth: CGFloat = 240
+    static package let toolbarTabMinimumWidth: CGFloat = 120
+    static package let toolbarTabMaximumWidth: CGFloat = 240
     #endif
-    static var barHeight: CGFloat { tabHeight + barVerticalInset * 2 }
+    static package var barHeight: CGFloat { tabHeight + barVerticalInset * 2 }
 }
 
 #if os(macOS)
-struct ServerToolbarTabCell: View {
-    let title: String
-    let isSelected: Bool
-    let statusColor: Color
-    let width: CGFloat
-    var accessibilityLabel: String?
+package struct ServerToolbarTabCell: View {
+    package let title: String
+    package let isSelected: Bool
+    package let statusColor: Color
+    package let width: CGFloat
+    package var accessibilityLabel: String?
     /// Shared namespace so the selected glass capsule morphs between tabs.
-    var glassNamespace: Namespace.ID?
+    package var glassNamespace: Namespace.ID?
     /// 1-based tab position; shows a ⌘N hint on hover for the first nine tabs.
-    var shortcutNumber: Int?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package var shortcutNumber: Int?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: onSelect) {
             ZStack {
                 tabSurface
@@ -207,13 +207,35 @@ struct ServerToolbarTabCell: View {
     }
 
     private static let selectedGlassID = "orlix.selectedTab"
+
+    package init(
+        title: String,
+        isSelected: Bool,
+        statusColor: Color,
+        width: CGFloat,
+        accessibilityLabel: String? = nil,
+        glassNamespace: Namespace.ID? = nil,
+        shortcutNumber: Int? = nil,
+        onSelect: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        self.title = title
+        self.isSelected = isSelected
+        self.statusColor = statusColor
+        self.width = width
+        self.accessibilityLabel = accessibilityLabel
+        self.glassNamespace = glassNamespace
+        self.shortcutNumber = shortcutNumber
+        self.onSelect = onSelect
+        self.onClose = onClose
+    }
 }
 
-struct AdaptiveServerTabSizing: Equatable {
-    let tabWidth: CGFloat
-    let isScrollable: Bool
+package struct AdaptiveServerTabSizing: Equatable {
+    package let tabWidth: CGFloat
+    package let isScrollable: Bool
 
-    static func resolve(
+    static package func resolve(
         containerWidth: CGFloat,
         itemCount: Int,
         minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth,
@@ -248,17 +270,17 @@ struct AdaptiveServerTabSizing: Equatable {
     }
 }
 
-struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
-    let items: [Item]
-    let selectedId: Item.ID?
-    var minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth
-    var maximumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMaximumWidth
-    var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
+package struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
+    package let items: [Item]
+    package let selectedId: Item.ID?
+    package var minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth
+    package var maximumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMaximumWidth
+    package var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var glassNamespace
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let sizing = AdaptiveServerTabSizing.resolve(
                 containerWidth: proxy.size.width,
@@ -338,18 +360,18 @@ struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where 
     }
 }
 
-struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
-    let items: [Item]
-    let selectedId: Item.ID?
-    let previousHelp: String
-    let nextHelp: String
-    let newHelp: String
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-    let onNew: () -> Void
-    var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
+package struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
+    package let items: [Item]
+    package let selectedId: Item.ID?
+    package let previousHelp: String
+    package let nextHelp: String
+    package let newHelp: String
+    package let onPrevious: () -> Void
+    package let onNext: () -> Void
+    package let onNew: () -> Void
+    package var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 4) {
             HStack(spacing: 4) {
                 ServerViewTabNavigationButton(
@@ -386,6 +408,49 @@ struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View where I
             .padding(.trailing, 8)
         }
         .frame(maxWidth: .infinity)
+    }
+
+
+    package init(
+
+        items: [Item],
+
+        selectedId: Item.ID? = nil,
+
+        previousHelp: String,
+
+        nextHelp: String,
+
+        newHelp: String,
+
+        onPrevious: @escaping () -> Void,
+
+        onNext: @escaping () -> Void,
+
+        onNew: @escaping () -> Void,
+
+        tabContent: @escaping (Item, CGFloat, Namespace.ID) -> TabContent
+
+    ) {
+
+        self.items = items
+
+        self.selectedId = selectedId
+
+        self.previousHelp = previousHelp
+
+        self.nextHelp = nextHelp
+
+        self.newHelp = newHelp
+
+        self.onPrevious = onPrevious
+
+        self.onNext = onNext
+
+        self.onNew = onNew
+
+        self.tabContent = tabContent
+
     }
 }
 

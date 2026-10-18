@@ -1,9 +1,12 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
-    static let storageKey = "statsPreferencesV1"
+final package class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
+    static package let storageKey = "statsPreferencesV1"
 
     private let defaults: UserDefaults
     private let key: String
@@ -12,12 +15,12 @@ final class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
         category: "StatsPreferencesStore"
     )
 
-    init(defaults: UserDefaults, key: String) {
+    package init(defaults: UserDefaults, key: String) {
         self.defaults = defaults
         self.key = key
     }
 
-    func loadPreferences(defaultWriterID writerID: String) -> StatsPreferences {
+    package func loadPreferences(defaultWriterID writerID: String) -> StatsPreferences {
         guard let data = defaults.data(forKey: key) else {
             return repairWithDefaultPreferences(writerID: writerID)
         }
@@ -38,7 +41,7 @@ final class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
         }
     }
 
-    func savePreferences(_ preferences: StatsPreferences) {
+    package func savePreferences(_ preferences: StatsPreferences) {
         do {
             defaults.set(try JSONEncoder().encode(preferences), forKey: key)
         } catch {

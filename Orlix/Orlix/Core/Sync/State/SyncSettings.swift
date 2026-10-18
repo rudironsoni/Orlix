@@ -1,17 +1,17 @@
 import Foundation
 
-enum SyncSettings {
-    nonisolated static let enabledKey = CloudKitSyncConstants.syncEnabledKey
+package enum SyncSettings {
+    nonisolated static package let enabledKey = CloudKitSyncConstants.syncEnabledKey
 
-    nonisolated static var isEnabled: Bool {
+    nonisolated static package var isEnabled: Bool {
         isEnabled(in: .standard)
     }
 
-    nonisolated static func isEnabled(in defaults: UserDefaults) -> Bool {
+    nonisolated static package func isEnabled(in defaults: UserDefaults) -> Bool {
         defaults.object(forKey: enabledKey) as? Bool ?? true
     }
 
-    nonisolated static func persistEnabled(
+    nonisolated static package func persistEnabled(
         _ enabled: Bool,
         in defaults: UserDefaults = .standard
     ) throws {
@@ -22,6 +22,6 @@ enum SyncSettings {
     }
 }
 
-nonisolated enum SyncSettingsPersistenceError: Error, Sendable {
+nonisolated package enum SyncSettingsPersistenceError: Error, Sendable {
     case persistenceFailed
 }

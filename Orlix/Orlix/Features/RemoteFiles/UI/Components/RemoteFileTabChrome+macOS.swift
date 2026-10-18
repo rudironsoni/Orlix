@@ -1,24 +1,27 @@
 import SwiftUI
 
 #if os(macOS)
-struct RemoteFileTabsScrollView: View {
-    let tabs: [RemoteFileTab]
-    @Binding var selectedTabId: UUID?
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileTabsScrollView: View {
+    package let tabs: [RemoteFileTab]
+    @Binding package var selectedTabId: UUID?
     // Observed so the hosted tab strip redraws when navigation changes a tab's
     // path/title (the title closures read this store). The toolbar host itself
     // only observes the terminal manager, so without this the strip would keep
     // showing the old folder until a tab open/close/select forced a redraw.
-    @ObservedObject var fileBrowser: RemoteFileBrowserStore
-    let titleForTab: (RemoteFileTab) -> String
-    let onSelect: (RemoteFileTab) -> Void
-    let onClose: (RemoteFileTab) -> Void
-    let onCloseOtherTabs: (RemoteFileTab) -> Void
-    let onCloseTabsToLeft: (RemoteFileTab) -> Void
-    let onCloseTabsToRight: (RemoteFileTab) -> Void
-    let onDuplicate: (RemoteFileTab) -> Void
-    let onNew: () -> Void
+    @ObservedObject package var fileBrowser: RemoteFileBrowserStore
+    package let titleForTab: (RemoteFileTab) -> String
+    package let onSelect: (RemoteFileTab) -> Void
+    package let onClose: (RemoteFileTab) -> Void
+    package let onCloseOtherTabs: (RemoteFileTab) -> Void
+    package let onCloseTabsToLeft: (RemoteFileTab) -> Void
+    package let onCloseTabsToRight: (RemoteFileTab) -> Void
+    package let onDuplicate: (RemoteFileTab) -> Void
+    package let onNew: () -> Void
 
-    var body: some View {
+    package var body: some View {
         ServerToolbarTabStrip(
             items: tabs,
             selectedId: selectedTabId,
@@ -85,6 +88,32 @@ struct RemoteFileTabsScrollView: View {
 
         let target = tabs[currentIndex + 1]
         onSelect(target)
+    }
+
+    package init(
+        tabs: [RemoteFileTab],
+        selectedTabId: Binding<UUID?>,
+        fileBrowser: RemoteFileBrowserStore,
+        titleForTab: @escaping (RemoteFileTab) -> String,
+        onSelect: @escaping (RemoteFileTab) -> Void,
+        onClose: @escaping (RemoteFileTab) -> Void,
+        onCloseOtherTabs: @escaping (RemoteFileTab) -> Void,
+        onCloseTabsToLeft: @escaping (RemoteFileTab) -> Void,
+        onCloseTabsToRight: @escaping (RemoteFileTab) -> Void,
+        onDuplicate: @escaping (RemoteFileTab) -> Void,
+        onNew: @escaping () -> Void
+    ) {
+        self.tabs = tabs
+        self._selectedTabId = selectedTabId
+        self.fileBrowser = fileBrowser
+        self.titleForTab = titleForTab
+        self.onSelect = onSelect
+        self.onClose = onClose
+        self.onCloseOtherTabs = onCloseOtherTabs
+        self.onCloseTabsToLeft = onCloseTabsToLeft
+        self.onCloseTabsToRight = onCloseTabsToRight
+        self.onDuplicate = onDuplicate
+        self.onNew = onNew
     }
 }
 #endif

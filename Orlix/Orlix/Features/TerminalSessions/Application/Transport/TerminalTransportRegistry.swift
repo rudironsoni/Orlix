@@ -1,21 +1,24 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 
 /// Owns the live transport identities and tasks for terminal panes.
 @MainActor
-final class TerminalTransportRegistry<Runtime: AnyObject> {
-    struct ShellRoute {
-        let client: SSHClient
-        let shellId: UUID
+final package class TerminalTransportRegistry<Runtime: AnyObject> {
+    package struct ShellRoute {
+        package let client: SSHClient
+        package let shellId: UUID
     }
 
-    struct DrainResult {
-        let clients: [SSHClient]
-        let runtimes: [Runtime]
+    package struct DrainResult {
+        package let clients: [SSHClient]
+        package let runtimes: [Runtime]
     }
 
     private struct ConnectionCleanup {
-        let client: SSHClient
-        let task: Task<Void, Never>
+        package let client: SSHClient
+        package let task: Task<Void, Never>
     }
 
     private var shells: SSHShellRegistry
@@ -23,7 +26,7 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
     private var runtimesByPane: [UUID: Runtime] = [:]
     private var cleanupsInFlight: [UUID: ConnectionCleanup] = [:]
 
-    init(staleShellStartThreshold: TimeInterval) {
+    package init(staleShellStartThreshold: TimeInterval) {
         shells = SSHShellRegistry(staleThreshold: staleShellStartThreshold)
     }
 
@@ -34,44 +37,44 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
     deinit {}
     #endif
 
-    var ownedPaneIds: Set<UUID> {
+    package var ownedPaneIds: Set<UUID> {
         Set(shells.registrations.keys)
             .union(shells.startsInFlight.keys)
             .union(runtimesByPane.keys)
             .union(connectionTasks.paneIds)
     }
 
-    func hasLiveTransport(for paneId: UUID) -> Bool {
+    package func hasLiveTransport(for paneId: UUID) -> Bool {
         shells.shellId(for: paneId) != nil || runtimesByPane[paneId] != nil
     }
 
-    func shellRoute(for paneId: UUID) -> ShellRoute? {
+    package func shellRoute(for paneId: UUID) -> ShellRoute? {
         guard let client = shells.client(for: paneId),
               let shellId = shells.shellId(for: paneId) else { return nil }
         return ShellRoute(client: client, shellId: shellId)
     }
 
-    func shellRegistration(for paneId: UUID) -> SSHShellRegistry.Registration? {
+    package func shellRegistration(for paneId: UUID) -> SSHShellRegistry.Registration? {
         shells.registration(for: paneId)
     }
 
-    func shellId(for paneId: UUID) -> UUID? {
+    package func shellId(for paneId: UUID) -> UUID? {
         shells.shellId(for: paneId)
     }
 
-    func registeredClient(for paneId: UUID) -> SSHClient? {
+    package func registeredClient(for paneId: UUID) -> SSHClient? {
         shells.client(for: paneId)
     }
 
-    func connectionClient(for paneId: UUID) -> SSHClient? {
+    package func connectionClient(for paneId: UUID) -> SSHClient? {
         shells.connectionClient(for: paneId)
     }
 
-    func connectionStartToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
+    package func connectionStartToken(for paneId: UUID) -> SSHShellRegistry.StartToken? {
         shells.connectionStartToken(for: paneId)
     }
 
-    func beginShellStart(
+    package func beginShellStart(
         for paneId: UUID,
         serverId: UUID,
         client: SSHClient,
@@ -85,7 +88,7 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         )
     }
 
-    func finishShellStart(
+    package func finishShellStart(
         for paneId: UUID,
         client: SSHClient,
         startToken: SSHShellRegistry.StartToken
@@ -97,14 +100,14 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         )
     }
 
-    func shellStartStatus(
+    package func shellStartStatus(
         for paneId: UUID,
         now: Date = Date()
     ) -> SSHShellRegistry.InFlightResult {
         shells.isStartInFlight(for: paneId, now: now)
     }
 
-    func registerShell(
+    package func registerShell(
         client: SSHClient,
         shellId: UUID,
         startToken: SSHShellRegistry.StartToken,
@@ -120,17 +123,17 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         )
     }
 
-    func unregisterShell(
+    package func unregisterShell(
         for paneId: UUID
     ) -> (registration: SSHShellRegistry.Registration?, pendingStart: SSHShellRegistry.StartContext?) {
         shells.unregister(for: paneId)
     }
 
-    func ownsShell(client: SSHClient, shellId: UUID, for paneId: UUID) -> Bool {
+    package func ownsShell(client: SSHClient, shellId: UUID, for paneId: UUID) -> Bool {
         shells.owns(client: client, shellId: shellId, for: paneId)
     }
 
-    func ownsConnection(
+    package func ownsConnection(
         client: SSHClient,
         startToken: SSHShellRegistry.StartToken,
         for paneId: UUID
@@ -142,48 +145,48 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         )
     }
 
-    func ownsConnection(startToken: SSHShellRegistry.StartToken, for paneId: UUID) -> Bool {
+    package func ownsConnection(startToken: SSHShellRegistry.StartToken, for paneId: UUID) -> Bool {
         shells.owns(startToken: startToken, for: paneId)
     }
 
-    func hasClientReferences(_ client: SSHClient) -> Bool {
+    package func hasClientReferences(_ client: SSHClient) -> Bool {
         shells.hasClientReferences(client)
     }
 
-    func hasOtherClientReferences(using client: SSHClient, excluding paneId: UUID) -> Bool {
+    package func hasOtherClientReferences(using client: SSHClient, excluding paneId: UUID) -> Bool {
         shells.hasOtherClientReferences(using: client, excluding: paneId)
     }
 
-    func firstRegisteredClient(for serverId: UUID) -> SSHClient? {
+    package func firstRegisteredClient(for serverId: UUID) -> SSHClient? {
         shells.firstRegisteredClient(for: serverId)
     }
 
-    func firstPendingClient(for serverId: UUID) -> SSHClient? {
+    package func firstPendingClient(for serverId: UUID) -> SSHClient? {
         shells.firstPendingClient(for: serverId)
     }
 
     @discardableResult
-    func startConnectionTask(
+    package func startConnectionTask(
         for paneId: UUID,
         operation: @escaping @Sendable (_ taskId: UUID) async -> Void
     ) -> UUID? {
         connectionTasks.start(for: paneId, operation: operation)
     }
 
-    func isCurrentConnectionTask(taskId: UUID, for paneId: UUID) -> Bool {
+    package func isCurrentConnectionTask(taskId: UUID, for paneId: UUID) -> Bool {
         connectionTasks.isCurrent(taskId: taskId, for: paneId)
     }
 
     @discardableResult
-    func cancelConnectionTask(for paneId: UUID) -> Bool {
+    package func cancelConnectionTask(for paneId: UUID) -> Bool {
         connectionTasks.cancel(for: paneId)
     }
 
-    func runtime(for paneId: UUID) -> Runtime? {
+    package func runtime(for paneId: UUID) -> Runtime? {
         runtimesByPane[paneId]
     }
 
-    func runtime(
+    package func runtime(
         for paneId: UUID,
         create: () -> Runtime
     ) -> Runtime {
@@ -195,18 +198,18 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         return runtime
     }
 
-    func isCurrentRuntime(_ runtime: Runtime, for paneId: UUID) -> Bool {
+    package func isCurrentRuntime(_ runtime: Runtime, for paneId: UUID) -> Bool {
         runtimesByPane[paneId] === runtime
     }
 
     @discardableResult
-    func detachRuntime(_ runtime: Runtime, for paneId: UUID) -> Bool {
+    package func detachRuntime(_ runtime: Runtime, for paneId: UUID) -> Bool {
         guard isCurrentRuntime(runtime, for: paneId) else { return false }
         runtimesByPane.removeValue(forKey: paneId)
         return true
     }
 
-    func forEachRuntime(
+    package func forEachRuntime(
         _ operation: @MainActor (Runtime) async -> Void
     ) async {
         let runtimes = Array(runtimesByPane.values)
@@ -215,7 +218,7 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         }
     }
 
-    func performTrackedCleanup(
+    package func performTrackedCleanup(
         for client: SSHClient,
         operation: @MainActor @Sendable @escaping () async -> Void
     ) async {
@@ -228,7 +231,7 @@ final class TerminalTransportRegistry<Runtime: AnyObject> {
         cleanupsInFlight.removeValue(forKey: cleanupId)
     }
 
-    func drain() -> DrainResult {
+    package func drain() -> DrainResult {
         connectionTasks.cancelAll()
         let shellOwnership = shells.drain()
         let cleanups = Array(cleanupsInFlight.values)

@@ -1,21 +1,25 @@
 import Combine
 import Foundation
 
-nonisolated enum TerminalNetworkReadiness: String, Hashable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package enum TerminalNetworkReadiness: String, Hashable, Sendable {
     case unknown
     case ready
     case unavailable
 }
 
-nonisolated enum TerminalRemoteSessionDefaults {
-    static let enabledKey = "terminalRemoteSessionEnabledDefault"
-    static let backendIdentifierKey = "terminalRemoteSessionBackendIdentifierDefault"
-    static let startupBehaviorKey = "terminalRemoteSessionStartupBehaviorDefault"
-    static let legacyEnabledKey = "terminalTmuxEnabledDefault"
-    static let legacyStartupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
+nonisolated package enum TerminalRemoteSessionDefaults {
+    static package let enabledKey = "terminalRemoteSessionEnabledDefault"
+    static package let backendIdentifierKey = "terminalRemoteSessionBackendIdentifierDefault"
+    static package let startupBehaviorKey = "terminalRemoteSessionStartupBehaviorDefault"
+    static package let legacyEnabledKey = "terminalTmuxEnabledDefault"
+    static package let legacyStartupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
 }
 
-nonisolated protocol TerminalRemoteSessionServicing: Sendable {
+nonisolated package protocol TerminalRemoteSessionServicing: Sendable {
     var backendMetadata: [RemoteSessionBackendMetadata] { get }
     func managedIdentifier(
         deviceID: String,
@@ -72,7 +76,7 @@ nonisolated protocol TerminalRemoteSessionServicing: Sendable {
     ) async -> String?
 }
 
-extension TerminalRemoteSessionServicing {
+package extension TerminalRemoteSessionServicing {
     nonisolated func managedIdentifier(
         deviceID: String,
         entityID: UUID,
@@ -89,64 +93,64 @@ extension TerminalRemoteSessionServicing {
 
 }
 
-nonisolated protocol TerminalRemoteMoshServicing: Sendable {
+nonisolated package protocol TerminalRemoteMoshServicing: Sendable {
     func installMoshServer(using client: SSHClient) async throws
 }
 
 @MainActor
-struct TerminalNetworkReadinessSource {
-    let initial: TerminalNetworkReadiness
-    let updates: AnyPublisher<TerminalNetworkReadiness, Never>
+package struct TerminalNetworkReadinessSource {
+    package let initial: TerminalNetworkReadiness
+    package let updates: AnyPublisher<TerminalNetworkReadiness, Never>
 }
 
 @MainActor
-struct TerminalAppLockSource {
-    let initialIsLocked: Bool
-    let updates: AnyPublisher<Bool, Never>
+package struct TerminalAppLockSource {
+    package let initialIsLocked: Bool
+    package let updates: AnyPublisher<Bool, Never>
 }
 
 @MainActor
-struct TerminalSessionApplicationEffects {
-    let authorizeServer: (Server) async -> Bool
-    let prepareInitialConnection: (Server) -> Void
-    let refreshLiveActivity: ([ConnectionState]) -> Void
-    let recordSuccessfulConnection: (UUID, String) -> Void
-    let noteTerminalSessionEnded: (Bool) -> Void
-    let recordSplitPaneCreated: () -> Void
+package struct TerminalSessionApplicationEffects {
+    package let authorizeServer: (Server) async -> Bool
+    package let prepareInitialConnection: (Server) -> Void
+    package let refreshLiveActivity: ([ConnectionState]) -> Void
+    package let recordSuccessfulConnection: (UUID, String) -> Void
+    package let noteTerminalSessionEnded: (Bool) -> Void
+    package let recordSplitPaneCreated: () -> Void
 }
 
 @MainActor
-struct TerminalRemoteSessionConfiguration {
-    struct ServerSettings {
-        let name: String
-        let enabledOverride: Bool?
-        let backendIdentifier: RemoteSessionBackendIdentifier
-        let startupBehaviorOverride: RemoteSessionStartupBehavior?
-        let startupAction: RemoteShellStartupAction?
+package struct TerminalRemoteSessionConfiguration {
+    package struct ServerSettings {
+        package let name: String
+        package let enabledOverride: Bool?
+        package let backendIdentifier: RemoteSessionBackendIdentifier
+        package let startupBehaviorOverride: RemoteSessionStartupBehavior?
+        package let startupAction: RemoteShellStartupAction?
     }
 
-    let deviceID: String
-    let enabledByDefault: () -> Bool
-    let backendIdentifierByDefault: () -> RemoteSessionBackendIdentifier
-    let startupBehaviorByDefault: () -> RemoteSessionStartupBehavior
-    let serverSettings: (UUID) -> ServerSettings?
-    let themeStyle: @MainActor () -> RemoteSessionThemeStyle
+    package let deviceID: String
+    package let enabledByDefault: () -> Bool
+    package let backendIdentifierByDefault: () -> RemoteSessionBackendIdentifier
+    package let startupBehaviorByDefault: () -> RemoteSessionStartupBehavior
+    package let serverSettings: (UUID) -> ServerSettings?
+    package let themeStyle: @MainActor () -> RemoteSessionThemeStyle
 }
 
 @MainActor
-struct TerminalTabManagerDependencies {
-    let sshClientFactory: SSHClientFactory
-    let networkReadiness: TerminalNetworkReadinessSource
-    let applicationIsActive: @MainActor @Sendable () -> Bool
-    let appLock: TerminalAppLockSource
-    let effects: TerminalSessionApplicationEffects
-    let remoteMosh: any TerminalRemoteMoshServicing
-    let eternalTerminalRuntime: EternalTerminalRuntimeDependencies
+package struct TerminalTabManagerDependencies {
+    package let sshClientFactory: SSHClientFactory
+    package let networkReadiness: TerminalNetworkReadinessSource
+    package let applicationIsActive: @MainActor @Sendable () -> Bool
+    package let appLock: TerminalAppLockSource
+    package let effects: TerminalSessionApplicationEffects
+    package let remoteMosh: any TerminalRemoteMoshServicing
+    package let eternalTerminalRuntime: EternalTerminalRuntimeDependencies
 }
 
 #if DEBUG
-extension TerminalTabManagerDependencies {
-    static func testing(
+package extension TerminalTabManagerDependencies {
+    static package func testing(
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void
     ) -> Self {
@@ -178,7 +182,7 @@ extension TerminalTabManagerDependencies {
 }
 
 private actor UnavailableTerminalRemoteMoshService: TerminalRemoteMoshServicing {
-    func installMoshServer(using client: SSHClient) async throws {
+    package func installMoshServer(using client: SSHClient) async throws {
         throw SSHError.notConnected
     }
 }

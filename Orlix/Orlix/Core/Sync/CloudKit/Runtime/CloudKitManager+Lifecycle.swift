@@ -3,10 +3,10 @@ import Foundation
 import os.log
 
 @MainActor
-extension CloudKitManager {
+package extension CloudKitManager {
     // MARK: - Account Status
 
-    func refreshAccountStatus() async {
+    package func refreshAccountStatus() async {
         let generation = cloudKitSyncGeneration
         guard isSyncEnabled else {
             applySyncDisabledState()
@@ -17,7 +17,7 @@ extension CloudKitManager {
     }
 
     @discardableResult
-    func advanceSyncGeneration() -> UUID {
+    package func advanceSyncGeneration() -> UUID {
         let generation = UUID()
         cloudKitSyncGeneration = generation
         accountStatusCheck?.task.cancel()
@@ -27,7 +27,7 @@ extension CloudKitManager {
         return generation
     }
 
-    func cancelRecordChanges() {
+    package func cancelRecordChanges() {
         guard let current = inFlightRecordChanges else { return }
         inFlightRecordChanges = nil
         current.task.cancel()
@@ -39,11 +39,11 @@ extension CloudKitManager {
         }
     }
 
-    func isCurrentGeneration(_ generation: UUID) -> Bool {
+    package func isCurrentGeneration(_ generation: UUID) -> Bool {
         isSyncEnabled && cloudKitSyncGeneration == generation
     }
 
-    func requireCurrentGeneration(_ generation: UUID) throws {
+    package func requireCurrentGeneration(_ generation: UUID) throws {
         guard isCurrentGeneration(generation) else {
             throw CancellationError()
         }
@@ -51,7 +51,7 @@ extension CloudKitManager {
 
     // MARK: - Record Zone
 
-    func ensureCustomZone() async throws {
+    package func ensureCustomZone() async throws {
         if zoneReady {
             return
         }
@@ -67,7 +67,7 @@ extension CloudKitManager {
         try await task.value
     }
 
-    func createZoneIfNeeded() async throws {
+    package func createZoneIfNeeded() async throws {
         let results = try await cloudDatabase().recordZones(for: [recordZoneID])
         if let result = results[recordZoneID] {
             switch result {
@@ -88,12 +88,12 @@ extension CloudKitManager {
         setZoneReady(true)
     }
 
-    func setZoneReady(_ ready: Bool) {
+    package func setZoneReady(_ ready: Bool) {
         zoneReady = ready
         UserDefaults.standard.set(ready, forKey: zoneReadyKey)
     }
 
-    func withZoneRetry<T>(_ operation: () async throws -> T) async throws -> T {
+    package func withZoneRetry<T>(_ operation: () async throws -> T) async throws -> T {
         do {
             return try await operation()
         } catch {
@@ -108,7 +108,7 @@ extension CloudKitManager {
         }
     }
 
-    func isZoneNotFound(_ error: Error) -> Bool {
+    package func isZoneNotFound(_ error: Error) -> Bool {
         guard let ckError = error as? CKError else {
             return false
         }

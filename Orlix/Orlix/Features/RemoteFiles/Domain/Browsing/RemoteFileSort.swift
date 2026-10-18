@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated package enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
     case name
     case modifiedAt
     case size
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .name:
             return String(localized: "Name")
@@ -18,7 +18,7 @@ nonisolated enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Se
         }
     }
 
-    var defaultDirection: RemoteFileSortDirection {
+    package var defaultDirection: RemoteFileSortDirection {
         switch self {
         case .name:
             return .ascending
@@ -28,11 +28,11 @@ nonisolated enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Se
     }
 }
 
-nonisolated enum RemoteFileSortDirection: String, Codable, Sendable {
+nonisolated package enum RemoteFileSortDirection: String, Codable, Sendable {
     case ascending
     case descending
 
-    init(sortOrder: SortOrder) {
+    package init(sortOrder: SortOrder) {
         switch sortOrder {
         case .forward:
             self = .ascending
@@ -41,7 +41,7 @@ nonisolated enum RemoteFileSortDirection: String, Codable, Sendable {
         }
     }
 
-    var sortOrder: SortOrder {
+    package var sortOrder: SortOrder {
         switch self {
         case .ascending:
             return .forward
@@ -51,8 +51,8 @@ nonisolated enum RemoteFileSortDirection: String, Codable, Sendable {
     }
 }
 
-nonisolated extension Array where Element == RemoteFileEntry {
-    func sortedForBrowser(using sort: RemoteFileSort, direction: RemoteFileSortDirection) -> [RemoteFileEntry] {
+nonisolated package extension Array where Element == RemoteFileEntry {
+    package func sortedForBrowser(using sort: RemoteFileSort, direction: RemoteFileSortDirection) -> [RemoteFileEntry] {
         sorted { lhs, rhs in
             let lhsDirectoryRank = lhs.type == .directory ? 0 : 1
             let rhsDirectoryRank = rhs.type == .directory ? 0 : 1

@@ -1,59 +1,62 @@
 import Foundation
 
-nonisolated struct SSHShellRegistry {
-    nonisolated struct StartToken: Hashable, Sendable {
-        let id: UUID
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
+nonisolated package struct SSHShellRegistry {
+    nonisolated package struct StartToken: Hashable, Sendable {
+        package let id: UUID
 
-        init(id: UUID = UUID()) {
+        package init(id: UUID = UUID()) {
             self.id = id
         }
     }
 
-    nonisolated struct Registration: Sendable {
-        let serverId: UUID
-        let client: SSHClient
-        let shellId: UUID
-        let startToken: StartToken
+    nonisolated package struct Registration: Sendable {
+        package let serverId: UUID
+        package let client: SSHClient
+        package let shellId: UUID
+        package let startToken: StartToken
     }
 
-    nonisolated struct StartContext: Sendable {
-        let token: StartToken
-        let startedAt: Date
-        let client: SSHClient
-        let serverId: UUID
+    nonisolated package struct StartContext: Sendable {
+        package let token: StartToken
+        package let startedAt: Date
+        package let client: SSHClient
+        package let serverId: UUID
     }
 
-    nonisolated enum RegisterResult: Sendable, Equatable {
+    nonisolated package enum RegisterResult: Sendable, Equatable {
         case accepted
         case stale
     }
 
-    nonisolated struct StartResult: Sendable {
-        let token: StartToken?
-        let staleContext: StartContext?
+    nonisolated package struct StartResult: Sendable {
+        package let token: StartToken?
+        package let staleContext: StartContext?
 
-        var started: Bool { token != nil }
+        package var started: Bool { token != nil }
     }
 
-    nonisolated struct InFlightResult: Sendable {
-        let inFlight: Bool
-        let staleContext: StartContext?
+    nonisolated package struct InFlightResult: Sendable {
+        package let inFlight: Bool
+        package let staleContext: StartContext?
     }
 
-    nonisolated struct DrainResult: Sendable {
-        let registrations: [Registration]
-        let pendingStarts: [StartContext]
+    nonisolated package struct DrainResult: Sendable {
+        package let registrations: [Registration]
+        package let pendingStarts: [StartContext]
     }
 
     private(set) var registrations: [UUID: Registration] = [:]
     private(set) var startsInFlight: [UUID: StartContext] = [:]
     private let staleThreshold: TimeInterval
 
-    init(staleThreshold: TimeInterval) {
+    package init(staleThreshold: TimeInterval) {
         self.staleThreshold = staleThreshold
     }
 
-    mutating func register(
+    mutating package func register(
         client: SSHClient,
         shellId: UUID,
         startToken: StartToken,
@@ -79,13 +82,13 @@ nonisolated struct SSHShellRegistry {
         return .accepted
     }
 
-    mutating func unregister(for entityId: UUID) -> (registration: Registration?, pendingStart: StartContext?) {
+    mutating package func unregister(for entityId: UUID) -> (registration: Registration?, pendingStart: StartContext?) {
         let pendingStart = startsInFlight.removeValue(forKey: entityId)
         let registration = registrations.removeValue(forKey: entityId)
         return (registration, pendingStart)
     }
 
-    mutating func tryBeginStart(
+    mutating package func tryBeginStart(
         for entityId: UUID,
         serverId: UUID,
         client: SSHClient,
@@ -120,7 +123,7 @@ nonisolated struct SSHShellRegistry {
         return StartResult(token: context.token, staleContext: nil)
     }
 
-    mutating func finishStart(
+    mutating package func finishStart(
         for entityId: UUID,
         client: SSHClient,
         startToken: StartToken
@@ -131,7 +134,7 @@ nonisolated struct SSHShellRegistry {
         startsInFlight.removeValue(forKey: entityId)
     }
 
-    mutating func isStartInFlight(for entityId: UUID, now: Date = Date()) -> InFlightResult {
+    mutating package func isStartInFlight(for entityId: UUID, now: Date = Date()) -> InFlightResult {
         guard let context = startsInFlight[entityId] else {
             return InFlightResult(inFlight: false, staleContext: nil)
         }
@@ -144,21 +147,21 @@ nonisolated struct SSHShellRegistry {
         return InFlightResult(inFlight: true, staleContext: nil)
     }
 
-    func registration(for entityId: UUID) -> Registration? {
+    package func registration(for entityId: UUID) -> Registration? {
         registrations[entityId]
     }
 
-    func shellId(for entityId: UUID) -> UUID? {
+    package func shellId(for entityId: UUID) -> UUID? {
         registrations[entityId]?.shellId
     }
 
-    func owns(client: SSHClient, shellId: UUID, for entityId: UUID) -> Bool {
+    package func owns(client: SSHClient, shellId: UUID, for entityId: UUID) -> Bool {
         guard let registration = registrations[entityId] else { return false }
         return ObjectIdentifier(registration.client) == ObjectIdentifier(client)
             && registration.shellId == shellId
     }
 
-    func ownsConnection(
+    package func ownsConnection(
         client: SSHClient,
         startToken: StartToken,
         for entityId: UUID
@@ -175,23 +178,23 @@ nonisolated struct SSHShellRegistry {
         return false
     }
 
-    func client(for entityId: UUID) -> SSHClient? {
+    package func client(for entityId: UUID) -> SSHClient? {
         registrations[entityId]?.client
     }
 
-    func connectionClient(for entityId: UUID) -> SSHClient? {
+    package func connectionClient(for entityId: UUID) -> SSHClient? {
         registrations[entityId]?.client ?? startsInFlight[entityId]?.client
     }
 
-    func connectionStartToken(for entityId: UUID) -> StartToken? {
+    package func connectionStartToken(for entityId: UUID) -> StartToken? {
         registrations[entityId]?.startToken ?? startsInFlight[entityId]?.token
     }
 
-    func owns(startToken: StartToken, for entityId: UUID) -> Bool {
+    package func owns(startToken: StartToken, for entityId: UUID) -> Bool {
         connectionStartToken(for: entityId) == startToken
     }
 
-    func hasOtherClientReferences(using client: SSHClient, excluding entityId: UUID) -> Bool {
+    package func hasOtherClientReferences(using client: SSHClient, excluding entityId: UUID) -> Bool {
         let identifier = ObjectIdentifier(client)
         let hasRegistration = registrations.contains { registration in
             registration.key != entityId && ObjectIdentifier(registration.value.client) == identifier
@@ -202,29 +205,29 @@ nonisolated struct SSHShellRegistry {
         return hasRegistration || hasPendingStart
     }
 
-    func hasClientReferences(_ client: SSHClient) -> Bool {
+    package func hasClientReferences(_ client: SSHClient) -> Bool {
         hasActiveRegistration(using: client) || hasPendingStart(using: client)
     }
 
-    func hasActiveRegistration(using client: SSHClient) -> Bool {
+    package func hasActiveRegistration(using client: SSHClient) -> Bool {
         let identifier = ObjectIdentifier(client)
         return registrations.values.contains { ObjectIdentifier($0.client) == identifier }
     }
 
-    func hasPendingStart(using client: SSHClient) -> Bool {
+    package func hasPendingStart(using client: SSHClient) -> Bool {
         let identifier = ObjectIdentifier(client)
         return startsInFlight.values.contains { ObjectIdentifier($0.client) == identifier }
     }
 
-    func firstRegisteredClient(for serverId: UUID) -> SSHClient? {
+    package func firstRegisteredClient(for serverId: UUID) -> SSHClient? {
         registrations.values.first(where: { $0.serverId == serverId })?.client
     }
 
-    func firstPendingClient(for serverId: UUID) -> SSHClient? {
+    package func firstPendingClient(for serverId: UUID) -> SSHClient? {
         startsInFlight.values.first(where: { $0.serverId == serverId })?.client
     }
 
-    mutating func drain() -> DrainResult {
+    mutating package func drain() -> DrainResult {
         let result = DrainResult(
             registrations: Array(registrations.values),
             pendingStarts: Array(startsInFlight.values)
@@ -234,7 +237,7 @@ nonisolated struct SSHShellRegistry {
         return result
     }
 
-    mutating func removeAll() {
+    mutating package func removeAll() {
         _ = drain()
     }
 }

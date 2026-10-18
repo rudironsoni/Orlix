@@ -2,42 +2,47 @@ import Combine
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
-struct TerminalRemoteSessionShellRegistration {
-    let client: SSHClient
-    let shellID: UUID
-    let serverID: UUID
+package struct TerminalRemoteSessionShellRegistration {
+    package let client: SSHClient
+    package let shellID: UUID
+    package let serverID: UUID
 }
 
 /// Owns persistent remote-session selection, launch, cleanup, and termination.
 @MainActor
-final class TerminalRemoteSessionCoordinator: ObservableObject {
-    struct CleanupKey: Hashable {
-        let serverID: UUID
-        let backendIdentifier: RemoteSessionBackendIdentifier
+final package class TerminalRemoteSessionCoordinator: ObservableObject {
+    package struct CleanupKey: Hashable {
+        package let serverID: UUID
+        package let backendIdentifier: RemoteSessionBackendIdentifier
     }
 
-    var attachPrompt: RemoteSessionAttachPrompt? {
+    package var attachPrompt: RemoteSessionAttachPrompt? {
         resolver.currentPrompt
     }
 
-    var backendMetadata: [RemoteSessionBackendMetadata] {
+    package var backendMetadata: [RemoteSessionBackendMetadata] {
         remoteSessions.backendMetadata
     }
 
-    let configuration: TerminalRemoteSessionConfiguration
-    let remoteSessions: any TerminalRemoteSessionServicing
-    let resolver: RemoteSessionAttachResolver
-    let sessionState: TerminalSessionStateStore
-    let transportLifetime: TerminalTransportLifetime
-    let logger = Logger(
+    package let configuration: TerminalRemoteSessionConfiguration
+    package let remoteSessions: any TerminalRemoteSessionServicing
+    package let resolver: RemoteSessionAttachResolver
+    package let sessionState: TerminalSessionStateStore
+    package let transportLifetime: TerminalTransportLifetime
+    package let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Orlix",
         category: "TerminalRemoteSessionCoordinator"
     )
-    var completedCleanup: Set<CleanupKey> = []
+    package var completedCleanup: Set<CleanupKey> = []
     private var cancellables: Set<AnyCancellable> = []
 
-    init(
+    package init(
         configuration: TerminalRemoteSessionConfiguration,
         remoteSessions: any TerminalRemoteSessionServicing,
         resolver: RemoteSessionAttachResolver,
@@ -56,19 +61,19 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
 
     // MARK: - Settings and attachment state
 
-    func isEnabled(for serverID: UUID) -> Bool {
+    package func isEnabled(for serverID: UUID) -> Bool {
         resolver.isEnabled(for: serverID)
     }
 
-    func backendIdentifier(for serverID: UUID) -> RemoteSessionBackendIdentifier {
+    package func backendIdentifier(for serverID: UUID) -> RemoteSessionBackendIdentifier {
         resolver.backendIdentifier(for: serverID)
     }
 
-    func attachment(for paneID: UUID) -> TerminalRemoteSessionAttachmentState? {
+    package func attachment(for paneID: UUID) -> TerminalRemoteSessionAttachmentState? {
         resolver.attachment(for: paneID)
     }
 
-    func setAttachment(
+    package func setAttachment(
         for paneID: UUID,
         identifier: RemoteSessionIdentifier,
         ownership: RemoteSessionOwnership,
@@ -86,16 +91,16 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         )
     }
 
-    func clearAttachmentState(for paneID: UUID) {
+    package func clearAttachmentState(for paneID: UUID) {
         resolver.clearAttachmentState(for: paneID)
         clearResumeContext(for: paneID)
     }
 
-    func confirmManagedSession(for paneID: UUID) {
+    package func confirmManagedSession(for paneID: UUID) {
         resolver.confirmManagedSession(for: paneID)
     }
 
-    func shouldReattachManagedSession(
+    package func shouldReattachManagedSession(
         for paneID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier
     ) -> Bool {
@@ -107,22 +112,22 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
 
     // MARK: - Prompt ownership
 
-    func resolvePrompt(
+    package func resolvePrompt(
         requestID: UUID,
         selection: RemoteSessionAttachSelection
     ) {
         resolver.resolvePrompt(requestID: requestID, selection: selection)
     }
 
-    func cancelPrompt(requestID: UUID) {
+    package func cancelPrompt(requestID: UUID) {
         resolver.cancelPrompt(requestID: requestID)
     }
 
-    func hasPendingPrompt(requestID: UUID) -> Bool {
+    package func hasPendingPrompt(requestID: UUID) -> Bool {
         resolver.hasPendingPrompt(requestID: requestID)
     }
 
-    func requestSelection(
+    package func requestSelection(
         requestID: UUID,
         paneID: UUID,
         backendIdentifier: RemoteSessionBackendIdentifier,
@@ -136,23 +141,23 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         )
     }
 
-    func cancelPrompt(for startContext: SSHShellRegistry.StartContext?) {
+    package func cancelPrompt(for startContext: SSHShellRegistry.StartContext?) {
         guard let startContext else { return }
         cancelPrompt(requestID: startContext.token.id)
     }
 
-    func clearRuntimeState(for paneID: UUID) {
+    package func clearRuntimeState(for paneID: UUID) {
         resolver.clearRuntimeState(for: paneID)
         clearResumeContext(for: paneID)
     }
 
     // MARK: - Pane state
 
-    func status(for paneID: UUID) -> RemoteSessionStatus? {
+    package func status(for paneID: UUID) -> RemoteSessionStatus? {
         sessionState.paneState(for: paneID)?.remoteSessionStatus
     }
 
-    func updateStatus(_ status: RemoteSessionStatus, for paneID: UUID) {
+    package func updateStatus(_ status: RemoteSessionStatus, for paneID: UUID) {
         guard let previous = sessionState.paneState(for: paneID)?.remoteSessionStatus,
               previous != status else {
             return
@@ -163,12 +168,12 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         )
     }
 
-    func shouldApplyWorkingDirectory(for paneID: UUID) -> Bool {
+    package func shouldApplyWorkingDirectory(for paneID: UUID) -> Bool {
         guard let status = status(for: paneID) else { return false }
         return status == .off || status == .missing
     }
 
-    func updateSelectionStatuses(selectedTabs: [UUID: UUID]) {
+    package func updateSelectionStatuses(selectedTabs: [UUID: UUID]) {
         for serverID in sessionState.serverIdsWithTabs {
             for tab in sessionState.tabs(for: serverID) {
                 updateFocus(
@@ -179,7 +184,7 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         }
     }
 
-    func updateFocus(for tab: TerminalTab) {
+    package func updateFocus(for tab: TerminalTab) {
         updateFocus(
             for: tab,
             isSelectedTab: sessionState.selectedTabId(for: tab.serverId) == tab.id
@@ -200,7 +205,7 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
         }
     }
 
-    func disable(for serverID: UUID) {
+    package func disable(for serverID: UUID) {
         for state in sessionState.paneStates(forServer: serverID) {
             updateStatus(.off, for: state.paneId)
             clearRuntimeState(for: state.paneId)
@@ -210,8 +215,8 @@ final class TerminalRemoteSessionCoordinator: ObservableObject {
 }
 
 #if DEBUG
-extension TerminalRemoteSessionCoordinator {
-    convenience init() {
+package extension TerminalRemoteSessionCoordinator {
+    convenience package init() {
         let configuration = TerminalRemoteSessionConfiguration.testing
         let remoteSessions = UnavailableTerminalRemoteSessionService()
         let resolver = RemoteSessionAttachResolver(
@@ -235,13 +240,13 @@ extension TerminalRemoteSessionCoordinator {
 
 @MainActor
 private final class EmptyTerminalTabSnapshotStore: TerminalTabSnapshotStoring {
-    func loadSnapshotData() -> Data? { nil }
-    func saveSnapshotData(_ data: Data) {}
-    func removeSnapshotData() {}
+    package func loadSnapshotData() -> Data? { nil }
+    package func saveSnapshotData(_ data: Data) {}
+    package func removeSnapshotData() {}
 }
 
-extension TerminalRemoteSessionConfiguration {
-    static var testing: Self {
+package extension TerminalRemoteSessionConfiguration {
+    static package var testing: Self {
         Self(
             deviceID: "test-device",
             enabledByDefault: { true },
@@ -258,38 +263,38 @@ extension TerminalRemoteSessionConfiguration {
     }
 }
 
-actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
-    nonisolated let backendMetadata = [RemoteSessionBackendMetadata(
+package actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
+    nonisolated package let backendMetadata = [RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
         installation: .automatic,
         managedStartupCommandSupport: .supported
     )]
 
-    func availability(
+    package func availability(
         for backendIdentifier: RemoteSessionBackendIdentifier,
         using client: SSHClient
     ) async -> RemoteSessionAvailability { .unsupportedEnvironment }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async throws -> [RemoteSessionDescriptor] { throw SSHError.notConnected }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
         runtime: RemoteSessionRuntime
     ) async {}
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) async throws -> RemoteSessionBackendLaunchPlan { throw SSHError.notConnected }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -298,25 +303,25 @@ actor UnavailableTerminalRemoteSessionService: TerminalRemoteSessionServicing {
         attachAfterInstall: Bool
     ) async -> String? { nil }
 
-    func sendScript(
+    package func sendScript(
         _ script: String,
         using client: SSHClient,
         shellId: UUID
     ) async throws { throw SSHError.notConnected }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?
     ) async {}
 
-    func cleanupSessions(
+    package func cleanupSessions(
         keeping identifiers: Set<RemoteSessionIdentifier>,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
     ) async {}
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime?

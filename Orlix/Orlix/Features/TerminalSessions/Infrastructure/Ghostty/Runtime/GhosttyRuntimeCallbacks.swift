@@ -13,6 +13,9 @@ import AppKit
 import UIKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private nonisolated enum GhosttyRuntimeAction: Sendable {
     case title(String)
     case workingDirectory(String)
@@ -35,22 +38,22 @@ private nonisolated enum GhosttyRuntimeActionDisposition: Sendable {
 }
 
 private nonisolated struct GhosttyRuntimeActionTarget: Sendable {
-    let app: GhosttyRuntime?
-    let surfaceAddress: UInt?
-    let fallbackTerminalView: GhosttyTerminalView?
-    let description: String
-    let tagRawValue: UInt32
+    package let app: GhosttyRuntime?
+    package let surfaceAddress: UInt?
+    package let fallbackTerminalView: GhosttyTerminalView?
+    package let description: String
+    package let tagRawValue: UInt32
 }
 
-extension GhosttyRuntime {
+package extension GhosttyRuntime {
     @MainActor
     private struct TitleDeliveryLogCache {
-        static var lastUndeliveredTitleBySurface: [String: String] = [:]
+        static package var lastUndeliveredTitleBySurface: [String: String] = [:]
     }
 
     /// Builds C callbacks outside the app's Main Actor isolation. libghostty may
     /// invoke every callback from its renderer thread.
-    nonisolated static func makeRuntimeConfiguration(
+    nonisolated static package func makeRuntimeConfiguration(
         userdata: UnsafeMutableRawPointer?,
         supportsSelectionClipboard: Bool
     ) -> ghostty_runtime_config_s {
@@ -309,7 +312,7 @@ extension GhosttyRuntime {
         }
     }
 
-    nonisolated static func clipboardConfirmationKind(
+    nonisolated static package func clipboardConfirmationKind(
         request: ghostty_clipboard_request_e
     ) -> TerminalClipboardConfirmationKind {
         switch request {
@@ -366,7 +369,7 @@ extension GhosttyRuntime {
         }
     }
 
-    nonisolated static func completeClipboardRequest(
+    nonisolated static package func completeClipboardRequest(
         surface: ghostty_surface_t,
         text: String?,
         availableMIMETypes: [String],

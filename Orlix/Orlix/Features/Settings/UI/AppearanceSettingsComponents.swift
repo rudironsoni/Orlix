@@ -12,12 +12,12 @@ import AppKit
 import UIKit
 #endif
 
-enum AppearanceMode: String, CaseIterable {
+package enum AppearanceMode: String, CaseIterable {
     case system = "system"
     case light = "light"
     case dark = "dark"
 
-    var label: String {
+    package var label: String {
         switch self {
         case .system: return String(localized: "System")
         case .light: return String(localized: "Light")
@@ -25,7 +25,7 @@ enum AppearanceMode: String, CaseIterable {
         }
     }
 
-    var colorScheme: ColorScheme? {
+    package var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
         case .light: return .light
@@ -35,7 +35,7 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 /// View modifier that applies the app-wide appearance setting
-struct AppearanceModifier: ViewModifier {
+package struct AppearanceModifier: ViewModifier {
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
 
     private var colorScheme: ColorScheme? {
@@ -46,7 +46,7 @@ struct AppearanceModifier: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         let mode = AppearanceMode(rawValue: appearanceMode) ?? .system
         #if os(iOS)
         content
@@ -63,19 +63,21 @@ struct AppearanceModifier: ViewModifier {
             )
         #endif
     }
+
+    package init() {}
 }
 
 // MARK: - Appearance Picker View
 
 #if os(macOS)
-struct AppearanceWindowBridge: NSViewRepresentable {
-    let mode: AppearanceMode
+package struct AppearanceWindowBridge: NSViewRepresentable {
+    package let mode: AppearanceMode
 
-    func makeNSView(context: Context) -> NSView {
+    package func makeNSView(context: Context) -> NSView {
         NSView(frame: .zero)
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         guard let window = nsView.window else { return }
 
         let targetName: NSAppearance.Name? = {
@@ -97,20 +99,20 @@ struct AppearanceWindowBridge: NSViewRepresentable {
 #endif
 
 #if os(iOS)
-final class AppearanceWindowController: UIViewController {
-    var mode: AppearanceMode = .system
+final package class AppearanceWindowController: UIViewController {
+    package var mode: AppearanceMode = .system
 
-    override func viewDidAppear(_ animated: Bool) {
+    override package func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         applyAppearance()
     }
 
-    override func viewDidLayoutSubviews() {
+    override package func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyAppearance()
     }
 
-    func applyAppearance() {
+    package func applyAppearance() {
         let targetStyle: UIUserInterfaceStyle = {
             switch mode {
             case .system:
@@ -142,26 +144,26 @@ final class AppearanceWindowController: UIViewController {
     }
 }
 
-struct AppearanceWindowBridge: UIViewControllerRepresentable {
-    let mode: AppearanceMode
+package struct AppearanceWindowBridge: UIViewControllerRepresentable {
+    package let mode: AppearanceMode
 
-    func makeUIViewController(context: Context) -> AppearanceWindowController {
+    package func makeUIViewController(context: Context) -> AppearanceWindowController {
         let controller = AppearanceWindowController()
         controller.view.isHidden = true
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: AppearanceWindowController, context: Context) {
+    package func updateUIViewController(_ uiViewController: AppearanceWindowController, context: Context) {
         uiViewController.mode = mode
         uiViewController.applyAppearance()
     }
 }
 #endif
 
-struct AppearancePickerView: View {
-    @Binding var selection: String
+package struct AppearancePickerView: View {
+    @Binding package var selection: String
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 0) {
             ForEach(AppearanceMode.allCases, id: \.self) { mode in
                 let isSelected = selection == mode.rawValue
@@ -183,11 +185,11 @@ struct AppearancePickerView: View {
     }
 }
 
-struct AppearanceOptionView: View {
-    let mode: AppearanceMode
-    let isSelected: Bool
+package struct AppearanceOptionView: View {
+    package let mode: AppearanceMode
+    package let isSelected: Bool
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 8) {
             ZStack {
                 AppearancePreviewCard(mode: mode)
@@ -207,10 +209,10 @@ struct AppearanceOptionView: View {
     }
 }
 
-struct AppearancePreviewCard: View {
-    let mode: AppearanceMode
+package struct AppearancePreviewCard: View {
+    package let mode: AppearanceMode
 
-    var body: some View {
+    package var body: some View {
         switch mode {
         case .system:
             HStack(spacing: 0) {

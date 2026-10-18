@@ -1,9 +1,12 @@
 import SwiftUI
 
-struct CPUDetailsSheet: View {
-    let stats: ServerStats
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct CPUDetailsSheet: View {
+    package let stats: ServerStats
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .adaptiveSoftScrollEdges()
     }
@@ -76,9 +79,9 @@ struct CPUDetailsSheet: View {
 }
 
 private struct CPUCoreDetailRow: View {
-    let sample: CPUCoreSample
+    package let sample: CPUCoreSample
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(sample.displayName)
@@ -107,11 +110,11 @@ private struct CPUCoreDetailRow: View {
     }
 }
 
-struct GPUDetailsSheet: View {
-    let stats: ServerStats
-    let devices: [GPUDevice]
+package struct GPUDetailsSheet: View {
+    package let stats: ServerStats
+    package let devices: [GPUDevice]
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .adaptiveSoftScrollEdges()
     }
@@ -162,10 +165,10 @@ struct GPUDetailsSheet: View {
 }
 
 private struct GPUDeviceDetailRows: View {
-    let device: GPUDevice
-    let sample: GPUSample?
+    package let device: GPUDevice
+    package let sample: GPUSample?
 
-    var body: some View {
+    package var body: some View {
         InfoRow(title: String(localized: "Vendor"), value: device.vendor)
         InfoRow(title: String(localized: "Driver"), value: device.driverVersion)
         InfoRow(title: String(localized: "Source"), value: sourceLabel(sample?.source ?? device.source))
@@ -238,9 +241,9 @@ private struct GPUDeviceDetailRows: View {
 }
 
 private struct GPUProcessDetailRow: View {
-    let process: GPUProcess
+    package let process: GPUProcess
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(process.name)
@@ -270,14 +273,14 @@ private struct GPUProcessDetailRow: View {
     }
 }
 
-struct SystemDetailsSheet: View {
-    let stats: ServerStats
+package struct SystemDetailsSheet: View {
+    package let stats: ServerStats
 
     private var profile: HardwareProfile {
         stats.hardware
     }
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .adaptiveSoftScrollEdges()
     }

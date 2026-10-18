@@ -1,25 +1,25 @@
 import Foundation
 
-nonisolated enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
+nonisolated package enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
     case stats
     case terminal
     case files
 
-    var id: Self { self }
+    package var id: Self { self }
 }
 
-nonisolated struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable {
-    var order: [ConnectionViewTabID]
-    var visibleTabs: Set<ConnectionViewTabID>
-    var defaultTab: ConnectionViewTabID
+nonisolated package struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable {
+    package var order: [ConnectionViewTabID]
+    package var visibleTabs: Set<ConnectionViewTabID>
+    package var defaultTab: ConnectionViewTabID
 
-    static let `default` = ConnectionViewTabConfiguration(
+    static package let `default` = ConnectionViewTabConfiguration(
         order: ConnectionViewTabID.allCases,
         visibleTabs: Set(ConnectionViewTabID.allCases),
         defaultTab: .stats
     )
 
-    init(
+    package init(
         order: [ConnectionViewTabID],
         visibleTabs: Set<ConnectionViewTabID>,
         defaultTab: ConnectionViewTabID
@@ -41,18 +41,18 @@ nonisolated struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable 
         self.defaultTab = defaultTab
     }
 
-    var orderedVisibleTabs: [ConnectionViewTabID] {
+    package var orderedVisibleTabs: [ConnectionViewTabID] {
         order.filter(visibleTabs.contains)
     }
 
-    var effectiveDefaultTab: ConnectionViewTabID {
+    package var effectiveDefaultTab: ConnectionViewTabID {
         if visibleTabs.contains(defaultTab) {
             return defaultTab
         }
         return orderedVisibleTabs.first ?? .stats
     }
 
-    func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
+    package func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
         guard let storedView, visibleTabs.contains(storedView) else {
             return effectiveDefaultTab
         }
@@ -65,7 +65,7 @@ nonisolated struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable 
         case defaultTab
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             order: try container.decode([ConnectionViewTabID].self, forKey: .order),
@@ -74,7 +74,7 @@ nonisolated struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable 
         )
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(order, forKey: .order)
         try container.encode(

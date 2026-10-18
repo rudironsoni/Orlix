@@ -1,25 +1,28 @@
 import Foundation
 
-nonisolated struct TranscriptionSettingsKeys {
-    static let provider = "transcriptionProvider"
-    static let mlxWhisperModelId = "mlxWhisperModelId"
-    static let mlxParakeetModelId = "mlxParakeetModelId"
-    static let language = "transcriptionLanguage"
-    static let terminalVoiceButtonEnabled = "terminalVoiceButtonEnabled"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct TranscriptionSettingsKeys {
+    static package let provider = "transcriptionProvider"
+    static package let mlxWhisperModelId = "mlxWhisperModelId"
+    static package let mlxParakeetModelId = "mlxParakeetModelId"
+    static package let language = "transcriptionLanguage"
+    static package let terminalVoiceButtonEnabled = "terminalVoiceButtonEnabled"
 
-    static let legacyWhisperModelID = "whisperModelId"
-    static let legacyParakeetModelID = "parakeetModelId"
+    static package let legacyWhisperModelID = "whisperModelId"
+    static package let legacyParakeetModelID = "parakeetModelId"
 }
 
-nonisolated struct TranscriptionSettingsDefaults {
-    static let provider: TranscriptionProvider = .system
-    static let mlxWhisperModelId = MLXModelCatalog.defaultModelID(for: .whisper)
-    static let mlxParakeetModelId = MLXModelCatalog.defaultModelID(for: .parakeetTDT)
-    static let language = "en"
-    static let autoLanguageCode = "auto"
-    static let terminalVoiceButtonEnabled = true
+nonisolated package struct TranscriptionSettingsDefaults {
+    static package let provider: TranscriptionProvider = .system
+    static package let mlxWhisperModelId = MLXModelCatalog.defaultModelID(for: .whisper)
+    static package let mlxParakeetModelId = MLXModelCatalog.defaultModelID(for: .parakeetTDT)
+    static package let language = "en"
+    static package let autoLanguageCode = "auto"
+    static package let terminalVoiceButtonEnabled = true
 
-    static var settings: VoiceSettings {
+    static package var settings: VoiceSettings {
         VoiceSettings(
             provider: provider,
             whisperModelID: mlxWhisperModelId,
@@ -31,14 +34,14 @@ nonisolated struct TranscriptionSettingsDefaults {
 }
 
 @MainActor
-final class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
+final package class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    func loadSettings() -> VoiceSettings {
+    package func loadSettings() -> VoiceSettings {
         let settings = VoiceSettings(
             provider: loadProvider(),
             whisperModelID: loadModelID(
@@ -60,7 +63,7 @@ final class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
         return settings
     }
 
-    func saveSettings(_ settings: VoiceSettings) {
+    package func saveSettings(_ settings: VoiceSettings) {
         defaults.set(settings.provider.rawValue, forKey: TranscriptionSettingsKeys.provider)
         defaults.set(settings.whisperModelID, forKey: TranscriptionSettingsKeys.mlxWhisperModelId)
         defaults.set(settings.parakeetModelID, forKey: TranscriptionSettingsKeys.mlxParakeetModelId)

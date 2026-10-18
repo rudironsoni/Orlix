@@ -1,25 +1,28 @@
 import Foundation
 
-nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
-    static let minimumVersion07 = RemoteSessionSemanticVersion(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct HerdrRemoteSessionBackend: RemoteSessionBackend {
+    static package let minimumVersion07 = RemoteSessionSemanticVersion(
         major: 0,
         minor: 7,
         patch: 5
     )
-    static let minimumVersion08 = RemoteSessionSemanticVersion(
+    static package let minimumVersion08 = RemoteSessionSemanticVersion(
         major: 0,
         minor: 8,
         patch: 2
     )
 
-    let metadata = RemoteSessionBackendMetadata(
+    package let metadata = RemoteSessionBackendMetadata(
         identifier: .herdr,
         displayName: "Herdr",
         installation: .documentation(URL(string: "https://herdr.dev/docs/install/")!),
         managedStartupCommandSupport: .unsupported
     )
 
-    func availability(using client: SSHClient) async -> RemoteSessionAvailability {
+    package func availability(using client: SSHClient) async -> RemoteSessionAvailability {
         let environment = await client.remoteEnvironment()
         return await availability(in: environment) { command in
             try await client.execute(
@@ -30,7 +33,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func availability(
+    package func availability(
         in environment: RemoteEnvironment,
         execute: @escaping @Sendable (String) async throws -> String
     ) async -> RemoteSessionAvailability {
@@ -74,7 +77,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -89,7 +92,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         return try HerdrRemoteSessionParser.parseSessionList(output, scope: scope)
     }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -98,7 +101,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         // Herdr owns its configuration and session state.
     }
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan {
@@ -118,7 +121,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -129,7 +132,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         nil
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -166,7 +169,7 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -229,4 +232,6 @@ nonisolated struct HerdrRemoteSessionBackend: RemoteSessionBackend {
             throw SSHError.unknown("Unsupported Herdr runtime")
         }
     }
+
+    package init() {}
 }

@@ -1,9 +1,12 @@
 import Foundation
 
-nonisolated extension WindowsStatsCollector {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package extension WindowsStatsCollector {
     // MARK: - Parsers
 
-    func parsePeriodicStats(_ output: String) -> WindowsPeriodicStatsSnapshot {
+    package func parsePeriodicStats(_ output: String) -> WindowsPeriodicStatsSnapshot {
         var memory: (total: UInt64, used: UInt64, free: UInt64)?
         var uptime: TimeInterval?
         var processCount: Int?
@@ -79,7 +82,7 @@ nonisolated extension WindowsStatsCollector {
         return processes
     }
 
-    func parseVolumes(
+    package func parseVolumes(
         _ output: String,
         metadataByMountPoint: [String: VolumeCollectionMetadata] = [:]
     ) -> [VolumeInfo] {
@@ -113,7 +116,7 @@ nonisolated extension WindowsStatsCollector {
         return volumes
     }
 
-    func parseWMICVolumes(
+    package func parseWMICVolumes(
         _ output: String,
         metadataByMountPoint: [String: VolumeCollectionMetadata] = [:]
     ) -> [VolumeInfo] {
@@ -147,7 +150,7 @@ nonisolated extension WindowsStatsCollector {
         }
     }
 
-    func parseWindowsVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
+    package func parseWindowsVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
         var metadata: [String: VolumeCollectionMetadata] = [:]
         for line in output.components(separatedBy: .newlines) {
             let fields = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -228,7 +231,7 @@ nonisolated extension WindowsStatsCollector {
             .map { $0 }
     }
 
-    func parseWindowsGPUs(_ output: String) -> [GPUDevice] {
+    package func parseWindowsGPUs(_ output: String) -> [GPUDevice] {
         var devices: [GPUDevice] = []
 
         for line in output.components(separatedBy: .newlines) {
@@ -273,7 +276,7 @@ nonisolated extension WindowsStatsCollector {
         return devices
     }
 
-    func parseWindowsNvidiaGPUs(_ output: String) -> [GPUDevice] {
+    package func parseWindowsNvidiaGPUs(_ output: String) -> [GPUDevice] {
         parseCSVRows(output).compactMap { fields in
             guard fields.count >= 9 else { return nil }
             let index = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -292,7 +295,7 @@ nonisolated extension WindowsStatsCollector {
         }
     }
 
-    func parseWindowsNvidiaSamples(_ output: String, timestamp: Date) -> [GPUSample] {
+    package func parseWindowsNvidiaSamples(_ output: String, timestamp: Date) -> [GPUSample] {
         parseCSVRows(output).compactMap { fields in
             guard fields.count >= 9 else { return nil }
             let index = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -317,7 +320,7 @@ nonisolated extension WindowsStatsCollector {
         }
     }
 
-    func parseWindowsGPUCounterSamples(_ output: String, timestamp: Date) -> [GPUSample] {
+    package func parseWindowsGPUCounterSamples(_ output: String, timestamp: Date) -> [GPUSample] {
         output.components(separatedBy: .newlines).compactMap { line in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return nil }
@@ -345,7 +348,7 @@ nonisolated extension WindowsStatsCollector {
         }
     }
 
-    func parseWindowsCPUUsage(_ output: String) -> WindowsCPUUsage {
+    package func parseWindowsCPUUsage(_ output: String) -> WindowsCPUUsage {
         var usage = 0.0
         var user = 0.0
         var system = 0.0
@@ -393,7 +396,7 @@ nonisolated extension WindowsStatsCollector {
         )
     }
 
-    func parseWMICKeyValueOutput(_ output: String) -> [String: [String]] {
+    package func parseWMICKeyValueOutput(_ output: String) -> [String: [String]] {
         var result: [String: [String]] = [:]
         for line in output.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -433,7 +436,7 @@ nonisolated extension WindowsStatsCollector {
         return Double(trimmed.replacingOccurrences(of: ",", with: "."))
     }
 
-    func parseTypeperfValue(_ output: String) -> Double? {
+    package func parseTypeperfValue(_ output: String) -> Double? {
         let lines = output
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -446,7 +449,7 @@ nonisolated extension WindowsStatsCollector {
         return parseWindowsDouble(rawValue)
     }
 
-    func parseNetstatInterfaceStats(_ output: String) -> (rx: UInt64, tx: UInt64) {
+    package func parseNetstatInterfaceStats(_ output: String) -> (rx: UInt64, tx: UInt64) {
         for line in output.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.lowercased().hasPrefix("bytes") else { continue }
@@ -568,7 +571,7 @@ nonisolated extension WindowsStatsCollector {
         return Int(String(digits)) ?? Int.max
     }
 
-    func parseWMIDate(_ raw: String) -> Date? {
+    package func parseWMIDate(_ raw: String) -> Date? {
         guard raw.count >= 21 else { return nil }
 
         let year = Int(raw.prefix(4)) ?? 0
@@ -596,21 +599,21 @@ nonisolated extension WindowsStatsCollector {
         return Calendar(identifier: .gregorian).date(from: components)
     }
 
-    func section(_ sections: [String], _ index: Int) -> String {
+    package func section(_ sections: [String], _ index: Int) -> String {
         guard sections.indices.contains(index) else { return "" }
         return sections[index].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
-nonisolated struct WindowsCPUUsage: Sendable {
-    let usagePercent: Double
-    let userPercent: Double
-    let systemPercent: Double
-    let coreSamples: [CPUCoreSample]
+nonisolated package struct WindowsCPUUsage: Sendable {
+    package let usagePercent: Double
+    package let userPercent: Double
+    package let systemPercent: Double
+    package let coreSamples: [CPUCoreSample]
 }
 
-nonisolated struct WindowsPeriodicStatsSnapshot: Sendable {
-    let memory: (total: UInt64, used: UInt64, free: UInt64)?
-    let uptime: TimeInterval?
-    let processCount: Int?
-    let network: (rx: UInt64, tx: UInt64)?
+nonisolated package struct WindowsPeriodicStatsSnapshot: Sendable {
+    package let memory: (total: UInt64, used: UInt64, free: UInt64)?
+    package let uptime: TimeInterval?
+    package let processCount: Int?
+    package let network: (rx: UInt64, tx: UInt64)?
 }

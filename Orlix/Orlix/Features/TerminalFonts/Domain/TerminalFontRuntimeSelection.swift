@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated struct TerminalFontRuntimeSelection: Equatable, Sendable {
-    let primaryFamily: String
-    let cjkFamily: String?
+nonisolated package struct TerminalFontRuntimeSelection: Equatable, Sendable {
+    package let primaryFamily: String
+    package let cjkFamily: String?
 
-    init(primaryFamily: String, cjkFamily: String?) {
+    package init(primaryFamily: String, cjkFamily: String?) {
         let normalizedPrimary = primaryFamily.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedCJK = cjkFamily?.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -14,7 +14,7 @@ nonisolated struct TerminalFontRuntimeSelection: Equatable, Sendable {
         self.cjkFamily = normalizedCJK?.isEmpty == false ? normalizedCJK : nil
     }
 
-    var fontFamilies: [String] {
+    package var fontFamilies: [String] {
         let candidates = [primaryFamily]
             + (cjkFamily.map { [$0] } ?? [])
             + TerminalDefaults.automaticTextFallbackFontFamilies
@@ -24,7 +24,7 @@ nonisolated struct TerminalFontRuntimeSelection: Equatable, Sendable {
         return candidates.filter { seen.insert($0).inserted }
     }
 
-    static var defaultValue: Self {
+    static package var defaultValue: Self {
         Self(primaryFamily: TerminalDefaults.defaultFontName, cjkFamily: nil)
     }
 }

@@ -1,10 +1,13 @@
 import Foundation
 
-nonisolated enum ServerPendingCloudKitPayloadCodec {
-    static let serverEntityType = "server"
-    static let workspaceEntityType = "workspace"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerPendingCloudKitPayloadCodec {
+    static package let serverEntityType = "server"
+    static package let workspaceEntityType = "workspace"
 
-    static func encode(_ payload: ServerPendingMutation.Payload) throws -> PendingCloudKitPayloadEnvelope {
+    static package func encode(_ payload: ServerPendingMutation.Payload) throws -> PendingCloudKitPayloadEnvelope {
         switch payload {
         case .serverUpsert(let server):
             return try PendingCloudKitPayloadEnvelope(
@@ -41,7 +44,7 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
         }
     }
 
-    static func decode(_ payload: PendingCloudKitPayloadEnvelope) throws -> ServerPendingMutation.Payload? {
+    static package func decode(_ payload: PendingCloudKitPayloadEnvelope) throws -> ServerPendingMutation.Payload? {
         switch (payload.entityType, payload.operation) {
         case (serverEntityType, .upsert):
             let server = try JSONDecoder().decode(Server.self, from: payload.encodedValue)
@@ -64,7 +67,7 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
         }
     }
 
-    static func contains(_ payload: PendingCloudKitPayloadEnvelope) -> Bool {
+    static package func contains(_ payload: PendingCloudKitPayloadEnvelope) -> Bool {
         do {
             return try decode(payload) != nil
         } catch {
@@ -72,7 +75,7 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
         }
     }
 
-    static func migrateLegacy(
+    static package func migrateLegacy(
         kind: String,
         encodedValue: Data
     ) throws -> PendingCloudKitPayloadEnvelope? {
@@ -95,20 +98,20 @@ nonisolated enum ServerPendingCloudKitPayloadCodec {
     }
 }
 
-nonisolated extension PendingCloudKitPayloadEnvelope {
-    static func serverUpsert(_ server: Server) throws -> Self {
+nonisolated package extension PendingCloudKitPayloadEnvelope {
+    static package func serverUpsert(_ server: Server) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.serverUpsert(server))
     }
 
-    static func serverDelete(_ server: Server) throws -> Self {
+    static package func serverDelete(_ server: Server) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.serverDelete(server))
     }
 
-    static func workspaceUpsert(_ workspace: Workspace) throws -> Self {
+    static package func workspaceUpsert(_ workspace: Workspace) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.workspaceUpsert(workspace))
     }
 
-    static func workspaceDelete(_ workspace: Workspace) throws -> Self {
+    static package func workspaceDelete(_ workspace: Workspace) throws -> Self {
         try ServerPendingCloudKitPayloadCodec.encode(.workspaceDelete(workspace))
     }
 }

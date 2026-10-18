@@ -1,7 +1,11 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
-extension TerminalRemoteSessionCoordinator {
+package extension TerminalRemoteSessionCoordinator {
     private enum InstallOutcome: Sendable {
         case installed(TerminalRemoteSessionAttachmentState)
         case unavailable
@@ -9,7 +13,7 @@ extension TerminalRemoteSessionCoordinator {
         case indeterminate
     }
 
-    func startInstall(
+    package func startInstall(
         for paneID: UUID,
         onInstalled: @MainActor @escaping () -> Void
     ) async {
@@ -195,7 +199,7 @@ extension TerminalRemoteSessionCoordinator {
         }
     }
 
-    func completeInstall(
+    package func completeInstall(
         for paneID: UUID,
         attachment: TerminalRemoteSessionAttachmentState,
         onInstalled: () -> Void
@@ -206,7 +210,7 @@ extension TerminalRemoteSessionCoordinator {
         onInstalled()
     }
 
-    func managedSessionIdentifierToKill(
+    package func managedSessionIdentifierToKill(
         for paneID: UUID,
         status: RemoteSessionStatus
     ) -> RemoteSessionIdentifier? {
@@ -218,7 +222,7 @@ extension TerminalRemoteSessionCoordinator {
         return state.attachment.identifier
     }
 
-    func killIfNeeded(for paneID: UUID) {
+    package func killIfNeeded(for paneID: UUID) {
         guard let registration = shellRegistration(for: paneID),
               let state = resolver.attachment(for: paneID),
               state.attachment.ownership == .managed else {
@@ -230,21 +234,21 @@ extension TerminalRemoteSessionCoordinator {
         }
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient
     ) async {
         await remoteSessions.killSession(identifier, using: client, runtime: nil)
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using runtime: EternalTerminalRuntime
     ) async {
         await runtime.killManagedRemoteSession(identifier)
     }
 
-    func resetRuntimeState(for paneIDs: Set<UUID>) {
+    package func resetRuntimeState(for paneIDs: Set<UUID>) {
         for paneID in paneIDs {
             clearRuntimeState(for: paneID)
         }

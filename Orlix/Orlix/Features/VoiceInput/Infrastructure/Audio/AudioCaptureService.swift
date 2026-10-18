@@ -3,12 +3,15 @@ import Combine
 import AVFoundation
 import os.log
 
-struct AudioPCMBufferSnapshot {
-    let format: AVAudioFormat
-    let frameLength: AVAudioFrameCount
-    let buffers: [Data]
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct AudioPCMBufferSnapshot {
+    package let format: AVAudioFormat
+    package let frameLength: AVAudioFrameCount
+    package let buffers: [Data]
 
-    init(_ buffer: AVAudioPCMBuffer) {
+    package init(_ buffer: AVAudioPCMBuffer) {
         format = buffer.format
         frameLength = buffer.frameLength
         buffers = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList).map { audioBuffer in
@@ -19,7 +22,7 @@ struct AudioPCMBufferSnapshot {
         }
     }
 
-    func makeBuffer() -> AVAudioPCMBuffer? {
+    package func makeBuffer() -> AVAudioPCMBuffer? {
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameLength) else {
             return nil
         }
@@ -51,11 +54,11 @@ struct AudioPCMBufferSnapshot {
 /// bridge after Xcode Cloud uses the SDK 27 AVFAudio overlay, which marks the
 /// callback as non-Sendable.
 private nonisolated struct SynchronousAudioConverterInput: @unchecked Sendable {
-    let buffer: AVAudioPCMBuffer
+    package let buffer: AVAudioPCMBuffer
 }
 
 @MainActor
-protocol AudioCaptureHardware: AnyObject {
+package protocol AudioCaptureHardware: AnyObject {
     var inputFormat: AVAudioFormat { get }
 
     func activateAudioSession() throws
@@ -72,14 +75,14 @@ protocol AudioCaptureHardware: AnyObject {
 }
 
 @MainActor
-final class AudioCaptureResources {
+final package class AudioCaptureResources {
     private var cleanupActions: [() -> Void] = []
 
-    func own(cleanup: @escaping () -> Void) {
+    package func own(cleanup: @escaping () -> Void) {
         cleanupActions.append(cleanup)
     }
 
-    func releaseAll() {
+    package func releaseAll() {
         let actions = cleanupActions
         cleanupActions.removeAll(keepingCapacity: true)
         for action in actions.reversed() {
@@ -93,11 +96,11 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
     private let logger = Logger.audio
     private let engine = AVAudioEngine()
 
-    var inputFormat: AVAudioFormat {
+    package var inputFormat: AVAudioFormat {
         engine.inputNode.outputFormat(forBus: 0)
     }
 
-    func activateAudioSession() throws {
+    package func activateAudioSession() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
@@ -111,14 +114,14 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
         #endif
     }
 
-    func deactivateAudioSession() {
+    package func deactivateAudioSession() {
         #if os(iOS)
         // Release the session so system services (e.g. keyboard dictation) regain the mic.
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
         #endif
     }
 
-    func installTap(
+    package func installTap(
         bufferSize: AVAudioFrameCount,
         format: AVAudioFormat,
         handler: @escaping @MainActor (AVAudioPCMBuffer) -> Void
@@ -150,32 +153,32 @@ private final class SystemAudioCaptureHardware: AudioCaptureHardware {
         }
     }
 
-    func removeTap() {
+    package func removeTap() {
         engine.inputNode.removeTap(onBus: 0)
     }
 
-    func prepare() {
+    package func prepare() {
         engine.prepare()
     }
 
-    func start() throws {
+    package func start() throws {
         try engine.start()
         logger.info("Audio engine started")
     }
 
-    func stop() {
+    package func stop() {
         engine.stop()
     }
 }
 
 @MainActor
-final class AudioCaptureService: ObservableObject {
+final package class AudioCaptureService: ObservableObject {
     private enum CaptureState {
         case idle
         case starting(UUID)
         case recording(UUID)
 
-        var generation: UUID? {
+        package var generation: UUID? {
             switch self {
             case .idle:
                 return nil
@@ -184,16 +187,16 @@ final class AudioCaptureService: ObservableObject {
             }
         }
 
-        var isRecording: Bool {
+        package var isRecording: Bool {
             if case .recording = self { return true }
             return false
         }
     }
 
-    @Published var audioLevel: Float = 0.0
-    @Published var recordingDuration: TimeInterval = 0
+    @Published package var audioLevel: Float = 0.0
+    @Published package var recordingDuration: TimeInterval = 0
 
-    var bufferHandler: ((AVAudioPCMBuffer) -> Void)?
+    package var bufferHandler: ((AVAudioPCMBuffer) -> Void)?
 
     private let targetSampleRate: Double = 16_000
     private let logger = Logger.audio
@@ -203,24 +206,24 @@ final class AudioCaptureService: ObservableObject {
     private var recordedSamples: [Float] = []
     private var captureState: CaptureState = .idle
 
-    var sampleRate: Double { targetSampleRate }
+    package var sampleRate: Double { targetSampleRate }
 
-    init() {
+    package init() {
         captureResources = AudioCaptureResources()
         makeHardware = { SystemAudioCaptureHardware() }
     }
 
-    init(captureResources: AudioCaptureResources) {
+    package init(captureResources: AudioCaptureResources) {
         self.captureResources = captureResources
         makeHardware = { SystemAudioCaptureHardware() }
     }
 
-    init(makeHardware: @escaping () -> any AudioCaptureHardware) {
+    package init(makeHardware: @escaping () -> any AudioCaptureHardware) {
         captureResources = AudioCaptureResources()
         self.makeHardware = makeHardware
     }
 
-    func start(lifecycleState: () -> AudioCaptureLifecycleState) throws {
+    package func start(lifecycleState: () -> AudioCaptureLifecycleState) throws {
         guard lifecycleState().allowsCapture else {
             throw RecordingError.inactiveLifecycle
         }
@@ -296,7 +299,7 @@ final class AudioCaptureService: ObservableObject {
         }
     }
 
-    func stop() -> [Float] {
+    package func stop() -> [Float] {
         let samples = captureState.isRecording ? recordedSamples : []
         captureState = .idle
         cleanupCaptureResources()
@@ -306,7 +309,7 @@ final class AudioCaptureService: ObservableObject {
         return samples
     }
 
-    func cancel() {
+    package func cancel() {
         _ = stop()
         recordedSamples.removeAll(keepingCapacity: false)
         audioLevel = 0
@@ -372,12 +375,12 @@ final class AudioCaptureService: ObservableObject {
         recordingDuration = Double(recordedSamples.count) / targetSampleRate
     }
 
-    enum RecordingError: LocalizedError {
+    package enum RecordingError: LocalizedError {
         case converterUnavailable
         case inactiveLifecycle
         case inputUnavailable
 
-        var errorDescription: String? {
+        package var errorDescription: String? {
             switch self {
             case .converterUnavailable:
                 return "Failed to configure audio converter."

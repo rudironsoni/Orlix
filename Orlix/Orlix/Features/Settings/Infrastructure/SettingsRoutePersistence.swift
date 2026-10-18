@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated enum SettingsRoutePersistence {
-    static let selectedRouteKey = "settings.selectedRoute"
+nonisolated package enum SettingsRoutePersistence {
+    static package let selectedRouteKey = "settings.selectedRoute"
 
-    static func load(from defaults: UserDefaults) -> SettingsRoute {
+    static package func load(from defaults: UserDefaults) -> SettingsRoute {
         guard let rawValue = defaults.string(forKey: selectedRouteKey),
               let route = SettingsRoute(rawValue: rawValue) else {
             return .defaultRoute
@@ -11,11 +11,11 @@ nonisolated enum SettingsRoutePersistence {
         return route
     }
 
-    static func save(_ route: SettingsRoute, to defaults: UserDefaults) {
+    static package func save(_ route: SettingsRoute, to defaults: UserDefaults) {
         defaults.set(route.rawValue, forKey: selectedRouteKey)
     }
 
-    static func route(for rawValue: String) -> SettingsRoute {
+    static package func route(for rawValue: String) -> SettingsRoute {
         SettingsRoute(rawValue: rawValue) ?? .defaultRoute
     }
 }

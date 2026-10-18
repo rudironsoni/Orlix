@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum TerminalFontSelectionPolicy {
-    static func resolve(
+nonisolated package enum TerminalFontSelectionPolicy {
+    static package func resolve(
         primaryFamily: String,
         cjkFamily: String?,
         catalog: TerminalFontCatalog,
@@ -24,7 +24,7 @@ nonisolated enum TerminalFontSelectionPolicy {
         )
     }
 
-    static func requiresProForPrimarySelection(
+    static package func requiresProForPrimarySelection(
         _ familyName: String,
         catalog: TerminalFontCatalog
     ) -> Bool {

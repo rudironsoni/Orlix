@@ -1,27 +1,27 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct RemoteFileDownloadDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.data] }
+package struct RemoteFileDownloadDocument: FileDocument {
+    static package var readableContentTypes: [UTType] { [.data] }
 
-    let sourceURL: URL
+    package let sourceURL: URL
 
-    init(sourceURL: URL) {
+    package init(sourceURL: URL) {
         self.sourceURL = sourceURL
     }
 
-    init(configuration: ReadConfiguration) throws {
+    package init(configuration: ReadConfiguration) throws {
         self.sourceURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
     }
 
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+    package func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         try FileWrapper(url: sourceURL, options: .immediate)
     }
 }
 
-struct RemoteFileShareItem: Identifiable {
-    let id: UUID
-    let sourceURL: URL
-    let title: String
+package struct RemoteFileShareItem: Identifiable {
+    package let id: UUID
+    package let sourceURL: URL
+    package let title: String
 }

@@ -1,9 +1,12 @@
 import Foundation
 
-nonisolated extension LinuxStatsCollector {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package extension LinuxStatsCollector {
     // MARK: - Parsers
 
-    func isProcStatValid(_ output: String) -> Bool {
+    package func isProcStatValid(_ output: String) -> Bool {
         let firstLine = output.components(separatedBy: .newlines)
             .first { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("cpu ") } ?? output
         let components = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -12,15 +15,15 @@ nonisolated extension LinuxStatsCollector {
         return components.count >= 8 && components.first == "cpu"
     }
 
-    func isProcMeminfoValid(_ output: String) -> Bool {
+    package func isProcMeminfoValid(_ output: String) -> Bool {
         output.contains("MemTotal:")
     }
 
-    func isProcNetDevValid(_ output: String) -> Bool {
+    package func isProcNetDevValid(_ output: String) -> Bool {
         output.contains(":") && output.contains("bytes")
     }
 
-    func parseProcStat(_ output: String, prevValues: LinuxCpuValues?) -> (result: CpuResult, newValues: LinuxCpuValues) {
+    package func parseProcStat(_ output: String, prevValues: LinuxCpuValues?) -> (result: CpuResult, newValues: LinuxCpuValues) {
         let firstLine = output.components(separatedBy: .newlines)
             .first { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("cpu ") } ?? output
         guard let current = parseCpuValues(firstLine) else {
@@ -31,7 +34,7 @@ nonisolated extension LinuxStatsCollector {
         return (calculateCpuResult(current: current, previous: prevValues), current)
     }
 
-    func parseProcStatCores(
+    package func parseProcStatCores(
         _ output: String,
         prevValues: [String: LinuxCpuValues]
     ) -> (samples: [CPUCoreSample], newValues: [String: LinuxCpuValues]) {
@@ -128,7 +131,7 @@ nonisolated extension LinuxStatsCollector {
         Int(identifier.dropFirst(3)) ?? Int.max
     }
 
-    func parseTopCpu(_ output: String) -> CpuResult? {
+    package func parseTopCpu(_ output: String) -> CpuResult? {
         let line = output.components(separatedBy: .newlines).first { line in
             line.lowercased().contains("cpu(s)") || line.lowercased().contains("%cpu")
         }
@@ -153,7 +156,7 @@ nonisolated extension LinuxStatsCollector {
         return CpuResult(total: total, user: user, system: system, iowait: iowait, steal: steal, idle: idle)
     }
 
-    func parseCPUProfile(_ output: String) -> (model: String, vendor: String, cores: Int, threads: Int) {
+    package func parseCPUProfile(_ output: String) -> (model: String, vendor: String, cores: Int, threads: Int) {
         var model = ""
         var vendor = ""
         var cores = 0
@@ -191,7 +194,7 @@ nonisolated extension LinuxStatsCollector {
         return (model, vendor, max(cores, 0), max(threads, cores))
     }
 
-    func parseMemTotal(_ output: String) -> UInt64 {
+    package func parseMemTotal(_ output: String) -> UInt64 {
         let parts = output.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         guard parts.count >= 2,
               let kib = UInt64(parts[1]) else {
@@ -200,7 +203,7 @@ nonisolated extension LinuxStatsCollector {
         return bytesFromKiB(kib) ?? 0
     }
 
-    func parseNvidiaProfile(_ output: String) -> [GPUDevice] {
+    package func parseNvidiaProfile(_ output: String) -> [GPUDevice] {
         output
             .components(separatedBy: .newlines)
             .compactMap { line -> GPUDevice? in
@@ -224,7 +227,7 @@ nonisolated extension LinuxStatsCollector {
             }
     }
 
-    func parsePCIGPUs(_ output: String, existingIDs: Set<String>) -> [GPUDevice] {
+    package func parsePCIGPUs(_ output: String, existingIDs: Set<String>) -> [GPUDevice] {
         var devices: [GPUDevice] = []
         for (index, line) in output.components(separatedBy: .newlines).enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -276,7 +279,7 @@ nonisolated extension LinuxStatsCollector {
         return vendor.isEmpty ? line : line.replacingOccurrences(of: vendor, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func parseNvidiaSamples(_ output: String, timestamp: Date) -> [GPUSample] {
+    package func parseNvidiaSamples(_ output: String, timestamp: Date) -> [GPUSample] {
         output
             .components(separatedBy: .newlines)
             .compactMap { line -> GPUSample? in
@@ -318,7 +321,7 @@ nonisolated extension LinuxStatsCollector {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func parseProcMeminfo(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64) {
+    package func parseProcMeminfo(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64) {
         var total: UInt64 = 0
         var free: UInt64 = 0
         var available: UInt64 = 0
@@ -360,7 +363,7 @@ nonisolated extension LinuxStatsCollector {
         return (total, used, free, actualCached, buffers)
     }
 
-    func parseFreeMemory(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64)? {
+    package func parseFreeMemory(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64)? {
         let lines = output.components(separatedBy: .newlines)
         guard let memLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("Mem:") }) else { return nil }
         let parts = memLine.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
@@ -374,7 +377,7 @@ nonisolated extension LinuxStatsCollector {
         return (total, used, free, cached, 0)
     }
 
-    func parseTopMemory(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64)? {
+    package func parseTopMemory(_ output: String) -> (total: UInt64, used: UInt64, free: UInt64, cached: UInt64, buffers: UInt64)? {
         let line = output.components(separatedBy: .newlines).first { line in
             line.lowercased().contains("mem") && line.contains("total")
         }
@@ -413,7 +416,7 @@ nonisolated extension LinuxStatsCollector {
         return (total, used, free, cached, 0)
     }
 
-    func parseUptimeLoadAverage(_ output: String) -> (Double, Double, Double) {
+    package func parseUptimeLoadAverage(_ output: String) -> (Double, Double, Double) {
         let lower = output.lowercased()
         if let range = lower.range(of: "load average:") {
             let suffix = output[range.upperBound...]
@@ -428,7 +431,7 @@ nonisolated extension LinuxStatsCollector {
         return (0, 0, 0)
     }
 
-    func parseUptimeSeconds(_ output: String) -> TimeInterval {
+    package func parseUptimeSeconds(_ output: String) -> TimeInterval {
         guard let range = output.lowercased().range(of: " up ") else { return 0 }
         let suffix = output[range.upperBound...]
         let parts = suffix.components(separatedBy: ",")
@@ -455,7 +458,7 @@ nonisolated extension LinuxStatsCollector {
         return totalSeconds
     }
 
-    func parseProcNetDev(_ output: String) -> (rx: UInt64, tx: UInt64) {
+    package func parseProcNetDev(_ output: String) -> (rx: UInt64, tx: UInt64) {
         var totalRx: UInt64 = 0
         var totalTx: UInt64 = 0
 
@@ -475,7 +478,7 @@ nonisolated extension LinuxStatsCollector {
         return (totalRx, totalTx)
     }
 
-    func parseSysClassNet(_ output: String) -> (rx: UInt64, tx: UInt64)? {
+    package func parseSysClassNet(_ output: String) -> (rx: UInt64, tx: UInt64)? {
         var totalRx: UInt64 = 0
         var totalTx: UInt64 = 0
         var found = false
@@ -493,7 +496,7 @@ nonisolated extension LinuxStatsCollector {
         return found ? (totalRx, totalTx) : nil
     }
 
-    func parseIpLinkOrIfconfig(_ output: String) -> (rx: UInt64, tx: UInt64)? {
+    package func parseIpLinkOrIfconfig(_ output: String) -> (rx: UInt64, tx: UInt64)? {
         let lines = output.components(separatedBy: .newlines)
 
         var totalRx: UInt64 = 0
@@ -568,7 +571,7 @@ nonisolated extension LinuxStatsCollector {
         return found ? (totalRx, totalTx) : nil
     }
 
-    func parseDfVolumes(
+    package func parseDfVolumes(
         _ output: String,
         metadataBySource: [String: VolumeCollectionMetadata] = [:]
     ) -> [VolumeInfo] {
@@ -616,7 +619,7 @@ nonisolated extension LinuxStatsCollector {
         return volumes
     }
 
-    func parseLSBLKVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
+    package func parseLSBLKVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
         guard let data = output.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let devices = root["blockdevices"] as? [[String: Any]] else {
@@ -819,11 +822,11 @@ nonisolated extension LinuxStatsCollector {
 
 // MARK: - CPU Result Helper
 
-nonisolated struct CpuResult: Sendable {
-    let total: Double
-    let user: Double
-    let system: Double
-    let iowait: Double
-    let steal: Double
-    let idle: Double
+nonisolated package struct CpuResult: Sendable {
+    package let total: Double
+    package let user: Double
+    package let system: Double
+    package let iowait: Double
+    package let steal: Double
+    package let idle: Double
 }

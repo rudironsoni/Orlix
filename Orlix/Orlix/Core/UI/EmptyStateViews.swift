@@ -7,12 +7,12 @@ import SwiftUI
 
 // MARK: - Empty State Views
 
-struct ServerConnectEmptyState: View {
-    let server: Server
-    let onConnect: () -> Void
+package struct ServerConnectEmptyState: View {
+    package let server: Server
+    package let onConnect: () -> Void
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -49,10 +49,25 @@ struct ServerConnectEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+
+    package init(
+
+        server: Server,
+
+        onConnect: @escaping () -> Void
+
+    ) {
+
+        self.server = server
+
+        self.onConnect = onConnect
+
+    }
 }
 
-struct NoServerSelectedEmptyState: View {
-    var body: some View {
+package struct NoServerSelectedEmptyState: View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -77,69 +92,17 @@ struct NoServerSelectedEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+
+    package init() {}
 }
 
-struct MultiConnectionUpgradeEmptyState: View {
-    let server: Server
-    @State private var showingTabLimitAlert = false
+package struct NoServersEmptyState: View {
+    package let onAddServer: () -> Void
+    package var onAddWorkspace: (() -> Void)? = nil
+    package var requiresWorkspace = false
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            VStack(spacing: 16) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.orange)
-
-                VStack(spacing: 8) {
-                    Text(server.name)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-
-                    Text("Multiple connections require Pro")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-
-                    Text(String(
-                        format: String(localized: "Free plan allows %lld active connection. Disconnect another server or upgrade."),
-                        Int64(FreeTierLimits.maxTabs)
-                    ))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-            }
-
-            Button {
-                showingTabLimitAlert = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "star.fill")
-                    Text("Upgrade to Pro")
-                        .fontWeight(.medium)
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(.orange, in: RoundedRectangle(cornerRadius: 10))
-                .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
-    }
-}
-
-struct NoServersEmptyState: View {
-    let onAddServer: () -> Void
-    var onAddWorkspace: (() -> Void)? = nil
-    var requiresWorkspace = false
-
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 16) {
                 if requiresWorkspace {
@@ -203,5 +166,16 @@ struct NoServersEmptyState: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
+    }
+
+
+    package init(
+        onAddServer: @escaping () -> Void,
+        onAddWorkspace: (() -> Void)? = nil,
+        requiresWorkspace: Bool = false
+    ) {
+        self.onAddServer = onAddServer
+        self.onAddWorkspace = onAddWorkspace
+        self.requiresWorkspace = requiresWorkspace
     }
 }

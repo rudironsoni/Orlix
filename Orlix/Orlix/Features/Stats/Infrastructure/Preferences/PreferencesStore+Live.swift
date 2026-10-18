@@ -1,14 +1,17 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension CloudKitSyncCoordinator: StatsPreferencesMutationQueue {
-    func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) throws {
+    package func enqueueStatsPreferencesUpsert(_ preferences: StatsPreferences) throws {
         try enqueue(.statsPreferencesUpsert(preferences))
     }
 }
 extension CloudKitSyncLifecycleDriver: StatsPreferencesSyncLifecycle {}
 
-extension PreferencesStoreDependencies {
-    static func live(
+package extension PreferencesStoreDependencies {
+    static package func live(
         defaults: UserDefaults,
         cloud: any StatsPreferencesCloudClient,
         mutationQueue: any StatsPreferencesMutationQueue,

@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct OrlixLabeledContent<Label: View, Content: View>: View {
+package struct OrlixLabeledContent<Label: View, Content: View>: View {
     private let label: Label
     private let content: Content
 
-    init(
+    package init(
         @ViewBuilder content: () -> Content,
         @ViewBuilder label: () -> Label
     ) {
@@ -12,7 +12,7 @@ struct OrlixLabeledContent<Label: View, Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         HStack {
             label
             Spacer()
@@ -21,22 +21,22 @@ struct OrlixLabeledContent<Label: View, Content: View>: View {
     }
 }
 
-extension OrlixLabeledContent where Label == Text {
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+package extension OrlixLabeledContent where Label == Text {
+    package init(_ title: String, @ViewBuilder content: () -> Content) {
         self.init(content: content) {
             Text(title)
         }
     }
 
-    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+    package init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.init(content: content) {
             Text(title)
         }
     }
 }
 
-extension OrlixLabeledContent where Label == Text, Content == Text {
-    init(_ title: String, value: String) {
+package extension OrlixLabeledContent where Label == Text, Content == Text {
+    package init(_ title: String, value: String) {
         self.init {
             Text(value)
         } label: {
@@ -45,9 +45,9 @@ extension OrlixLabeledContent where Label == Text, Content == Text {
     }
 }
 
-extension View {
+package extension View {
     @ViewBuilder
-    func orlixNavigationStack() -> some View {
+    package func orlixNavigationStack() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             NavigationStack { self }
         } else {
@@ -56,7 +56,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationDestination<Destination: View>(
+    package func orlixNavigationDestination<Destination: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
@@ -75,7 +75,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixScrollContentBackgroundHidden() -> some View {
+    package func orlixScrollContentBackgroundHidden() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             scrollContentBackground(.hidden)
         } else {
@@ -84,7 +84,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixLargePresentationDetent() -> some View {
+    package func orlixLargePresentationDetent() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.large])
         } else {
@@ -93,7 +93,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixMediumAndLargePresentationDetents() -> some View {
+    package func orlixMediumAndLargePresentationDetents() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.medium, .large])
         } else {
@@ -102,7 +102,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixPresentationDetents(height: CGFloat) -> some View {
+    package func orlixPresentationDetents(height: CGFloat) -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.height(height), .large])
         } else {
@@ -111,7 +111,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationBarBackgroundHidden() -> some View {
+    package func orlixNavigationBarBackgroundHidden() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             toolbarBackground(.hidden, for: .navigationBar)
         } else {
@@ -120,7 +120,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixGroupedFormStyle() -> some View {
+    package func orlixGroupedFormStyle() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             formStyle(.grouped)
         } else {
@@ -129,7 +129,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixVisiblePresentationDragIndicator() -> some View {
+    package func orlixVisiblePresentationDragIndicator() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDragIndicator(.visible)
         } else {
@@ -138,7 +138,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationBarHidden(_ hidden: Bool) -> some View {
+    package func orlixNavigationBarHidden(_ hidden: Bool) -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             toolbar(hidden ? .hidden : .visible, for: .navigationBar)
         } else {
@@ -147,7 +147,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixListRowSeparatorLeadingZero() -> some View {
+    package func orlixListRowSeparatorLeadingZero() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         } else {
@@ -156,7 +156,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixVisibleScrollIndicators() -> some View {
+    package func orlixVisibleScrollIndicators() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             scrollIndicators(.visible)
         } else {

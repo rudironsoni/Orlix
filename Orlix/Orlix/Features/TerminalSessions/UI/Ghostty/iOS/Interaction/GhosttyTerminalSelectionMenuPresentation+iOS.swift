@@ -10,7 +10,7 @@ import UIKit
 
 @available(iOS 16.0, *)
 extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
-    func editMenuInteraction(
+    package func editMenuInteraction(
         _ interaction: UIEditMenuInteraction,
         menuFor configuration: UIEditMenuConfiguration,
         suggestedActions: [UIMenuElement]
@@ -22,7 +22,7 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
         return UIMenu(children: nativeSelectionMenuElements())
     }
 
-    func editMenuInteraction(
+    package func editMenuInteraction(
         _ interaction: UIEditMenuInteraction,
         willDismissMenuFor configuration: UIEditMenuConfiguration,
         animator: UIEditMenuInteractionAnimating
@@ -31,8 +31,8 @@ extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
     }
 }
 
-extension GhosttyTerminalView {
-    func presentNativeSelectionEditMenu(at point: CGPoint) {
+package extension GhosttyTerminalView {
+    package func presentNativeSelectionEditMenu(at point: CGPoint) {
         editMenuPresentation = .selection
         if #available(iOS 16.0, *) {
             let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: point)
@@ -42,7 +42,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func dismissEditMenuIfNeeded() {
+    package func dismissEditMenuIfNeeded() {
         if #available(iOS 16.0, *) {
             editMenuInteraction?.dismissMenu()
         } else {
@@ -50,7 +50,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func normalizedSelectionMenuText() -> String? {
+    package func normalizedSelectionMenuText() -> String? {
         guard let text = currentSelectionText()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else { return nil }
@@ -67,7 +67,7 @@ extension GhosttyTerminalView {
         return CGRect(x: bounds.midX, y: bounds.midY, width: 1, height: 1)
     }
 
-    func nearestPresentingViewController() -> UIViewController? {
+    package func nearestPresentingViewController() -> UIViewController? {
         var responder: UIResponder? = self
         while let current = responder {
             if let viewController = current as? UIViewController {
@@ -106,7 +106,7 @@ extension GhosttyTerminalView {
     }
 
     @available(iOS 16.0, *)
-    func nativeSelectionMenuElements() -> [UIMenuElement] {
+    package func nativeSelectionMenuElements() -> [UIMenuElement] {
         let selectionText = allowsHostTextSelection ? normalizedSelectionMenuText() : nil
         var actions: [UIMenuElement] = []
 

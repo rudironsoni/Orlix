@@ -1,26 +1,29 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
-    static let didBootstrapDefaultWorkspaceKey = "com.rudironsoni.orlix.didBootstrapDefaultWorkspace"
-    static let pendingBootstrapWorkspaceIDKey = "com.rudironsoni.orlix.pendingBootstrapWorkspaceID"
+final package class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
+    static package let didBootstrapDefaultWorkspaceKey = "com.rudironsoni.orlix.didBootstrapDefaultWorkspace"
+    static package let pendingBootstrapWorkspaceIDKey = "com.rudironsoni.orlix.pendingBootstrapWorkspaceID"
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    var didBootstrapDefaultWorkspace: Bool {
+    package var didBootstrapDefaultWorkspace: Bool {
         get { defaults.bool(forKey: Self.didBootstrapDefaultWorkspaceKey) }
         set { defaults.set(newValue, forKey: Self.didBootstrapDefaultWorkspaceKey) }
     }
 
-    var hasSeenWelcome: Bool {
+    package var hasSeenWelcome: Bool {
         defaults.bool(forKey: "hasSeenWelcome")
     }
 
-    var freePlanGeneration: FreePlanGeneration? {
+    package var freePlanGeneration: FreePlanGeneration? {
         get {
             guard let rawValue = defaults.string(forKey: FreeTierLimits.planGenerationStorageKey) else {
                 return nil
@@ -36,7 +39,7 @@ final class ServerManagerUserDefaultsPreferences: ServerManagerPreferences {
         }
     }
 
-    var pendingBootstrapWorkspaceID: UUID? {
+    package var pendingBootstrapWorkspaceID: UUID? {
         get {
             guard let rawValue = defaults.string(
                 forKey: Self.pendingBootstrapWorkspaceIDKey

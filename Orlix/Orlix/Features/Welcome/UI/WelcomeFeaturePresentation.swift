@@ -1,15 +1,18 @@
 import SwiftUI
 
-struct WelcomeFeaturePresentation: Identifiable {
-    let id: WelcomeFeatureID
-    let icon: String
-    let title: LocalizedStringKey
-    let description: LocalizedStringKey
-    let color: Color
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct WelcomeFeaturePresentation: Identifiable {
+    package let id: WelcomeFeatureID
+    package let icon: String
+    package let title: LocalizedStringKey
+    package let description: LocalizedStringKey
+    package let color: Color
 }
 
-enum WelcomeFeaturePresentationCatalog {
-    static func features(
+package enum WelcomeFeaturePresentationCatalog {
+    static package func features(
         companionPlatformTitle: LocalizedStringKey
     ) -> [WelcomeFeaturePresentation] {
         WelcomeFeatureID.allCases.map {

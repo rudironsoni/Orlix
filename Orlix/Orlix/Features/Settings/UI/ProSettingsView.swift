@@ -1,14 +1,17 @@
 import StoreKit
 import SwiftUI
 
-struct ProSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ProSettingsView: View {
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var serverManager: ServerManager
     @State private var showingPlans = false
     @State private var showingManageSubscription = false
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 ProSettingsStatusHero(
@@ -181,14 +184,16 @@ struct ProSettingsView: View {
             openURL(url)
         }
     }
+
+    package init() {}
 }
 
 private struct ProSettingsFeatureRow: View {
-    let title: String
-    let systemImage: String
-    let value: String
+    package let title: String
+    package let systemImage: String
+    package let value: String
 
-    var body: some View {
+    package var body: some View {
         OrlixLabeledContent {
             Text(value)
                 .foregroundStyle(.secondary)
@@ -199,9 +204,9 @@ private struct ProSettingsFeatureRow: View {
 }
 
 #if os(iOS)
-extension View {
+package extension View {
     @ViewBuilder
-    func manageSubscriptionsSheetCompat(
+    package func manageSubscriptionsSheetCompat(
         isPresented: Binding<Bool>,
         subscriptionGroupID: String
     ) -> some View {

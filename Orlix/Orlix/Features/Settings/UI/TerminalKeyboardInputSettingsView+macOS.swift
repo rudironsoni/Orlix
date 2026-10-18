@@ -1,7 +1,10 @@
 #if os(macOS)
 import SwiftUI
 
-struct TerminalKeyboardInputPlatformSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
 
     private var optionAsAltModeBinding: Binding<TerminalOptionAsAltMode> {
@@ -11,7 +14,7 @@ struct TerminalKeyboardInputPlatformSettingsView: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Picker("Option as Alt", selection: optionAsAltModeBinding) {

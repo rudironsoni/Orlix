@@ -1,27 +1,30 @@
 import Foundation
 import OSLog
 
-struct RemoteClipboardUpload: Sendable {
-    let remotePath: String
-    let pastedPathToken: String
-    let mimeType: String
-    let sizeBytes: Int
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteClipboardUpload: Sendable {
+    package let remotePath: String
+    package let pastedPathToken: String
+    package let mimeType: String
+    package let sizeBytes: Int
 }
 
-struct RichPasteUploadResult: Sendable, Equatable {
-    let remotePath: String
-    let pastedPathToken: String
-    let seededRemoteClipboard: Bool
+package struct RichPasteUploadResult: Sendable, Equatable {
+    package let remotePath: String
+    package let pastedPathToken: String
+    package let seededRemoteClipboard: Bool
 }
 
-enum TerminalRichPasteError: LocalizedError {
+package enum TerminalRichPasteError: LocalizedError {
     case imageTooLarge(maxBytes: Int)
     case unsupportedRemoteShell
     case remoteTempFileCreationFailed
     case unsafeRemotePath
     case remoteUploadFailed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .imageTooLarge(let maxBytes):
             let formatter = ByteCountFormatter()
@@ -47,18 +50,18 @@ private enum RemoteClipboardSeedCapability: Sendable {
     case macOS
 }
 
-actor TerminalRichPasteCoordinator {
+package actor TerminalRichPasteCoordinator {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "TerminalRichPasteCoordinator")
     private let sessionId: UUID
     private let transferService: RemoteClipboardTransferService
     private var remoteClipboardCapabilities: [ObjectIdentifier: RemoteClipboardSeedCapability] = [:]
 
-    init(sessionId: UUID) {
+    package init(sessionId: UUID) {
         self.sessionId = sessionId
         self.transferService = RemoteClipboardTransferService(sessionId: sessionId)
     }
 
-    func performRichPaste(
+    package func performRichPaste(
         image: ClipboardImagePayload,
         settings: RichClipboardSettings,
         sshClient: SSHClient

@@ -1,8 +1,11 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Pro Upgrade Sheet
 
-struct ProUpgradeSheet: View {
+package struct ProUpgradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var serverManager: ServerManager
@@ -14,21 +17,21 @@ struct ProUpgradeSheet: View {
     @State private var showSuccess = false
     @State private var alertInfo: AlertInfo?
     @State private var showCancelSubscriptionAlert = false
-    @State var showManageSubscription = false
+    @State package var showManageSubscription = false
 
     private struct AlertInfo: Identifiable {
-        let id = UUID()
-        let title: String
-        let message: String
-        let isRestore: Bool
+        package let id = UUID()
+        package let title: String
+        package let message: String
+        package let isRestore: Bool
     }
 
-    init(source: PaywallSource = .general, onDismiss: (() -> Void)? = nil) {
+    package init(source: PaywallSource = .general, onDismiss: (() -> Void)? = nil) {
         self.source = source
         self.onDismiss = onDismiss
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody(
             sheetContent: sheetContent,
             source: source,
@@ -538,19 +541,19 @@ struct ProUpgradeSheet: View {
     }
 }
 
-extension View {
-    func proUpgradePresentation(isPresented: Binding<Bool>, source: PaywallSource = .general) -> some View {
+package extension View {
+    package func proUpgradePresentation(isPresented: Binding<Bool>, source: PaywallSource = .general) -> some View {
         modifier(ProUpgradePresentationModifier(isPresented: isPresented, source: source))
     }
 }
 
-struct ProUpgradePresentationModifier: ViewModifier {
-    @Binding var isPresented: Bool
-    let source: PaywallSource
-    @EnvironmentObject var storeManager: StoreManager
-    @EnvironmentObject var serverManager: ServerManager
+package struct ProUpgradePresentationModifier: ViewModifier {
+    @Binding package var isPresented: Bool
+    package let source: PaywallSource
+    @EnvironmentObject package var storeManager: StoreManager
+    @EnvironmentObject package var serverManager: ServerManager
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         platformBody(content: content)
     }
 }
@@ -558,8 +561,8 @@ struct ProUpgradePresentationModifier: ViewModifier {
 
 // MARK: - Source Copy
 
-extension PaywallSource {
-    var paywallTitle: String {
+package extension PaywallSource {
+    package var paywallTitle: String {
         switch self {
         case .general, .settings, .sidebarBanner:
             return String(localized: "Upgrade to Pro")
@@ -584,7 +587,7 @@ extension PaywallSource {
         }
     }
 
-    var paywallSubtitle: String {
+    package var paywallSubtitle: String {
         switch self {
         case .general, .settings, .sidebarBanner, .welcome:
             return String(localized: "Connect everywhere, without limits.")
@@ -611,11 +614,11 @@ extension PaywallSource {
 // MARK: - Plans
 
 private struct PlanSelectionCard: View {
-    let presentation: ProPlanPresentation
-    let isSelected: Bool
-    let onSelect: () -> Void
+    package let presentation: ProPlanPresentation
+    package let isSelected: Bool
+    package let onSelect: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -679,12 +682,12 @@ private struct PlanSelectionCard: View {
 // MARK: - Comparison Table
 
 private struct ComparisonFeature: Identifiable {
-    let icon: String
-    let title: String
-    let free: ComparisonValue
-    let pro: ComparisonValue
+    package let icon: String
+    package let title: String
+    package let free: ComparisonValue
+    package let pro: ComparisonValue
 
-    var id: String { title }
+    package var id: String { title }
 }
 
 private enum ComparisonValue {
@@ -696,9 +699,9 @@ private enum ComparisonValue {
 }
 
 private struct ComparisonTable: View {
-    let rows: [ComparisonFeature]
+    package let rows: [ComparisonFeature]
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             ComparisonTableRow(isHeader: true) {
                 ComparisonHeaderCell(title: String(localized: "Feature"), alignment: .leading)
@@ -750,12 +753,12 @@ private struct ComparisonTable: View {
 }
 
 private struct ComparisonTableRow<Feature: View, Free: View, Pro: View>: View {
-    var isHeader = false
-    @ViewBuilder let feature: Feature
-    @ViewBuilder let free: Free
-    @ViewBuilder let pro: Pro
+    package var isHeader = false
+    @ViewBuilder package let feature: Feature
+    @ViewBuilder package let free: Free
+    @ViewBuilder package let pro: Pro
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 0) {
             feature
                 .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .leading)
@@ -785,13 +788,13 @@ private struct ComparisonTableRow<Feature: View, Free: View, Pro: View>: View {
 }
 
 private enum ComparisonTableLayout {
-    static let valueColumnWidth: CGFloat = 68
+    static package let valueColumnWidth: CGFloat = 68
 }
 
 private struct ComparisonFeatureCell: View {
-    let feature: ComparisonFeature
+    package let feature: ComparisonFeature
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 7) {
             Image(systemName: feature.icon)
                 .font(.caption.weight(.semibold))
@@ -810,10 +813,10 @@ private struct ComparisonFeatureCell: View {
 }
 
 private struct ComparisonHeaderCell: View {
-    let title: String
-    let alignment: Alignment
+    package let title: String
+    package let alignment: Alignment
 
-    var body: some View {
+    package var body: some View {
         Text(title)
             .font(.caption)
             .fontWeight(.semibold)
@@ -824,9 +827,9 @@ private struct ComparisonHeaderCell: View {
 }
 
 private struct ComparisonValueCell: View {
-    let value: ComparisonValue
+    package let value: ComparisonValue
 
-    var body: some View {
+    package var body: some View {
         Group {
             switch value {
             case .included(let accessibilityLabel):
@@ -871,10 +874,10 @@ private struct ComparisonValueCell: View {
 // MARK: - Native Card
 
 private struct NativeSectionCard<Content: View>: View {
-    var padding: CGFloat = 14
-    @ViewBuilder let content: Content
+    package var padding: CGFloat = 14
+    @ViewBuilder package let content: Content
 
-    var body: some View {
+    package var body: some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
 
         content

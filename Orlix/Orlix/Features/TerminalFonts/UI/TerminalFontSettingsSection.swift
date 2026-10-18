@@ -1,12 +1,16 @@
 import SwiftUI
 
-struct TerminalFontSettingsSection: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
+package struct TerminalFontSettingsSection: View {
     private enum PickerRole {
         case primary
         case cjk
     }
 
-    @Binding var fontSize: Double
+    @Binding package var fontSize: Double
 
     @EnvironmentObject private var fontStore: TerminalFontStore
     @EnvironmentObject private var storeManager: StoreManager
@@ -14,7 +18,7 @@ struct TerminalFontSettingsSection: View {
     @State private var showingCustomFonts = false
     #endif
 
-    var body: some View {
+    package var body: some View {
         Section {
             Picker("Family", selection: primaryFamilyBinding) {
                 fontGroups(

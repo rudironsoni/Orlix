@@ -10,18 +10,18 @@ import Foundation
 
 // MARK: - Split Direction
 
-nonisolated enum TerminalSplitDirection: String, Codable, Equatable, Sendable {
+nonisolated package enum TerminalSplitDirection: String, Codable, Equatable, Sendable {
     case horizontal  // left | right
     case vertical    // top / bottom
 }
 
-nonisolated enum TerminalSplitPlacement: Equatable, Sendable {
+nonisolated package enum TerminalSplitPlacement: Equatable, Sendable {
     case right
     case left
     case down
     case up
 
-    var direction: TerminalSplitDirection {
+    package var direction: TerminalSplitDirection {
         switch self {
         case .right, .left:
             return .horizontal
@@ -30,7 +30,7 @@ nonisolated enum TerminalSplitPlacement: Equatable, Sendable {
         }
     }
 
-    var insertsBeforeSource: Bool {
+    package var insertsBeforeSource: Bool {
         switch self {
         case .left, .up:
             return true
@@ -40,14 +40,14 @@ nonisolated enum TerminalSplitPlacement: Equatable, Sendable {
     }
 }
 
-nonisolated enum TerminalSplitFocusDirection: Equatable, Sendable {
+nonisolated package enum TerminalSplitFocusDirection: Equatable, Sendable {
     case above
     case below
     case left
     case right
 }
 
-nonisolated enum TerminalSplitResizeDirection: Equatable, Sendable {
+nonisolated package enum TerminalSplitResizeDirection: Equatable, Sendable {
     case up
     case down
     case left
@@ -76,15 +76,27 @@ nonisolated enum TerminalSplitResizeDirection: Equatable, Sendable {
 
 /// A split node stores pane IDs, not connection objects.
 /// This allows the view hierarchy to change without losing terminal state.
-nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
+nonisolated indirect package enum TerminalSplitNode: Equatable, Codable, Sendable {
     case leaf(paneId: UUID)
     case split(Split)
 
-    nonisolated struct Split: Equatable, Codable, Sendable {
-        let direction: TerminalSplitDirection
-        let ratio: Double  // 0.0 to 1.0, left/top percentage
-        let left: TerminalSplitNode
-        let right: TerminalSplitNode
+    nonisolated package struct Split: Equatable, Codable, Sendable {
+        package let direction: TerminalSplitDirection
+        package let ratio: Double  // 0.0 to 1.0, left/top percentage
+        package let left: TerminalSplitNode
+        package let right: TerminalSplitNode
+
+        package init(
+            direction: TerminalSplitDirection,
+            ratio: Double,
+            left: TerminalSplitNode,
+            right: TerminalSplitNode
+        ) {
+            self.direction = direction
+            self.ratio = ratio
+            self.left = left
+            self.right = right
+        }
     }
 
     nonisolated private enum CodingKeys: String, CodingKey {
@@ -98,7 +110,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         case split
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(NodeType.self, forKey: .type)
         switch type {
@@ -111,7 +123,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .leaf(let paneId):
@@ -125,7 +137,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
 
     // MARK: - Tree Operations
 
-    func allPaneIds() -> [UUID] {
+    package func allPaneIds() -> [UUID] {
         switch self {
         case .leaf(let paneId):
             return [paneId]
@@ -134,7 +146,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    var leafCount: Int {
+    package var leafCount: Int {
         switch self {
         case .leaf:
             return 1
@@ -143,7 +155,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    var isSplit: Bool {
+    package var isSplit: Bool {
         if case .split = self { return true }
         return false
     }
@@ -163,7 +175,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func equalized() -> TerminalSplitNode {
+    package func equalized() -> TerminalSplitNode {
         switch self {
         case .leaf:
             return self
@@ -182,7 +194,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func replacingPane(_ targetId: UUID, with newNode: TerminalSplitNode) -> TerminalSplitNode {
+    package func replacingPane(_ targetId: UUID, with newNode: TerminalSplitNode) -> TerminalSplitNode {
         switch self {
         case .leaf(let paneId):
             return paneId == targetId ? newNode : self
@@ -196,7 +208,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func removingPane(_ targetId: UUID) -> TerminalSplitNode? {
+    package func removingPane(_ targetId: UUID) -> TerminalSplitNode? {
         switch self {
         case .leaf(let paneId):
             return paneId == targetId ? nil : self
@@ -219,7 +231,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func withUpdatedRatio(_ newRatio: Double) -> TerminalSplitNode {
+    package func withUpdatedRatio(_ newRatio: Double) -> TerminalSplitNode {
         switch self {
         case .leaf:
             return self
@@ -233,7 +245,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func replacingNode(_ oldNode: TerminalSplitNode, with newNode: TerminalSplitNode) -> TerminalSplitNode {
+    package func replacingNode(_ oldNode: TerminalSplitNode, with newNode: TerminalSplitNode) -> TerminalSplitNode {
         if self == oldNode {
             return newNode
         }
@@ -251,7 +263,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func findPane(_ paneId: UUID) -> Bool {
+    package func findPane(_ paneId: UUID) -> Bool {
         switch self {
         case .leaf(let id):
             return id == paneId
@@ -260,15 +272,15 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func pane(before paneId: UUID) -> UUID? {
+    package func pane(before paneId: UUID) -> UUID? {
         adjacentPane(to: paneId, offset: -1)
     }
 
-    func pane(after paneId: UUID) -> UUID? {
+    package func pane(after paneId: UUID) -> UUID? {
         adjacentPane(to: paneId, offset: 1)
     }
 
-    func neighboringPane(
+    package func neighboringPane(
         from paneId: UUID,
         direction: TerminalSplitFocusDirection
     ) -> UUID? {
@@ -295,7 +307,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
             .paneId
     }
 
-    func hasDivider(
+    package func hasDivider(
         near paneId: UUID,
         direction: TerminalSplitResizeDirection
     ) -> Bool {
@@ -310,7 +322,7 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
         }
     }
 
-    func movingDivider(
+    package func movingDivider(
         near paneId: UUID,
         direction: TerminalSplitResizeDirection,
         step: Double = 0.05
@@ -443,32 +455,32 @@ nonisolated indirect enum TerminalSplitNode: Equatable, Codable, Sendable {
 }
 
 nonisolated private struct PaneFrame: Sendable {
-    static let unit = PaneFrame(minX: 0, minY: 0, width: 1, height: 1)
+    static package let unit = PaneFrame(minX: 0, minY: 0, width: 1, height: 1)
 
-    let minX: Double
-    let minY: Double
-    let width: Double
-    let height: Double
+    package let minX: Double
+    package let minY: Double
+    package let width: Double
+    package let height: Double
 
-    var maxX: Double { minX + width }
-    var maxY: Double { minY + height }
-    var midX: Double { minX + width / 2 }
-    var midY: Double { minY + height / 2 }
+    package var maxX: Double { minX + width }
+    package var maxY: Double { minY + height }
+    package var midX: Double { minX + width / 2 }
+    package var midY: Double { minY + height / 2 }
 }
 
 nonisolated private struct NeighborCandidate: Sendable {
-    let paneId: UUID
-    let score: NeighborScore
+    package let paneId: UUID
+    package let score: NeighborScore
 }
 
 nonisolated private struct NeighborScore: Comparable, Sendable {
-    let primaryGap: Double
-    let perpendicularGap: Double
-    let perpendicularCenterDistance: Double
-    let primaryCenterDistance: Double
-    let order: Int
+    package let primaryGap: Double
+    package let perpendicularGap: Double
+    package let perpendicularCenterDistance: Double
+    package let primaryCenterDistance: Double
+    package let order: Int
 
-    init?(
+    package init?(
         source: PaneFrame,
         candidate: PaneFrame,
         direction: TerminalSplitFocusDirection,
@@ -515,7 +527,7 @@ nonisolated private struct NeighborScore: Comparable, Sendable {
         self.order = order
     }
 
-    static func < (lhs: NeighborScore, rhs: NeighborScore) -> Bool {
+    package static func < (lhs: NeighborScore, rhs: NeighborScore) -> Bool {
         if lhs.primaryGap != rhs.primaryGap { return lhs.primaryGap < rhs.primaryGap }
         if lhs.perpendicularGap != rhs.perpendicularGap { return lhs.perpendicularGap < rhs.perpendicularGap }
         if lhs.perpendicularCenterDistance != rhs.perpendicularCenterDistance {

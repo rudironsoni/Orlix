@@ -1,8 +1,11 @@
 #if os(iOS)
 import SwiftUI
 
-extension SettingsView {
-    var platformBody: some View {
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
+package extension SettingsView {
+    package var platformBody: some View {
         NavigationView {
             List {
                 ForEach(visibleRoutes(from: SettingsRouteCatalog.leadingRoutes)) { route in

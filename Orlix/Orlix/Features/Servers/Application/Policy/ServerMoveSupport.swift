@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum ServerMoveSupport {
-    static func allowedDestinationIDs(
+nonisolated package enum ServerMoveSupport {
+    static package func allowedDestinationIDs(
         isPro: Bool,
         sourceWorkspaceId: UUID,
         workspacesInOrder: [Workspace],
@@ -21,7 +21,7 @@ nonisolated enum ServerMoveSupport {
         return unlockedWorkspaceIds
     }
 
-    static func resolveEnvironment(
+    static package func resolveEnvironment(
         currentEnvironment: ServerEnvironment,
         preferredEnvironment: ServerEnvironment? = nil,
         destination: Workspace
@@ -42,7 +42,7 @@ nonisolated enum ServerMoveSupport {
         return destination.environments.first ?? .production
     }
 
-    static func requiresEnvironmentFallback(
+    static package func requiresEnvironmentFallback(
         currentEnvironment: ServerEnvironment,
         destination: Workspace
     ) -> Bool {

@@ -1,9 +1,13 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Platform Stats Protocol
 
 /// Protocol defining the interface for platform-specific stats collection
-nonisolated protocol PlatformStatsCollector: Sendable {
+nonisolated package protocol PlatformStatsCollector: Sendable {
     /// Collect stats from the remote server
     /// - Parameters:
     ///   - client: SSH client to execute commands
@@ -33,12 +37,12 @@ nonisolated protocol PlatformStatsCollector: Sendable {
     ) async throws -> StorageDeviceHealthResult
 }
 
-nonisolated struct VolumeCollectionMetadata: Equatable, Sendable {
-    let stableIdentifier: String?
-    let fileSystem: String
+nonisolated package struct VolumeCollectionMetadata: Equatable, Sendable {
+    package let stableIdentifier: String?
+    package let fileSystem: String
 }
 
-nonisolated func parseBSDMountVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
+nonisolated package func parseBSDMountVolumeMetadata(_ output: String) -> [String: VolumeCollectionMetadata] {
     var metadata: [String: VolumeCollectionMetadata] = [:]
     for line in output.components(separatedBy: .newlines) {
         guard let onRange = line.range(of: " on ") else { continue }
@@ -67,7 +71,7 @@ nonisolated func parseBSDMountVolumeMetadata(_ output: String) -> [String: Volum
     return metadata
 }
 
-extension PlatformStatsCollector {
+package extension PlatformStatsCollector {
     func collectProfile(client: SSHClient) async throws -> HardwareProfile {
         let systemInfo = try await getSystemInfo(client: client)
         return HardwareProfile(
@@ -85,7 +89,7 @@ extension PlatformStatsCollector {
         )
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         []
     }
 
@@ -100,32 +104,32 @@ extension PlatformStatsCollector {
 // MARK: - Stats Collection Context
 
 /// Shared context for stats collection (previous values for rate calculations)
-nonisolated final class StatsCollectionContext: @unchecked Sendable {
-    var prevNetRx: UInt64 = 0
-    var prevNetTx: UInt64 = 0
-    var prevTimestamp: Date?
-    var prevCpuValues: LinuxCpuValues?
-    var prevCpuCoreValues: [String: LinuxCpuValues] = [:]
+nonisolated final package class StatsCollectionContext: @unchecked Sendable {
+    package var prevNetRx: UInt64 = 0
+    package var prevNetTx: UInt64 = 0
+    package var prevTimestamp: Date?
+    package var prevCpuValues: LinuxCpuValues?
+    package var prevCpuCoreValues: [String: LinuxCpuValues] = [:]
     private var previousProcessCPUTimeByPID: [Int: TimeInterval] = [:]
     private var previousProcessTimestamp: Date?
     private var lastPeriodicProcessesTimestamp: Date?
     private var lastPeriodicProcesses: [ProcessInfo] = []
-    var lastGPUCollectionTimestamp: Date?
-    var lastGPUSamples: [GPUSample] = []
-    var lastDockerCollectionTimestamp: Date?
-    var lastDockerStats = DockerStats()
+    package var lastGPUCollectionTimestamp: Date?
+    package var lastGPUSamples: [GPUSample] = []
+    package var lastDockerCollectionTimestamp: Date?
+    package var lastDockerStats = DockerStats()
     private var lastVolumeMetadataRefreshByPlatform: [VolumeIdentity.Platform: Date] = [:]
     private var volumeMetadataByPlatform: [VolumeIdentity.Platform: [String: VolumeCollectionMetadata]] = [:]
 
     private let lock = NSLock()
 
-    func withLock<T>(_ block: () -> T) -> T {
+    package func withLock<T>(_ block: () -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
         return block()
     }
 
-    func reset() {
+    package func reset() {
         withLock {
             prevNetRx = 0
             prevNetTx = 0
@@ -145,7 +149,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    func updateNetwork(rx: UInt64, tx: UInt64, timestamp: Date) {
+    package func updateNetwork(rx: UInt64, tx: UInt64, timestamp: Date) {
         withLock {
             prevNetRx = rx
             prevNetTx = tx
@@ -153,31 +157,31 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    func getNetworkPrev() -> (rx: UInt64, tx: UInt64, timestamp: Date?) {
+    package func getNetworkPrev() -> (rx: UInt64, tx: UInt64, timestamp: Date?) {
         withLock {
             (prevNetRx, prevNetTx, prevTimestamp)
         }
     }
 
-    func updateCpuValues(_ values: LinuxCpuValues) {
+    package func updateCpuValues(_ values: LinuxCpuValues) {
         withLock {
             prevCpuValues = values
         }
     }
 
-    func getCpuValues() -> LinuxCpuValues? {
+    package func getCpuValues() -> LinuxCpuValues? {
         withLock {
             prevCpuValues
         }
     }
 
-    func updateCpuCoreValues(_ values: [String: LinuxCpuValues]) {
+    package func updateCpuCoreValues(_ values: [String: LinuxCpuValues]) {
         withLock {
             prevCpuCoreValues = values
         }
     }
 
-    func getCpuCoreValues() -> [String: LinuxCpuValues] {
+    package func getCpuCoreValues() -> [String: LinuxCpuValues] {
         withLock {
             prevCpuCoreValues
         }
@@ -185,7 +189,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
 
     /// Converts cumulative per-process CPU time into a share of total machine capacity.
     /// The first snapshot seeds the interval and intentionally returns no percentages.
-    func processCPUPercentages(
+    package func processCPUPercentages(
         cumulativeCPUTimeByPID: [Int: TimeInterval],
         timestamp: Date,
         logicalProcessorCount: Int
@@ -218,7 +222,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    func shouldCollectPeriodicProcesses(now: Date = Date(), minimumInterval: TimeInterval) -> Bool {
+    package func shouldCollectPeriodicProcesses(now: Date = Date(), minimumInterval: TimeInterval) -> Bool {
         withLock {
             guard let lastPeriodicProcessesTimestamp else { return true }
             return now.timeIntervalSince(lastPeriodicProcessesTimestamp) >= minimumInterval
@@ -238,47 +242,47 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         withLock { lastPeriodicProcesses }
     }
 
-    func shouldCollectGPU(now: Date = Date(), minimumInterval: TimeInterval = 5) -> Bool {
+    package func shouldCollectGPU(now: Date = Date(), minimumInterval: TimeInterval = 5) -> Bool {
         withLock {
             guard let lastGPUCollectionTimestamp else { return true }
             return now.timeIntervalSince(lastGPUCollectionTimestamp) >= minimumInterval
         }
     }
 
-    func markGPUCollected(at timestamp: Date = Date()) {
+    package func markGPUCollected(at timestamp: Date = Date()) {
         withLock {
             lastGPUCollectionTimestamp = timestamp
         }
     }
 
-    func updateGPUSamples(_ samples: [GPUSample], timestamp: Date = Date()) {
+    package func updateGPUSamples(_ samples: [GPUSample], timestamp: Date = Date()) {
         withLock {
             lastGPUCollectionTimestamp = timestamp
             lastGPUSamples = samples
         }
     }
 
-    func getGPUSamples() -> [GPUSample] {
+    package func getGPUSamples() -> [GPUSample] {
         withLock {
             lastGPUSamples
         }
     }
 
-    func shouldCollectDocker(now: Date = Date(), minimumInterval: TimeInterval = 10) -> Bool {
+    package func shouldCollectDocker(now: Date = Date(), minimumInterval: TimeInterval = 10) -> Bool {
         withLock {
             guard let lastDockerCollectionTimestamp else { return true }
             return now.timeIntervalSince(lastDockerCollectionTimestamp) >= minimumInterval
         }
     }
 
-    func updateDockerStats(_ stats: DockerStats, timestamp: Date = Date()) {
+    package func updateDockerStats(_ stats: DockerStats, timestamp: Date = Date()) {
         withLock {
             lastDockerCollectionTimestamp = timestamp
             lastDockerStats = stats
         }
     }
 
-    func getDockerStats() -> DockerStats {
+    package func getDockerStats() -> DockerStats {
         withLock {
             lastDockerStats
         }
@@ -287,7 +291,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
     /// Claims a metadata refresh window before the caller suspends for SSH work.
     /// This keeps the shared unchecked-Sendable context from launching duplicate
     /// platform inventory probes if collection entry points overlap.
-    func beginVolumeMetadataRefresh(
+    package func beginVolumeMetadataRefresh(
         for platform: VolumeIdentity.Platform,
         now: Date = Date(),
         minimumInterval: TimeInterval = 60
@@ -302,7 +306,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    func updateVolumeMetadata(
+    package func updateVolumeMetadata(
         _ metadata: [String: VolumeCollectionMetadata],
         for platform: VolumeIdentity.Platform
     ) {
@@ -311,7 +315,7 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    func volumeMetadata(for platform: VolumeIdentity.Platform) -> [String: VolumeCollectionMetadata] {
+    package func volumeMetadata(for platform: VolumeIdentity.Platform) -> [String: VolumeCollectionMetadata] {
         withLock {
             volumeMetadataByPlatform[platform] ?? [:]
         }
@@ -320,22 +324,22 @@ nonisolated final class StatsCollectionContext: @unchecked Sendable {
 
 // MARK: - Linux CPU Values (used by Linux-like systems)
 
-nonisolated struct LinuxCpuValues: Sendable {
-    let user: UInt64
-    let nice: UInt64
-    let system: UInt64
-    let idle: UInt64
-    let iowait: UInt64
-    let irq: UInt64
-    let softirq: UInt64
-    let steal: UInt64
+nonisolated package struct LinuxCpuValues: Sendable {
+    package let user: UInt64
+    package let nice: UInt64
+    package let system: UInt64
+    package let idle: UInt64
+    package let iowait: UInt64
+    package let irq: UInt64
+    package let softirq: UInt64
+    package let steal: UInt64
 }
 
 // MARK: - Platform Collector Factory
 
-extension RemotePlatform {
+package extension RemotePlatform {
     /// Get the appropriate stats collector for this platform
-    func createCollector() -> PlatformStatsCollector {
+    package func createCollector() -> PlatformStatsCollector {
         switch self {
         case .linux:
             return LinuxStatsCollector()
@@ -357,9 +361,9 @@ extension RemotePlatform {
 
 // MARK: - Shared Parsing Utilities
 
-nonisolated enum StatsParsingUtils {
+nonisolated package enum StatsParsingUtils {
     /// Calculate network speed from previous and current values
-    static func calculateNetworkSpeed(
+    static package func calculateNetworkSpeed(
         currentRx: UInt64,
         currentTx: UInt64,
         prevRx: UInt64,
@@ -389,7 +393,7 @@ nonisolated enum StatsParsingUtils {
     }
 
     /// Parse load average from space-separated string (e.g., "1.23 4.56 7.89")
-    static func parseLoadAverage(_ output: String) -> (Double, Double, Double) {
+    static package func parseLoadAverage(_ output: String) -> (Double, Double, Double) {
         let cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "{", with: "")
             .replacingOccurrences(of: "}", with: "")
@@ -406,12 +410,12 @@ nonisolated enum StatsParsingUtils {
     }
 
     /// Parse uptime from boot time (Unix timestamp)
-    static func uptimeFromBootTime(_ bootTimeSeconds: TimeInterval) -> TimeInterval {
+    static package func uptimeFromBootTime(_ bootTimeSeconds: TimeInterval) -> TimeInterval {
         Date().timeIntervalSince1970 - bootTimeSeconds
     }
 
     /// Format bytes to human readable string
-    static func formatBytes(_ bytes: UInt64) -> String {
+    static package func formatBytes(_ bytes: UInt64) -> String {
         let units = ["B", "KB", "MB", "GB", "TB"]
         var value = Double(bytes)
         var unitIndex = 0

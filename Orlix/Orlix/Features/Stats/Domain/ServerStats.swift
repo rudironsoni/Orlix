@@ -1,78 +1,158 @@
 import Foundation
 
-nonisolated struct ServerStats: Sendable {
+nonisolated package struct ServerStats: Sendable {
     // System
-    var hostname: String = ""
-    var osInfo: String = ""
-    var hardware: HardwareProfile = .empty
-    var cpuCores: Int = 0
+    package var hostname: String = ""
+    package var osInfo: String = ""
+    package var hardware: HardwareProfile = .empty
+    package var cpuCores: Int = 0
 
     // CPU detailed
-    var cpuUsage: Double = 0
-    var cpuUser: Double = 0
-    var cpuSystem: Double = 0
-    var cpuIowait: Double = 0
-    var cpuSteal: Double = 0
-    var cpuIdle: Double = 0
-    var cpuCoreSamples: [CPUCoreSample] = []
+    package var cpuUsage: Double = 0
+    package var cpuUser: Double = 0
+    package var cpuSystem: Double = 0
+    package var cpuIowait: Double = 0
+    package var cpuSteal: Double = 0
+    package var cpuIdle: Double = 0
+    package var cpuCoreSamples: [CPUCoreSample] = []
 
     // Memory detailed (in bytes)
-    var memoryTotal: UInt64 = 0
-    var memoryUsed: UInt64 = 0
-    var memoryFree: UInt64 = 0
-    var memoryCached: UInt64 = 0
-    var memoryBuffers: UInt64 = 0
+    package var memoryTotal: UInt64 = 0
+    package var memoryUsed: UInt64 = 0
+    package var memoryFree: UInt64 = 0
+    package var memoryCached: UInt64 = 0
+    package var memoryBuffers: UInt64 = 0
 
     // Network (speed in bytes/sec, total in bytes)
-    var networkRxSpeed: UInt64 = 0
-    var networkTxSpeed: UInt64 = 0
-    var networkRxTotal: UInt64 = 0
-    var networkTxTotal: UInt64 = 0
+    package var networkRxSpeed: UInt64 = 0
+    package var networkTxSpeed: UInt64 = 0
+    package var networkRxTotal: UInt64 = 0
+    package var networkTxTotal: UInt64 = 0
 
     // Volumes
-    var volumes: [VolumeInfo] = []
+    package var volumes: [VolumeInfo] = []
 
     // System
-    var loadAverage: (Double, Double, Double) = (0, 0, 0)
-    var uptime: TimeInterval = 0
-    var processCount: Int = 0
-    var topProcesses: [ProcessInfo] = []
-    var gpuSamples: [GPUSample] = []
-    var docker = DockerStats()
-    var timestamp: Date = Date()
+    package var loadAverage: (Double, Double, Double) = (0, 0, 0)
+    package var uptime: TimeInterval = 0
+    package var processCount: Int = 0
+    package var topProcesses: [ProcessInfo] = []
+    package var gpuSamples: [GPUSample] = []
+    package var docker = DockerStats()
+    package var timestamp: Date = Date()
 
-    var memoryPercent: Double {
+    package init(
+        hostname: String = "",
+        osInfo: String = "",
+        hardware: HardwareProfile = .empty,
+        cpuCores: Int = 0,
+        cpuUsage: Double = 0,
+        cpuUser: Double = 0,
+        cpuSystem: Double = 0,
+        cpuIowait: Double = 0,
+        cpuSteal: Double = 0,
+        cpuIdle: Double = 0,
+        cpuCoreSamples: [CPUCoreSample] = [],
+        memoryTotal: UInt64 = 0,
+        memoryUsed: UInt64 = 0,
+        memoryFree: UInt64 = 0,
+        memoryCached: UInt64 = 0,
+        memoryBuffers: UInt64 = 0,
+        networkRxSpeed: UInt64 = 0,
+        networkTxSpeed: UInt64 = 0,
+        networkRxTotal: UInt64 = 0,
+        networkTxTotal: UInt64 = 0,
+        volumes: [VolumeInfo] = [],
+        loadAverage: (Double, Double, Double) = (0, 0, 0),
+        uptime: TimeInterval = 0,
+        processCount: Int = 0,
+        topProcesses: [ProcessInfo] = [],
+        gpuSamples: [GPUSample] = [],
+        docker: DockerStats = DockerStats(),
+        timestamp: Date = Date()
+    ) {
+        self.hostname = hostname
+        self.osInfo = osInfo
+        self.hardware = hardware
+        self.cpuCores = cpuCores
+        self.cpuUsage = cpuUsage
+        self.cpuUser = cpuUser
+        self.cpuSystem = cpuSystem
+        self.cpuIowait = cpuIowait
+        self.cpuSteal = cpuSteal
+        self.cpuIdle = cpuIdle
+        self.cpuCoreSamples = cpuCoreSamples
+        self.memoryTotal = memoryTotal
+        self.memoryUsed = memoryUsed
+        self.memoryFree = memoryFree
+        self.memoryCached = memoryCached
+        self.memoryBuffers = memoryBuffers
+        self.networkRxSpeed = networkRxSpeed
+        self.networkTxSpeed = networkTxSpeed
+        self.networkRxTotal = networkRxTotal
+        self.networkTxTotal = networkTxTotal
+        self.volumes = volumes
+        self.loadAverage = loadAverage
+        self.uptime = uptime
+        self.processCount = processCount
+        self.topProcesses = topProcesses
+        self.gpuSamples = gpuSamples
+        self.docker = docker
+        self.timestamp = timestamp
+    }
+
+    package var memoryPercent: Double {
         guard memoryTotal > 0 else { return 0 }
         return Double(memoryUsed) / Double(memoryTotal) * 100
     }
 }
 
-nonisolated struct CPUCoreSample: Identifiable, Sendable {
-    let identifier: String
-    let displayName: String
-    let usagePercent: Double
-    let userPercent: Double
-    let systemPercent: Double
-    let iowaitPercent: Double
-    let stealPercent: Double
-    let idlePercent: Double
+nonisolated package struct CPUCoreSample: Identifiable, Sendable {
+    package let identifier: String
+    package let displayName: String
+    package let usagePercent: Double
+    package let userPercent: Double
+    package let systemPercent: Double
+    package let iowaitPercent: Double
+    package let stealPercent: Double
+    package let idlePercent: Double
 
-    var id: String { identifier }
+    package init(
+        identifier: String,
+        displayName: String,
+        usagePercent: Double,
+        userPercent: Double,
+        systemPercent: Double,
+        iowaitPercent: Double,
+        stealPercent: Double,
+        idlePercent: Double
+    ) {
+        self.identifier = identifier
+        self.displayName = displayName
+        self.usagePercent = usagePercent
+        self.userPercent = userPercent
+        self.systemPercent = systemPercent
+        self.iowaitPercent = iowaitPercent
+        self.stealPercent = stealPercent
+        self.idlePercent = idlePercent
+    }
+
+    package var id: String { identifier }
 }
 
-nonisolated struct VolumeInfo: Identifiable, Equatable, Sendable {
-    let identity: VolumeIdentity
-    let mountPoint: String
-    let source: String
-    let fileSystem: String
-    let stableIdentifier: String?
-    let kind: VolumeKind
-    let used: UInt64
-    let total: UInt64
+nonisolated package struct VolumeInfo: Identifiable, Equatable, Sendable {
+    package let identity: VolumeIdentity
+    package let mountPoint: String
+    package let source: String
+    package let fileSystem: String
+    package let stableIdentifier: String?
+    package let kind: VolumeKind
+    package let used: UInt64
+    package let total: UInt64
 
-    var id: VolumeIdentity { identity }
+    package var id: VolumeIdentity { identity }
 
-    init(
+    package init(
         identity: VolumeIdentity? = nil,
         platform: VolumeIdentity.Platform = .unknown,
         mountPoint: String,
@@ -103,7 +183,7 @@ nonisolated struct VolumeInfo: Identifiable, Equatable, Sendable {
         )
     }
 
-    var normalizationKey: String {
+    package var normalizationKey: String {
         switch identity {
         case .stable(let platform, _, let mountPoint),
              .fallback(let platform, _, let mountPoint, _):
@@ -111,27 +191,27 @@ nonisolated struct VolumeInfo: Identifiable, Equatable, Sendable {
         }
     }
 
-    var percent: Double {
+    package var percent: Double {
         guard total > 0 else { return 0 }
         return Double(used) / Double(total) * 100
     }
 }
 
-nonisolated struct ProcessInfo: Identifiable, Sendable {
-    var id: Int { pid }
-    let pid: Int
-    let name: String
+nonisolated package struct ProcessInfo: Identifiable, Sendable {
+    package var id: Int { pid }
+    package let pid: Int
+    package let name: String
     /// Share of total logical CPU capacity used during the latest sample interval.
     /// A value of 100 means the process saturated the whole machine, not one core.
-    let cpuPercent: Double
+    package let cpuPercent: Double
     /// Resident physical memory divided by total visible physical memory.
-    let memoryPercent: Double
+    package let memoryPercent: Double
     /// Resident physical memory in bytes when the platform exposes it.
-    let memoryBytes: UInt64?
-    let user: String
-    let command: String
+    package let memoryBytes: UInt64?
+    package let user: String
+    package let command: String
 
-    init(
+    package init(
         pid: Int,
         name: String,
         cpuPercent: Double,
@@ -150,9 +230,14 @@ nonisolated struct ProcessInfo: Identifiable, Sendable {
     }
 }
 
-nonisolated struct StatsPoint: Identifiable, Sendable {
-    let timestamp: Date
-    let value: Double
+nonisolated package struct StatsPoint: Identifiable, Sendable {
+    package let timestamp: Date
+    package let value: Double
 
-    var id: TimeInterval { timestamp.timeIntervalSince1970 }
+    package init(timestamp: Date, value: Double) {
+        self.timestamp = timestamp
+        self.value = value
+    }
+
+    package var id: TimeInterval { timestamp.timeIntervalSince1970 }
 }

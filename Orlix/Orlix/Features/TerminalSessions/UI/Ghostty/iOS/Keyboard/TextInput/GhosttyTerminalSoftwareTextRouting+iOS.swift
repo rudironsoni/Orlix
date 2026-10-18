@@ -8,21 +8,24 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
     /// Send text to the terminal (called from keyboard toolbar or software keyboard)
-    func sendText(_ text: String) {
+    package func sendText(_ text: String) {
         guard canRouteTerminalInput else { return }
         surface?.sendText(text)
         requestRender()
     }
 
-    func pasteTextFromClipboard() {
+    package func pasteTextFromClipboard() {
         guard canRouteTerminalInput else { return }
         _ = surface?.perform(action: "paste_from_clipboard")
         requestRender()
     }
 
-    func sendTerminalInputText(_ text: String) {
+    package func sendTerminalInputText(_ text: String) {
         guard canRouteTerminalInput else { return }
         let normalized = text.precomposedStringWithCanonicalMapping
         guard normalized.count == 1, let character = normalized.first else {
@@ -66,7 +69,7 @@ extension GhosttyTerminalView {
         requestRender()
     }
 
-    func handleIMEProxyInsertText(_ text: String, fromIMEComposition: Bool = false) -> Bool {
+    package func handleIMEProxyInsertText(_ text: String, fromIMEComposition: Bool = false) -> Bool {
         guard canRouteTerminalInput else { return true }
         if fromIMEComposition {
             cancelTrackedHardwareInput()

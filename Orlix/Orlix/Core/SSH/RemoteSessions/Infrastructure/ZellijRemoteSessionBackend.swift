@@ -1,12 +1,15 @@
 import Foundation
 
-nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
-    static let supportedVersions: Set<RemoteSessionSemanticVersion> = [
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ZellijRemoteSessionBackend: RemoteSessionBackend {
+    static package let supportedVersions: Set<RemoteSessionSemanticVersion> = [
         RemoteSessionSemanticVersion(major: 0, minor: 44, patch: 3),
         RemoteSessionSemanticVersion(major: 0, minor: 45, patch: 0)
     ]
 
-    let metadata = RemoteSessionBackendMetadata(
+    package let metadata = RemoteSessionBackendMetadata(
         identifier: .zellij,
         displayName: "Zellij",
         installation: .documentation(
@@ -15,7 +18,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         managedStartupCommandSupport: .supported
     )
 
-    func availability(using client: SSHClient) async -> RemoteSessionAvailability {
+    package func availability(using client: SSHClient) async -> RemoteSessionAvailability {
         let environment = await client.remoteEnvironment()
         return await availability(in: environment) { command in
             try await client.execute(
@@ -26,7 +29,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func availability(
+    package func availability(
         in environment: RemoteEnvironment,
         execute: @escaping @Sendable (String) async throws -> String
     ) async -> RemoteSessionAvailability {
@@ -70,7 +73,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -99,7 +102,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         return sessions
     }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -108,7 +111,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         // Managed creation disables serialization without replacing user configuration.
     }
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan {
@@ -128,7 +131,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -139,7 +142,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         nil
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -162,7 +165,7 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -201,4 +204,6 @@ nonisolated struct ZellijRemoteSessionBackend: RemoteSessionBackend {
             throw SSHError.unknown("Unsupported Zellij runtime")
         }
     }
+
+    package init() {}
 }

@@ -5,35 +5,38 @@ import UniformTypeIdentifiers
 import AppKit
 import ObjectiveC.runtime
 
-struct RemoteFileSharePicker: NSViewRepresentable {
-    let item: RemoteFileShareItem
-    let onComplete: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileSharePicker: NSViewRepresentable {
+    package let item: RemoteFileShareItem
+    package let onComplete: () -> Void
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(onComplete: onComplete)
     }
 
-    func makeNSView(context: Context) -> NSView {
+    package func makeNSView(context: Context) -> NSView {
         NSView(frame: .zero)
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.presentIfNeeded(item: item, from: nsView)
     }
 
     @MainActor
-    final class Coordinator: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
+    final package class Coordinator: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
         private let onComplete: () -> Void
         private var activeItemID: UUID?
         private var activePicker: NSSharingServicePicker?
         private var activeService: NSSharingService?
         private var didFinish = false
 
-        init(onComplete: @escaping () -> Void) {
+        package init(onComplete: @escaping () -> Void) {
             self.onComplete = onComplete
         }
 
-        func presentIfNeeded(item: RemoteFileShareItem, from view: NSView) {
+        package func presentIfNeeded(item: RemoteFileShareItem, from view: NSView) {
             guard activeItemID != item.id else { return }
 
             activeItemID = item.id
@@ -49,7 +52,7 @@ struct RemoteFileSharePicker: NSViewRepresentable {
             }
         }
 
-        func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
+        package func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
             guard let service else {
                 finish()
                 return
@@ -59,11 +62,11 @@ struct RemoteFileSharePicker: NSViewRepresentable {
             service.delegate = self
         }
 
-        func sharingService(_ sharingService: NSSharingService, didShareItems items: [Any]) {
+        package func sharingService(_ sharingService: NSSharingService, didShareItems items: [Any]) {
             finish()
         }
 
-        func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+        package func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
             finish()
         }
 
@@ -79,27 +82,27 @@ struct RemoteFileSharePicker: NSViewRepresentable {
 }
 
 @MainActor
-final class MacOSMenuActionTarget: NSObject {
+final package class MacOSMenuActionTarget: NSObject {
     private let actionHandler: () -> Void
 
-    init(actionHandler: @escaping () -> Void) {
+    package init(actionHandler: @escaping () -> Void) {
         self.actionHandler = actionHandler
     }
 
     @objc
-    func performAction(_ sender: Any?) {
+    package func performAction(_ sender: Any?) {
         actionHandler()
     }
 }
 
-struct MacOSWindowTopInsetBridge: NSViewRepresentable {
-    @Binding var topInset: CGFloat
+package struct MacOSWindowTopInsetBridge: NSViewRepresentable {
+    @Binding package var topInset: CGFloat
 
-    func makeNSView(context: Context) -> WindowObserverView {
+    package func makeNSView(context: Context) -> WindowObserverView {
         WindowObserverView()
     }
 
-    func updateNSView(_ nsView: WindowObserverView, context: Context) {
+    package func updateNSView(_ nsView: WindowObserverView, context: Context) {
         nsView.onWindowUpdate = { [topInset = _topInset] window in
             let safeArea = window.contentView?.safeAreaInsets
                 ?? NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
@@ -115,35 +118,35 @@ struct MacOSWindowTopInsetBridge: NSViewRepresentable {
         nsView.triggerUpdate()
     }
 
-    static func dismantleNSView(_ nsView: WindowObserverView, coordinator: ()) {
+    static package func dismantleNSView(_ nsView: WindowObserverView, coordinator: ()) {
         nsView.removeObservers()
     }
 
-    final class WindowObserverView: NSView {
-        var onWindowUpdate: ((NSWindow) -> Void)?
+    final package class WindowObserverView: NSView {
+        package var onWindowUpdate: ((NSWindow) -> Void)?
         private var observers: [NSObjectProtocol] = []
 
-        override var intrinsicContentSize: NSSize {
+        override package var intrinsicContentSize: NSSize {
             .zero
         }
 
-        override func viewDidMoveToWindow() {
+        override package func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             installObservers()
             triggerUpdate()
         }
 
-        override func viewDidMoveToSuperview() {
+        override package func viewDidMoveToSuperview() {
             super.viewDidMoveToSuperview()
             triggerUpdate()
         }
 
-        override func layout() {
+        override package func layout() {
             super.layout()
             triggerUpdate()
         }
 
-        func triggerUpdate() {
+        package func triggerUpdate() {
             guard let window else { return }
             DispatchQueue.main.async { [weak self, weak window] in
                 guard let self, let window else { return }
@@ -151,7 +154,7 @@ struct MacOSWindowTopInsetBridge: NSViewRepresentable {
             }
         }
 
-        func removeObservers() {
+        package func removeObservers() {
             let center = NotificationCenter.default
             observers.forEach(center.removeObserver)
             observers.removeAll()
@@ -182,64 +185,64 @@ struct MacOSWindowTopInsetBridge: NSViewRepresentable {
     }
 }
 
-struct MacOSRemoteFileTableView: NSViewRepresentable {
-    let entries: [RemoteFileEntry]
-    let currentPath: String
-    let selectedPaths: Set<String>
-    let sort: RemoteFileSort
-    let sortDirection: RemoteFileSortDirection
-    let inlineCreateFolderParentPath: String?
-    let inlineRenamePath: String?
-    let inlineProposedName: String
-    let isInlineSubmitting: Bool
-    let onSelectionChange: @MainActor (Set<String>, NSEvent.ModifierFlags) -> Void
-    let onActivate: @MainActor (RemoteFileEntry) -> Void
-    let onSortChange: @MainActor (RemoteFileSort, RemoteFileSortDirection) -> Void
-    let onUploadDroppedURLs: @MainActor ([URL], String) -> Void
-    let onDropRemotePayload: @MainActor (RemoteFileDragPayload, String) -> Void
-    let onBeginRemoteDrag: @MainActor (RemoteFileDragPayload) -> Void
-    let onEndRemoteDrag: @MainActor () -> Void
-    let activeRemoteDragPayload: @MainActor () -> RemoteFileDragPayload?
-    let menuForEntry: @MainActor (RemoteFileEntry) -> NSMenu
-    let menuForBackground: @MainActor () -> NSMenu
-    let exportEntry: @MainActor (RemoteFileEntry, URL) async throws -> Void
-    let fileTypeIdentifier: (RemoteFileEntry) -> String
-    let kindLabel: (RemoteFileEntry) -> String
-    let onSubmitInlineEdit: @MainActor (String) -> Void
-    let onCancelInlineEdit: @MainActor () -> Void
-    let serverId: UUID
+package struct MacOSRemoteFileTableView: NSViewRepresentable {
+    package let entries: [RemoteFileEntry]
+    package let currentPath: String
+    package let selectedPaths: Set<String>
+    package let sort: RemoteFileSort
+    package let sortDirection: RemoteFileSortDirection
+    package let inlineCreateFolderParentPath: String?
+    package let inlineRenamePath: String?
+    package let inlineProposedName: String
+    package let isInlineSubmitting: Bool
+    package let onSelectionChange: @MainActor (Set<String>, NSEvent.ModifierFlags) -> Void
+    package let onActivate: @MainActor (RemoteFileEntry) -> Void
+    package let onSortChange: @MainActor (RemoteFileSort, RemoteFileSortDirection) -> Void
+    package let onUploadDroppedURLs: @MainActor ([URL], String) -> Void
+    package let onDropRemotePayload: @MainActor (RemoteFileDragPayload, String) -> Void
+    package let onBeginRemoteDrag: @MainActor (RemoteFileDragPayload) -> Void
+    package let onEndRemoteDrag: @MainActor () -> Void
+    package let activeRemoteDragPayload: @MainActor () -> RemoteFileDragPayload?
+    package let menuForEntry: @MainActor (RemoteFileEntry) -> NSMenu
+    package let menuForBackground: @MainActor () -> NSMenu
+    package let exportEntry: @MainActor (RemoteFileEntry, URL) async throws -> Void
+    package let fileTypeIdentifier: (RemoteFileEntry) -> String
+    package let kindLabel: (RemoteFileEntry) -> String
+    package let onSubmitInlineEdit: @MainActor (String) -> Void
+    package let onCancelInlineEdit: @MainActor () -> Void
+    package let serverId: UUID
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    package func makeNSView(context: Context) -> NSScrollView {
         context.coordinator.makeScrollView()
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    package func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.update(scrollView: scrollView)
     }
 
     @MainActor
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-        enum RowKind {
+    final package class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+        package enum RowKind {
             case inlineCreatePlaceholder
             case entry(index: Int)
         }
 
-        struct TableRenderState: Equatable {
-            let entries: [RemoteFileEntry]
-            let currentPath: String
-            let sort: RemoteFileSort
-            let sortDirection: RemoteFileSortDirection
-            let inlineCreateFolderParentPath: String?
-            let inlineRenamePath: String?
-            let inlineProposedName: String
-            let isInlineSubmitting: Bool
+        package struct TableRenderState: Equatable {
+            package let entries: [RemoteFileEntry]
+            package let currentPath: String
+            package let sort: RemoteFileSort
+            package let sortDirection: RemoteFileSortDirection
+            package let inlineCreateFolderParentPath: String?
+            package let inlineRenamePath: String?
+            package let inlineProposedName: String
+            package let isInlineSubmitting: Bool
 
-            init(parent: MacOSRemoteFileTableView) {
+            package init(parent: MacOSRemoteFileTableView) {
                 entries = parent.entries
                 currentPath = parent.currentPath
                 sort = parent.sort
@@ -251,7 +254,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        var parent: MacOSRemoteFileTableView
+        package var parent: MacOSRemoteFileTableView
         private let tableView = RemoteFileTableView()
         private let scrollView = NSScrollView()
         private var isUpdatingSelection = false
@@ -261,11 +264,11 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         private var activeInlineEditorIdentity: String?
         private var lastRenderedState: TableRenderState?
 
-        init(_ parent: MacOSRemoteFileTableView) {
+        package init(_ parent: MacOSRemoteFileTableView) {
             self.parent = parent
         }
 
-        func makeScrollView() -> NSScrollView {
+        package func makeScrollView() -> NSScrollView {
             scrollView.hasVerticalScroller = true
             scrollView.hasHorizontalScroller = false
             scrollView.autohidesScrollers = true
@@ -322,7 +325,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             return scrollView
         }
 
-        func update(scrollView: NSScrollView) {
+        package func update(scrollView: NSScrollView) {
             let renderState = TableRenderState(parent: parent)
             let shouldReloadData = lastRenderedState != renderState
             lastRenderedState = renderState
@@ -339,11 +342,11 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             syncInlineEditorFocus()
         }
 
-        func numberOfRows(in tableView: NSTableView) -> Int {
+        package func numberOfRows(in tableView: NSTableView) -> Int {
             parent.entries.count + (inlineCreateRowIndex == nil ? 0 : 1)
         }
 
-        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        package func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
             switch rowKind(for: row) {
             case .inlineCreatePlaceholder:
                 return 30
@@ -355,7 +358,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        package func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             guard let tableColumn, let rowKind = rowKind(for: row) else { return nil }
 
             switch ColumnID(rawValue: tableColumn.identifier.rawValue) {
@@ -449,7 +452,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        func tableViewSelectionDidChange(_ notification: Notification) {
+        package func tableViewSelectionDidChange(_ notification: Notification) {
             guard !isUpdatingSelection else { return }
             let selectedPaths: [String] = tableView.selectedRowIndexes.compactMap { index in
                 guard case .entry(let entryIndex) = rowKind(for: index) else { return nil }
@@ -459,7 +462,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             parent.onSelectionChange(selected, NSApp.currentEvent?.modifierFlags ?? [])
         }
 
-        func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+        package func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
             guard let descriptor = tableView.sortDescriptors.first,
                   let column = ColumnID(rawValue: descriptor.key ?? "") else { return }
             let direction: RemoteFileSortDirection = descriptor.ascending ? .ascending : .descending
@@ -475,7 +478,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        package func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
             guard case .entry(let index) = rowKind(for: row) else { return nil }
             let entry = parent.entries[index]
             let delegate = FilePromiseDelegate(
@@ -487,7 +490,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             return delegate.makeProvider()
         }
 
-        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+        package func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
             let draggedEntries = rowIndexes.compactMap { index -> RemoteFileEntry? in
                 guard case .entry(let entryIndex) = rowKind(for: index) else { return nil }
                 return parent.entries[entryIndex]
@@ -498,12 +501,12 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             ))
         }
 
-        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        package func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
             parent.onEndRemoteDrag()
             promiseDelegates.removeAll()
         }
 
-        func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        package func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
             retargetDrop(on: tableView, proposedRow: row, dropOperation: dropOperation)
             let destinationPath = destinationPath(
                 for: currentDropRow,
@@ -519,7 +522,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             return fileURLs.isEmpty ? [] : .copy
         }
 
-        func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        package func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
             guard let destinationPath = destinationPath(
                 for: currentDropRow,
                 dropOperation: currentDropOperation
@@ -810,7 +813,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         case size
         case kind
 
-        init?(sort: RemoteFileSort) {
+        package init?(sort: RemoteFileSort) {
             switch sort {
             case .name: self = .name
             case .modifiedAt: self = .modifiedAt
@@ -819,23 +822,23 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
     }
 
-    final class RemoteFileTableView: NSTableView {
-        var menuProvider: ((Int?) -> NSMenu?)?
-        var onSelectAll: (() -> Void)?
+    final package class RemoteFileTableView: NSTableView {
+        package var menuProvider: ((Int?) -> NSMenu?)?
+        package var onSelectAll: (() -> Void)?
 
-        override func menu(for event: NSEvent) -> NSMenu? {
+        override package func menu(for event: NSEvent) -> NSMenu? {
             let location = convert(event.locationInWindow, from: nil)
             let row = self.row(at: location)
             return menuProvider?(row >= 0 ? row : nil)
         }
 
-        override func selectAll(_ sender: Any?) {
+        override package func selectAll(_ sender: Any?) {
             super.selectAll(sender)
             onSelectAll?()
         }
     }
 
-    final class NameCellView: NSTableCellView, NSTextFieldDelegate {
+    final package class NameCellView: NSTableCellView, NSTextFieldDelegate {
         private let iconView = NSImageView()
         private let titleField = NSTextField(labelWithString: "")
         private let subtitleField = NSTextField(labelWithString: "")
@@ -846,7 +849,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         private var onSubmit: ((String) -> Void)?
         private var onCancel: (() -> Void)?
 
-        override init(frame frameRect: NSRect) {
+        override package init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
 
             iconView.translatesAutoresizingMaskIntoConstraints = false
@@ -914,11 +917,11 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) {
+        required package init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func configure(entry: RemoteFileEntry) {
+        package func configure(entry: RemoteFileEntry) {
             onSubmit = nil
             onCancel = nil
             suppressNextEndEditing = false
@@ -933,7 +936,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             progressIndicator.isHidden = true
         }
 
-        func configureInlineEditing(
+        package func configureInlineEditing(
             iconName: String,
             iconTintColor: NSColor,
             title: String,
@@ -972,7 +975,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        func requestEditingFocus() {
+        package func requestEditingFocus() {
             guard !editorField.isHidden, !editorField.isHiddenOrHasHiddenAncestor, editorField.window != nil else { return }
             editorField.window?.makeFirstResponder(editorField)
             editorField.applyInlineEditingAppearance(isFocused: true, isSubmitting: !editorField.isEditable)
@@ -982,12 +985,12 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             }
         }
 
-        var isEditingActive: Bool {
+        package var isEditingActive: Bool {
             guard let window = editorField.window else { return false }
             return window.firstResponder === editorField || window.firstResponder === editorField.currentEditor()
         }
 
-        func controlTextDidEndEditing(_ notification: Notification) {
+        package func controlTextDidEndEditing(_ notification: Notification) {
             guard !editorField.isHidden, !isConfiguringEditor else { return }
             if suppressNextEndEditing {
                 suppressNextEndEditing = false
@@ -1002,7 +1005,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             onSubmit?(editorField.stringValue)
         }
 
-        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        package func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             switch commandSelector {
             case #selector(NSResponder.insertNewline(_:)),
                  #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
@@ -1019,10 +1022,10 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
     }
 
-    final class TextCellView: NSTableCellView {
+    final package class TextCellView: NSTableCellView {
         private let label = NSTextField(labelWithString: "")
 
-        override init(frame frameRect: NSRect) {
+        override package init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             label.translatesAutoresizingMaskIntoConstraints = false
             label.lineBreakMode = .byTruncatingTail
@@ -1036,44 +1039,44 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) {
+        required package init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func configure(text: String, alignment: NSTextAlignment) {
+        package func configure(text: String, alignment: NSTextAlignment) {
             label.stringValue = text
             label.alignment = alignment
         }
     }
 
-    final class InlineEditingTextField: NSTextField {
-        override class var cellClass: AnyClass? {
+    final package class InlineEditingTextField: NSTextField {
+        override class package var cellClass: AnyClass? {
             get { InlineEditingTextFieldCell.self }
             set {}
         }
 
-        var onCancelOperation: (() -> Void)?
+        package var onCancelOperation: (() -> Void)?
 
-        override init(frame frameRect: NSRect) {
+        override package init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             configureAppearance()
         }
 
-        convenience init(string: String) {
+        convenience package init(string: String) {
             self.init(frame: .zero)
             stringValue = string
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) {
+        required package init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
-        override func cancelOperation(_ sender: Any?) {
+        override package func cancelOperation(_ sender: Any?) {
             onCancelOperation?()
         }
 
-        func applyInlineEditingAppearance(isFocused: Bool = false, isSubmitting: Bool) {
+        package func applyInlineEditingAppearance(isFocused: Bool = false, isSubmitting: Bool) {
             guard let layer else { return }
 
             let borderColor: NSColor
@@ -1089,12 +1092,12 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             alphaValue = isSubmitting ? 0.8 : 1.0
         }
 
-        override func textDidBeginEditing(_ notification: Notification) {
+        override package func textDidBeginEditing(_ notification: Notification) {
             super.textDidBeginEditing(notification)
             applyInlineEditingAppearance(isFocused: true, isSubmitting: !isEditable)
         }
 
-        override func textDidEndEditing(_ notification: Notification) {
+        override package func textDidEndEditing(_ notification: Notification) {
             super.textDidEndEditing(notification)
             applyInlineEditingAppearance(isFocused: false, isSubmitting: !isEditable)
         }
@@ -1110,15 +1113,15 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
     }
 
-    final class InlineEditingTextFieldCell: NSTextFieldCell {
+    final package class InlineEditingTextFieldCell: NSTextFieldCell {
         private let horizontalInset: CGFloat = 8
         private let verticalInset: CGFloat = 3
 
-        override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        override package func drawingRect(forBounds rect: NSRect) -> NSRect {
             insetBounds(rect)
         }
 
-        override func edit(
+        override package func edit(
             withFrame rect: NSRect,
             in controlView: NSView,
             editor textObj: NSText,
@@ -1134,7 +1137,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             )
         }
 
-        override func select(
+        override package func select(
             withFrame rect: NSRect,
             in controlView: NSView,
             editor textObj: NSText,
@@ -1157,13 +1160,13 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
         }
     }
 
-    final class FilePromiseDelegate: NSObject, NSFilePromiseProviderDelegate {
-        let id = UUID()
+    final package class FilePromiseDelegate: NSObject, NSFilePromiseProviderDelegate {
+        package let id = UUID()
         private let entry: RemoteFileEntry
         private let fileTypeIdentifier: String
         private let export: @MainActor (RemoteFileEntry, URL) async throws -> Void
 
-        init(
+        package init(
             entry: RemoteFileEntry,
             fileTypeIdentifier: String,
             export: @escaping @MainActor (RemoteFileEntry, URL) async throws -> Void
@@ -1173,25 +1176,25 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
             self.export = export
         }
 
-        func makeProvider() -> NSFilePromiseProvider {
+        package func makeProvider() -> NSFilePromiseProvider {
             NSFilePromiseProvider(fileType: fileTypeIdentifier, delegate: self)
         }
 
-        func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue {
+        package func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue {
             .main
         }
 
-        func promisedFileName(for fileType: String) -> String {
+        package func promisedFileName(for fileType: String) -> String {
             let fallbackName = entry.type == .directory ? "Folder" : "download"
             let trimmedName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmedName.isEmpty ? fallbackName : trimmedName
         }
 
-        func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        package func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
             promisedFileName(for: fileType)
         }
 
-        func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
+        package func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
             Task { @MainActor in
                 do {
                     try await export(entry, url)
@@ -1208,7 +1211,7 @@ struct MacOSRemoteFileTableView: NSViewRepresentable {
 private var macOSMenuActionTargetAssociationKey: UInt8 = 0
 
 @MainActor
-func makeMacOSMenuItem(
+package func makeMacOSMenuItem(
     title: String,
     systemImage: String? = nil,
     keyEquivalent: String = "",
@@ -1236,7 +1239,7 @@ func makeMacOSMenuItem(
     return item
 }
 
-func makeMacOSSeparatorMenuItem() -> NSMenuItem {
+package func makeMacOSSeparatorMenuItem() -> NSMenuItem {
     .separator()
 }
 #endif

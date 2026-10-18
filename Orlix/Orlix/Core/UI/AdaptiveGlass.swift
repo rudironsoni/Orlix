@@ -6,10 +6,10 @@ import SwiftUI
 /// - iOS 26+ / macOS 26+: Uses native `.glassEffect()` API
 /// - Earlier versions: Falls back to `.ultraThinMaterial`
 
-extension View {
+package extension View {
     /// Apply adaptive glass effect with capsule shape
     @ViewBuilder
-    func adaptiveGlass() -> some View {
+    package func adaptiveGlass() -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular.interactive(), in: .capsule)
@@ -23,7 +23,7 @@ extension View {
 
     /// Apply adaptive glass effect with circle shape
     @ViewBuilder
-    func adaptiveGlassCircle() -> some View {
+    package func adaptiveGlassCircle() -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular.interactive(), in: Circle())
@@ -37,7 +37,7 @@ extension View {
 
     /// Apply adaptive glass effect with rounded rectangle shape
     @ViewBuilder
-    func adaptiveGlassRect(cornerRadius: CGFloat = 12) -> some View {
+    package func adaptiveGlassRect(cornerRadius: CGFloat = 12) -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: cornerRadius))
@@ -51,7 +51,7 @@ extension View {
 
     /// Apply adaptive glass effect with semantic color tint
     @ViewBuilder
-    func adaptiveGlassTint(_ color: Color) -> some View {
+    package func adaptiveGlassTint(_ color: Color) -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular.tint(color).interactive(), in: .capsule)
@@ -67,7 +67,7 @@ extension View {
 
     /// Apply adaptive glass effect with semantic color tint and rounded rectangle
     @ViewBuilder
-    func adaptiveGlassTintRect(_ color: Color, cornerRadius: CGFloat = 12) -> some View {
+    package func adaptiveGlassTintRect(_ color: Color, cornerRadius: CGFloat = 12) -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular.tint(color).interactive(), in: RoundedRectangle(cornerRadius: cornerRadius))
@@ -83,7 +83,7 @@ extension View {
 
     /// Apply adaptive bar background (for toolbars, tab bars)
     @ViewBuilder
-    func adaptiveBarBackground() -> some View {
+    package func adaptiveBarBackground() -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if swift(>=6.1)
             self.glassEffect(.regular)
@@ -97,7 +97,7 @@ extension View {
 
     /// Apply native soft scroll-edge effects where supported.
     @ViewBuilder
-    func adaptiveSoftScrollEdges(_ edges: Edge.Set = .all) -> some View {
+    package func adaptiveSoftScrollEdges(_ edges: Edge.Set = .all) -> some View {
         if #available(iOS 26, macOS 26, *) {
             #if compiler(>=6.2)
             self.scrollEdgeEffectStyle(.soft, for: edges)
@@ -111,7 +111,7 @@ extension View {
 
     /// Apply glass effect with accessibility support
     @ViewBuilder
-    func adaptiveGlassAccessible() -> some View {
+    package func adaptiveGlassAccessible() -> some View {
         self.modifier(AccessibleGlassModifier())
     }
 }
@@ -121,7 +121,7 @@ extension View {
 private struct AccessibleGlassModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if reduceTransparency {
             content
                 .background(.regularMaterial, in: Capsule())
@@ -135,11 +135,11 @@ private struct AccessibleGlassModifier: ViewModifier {
 // MARK: - Glass Button Style
 
 /// Button style that applies glass effect
-struct GlassButtonStyle: ButtonStyle {
-    var tint: Color?
-    var cornerRadius: CGFloat = 20
+package struct GlassButtonStyle: ButtonStyle {
+    package var tint: Color?
+    package var cornerRadius: CGFloat = 20
 
-    func makeBody(configuration: Configuration) -> some View {
+    package func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -189,10 +189,10 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
-extension ButtonStyle where Self == GlassButtonStyle {
-    static var glass: GlassButtonStyle { GlassButtonStyle() }
+package extension ButtonStyle where Self == GlassButtonStyle {
+    static package var glass: GlassButtonStyle { GlassButtonStyle() }
 
-    static func glass(tint: Color) -> GlassButtonStyle {
+    static package func glass(tint: Color) -> GlassButtonStyle {
         GlassButtonStyle(tint: tint)
     }
 }
@@ -200,16 +200,16 @@ extension ButtonStyle where Self == GlassButtonStyle {
 // MARK: - Glass Card View
 
 /// A card container with glass effect
-struct GlassCard<Content: View>: View {
-    let cornerRadius: CGFloat
-    let content: Content
+package struct GlassCard<Content: View>: View {
+    package let cornerRadius: CGFloat
+    package let content: Content
 
-    init(cornerRadius: CGFloat = 16, @ViewBuilder content: () -> Content) {
+    package init(cornerRadius: CGFloat = 16, @ViewBuilder content: () -> Content) {
         self.cornerRadius = cornerRadius
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         content
             .padding()
             .adaptiveGlassRect(cornerRadius: cornerRadius)
@@ -219,14 +219,14 @@ struct GlassCard<Content: View>: View {
 // MARK: - Glass Toolbar
 
 /// A toolbar container with glass effect
-struct GlassToolbar<Content: View>: View {
-    let content: Content
+package struct GlassToolbar<Content: View>: View {
+    package let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    package init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         HStack {
             content
         }
@@ -238,13 +238,13 @@ struct GlassToolbar<Content: View>: View {
 
 // MARK: - Glass Tab Bar Item
 
-struct GlassTabItem: View {
-    let icon: String
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
+package struct GlassTabItem: View {
+    package let icon: String
+    package let title: String
+    package let isSelected: Bool
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)

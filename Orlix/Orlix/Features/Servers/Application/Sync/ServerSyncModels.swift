@@ -1,18 +1,21 @@
 import Foundation
 
-nonisolated struct ServerRemoteChangeCheckpoint: Equatable, Sendable {
-    let id: UUID
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ServerRemoteChangeCheckpoint: Equatable, Sendable {
+    package let id: UUID
 }
 
-nonisolated struct ServerRemoteChanges: Equatable, Sendable {
-    let servers: [Server]
-    let workspaces: [Workspace]
-    let deletedServerIDs: [UUID]
-    let deletedWorkspaceIDs: [UUID]
-    let isFullFetch: Bool
-    let checkpoint: ServerRemoteChangeCheckpoint
+nonisolated package struct ServerRemoteChanges: Equatable, Sendable {
+    package let servers: [Server]
+    package let workspaces: [Workspace]
+    package let deletedServerIDs: [UUID]
+    package let deletedWorkspaceIDs: [UUID]
+    package let isFullFetch: Bool
+    package let checkpoint: ServerRemoteChangeCheckpoint
 
-    init(
+    package init(
         servers: [Server],
         workspaces: [Workspace],
         deletedServerIDs: [UUID],
@@ -29,27 +32,27 @@ nonisolated struct ServerRemoteChanges: Equatable, Sendable {
     }
 }
 
-nonisolated enum AmbiguousCloudRecoveryChoice: Equatable, Sendable {
+nonisolated package enum AmbiguousCloudRecoveryChoice: Equatable, Sendable {
     case keepLocal
     case uploadLocal
     case replaceWithCloud
 }
 
-nonisolated struct AmbiguousCloudRecoveryBackup: Codable, Equatable, Sendable {
-    let servers: [Server]
-    let workspaces: [Workspace]
+nonisolated package struct AmbiguousCloudRecoveryBackup: Codable, Equatable, Sendable {
+    package let servers: [Server]
+    package let workspaces: [Workspace]
 }
 
-nonisolated enum AmbiguousCloudRecoveryState: Equatable, Sendable {
+nonisolated package enum AmbiguousCloudRecoveryState: Equatable, Sendable {
     case decisionRequired
 }
 
-nonisolated enum AmbiguousCloudRecoveryError: LocalizedError, Equatable, Sendable {
+nonisolated package enum AmbiguousCloudRecoveryError: LocalizedError, Equatable, Sendable {
     case fullFetchNeedsDecision
     case remoteUnavailable
     case incompleteSnapshot
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .fullFetchNeedsDecision:
             return String(
@@ -63,8 +66,8 @@ nonisolated enum AmbiguousCloudRecoveryError: LocalizedError, Equatable, Sendabl
     }
 }
 
-nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Sendable {
-    nonisolated enum Payload: Codable, Equatable, Sendable {
+nonisolated package struct ServerPendingMutation: Codable, Equatable, Identifiable, Sendable {
+    nonisolated package enum Payload: Codable, Equatable, Sendable {
         case serverUpsert(Server)
         case serverDelete(Server)
         case workspaceUpsert(Workspace)
@@ -82,7 +85,7 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
             case payload
         }
 
-        init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             switch try container.decode(Kind.self, forKey: .kind) {
             case .serverUpsert:
@@ -96,7 +99,7 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
             }
         }
 
-        func encode(to encoder: Encoder) throws {
+        package func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             switch self {
             case .serverUpsert(let server):
@@ -115,11 +118,11 @@ nonisolated struct ServerPendingMutation: Codable, Equatable, Identifiable, Send
         }
     }
 
-    let id: UUID
-    let payload: Payload
-    let createdAt: Date
+    package let id: UUID
+    package let payload: Payload
+    package let createdAt: Date
 
-    init(id: UUID, payload: Payload, createdAt: Date) {
+    package init(id: UUID, payload: Payload, createdAt: Date) {
         self.id = id
         self.payload = payload
         self.createdAt = createdAt

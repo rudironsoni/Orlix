@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// macOS sheet header used by modal dialogs (title + close button).
-struct DialogSheetHeader: View {
-    let title: LocalizedStringKey
-    let onClose: () -> Void
-    var isCloseDisabled: Bool = false
+package struct DialogSheetHeader: View {
+    package let title: LocalizedStringKey
+    package let onClose: () -> Void
+    package var isCloseDisabled: Bool = false
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Text(title)
                 .font(.title3.weight(.semibold))
@@ -29,5 +29,15 @@ struct DialogSheetHeader: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 10)
+    }
+
+    package init(
+        title: LocalizedStringKey,
+        onClose: @escaping () -> Void,
+        isCloseDisabled: Bool = false
+    ) {
+        self.title = title
+        self.onClose = onClose
+        self.isCloseDisabled = isCloseDisabled
     }
 }

@@ -1,13 +1,16 @@
 import Foundation
 
-nonisolated enum ProSettingsUserState: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ProSettingsUserState: Equatable, Sendable {
     case checking
     case free
     case pro
     case lifetime
     case subscription(plan: ProPlanKind, renewalDate: Date?)
 
-    init(snapshot: StoreEntitlementSnapshot) {
+    package init(snapshot: StoreEntitlementSnapshot) {
         switch snapshot.accessState {
         case .checking:
             self = .checking
@@ -38,7 +41,7 @@ nonisolated enum ProSettingsUserState: Equatable, Sendable {
         }
     }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .checking:
             String(localized: "Checking...")
@@ -60,12 +63,12 @@ nonisolated enum ProSettingsUserState: Equatable, Sendable {
         }
     }
 
-    var renewalDate: Date? {
+    package var renewalDate: Date? {
         guard case .subscription(_, let renewalDate) = self else { return nil }
         return renewalDate
     }
 
-    var primaryAction: ProSettingsPrimaryAction? {
+    package var primaryAction: ProSettingsPrimaryAction? {
         switch self {
         case .free:
             .viewPlans
@@ -76,7 +79,7 @@ nonisolated enum ProSettingsUserState: Equatable, Sendable {
         }
     }
 
-    var hasProAccess: Bool {
+    package var hasProAccess: Bool {
         switch self {
         case .pro, .lifetime, .subscription:
             true
@@ -86,11 +89,11 @@ nonisolated enum ProSettingsUserState: Equatable, Sendable {
     }
 }
 
-nonisolated enum ProSettingsPrimaryAction: Equatable, Sendable {
+nonisolated package enum ProSettingsPrimaryAction: Equatable, Sendable {
     case viewPlans
     case manageSubscription
 
-    var title: String {
+    package var title: String {
         switch self {
         case .viewPlans:
             String(localized: "View Plans")

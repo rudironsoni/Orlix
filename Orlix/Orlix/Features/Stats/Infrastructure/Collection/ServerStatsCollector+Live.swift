@@ -1,27 +1,31 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 private struct LiveServerStatsTarget: ServerStatsCollectionTarget {
-    let server: Server
+    package let server: Server
 
-    var serverID: UUID { server.id }
+    package var serverID: UUID { server.id }
 }
 
 @MainActor
 private struct LiveServerStatsConnection: ServerStatsConnectionReference {
-    let client: SSHClient
+    package let client: SSHClient
 
-    var identity: ServerStatsConnectionIdentity {
+    package var identity: ServerStatsConnectionIdentity {
         ServerStatsConnectionIdentity(client)
     }
 }
 
 @MainActor
-final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
-    let rawValue: ServerSecurityApprovalRequest
-    let request: ServerStatsApprovalRequest
+final package class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
+    package let rawValue: ServerSecurityApprovalRequest
+    package let request: ServerStatsApprovalRequest
 
-    init(_ rawValue: ServerSecurityApprovalRequest, serverID: UUID) {
+    package init(_ rawValue: ServerSecurityApprovalRequest, serverID: UUID) {
         self.rawValue = rawValue
         request = ServerStatsApprovalRequest(
             id: rawValue.id,
@@ -31,8 +35,8 @@ final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
 }
 
 @MainActor
-extension ServerStatsCollectorDependencies {
-    static func live(
+package extension ServerStatsCollectorDependencies {
+    static package func live(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager,
         connectionOperations: SSHConnectionOperationService,
@@ -65,12 +69,12 @@ extension ServerStatsCollectorDependencies {
 }
 
 @MainActor
-extension ServerStatsCollector {
-    var securityApproval: ServerSecurityApprovalRequest? {
+package extension ServerStatsCollector {
+    package var securityApproval: ServerSecurityApprovalRequest? {
         (approvalReferenceForPresentation as? LiveServerStatsApprovalReference)?.rawValue
     }
 
-    func startCollecting(
+    package func startCollecting(
         for server: Server,
         using sharedClient: SSHClient? = nil,
         collectDocker: Bool = false
@@ -82,7 +86,7 @@ extension ServerStatsCollector {
         )
     }
 
-    func resolveSecurityApproval(
+    package func resolveSecurityApproval(
         _ request: ServerSecurityApprovalRequest,
         error: ServerSecurityApprovalError? = nil
     ) {
@@ -109,7 +113,7 @@ extension ServerStatsCollector {
 private enum LiveServerStatsAdapterError: LocalizedError {
     case incompatibleReference
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         String(localized: "Stats received an incompatible connection reference.")
     }
 }

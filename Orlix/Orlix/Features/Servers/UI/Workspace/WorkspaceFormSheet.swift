@@ -1,12 +1,15 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Workspace Form Sheet (Create/Edit)
 
-struct WorkspaceFormSheet: View {
-    let serverManager: ServerManager
+package struct WorkspaceFormSheet: View {
+    package let serverManager: ServerManager
     @ObservedObject private var stateStore: ServerStateStore
-    let workspace: Workspace?
-    let onSave: (Workspace) -> Void
+    package let workspace: Workspace?
+    package let onSave: (Workspace) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
@@ -24,11 +27,11 @@ struct WorkspaceFormSheet: View {
         !isEditing && !stateStore.canAddWorkspace(hasProAccess: storeManager.allowsProFeatures)
     }
 
-    let availableColors: [Color] = [
+    package let availableColors: [Color] = [
         .blue, .purple, .pink, .red, .orange, .yellow, .green, .teal, .cyan, .indigo
     ]
 
-    init(
+    package init(
         serverManager: ServerManager,
         workspace: Workspace? = nil,
         onSave: @escaping (Workspace) -> Void
@@ -44,7 +47,7 @@ struct WorkspaceFormSheet: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 // Limit Banner
@@ -232,8 +235,8 @@ struct WorkspaceFormSheet: View {
 
 // MARK: - Color Extension
 
-extension Color {
-    func toHex() -> String {
+package extension Color {
+    package func toHex() -> String {
         #if os(macOS)
         guard let components = NSColor(self).cgColor.components, components.count >= 3 else { return "#0000FF" }
         #else

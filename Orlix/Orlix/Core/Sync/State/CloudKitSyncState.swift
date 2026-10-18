@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct CloudKitSyncState: Equatable, Sendable {
-    enum Status: Equatable, Sendable {
+nonisolated package struct CloudKitSyncState: Equatable, Sendable {
+    package enum Status: Equatable, Sendable {
         case idle
         case syncing
         case error(String)
@@ -9,15 +9,15 @@ nonisolated struct CloudKitSyncState: Equatable, Sendable {
         case disabled
     }
 
-    enum OperationCompletion: Equatable, Sendable {
+    package enum OperationCompletion: Equatable, Sendable {
         case success
         case failure(String)
     }
 
     private struct AvailableContext: Equatable, Sendable {
-        var activeOperations: Set<UUID> = []
-        var latestOperationID: UUID?
-        var latestFailure: String?
+        package var activeOperations: Set<UUID> = []
+        package var latestOperationID: UUID?
+        package var latestFailure: String?
     }
 
     private enum Phase: Equatable, Sendable {
@@ -30,11 +30,11 @@ nonisolated struct CloudKitSyncState: Equatable, Sendable {
 
     private var phase: Phase = .checkingAccount
 
-    static var available: Self {
+    static package var available: Self {
         Self(phase: .available(AvailableContext()))
     }
 
-    var status: Status {
+    package var status: Status {
         switch phase {
         case .checkingAccount:
             return .idle
@@ -55,36 +55,36 @@ nonisolated struct CloudKitSyncState: Equatable, Sendable {
         }
     }
 
-    var isAvailable: Bool {
+    package var isAvailable: Bool {
         if case .available = phase {
             return true
         }
         return false
     }
 
-    mutating func markAvailable() {
+    mutating package func markAvailable() {
         guard !isAvailable else { return }
         phase = .available(AvailableContext())
     }
 
-    mutating func markCheckingAccount() {
+    mutating package func markCheckingAccount() {
         phase = .checkingAccount
     }
 
-    mutating func markAccountFailure(_ message: String) {
+    mutating package func markAccountFailure(_ message: String) {
         phase = .accountFailure(message)
     }
 
-    mutating func markOffline() {
+    mutating package func markOffline() {
         phase = .offline
     }
 
-    mutating func markDisabled() {
+    mutating package func markDisabled() {
         phase = .disabled
     }
 
     @discardableResult
-    mutating func beginOperation(_ id: UUID) -> Bool {
+    mutating package func beginOperation(_ id: UUID) -> Bool {
         guard case .available(var context) = phase else { return false }
         context.activeOperations.insert(id)
         context.latestOperationID = id
@@ -93,7 +93,7 @@ nonisolated struct CloudKitSyncState: Equatable, Sendable {
         return true
     }
 
-    mutating func completeOperation(_ id: UUID, with completion: OperationCompletion) {
+    mutating package func completeOperation(_ id: UUID, with completion: OperationCompletion) {
         guard case .available(var context) = phase,
               context.activeOperations.remove(id) != nil else {
             return

@@ -1,8 +1,11 @@
 #if os(iOS)
 import SwiftUI
 
-extension CustomFontLibraryView {
-    var platformBody: some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension CustomFontLibraryView {
+    package var platformBody: some View {
         Group {
             if fontStore.customFonts.isEmpty {
                 emptyState

@@ -1,6 +1,9 @@
 import Foundation
 
-nonisolated enum StoreManagerEffect: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StoreManagerEffect: Equatable, Sendable {
     case paywallPresented(source: PaywallSource)
     case paywallCTATapped(source: PaywallSource, productID: String)
     case purchaseStarted(source: PaywallSource, productID: String)
@@ -19,8 +22,8 @@ nonisolated enum StoreManagerEffect: Equatable, Sendable {
 }
 
 @MainActor
-struct StoreManagerEffects {
-    let record: (StoreManagerEffect) -> Void
+package struct StoreManagerEffects {
+    package let record: (StoreManagerEffect) -> Void
 
-    static let none = StoreManagerEffects { _ in }
+    static package let none = StoreManagerEffects { _ in }
 }

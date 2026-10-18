@@ -7,8 +7,11 @@ import AppKit
 import UIKit
 #endif
 
-struct RemoteFileInspectorView: View {
-    enum Chrome {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileInspectorView: View {
+    package enum Chrome {
         case sidebar
         case sheet
     }
@@ -17,9 +20,9 @@ struct RemoteFileInspectorView: View {
         case metadata
         case content
 
-        var id: String { rawValue }
+        package var id: String { rawValue }
 
-        var title: LocalizedStringKey {
+        package var title: LocalizedStringKey {
             switch self {
             case .metadata:
                 return "Metadata"
@@ -29,25 +32,25 @@ struct RemoteFileInspectorView: View {
         }
     }
 
-    let selectedEntry: RemoteFileEntry?
-    let viewerPayload: RemoteFileViewerPayload?
-    let isLoadingViewer: Bool
-    let viewerError: RemoteFileBrowserError?
-    let directoryError: RemoteFileBrowserError?
-    let chrome: Chrome
-    let backgroundColor: Color
-    let previewBackgroundColor: Color
-    let sectionBackgroundColor: Color
-    let onLoadPreview: ((RemoteFileEntry) -> Void)?
-    let onDownloadPreview: ((RemoteFileEntry) -> Void)?
-    let onDownload: ((RemoteFileEntry) -> Void)?
-    let onShare: ((RemoteFileEntry) -> Void)?
-    let onRename: ((RemoteFileEntry) -> Void)?
-    let onMove: ((RemoteFileEntry) -> Void)?
-    let onEditPermissions: ((RemoteFileEntry) -> Void)?
-    let onDelete: ((RemoteFileEntry) -> Void)?
-    let onClose: (() -> Void)?
-    let onSaveText: ((RemoteFileEntry, String) async throws -> Void)?
+    package let selectedEntry: RemoteFileEntry?
+    package let viewerPayload: RemoteFileViewerPayload?
+    package let isLoadingViewer: Bool
+    package let viewerError: RemoteFileBrowserError?
+    package let directoryError: RemoteFileBrowserError?
+    package let chrome: Chrome
+    package let backgroundColor: Color
+    package let previewBackgroundColor: Color
+    package let sectionBackgroundColor: Color
+    package let onLoadPreview: ((RemoteFileEntry) -> Void)?
+    package let onDownloadPreview: ((RemoteFileEntry) -> Void)?
+    package let onDownload: ((RemoteFileEntry) -> Void)?
+    package let onShare: ((RemoteFileEntry) -> Void)?
+    package let onRename: ((RemoteFileEntry) -> Void)?
+    package let onMove: ((RemoteFileEntry) -> Void)?
+    package let onEditPermissions: ((RemoteFileEntry) -> Void)?
+    package let onDelete: ((RemoteFileEntry) -> Void)?
+    package let onClose: (() -> Void)?
+    package let onSaveText: ((RemoteFileEntry, String) async throws -> Void)?
 
     @State private var selectedTab: InspectorTab = .metadata
     @State private var editableText = ""
@@ -56,7 +59,7 @@ struct RemoteFileInspectorView: View {
     @State private var textSaveErrorMessage: String?
     @State private var presentedMediaPreview: PresentedMediaPreview?
 
-    var body: some View {
+    package var body: some View {
         Group {
             if chrome == .sidebar {
                 sidebarInspectorContent
@@ -1144,18 +1147,18 @@ struct RemoteFileInspectorView: View {
 }
 
 private struct PresentedMediaPreview: Identifiable {
-    let title: String
-    let kind: RemoteFilePreviewKind
-    let url: URL
+    package let title: String
+    package let kind: RemoteFilePreviewKind
+    package let url: URL
 
-    var id: String { url.absoluteString }
+    package var id: String { url.absoluteString }
 }
 
 private struct RemoteFileImagePreview: View {
-    let url: URL
-    let backgroundColor: Color
+    package let url: URL
+    package let backgroundColor: Color
 
-    var body: some View {
+    package var body: some View {
         Group {
             if let image {
                 image
@@ -1193,12 +1196,12 @@ private struct RemoteFileImagePreview: View {
 }
 
 private struct RemoteFileVideoPreview: View {
-    let url: URL
-    let backgroundColor: Color
+    package let url: URL
+    package let backgroundColor: Color
 
     @State private var player: AVPlayer?
 
-    var body: some View {
+    package var body: some View {
         VideoPlayer(player: player)
             .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 360)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1217,12 +1220,12 @@ private struct RemoteFileVideoPreview: View {
 }
 
 private struct RemoteFileExpandedMediaPreview: View {
-    let item: PresentedMediaPreview
+    package let item: PresentedMediaPreview
 
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             mediaContent

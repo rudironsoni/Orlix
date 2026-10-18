@@ -284,8 +284,8 @@ nonisolated private func matmul(_ a: MLXArray, _ b: MLXArray) -> MLXArray {
 
 // MARK: - MLXArray Extensions
 
-extension MLXArray {
-    nonisolated func std(axes: [Int]? = nil, keepDims: Bool = false) -> MLXArray {
+package extension MLXArray {
+    nonisolated package func std(axes: [Int]? = nil, keepDims: Bool = false) -> MLXArray {
         let meanVal =
             axes != nil ? self.mean(axes: axes!, keepDims: true) : self.mean(keepDims: true)
         let variance =
@@ -295,19 +295,19 @@ extension MLXArray {
         return MLX.sqrt(variance)
     }
 
-    nonisolated func reversed(axes: [Int]) -> MLXArray {
+    nonisolated package func reversed(axes: [Int]) -> MLXArray {
         // For 1D reversal on axis 0
         let indices = MLXArray((0..<self.shape[0]).reversed())
         return self[indices]
     }
 
-    nonisolated static func linspace(_ start: Float, _ end: Float, count: Int) -> MLXArray {
+    nonisolated static package func linspace(_ start: Float, _ end: Float, count: Int) -> MLXArray {
         let step = (end - start) / Float(count - 1)
         let values = (0..<count).map { start + Float($0) * step }
         return MLXArray(values)
     }
 
-    nonisolated static func stacked(_ arrays: [MLXArray], axis: Int) -> MLXArray {
+    nonisolated static package func stacked(_ arrays: [MLXArray], axis: Int) -> MLXArray {
         return MLX.stacked(arrays, axis: axis)
     }
 }

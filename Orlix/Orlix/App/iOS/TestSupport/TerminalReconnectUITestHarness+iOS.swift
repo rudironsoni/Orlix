@@ -1,11 +1,19 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 
 /// Boots the production server route against a loopback SSH fixture. Only the
 /// app's root data is seeded here; terminal, reconnect, responder, and SSH work
 /// all run through the same types used by the normal iOS route.
-struct TerminalReconnectUITestHarness: View {
+package struct TerminalReconnectUITestHarness: View {
     private enum FixtureState {
         case preparing
         case ready(Server)
@@ -16,7 +24,7 @@ struct TerminalReconnectUITestHarness: View {
         case missingUsername
         case invalidPrivateKey
 
-        var errorDescription: String? {
+        package var errorDescription: String? {
             switch self {
             case .missingUsername:
                 "Missing loopback SSH username"
@@ -49,7 +57,7 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
-    init(
+    package init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         serverWakeCoordinator: ServerWakeCoordinator,
@@ -78,7 +86,7 @@ struct TerminalReconnectUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         fixtureContent
             .overlay(alignment: .topLeading) {
                 TerminalReconnectDiagnosticsLabel(
@@ -383,15 +391,15 @@ struct TerminalReconnectUITestHarness: View {
 }
 
 private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
-    let tabManager: TerminalTabManager
-    let serverId: UUID?
-    let fallback: String
+    package let tabManager: TerminalTabManager
+    package let serverId: UUID?
+    package let fallback: String
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(tabManager: tabManager)
     }
 
-    func makeUIView(context: Context) -> UILabel {
+    package func makeUIView(context: Context) -> UILabel {
         let label = UILabel()
         label.accessibilityIdentifier = "orlix.reconnectTest.diagnostics"
         label.backgroundColor = UIColor.black.withAlphaComponent(0.8)
@@ -403,16 +411,16 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         return label
     }
 
-    func updateUIView(_ label: UILabel, context: Context) {
+    package func updateUIView(_ label: UILabel, context: Context) {
         context.coordinator.update(serverId: serverId, fallback: fallback)
     }
 
-    static func dismantleUIView(_ label: UILabel, coordinator: Coordinator) {
+    static package func dismantleUIView(_ label: UILabel, coordinator: Coordinator) {
         coordinator.invalidate()
     }
 
     @MainActor
-    final class Coordinator {
+    final package class Coordinator {
         private let tabManager: TerminalTabManager
         private weak var label: UILabel?
         private weak var configuredTerminal: GhosttyTerminalView?
@@ -420,11 +428,11 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
         private var fallback = "setup=preparing"
         private var timer: Timer?
 
-        init(tabManager: TerminalTabManager) {
+        package init(tabManager: TerminalTabManager) {
             self.tabManager = tabManager
         }
 
-        func install(_ label: UILabel) {
+        package func install(_ label: UILabel) {
             self.label = label
             let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -436,13 +444,13 @@ private struct TerminalReconnectDiagnosticsLabel: UIViewRepresentable {
             refresh()
         }
 
-        func update(serverId: UUID?, fallback: String) {
+        package func update(serverId: UUID?, fallback: String) {
             self.serverId = serverId
             self.fallback = fallback
             refresh()
         }
 
-        func invalidate() {
+        package func invalidate() {
             timer?.invalidate()
             timer = nil
         }

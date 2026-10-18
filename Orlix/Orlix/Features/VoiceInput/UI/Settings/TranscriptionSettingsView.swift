@@ -4,10 +4,13 @@
 //
 
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Transcription Settings View
 
-struct TranscriptionSettingsView: View {
+package struct TranscriptionSettingsView: View {
     @ObservedObject private var settingsStore: VoiceSettingsStore
     @ObservedObject private var whisperManager: MLXModelManager
     @ObservedObject private var parakeetManager: MLXModelManager
@@ -30,14 +33,14 @@ struct TranscriptionSettingsView: View {
         ("auto", String(localized: "Auto-detect"))
     ]
 
-    init(modelManagers: VoiceSettingsModelManagerOwner) {
+    package init(modelManagers: VoiceSettingsModelManagerOwner) {
         self.modelManagers = modelManagers
         _settingsStore = ObservedObject(wrappedValue: modelManagers.settingsStore)
         _whisperManager = ObservedObject(wrappedValue: modelManagers.whisperManager)
         _parakeetManager = ObservedObject(wrappedValue: modelManagers.parakeetManager)
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Toggle("Show in Terminal", isOn: terminalVoiceButtonBinding)

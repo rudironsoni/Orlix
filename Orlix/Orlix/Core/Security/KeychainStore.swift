@@ -8,15 +8,15 @@
 import Foundation
 import Security
 
-nonisolated enum KeychainStorageScope: String, CaseIterable, Codable, Hashable, Sendable {
+nonisolated package enum KeychainStorageScope: String, CaseIterable, Codable, Hashable, Sendable {
     case deviceOnly
     case iCloud
 
-    var isSynchronizable: Bool {
+    package var isSynchronizable: Bool {
         self == .iCloud
     }
 
-    var accessibility: CFString {
+    package var accessibility: CFString {
         switch self {
         case .deviceOnly:
             kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -25,7 +25,7 @@ nonisolated enum KeychainStorageScope: String, CaseIterable, Codable, Hashable, 
         }
     }
 
-    var alternate: Self {
+    package var alternate: Self {
         switch self {
         case .deviceOnly: .iCloud
         case .iCloud: .deviceOnly
@@ -33,7 +33,7 @@ nonisolated enum KeychainStorageScope: String, CaseIterable, Codable, Hashable, 
     }
 }
 
-nonisolated protocol KeychainStoreBacking: Sendable {
+nonisolated package protocol KeychainStoreBacking: Sendable {
     func set(
         _ data: Data,
         service: String,
@@ -61,8 +61,8 @@ nonisolated protocol KeychainStoreBacking: Sendable {
     ) throws -> [String]
 }
 
-nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unchecked Sendable {
-    func set(
+nonisolated final package class SecurityKeychainStoreBacking: KeychainStoreBacking, @unchecked Sendable {
+    package func set(
         _ data: Data,
         service: String,
         key: String,
@@ -91,7 +91,7 @@ nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unc
         }
     }
 
-    func get(
+    package func get(
         service: String,
         key: String,
         scope: KeychainStorageScope
@@ -109,7 +109,7 @@ nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unc
         return item as? Data
     }
 
-    func contains(
+    package func contains(
         service: String,
         key: String,
         scope: KeychainStorageScope
@@ -124,7 +124,7 @@ nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unc
         return true
     }
 
-    func delete(
+    package func delete(
         service: String,
         key: String,
         scope: KeychainStorageScope
@@ -137,7 +137,7 @@ nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unc
         }
     }
 
-    func keys(
+    package func keys(
         service: String,
         scope: KeychainStorageScope
     ) throws -> [String] {
@@ -180,11 +180,11 @@ nonisolated final class SecurityKeychainStoreBacking: KeychainStoreBacking, @unc
     }
 }
 
-nonisolated final class KeychainStore: @unchecked Sendable {
-    let service: String
+nonisolated final package class KeychainStore: @unchecked Sendable {
+    package let service: String
     private let backing: any KeychainStoreBacking
 
-    init(
+    package init(
         service: String,
         backing: any KeychainStoreBacking = SecurityKeychainStoreBacking()
     ) {
@@ -192,7 +192,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         self.backing = backing
     }
 
-    func set(
+    package func set(
         _ data: Data,
         forKey key: String,
         scope: KeychainStorageScope
@@ -200,28 +200,28 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         try backing.set(data, service: service, key: key, scope: scope)
     }
 
-    func get(
+    package func get(
         _ key: String,
         scope: KeychainStorageScope
     ) throws -> Data? {
         try backing.get(service: service, key: key, scope: scope)
     }
 
-    func contains(
+    package func contains(
         _ key: String,
         scope: KeychainStorageScope
     ) throws -> Bool {
         try backing.contains(service: service, key: key, scope: scope)
     }
 
-    func delete(
+    package func delete(
         _ key: String,
         scope: KeychainStorageScope
     ) throws {
         try backing.delete(service: service, key: key, scope: scope)
     }
 
-    func copyAll(
+    package func copyAll(
         from source: KeychainStorageScope,
         to destination: KeychainStorageScope,
         where shouldCopy: (String) -> Bool
@@ -233,7 +233,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         }
     }
 
-    func moveAll(
+    package func moveAll(
         from source: KeychainStorageScope,
         to destination: KeychainStorageScope,
         where shouldMove: (String) -> Bool
@@ -248,7 +248,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         }
     }
 
-    func deleteAll(
+    package func deleteAll(
         in scope: KeychainStorageScope,
         where shouldDelete: (String) -> Bool
     ) throws {
@@ -257,7 +257,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         }
     }
 
-    func keys(in scope: KeychainStorageScope) throws -> [String] {
+    package func keys(in scope: KeychainStorageScope) throws -> [String] {
         try backing.keys(service: service, scope: scope).sorted()
     }
 
@@ -284,7 +284,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         return true
     }
 
-    func setString(
+    package func setString(
         _ value: String,
         forKey key: String,
         scope: KeychainStorageScope
@@ -295,7 +295,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
         try set(data, forKey: key, scope: scope)
     }
 
-    func getString(
+    package func getString(
         _ key: String,
         scope: KeychainStorageScope
     ) throws -> String? {
@@ -307,7 +307,7 @@ nonisolated final class KeychainStore: @unchecked Sendable {
     }
 }
 
-nonisolated enum KeychainError: LocalizedError {
+nonisolated package enum KeychainError: LocalizedError {
     case unhandled(OSStatus)
     case encodingFailed
     case decodingFailed
@@ -315,7 +315,7 @@ nonisolated enum KeychainError: LocalizedError {
     case credentialServerMismatch
     case copyVerificationFailed
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .unhandled(let status):
             "Keychain error: \(status)"

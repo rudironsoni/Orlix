@@ -1,18 +1,21 @@
 import Foundation
 
-nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
-    enum ValidationError: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct RemoteShellStartupActionFormModel: Equatable, Sendable {
+    package enum ValidationError: Equatable, Sendable {
         case invalidCommand
         case commandTooLong
     }
 
-    var command: String
+    package var command: String
 
-    init(action: RemoteShellStartupAction?) {
+    package init(action: RemoteShellStartupAction?) {
         command = action?.command ?? ""
     }
 
-    var validationError: ValidationError? {
+    package var validationError: ValidationError? {
         do {
             _ = try makeAction()
             return nil
@@ -30,18 +33,18 @@ nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
         }
     }
 
-    var isValid: Bool {
+    package var isValid: Bool {
         validationError == nil
     }
 
-    func makeAction() throws -> RemoteShellStartupAction? {
+    package func makeAction() throws -> RemoteShellStartupAction? {
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
         return try RemoteShellStartupAction(command: command)
     }
 
-    func commandForPersistence() -> String? {
+    package func commandForPersistence() -> String? {
         do {
             return try makeAction()?.command
         } catch {

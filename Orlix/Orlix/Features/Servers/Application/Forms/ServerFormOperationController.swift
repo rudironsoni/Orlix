@@ -1,7 +1,11 @@
 import Combine
 import Foundation
 
-nonisolated enum ServerConnectionTestFailureReason: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package enum ServerConnectionTestFailureReason: Equatable, Sendable {
     case message(String)
     case tailscale(String)
     case eternalTerminal(
@@ -12,50 +16,106 @@ nonisolated enum ServerConnectionTestFailureReason: Equatable, Sendable {
     case hostKeyApprovalExpired
 }
 
-nonisolated struct ServerConnectionTestFailure: Equatable, Sendable {
-    let reason: ServerConnectionTestFailureReason
-    let requiresCloudflareOverrides: Bool
-    let hostKeyChallenge: KnownHostsManager.Challenge?
+nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
+    package let reason: ServerConnectionTestFailureReason
+    package let requiresCloudflareOverrides: Bool
+    package let hostKeyChallenge: KnownHostsManager.Challenge?
+
+    package var message: String {
+        switch reason {
+        case .message(let message):
+            return message
+        case .tailscale(let message):
+            let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
+            return message.contains(reminder) ? message : "\(message)\n\(reminder)"
+        case .eternalTerminal(let failure, let host, let port):
+            return failure.userFacingMessage(host: host, port: port)
+        case .hostKeyApprovalExpired:
+            return String(localized: "SSH host key approval expired. Try again.")
+        }
+    }
+
+    package init(
+
+        reason: ServerConnectionTestFailureReason,
+
+        requiresCloudflareOverrides: Bool,
+
+        hostKeyChallenge: KnownHostsManager.Challenge? = nil
+
+    ) {
+
+        self.reason = reason
+
+        self.requiresCloudflareOverrides = requiresCloudflareOverrides
+
+        self.hostKeyChallenge = hostKeyChallenge
+
+    }
 }
 
-nonisolated enum ServerConnectionTestResult: Equatable, Sendable {
+nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {
     case success
     case failure(ServerConnectionTestFailure)
     case cancelled
 }
 
-nonisolated protocol ServerConnectionTesting: Sendable {
+nonisolated package protocol ServerConnectionTesting: Sendable {
     func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult
 }
 
-nonisolated protocol ServerHostKeyRepository: Sendable {
+nonisolated package protocol ServerHostKeyRepository: Sendable {
     func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge?
     func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool
     func reject(_ challenge: KnownHostsManager.Challenge)
 }
 
 @MainActor
-struct ServerFormDependencies {
-    let credentials: any ServerCredentialRepository
-    let connectionTester: any ServerConnectionTesting
-    let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
-    let hostKeys: any ServerHostKeyRepository
-    let remoteSessionBackends: [RemoteSessionBackendMetadata]
-    let defaultRemoteSessionEnabled: @MainActor () -> Bool
-    let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier
-    let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
-    let now: @Sendable () -> Date
-    let makeID: @Sendable () -> UUID
+package struct ServerFormDependencies {
+    package let credentials: any ServerCredentialRepository
+    package let connectionTester: any ServerConnectionTesting
+    package let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
+    package let hostKeys: any ServerHostKeyRepository
+    package let remoteSessionBackends: [RemoteSessionBackendMetadata]
+    package let defaultRemoteSessionEnabled: @MainActor () -> Bool
+    package let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier
+    package let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
+    package let now: @Sendable () -> Date
+    package let makeID: @Sendable () -> UUID
+
+    package init(
+        credentials: any ServerCredentialRepository,
+        connectionTester: any ServerConnectionTesting,
+        wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving,
+        hostKeys: any ServerHostKeyRepository,
+        remoteSessionBackends: [RemoteSessionBackendMetadata],
+        defaultRemoteSessionEnabled: @escaping @MainActor () -> Bool,
+        defaultRemoteSessionBackendIdentifier: @escaping @MainActor () -> RemoteSessionBackendIdentifier,
+        defaultRemoteSessionStartupBehavior: @escaping @MainActor () -> RemoteSessionStartupBehavior,
+        now: @escaping @Sendable () -> Date,
+        makeID: @escaping @Sendable () -> UUID
+    ) {
+        self.credentials = credentials
+        self.connectionTester = connectionTester
+        self.wakeOnLANMACAddressResolver = wakeOnLANMACAddressResolver
+        self.hostKeys = hostKeys
+        self.remoteSessionBackends = remoteSessionBackends
+        self.defaultRemoteSessionEnabled = defaultRemoteSessionEnabled
+        self.defaultRemoteSessionBackendIdentifier = defaultRemoteSessionBackendIdentifier
+        self.defaultRemoteSessionStartupBehavior = defaultRemoteSessionStartupBehavior
+        self.now = now
+        self.makeID = makeID
+    }
 }
 
-nonisolated enum ServerFormOperationFailure: Equatable, Sendable {
+nonisolated package enum ServerFormOperationFailure: Equatable, Sendable {
     case operation(message: String)
     case credentialLoad(message: String)
     case storedKeyLoad(message: String)
     case wakeOnLANUnavailable
 }
 
-nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
+nonisolated package enum ServerFormOperationPhase: Equatable, Sendable {
     case idle
     case loadingCredentials(id: UUID)
     case testing(id: UUID, snapshot: ServerFormModel.ConnectionSnapshot)
@@ -67,7 +127,7 @@ nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
 }
 
 @MainActor
-final class ServerFormOperationController: ObservableObject {
+final package class ServerFormOperationController: ObservableObject {
     @Published private(set) var phase: ServerFormOperationPhase = .idle
     @Published private(set) var storedKeys: [SSHKeyEntry] = []
     @Published private(set) var selectedStoredKeyID: UUID?
@@ -83,7 +143,7 @@ final class ServerFormOperationController: ObservableObject {
     private var connectionTestTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
-    init(
+    package init(
         credentialLoader: any ServerFormCredentialLoading,
         connectionTester: any ServerConnectionTesting,
         wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving,
@@ -107,45 +167,45 @@ final class ServerFormOperationController: ObservableObject {
         saveTask?.cancel()
     }
 
-    var isLoadingCredentials: Bool {
+    package var isLoadingCredentials: Bool {
         if case .loadingCredentials = phase { return true }
         return false
     }
 
-    var isTestingConnection: Bool {
+    package var isTestingConnection: Bool {
         if case .testing = phase { return true }
         return false
     }
 
-    var isSaving: Bool {
+    package var isSaving: Bool {
         if case .saving = phase { return true }
         return false
     }
 
-    var requiresUpgrade: Bool {
+    package var requiresUpgrade: Bool {
         phase == .requiresUpgrade
     }
 
-    var failure: ServerFormOperationFailure? {
+    package var failure: ServerFormOperationFailure? {
         if case .failed(let failure) = phase { return failure }
         return nil
     }
 
-    var connectionTestFailure: ServerConnectionTestFailure? {
+    package var connectionTestFailure: ServerConnectionTestFailure? {
         if case .testFailed(_, let failure) = phase { return failure }
         return nil
     }
 
-    var hostKeyChallenge: KnownHostsManager.Challenge? {
+    package var hostKeyChallenge: KnownHostsManager.Challenge? {
         connectionTestFailure?.hostKeyChallenge
     }
 
-    func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
+    package func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
         guard case .testSucceeded(let completedSnapshot) = phase else { return false }
         return completedSnapshot == snapshot
     }
 
-    func clearPresentation() {
+    package func clearPresentation() {
         switch phase {
         case .failed, .requiresUpgrade, .testFailed:
             phase = .idle
@@ -154,7 +214,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func resetConnectionTest() {
+    package func resetConnectionTest() {
         connectionTestTask?.cancel()
         connectionTestTask = nil
         switch phase {
@@ -165,7 +225,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func loadFormCredentials(
+    package func loadFormCredentials(
         for server: Server?,
         onLoaded: @escaping @MainActor (ServerCredentials) -> Void
     ) {
@@ -190,7 +250,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func refreshStoredKeys(
+    package func refreshStoredKeys(
         selecting selectedID: UUID,
         onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
     ) {
@@ -215,7 +275,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func selectStoredKey(
+    package func selectStoredKey(
         id: UUID,
         onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
     ) {
@@ -233,12 +293,12 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func clearStoredKeySelection() {
+    package func clearStoredKeySelection() {
         invalidateCredentialLoading()
         selectedStoredKeyID = nil
     }
 
-    func invalidateCredentialLoading() {
+    package func invalidateCredentialLoading() {
         credentialLoadTask?.cancel()
         credentialLoadTask = nil
         if case .loadingCredentials = phase {
@@ -246,7 +306,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func startConnectionTest(
+    package func startConnectionTest(
         server: Server,
         credentials: ServerCredentials,
         snapshot: ServerFormModel.ConnectionSnapshot
@@ -268,14 +328,14 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func rejectHostKeyChallenge() {
+    package func rejectHostKeyChallenge() {
         guard let challenge = hostKeyChallenge else { return }
         hostKeys.reject(challenge)
         phase = .idle
     }
 
     @discardableResult
-    func approveHostKeyChallenge() -> Bool {
+    package func approveHostKeyChallenge() -> Bool {
         guard let challenge = hostKeyChallenge,
               let snapshot = currentTestSnapshot else { return false }
         guard hostKeys.approve(challenge, now: now()) else {
@@ -293,7 +353,7 @@ final class ServerFormOperationController: ObservableObject {
         return true
     }
 
-    func save(
+    package func save(
         mutation: ServerMutation,
         credentials: ServerCredentials,
         wakeOnLANPlan: ServerFormModel.WakeOnLANSavePlan,
@@ -376,7 +436,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func cancel() {
+    package func cancel() {
         credentialLoadTask?.cancel()
         credentialLoadTask = nil
         connectionTestTask?.cancel()

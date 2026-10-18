@@ -1,10 +1,14 @@
 import Foundation
 
-enum StatsPreviewFixture {
-    static let now = Date(timeIntervalSinceReferenceDate: 804_000_000)
-    static let gigabyte = UInt64(1_073_741_824)
+#if ORLIX_MODULAR_APP
+import OrlixModels
+package typealias ProcessInfo = OrlixModels.ProcessInfo
+#endif
+package enum StatsPreviewFixture {
+    static package let now = Date(timeIntervalSinceReferenceDate: 804_000_000)
+    static package let gigabyte = UInt64(1_073_741_824)
 
-    static var stats: ServerStats {
+    static package var stats: ServerStats {
         let gpu = GPUDevice(
             id: "gpu-0",
             name: "NVIDIA RTX 4090",
@@ -177,38 +181,38 @@ enum StatsPreviewFixture {
         return stats
     }
 
-    static var cpuHistory: [StatsPoint] {
+    static package var cpuHistory: [StatsPoint] {
         makeHistory([18, 24, 52, 47, 42, 67, 58, 41, 44, 42])
     }
 
-    static var memoryHistory: [StatsPoint] {
+    static package var memoryHistory: [StatsPoint] {
         makeHistory([54, 56, 59, 60, 64, 65, 66, 70, 69, 68])
     }
 
-    static var networkRxHistory: [StatsPoint] {
+    static package var networkRxHistory: [StatsPoint] {
         makeHistory([1, 2, 4, 11, 7, 12, 8, 5, 9, 12].map { Double($0) * 1_048_576 })
     }
 
-    static var networkTxHistory: [StatsPoint] {
+    static package var networkTxHistory: [StatsPoint] {
         makeHistory([0.4, 1.2, 2.0, 3.8, 2.4, 4.2, 2.8, 1.7, 3.0, 4.0].map { $0 * 1_048_576 })
     }
 
-    static var gpuHistories: [String: [StatsPoint]] {
+    static package var gpuHistories: [String: [StatsPoint]] {
         [
             "gpu-0": makeHistory([28, 36, 61, 79, 71, 84, 76, 66, 72, 76]),
             "gpu-1": makeHistory([11, 18, 27, 45, 39, 52, 47, 44, 38, 41])
         ]
     }
 
-    static var dockerCPUHistory: [StatsPoint] {
+    static package var dockerCPUHistory: [StatsPoint] {
         makeHistory([12, 18, 26, 48, 35, 55, 42, 38, 51, 48])
     }
 
-    static var dockerMemoryHistory: [StatsPoint] {
+    static package var dockerMemoryHistory: [StatsPoint] {
         makeHistory([20, 22, 24, 28, 30, 31, 32, 35, 37, 36])
     }
 
-    static var presentationSnapshot: ServerStatsPresentationSnapshot {
+    static package var presentationSnapshot: ServerStatsPresentationSnapshot {
         ServerStatsPresentationSnapshot(
             stats: stats,
             cpuHistory: cpuHistory,

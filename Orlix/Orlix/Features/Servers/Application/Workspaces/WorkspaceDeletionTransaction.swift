@@ -1,16 +1,19 @@
 import Foundation
 
-nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Sendable {
-    let id: UUID
-    let workspace: Workspace
-    let deletedServers: [Server]
-    let previousServers: [Server]
-    let previousWorkspaces: [Workspace]
-    let remainingServers: [Server]
-    let remainingWorkspaces: [Workspace]
-    let pendingMutations: [ServerPendingMutation]
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Sendable {
+    package let id: UUID
+    package let workspace: Workspace
+    package let deletedServers: [Server]
+    package let previousServers: [Server]
+    package let previousWorkspaces: [Workspace]
+    package let remainingServers: [Server]
+    package let remainingWorkspaces: [Workspace]
+    package let pendingMutations: [ServerPendingMutation]
 
-    init?(
+    package init?(
         workspaceID: UUID,
         servers: [Server],
         workspaces: [Workspace],
@@ -49,7 +52,7 @@ nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Send
         ]
     }
 
-    func hasSameDeletionSnapshot(as other: WorkspaceDeletionPlan) -> Bool {
+    package func hasSameDeletionSnapshot(as other: WorkspaceDeletionPlan) -> Bool {
         workspace == other.workspace &&
         deletedServers == other.deletedServers &&
         remainingServers == other.remainingServers &&

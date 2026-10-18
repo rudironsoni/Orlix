@@ -8,8 +8,8 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+package extension GhosttyTerminalView {
+    override package func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         switch action {
         case #selector(copy(_:)):
             guard allowsHostTextSelection else { return false }
@@ -38,33 +38,33 @@ extension GhosttyTerminalView {
         }
     }
 
-    @objc override func copy(_ sender: Any?) {
+    @objc override package func copy(_ sender: Any?) {
         guard let selectionText = currentSelectionText(), !selectionText.isEmpty else { return }
         copyTextToClipboard(selectionText)
     }
 
-    @objc override func selectAll(_ sender: Any?) {
+    @objc override package func selectAll(_ sender: Any?) {
         selectAllVisibleText()
     }
 
-    @objc override func paste(_ sender: Any?) {
+    @objc override package func paste(_ sender: Any?) {
         performPasteAction()
     }
 
-    @objc override func find(_ sender: Any?) {
+    @objc override package func find(_ sender: Any?) {
         showFindNavigator()
     }
 
-    @objc override func useSelectionForFind(_ sender: Any?) {
+    @objc override package func useSelectionForFind(_ sender: Any?) {
         showFindNavigator(prefillingSelectedText: true)
     }
 
-    @objc override func findNext(_ sender: Any?) {
+    @objc override package func findNext(_ sender: Any?) {
         guard #available(iOS 16.0, *) else { return }
         nativeFindInteraction?.findNext()
     }
 
-    @objc override func findPrevious(_ sender: Any?) {
+    @objc override package func findPrevious(_ sender: Any?) {
         guard #available(iOS 16.0, *) else { return }
         nativeFindInteraction?.findPrevious()
     }

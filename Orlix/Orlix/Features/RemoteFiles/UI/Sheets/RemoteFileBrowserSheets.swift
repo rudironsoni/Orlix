@@ -1,10 +1,13 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private struct RemoteFileSheetActionLabel: View {
-    let title: String
-    let isSubmitting: Bool
+    package let title: String
+    package let isSubmitting: Bool
 
-    var body: some View {
+    package var body: some View {
         Text(title)
             .opacity(isSubmitting ? 0 : 1)
             .overlay {
@@ -16,14 +19,14 @@ private struct RemoteFileSheetActionLabel: View {
     }
 }
 
-struct RemoteFileRenameSheet: View {
-    let entry: RemoteFileEntry
-    @Binding var proposedName: String
-    let isSubmitting: Bool
-    let onCancel: () -> Void
-    let onRename: () -> Void
+package struct RemoteFileRenameSheet: View {
+    package let entry: RemoteFileEntry
+    @Binding package var proposedName: String
+    package let isSubmitting: Bool
+    package let onCancel: () -> Void
+    package let onRename: () -> Void
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             renameContent
@@ -115,14 +118,14 @@ struct RemoteFileRenameSheet: View {
     }
 }
 
-struct RemoteFileCreateFolderSheet: View {
-    let destinationPath: String
-    @Binding var folderName: String
-    let isSubmitting: Bool
-    let onCancel: () -> Void
-    let onCreate: () -> Void
+package struct RemoteFileCreateFolderSheet: View {
+    package let destinationPath: String
+    @Binding package var folderName: String
+    package let isSubmitting: Bool
+    package let onCancel: () -> Void
+    package let onCreate: () -> Void
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             createFolderContent
@@ -210,20 +213,20 @@ struct RemoteFileCreateFolderSheet: View {
     }
 }
 
-struct RemoteFileMoveSheet: View {
-    let entry: RemoteFileEntry
-    @Binding var destinationDirectory: String
-    let onLoadDirectories: (String) async throws -> [RemoteFileEntry]
-    let isSubmitting: Bool
-    let onCancel: () -> Void
-    let onMove: () -> Void
+package struct RemoteFileMoveSheet: View {
+    package let entry: RemoteFileEntry
+    @Binding package var destinationDirectory: String
+    package let onLoadDirectories: (String) async throws -> [RemoteFileEntry]
+    package let isSubmitting: Bool
+    package let onCancel: () -> Void
+    package let onMove: () -> Void
 
     @State private var currentDirectory: String
     @State private var directories: [RemoteFileEntry] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    init(
+    package init(
         entry: RemoteFileEntry,
         destinationDirectory: Binding<String>,
         onLoadDirectories: @escaping (String) async throws -> [RemoteFileEntry],
@@ -240,7 +243,7 @@ struct RemoteFileMoveSheet: View {
         _currentDirectory = State(initialValue: destinationDirectory.wrappedValue)
     }
 
-    var body: some View {
+    package var body: some View {
         Group {
             #if os(iOS)
             NavigationView {
@@ -472,13 +475,13 @@ struct RemoteFileMoveSheet: View {
     }
 }
 
-struct RemoteFileDeleteConfirmationSheet: View {
-    let entry: RemoteFileEntry
-    let message: String
-    let onCancel: () -> Void
-    let onDelete: () -> Void
+package struct RemoteFileDeleteConfirmationSheet: View {
+    package let entry: RemoteFileEntry
+    package let message: String
+    package let onCancel: () -> Void
+    package let onDelete: () -> Void
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             content
@@ -560,21 +563,21 @@ struct RemoteFileDeleteConfirmationSheet: View {
     }
 }
 
-struct RemoteFilePermissionEditorSheet: View {
-    let entry: RemoteFileEntry
-    @Binding var draft: RemoteFilePermissionDraft
-    let originalAccessBits: UInt32
-    let preservedBits: UInt32
-    let errorMessage: String?
-    let isSubmitting: Bool
-    let onCancel: () -> Void
-    let onApply: () -> Void
+package struct RemoteFilePermissionEditorSheet: View {
+    package let entry: RemoteFileEntry
+    @Binding package var draft: RemoteFilePermissionDraft
+    package let originalAccessBits: UInt32
+    package let preservedBits: UInt32
+    package let errorMessage: String?
+    package let isSubmitting: Bool
+    package let onCancel: () -> Void
+    package let onApply: () -> Void
 
     private var permissionsChanged: Bool {
         draft.accessBits != originalAccessBits
     }
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             content

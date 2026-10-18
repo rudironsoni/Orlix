@@ -4,13 +4,13 @@ import Foundation
 import ActivityKit
 
 @available(iOS 16.1, *)
-nonisolated enum OrlixLiveActivityStatus: String, Codable, Hashable {
+nonisolated package enum OrlixLiveActivityStatus: String, Codable, Hashable {
     case connected
     case connecting
     case reconnecting
     case disconnected
 
-    var label: String {
+    package var label: String {
         switch self {
         case .connected:
             return "Connected"
@@ -25,12 +25,21 @@ nonisolated enum OrlixLiveActivityStatus: String, Codable, Hashable {
 }
 
 @available(iOS 16.1, *)
-nonisolated struct OrlixActivityAttributes: ActivityAttributes {
-    struct ContentState: Codable, Hashable {
-        var status: OrlixLiveActivityStatus
-        var activeCount: Int
+nonisolated package struct OrlixActivityAttributes: ActivityAttributes {
+    package struct ContentState: Codable, Hashable {
+        package var status: OrlixLiveActivityStatus
+        package var activeCount: Int
+
+        package init(status: OrlixLiveActivityStatus, activeCount: Int) {
+            self.status = status
+            self.activeCount = activeCount
+        }
     }
 
-    var appName: String
+    package var appName: String
+
+    package init(appName: String) {
+        self.appName = appName
+    }
 }
 #endif

@@ -2,9 +2,13 @@
 import Combine
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixTerminal
+#endif
 @MainActor
-final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
-    enum Outcome: Equatable {
+final package class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
+    package enum Outcome: Equatable {
         case idle
         case waitingForNetwork
         case reconnecting
@@ -13,7 +17,7 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
     }
 
     @Published private(set) var outcome: Outcome = .idle
-    var simulatedInterval: TimeInterval { Self.simulatedSleepInterval }
+    package var simulatedInterval: TimeInterval { Self.simulatedSleepInterval }
     private(set) var cleanupCount = 0
     private(set) var replacementCount = 0
     private(set) var observedOutcomes: Set<Outcome> = [.idle]
@@ -94,11 +98,11 @@ final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
         )
     }
 
-    init(simulatesSuccess: Bool) {
+    package init(simulatesSuccess: Bool) {
         self.simulatesSuccess = simulatesSuccess
     }
 
-    func run() {
+    package func run() {
         guard outcome == .idle || outcome == .failed else { return }
         setOutcome(.waitingForNetwork)
 
@@ -151,12 +155,12 @@ private actor MacTerminalRecoveryHarnessBlocker {
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var isReleased = false
 
-    func wait() async {
+    package func wait() async {
         guard !isReleased else { return }
         await withCheckedContinuation { waiters.append($0) }
     }
 
-    func release() {
+    package func release() {
         isReleased = true
         let activeWaiters = waiters
         waiters.removeAll()
@@ -164,10 +168,10 @@ private actor MacTerminalRecoveryHarnessBlocker {
     }
 }
 
-struct MacTerminalRecoveryUITestHarness: View {
+package struct MacTerminalRecoveryUITestHarness: View {
     @StateObject private var model: MacTerminalRecoveryUITestHarnessModel
 
-    init(simulatesSuccess: Bool) {
+    package init(simulatesSuccess: Bool) {
         _model = StateObject(
             wrappedValue: MacTerminalRecoveryUITestHarnessModel(
                 simulatesSuccess: simulatesSuccess
@@ -175,7 +179,7 @@ struct MacTerminalRecoveryUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             switch model.outcome {
             case .idle, .reconnecting:

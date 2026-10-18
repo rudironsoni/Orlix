@@ -7,20 +7,23 @@ import Foundation
 import Combine
 import os.log
 
-nonisolated enum TerminalThemeSelectionTarget: CaseIterable, Hashable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum TerminalThemeSelectionTarget: CaseIterable, Hashable, Sendable {
     case dark
     case light
     case both
 }
 
-nonisolated struct TerminalThemeObserverCleanupRequest: Sendable {
+nonisolated package struct TerminalThemeObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
-    init(cleanup: @escaping @MainActor @Sendable () -> Void) {
+    package init(cleanup: @escaping @MainActor @Sendable () -> Void) {
         self.cleanup = cleanup
     }
 
-    func perform() {
+    package func perform() {
         Task { @MainActor in
             cleanup()
         }
@@ -34,7 +37,7 @@ private final class TerminalThemeObserverCleanup {
     private var preferenceObserver: NSObjectProtocol?
     private var lifecycleObserverID: UUID?
 
-    init(
+    package init(
         preferenceChanges: any TerminalThemePreferenceChangeSource,
         syncLifecycle: any TerminalThemeSyncLifecycle
     ) {
@@ -42,17 +45,17 @@ private final class TerminalThemeObserverCleanup {
         self.syncLifecycle = syncLifecycle
     }
 
-    var request: TerminalThemeObserverCleanupRequest {
+    package var request: TerminalThemeObserverCleanupRequest {
         TerminalThemeObserverCleanupRequest { [self] in
             removeObservers()
         }
     }
 
-    func registerPreferenceObserver(_ observer: NSObjectProtocol) {
+    package func registerPreferenceObserver(_ observer: NSObjectProtocol) {
         preferenceObserver = observer
     }
 
-    func registerLifecycleObserver(_ id: UUID) {
+    package func registerLifecycleObserver(_ id: UUID) {
         lifecycleObserverID = id
     }
 
@@ -69,9 +72,9 @@ private final class TerminalThemeObserverCleanup {
 }
 
 @MainActor
-final class TerminalThemeManager: ObservableObject {
+final package class TerminalThemeManager: ObservableObject {
     @Published private(set) var customThemes: [TerminalTheme] = []
-    @Published private(set) var themeSelection: TerminalThemeSelection
+    @Published package private(set) var themeSelection: TerminalThemeSelection
     @Published private(set) var activeAppearanceSnapshot: TerminalAppearanceSnapshot = .fallback
 
     private let dependencies: TerminalThemeManagerDependencies
@@ -86,7 +89,7 @@ final class TerminalThemeManager: ObservableObject {
 
     private var persistence: any TerminalThemePersistence { dependencies.persistence }
 
-    init(dependencies: TerminalThemeManagerDependencies) {
+    package init(dependencies: TerminalThemeManagerDependencies) {
         self.dependencies = dependencies
         let observerCleanup = TerminalThemeObserverCleanup(
             preferenceChanges: dependencies.preferenceChanges,
@@ -115,7 +118,7 @@ final class TerminalThemeManager: ObservableObject {
         observerCleanupRequest.perform()
     }
 
-    func refreshFromCloud() async throws {
+    package func refreshFromCloud() async throws {
         startupSyncTask?.cancel()
         startupSyncTask = nil
         lifecycleSyncTask?.cancel()
@@ -123,18 +126,18 @@ final class TerminalThemeManager: ObservableObject {
         try await synchronizeWithCloud()
     }
 
-    var customThemeNames: [String] {
+    package var customThemeNames: [String] {
         customThemes
             .filter { !$0.isDeleted && $0.canApply }
             .map(\.name)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    var builtInThemeNames: [String] {
+    package var builtInThemeNames: [String] {
         dependencies.builtInThemeCatalog.themeNames()
     }
 
-    func applicationThemeName(preferred: String, fallback: String) -> String {
+    package func applicationThemeName(preferred: String, fallback: String) -> String {
         guard let customTheme = customThemes.first(where: {
             !$0.isDeleted && $0.name == preferred
         }) else {
@@ -143,7 +146,7 @@ final class TerminalThemeManager: ObservableObject {
         return customTheme.canApply ? preferred : fallback
     }
 
-    func selectTheme(
+    package func selectTheme(
         named themeName: String,
         for target: TerminalThemeSelectionTarget
     ) {
@@ -173,7 +176,7 @@ final class TerminalThemeManager: ObservableObject {
         applyLocalSelection(requested)
     }
 
-    func setUsesPerAppearanceTheme(_ enabled: Bool) {
+    package func setUsesPerAppearanceTheme(_ enabled: Bool) {
         applyLocalSelection(
             TerminalThemeSelection(
                 darkThemeName: themeSelection.darkThemeName,
@@ -183,7 +186,7 @@ final class TerminalThemeManager: ObservableObject {
         )
     }
 
-    func appearanceSnapshot(
+    package func appearanceSnapshot(
         for activeAppearance: TerminalColorAppearance
     ) -> TerminalAppearanceSnapshot {
         let darkTheme = resolvedTheme(
@@ -205,7 +208,7 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     @discardableResult
-    func activateAppearance(
+    package func activateAppearance(
         _ appearance: TerminalColorAppearance
     ) -> TerminalAppearanceSnapshot {
         let snapshot = appearanceSnapshot(for: appearance)
@@ -218,7 +221,7 @@ final class TerminalThemeManager: ObservableObject {
         return snapshot
     }
 
-    func suggestThemeName(from sourceName: String?) -> String {
+    package func suggestThemeName(from sourceName: String?) -> String {
         let trimmed = sourceName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
             return uniqueThemeName(from: "Custom Theme")
@@ -227,7 +230,7 @@ final class TerminalThemeManager: ObservableObject {
         return uniqueThemeName(from: sanitized.isEmpty ? "Custom Theme" : sanitized)
     }
 
-    func createCustomTheme(name: String, content: String) throws -> TerminalTheme {
+    package func createCustomTheme(name: String, content: String) throws -> TerminalTheme {
         let normalizedContent = try TerminalThemeValidator.validateAndNormalizeThemeContent(content)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TerminalThemeValidationError.invalidName }
@@ -254,7 +257,7 @@ final class TerminalThemeManager: ObservableObject {
     }
 
     @discardableResult
-    func updateCustomTheme(id: UUID, name: String, content: String) throws -> TerminalTheme {
+    package func updateCustomTheme(id: UUID, name: String, content: String) throws -> TerminalTheme {
         guard let index = customThemes.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             throw TerminalThemeValidationError.themeNotFound
         }
@@ -287,7 +290,7 @@ final class TerminalThemeManager: ObservableObject {
         return customThemes[index]
     }
 
-    func deleteCustomTheme(named name: String) {
+    package func deleteCustomTheme(named name: String) {
         guard let index = customThemes.firstIndex(where: { $0.name == name && !$0.isDeleted }) else {
             return
         }
@@ -295,7 +298,7 @@ final class TerminalThemeManager: ObservableObject {
         deleteTheme(at: index)
     }
 
-    func deleteCustomTheme(id: UUID) {
+    package func deleteCustomTheme(id: UUID) {
         guard let index = customThemes.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             return
         }

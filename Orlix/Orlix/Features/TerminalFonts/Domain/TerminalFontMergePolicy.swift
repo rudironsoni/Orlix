@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum TerminalFontMergePolicy {
-    static func normalized(_ fonts: [TerminalFont]) -> [TerminalFont] {
+nonisolated package enum TerminalFontMergePolicy {
+    static package func normalized(_ fonts: [TerminalFont]) -> [TerminalFont] {
         merge(local: fonts, remote: [])
     }
 
-    static func merge(local: [TerminalFont], remote: [TerminalFont]) -> [TerminalFont] {
+    static package func merge(local: [TerminalFont], remote: [TerminalFont]) -> [TerminalFont] {
         var fontsByID: [TerminalFont.ID: TerminalFont] = [:]
 
         for font in local + remote {

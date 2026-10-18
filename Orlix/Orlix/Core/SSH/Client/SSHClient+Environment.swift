@@ -1,8 +1,11 @@
 import Foundation
 import os.log
 
-extension SSHClient {
-    func remoteEnvironment(forceRefresh: Bool = false) async -> RemoteEnvironment {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension SSHClient {
+    package func remoteEnvironment(forceRefresh: Bool = false) async -> RemoteEnvironment {
         if !forceRefresh,
            case .connected(let state) = lifecycle,
            let remoteEnvironment = state.remoteEnvironment {
@@ -30,7 +33,7 @@ extension SSHClient {
         return environment
     }
 
-    func remoteTerminalType(forceRefresh: Bool = false) async -> RemoteTerminalType {
+    package func remoteTerminalType(forceRefresh: Bool = false) async -> RemoteTerminalType {
         if !forceRefresh,
            case .connected(let state) = lifecycle,
            let remoteTerminalType = state.remoteTerminalType {
@@ -63,16 +66,16 @@ extension SSHClient {
         return terminalType
     }
 
-    func remotePlatform(forceRefresh: Bool = false) async -> RemotePlatform {
+    package func remotePlatform(forceRefresh: Bool = false) async -> RemotePlatform {
         await remoteEnvironment(forceRefresh: forceRefresh).platform
     }
 
-    func supportsTmuxRuntime() async -> Bool {
+    package func supportsTmuxRuntime() async -> Bool {
         let environment = await remoteEnvironment()
         return environment.supportsTmuxRuntime
     }
 
-    func supportsMoshRuntime() async -> Bool {
+    package func supportsMoshRuntime() async -> Bool {
         let environment = await remoteEnvironment()
         return environment.supportsMoshRuntime
     }

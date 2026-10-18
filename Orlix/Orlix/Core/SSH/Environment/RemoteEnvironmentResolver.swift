@@ -1,26 +1,29 @@
 import Foundation
 
-nonisolated enum RemoteShellFamily: String, Codable, Hashable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum RemoteShellFamily: String, Codable, Hashable, Sendable {
     case posix
     case powershell
     case cmd
     case unknown
 }
 
-nonisolated struct RemoteShellProfile: Hashable, Sendable {
-    let family: RemoteShellFamily
-    let executableName: String?
-    let shellName: String?
+nonisolated package struct RemoteShellProfile: Hashable, Sendable {
+    package let family: RemoteShellFamily
+    package let executableName: String?
+    package let shellName: String?
 
-    nonisolated var supportsPOSIXExecWrapper: Bool {
+    nonisolated package var supportsPOSIXExecWrapper: Bool {
         family == .posix
     }
 
-    var supportsPowerShellCommands: Bool {
+    package var supportsPowerShellCommands: Bool {
         family == .powershell
     }
 
-    var supportsOSC7Reporting: Bool {
+    package var supportsOSC7Reporting: Bool {
         switch family {
         case .posix:
             return true
@@ -29,7 +32,7 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
         }
     }
 
-    nonisolated func launchPlan(startupCommand: String?, bundle: Bundle = .main) -> RemoteShellLaunchPlan {
+    nonisolated package func launchPlan(startupCommand: String?, bundle: Bundle = .main) -> RemoteShellLaunchPlan {
         let trimmed = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch family {
         case .posix:
@@ -62,7 +65,7 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
         }
     }
 
-    nonisolated func workingDirectoryRestorePlan(
+    nonisolated package func workingDirectoryRestorePlan(
         for path: String,
         powerShellExecutable: String?
     ) -> RemoteWorkingDirectoryRestorePlan {
@@ -84,31 +87,31 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
         }
     }
 
-    static func posix(shellName: String?) -> RemoteShellProfile {
+    static package func posix(shellName: String?) -> RemoteShellProfile {
         RemoteShellProfile(family: .posix, executableName: shellName, shellName: shellName)
     }
 
-    static func powershell(executableName: String?) -> RemoteShellProfile {
+    static package func powershell(executableName: String?) -> RemoteShellProfile {
         let shellName = executableName?.lowercased()
         return RemoteShellProfile(family: .powershell, executableName: executableName, shellName: shellName)
     }
 
-    static var cmd: RemoteShellProfile {
+    static package var cmd: RemoteShellProfile {
         RemoteShellProfile(family: .cmd, executableName: "cmd.exe", shellName: "cmd.exe")
     }
 
-    static func unknown(shellName: String? = nil) -> RemoteShellProfile {
+    static package func unknown(shellName: String? = nil) -> RemoteShellProfile {
         RemoteShellProfile(family: .unknown, executableName: shellName, shellName: shellName)
     }
 }
 
-nonisolated struct RemoteEnvironment: Hashable, Sendable {
-    let platform: RemotePlatform
-    let shellProfile: RemoteShellProfile
-    let activeShellName: String?
-    let powerShellExecutable: String?
+nonisolated package struct RemoteEnvironment: Hashable, Sendable {
+    package let platform: RemotePlatform
+    package let shellProfile: RemoteShellProfile
+    package let activeShellName: String?
+    package let powerShellExecutable: String?
 
-    nonisolated var supportsTmuxRuntime: Bool {
+    nonisolated package var supportsTmuxRuntime: Bool {
         if platform != .windows {
             return shellProfile.family == .posix
         }
@@ -121,11 +124,11 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
         }
     }
 
-    nonisolated var supportsMoshRuntime: Bool {
+    nonisolated package var supportsMoshRuntime: Bool {
         platform != .windows && shellProfile.family == .posix
     }
 
-    nonisolated var supportsWorkingDirectoryRestore: Bool {
+    nonisolated package var supportsWorkingDirectoryRestore: Bool {
         switch shellProfile.family {
         case .posix, .powershell, .cmd:
             return true
@@ -134,7 +137,7 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
         }
     }
 
-    nonisolated static let fallbackPOSIX = RemoteEnvironment(
+    nonisolated static package let fallbackPOSIX = RemoteEnvironment(
         platform: .linux,
         shellProfile: .posix(shellName: "sh"),
         activeShellName: "sh",
@@ -142,8 +145,8 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
     )
 }
 
-nonisolated enum RemoteEnvironmentResolver {
-    typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
+nonisolated package enum RemoteEnvironmentResolver {
+    package typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 
     private static let probeTimeout: Duration = .seconds(2)
     private static let platformMarker = "__VVTERM_PLATFORM__="
@@ -153,13 +156,13 @@ nonisolated enum RemoteEnvironmentResolver {
     private static let windowsPwshMarker = "__VVTERM_WINDOWS_PWSH_BEGIN__"
     private static let windowsProbeEndMarker = "__VVTERM_WINDOWS_PROBE_END__"
 
-    static func resolve(using client: SSHClient) async -> RemoteEnvironment {
+    static package func resolve(using client: SSHClient) async -> RemoteEnvironment {
         await resolve { command, timeout in
             try await client.execute(command, timeout: timeout)
         }
     }
 
-    static func resolve(execute: CommandExecutor) async -> RemoteEnvironment {
+    static package func resolve(execute: CommandExecutor) async -> RemoteEnvironment {
         if let output = await probe(posixEnvironmentProbeCommand(), execute: execute),
            let environment = parsePOSIXEnvironmentProbe(output) {
             return environment
@@ -209,7 +212,7 @@ nonisolated enum RemoteEnvironmentResolver {
         }
     }
 
-    nonisolated static func posixEnvironmentProbeCommand() -> String {
+    nonisolated static package func posixEnvironmentProbeCommand() -> String {
         let body = """
         \(RemoteTerminalBootstrap.shellPathExport());
         VVTERM_PLATFORM="$(uname -s 2>/dev/null || true)";
@@ -220,7 +223,7 @@ nonisolated enum RemoteEnvironmentResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(body)
     }
 
-    nonisolated static func parsePOSIXEnvironmentProbe(_ output: String) -> RemoteEnvironment? {
+    nonisolated static package func parsePOSIXEnvironmentProbe(_ output: String) -> RemoteEnvironment? {
         let values = output.split(whereSeparator: { $0.isNewline }).reduce(into: [String: String]()) {
             let line = String($1)
             if line.hasPrefix(platformMarker) {
@@ -246,11 +249,11 @@ nonisolated enum RemoteEnvironmentResolver {
         )
     }
 
-    nonisolated static func windowsEnvironmentProbeCommand() -> String {
+    nonisolated static package func windowsEnvironmentProbeCommand() -> String {
         #"cmd.exe /d /c "echo __VVTERM_PLATFORM__=Windows & echo __VVTERM_DEFAULT_SHELL_BEGIN__ & reg query HKLM\SOFTWARE\OpenSSH /v DefaultShell 2>nul & echo __VVTERM_WINDOWS_POWERSHELL_BEGIN__ & where powershell.exe 2>nul & echo __VVTERM_WINDOWS_PWSH_BEGIN__ & where pwsh.exe 2>nul & echo __VVTERM_WINDOWS_PROBE_END__""#
     }
 
-    nonisolated static func parseWindowsEnvironmentProbe(_ output: String) -> RemoteEnvironment? {
+    nonisolated static package func parseWindowsEnvironmentProbe(_ output: String) -> RemoteEnvironment? {
         let lines = output.components(separatedBy: .newlines).map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -366,7 +369,7 @@ nonisolated enum RemoteEnvironmentResolver {
         }
     }
 
-    nonisolated static func powerShellExecutableCandidates(preferredExecutableName: String?) -> [String] {
+    nonisolated static package func powerShellExecutableCandidates(preferredExecutableName: String?) -> [String] {
         var candidates: [String] = []
         if let preferred = normalizedPowerShellExecutableName(preferredExecutableName) {
             candidates.append(preferred)
@@ -377,7 +380,7 @@ nonisolated enum RemoteEnvironmentResolver {
         return candidates
     }
 
-    nonisolated static func powerShellExecutableName(inWindowsShellOutput output: String) -> String? {
+    nonisolated static package func powerShellExecutableName(inWindowsShellOutput output: String) -> String? {
         let normalized = output
             .lowercased()
             .replacingOccurrences(of: "\\", with: "/")
@@ -480,7 +483,7 @@ private nonisolated enum RemoteWindowsShellDetection: Equatable {
     case posix
     case unknown
 
-    var powerShellExecutableName: String? {
+    package var powerShellExecutableName: String? {
         guard case .powershell(let executableName) = self else { return nil }
         return executableName
     }

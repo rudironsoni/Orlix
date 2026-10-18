@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated struct RemoteSessionCommandPlan: Codable, Hashable, Sendable {
-    let executable: RemoteSessionExecutable
-    let arguments: [String]
-    let environment: [String: String]
-    let environmentRemovals: Set<String>
-    let workingDirectory: String?
+nonisolated package struct RemoteSessionCommandPlan: Codable, Hashable, Sendable {
+    package let executable: RemoteSessionExecutable
+    package let arguments: [String]
+    package let environment: [String: String]
+    package let environmentRemovals: Set<String>
+    package let workingDirectory: String?
 
-    init(
+    package init(
         executable: RemoteSessionExecutable,
         arguments: [String] = [],
         environment: [String: String] = [:],
@@ -22,8 +22,8 @@ nonisolated struct RemoteSessionCommandPlan: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated enum RemoteSessionCommandRenderer {
-    enum RenderError: Error, Equatable, Sendable {
+nonisolated package enum RemoteSessionCommandRenderer {
+    package enum RenderError: Error, Equatable, Sendable {
         case unsupportedShell
         case invalidEnvironmentName
         case invalidValue
@@ -37,7 +37,7 @@ nonisolated enum RemoteSessionCommandRenderer {
     private static let maximumInputBytes = 64 * 1_024
     private static let maximumRenderedCommandBytes = 128 * 1_024
 
-    static func render(
+    static package func render(
         _ plan: RemoteSessionCommandPlan,
         for shellFamily: RemoteShellFamily
     ) throws -> String {

@@ -2,11 +2,14 @@ import ETBootstrap
 import ETSession
 import Foundation
 
-nonisolated struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
-    let clientID: String
-    let passkey: Data
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
+    package let clientID: String
+    package let passkey: Data
 
-    init(clientID: String, passkey: Data) throws {
+    package init(clientID: String, passkey: Data) throws {
         guard clientID.utf8.count == 16, passkey.count == 32 else {
             throw EternalTerminalResumeCredentialError.invalidCredentials
         }
@@ -14,19 +17,19 @@ nonisolated struct EternalTerminalResumeCredentials: Codable, Equatable, Sendabl
         self.passkey = passkey
     }
 
-    init(_ credentials: ETCredentials) throws {
+    package init(_ credentials: ETCredentials) throws {
         try self.init(clientID: credentials.clientID, passkey: credentials.passkey)
     }
 }
 
-nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable {
+nonisolated package enum EternalTerminalResumeCredentialError: LocalizedError, Sendable {
     case invalidCredentials
     case corruptStoredCredentials
     case secureStorageUnavailable
     case corruptStoredCheckpoint
     case checkpointStorageUnavailable
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .invalidCredentials:
             String(localized: "Eternal Terminal returned invalid resume credentials. Update Eternal Terminal on the host and try again.")
@@ -41,7 +44,7 @@ nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable 
         }
     }
 
-    var shouldDeleteStoredCredentials: Bool {
+    package var shouldDeleteStoredCredentials: Bool {
         switch self {
         case .corruptStoredCredentials, .corruptStoredCheckpoint:
             true
@@ -51,7 +54,7 @@ nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable 
     }
 }
 
-protocol EternalTerminalResumeStoring: Sendable {
+package protocol EternalTerminalResumeStoring: Sendable {
     func credentials(for paneId: UUID) throws -> EternalTerminalResumeCredentials?
     func checkpoint(for paneId: UUID) throws -> ETSessionCheckpoint?
     func hasCheckpoint(for paneId: UUID) -> Bool
@@ -60,14 +63,14 @@ protocol EternalTerminalResumeStoring: Sendable {
     func deleteResumeState(for paneId: UUID) throws
 }
 
-final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked Sendable {
-    static let shared = EternalTerminalResumeStore()
+final package class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked Sendable {
+    static package let shared = EternalTerminalResumeStore()
 
     private let keychain: KeychainStore
     private let fileManager: FileManager
     private let checkpointDirectory: URL?
 
-    init(
+    package init(
         keychain: KeychainStore = KeychainStore(service: "com.rudironsoni.orlix.et.resume"),
         fileManager: FileManager = .default,
         checkpointDirectory: URL? = nil
@@ -80,7 +83,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
             .appendingPathComponent("EternalTerminalResume", isDirectory: true)
     }
 
-    func checkpoint(for paneId: UUID) throws -> ETSessionCheckpoint? {
+    package func checkpoint(for paneId: UUID) throws -> ETSessionCheckpoint? {
         guard let url = checkpointURL(for: paneId) else {
             throw EternalTerminalResumeCredentialError.checkpointStorageUnavailable
         }
@@ -95,12 +98,12 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
         }
     }
 
-    func hasCheckpoint(for paneId: UUID) -> Bool {
+    package func hasCheckpoint(for paneId: UUID) -> Bool {
         guard let url = checkpointURL(for: paneId) else { return false }
         return fileManager.fileExists(atPath: url.path)
     }
 
-    func credentials(for paneId: UUID) throws -> EternalTerminalResumeCredentials? {
+    package func credentials(for paneId: UUID) throws -> EternalTerminalResumeCredentials? {
         let data: Data
         do {
             guard let stored = try keychain.get(
@@ -123,7 +126,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
         }
     }
 
-    func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {
+    package func save(_ credentials: EternalTerminalResumeCredentials, for paneId: UUID) throws {
         do {
             let data = try JSONEncoder().encode(credentials)
             try keychain.set(data, forKey: Self.key(for: paneId), scope: .deviceOnly)
@@ -132,7 +135,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
         }
     }
 
-    func save(_ checkpoint: ETSessionCheckpoint, for paneId: UUID) throws {
+    package func save(_ checkpoint: ETSessionCheckpoint, for paneId: UUID) throws {
         guard let checkpointDirectory, let url = checkpointURL(for: paneId) else {
             throw EternalTerminalResumeCredentialError.checkpointStorageUnavailable
         }
@@ -155,7 +158,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
         }
     }
 
-    func deleteResumeState(for paneId: UUID) throws {
+    package func deleteResumeState(for paneId: UUID) throws {
         var failed = false
         do {
             try keychain.delete(Self.key(for: paneId), scope: .deviceOnly)
@@ -181,7 +184,7 @@ final class EternalTerminalResumeStore: EternalTerminalResumeStoring, @unchecked
         )
     }
 
-    nonisolated static func key(for paneId: UUID) -> String {
+    nonisolated static package func key(for paneId: UUID) -> String {
         "terminal.et.resume.\(paneId.uuidString.lowercased())"
     }
 }

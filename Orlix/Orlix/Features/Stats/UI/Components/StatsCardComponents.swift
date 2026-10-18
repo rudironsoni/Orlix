@@ -1,11 +1,14 @@
 import SwiftUI
 
-struct AppleCard<Content: View>: View {
-    let style: StatsVisualStyle
-    let minHeight: CGFloat?
-    let content: () -> Content
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct AppleCard<Content: View>: View {
+    package let style: StatsVisualStyle
+    package let minHeight: CGFloat?
+    package let content: () -> Content
 
-    init(
+    package init(
         style: StatsVisualStyle,
         minHeight: CGFloat? = nil,
         @ViewBuilder content: @escaping () -> Content
@@ -15,7 +18,7 @@ struct AppleCard<Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         content()
             .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity, alignment: .topLeading)
             .background(style.cardFill, in: RoundedRectangle(cornerRadius: style.cardCornerRadius, style: .continuous))
@@ -26,11 +29,11 @@ struct AppleCard<Content: View>: View {
     }
 }
 
-struct StatsCustomizeButton: View {
-    let style: StatsVisualStyle
-    let action: () -> Void
+package struct StatsCustomizeButton: View {
+    package let style: StatsVisualStyle
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: 9) {
                 Image(systemName: "slider.horizontal.3")
@@ -53,28 +56,28 @@ struct StatsCustomizeButton: View {
     }
 }
 
-struct StatsCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+package struct StatsCardButtonStyle: ButtonStyle {
+    package func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
             .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
-struct AppleMetricCard<Preview: View>: View {
-    let icon: String
-    let title: String
-    let titleColor: Color
-    let trailing: String
-    let value: String
-    let unit: String
-    let footer: String
-    let detailItems: [MetricDetailItem]
-    let showsChevron: Bool
-    let style: StatsVisualStyle
-    let preview: () -> Preview
+package struct AppleMetricCard<Preview: View>: View {
+    package let icon: String
+    package let title: String
+    package let titleColor: Color
+    package let trailing: String
+    package let value: String
+    package let unit: String
+    package let footer: String
+    package let detailItems: [MetricDetailItem]
+    package let showsChevron: Bool
+    package let style: StatsVisualStyle
+    package let preview: () -> Preview
 
-    init(
+    package init(
         icon: String,
         title: String,
         titleColor: Color,
@@ -100,7 +103,7 @@ struct AppleMetricCard<Preview: View>: View {
         self.preview = preview
     }
 
-    var body: some View {
+    package var body: some View {
         AppleCard(style: style, minHeight: style.metricMinHeight) {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 8) {
@@ -165,17 +168,17 @@ struct AppleMetricCard<Preview: View>: View {
     }
 }
 
-struct MetricDetailItem: Identifiable {
-    let title: String
-    let value: String
-    let color: Color
+package struct MetricDetailItem: Identifiable {
+    package let title: String
+    package let value: String
+    package let color: Color
 
-    var id: String { title }
+    package var id: String { title }
 }
 
-struct MetricDetailGrid: View {
-    let items: [MetricDetailItem]
-    let style: StatsVisualStyle
+package struct MetricDetailGrid: View {
+    package let items: [MetricDetailItem]
+    package let style: StatsVisualStyle
 
     private var columns: [GridItem] {
         [
@@ -184,7 +187,7 @@ struct MetricDetailGrid: View {
         ]
     }
 
-    var body: some View {
+    package var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
             ForEach(items) { item in
                 VStack(alignment: .leading, spacing: 5) {
@@ -209,14 +212,14 @@ struct MetricDetailGrid: View {
     }
 }
 
-struct NetworkValue: View {
-    let symbol: String
-    let title: String
-    let value: String
-    let color: Color
-    let style: StatsVisualStyle
+package struct NetworkValue: View {
+    package let symbol: String
+    package let title: String
+    package let value: String
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: symbol)
@@ -237,13 +240,13 @@ struct NetworkValue: View {
     }
 }
 
-struct FooterValue: View {
-    let title: String
-    let value: String
-    let color: Color
-    let style: StatsVisualStyle
+package struct FooterValue: View {
+    package let title: String
+    package let value: String
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(color)
@@ -261,12 +264,12 @@ struct FooterValue: View {
     }
 }
 
-struct ProcessCardHeader: View {
-    let processCount: Int
-    let style: StatsVisualStyle
-    let showsChevron: Bool
+package struct ProcessCardHeader: View {
+    package let processCount: Int
+    package let style: StatsVisualStyle
+    package let showsChevron: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "list.bullet.rectangle")
                 .font(.headline.weight(.bold))
@@ -292,15 +295,15 @@ struct ProcessCardHeader: View {
     }
 }
 
-struct CardHeader: View {
-    let icon: String
-    let title: String
-    let titleColor: Color
-    let trailing: String
-    var showsChevron = false
-    let style: StatsVisualStyle
+package struct CardHeader: View {
+    package let icon: String
+    package let title: String
+    package let titleColor: Color
+    package let trailing: String
+    package var showsChevron = false
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.headline.weight(.bold))
@@ -326,11 +329,11 @@ struct CardHeader: View {
     }
 }
 
-struct VolumeCardRow: View {
-    let volume: VolumeInfo
-    let style: StatsVisualStyle
+package struct VolumeCardRow: View {
+    package let volume: VolumeInfo
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(volume.mountPoint)
@@ -370,11 +373,11 @@ struct VolumeCardRow: View {
     }
 }
 
-struct ProcessCardRow: View {
+package struct ProcessCardRow: View {
     let process: ProcessInfo
-    let style: StatsVisualStyle
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(process.name)
@@ -408,13 +411,13 @@ struct ProcessCardRow: View {
     }
 }
 
-struct ProcessBadge: View {
-    let title: String
-    let value: Double
-    let color: Color
-    let style: StatsVisualStyle
+package struct ProcessBadge: View {
+    package let title: String
+    package let value: Double
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(formatPercent(value))
@@ -437,14 +440,14 @@ struct ProcessBadge: View {
     }
 }
 
-struct EmptyCardState: View {
-    let icon: String
-    let title: String
-    let message: String
-    let color: Color
-    let style: StatsVisualStyle
+package struct EmptyCardState: View {
+    package let icon: String
+    package let title: String
+    package let message: String
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 23, weight: .semibold))

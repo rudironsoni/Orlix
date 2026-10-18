@@ -5,15 +5,15 @@
 
 import Foundation
 
-struct TerminalCopySettings {
-    var trimTrailingWhitespace: Bool = true
-    var collapseBlankLines: Bool = false
-    var stripShellPrompts: Bool = false
-    var flattenCommands: Bool = false
-    var removeBoxDrawing: Bool = false
-    var stripAnsiCodes: Bool = true
+package struct TerminalCopySettings {
+    package var trimTrailingWhitespace: Bool = true
+    package var collapseBlankLines: Bool = false
+    package var stripShellPrompts: Bool = false
+    package var flattenCommands: Bool = false
+    package var removeBoxDrawing: Bool = false
+    package var stripAnsiCodes: Bool = true
 
-    static func current(userDefaults: UserDefaults = .standard) -> TerminalCopySettings {
+    static package func current(userDefaults: UserDefaults = .standard) -> TerminalCopySettings {
         TerminalCopySettings(
             trimTrailingWhitespace: userDefaults.object(forKey: "terminalCopyTrimTrailingWhitespace") as? Bool ?? true,
             collapseBlankLines: userDefaults.bool(forKey: "terminalCopyCollapseBlankLines"),
@@ -25,7 +25,7 @@ struct TerminalCopySettings {
     }
 }
 
-nonisolated struct TerminalTextCleaner {
+nonisolated package struct TerminalTextCleaner {
     private static let boxDrawingCharacterClass = "[│┃╎╏┆┇┊┋╽╿￨｜]"
     private static let knownCommandPrefixes: [String] = [
         "sudo", "./", "~/", "apt", "brew", "git", "python", "pip", "pnpm", "npm", "yarn", "cargo",
@@ -34,7 +34,7 @@ nonisolated struct TerminalTextCleaner {
         "perl", "bash", "zsh", "fish", "pwsh", "sh",
     ]
 
-    static func cleanText(_ text: String, settings: TerminalCopySettings) -> String {
+    static package func cleanText(_ text: String, settings: TerminalCopySettings) -> String {
         var result = text
 
         if settings.stripAnsiCodes {
@@ -72,7 +72,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - ANSI Codes
 
-    static func stripAnsiCodes(_ text: String) -> String {
+    static package func stripAnsiCodes(_ text: String) -> String {
         // Match ANSI escape sequences: ESC[ followed by params and command
         // Covers: colors, cursor movement, clearing, etc.
         let patterns = [
@@ -96,7 +96,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - Trailing Whitespace
 
-    static func trimTrailingWhitespace(_ text: String) -> String {
+    static package func trimTrailingWhitespace(_ text: String) -> String {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let trimmed = lines.map { line -> String in
             var s = String(line)
@@ -110,7 +110,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - Blank Lines
 
-    static func collapseBlankLines(_ text: String) -> String {
+    static package func collapseBlankLines(_ text: String) -> String {
         text.replacingOccurrences(
             of: #"\n{3,}"#,
             with: "\n\n",
@@ -120,7 +120,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - Shell Prompts
 
-    static func stripPromptPrefixes(_ text: String) -> String? {
+    static package func stripPromptPrefixes(_ text: String) -> String? {
         let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         let nonEmptyLines = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !nonEmptyLines.isEmpty else { return nil }
@@ -174,7 +174,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - Command Flattening
 
-    static func flattenMultilineCommand(_ text: String) -> String? {
+    static package func flattenMultilineCommand(_ text: String) -> String? {
         guard text.contains("\n") else { return nil }
 
         let lines = text.split(whereSeparator: { $0.isNewline })
@@ -260,7 +260,7 @@ nonisolated struct TerminalTextCleaner {
 
     // MARK: - Box Drawing
 
-    static func stripBoxDrawingCharacters(in text: String) -> String? {
+    static package func stripBoxDrawingCharacters(in text: String) -> String? {
         let boxRegex = try? NSRegularExpression(pattern: boxDrawingCharacterClass, options: [])
         if boxRegex?.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)) == nil {
             return nil

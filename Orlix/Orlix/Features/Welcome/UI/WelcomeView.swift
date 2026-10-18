@@ -5,12 +5,24 @@
 
 import SwiftUI
 
-struct WelcomeView: View {
-    @Binding var hasSeenWelcome: Bool
-    let onCompleted: () -> Void
+package struct WelcomeView: View {
+    @Binding package var hasSeenWelcome: Bool
+    package let onCompleted: () -> Void
 
-    var body: some View {
+    package var body: some View {
         platformContent
+    }
+
+
+    package init(
+
+        hasSeenWelcome: Binding<Bool>,
+        onCompleted: @escaping () -> Void
+    ) {
+        self._hasSeenWelcome = hasSeenWelcome
+
+        self.onCompleted = onCompleted
+
     }
 }
 

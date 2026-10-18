@@ -2,8 +2,8 @@
 import SwiftUI
 import UIKit
 
-extension SupportSheet {
-    func openURL(_ urlString: String) {
+package extension SupportSheet {
+    package func openURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         UIApplication.shared.open(url)
     }
@@ -11,23 +11,23 @@ extension SupportSheet {
 
 // MARK: - Support Settings View (iOS)
 
-struct SupportSettingsView: View {
+package struct SupportSettingsView: View {
     private struct ContactOption: Identifiable {
-        let id = UUID()
-        let title: String
-        let subtitle: String
-        let icon: String
-        let iconImage: String?
-        let iconText: String?
-        let color: Color
-        let url: String
+        package let id = UUID()
+        package let title: String
+        package let subtitle: String
+        package let icon: String
+        package let iconImage: String?
+        package let iconText: String?
+        package let color: Color
+        package let url: String
     }
 
     private let contactOptions: [ContactOption] = [
         ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/Orlix/issues")
     ]
 
-    var body: some View {
+    package var body: some View {
         List {
             Section {
                 ForEach(contactOptions) { option in

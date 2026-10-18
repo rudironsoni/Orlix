@@ -1,8 +1,11 @@
 import SwiftUI
 
-struct ProcessesSheet: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ProcessesSheet: View {
     let processes: [ProcessInfo]
-    let processCount: Int
+    package let processCount: Int
     let terminateProcess: ((ProcessInfo) async throws -> Void)?
     let loadProcesses: (() async throws -> [ProcessInfo])?
 
@@ -17,7 +20,7 @@ struct ProcessesSheet: View {
     @State private var errorMessage = ""
     @State private var showingError = false
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .confirmationDialog(
                 String(localized: "Kill Process?"),
@@ -233,9 +236,9 @@ private enum ProcessSortOption: String, CaseIterable, Identifiable {
     case name
     case pid
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .cpu:
             return String(localized: "CPU")
@@ -248,7 +251,7 @@ private enum ProcessSortOption: String, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .cpu:
             return "cpu"
@@ -261,7 +264,7 @@ private enum ProcessSortOption: String, CaseIterable, Identifiable {
         }
     }
 
-    func areInIncreasingOrder(_ lhs: ProcessInfo, _ rhs: ProcessInfo) -> Bool {
+    package func areInIncreasingOrder(_ lhs: ProcessInfo, _ rhs: ProcessInfo) -> Bool {
         switch self {
         case .cpu:
             if lhs.cpuPercent == rhs.cpuPercent {
@@ -291,9 +294,9 @@ private enum ProcessFilterOption: String, CaseIterable, Identifiable {
     case highCPU
     case highMemory
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .all:
             return String(localized: "All")
@@ -306,7 +309,7 @@ private enum ProcessFilterOption: String, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .all:
             return "line.3.horizontal"
@@ -319,7 +322,7 @@ private enum ProcessFilterOption: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ process: ProcessInfo) -> Bool {
+    package func includes(_ process: ProcessInfo) -> Bool {
         switch self {
         case .all:
             return true
@@ -334,12 +337,12 @@ private enum ProcessFilterOption: String, CaseIterable, Identifiable {
 }
 
 private struct ProcessListFooter: View {
-    let visibleCount: Int
-    let totalCount: Int
-    let processCount: Int
-    let isFiltered: Bool
+    package let visibleCount: Int
+    package let totalCount: Int
+    package let processCount: Int
+    package let isFiltered: Bool
 
-    var body: some View {
+    package var body: some View {
         if isFiltered {
             Text(String(
                 format: String(localized: "%lld of %lld processes"),
@@ -358,9 +361,9 @@ private struct ProcessListFooter: View {
 
 private struct ProcessSheetRow: View {
     let process: ProcessInfo
-    let isKilling: Bool
+    package let isKilling: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(process.name)
@@ -421,7 +424,7 @@ private struct ProcessSheetRow: View {
 private struct ProcessDetailsSheet: View {
     let process: ProcessInfo
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             #if os(iOS)
             .orlixMediumAndLargePresentationDetents()
@@ -475,9 +478,9 @@ private struct ProcessDetailsSheet: View {
 }
 
 private struct EmptyProcessListRow: View {
-    let isFiltered: Bool
+    package let isFiltered: Bool
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(isFiltered ? String(localized: "No Matching Processes") : String(localized: "No Processes"))
                 .font(.headline)
@@ -490,7 +493,7 @@ private struct EmptyProcessListRow: View {
 }
 
 private extension ProcessInfo {
-    func matches(_ query: String) -> Bool {
+    package func matches(_ query: String) -> Bool {
         let fields = [
             name,
             command,

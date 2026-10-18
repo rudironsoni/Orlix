@@ -8,13 +8,16 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    var isMouseCapturedForHostInteraction: Bool {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package var isMouseCapturedForHostInteraction: Bool {
         surface?.mouseCaptured == true && !isMouseReportingSuppressed
     }
 
     @discardableResult
-    func setMouseReportingSuppressed(
+    package func setMouseReportingSuppressed(
         _ isSuppressed: Bool,
         showFeedback: Bool = false
     ) -> Bool {
@@ -35,7 +38,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func toggleMouseReportingSuppression() {
+    package func toggleMouseReportingSuppression() {
         _ = setMouseReportingSuppressed(
             !isMouseReportingSuppressed,
             showFeedback: true
@@ -75,10 +78,10 @@ extension GhosttyTerminalView {
     }
 }
 
-final class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
+final package class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
     private let messageLabel = UILabel()
 
-    override init(effect: UIVisualEffect? = UIBlurEffect(style: .systemChromeMaterialDark)) {
+    override package init(effect: UIVisualEffect? = UIBlurEffect(style: .systemChromeMaterialDark)) {
         super.init(effect: effect)
         isUserInteractionEnabled = false
         isAccessibilityElement = true
@@ -103,11 +106,11 @@ final class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
         ])
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(message: String) {
+    package func update(message: String) {
         messageLabel.text = message
         accessibilityLabel = message
     }

@@ -1,29 +1,29 @@
 import Foundation
 
-extension Ghostty {
+package extension Ghostty {
     /// Represents a single surface within Ghostty.
     ///
     /// Wraps a `ghostty_surface_t`
-    nonisolated final class Surface: @unchecked Sendable {
+    nonisolated final package class Surface: @unchecked Sendable {
         private var surface: ghostty_surface_t?
         private let lock = NSLock()
 
         /// Keeps surface callback userdata valid until native teardown completes.
-        let callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>
+        package let callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>
 
         /// Track if surface has been explicitly freed
         private var hasBeenFreed = false
 
         /// Read the underlying C value for this surface. This is unsafe because the value will be
         /// freed when the Surface class is deinitialized.
-        var unsafeCValue: ghostty_surface_t? {
+        package var unsafeCValue: ghostty_surface_t? {
             lock.lock()
             defer { lock.unlock() }
             return surface
         }
 
         /// Initialize from the C structure.
-        init(
+        package init(
             cSurface: ghostty_surface_t,
             callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>
         ) {
@@ -34,7 +34,7 @@ extension Ghostty {
         /// Explicitly free the surface. Call this from cleanup() on main actor.
         /// This is preferred over relying on deinit since Task.detached may not run.
         @MainActor
-        func free() {
+        package func free() {
             lock.lock()
             guard !hasBeenFreed, let surf = surface else {
                 lock.unlock()
@@ -77,7 +77,7 @@ extension Ghostty {
         /// Send text to the terminal as if it was typed. This doesn't send the key events so keyboard
         /// shortcuts and other encodings do not take effect.
         @MainActor
-        func sendText(_ text: String) {
+        package func sendText(_ text: String) {
             guard let surface = unsafeCValue else { return }
             let len = text.utf8CString.count
             if (len == 0) { return }
@@ -96,7 +96,7 @@ extension Ghostty {
         ///
         /// - Parameter event: The key event to send to the terminal
         @MainActor
-        func sendKeyEvent(_ event: Input.KeyEvent) {
+        package func sendKeyEvent(_ event: Input.KeyEvent) {
             guard let surface = unsafeCValue else { return }
             event.withCValue { cEvent in
                 ghostty_surface_key(surface, cEvent)
@@ -109,7 +109,7 @@ extension Ghostty {
         /// directly rather than the host system handling them. This typically occurs when
         /// a terminal application enables mouse reporting mode.
         @MainActor
-        var mouseCaptured: Bool {
+        package var mouseCaptured: Bool {
             guard let surface = unsafeCValue else { return false }
             return ghostty_surface_mouse_captured(surface)
         }
@@ -119,7 +119,7 @@ extension Ghostty {
         /// Returns true if the terminal is busy (command running, cursor not at prompt).
         /// Uses Ghostty's internal prompt detection to avoid confirming idle shells.
         @MainActor
-        var needsConfirmQuit: Bool {
+        package var needsConfirmQuit: Bool {
             guard let surface = unsafeCValue else { return false }
             return ghostty_surface_needs_confirm_quit(surface)
         }
@@ -133,7 +133,7 @@ extension Ghostty {
         /// - Parameter event: The mouse button event to send to the terminal
         @MainActor
         @discardableResult
-        func sendMouseButton(_ event: Input.MouseButtonEvent) -> Bool {
+        package func sendMouseButton(_ event: Input.MouseButtonEvent) -> Bool {
             guard let surface = unsafeCValue else { return false }
             return ghostty_surface_mouse_button(
                 surface,
@@ -150,7 +150,7 @@ extension Ghostty {
         ///
         /// - Parameter event: The mouse position event to send to the terminal
         @MainActor
-        func sendMousePos(_ event: Input.MousePosEvent) {
+        package func sendMousePos(_ event: Input.MousePosEvent) {
             guard let surface = unsafeCValue else { return }
             ghostty_surface_mouse_pos(
                 surface,
@@ -167,7 +167,7 @@ extension Ghostty {
         ///
         /// - Parameter event: The mouse scroll event to send to the terminal
         @MainActor
-        func sendMouseScroll(_ event: Input.MouseScrollEvent) {
+        package func sendMouseScroll(_ event: Input.MouseScrollEvent) {
             guard let surface = unsafeCValue else { return }
             ghostty_surface_mouse_scroll(
                 surface,
@@ -183,7 +183,7 @@ extension Ghostty {
         ///
         /// Returns true if the action was performed. Invalid actions return false.
         @MainActor
-        func perform(action: String) -> Bool {
+        package func perform(action: String) -> Bool {
             guard let surface = unsafeCValue else { return false }
             let len = action.utf8CString.count
             if (len == 0) { return false }
@@ -193,18 +193,18 @@ extension Ghostty {
         }
 
         /// Terminal grid size information
-        struct TerminalSize {
-            let columns: UInt16
-            let rows: UInt16
-            let widthPx: UInt32
-            let heightPx: UInt32
-            let cellWidthPx: UInt32
-            let cellHeightPx: UInt32
+        package struct TerminalSize {
+            package let columns: UInt16
+            package let rows: UInt16
+            package let widthPx: UInt32
+            package let heightPx: UInt32
+            package let cellWidthPx: UInt32
+            package let cellHeightPx: UInt32
         }
 
         /// Get current terminal size
         @MainActor
-        func terminalSize() -> TerminalSize? {
+        package func terminalSize() -> TerminalSize? {
             guard let surface = unsafeCValue else { return nil }
             let cSize = ghostty_surface_size(surface)
             return TerminalSize(
@@ -227,7 +227,7 @@ extension Ghostty {
         ///
         /// - Parameter data: The raw terminal data to display
         @MainActor
-        func feedData(_ data: Data) {
+        package func feedData(_ data: Data) {
             guard let surface = unsafeCValue else { return }
             guard !data.isEmpty else { return }
             GhosttyHostIO.feed(surface, data)
@@ -239,7 +239,7 @@ extension Ghostty {
         ///
         /// - Parameter text: The text to display in the terminal
         @MainActor
-        func feedText(_ text: String) {
+        package func feedText(_ text: String) {
             guard let data = text.data(using: .utf8) else { return }
             feedData(data)
         }
@@ -248,7 +248,7 @@ extension Ghostty {
         ///
         /// This callback is invoked when the terminal wants to send data to the external source
         /// (e.g., when the user types, the data should be sent to the SSH channel).
-        typealias WriteCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
+        package typealias WriteCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
 
         /// Set the write callback for custom I/O backend.
         ///
@@ -259,7 +259,7 @@ extension Ghostty {
         ///   - callback: The callback function to receive write data, or nil to clear
         ///   - userdata: Opaque pointer passed to the callback (e.g., reference to SSH session)
         @MainActor
-        func setWriteCallback(_ callback: WriteCallback?, userdata: UnsafeMutableRawPointer?) {
+        package func setWriteCallback(_ callback: WriteCallback?, userdata: UnsafeMutableRawPointer?) {
             guard let surface = unsafeCValue else { return }
             GhosttyHostIO.setWriteCallback(surface, callback, userdata: userdata)
         }

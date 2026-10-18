@@ -1,16 +1,19 @@
 import Foundation
 
-extension Ghostty {
-    struct RuntimeConfiguration: Equatable {
-        let fontSelection: TerminalFontRuntimeSelection
-        let fontSize: Double
-        let contentPadding: TerminalContentPadding
-        let cursorStyle: TerminalCursorStyle
-        let cursorBlink: Bool
-        let optionAsAltMode: TerminalOptionAsAltMode
-        let remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension Ghostty {
+    package struct RuntimeConfiguration: Equatable {
+        package let fontSelection: TerminalFontRuntimeSelection
+        package let fontSize: Double
+        package let contentPadding: TerminalContentPadding
+        package let cursorStyle: TerminalCursorStyle
+        package let cursorBlink: Bool
+        package let optionAsAltMode: TerminalOptionAsAltMode
+        package let remoteClipboardReadPolicy: TerminalRemoteClipboardReadPolicy
 
-        init(
+        package init(
             fontSelection: TerminalFontRuntimeSelection,
             fontSize: Double,
             contentPadding: TerminalContentPadding,
@@ -32,7 +35,7 @@ extension Ghostty {
             ) ?? .defaultValue
         }
 
-        @MainActor static var defaultValue: Self {
+        @MainActor static package var defaultValue: Self {
             Self(
                 fontSelection: .defaultValue,
                 fontSize: TerminalDefaults.defaultFontSize,

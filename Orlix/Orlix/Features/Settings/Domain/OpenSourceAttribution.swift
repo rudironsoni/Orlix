@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct OpenSourceAttribution: Decodable, Equatable, Identifiable, Sendable {
-    enum Role: String, Decodable, Sendable {
+nonisolated package struct OpenSourceAttribution: Decodable, Equatable, Identifiable, Sendable {
+    package enum Role: String, Decodable, Sendable {
         case terminalEngine
         case networkTransport
         case securityLibrary
@@ -15,17 +15,22 @@ nonisolated struct OpenSourceAttribution: Decodable, Equatable, Identifiable, Se
         case artwork
     }
 
-    struct Document: Equatable, Identifiable, Sendable {
-        let attribution: OpenSourceAttribution
-        let legalText: String
+    package struct Document: Equatable, Identifiable, Sendable {
+        package let attribution: OpenSourceAttribution
+        package let legalText: String
 
-        var id: String { attribution.id }
+        package init(attribution: OpenSourceAttribution, legalText: String) {
+            self.attribution = attribution
+            self.legalText = legalText
+        }
+
+        package var id: String { attribution.id }
     }
 
-    let id: String
-    let name: String
-    let role: Role
-    let projectURL: URL
-    let licenseName: String
-    let licenseResource: String
+    package let id: String
+    package let name: String
+    package let role: Role
+    package let projectURL: URL
+    package let licenseName: String
+    package let licenseResource: String
 }

@@ -1,7 +1,11 @@
 #if os(macOS)
 import Foundation
 
-nonisolated struct MacTerminalRecoveryGate {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package struct MacTerminalRecoveryGate {
     private enum State {
         case idle
         case sleeping(UUID)
@@ -9,14 +13,14 @@ nonisolated struct MacTerminalRecoveryGate {
         case recovering(UUID)
     }
 
-    enum Signal: Sendable {
+    package enum Signal: Sendable {
         case sleep
         case wake
         case applicationActivated
         case networkChanged(TerminalNetworkReadiness)
     }
 
-    enum Action: Equatable, Sendable {
+    package enum Action: Equatable, Sendable {
         case none
         case waitForNetwork(UUID)
         case recover(UUID)
@@ -24,12 +28,12 @@ nonisolated struct MacTerminalRecoveryGate {
 
     private var state = State.idle
 
-    var recoveringGeneration: UUID? {
+    package var recoveringGeneration: UUID? {
         guard case .recovering(let generation) = state else { return nil }
         return generation
     }
 
-    mutating func receive(
+    mutating package func receive(
         _ signal: Signal,
         networkReadiness: TerminalNetworkReadiness
     ) -> Action {
@@ -68,7 +72,7 @@ nonisolated struct MacTerminalRecoveryGate {
         }
     }
 
-    mutating func complete(_ cycleID: UUID) {
+    mutating package func complete(_ cycleID: UUID) {
         guard case .recovering(let activeCycleID) = state,
               activeCycleID == cycleID else { return }
         state = .idle
@@ -89,14 +93,14 @@ nonisolated struct MacTerminalRecoveryGate {
     }
 }
 
-enum MacTerminalRecoveryPolicy {
-    enum ReadyStrategy: Equatable, Sendable {
+package enum MacTerminalRecoveryPolicy {
+    package enum ReadyStrategy: Equatable, Sendable {
         case ignore
         case verifyOrReplace
         case allowEternalTerminalSelfRecovery
     }
 
-    static func shouldPrepareWhileOffline(
+    static package func shouldPrepareWhileOffline(
         connectionState: ConnectionState,
         hasEstablishedConnection: Bool
     ) -> Bool {
@@ -110,7 +114,7 @@ enum MacTerminalRecoveryPolicy {
         }
     }
 
-    static func readyStrategy(
+    static package func readyStrategy(
         connectionState: ConnectionState,
         hasEstablishedConnection: Bool,
         activeTransport: ShellTransport,
@@ -126,7 +130,7 @@ enum MacTerminalRecoveryPolicy {
         return .verifyOrReplace
     }
 
-    static func hasVerifiedLiveTransport(
+    static package func hasVerifiedLiveTransport(
         connectionState: ConnectionState,
         activeTransport: ShellTransport,
         hasEternalTerminalRuntime: Bool,

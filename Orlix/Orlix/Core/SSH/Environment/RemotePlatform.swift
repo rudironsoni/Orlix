@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum RemotePlatform: String, Sendable {
+nonisolated package enum RemotePlatform: String, Sendable {
     case linux = "linux"
     case darwin = "darwin"
     case freebsd = "freebsd"
@@ -9,7 +9,7 @@ nonisolated enum RemotePlatform: String, Sendable {
     case windows = "windows"
     case unknown = "unknown"
 
-    static func detect(from unameOutput: String) -> RemotePlatform {
+    static package func detect(from unameOutput: String) -> RemotePlatform {
         let os = unameOutput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         if os.contains("darwin") {

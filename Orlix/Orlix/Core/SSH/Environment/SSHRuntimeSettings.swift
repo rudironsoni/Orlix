@@ -1,19 +1,19 @@
 import Foundation
 
-nonisolated enum SSHKeepAlivePolicy: Equatable, Sendable {
+nonisolated package enum SSHKeepAlivePolicy: Equatable, Sendable {
     case disabled
     case enabled(intervalSeconds: Int)
 }
 
-nonisolated struct SSHRuntimeSettings: Equatable, Sendable {
-    static let keepAliveEnabledKey = "sshKeepAliveEnabled"
-    static let keepAliveIntervalKey = "sshKeepAliveInterval"
-    static let defaultKeepAliveIntervalSeconds = 30
-    static let keepAliveIntervalRange = 10...120
+nonisolated package struct SSHRuntimeSettings: Equatable, Sendable {
+    static package let keepAliveEnabledKey = "sshKeepAliveEnabled"
+    static package let keepAliveIntervalKey = "sshKeepAliveInterval"
+    static package let defaultKeepAliveIntervalSeconds = 30
+    static package let keepAliveIntervalRange = 10...120
 
-    let keepAlive: SSHKeepAlivePolicy
+    package let keepAlive: SSHKeepAlivePolicy
 
-    init(keepAliveEnabled: Bool, keepAliveIntervalSeconds: Int) {
+    package init(keepAliveEnabled: Bool, keepAliveIntervalSeconds: Int) {
         guard keepAliveEnabled else {
             keepAlive = .disabled
             return
@@ -27,7 +27,7 @@ nonisolated struct SSHRuntimeSettings: Equatable, Sendable {
         )
     }
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         let keepAliveEnabled = (defaults.object(forKey: Self.keepAliveEnabledKey) as? NSNumber)?
             .boolValue ?? true
         let storedInterval = (defaults.object(forKey: Self.keepAliveIntervalKey) as? NSNumber)?

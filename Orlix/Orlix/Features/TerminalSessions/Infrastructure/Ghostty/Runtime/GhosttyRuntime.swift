@@ -8,11 +8,14 @@
 import Foundation
 import Combine
 import OSLog
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// Owns the native Ghostty application lifecycle.
 @MainActor
-final class GhosttyRuntime: ObservableObject {
-    enum Readiness: String {
+final package class GhosttyRuntime: ObservableObject {
+    package enum Readiness: String {
         case idle, loading, error, ready, stopped
     }
 
@@ -26,12 +29,12 @@ final class GhosttyRuntime: ObservableObject {
         )
         case stopped
 
-        var app: ghostty_app_t? {
+        package var app: ghostty_app_t? {
             guard case .ready(let app, _) = self else { return nil }
             return app
         }
 
-        var readiness: Readiness {
+        package var readiness: Readiness {
             switch self {
             case .idle:
                 return .idle
@@ -50,10 +53,10 @@ final class GhosttyRuntime: ObservableObject {
     // MARK: - Runtime State
 
     /// The ghostty app instance
-    var app: ghostty_app_t? { runtimeState.app }
+    package var app: ghostty_app_t? { runtimeState.app }
 
     /// Readiness state
-    var readiness: Readiness { runtimeState.readiness }
+    package var readiness: Readiness { runtimeState.readiness }
 
     @Published private var runtimeState: RuntimeState = .idle
 
@@ -61,7 +64,7 @@ final class GhosttyRuntime: ObservableObject {
     private(set) var appearanceSnapshot: TerminalAppearanceSnapshot
 
     /// Terminal settings supplied by the app composition root.
-    private(set) var configuration: Ghostty.RuntimeConfiguration
+    package private(set) var configuration: Ghostty.RuntimeConfiguration
 
     /// Track active surfaces for config propagation
     private var activeSurfaces: [Ghostty.SurfaceReference] = []
@@ -69,7 +72,7 @@ final class GhosttyRuntime: ObservableObject {
 
     // MARK: - Initialization
 
-    convenience init(
+    convenience package init(
         appearance: TerminalAppearanceSnapshot = .fallback,
         autoStart: Bool = true
     ) {
@@ -80,7 +83,7 @@ final class GhosttyRuntime: ObservableObject {
         )
     }
 
-    init(
+    package init(
         configuration: Ghostty.RuntimeConfiguration,
         appearance: TerminalAppearanceSnapshot = .fallback,
         autoStart: Bool = true
@@ -92,7 +95,7 @@ final class GhosttyRuntime: ObservableObject {
         }
     }
 
-    func startIfNeeded(appearance: TerminalAppearanceSnapshot? = nil) {
+    package func startIfNeeded(appearance: TerminalAppearanceSnapshot? = nil) {
         if let appearance {
             applyAppearance(appearance)
         }
@@ -191,7 +194,7 @@ final class GhosttyRuntime: ObservableObject {
     // MARK: - App Operations
 
     /// Clean up the ghostty app resources
-    func cleanup() {
+    package func cleanup() {
         clearSurfaceConfigCache()
         guard case .ready(let app, let callbackContext) = runtimeState else { return }
         callbackContext.invalidate()
@@ -199,7 +202,7 @@ final class GhosttyRuntime: ObservableObject {
         runtimeState = .stopped
     }
 
-    func appTick() {
+    package func appTick() {
         guard let app = self.app else { return }
         ghostty_app_tick(app)
     }
@@ -207,7 +210,7 @@ final class GhosttyRuntime: ObservableObject {
     /// Register a surface for config update tracking
     /// Returns the surface reference that should be stored by the view
     @discardableResult
-    func registerSurface(_ surface: ghostty_surface_t, terminalView: GhosttyTerminalView) -> Ghostty.SurfaceReference {
+    package func registerSurface(_ surface: ghostty_surface_t, terminalView: GhosttyTerminalView) -> Ghostty.SurfaceReference {
         removeReleasedSurfaceReferences()
         let ref = Ghostty.SurfaceReference(surface, terminalView: terminalView)
         activeSurfaces.append(ref)
@@ -215,22 +218,22 @@ final class GhosttyRuntime: ObservableObject {
     }
 
     /// Unregister a surface when it's being deallocated
-    func unregisterSurface(_ ref: Ghostty.SurfaceReference) {
+    package func unregisterSurface(_ ref: Ghostty.SurfaceReference) {
         activeSurfaces.removeAll { $0 === ref || $0.terminalView == nil }
     }
 
-    func terminalView(for surface: ghostty_surface_t) -> GhosttyTerminalView? {
+    package func terminalView(for surface: ghostty_surface_t) -> GhosttyTerminalView? {
         removeReleasedSurfaceReferences()
         return activeSurfaces.first { $0.surface == surface }?.terminalView
     }
 
-    func activeSurfaceCount() -> Int {
+    package func activeSurfaceCount() -> Int {
         removeReleasedSurfaceReferences()
         return activeSurfaces.count
     }
 
     /// Reload configuration (call when settings change)
-    func reloadConfig() {
+    package func reloadConfig() {
         guard let app = self.app else { return }
         clearSurfaceConfigCache()
 
@@ -260,14 +263,14 @@ final class GhosttyRuntime: ObservableObject {
         NotificationCenter.default.post(name: Ghostty.configDidReloadNotification, object: nil)
     }
 
-    func applyConfiguration(_ configuration: Ghostty.RuntimeConfiguration) {
+    package func applyConfiguration(_ configuration: Ghostty.RuntimeConfiguration) {
         guard self.configuration != configuration else { return }
         self.configuration = configuration
         guard case .ready = runtimeState else { return }
         reloadConfig()
     }
 
-    func applyAppearance(_ snapshot: TerminalAppearanceSnapshot) {
+    package func applyAppearance(_ snapshot: TerminalAppearanceSnapshot) {
         guard appearanceSnapshot != snapshot else { return }
         appearanceSnapshot = snapshot
         guard case .ready = runtimeState else { return }
@@ -277,7 +280,7 @@ final class GhosttyRuntime: ObservableObject {
         reloadConfig()
     }
 
-    func updateSurfaceConfig(_ surface: ghostty_surface_t, presentationOverrides: TerminalPresentationOverrides) {
+    package func updateSurfaceConfig(_ surface: ghostty_surface_t, presentationOverrides: TerminalPresentationOverrides) {
         guard let config = cachedSurfaceConfig(for: presentationOverrides) else { return }
         ghostty_surface_update_config(surface, config)
         Ghostty.logger.info("Updated surface presentation overrides")
@@ -396,7 +399,7 @@ final class GhosttyRuntime: ObservableObject {
         }
     }
 
-    static func loadConfigFile(_ config: ghostty_config_t, atPath path: String) {
+    static package func loadConfigFile(_ config: ghostty_config_t, atPath path: String) {
         path.withCString { pathPointer in
             ghostty_config_load_file(config, pathPointer)
         }

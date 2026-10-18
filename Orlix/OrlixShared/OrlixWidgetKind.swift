@@ -1,3 +1,3 @@
-enum OrlixWidgetKind {
-    static let launcher = "com.rudironsoni.orlix.launcher"
+package enum OrlixWidgetKind {
+    static package let launcher = "com.rudironsoni.orlix.launcher"
 }

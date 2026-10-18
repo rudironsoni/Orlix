@@ -1,19 +1,22 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private enum StorageHealthLoadState {
     case loading
     case loaded(StorageHealthResult)
     case failed
 }
 
-struct StorageHealthDetailsSheet: View {
-    let volume: VolumeInfo
-    let loadHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+package struct StorageHealthDetailsSheet: View {
+    package let volume: VolumeInfo
+    package let loadHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
 
     @State private var loadState: StorageHealthLoadState = .loading
     @State private var reloadTrigger = false
 
-    var body: some View {
+    package var body: some View {
         StorageHealthDetailsPlatformShell {
             healthList
         }
@@ -187,10 +190,10 @@ struct StorageHealthDetailsSheet: View {
 }
 
 private struct StorageDeviceHealthSections: View {
-    let report: StorageHealthReport
-    let includesStatus: Bool
+    package let report: StorageHealthReport
+    package let includesStatus: Bool
 
-    var body: some View {
+    package var body: some View {
         if includesStatus {
             Section(String(localized: "Health")) {
                 StorageHealthStatusRow(state: report.state, findings: report.findings)
@@ -288,10 +291,10 @@ private struct StorageDeviceHealthSections: View {
 }
 
 private struct StorageHealthStatusRow: View {
-    let state: StorageHealthState
-    let findings: [StorageHealthFinding]
+    package let state: StorageHealthState
+    package let findings: [StorageHealthFinding]
 
-    var body: some View {
+    package var body: some View {
         if findings.isEmpty {
             statusLabel
                 .accessibilityIdentifier("orlix.stats.storage.health.status")
@@ -317,9 +320,9 @@ private struct StorageHealthStatusRow: View {
 }
 
 private struct StorageHealthFindingsView: View {
-    let findings: [StorageHealthFinding]
+    package let findings: [StorageHealthFinding]
 
-    var body: some View {
+    package var body: some View {
         List(findings) { finding in
             VStack(alignment: .leading, spacing: 4) {
                 Label(finding.title, systemImage: finding.systemImage)
@@ -341,9 +344,9 @@ private struct StorageHealthFindingsView: View {
 }
 
 private struct StorageHealthMemberRow: View {
-    let member: StorageHealthMemberReport
+    package let member: StorageHealthMemberReport
 
-    var body: some View {
+    package var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(format: String(localized: "Drive %lld"), Int64(member.ordinal)))
@@ -366,9 +369,9 @@ private struct StorageHealthMemberRow: View {
 }
 
 private struct StorageHealthMemberDetailView: View {
-    let member: StorageHealthMemberReport
+    package let member: StorageHealthMemberReport
 
-    var body: some View {
+    package var body: some View {
         List {
             Section(String(localized: "Member")) {
                 InfoRow(title: String(localized: "Role"), value: member.role.title)
@@ -405,11 +408,11 @@ private struct StorageHealthMemberDetailView: View {
 }
 
 private struct StorageHealthUnavailableRow: View {
-    let systemImage: String
-    let title: String
-    let message: String
+    package let systemImage: String
+    package let title: String
+    package let message: String
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
                 .font(.title3)
@@ -430,7 +433,7 @@ private struct StorageHealthUnavailableRow: View {
 }
 
 private extension StorageHealthUnavailableReason {
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .networkVolume:
             return "network"
@@ -445,7 +448,7 @@ private extension StorageHealthUnavailableReason {
         }
     }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .unsupported:
             return String(localized: "Health Not Supported")
@@ -464,7 +467,7 @@ private extension StorageHealthUnavailableReason {
         }
     }
 
-    var message: String {
+    package var message: String {
         switch self {
         case .unsupported:
             return String(localized: "This device does not expose supported storage health information.")
@@ -485,7 +488,7 @@ private extension StorageHealthUnavailableReason {
 }
 
 private extension StorageHealthState {
-    var title: String {
+    package var title: String {
         switch self {
         case .unknown:
             return String(localized: "Unknown")
@@ -498,7 +501,7 @@ private extension StorageHealthState {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .unknown:
             return "questionmark.circle"
@@ -511,7 +514,7 @@ private extension StorageHealthState {
         }
     }
 
-    var tint: Color {
+    package var tint: Color {
         switch self {
         case .unknown:
             return .secondary
@@ -526,7 +529,7 @@ private extension StorageHealthState {
 }
 
 private extension StorageHealthSource {
-    var title: String {
+    package var title: String {
         switch self {
         case .smartctl:
             return String(localized: "SMART")
@@ -547,7 +550,7 @@ private extension StorageHealthSource {
 }
 
 private extension StorageTopologyKind {
-    var title: String {
+    package var title: String {
         switch self {
         case .physicalDevice: String(localized: "Physical Drive")
         case .btrfs: String(localized: "BTRFS File System")
@@ -557,7 +560,7 @@ private extension StorageTopologyKind {
 }
 
 private extension StorageHealthMemberRole {
-    var title: String {
+    package var title: String {
         switch self {
         case .data: String(localized: "Data")
         case .cache: String(localized: "Cache")
@@ -569,7 +572,7 @@ private extension StorageHealthMemberRole {
 }
 
 private extension StorageHealthFinding {
-    var systemImage: String {
+    package var systemImage: String {
         switch severity {
         case .information: "info.circle"
         case .warning: "exclamationmark.triangle"
@@ -577,7 +580,7 @@ private extension StorageHealthFinding {
         }
     }
 
-    var title: String {
+    package var title: String {
         switch kind {
         case .sourceReportedHealth(let status):
             return String(format: String(localized: "Storage reported: %@"), status)
@@ -612,7 +615,7 @@ private extension StorageHealthFinding {
         }
     }
 
-    var explanation: String {
+    package var explanation: String {
         switch kind {
         case .smartPastThreshold, .smartErrorLog, .smartSelfTestLog:
             return String(localized: "This is historical diagnostic information and does not by itself indicate a current failure.")
@@ -653,7 +656,7 @@ private extension StorageHealthFinding {
 }
 
 private extension EMMCPreEOLStatus {
-    var title: String {
+    package var title: String {
         switch self {
         case .unknown:
             return String(localized: "Unknown")
@@ -668,7 +671,7 @@ private extension EMMCPreEOLStatus {
 }
 
 private extension EMMCLifetimeEstimate {
-    var title: String {
+    package var title: String {
         switch bucket {
         case .unknown:
             return String(localized: "Unknown")
@@ -687,7 +690,7 @@ private extension EMMCLifetimeEstimate {
 }
 
 private extension StorageHealthAttribute {
-    var localizedLabel: String {
+    package var localizedLabel: String {
         switch key {
         case "device.model":
             return String(localized: "Model")
@@ -722,7 +725,7 @@ private extension StorageHealthAttribute {
         }
     }
 
-    var formattedValue: String {
+    package var formattedValue: String {
         let baseValue: String
         switch value {
         case .integer(let value):

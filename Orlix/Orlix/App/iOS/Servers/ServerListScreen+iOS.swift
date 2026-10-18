@@ -7,21 +7,28 @@ import os
 import SwiftUI
 
 #if os(iOS)
-struct ServerListScreen: View {
-    @ObservedObject var serverManager: ServerManager
-    let tabManager: TerminalTabManager
-    @ObservedObject var fileTabs: RemoteFileTabManager
-    let fileBrowser: RemoteFileBrowserStore
-    let statsDependencies: ServerStatsScreenDependencies
-    let analyticsOptOutAction: AnalyticsOptOutAction
-    let serverFormDependencies: ServerFormDependencies
-    let serverWakeCoordinator: ServerWakeCoordinator
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
-    @Binding var selectedWorkspace: Workspace?
-    @Binding var selectedEnvironment: ServerEnvironment?
-    let onServerSelected: (Server) -> Void
-    let onActiveConnectionSelected: (Server) -> Void
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
+package struct ServerListScreen: View {
+    @ObservedObject package var serverManager: ServerManager
+    package let tabManager: TerminalTabManager
+    @ObservedObject package var fileTabs: RemoteFileTabManager
+    package let fileBrowser: RemoteFileBrowserStore
+    package let statsDependencies: ServerStatsScreenDependencies
+    package let analyticsOptOutAction: AnalyticsOptOutAction
+    package let serverFormDependencies: ServerFormDependencies
+    package let serverWakeCoordinator: ServerWakeCoordinator
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    @Binding package var selectedWorkspace: Workspace?
+    @Binding package var selectedEnvironment: ServerEnvironment?
+    package let onServerSelected: (Server) -> Void
+    package let onActiveConnectionSelected: (Server) -> Void
 
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -40,7 +47,7 @@ struct ServerListScreen: View {
     @State private var lockedServerAlert: Server?
     @State private var showingCustomEnvironmentAlert = false
 
-    init(
+    package init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         fileTabs: RemoteFileTabManager,
@@ -77,7 +84,7 @@ struct ServerListScreen: View {
         !serverManager.workspaces.isEmpty
     }
 
-    var body: some View {
+    package var body: some View {
         List {
             Section("Local") {
                 NavigationLink {

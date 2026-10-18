@@ -6,17 +6,22 @@
 import SwiftUI
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
 // MARK: - Server List Row
 
-struct ServerListRow: View {
-    @ObservedObject var serverManager: ServerManager
-    let server: Server
-    let onTap: () -> Void
-    let onEdit: () -> Void
-    var onMove: (() -> Void)? = nil
-    let onDuplicate: () -> Void
-    let onWake: () -> Void
-    var onLockedTap: (() -> Void)? = nil
+package struct ServerListRow: View {
+    @ObservedObject package var serverManager: ServerManager
+    package let server: Server
+    package let onTap: () -> Void
+    package let onEdit: () -> Void
+    package var onMove: (() -> Void)? = nil
+    package let onDuplicate: () -> Void
+    package let onWake: () -> Void
+    package var onLockedTap: (() -> Void)? = nil
 
     @EnvironmentObject private var storeManager: StoreManager
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
@@ -25,7 +30,7 @@ struct ServerListRow: View {
         serverManager.isServerLocked(server, hasProAccess: storeManager.allowsProFeatures)
     }
 
-    var body: some View {
+    package var body: some View {
         Button(action: {
             if isLocked {
                 onLockedTap?()
@@ -171,16 +176,16 @@ struct ServerListRow: View {
 
 // MARK: - Active Connection List Row
 
-struct ActiveConnectionListRow: View {
-    let title: String
-    let status: ActiveConnectionPresentationStatus
-    let remoteSessionStatus: RemoteSessionStatus
-    let remoteSessionBackendName: String
-    let tabCount: Int
-    let onOpen: () -> Void
-    let onDisconnect: () -> Void
+package struct ActiveConnectionListRow: View {
+    package let title: String
+    package let status: ActiveConnectionPresentationStatus
+    package let remoteSessionStatus: RemoteSessionStatus
+    package let remoteSessionBackendName: String
+    package let tabCount: Int
+    package let onOpen: () -> Void
+    package let onDisconnect: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button {
             onOpen()
         } label: {
@@ -254,10 +259,10 @@ struct ActiveConnectionListRow: View {
 
 // MARK: - Workspace Picker Sheet
 
-struct WorkspacePickerSheet: View {
-    @ObservedObject var serverManager: ServerManager
-    @Binding var selectedWorkspace: Workspace?
-    let onDismiss: () -> Void
+package struct WorkspacePickerSheet: View {
+    @ObservedObject package var serverManager: ServerManager
+    @Binding package var selectedWorkspace: Workspace?
+    package let onDismiss: () -> Void
     @EnvironmentObject private var storeManager: StoreManager
 
     @State private var lockedWorkspaceAlert: Workspace?
@@ -266,7 +271,7 @@ struct WorkspacePickerSheet: View {
     @State private var workspaceToDelete: Workspace?
     @State private var workspaceToManageServers: Workspace?
 
-    var body: some View {
+    package var body: some View {
         List {
             ForEach(serverManager.workspaces) { workspace in
                 let isLocked = serverManager.isWorkspaceLocked(

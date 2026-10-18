@@ -1,24 +1,27 @@
 import CoreGraphics
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// Selects one application transport coordinator per pane. Transport state is
 /// retained by the app-scoped transport owner so view reconstruction cannot
 /// replace a live session.
 @MainActor
-final class TerminalPaneConnectionCoordinator {
+final package class TerminalPaneConnectionCoordinator {
     private enum Backend {
         case ssh(TerminalPaneSSHCoordinator)
         case eternalTerminal(EternalTerminalPaneCoordinator)
     }
 
-    let tabManager: TerminalTabManager
-    weak var terminal: (any TerminalSurface)?
-    var isTerminalReady = false
-    var preservePane = false
-    var lastReportedSize: CGSize = .zero
+    package let tabManager: TerminalTabManager
+    weak package var terminal: (any TerminalSurface)?
+    package var isTerminalReady = false
+    package var preservePane = false
+    package var lastReportedSize: CGSize = .zero
     private let backend: Backend
 
-    init(
+    package init(
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
@@ -45,34 +48,34 @@ final class TerminalPaneConnectionCoordinator {
         }
     }
 
-    var paneId: UUID {
+    package var paneId: UUID {
         switch backend {
         case .ssh(let coordinator): coordinator.paneId
         case .eternalTerminal(let coordinator): coordinator.paneId
         }
     }
 
-    var hasLiveConnection: Bool {
+    package var hasLiveConnection: Bool {
         tabManager.transportCoordinator.hasLiveTransport(for: paneId)
     }
 
-    var isConnectionStartInFlight: Bool {
+    package var isConnectionStartInFlight: Bool {
         tabManager.transportCoordinator.isTransportStartInFlight(for: paneId)
     }
 
-    func installRichPasteInterception(on terminal: any TerminalSurface) {
+    package func installRichPasteInterception(on terminal: any TerminalSurface) {
         guard case .ssh(let coordinator) = backend else { return }
         coordinator.installRichPasteInterception(on: terminal)
     }
 
-    func sendToTransport(_ data: Data) {
+    package func sendToTransport(_ data: Data) {
         switch backend {
         case .ssh(let coordinator): coordinator.sendToSSH(data)
         case .eternalTerminal(let coordinator): coordinator.send(data)
         }
     }
 
-    func handleResize(cols: Int, rows: Int) {
+    package func handleResize(cols: Int, rows: Int) {
         let pixelSize = terminal?.terminalGeometry?.pixelSize
         switch backend {
         case .ssh(let coordinator):
@@ -82,7 +85,7 @@ final class TerminalPaneConnectionCoordinator {
         }
     }
 
-    func startConnection(terminal: any TerminalSurface) {
+    package func startConnection(terminal: any TerminalSurface) {
         self.terminal = terminal
         switch backend {
         case .ssh(let coordinator): coordinator.startSSHConnection(terminal: terminal)
@@ -90,7 +93,7 @@ final class TerminalPaneConnectionCoordinator {
         }
     }
 
-    func cancelConnection() {
+    package func cancelConnection() {
         terminal = nil
         switch backend {
         case .ssh:
@@ -102,12 +105,12 @@ final class TerminalPaneConnectionCoordinator {
 
 @MainActor
 private final class EternalTerminalPaneCoordinator {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
-    let tabManager: TerminalTabManager
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
+    package let tabManager: TerminalTabManager
 
-    init(
+    package init(
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
@@ -119,7 +122,7 @@ private final class EternalTerminalPaneCoordinator {
         self.tabManager = tabManager
     }
 
-    func start(terminal: any TerminalSurface) {
+    package func start(terminal: any TerminalSurface) {
         let runtime = tabManager.transportCoordinator.eternalTerminalRuntime(
             for: paneId,
             server: server,
@@ -135,11 +138,11 @@ private final class EternalTerminalPaneCoordinator {
         runtime.startIfNeeded()
     }
 
-    func send(_ data: Data) {
+    package func send(_ data: Data) {
         tabManager.transportCoordinator.sendEternalTerminalInput(data, for: paneId)
     }
 
-    func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
+    package func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
         tabManager.transportCoordinator.resizeEternalTerminal(
             for: paneId,
             cols: cols,
@@ -148,7 +151,7 @@ private final class EternalTerminalPaneCoordinator {
         )
     }
 
-    func cancel() {
+    package func cancel() {
         tabManager.transportCoordinator.unregisterEternalTerminalRuntimeIfPaneWasRemoved(
             for: paneId
         )

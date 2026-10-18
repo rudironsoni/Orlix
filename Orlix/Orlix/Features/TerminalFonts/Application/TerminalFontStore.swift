@@ -2,24 +2,27 @@ import Combine
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalFontStore: ObservableObject {
+final package class TerminalFontStore: ObservableObject {
     @Published private(set) var fontRecords: [TerminalFont]
-    @Published private(set) var catalog = TerminalFontCatalog.empty
-    @Published private(set) var preference: TerminalFontPreference
+    @Published package private(set) var catalog = TerminalFontCatalog.empty
+    @Published package private(set) var preference: TerminalFontPreference
     @Published private var registeredFamiliesByFontID: [
         TerminalFont.ID: [TerminalFontFamily]
     ] = [:]
 
-    let dependencies: TerminalFontStoreDependencies
-    let logger = Logger(
+    package let dependencies: TerminalFontStoreDependencies
+    package let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix",
         category: "TerminalFontStore"
     )
-    var lifecycleObserverID: UUID?
-    var syncTask: Task<Void, Never>?
+    package var lifecycleObserverID: UUID?
+    package var syncTask: Task<Void, Never>?
 
-    init(dependencies: TerminalFontStoreDependencies) {
+    package init(dependencies: TerminalFontStoreDependencies) {
         self.dependencies = dependencies
         fontRecords = []
         let storedPreference = dependencies.repository.loadPreference()
@@ -51,16 +54,16 @@ final class TerminalFontStore: ObservableObject {
         }
     }
 
-    var customFonts: [TerminalFont] {
+    package var customFonts: [TerminalFont] {
         fontRecords.filter { !$0.isDeleted }
     }
 
-    func isAvailable(_ font: TerminalFont) -> Bool {
+    package func isAvailable(_ font: TerminalFont) -> Bool {
         registeredFamiliesByFontID[font.id] != nil
     }
 
     @discardableResult
-    func importFont(
+    package func importFont(
         from sourceURL: URL,
         allowsProFeatures: Bool
     ) throws -> TerminalFont {
@@ -79,7 +82,7 @@ final class TerminalFontStore: ObservableObject {
         return imported
     }
 
-    func deleteFont(id: TerminalFont.ID) {
+    package func deleteFont(id: TerminalFont.ID) {
         guard let index = fontRecords.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             return
         }
@@ -96,7 +99,7 @@ final class TerminalFontStore: ObservableObject {
         enqueueFont(deletedFont)
     }
 
-    func selectPrimaryFamily(
+    package func selectPrimaryFamily(
         _ familyName: String,
         allowsProFeatures: Bool
     ) throws {
@@ -115,7 +118,7 @@ final class TerminalFontStore: ObservableObject {
         saveSelection(primaryFamily: name, cjkFamily: preference.cjkFamily)
     }
 
-    func selectCJKFamily(
+    package func selectCJKFamily(
         _ familyName: String?,
         allowsProFeatures: Bool
     ) throws {
@@ -132,7 +135,7 @@ final class TerminalFontStore: ObservableObject {
         saveSelection(primaryFamily: preference.primaryFamily, cjkFamily: name)
     }
 
-    func refreshCatalog() {
+    package func refreshCatalog() {
         let updated = dependencies.loadCatalog(
             registeredFamiliesByFontID.values.flatMap { $0 }
         )
@@ -140,7 +143,7 @@ final class TerminalFontStore: ObservableObject {
         catalog = updated
     }
 
-    func refreshFromCloud() async throws {
+    package func refreshFromCloud() async throws {
         syncTask?.cancel()
         syncTask = nil
         try await synchronizeWithCloud()
@@ -159,7 +162,7 @@ final class TerminalFontStore: ObservableObject {
         }
     }
 
-    func mergeRemoteFonts(_ remoteFonts: [TerminalFont]) {
+    package func mergeRemoteFonts(_ remoteFonts: [TerminalFont]) {
         fontRecords = TerminalFontMergePolicy.merge(
             local: fontRecords,
             remote: remoteFonts
@@ -182,7 +185,7 @@ final class TerminalFontStore: ObservableObject {
         applyPreference(updated, enqueueForSync: true)
     }
 
-    func clearSelections(providedBy fonts: [TerminalFont]) {
+    package func clearSelections(providedBy fonts: [TerminalFont]) {
         let families = Set(fonts.flatMap(\.familyNames))
         guard !families.isEmpty else { return }
         var primary = preference.primaryFamily
@@ -199,7 +202,7 @@ final class TerminalFontStore: ObservableObject {
         saveSelection(primaryFamily: primary, cjkFamily: cjk)
     }
 
-    func applyPreference(
+    package func applyPreference(
         _ updated: TerminalFontPreference,
         enqueueForSync: Bool
     ) {

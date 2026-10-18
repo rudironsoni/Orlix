@@ -1,8 +1,11 @@
 import CoreFoundation
 import Foundation
 
-nonisolated enum StorageHealthParser {
-    static func parseSmartctlJSON(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StorageHealthParser {
+    static package func parseSmartctlJSON(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -166,7 +169,7 @@ nonisolated enum StorageHealthParser {
         ))
     }
 
-    static func parseEMMCExtCSD(
+    static package func parseEMMCExtCSD(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -236,7 +239,7 @@ nonisolated enum StorageHealthParser {
         ))
     }
 
-    static func parseDarwinPlist(
+    static package func parseDarwinPlist(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -246,7 +249,7 @@ nonisolated enum StorageHealthParser {
         return parseDarwinPlist(data, deviceID: deviceID)
     }
 
-    static func parseDarwinPlist(
+    static package func parseDarwinPlist(
         _ data: Data,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -326,7 +329,7 @@ nonisolated enum StorageHealthParser {
         ))
     }
 
-    static func parseWindowsNativeJSON(
+    static package func parseWindowsNativeJSON(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -407,7 +410,7 @@ nonisolated enum StorageHealthParser {
         ))
     }
 
-    static func parseBSDMetadata(
+    static package func parseBSDMetadata(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageDeviceHealthResult {
@@ -457,7 +460,7 @@ nonisolated enum StorageHealthParser {
         ))
     }
 
-    static func merged(_ results: [StorageDeviceHealthResult]) -> StorageDeviceHealthResult {
+    static package func merged(_ results: [StorageDeviceHealthResult]) -> StorageDeviceHealthResult {
         let reports = results.compactMap { result -> StorageHealthReport? in
             guard case .report(let report) = result else { return nil }
             return report

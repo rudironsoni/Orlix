@@ -1,12 +1,16 @@
 import SwiftUI
 
-struct NavigationStatsSettingsView: View {
-    let statsPreferencesStore: PreferencesStore
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixStats
+#endif
+package struct NavigationStatsSettingsView: View {
+    package let statsPreferencesStore: PreferencesStore
 
     @EnvironmentObject private var viewTabConfig: ViewTabConfigurationManager
     @State private var isShowingStatsAppearance = false
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 if viewTabConfig.currentVisibleTabs.isEmpty {
@@ -107,5 +111,9 @@ struct NavigationStatsSettingsView: View {
             get: { viewTabConfig.effectiveDefaultTab() },
             set: { viewTabConfig.setDefaultTab($0) }
         )
+    }
+
+    package init(statsPreferencesStore: PreferencesStore) {
+        self.statsPreferencesStore = statsPreferencesStore
     }
 }

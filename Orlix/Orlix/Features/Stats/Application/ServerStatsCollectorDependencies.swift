@@ -1,51 +1,54 @@
 import Foundation
 
-nonisolated struct ServerStatsConnectionIdentity: Hashable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ServerStatsConnectionIdentity: Hashable, Sendable {
     private let value: ObjectIdentifier
 
-    init(_ value: AnyObject) {
+    package init(_ value: AnyObject) {
         self.value = ObjectIdentifier(value)
     }
 }
 
-nonisolated enum ServerStatsClientOwnership: Equatable, Sendable {
+nonisolated package enum ServerStatsClientOwnership: Equatable, Sendable {
     case owned
     case shared
 
-    var disconnectWhenDone: Bool { self == .owned }
+    package var disconnectWhenDone: Bool { self == .owned }
 }
 
-nonisolated struct ServerStatsApprovalRequest: Identifiable, Equatable, Sendable {
-    let id: String
-    let serverID: UUID
+nonisolated package struct ServerStatsApprovalRequest: Identifiable, Equatable, Sendable {
+    package let id: String
+    package let serverID: UUID
 }
 
 @MainActor
-protocol ServerStatsCollectionTarget {
+package protocol ServerStatsCollectionTarget {
     var serverID: UUID { get }
 }
 
 @MainActor
-protocol ServerStatsConnectionReference {
+package protocol ServerStatsConnectionReference {
     var identity: ServerStatsConnectionIdentity { get }
 }
 
 @MainActor
-protocol ServerStatsApprovalReference: AnyObject, Sendable {
+package protocol ServerStatsApprovalReference: AnyObject, Sendable {
     var request: ServerStatsApprovalRequest { get }
 }
 
-struct ServerStatsApprovalRequired: Error {
-    let reference: any ServerStatsApprovalReference
+package struct ServerStatsApprovalRequired: Error {
+    package let reference: any ServerStatsApprovalReference
 }
 
-nonisolated struct ServerStatsCollectionPreparation: Sendable {
-    let platformName: String
-    let profile: HardwareProfile?
+nonisolated package struct ServerStatsCollectionPreparation: Sendable {
+    package let platformName: String
+    package let profile: HardwareProfile?
 }
 
 @MainActor
-protocol ServerStatsCollectionSession: AnyObject {
+package protocol ServerStatsCollectionSession: AnyObject {
     var connectionIdentity: ServerStatsConnectionIdentity { get }
     var ownership: ServerStatsClientOwnership { get }
 
@@ -67,19 +70,19 @@ protocol ServerStatsCollectionSession: AnyObject {
 }
 
 @MainActor
-struct ServerStatsCollectorDependencies {
-    typealias WaitForNextPoll = @MainActor @Sendable () async throws -> Void
+package struct ServerStatsCollectorDependencies {
+    package typealias WaitForNextPoll = @MainActor @Sendable () async throws -> Void
 
-    let makeOwnedConnection: () -> any ServerStatsConnectionReference
-    let makeSession: (
+    package let makeOwnedConnection: () -> any ServerStatsConnectionReference
+    package let makeSession: (
         _ target: any ServerStatsCollectionTarget,
         _ connection: any ServerStatsConnectionReference,
         _ ownership: ServerStatsClientOwnership
     ) throws -> any ServerStatsCollectionSession
-    let makeAttemptID: () -> UUID
-    let waitForNextPoll: WaitForNextPoll
+    package let makeAttemptID: () -> UUID
+    package let waitForNextPoll: WaitForNextPoll
 
-    init(
+    package init(
         makeOwnedConnection: @escaping () -> any ServerStatsConnectionReference,
         makeSession: @escaping (
             _ target: any ServerStatsCollectionTarget,

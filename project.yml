@@ -594,9 +594,13 @@ targets:
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_EMIT_LOC_STRINGS: YES
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -package-name
+          - Orlix
         SWIFT_OBJC_BRIDGING_HEADER: Orlix/Orlix/ghostty-bridging-header.h
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
-        SWIFT_VERSION: "5.0"
+        SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: 1,2
       configs: &orlix_application_config_settings
         Debug:
@@ -712,9 +716,13 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "16.1"
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.live-activity
         PRODUCT_NAME: OrlixLiveActivity
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -package-name
+          - Orlix
         SKIP_INSTALL: YES
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
-        SWIFT_VERSION: "5.0"
+        SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: 1,2
   OrlixTests:
     type: bundle.unit-test
@@ -744,10 +752,14 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp
         BUNDLE_LOADER: $(TEST_HOST)
         STRING_CATALOG_GENERATE_SYMBOLS: NO
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -package-name
+          - Orlix
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_EMIT_LOC_STRINGS: NO
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
-        SWIFT_VERSION: "5.0"
+        SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: 1,2
   OrlixUITests:
     type: bundle.ui-testing

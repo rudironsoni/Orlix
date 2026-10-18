@@ -1,9 +1,12 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// A deterministic app-shell preview with no live external dependencies.
 @MainActor
 @available(iOS 16.0, *)
-struct AppPreviewComposition {
+package struct AppPreviewComposition {
     private let workspace = Workspace(
         id: UUID(uuidString: "E6B55295-4694-4B3A-AC1D-A179399B5C09")!,
         name: "My Servers",
@@ -20,17 +23,17 @@ struct AppPreviewComposition {
         username: "demo"
     )
 
-    var rootView: some View {
+    package var rootView: some View {
         AppPreviewRoot(workspace: workspace, server: server)
     }
 }
 
 @available(iOS 16.0, *)
 private struct AppPreviewRoot: View {
-    let workspace: Workspace
-    let server: Server
+    package let workspace: Workspace
+    package let server: Server
 
-    var body: some View {
+    package var body: some View {
         NavigationSplitView {
             List {
                 Section(workspace.name) {

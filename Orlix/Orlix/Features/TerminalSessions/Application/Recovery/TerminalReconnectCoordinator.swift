@@ -1,40 +1,99 @@
 import Combine
 import Foundation
 
-nonisolated struct TerminalReconnectPaneFacts: Sendable {
-    let connectionState: ConnectionState
-    let hasEstablishedConnection: Bool
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct TerminalReconnectPaneFacts: Sendable {
+    package let connectionState: ConnectionState
+    package let hasEstablishedConnection: Bool
+
+    package init(
+        connectionState: ConnectionState,
+        hasEstablishedConnection: Bool
+    ) {
+        self.connectionState = connectionState
+        self.hasEstablishedConnection = hasEstablishedConnection
+    }
 }
 
 #if os(macOS)
-nonisolated struct MacTerminalRecoveryCandidate: Sendable {
-    let paneId: UUID
-    let strategy: MacTerminalRecoveryPolicy.ReadyStrategy
+nonisolated package struct MacTerminalRecoveryCandidate: Sendable {
+    package let paneId: UUID
+    package let strategy: MacTerminalRecoveryPolicy.ReadyStrategy
 }
 #endif
 
 @MainActor
-struct TerminalReconnectAccess {
-    let paneFacts: @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?
-    let paneIDs: @MainActor @Sendable () -> [UUID]
-    let paneIDsForServer: @MainActor @Sendable (UUID) -> [UUID]
-    let networkPathBecameReady: @MainActor @Sendable (UUID) -> Void
-    let prepareTransport: @MainActor @Sendable (UUID) async -> Void
-    let startConnection: @MainActor @Sendable (UUID) -> Bool
-    let failConnection: @MainActor @Sendable (UUID) -> Void
+package struct TerminalReconnectAccess {
+    package let paneFacts: @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?
+    package let paneIDs: @MainActor @Sendable () -> [UUID]
+    package let paneIDsForServer: @MainActor @Sendable (UUID) -> [UUID]
+    package let networkPathBecameReady: @MainActor @Sendable (UUID) -> Void
+    package let prepareTransport: @MainActor @Sendable (UUID) async -> Void
+    package let startConnection: @MainActor @Sendable (UUID) -> Bool
+    package let failConnection: @MainActor @Sendable (UUID) -> Void
 
     #if os(macOS)
-    let offlineMacRecoveryPaneIDs: @MainActor @Sendable () -> [UUID]
-    let macRecoveryCandidates: @MainActor @Sendable () -> [MacTerminalRecoveryCandidate]
-    let beginEternalTerminalProbe: @MainActor @Sendable (UUID) async -> UUID?
-    let hasVerifiedLiveTransport: @MainActor @Sendable (UUID, UUID?) async -> Bool
-    let markMoshConnected: @MainActor @Sendable (UUID) -> Void
+    package let offlineMacRecoveryPaneIDs: @MainActor @Sendable () -> [UUID]
+    package let macRecoveryCandidates: @MainActor @Sendable () -> [MacTerminalRecoveryCandidate]
+    package let beginEternalTerminalProbe: @MainActor @Sendable (UUID) async -> UUID?
+    package let hasVerifiedLiveTransport: @MainActor @Sendable (UUID, UUID?) async -> Bool
+    package let markMoshConnected: @MainActor @Sendable (UUID) -> Void
+    #endif
+
+    #if os(macOS)
+    package init(
+        paneFacts: @escaping @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?,
+        paneIDs: @escaping @MainActor @Sendable () -> [UUID],
+        paneIDsForServer: @escaping @MainActor @Sendable (UUID) -> [UUID],
+        networkPathBecameReady: @escaping @MainActor @Sendable (UUID) -> Void,
+        prepareTransport: @escaping @MainActor @Sendable (UUID) async -> Void,
+        startConnection: @escaping @MainActor @Sendable (UUID) -> Bool,
+        failConnection: @escaping @MainActor @Sendable (UUID) -> Void,
+        offlineMacRecoveryPaneIDs: @escaping @MainActor @Sendable () -> [UUID],
+        macRecoveryCandidates: @escaping @MainActor @Sendable () -> [MacTerminalRecoveryCandidate],
+        beginEternalTerminalProbe: @escaping @MainActor @Sendable (UUID) async -> UUID?,
+        hasVerifiedLiveTransport: @escaping @MainActor @Sendable (UUID, UUID?) async -> Bool,
+        markMoshConnected: @escaping @MainActor @Sendable (UUID) -> Void
+    ) {
+        self.paneFacts = paneFacts
+        self.paneIDs = paneIDs
+        self.paneIDsForServer = paneIDsForServer
+        self.networkPathBecameReady = networkPathBecameReady
+        self.prepareTransport = prepareTransport
+        self.startConnection = startConnection
+        self.failConnection = failConnection
+        self.offlineMacRecoveryPaneIDs = offlineMacRecoveryPaneIDs
+        self.macRecoveryCandidates = macRecoveryCandidates
+        self.beginEternalTerminalProbe = beginEternalTerminalProbe
+        self.hasVerifiedLiveTransport = hasVerifiedLiveTransport
+        self.markMoshConnected = markMoshConnected
+    }
+    #else
+    package init(
+        paneFacts: @escaping @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?,
+        paneIDs: @escaping @MainActor @Sendable () -> [UUID],
+        paneIDsForServer: @escaping @MainActor @Sendable (UUID) -> [UUID],
+        networkPathBecameReady: @escaping @MainActor @Sendable (UUID) -> Void,
+        prepareTransport: @escaping @MainActor @Sendable (UUID) async -> Void,
+        startConnection: @escaping @MainActor @Sendable (UUID) -> Bool,
+        failConnection: @escaping @MainActor @Sendable (UUID) -> Void
+    ) {
+        self.paneFacts = paneFacts
+        self.paneIDs = paneIDs
+        self.paneIDsForServer = paneIDsForServer
+        self.networkPathBecameReady = networkPathBecameReady
+        self.prepareTransport = prepareTransport
+        self.startConnection = startConnection
+        self.failConnection = failConnection
+    }
     #endif
 }
 
 @MainActor
-final class TerminalReconnectCoordinator: ObservableObject {
-    nonisolated enum Phase: Hashable, Sendable {
+final package class TerminalReconnectCoordinator: ObservableObject {
+    nonisolated package enum Phase: Hashable, Sendable {
         case preparing
         case waitingForNetwork
         case waitingForApplication
@@ -42,15 +101,15 @@ final class TerminalReconnectCoordinator: ObservableObject {
         case connecting
     }
 
-    nonisolated struct Attempt: Hashable, Sendable {
-        let id: UUID
-        let paneId: UUID
-        let generation: UUID
-        let startedAt: Date
-        var phase: Phase
+    nonisolated package struct Attempt: Hashable, Sendable {
+        package let id: UUID
+        package let paneId: UUID
+        package let generation: UUID
+        package let startedAt: Date
+        package var phase: Phase
     }
 
-    nonisolated enum EventStage: String, Equatable, Sendable {
+    nonisolated package enum EventStage: String, Equatable, Sendable {
         case preparationStarted
         case cleanupStarted
         case cleanupCompleted
@@ -66,10 +125,10 @@ final class TerminalReconnectCoordinator: ObservableObject {
         case staleResultRejected
     }
 
-    nonisolated struct Event: Sendable {
-        let attempt: Attempt
-        let stage: EventStage
-        let systemUptime: TimeInterval
+    nonisolated package struct Event: Sendable {
+        package let attempt: Attempt
+        package let stage: EventStage
+        package let systemUptime: TimeInterval
     }
 
     private nonisolated enum CleanupOutcome: Equatable, Sendable {
@@ -79,29 +138,29 @@ final class TerminalReconnectCoordinator: ObservableObject {
         case failed
     }
 
-    typealias Sleep = @Sendable (Duration) async throws -> Void
-    typealias EventHandler = @MainActor @Sendable (Event) -> Void
+    package typealias Sleep = @Sendable (Duration) async throws -> Void
+    package typealias EventHandler = @MainActor @Sendable (Event) -> Void
 
     private struct Record {
-        var attempt: Attempt
-        var requiresReadyNetwork: Bool
-        var task: Task<Void, Never>?
+        package var attempt: Attempt
+        package var requiresReadyNetwork: Bool
+        package var task: Task<Void, Never>?
     }
 
     private struct AutomaticContext {
-        var sceneIsActive: Bool
-        var automaticReconnectAllowed: Bool
+        package var sceneIsActive: Bool
+        package var automaticReconnectAllowed: Bool
     }
 
     private final class AutomaticRetry {
-        var task: Task<Void, Never>?
+        package var task: Task<Void, Never>?
 
-        func cancel() {
+        package func cancel() {
             task?.cancel()
         }
     }
 
-    let access: TerminalReconnectAccess
+    package let access: TerminalReconnectAccess
     private let preparationTimeout: Duration
     private let connectionTimeout: Duration
     private let retryDelay: Duration
@@ -121,19 +180,19 @@ final class TerminalReconnectCoordinator: ObservableObject {
     private(set) var applicationIsActive: Bool
     private(set) var appIsLocked: Bool
 
-    var applicationActivityIsActive: Bool {
+    package var applicationActivityIsActive: Bool {
         applicationIsActiveQuery()
     }
 
     #if os(macOS)
-    var macRecoveryGate = MacTerminalRecoveryGate()
-    var macReconciliationID: UUID?
-    var macRecoveryTask: Task<Void, Never>?
+    package var macRecoveryGate = MacTerminalRecoveryGate()
+    package var macReconciliationID: UUID?
+    package var macRecoveryTask: Task<Void, Never>?
     #elseif os(iOS)
-    var iosNetworkRecoveryGate = TerminalNetworkRecoveryGate()
+    package var iosNetworkRecoveryGate = TerminalNetworkRecoveryGate()
     #endif
 
-    init(
+    package init(
         access: TerminalReconnectAccess,
         initialNetworkReadiness: TerminalNetworkReadiness,
         networkUpdates: AnyPublisher<TerminalNetworkReadiness, Never>? = nil,
@@ -182,53 +241,53 @@ final class TerminalReconnectCoordinator: ObservableObject {
         signalCancellables.forEach { $0.cancel() }
     }
 
-    func attempt(for paneId: UUID) -> Attempt? {
+    package func attempt(for paneId: UUID) -> Attempt? {
         records[paneId]?.attempt
     }
 
-    var activePaneIDs: Set<UUID> {
+    package var activePaneIDs: Set<UUID> {
         Set(records.keys)
     }
 
-    func connectionGeneration(for paneId: UUID) -> UUID {
+    package func connectionGeneration(for paneId: UUID) -> UUID {
         connectionGenerations[paneId] ?? paneId
     }
 
-    var recoveryPaneIDs: [UUID] {
+    package var recoveryPaneIDs: [UUID] {
         access.paneIDs()
     }
 
-    func recoveryPaneFacts(for paneId: UUID) -> TerminalReconnectPaneFacts? {
+    package func recoveryPaneFacts(for paneId: UUID) -> TerminalReconnectPaneFacts? {
         access.paneFacts(paneId)
     }
 
     #if os(macOS)
-    var offlineMacRecoveryPaneIDs: [UUID] {
+    package var offlineMacRecoveryPaneIDs: [UUID] {
         access.offlineMacRecoveryPaneIDs()
     }
 
-    var macRecoveryCandidates: [MacTerminalRecoveryCandidate] {
+    package var macRecoveryCandidates: [MacTerminalRecoveryCandidate] {
         access.macRecoveryCandidates()
     }
 
-    func beginEternalTerminalRecoveryProbe(_ paneId: UUID) async -> UUID? {
+    package func beginEternalTerminalRecoveryProbe(_ paneId: UUID) async -> UUID? {
         await access.beginEternalTerminalProbe(paneId)
     }
 
-    func verifyLiveTransport(
+    package func verifyLiveTransport(
         for paneId: UUID,
         eternalTerminalProbeID: UUID?
     ) async -> Bool {
         await access.hasVerifiedLiveTransport(paneId, eternalTerminalProbeID)
     }
 
-    func markMoshConnectedIfNeeded(_ paneId: UUID) {
+    package func markMoshConnectedIfNeeded(_ paneId: UUID) {
         access.markMoshConnected(paneId)
     }
     #endif
 
     @discardableResult
-    func request(
+    package func request(
         for paneId: UUID,
         requiresReadyNetwork: Bool,
         generation: UUID = UUID(),
@@ -256,7 +315,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         )
     }
 
-    func receiveApplicationActivity(_ isActive: Bool) {
+    package func receiveApplicationActivity(_ isActive: Bool) {
         guard applicationIsActive != isActive else {
             if isActive {
                 resumeEligibleAttempts()
@@ -282,7 +341,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         }
     }
 
-    func receiveAppLock(_ isLocked: Bool) {
+    package func receiveAppLock(_ isLocked: Bool) {
         guard appIsLocked != isLocked else { return }
         appIsLocked = isLocked
         if isLocked {
@@ -299,7 +358,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         }
     }
 
-    func receiveNetworkReadiness(_ readiness: TerminalNetworkReadiness) {
+    package func receiveNetworkReadiness(_ readiness: TerminalNetworkReadiness) {
         guard currentNetworkReadiness != readiness else { return }
         currentNetworkReadiness = readiness
         if readiness == .ready {
@@ -320,7 +379,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         reconcileAllAutomaticReconnects()
     }
 
-    func reconcileAutomaticReconnect(
+    package func reconcileAutomaticReconnect(
         for paneId: UUID,
         sceneIsActive: Bool,
         automaticReconnectAllowed: Bool
@@ -333,16 +392,16 @@ final class TerminalReconnectCoordinator: ObservableObject {
         reconcileAutomaticReconnect(for: paneId)
     }
 
-    func removeAutomaticReconnectContext(for paneId: UUID) {
+    package func removeAutomaticReconnectContext(for paneId: UUID) {
         automaticContexts.removeValue(forKey: paneId)
         cancelAutomaticRetry(for: paneId)
     }
 
-    func cancelAutomaticRetry(for paneId: UUID) {
+    package func cancelAutomaticRetry(for paneId: UUID) {
         automaticRetries.removeValue(forKey: paneId)?.cancel()
     }
 
-    func connectionStateDidChange(for paneId: UUID) {
+    package func connectionStateDidChange(for paneId: UUID) {
         guard let facts = access.paneFacts(paneId) else {
             removePane(paneId)
             return
@@ -369,28 +428,28 @@ final class TerminalReconnectCoordinator: ObservableObject {
         reconcileAutomaticReconnect(for: paneId)
     }
 
-    func invalidatePreparations(forServer serverId: UUID) {
+    package func invalidatePreparations(forServer serverId: UUID) {
         for paneId in access.paneIDsForServer(serverId) {
             invalidate(for: paneId)
         }
     }
 
-    func complete(for paneId: UUID) {
+    package func complete(for paneId: UUID) {
         removeAttempt(for: paneId, event: .completed)
     }
 
-    func invalidate(for paneId: UUID) {
+    package func invalidate(for paneId: UUID) {
         removeAttempt(for: paneId, event: .invalidated)
     }
 
-    func removePane(_ paneId: UUID) {
+    package func removePane(_ paneId: UUID) {
         invalidate(for: paneId)
         cancelAutomaticRetry(for: paneId)
         automaticContexts.removeValue(forKey: paneId)
         connectionGenerations.removeValue(forKey: paneId)
     }
 
-    func prepareForApplicationTermination() {
+    package func prepareForApplicationTermination() {
         invalidateAllAttempts()
         automaticRetries.values.forEach { $0.cancel() }
         automaticRetries.removeAll()
@@ -398,7 +457,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         resetPlatformRecovery()
     }
 
-    func reset() {
+    package func reset() {
         prepareForApplicationTermination()
         connectionGenerations.removeAll()
     }
@@ -643,7 +702,7 @@ final class TerminalReconnectCoordinator: ObservableObject {
         }
     }
 
-    func markNetworkUnavailable(for generation: UUID) {
+    package func markNetworkUnavailable(for generation: UUID) {
         let matching = records.values.filter { $0.attempt.generation == generation }
         for record in matching where record.attempt.phase != .connecting {
             records[record.attempt.paneId]?.requiresReadyNetwork = true
@@ -651,12 +710,12 @@ final class TerminalReconnectCoordinator: ObservableObject {
         suspendConnectingAttempts(generation: generation)
     }
 
-    func markNetworkReady(for generation: UUID) {
+    package func markNetworkReady(for generation: UUID) {
         resumeEligibleAttempts(generation: generation)
     }
 
     @discardableResult
-    func requestWaitingForNetwork(
+    package func requestWaitingForNetwork(
         for paneId: UUID,
         generation: UUID,
         replacingCurrent: Bool

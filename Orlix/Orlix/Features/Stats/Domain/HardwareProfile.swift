@@ -1,19 +1,45 @@
 import Foundation
 
-nonisolated struct HardwareProfile: Equatable, Sendable {
-    var hostname: String
-    var osInfo: String
-    var architecture: String
-    var kernelVersion: String
-    var cpuModel: String
-    var cpuVendor: String
-    var cpuCores: Int
-    var cpuThreads: Int
-    var memoryTotal: UInt64
-    var gpus: [GPUDevice]
-    var collectedAt: Date
+nonisolated package struct HardwareProfile: Equatable, Sendable {
+    package var hostname: String
+    package var osInfo: String
+    package var architecture: String
+    package var kernelVersion: String
+    package var cpuModel: String
+    package var cpuVendor: String
+    package var cpuCores: Int
+    package var cpuThreads: Int
+    package var memoryTotal: UInt64
+    package var gpus: [GPUDevice]
+    package var collectedAt: Date
 
-    static let empty = HardwareProfile(
+    package init(
+        hostname: String,
+        osInfo: String,
+        architecture: String,
+        kernelVersion: String,
+        cpuModel: String,
+        cpuVendor: String,
+        cpuCores: Int,
+        cpuThreads: Int,
+        memoryTotal: UInt64,
+        gpus: [GPUDevice],
+        collectedAt: Date
+    ) {
+        self.hostname = hostname
+        self.osInfo = osInfo
+        self.architecture = architecture
+        self.kernelVersion = kernelVersion
+        self.cpuModel = cpuModel
+        self.cpuVendor = cpuVendor
+        self.cpuCores = cpuCores
+        self.cpuThreads = cpuThreads
+        self.memoryTotal = memoryTotal
+        self.gpus = gpus
+        self.collectedAt = collectedAt
+    }
+
+    static package let empty = HardwareProfile(
         hostname: "",
         osInfo: "",
         architecture: "",
@@ -27,7 +53,7 @@ nonisolated struct HardwareProfile: Equatable, Sendable {
         collectedAt: .distantPast
     )
 
-    var isEmpty: Bool {
+    package var isEmpty: Bool {
         hostname.isEmpty
             && osInfo.isEmpty
             && architecture.isEmpty

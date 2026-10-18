@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum MLXModelStorageSizeFormatter {
-    static func string(
+nonisolated package enum MLXModelStorageSizeFormatter {
+    static package func string(
         fromByteCount byteCount: Int64,
         locale: Locale = .autoupdatingCurrent
     ) -> String {
@@ -34,23 +34,23 @@ nonisolated enum MLXModelStorageSizeFormatter {
     }
 }
 
-nonisolated struct MLXModelOption: Identifiable, Hashable {
-    let id: String
-    let title: String
-    let kind: MLXModelKind
+nonisolated package struct MLXModelOption: Identifiable, Hashable {
+    package let id: String
+    package let title: String
+    package let kind: MLXModelKind
 
-    var expectedDownloadBytes: Int64? {
+    package var expectedDownloadBytes: Int64? {
         MLXModelCatalog.downloadManifest(for: id, kind: kind)?.expectedBytes
     }
 
-    var downloadSizeLabel: String {
+    package var downloadSizeLabel: String {
         guard let expectedDownloadBytes else { return "" }
         return MLXModelStorageSizeFormatter.string(fromByteCount: expectedDownloadBytes)
     }
 }
 
-nonisolated enum MLXModelCatalog {
-    static let whisperPresets: [MLXModelOption] = [
+nonisolated package enum MLXModelCatalog {
+    static package let whisperPresets: [MLXModelOption] = [
         MLXModelOption(
             id: "mlx-community/whisper-tiny-mlx",
             title: String(localized: "Tiny"),
@@ -88,7 +88,7 @@ nonisolated enum MLXModelCatalog {
         )
     ]
 
-    static let parakeetPresets: [MLXModelOption] = [
+    static package let parakeetPresets: [MLXModelOption] = [
         MLXModelOption(
             id: "mlx-community/parakeet-tdt-0.6b-v2",
             title: String(localized: "Parakeet TDT 0.6B v2"),
@@ -96,16 +96,16 @@ nonisolated enum MLXModelCatalog {
         )
     ]
 
-    static func option(for modelId: String, kind: MLXModelKind) -> MLXModelOption? {
+    static package func option(for modelId: String, kind: MLXModelKind) -> MLXModelOption? {
         let normalized = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
         return allOptions.first { $0.kind == kind && $0.id == normalized }
     }
 
-    static func options(for kind: MLXModelKind) -> [MLXModelOption] {
+    static package func options(for kind: MLXModelKind) -> [MLXModelOption] {
         allOptions.filter { $0.kind == kind }
     }
 
-    static func defaultModelID(for kind: MLXModelKind) -> String {
+    static package func defaultModelID(for kind: MLXModelKind) -> String {
         switch kind {
         case .whisper:
             return "mlx-community/whisper-tiny-mlx"
@@ -114,7 +114,7 @@ nonisolated enum MLXModelCatalog {
         }
     }
 
-    static var allOptions: [MLXModelOption] {
+    static package var allOptions: [MLXModelOption] {
         whisperPresets + parakeetPresets
     }
 }

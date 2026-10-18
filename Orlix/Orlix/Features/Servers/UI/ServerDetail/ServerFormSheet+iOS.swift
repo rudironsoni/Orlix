@@ -1,20 +1,20 @@
 #if os(iOS)
 import SwiftUI
 
-extension ServerFormSheet {
-    var platformBody: some View {
+package extension ServerFormSheet {
+    package var platformBody: some View {
         formContent
     }
 }
 
-extension MoveServerSheet {
-    var platformBody: some View {
+package extension MoveServerSheet {
+    package var platformBody: some View {
         formContent
     }
 }
 
-extension View {
-    func serverFormPlatformStyle(title: String) -> some View {
+package extension View {
+    package func serverFormPlatformStyle(title: String) -> some View {
         environment(\.defaultMinListRowHeight, 34)
             .modifier(ServerFormCompactListSectionSpacingModifier())
             .modifier(ServerFormTransparentNavigationBarModifier())
@@ -22,7 +22,7 @@ extension View {
             .navigationTitle(title)
     }
 
-    func serverFormPlatformActions(
+    package func serverFormPlatformActions(
         isEditing: Bool,
         isSaving: Bool,
         saveButtonDisabled: Bool,
@@ -49,7 +49,7 @@ extension View {
         }
     }
 
-    func moveServerPlatformActions(
+    package func moveServerPlatformActions(
         isMoving: Bool,
         moveButtonDisabled: Bool,
         onCancel: @escaping () -> Void,
@@ -79,7 +79,7 @@ extension View {
 }
 
 private struct ServerFormCompactListSectionSpacingModifier: ViewModifier {
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
             content.listSectionSpacing(.compact)
         } else {
@@ -89,7 +89,7 @@ private struct ServerFormCompactListSectionSpacingModifier: ViewModifier {
 }
 
 private struct ServerFormTransparentNavigationBarModifier: ViewModifier {
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
             content.orlixNavigationBarBackgroundHidden()
         } else {

@@ -1,11 +1,14 @@
 import Foundation
 
-nonisolated enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
     case create(prefill: ServerFormPrefill?)
     case edit(Server)
     case duplicate(Server)
 
-    var id: String {
+    package var id: String {
         switch self {
         case .create:
             return "create"
@@ -16,7 +19,7 @@ nonisolated enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
         }
     }
 
-    var sourceServer: Server? {
+    package var sourceServer: Server? {
         switch self {
         case .create:
             return nil
@@ -25,33 +28,33 @@ nonisolated enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
         }
     }
 
-    var editedServer: Server? {
+    package var editedServer: Server? {
         guard case .edit(let server) = self else { return nil }
         return server
     }
 
-    var prefill: ServerFormPrefill? {
+    package var prefill: ServerFormPrefill? {
         guard case .create(let prefill) = self else { return nil }
         return prefill
     }
 
-    var isEditing: Bool {
+    package var isEditing: Bool {
         editedServer != nil
     }
 
-    func serverID(makeID: () -> UUID) -> UUID {
+    package func serverID(makeID: () -> UUID) -> UUID {
         editedServer?.id ?? makeID()
     }
 
-    func createdAt(now: () -> Date) -> Date {
+    package func createdAt(now: () -> Date) -> Date {
         editedServer?.createdAt ?? now()
     }
 
-    func mutation(for server: Server) -> ServerMutation {
+    package func mutation(for server: Server) -> ServerMutation {
         isEditing ? .update(server) : .create(server)
     }
 
-    func preservingSourceMetadata(in server: Server) -> Server {
+    package func preservingSourceMetadata(in server: Server) -> Server {
         guard let sourceServer else { return server }
 
         var result = server

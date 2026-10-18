@@ -1,18 +1,21 @@
 import Foundation
 import MoshCore
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private struct MoshResumeSecret: Codable, Equatable, Sendable {
-    let keyBase64: String
+    package let keyBase64: String
 }
 
 private struct MoshResumeCheckpoint: Codable, Equatable, Sendable {
-    let host: String
-    let port: UInt16
-    let transportState: Data
-    let createdAtMs: UInt64
-    let schemaVersion: UInt16
+    package let host: String
+    package let port: UInt16
+    package let transportState: Data
+    package let createdAtMs: UInt64
+    package let schemaVersion: UInt16
 
-    init(_ snapshot: MoshSnapshot) {
+    package init(_ snapshot: MoshSnapshot) {
         host = snapshot.endpoint.host
         port = snapshot.endpoint.port
         transportState = snapshot.transportState
@@ -20,7 +23,7 @@ private struct MoshResumeCheckpoint: Codable, Equatable, Sendable {
         schemaVersion = snapshot.schemaVersion
     }
 
-    func snapshot(keyBase64: String) -> MoshSnapshot {
+    package func snapshot(keyBase64: String) -> MoshSnapshot {
         MoshSnapshot(
             endpoint: MoshEndpoint(
                 host: host,
@@ -34,19 +37,19 @@ private struct MoshResumeCheckpoint: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated enum MoshStoredStateDisposition: Equatable, Sendable {
+nonisolated package enum MoshStoredStateDisposition: Equatable, Sendable {
     case keep
     case discard
 }
 
-enum MoshResumeStoreError: LocalizedError {
+package enum MoshResumeStoreError: LocalizedError {
     case invalidSnapshot
     case corruptStoredSecret
     case secureStorageUnavailable
     case corruptStoredCheckpoint
     case checkpointStorageUnavailable
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .invalidSnapshot:
             String(localized: "Mosh returned invalid recovery data. Reconnect to start a new session.")
@@ -59,7 +62,7 @@ enum MoshResumeStoreError: LocalizedError {
         }
     }
 
-    var storedStateDisposition: MoshStoredStateDisposition {
+    package var storedStateDisposition: MoshStoredStateDisposition {
         switch self {
         case .invalidSnapshot, .corruptStoredSecret, .corruptStoredCheckpoint:
             .discard
@@ -69,8 +72,8 @@ enum MoshResumeStoreError: LocalizedError {
     }
 }
 
-nonisolated enum MoshResumePolicy {
-    static func storedStateDisposition(
+nonisolated package enum MoshResumePolicy {
+    static package func storedStateDisposition(
         after error: MoshSessionError
     ) -> MoshStoredStateDisposition {
         switch error {
@@ -90,23 +93,23 @@ nonisolated enum MoshResumePolicy {
     }
 }
 
-protocol MoshResumeStoring {
+package protocol MoshResumeStoring {
     func snapshot(for paneId: UUID) throws -> MoshSnapshot?
     func hasSnapshot(for paneId: UUID) -> Bool
     func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws
     func deleteSnapshot(for paneId: UUID) throws
 }
 
-protocol MoshResumeSecretStoring {
+package protocol MoshResumeSecretStoring {
     func set(_ data: Data, forKey key: String) throws
     func get(_ key: String) throws -> Data?
     func delete(_ key: String) throws
 }
 
-final class DeviceOnlyMoshResumeSecretStore: MoshResumeSecretStoring {
+final package class DeviceOnlyMoshResumeSecretStore: MoshResumeSecretStoring {
     private let store: KeychainStore
 
-    init(
+    package init(
         store: KeychainStore = KeychainStore(
             service: "com.rudironsoni.orlix.mosh.resume"
         )
@@ -114,27 +117,27 @@ final class DeviceOnlyMoshResumeSecretStore: MoshResumeSecretStoring {
         self.store = store
     }
 
-    func set(_ data: Data, forKey key: String) throws {
+    package func set(_ data: Data, forKey key: String) throws {
         try store.set(data, forKey: key, scope: .deviceOnly)
     }
 
-    func get(_ key: String) throws -> Data? {
+    package func get(_ key: String) throws -> Data? {
         try store.get(key, scope: .deviceOnly)
     }
 
-    func delete(_ key: String) throws {
+    package func delete(_ key: String) throws {
         try store.delete(key, scope: .deviceOnly)
     }
 }
 
-final class MoshResumeStore: MoshResumeStoring {
-    static let shared = MoshResumeStore()
+final package class MoshResumeStore: MoshResumeStoring {
+    static package let shared = MoshResumeStore()
 
     private let keychain: any MoshResumeSecretStoring
     private let fileManager: FileManager
     private let checkpointDirectory: URL?
 
-    init(
+    package init(
         keychain: any MoshResumeSecretStoring = DeviceOnlyMoshResumeSecretStore(),
         fileManager: FileManager = .default,
         checkpointDirectory: URL? = nil
@@ -147,7 +150,7 @@ final class MoshResumeStore: MoshResumeStoring {
             .appendingPathComponent("MoshResume", isDirectory: true)
     }
 
-    func snapshot(for paneId: UUID) throws -> MoshSnapshot? {
+    package func snapshot(for paneId: UUID) throws -> MoshSnapshot? {
         guard let url = checkpointURL(for: paneId) else {
             throw MoshResumeStoreError.checkpointStorageUnavailable
         }
@@ -193,12 +196,12 @@ final class MoshResumeStore: MoshResumeStoring {
         return checkpoint.snapshot(keyBase64: secret.keyBase64)
     }
 
-    func hasSnapshot(for paneId: UUID) -> Bool {
+    package func hasSnapshot(for paneId: UUID) -> Bool {
         guard let url = checkpointURL(for: paneId) else { return false }
         return fileManager.fileExists(atPath: url.path)
     }
 
-    func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws {
+    package func save(_ snapshot: MoshSnapshot, for paneId: UUID) throws {
         guard !snapshot.endpoint.host.isEmpty,
               snapshot.endpoint.port > 0,
               !snapshot.endpoint.keyBase64_22.isEmpty else {
@@ -236,7 +239,7 @@ final class MoshResumeStore: MoshResumeStoring {
         }
     }
 
-    func deleteSnapshot(for paneId: UUID) throws {
+    package func deleteSnapshot(for paneId: UUID) throws {
         var failed = false
         do {
             try keychain.delete(Self.key(for: paneId))
@@ -262,7 +265,7 @@ final class MoshResumeStore: MoshResumeStoring {
         )
     }
 
-    nonisolated static func key(for paneId: UUID) -> String {
+    nonisolated static package func key(for paneId: UUID) -> String {
         "terminal.mosh.resume.\(paneId.uuidString.lowercased())"
     }
 }

@@ -1,8 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum SSHKeySettingsFailurePresentation {
-    static func message(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package enum SSHKeySettingsFailurePresentation {
+    static package func message(
         for operation: SSHKeySettingsCoordinator.Operation,
         failure: SSHKeySettingsFailure
     ) -> String {
@@ -17,7 +20,7 @@ enum SSHKeySettingsFailurePresentation {
         return String(format: format, details(for: failure))
     }
 
-    static func details(for failure: SSHKeySettingsFailure) -> String {
+    static package func details(for failure: SSHKeySettingsFailure) -> String {
         switch failure {
         case .keychain(let status):
             "Keychain error: \(status)"
@@ -47,14 +50,14 @@ enum SSHKeySettingsFailurePresentation {
 
 // MARK: - Keychain Settings View
 
-struct KeychainSettingsView: View {
+package struct KeychainSettingsView: View {
     @EnvironmentObject private var coordinator: SSHKeySettingsCoordinator
     @State private var showingAddKey = false
     @State private var showingGenerateKey = false
     @State private var keyToDelete: SSHKeyEntry?
-    @State var keyToShowDetails: SSHKeyEntry?
+    @State package var keyToShowDetails: SSHKeyEntry?
 
-    var body: some View {
+    package var body: some View {
         Group {
             if coordinator.keys.isEmpty {
                 emptyKeysView
@@ -187,7 +190,7 @@ struct KeychainSettingsView: View {
     }
 
     @ViewBuilder
-    func keyActions(for key: SSHKeyEntry) -> some View {
+    package func keyActions(for key: SSHKeyEntry) -> some View {
         Button {
             keyToShowDetails = key
         } label: {
@@ -211,14 +214,17 @@ struct KeychainSettingsView: View {
             Label("Delete", systemImage: "trash")
         }
     }
+
+
+    package init() {}
 }
 
 // MARK: - SSH Key Row
 
-struct SSHKeyRow: View {
-    let key: SSHKeyEntry
+package struct SSHKeyRow: View {
+    package let key: SSHKeyEntry
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: keyIcon)
                 .font(.title2)
@@ -269,8 +275,8 @@ struct SSHKeyRow: View {
 
 // MARK: - Add SSH Key Sheet
 
-struct AddSSHKeySheet: View {
-    let onSave: (SSHKeyEntry) -> Void
+package struct AddSSHKeySheet: View {
+    package let onSave: (SSHKeyEntry) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var coordinator: SSHKeySettingsCoordinator
@@ -282,7 +288,7 @@ struct AddSSHKeySheet: View {
     @State private var isSaving = false
     @State private var error: String?
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 Section("Key Name") {
@@ -440,8 +446,8 @@ struct AddSSHKeySheet: View {
 
 // MARK: - Generate SSH Key Sheet
 
-struct GenerateSSHKeySheet: View {
-    let onSave: (SSHKeyEntry) -> Void
+package struct GenerateSSHKeySheet: View {
+    package let onSave: (SSHKeyEntry) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var coordinator: SSHKeySettingsCoordinator
@@ -452,7 +458,7 @@ struct GenerateSSHKeySheet: View {
     @State private var confirmPassphrase: String = ""
     @State private var isGenerating = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 Section("Key Name") {
@@ -552,13 +558,13 @@ struct GenerateSSHKeySheet: View {
 
 // MARK: - Key Details Sheet
 
-struct KeyDetailsSheet: View {
-    let keyEntry: SSHKeyEntry
+package struct KeyDetailsSheet: View {
+    package let keyEntry: SSHKeyEntry
 
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 Section {
@@ -631,14 +637,14 @@ struct KeyDetailsSheet: View {
 
 // MARK: - Public Key Display Sheet (for newly generated keys)
 
-struct PublicKeyDisplaySheet: View {
-    let publicKey: String
-    let fingerprint: String
+package struct PublicKeyDisplaySheet: View {
+    package let publicKey: String
+    package let fingerprint: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             VStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {

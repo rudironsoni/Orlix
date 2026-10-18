@@ -2,8 +2,8 @@ import Foundation
 
 extension AnalyticsTracker: EngagementAnalytics {}
 
-extension EngagementTrackerDependencies {
-    static func live(
+package extension EngagementTrackerDependencies {
+    static package func live(
         defaults: UserDefaults,
         analytics: any EngagementAnalytics,
         now: @escaping () -> Date,

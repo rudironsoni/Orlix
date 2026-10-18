@@ -1,28 +1,31 @@
 import Foundation
 
-nonisolated enum HerdrRemoteSessionParser {
-    static let maximumOutputBytes = 64 * 1_024
-    static let maximumProbeOutputBytes = 8 * 1_024
-    static let maximumMutationOutputBytes = 16 * 1_024
-    static let maximumSessionCount = 256
-    static let maximumSessionNameBytes = 64
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum HerdrRemoteSessionParser {
+    static package let maximumOutputBytes = 64 * 1_024
+    static package let maximumProbeOutputBytes = 8 * 1_024
+    static package let maximumMutationOutputBytes = 16 * 1_024
+    static package let maximumSessionCount = 256
+    static package let maximumSessionNameBytes = 64
 
-    struct ProbeResult: Equatable, Sendable {
-        let executable: RemoteSessionExecutable
-        let rawVersion: String
-        let semanticVersion: RemoteSessionSemanticVersion
+    package struct ProbeResult: Equatable, Sendable {
+        package let executable: RemoteSessionExecutable
+        package let rawVersion: String
+        package let semanticVersion: RemoteSessionSemanticVersion
     }
 
     private struct SessionList: Decodable {
-        let sessions: [Session]
+        package let sessions: [Session]
     }
 
     private struct Session: Decodable {
-        let name: String
+        package let name: String
         let `default`: Bool
-        let running: Bool
-        let socketPath: String
-        let sessionDirectory: String
+        package let running: Bool
+        package let socketPath: String
+        package let sessionDirectory: String
 
         private enum CodingKeys: String, CodingKey {
             case name
@@ -34,10 +37,10 @@ nonisolated enum HerdrRemoteSessionParser {
     }
 
     private struct CurrentPaneResponse: Decodable {
-        struct Result: Decodable {
-            struct Pane: Decodable {
-                let cwd: String
-                let foregroundCwd: String?
+        package struct Result: Decodable {
+            package struct Pane: Decodable {
+                package let cwd: String
+                package let foregroundCwd: String?
 
                 private enum CodingKeys: String, CodingKey {
                     case cwd
@@ -45,13 +48,13 @@ nonisolated enum HerdrRemoteSessionParser {
                 }
             }
 
-            let pane: Pane
+            package let pane: Pane
         }
 
-        let result: Result
+        package let result: Result
     }
 
-    static func parseProbe(_ output: String) -> ProbeResult? {
+    static package func parseProbe(_ output: String) -> ProbeResult? {
         guard output.utf8.count <= maximumProbeOutputBytes else { return nil }
         let lines = output.split(whereSeparator: \.isNewline).map(String.init)
         guard lines.contains(HerdrRemoteSessionCommandBuilder.availableMarker),
@@ -77,7 +80,7 @@ nonisolated enum HerdrRemoteSessionParser {
         )
     }
 
-    static func parseSessionList(
+    static package func parseSessionList(
         _ output: String,
         scope: RemoteSessionListScope
     ) throws -> [RemoteSessionDescriptor] {
@@ -152,7 +155,7 @@ nonisolated enum HerdrRemoteSessionParser {
         }
     }
 
-    static func parseWorkingDirectory(_ output: String) -> String? {
+    static package func parseWorkingDirectory(_ output: String) -> String? {
         guard output.utf8.count <= maximumOutputBytes,
               let data = output.data(using: .utf8),
               let response = try? JSONDecoder().decode(
@@ -166,7 +169,7 @@ nonisolated enum HerdrRemoteSessionParser {
         return candidates.first(where: isBoundedAbsolutePath)
     }
 
-    static func isValidSessionName(_ name: String) -> Bool {
+    static package func isValidSessionName(_ name: String) -> Bool {
         let bytes = name.utf8
         guard !bytes.isEmpty,
               bytes.count <= maximumSessionNameBytes,

@@ -1,14 +1,29 @@
 import Foundation
 
-nonisolated struct TerminalFontFamily: Identifiable, Hashable, Sendable {
-    nonisolated enum Source: String, CaseIterable, Hashable, Sendable {
+nonisolated package struct TerminalFontFamily: Identifiable, Hashable, Sendable {
+    nonisolated package enum Source: String, CaseIterable, Hashable, Sendable {
         case builtIn
         case custom
         case system
     }
 
-    let name: String
-    let source: Source
+    package let name: String
+    package let source: Source
 
-    var id: String { name }
+    package var id: String { name }
+
+
+    package init(
+
+        name: String,
+
+        source: Source
+
+    ) {
+
+        self.name = name
+
+        self.source = source
+
+    }
 }

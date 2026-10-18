@@ -1,9 +1,12 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-struct ServerLocalStore {
-    static let serversStorageKey = "com.rudironsoni.orlix.servers"
-    static let workspacesStorageKey = "com.rudironsoni.orlix.workspaces"
+package struct ServerLocalStore {
+    static package let serversStorageKey = "com.rudironsoni.orlix.servers"
+    static package let workspacesStorageKey = "com.rudironsoni.orlix.workspaces"
     private static let serverDataMutationJournalKey =
         "com.rudironsoni.orlix.serverDataMutationJournal.v2"
     private static let ambiguousCloudRecoveryBackupKey =
@@ -13,7 +16,7 @@ struct ServerLocalStore {
     private let serversKey: String
     private let workspacesKey: String
 
-    init(
+    package init(
         defaults: UserDefaults,
         serversKey: String = Self.serversStorageKey,
         workspacesKey: String = Self.workspacesStorageKey
@@ -23,7 +26,7 @@ struct ServerLocalStore {
         self.workspacesKey = workspacesKey
     }
 
-    func loadServers() -> ServerLocalLoadResult<[Server]> {
+    package func loadServers() -> ServerLocalLoadResult<[Server]> {
         if let journal = try? loadServerDataMutationJournal() {
             return .loaded(
                 journal.presentsResultingState
@@ -34,7 +37,7 @@ struct ServerLocalStore {
         return load([Server].self, forKey: serversKey, collection: .servers)
     }
 
-    func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
+    package func loadWorkspaces() -> ServerLocalLoadResult<[Workspace]> {
         if let journal = try? loadServerDataMutationJournal() {
             return .loaded(
                 journal.presentsResultingState
@@ -45,12 +48,12 @@ struct ServerLocalStore {
         return load([Workspace].self, forKey: workspacesKey, collection: .workspaces)
     }
 
-    func storeServers(_ servers: [Server]) throws {
+    package func storeServers(_ servers: [Server]) throws {
         try requireNoPendingServerDataMutation()
         try store(servers, forKey: serversKey)
     }
 
-    func storeWorkspaces(_ workspaces: [Workspace]) throws {
+    package func storeWorkspaces(_ workspaces: [Workspace]) throws {
         try requireNoPendingServerDataMutation()
         try store(workspaces, forKey: workspacesKey)
     }
@@ -90,14 +93,14 @@ struct ServerLocalStore {
 }
 
 extension ServerLocalStore: ServerDataMutationJournalStoring {
-    func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
+    package func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
         guard let data = defaults.data(forKey: Self.serverDataMutationJournalKey) else {
             return nil
         }
         return try JSONDecoder().decode(ServerDataMutationJournal.self, from: data)
     }
 
-    func storeServerDataMutationJournal(
+    package func storeServerDataMutationJournal(
         _ journal: ServerDataMutationJournal
     ) throws {
         let data = try JSONEncoder().encode(journal)
@@ -108,14 +111,14 @@ extension ServerLocalStore: ServerDataMutationJournalStoring {
         }
     }
 
-    func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
+    package func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws {
         try persistCollections(
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
         )
     }
 
-    func clearServerDataMutationJournal() throws {
+    package func clearServerDataMutationJournal() throws {
         defaults.removeObject(forKey: Self.serverDataMutationJournalKey)
         guard defaults.object(forKey: Self.serverDataMutationJournalKey) == nil else {
             throw ServerLocalStoreError.persistenceFailed
@@ -124,32 +127,32 @@ extension ServerLocalStore: ServerDataMutationJournalStoring {
 }
 
 extension ServerLocalStore: ServerLocalRepository {
-    func loadSnapshot() -> ServerLocalRepositorySnapshot {
+    package func loadSnapshot() -> ServerLocalRepositorySnapshot {
         ServerLocalRepositorySnapshot(
             servers: loadServers(),
             workspaces: loadWorkspaces()
         )
     }
 
-    func persist(servers: [Server], workspaces: [Workspace]) throws {
+    package func persist(servers: [Server], workspaces: [Workspace]) throws {
         try requireNoPendingServerDataMutation()
         try persistCollections(servers: servers, workspaces: workspaces)
     }
 
-    func clearServerData() throws {
+    package func clearServerData() throws {
         try requireNoPendingServerDataMutation()
         defaults.removeObject(forKey: serversKey)
         defaults.removeObject(forKey: workspacesKey)
     }
 
-    func loadAmbiguousCloudRecoveryBackup() throws -> AmbiguousCloudRecoveryBackup? {
+    package func loadAmbiguousCloudRecoveryBackup() throws -> AmbiguousCloudRecoveryBackup? {
         guard let data = defaults.data(forKey: Self.ambiguousCloudRecoveryBackupKey) else {
             return nil
         }
         return try JSONDecoder().decode(AmbiguousCloudRecoveryBackup.self, from: data)
     }
 
-    func storeAmbiguousCloudRecoveryBackup(_ backup: AmbiguousCloudRecoveryBackup) throws {
+    package func storeAmbiguousCloudRecoveryBackup(_ backup: AmbiguousCloudRecoveryBackup) throws {
         if try loadAmbiguousCloudRecoveryBackup() != nil {
             return
         }
@@ -161,7 +164,7 @@ extension ServerLocalStore: ServerLocalRepository {
         }
     }
 
-    func clearAmbiguousCloudRecoveryBackup() throws {
+    package func clearAmbiguousCloudRecoveryBackup() throws {
         defaults.removeObject(forKey: Self.ambiguousCloudRecoveryBackupKey)
         guard defaults.object(forKey: Self.ambiguousCloudRecoveryBackupKey) == nil else {
             throw ServerLocalStoreError.persistenceFailed
@@ -200,7 +203,7 @@ extension ServerLocalStore: ServerLocalRepository {
     }
 }
 
-nonisolated enum ServerLocalStoreError: Error, Equatable, Sendable {
+nonisolated package enum ServerLocalStoreError: Error, Equatable, Sendable {
     case persistenceFailed
     case serverDataMutationPending
 }

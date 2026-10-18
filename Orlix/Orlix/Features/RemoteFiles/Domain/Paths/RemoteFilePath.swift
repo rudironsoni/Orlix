@@ -1,14 +1,29 @@
 import Foundation
 
-nonisolated struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
-    let title: String
-    let path: String
+nonisolated package struct RemoteFileBreadcrumb: Identifiable, Hashable, Sendable {
+    package let title: String
+    package let path: String
 
-    var id: String { path }
+    package var id: String { path }
+
+
+    package init(
+
+        title: String,
+
+        path: String
+
+    ) {
+
+        self.title = title
+
+        self.path = path
+
+    }
 }
 
-nonisolated enum RemoteFilePath {
-    static func normalize(_ path: String, relativeTo currentPath: String? = nil) -> String {
+nonisolated package enum RemoteFilePath {
+    static package func normalize(_ path: String, relativeTo currentPath: String? = nil) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return currentPath ?? "/"
@@ -43,7 +58,7 @@ nonisolated enum RemoteFilePath {
         return "/" + normalized.joined(separator: "/")
     }
 
-    static func parent(of path: String) -> String {
+    static package func parent(of path: String) -> String {
         let normalized = normalize(path)
         guard normalized != "/" else { return "/" }
 
@@ -55,26 +70,26 @@ nonisolated enum RemoteFilePath {
         return "/" + components.joined(separator: "/")
     }
 
-    static func appending(_ name: String, to directoryPath: String) -> String {
+    static package func appending(_ name: String, to directoryPath: String) -> String {
         let separator = directoryPath == "/" ? "" : "/"
         return normalize(directoryPath + separator + name)
     }
 
-    static func appending(_ leaf: RemoteFileLeaf, to directoryPath: String) -> String {
+    static package func appending(_ leaf: RemoteFileLeaf, to directoryPath: String) -> String {
         let root = normalize(directoryPath)
         let candidate = appending(leaf.value, to: root)
         precondition(isStrictDescendant(candidate, of: root))
         return candidate
     }
 
-    static func isStrictDescendant(_ candidatePath: String, of rootPath: String) -> Bool {
+    static package func isStrictDescendant(_ candidatePath: String, of rootPath: String) -> Bool {
         let candidate = normalize(candidatePath)
         let root = normalize(rootPath)
         guard candidate != root else { return false }
         return root == "/" ? candidate.hasPrefix("/") : candidate.hasPrefix(root + "/")
     }
 
-    static func breadcrumbs(for path: String) -> [RemoteFileBreadcrumb] {
+    static package func breadcrumbs(for path: String) -> [RemoteFileBreadcrumb] {
         let normalized = normalize(path)
         guard normalized != "/" else {
             return [RemoteFileBreadcrumb(title: "/", path: "/")]
@@ -93,8 +108,8 @@ nonisolated enum RemoteFilePath {
     }
 }
 
-nonisolated enum RemoteFileLocalPath {
-    static func descendant(
+nonisolated package enum RemoteFileLocalPath {
+    static package func descendant(
         named leaf: RemoteFileLeaf,
         in parentURL: URL,
         operationRootURL: URL,

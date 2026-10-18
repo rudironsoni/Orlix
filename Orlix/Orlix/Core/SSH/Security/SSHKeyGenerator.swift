@@ -4,27 +4,27 @@ import Security
 
 // MARK: - SSH Key Type
 
-enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
+package enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
     case ed25519
     case rsa4096
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .ed25519: return String(localized: "Ed25519")
         case .rsa4096: return String(localized: "RSA 4096")
         }
     }
 
-    var description: String {
+    package var description: String {
         switch self {
         case .ed25519: return String(localized: "Modern, fast, and secure. Recommended for most uses.")
         case .rsa4096: return String(localized: "Wide compatibility with older systems.")
         }
     }
 
-    var algorithmName: String {
+    package var algorithmName: String {
         switch self {
         case .ed25519: return "ssh-ed25519"
         case .rsa4096: return "ssh-rsa"
@@ -34,22 +34,22 @@ enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - Generated Key Result
 
-struct GeneratedSSHKey {
-    let privateKey: Data
-    let publicKey: String
-    let keyType: SSHKeyType
-    let fingerprint: String
+package struct GeneratedSSHKey {
+    package let privateKey: Data
+    package let publicKey: String
+    package let keyType: SSHKeyType
+    package let fingerprint: String
 }
 
 // MARK: - SSH Key Generator
 
-enum SSHKeyGeneratorError: LocalizedError {
+package enum SSHKeyGeneratorError: LocalizedError {
     case keyGenerationFailed
     case encodingFailed
     case rsaExportFailed
     case invalidKeyData
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .keyGenerationFailed: return String(localized: "Failed to generate SSH key")
         case .encodingFailed: return String(localized: "Failed to encode key data")
@@ -59,10 +59,10 @@ enum SSHKeyGeneratorError: LocalizedError {
     }
 }
 
-enum SSHKeyGenerator {
+package enum SSHKeyGenerator {
 
     /// Generate a new SSH key pair
-    static func generate(type: SSHKeyType, comment: String = "") throws -> GeneratedSSHKey {
+    static package func generate(type: SSHKeyType, comment: String = "") throws -> GeneratedSSHKey {
         switch type {
         case .ed25519:
             return try generateEd25519(comment: comment)

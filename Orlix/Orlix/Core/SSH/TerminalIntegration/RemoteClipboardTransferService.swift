@@ -1,16 +1,19 @@
 import Foundation
 import OSLog
 
-actor RemoteClipboardTransferService {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package actor RemoteClipboardTransferService {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "RemoteClipboardTransfer")
     private let sessionId: UUID
     private var didSweepStaleFiles = false
 
-    init(sessionId: UUID) {
+    package init(sessionId: UUID) {
         self.sessionId = sessionId
     }
 
-    func uploadImage(
+    package func uploadImage(
         _ image: ClipboardImagePayload,
         using sshClient: SSHClient
     ) async throws -> RemoteClipboardUpload {

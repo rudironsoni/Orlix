@@ -1,9 +1,12 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalConnectionWatchdog: ObservableObject {
-    typealias Sleep = @Sendable (_ duration: Duration) async throws -> Void
+final package class TerminalConnectionWatchdog: ObservableObject {
+    package typealias Sleep = @Sendable (_ duration: Duration) async throws -> Void
 
     @Published private(set) var token = UUID()
 
@@ -11,7 +14,7 @@ final class TerminalConnectionWatchdog: ObservableObject {
     private let sleep: Sleep
     private var task: Task<Void, Never>?
 
-    init(
+    package init(
         delay: Duration = .seconds(20),
         sleep: @escaping Sleep = { try await Task.sleep(for: $0) }
     ) {
@@ -19,7 +22,7 @@ final class TerminalConnectionWatchdog: ObservableObject {
         self.sleep = sleep
     }
 
-    func replace(action: @escaping @MainActor @Sendable () -> Void) {
+    package func replace(action: @escaping @MainActor @Sendable () -> Void) {
         cancel()
         let scheduledToken = token
         let delay = delay
@@ -36,7 +39,7 @@ final class TerminalConnectionWatchdog: ObservableObject {
         }
     }
 
-    func cancel() {
+    package func cancel() {
         task?.cancel()
         task = nil
         token = UUID()

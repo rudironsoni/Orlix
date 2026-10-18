@@ -4,12 +4,12 @@ import SwiftUI
 import AppKit
 #endif
 
-struct RemoteFileEmptyState: View {
-    let icon: String
-    let title: String
-    let message: String
+package struct RemoteFileEmptyState: View {
+    package let icon: String
+    package let title: String
+    package let message: String
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 24, weight: .semibold))
@@ -28,11 +28,11 @@ struct RemoteFileEmptyState: View {
     }
 }
 
-struct RemoteFileLoadingState: View {
-    let title: String
-    let message: String
+package struct RemoteFileLoadingState: View {
+    package let title: String
+    package let message: String
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.regular)
@@ -50,12 +50,12 @@ struct RemoteFileLoadingState: View {
     }
 }
 
-struct RemoteFileMessageRow: View {
-    let icon: String
-    let title: String
-    let message: String
+package struct RemoteFileMessageRow: View {
+    package let icon: String
+    package let title: String
+    package let message: String
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: icon)
                 .font(.subheadline.weight(.semibold))
@@ -70,8 +70,8 @@ struct RemoteFileMessageRow: View {
     }
 }
 
-struct RemoteFileDropOverlay: View {
-    var body: some View {
+package struct RemoteFileDropOverlay: View {
+    package var body: some View {
         #if os(macOS)
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .fill(Color.accentColor.opacity(0.06))

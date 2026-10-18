@@ -8,27 +8,31 @@ import UIKit
 import AppKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
-final class TerminalRichPasteUIModel: ObservableObject {
-    struct Prompt: Identifiable {
-        let id = UUID()
-        let title: String
-        let message: String
-        let previewImageData: Data?
-        let uploadOnceAction: () -> Void
-        let alwaysUploadAction: () -> Void
-        let pasteTextAction: (() -> Void)?
-        let cancelAction: () -> Void
+final package class TerminalRichPasteUIModel: ObservableObject {
+    package struct Prompt: Identifiable {
+        package let id = UUID()
+        package let title: String
+        package let message: String
+        package let previewImageData: Data?
+        package let uploadOnceAction: () -> Void
+        package let alwaysUploadAction: () -> Void
+        package let pasteTextAction: (() -> Void)?
+        package let cancelAction: () -> Void
     }
 
-    struct Banner: Identifiable {
-        enum Kind {
+    package struct Banner: Identifiable {
+        package enum Kind {
             case info
             case success
             case warning
             case error
 
-            var icon: String {
+            package var icon: String {
                 switch self {
                 case .info:
                     return "info.circle.fill"
@@ -41,7 +45,7 @@ final class TerminalRichPasteUIModel: ObservableObject {
                 }
             }
 
-            var tint: Color {
+            package var tint: Color {
                 switch self {
                 case .info:
                     return .blue
@@ -55,30 +59,30 @@ final class TerminalRichPasteUIModel: ObservableObject {
             }
         }
 
-        let id = UUID()
-        let kind: Kind
-        let message: String
+        package let id = UUID()
+        package let kind: Kind
+        package let message: String
     }
 
-    @Published var prompt: Prompt?
-    @Published var progressMessage: String?
-    @Published var banner: Banner?
+    @Published package var prompt: Prompt?
+    @Published package var progressMessage: String?
+    @Published package var banner: Banner?
 
     private var bannerDismissTask: Task<Void, Never>?
 
-    func present(prompt: Prompt) {
+    package func present(prompt: Prompt) {
         self.prompt = prompt
     }
 
-    func dismissPrompt() {
+    package func dismissPrompt() {
         prompt = nil
     }
 
-    func setProgress(_ message: String?) {
+    package func setProgress(_ message: String?) {
         progressMessage = message
     }
 
-    func showBanner(
+    package func showBanner(
         kind: Banner.Kind,
         message: String,
         autoDismissAfter: Duration? = .seconds(4)
@@ -98,7 +102,7 @@ final class TerminalRichPasteUIModel: ObservableObject {
         }
     }
 
-    func dismissBanner() {
+    package func dismissBanner() {
         bannerDismissTask?.cancel()
         bannerDismissTask = nil
         banner = nil
@@ -109,8 +113,8 @@ final class TerminalRichPasteUIModel: ObservableObject {
     }
 }
 
-extension TerminalRichPasteUIModel {
-    var promptBinding: Binding<Prompt?> {
+package extension TerminalRichPasteUIModel {
+    package var promptBinding: Binding<Prompt?> {
         Binding(
             get: { self.prompt },
             set: { prompt in
@@ -121,7 +125,7 @@ extension TerminalRichPasteUIModel {
         )
     }
 
-    var topBannerNotice: NoticeItem? {
+    package var topBannerNotice: NoticeItem? {
         guard let banner else { return nil }
 
         return NoticeItem(
@@ -136,7 +140,7 @@ extension TerminalRichPasteUIModel {
         )
     }
 
-    var bottomOperationNotice: NoticeItem? {
+    package var bottomOperationNotice: NoticeItem? {
         guard let progressMessage else { return nil }
 
         return NoticeItem(
@@ -151,7 +155,7 @@ extension TerminalRichPasteUIModel {
 }
 
 private extension TerminalRichPasteUIModel.Banner.Kind {
-    var noticeLevel: NoticeLevel {
+    package var noticeLevel: NoticeLevel {
         switch self {
         case .info:
             return .info
@@ -166,9 +170,9 @@ private extension TerminalRichPasteUIModel.Banner.Kind {
 }
 
 private struct TerminalRichPastePromptModifier: ViewModifier {
-    @ObservedObject var uiModel: TerminalRichPasteUIModel
+    @ObservedObject package var uiModel: TerminalRichPasteUIModel
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content.sheet(item: uiModel.promptBinding) { prompt in
             TerminalRichPastePromptSheet(
                 prompt: prompt,
@@ -196,14 +200,14 @@ private struct TerminalRichPastePromptModifier: ViewModifier {
     }
 }
 
-extension View {
-    func terminalRichPastePrompt(using uiModel: TerminalRichPasteUIModel) -> some View {
+package extension View {
+    package func terminalRichPastePrompt(using uiModel: TerminalRichPasteUIModel) -> some View {
         modifier(TerminalRichPastePromptModifier(uiModel: uiModel))
     }
 }
 
 @MainActor
-protocol TerminalRichPasteContext: AnyObject {
+package protocol TerminalRichPasteContext: AnyObject {
     var sessionId: UUID { get }
     var uiModel: TerminalRichPasteUIModel { get }
 
@@ -213,9 +217,9 @@ protocol TerminalRichPasteContext: AnyObject {
 }
 
 @MainActor
-final class TerminalRichPasteRuntime: TerminalRichPasteContext {
-    let sessionId: UUID
-    let uiModel: TerminalRichPasteUIModel
+final package class TerminalRichPasteRuntime: TerminalRichPasteContext {
+    package let sessionId: UUID
+    package let uiModel: TerminalRichPasteUIModel
 
     private let resolveConnectedSSHClientHandler: @MainActor () async -> SSHClient?
     private let pasteTextFromClipboardHandler: @MainActor () -> Void
@@ -225,7 +229,7 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
         coordinator: TerminalRichPasteCoordinator(sessionId: sessionId)
     )
 
-    init(
+    package init(
         sessionId: UUID,
         uiModel: TerminalRichPasteUIModel,
         resolveConnectedSSHClient: @escaping @MainActor () async -> SSHClient?,
@@ -239,7 +243,7 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
         self.sendTextHandler = sendText
     }
 
-    static func terminalPane(
+    static package func terminalPane(
         paneId: UUID,
         tabManager: TerminalTabManager,
         uiModel: TerminalRichPasteUIModel
@@ -261,25 +265,25 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
         )
     }
 
-    func install(on terminal: any TerminalSurface) {
+    package func install(on terminal: any TerminalSurface) {
         terminal.installRichPasteInterceptor { [weak self] in
             self?.controller.interceptPaste() ?? false
         }
     }
 
-    func resolveConnectedSSHClient() async -> SSHClient? {
+    package func resolveConnectedSSHClient() async -> SSHClient? {
         await resolveConnectedSSHClientHandler()
     }
 
-    func pasteTextFromClipboard() {
+    package func pasteTextFromClipboard() {
         pasteTextFromClipboardHandler()
     }
 
-    func sendText(_ text: String) {
+    package func sendText(_ text: String) {
         sendTextHandler(text)
     }
 
-    func cancel() {
+    package func cancel() {
         controller.cancel()
     }
 }
@@ -289,10 +293,10 @@ final class TerminalRichPasteRuntime: TerminalRichPasteContext {
 /// The store is intentionally not observable. Only the mounted pane observes
 /// its own UI model, so hidden uploads do not invalidate terminal toolbars.
 @MainActor
-final class TerminalRichPasteRuntimeStore {
+final package class TerminalRichPasteRuntimeStore {
     private var runtimesByPaneID: [UUID: TerminalRichPasteRuntime] = [:]
 
-    func runtime(
+    package func runtime(
         for paneID: UUID,
         tabManager: TerminalTabManager
     ) -> TerminalRichPasteRuntime {
@@ -309,17 +313,17 @@ final class TerminalRichPasteRuntimeStore {
         return runtime
     }
 
-    func removePane(_ paneID: UUID) {
+    package func removePane(_ paneID: UUID) {
         runtimesByPaneID.removeValue(forKey: paneID)?.cancel()
     }
 
-    func removeAll() {
+    package func removeAll() {
         let runtimes = Array(runtimesByPaneID.values)
         runtimesByPaneID.removeAll(keepingCapacity: false)
         runtimes.forEach { $0.cancel() }
     }
 
-    var runtimeCount: Int {
+    package var runtimeCount: Int {
         runtimesByPaneID.count
     }
 
@@ -329,14 +333,14 @@ final class TerminalRichPasteRuntimeStore {
 }
 
 @MainActor
-final class TerminalRichPasteController {
+final package class TerminalRichPasteController {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "TerminalRichPaste")
     private weak var context: (any TerminalRichPasteContext)?
     private let coordinator: TerminalRichPasteCoordinator
     private var activePasteTask: Task<Void, Never>?
     private var activePasteTaskID: UUID?
 
-    init(
+    package init(
         context: any TerminalRichPasteContext,
         coordinator: TerminalRichPasteCoordinator
     ) {
@@ -344,7 +348,7 @@ final class TerminalRichPasteController {
         self.coordinator = coordinator
     }
 
-    func interceptPaste() -> Bool {
+    package func interceptPaste() -> Bool {
         guard let context else { return false }
         let settings = RichClipboardSettings()
         guard settings.isImagePasteEnabled else { return false }
@@ -495,7 +499,7 @@ final class TerminalRichPasteController {
         context.sendText(result.pastedPathToken)
     }
 
-    func cancel() {
+    package func cancel() {
         activePasteTask?.cancel()
         activePasteTask = nil
         activePasteTaskID = nil
@@ -508,16 +512,16 @@ final class TerminalRichPasteController {
     }
 }
 
-struct TerminalRichPastePromptSheet: View {
-    let prompt: TerminalRichPasteUIModel.Prompt
-    let onUploadOnce: () -> Void
-    let onAlwaysUpload: () -> Void
-    let onPasteText: (() -> Void)?
-    let onCancel: () -> Void
+package struct TerminalRichPastePromptSheet: View {
+    package let prompt: TerminalRichPasteUIModel.Prompt
+    package let onUploadOnce: () -> Void
+    package let onAlwaysUpload: () -> Void
+    package let onPasteText: (() -> Void)?
+    package let onCancel: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             contentBody

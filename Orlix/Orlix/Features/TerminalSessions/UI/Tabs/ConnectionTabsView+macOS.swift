@@ -2,14 +2,20 @@
 import SwiftUI
 import AppKit
 
-struct ZenWindowChromeBridge: NSViewRepresentable {
-    @Binding var contentInsets: EdgeInsets
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+#endif
+package struct ZenWindowChromeBridge: NSViewRepresentable {
+    @Binding package var contentInsets: EdgeInsets
 
-    func makeNSView(context: Context) -> WindowObserverView {
+    package func makeNSView(context: Context) -> WindowObserverView {
         WindowObserverView()
     }
 
-    func updateNSView(_ nsView: WindowObserverView, context: Context) {
+    package func updateNSView(_ nsView: WindowObserverView, context: Context) {
         nsView.onWindowUpdate = { [contentInsets = _contentInsets] window in
             guard let closeButton = window.standardWindowButton(.closeButton),
                   let miniButton = window.standardWindowButton(.miniaturizeButton),
@@ -50,35 +56,35 @@ struct ZenWindowChromeBridge: NSViewRepresentable {
         nsView.triggerUpdate()
     }
 
-    static func dismantleNSView(_ nsView: WindowObserverView, coordinator: ()) {
+    static package func dismantleNSView(_ nsView: WindowObserverView, coordinator: ()) {
         nsView.removeObservers()
     }
 
-    final class WindowObserverView: NSView {
-        var onWindowUpdate: ((NSWindow) -> Void)?
+    final package class WindowObserverView: NSView {
+        package var onWindowUpdate: ((NSWindow) -> Void)?
         private var observers: [NSObjectProtocol] = []
 
-        override var intrinsicContentSize: NSSize {
+        override package var intrinsicContentSize: NSSize {
             .zero
         }
 
-        override func viewDidMoveToWindow() {
+        override package func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             installObservers()
             triggerUpdate()
         }
 
-        override func viewDidMoveToSuperview() {
+        override package func viewDidMoveToSuperview() {
             super.viewDidMoveToSuperview()
             triggerUpdate()
         }
 
-        override func layout() {
+        override package func layout() {
             super.layout()
             triggerUpdate()
         }
 
-        func triggerUpdate() {
+        package func triggerUpdate() {
             guard let window else { return }
             DispatchQueue.main.async { [weak self, weak window] in
                 guard let self, let window else { return }
@@ -86,7 +92,7 @@ struct ZenWindowChromeBridge: NSViewRepresentable {
             }
         }
 
-        func removeObservers() {
+        package func removeObservers() {
             let center = NotificationCenter.default
             observers.forEach(center.removeObserver)
             observers.removeAll()
@@ -117,10 +123,10 @@ struct ZenWindowChromeBridge: NSViewRepresentable {
     }
 }
 
-struct ToolbarBackdrop: View {
-    let color: Color
+package struct ToolbarBackdrop: View {
+    package let color: Color
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let height = proxy.safeAreaInsets.top > 0 ? proxy.safeAreaInsets.top : 52
             color
@@ -136,24 +142,24 @@ private struct TerminalCommandBridgeHost<Content: View>: View {
     @EnvironmentObject private var commandBridge: MacShellCommandBridge
     private let content: (MacShellCommandBridge) -> Content
 
-    init(@ViewBuilder content: @escaping (MacShellCommandBridge) -> Content) {
+    package init(@ViewBuilder content: @escaping (MacShellCommandBridge) -> Content) {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         content(commandBridge)
     }
 }
 
 private struct TerminalZenChromeHost<Content: View>: View {
-    let isZenModeEnabled: Bool
-    let appliesTerminalInsets: Bool
-    let backgroundColor: Color
+    package let isZenModeEnabled: Bool
+    package let appliesTerminalInsets: Bool
+    package let backgroundColor: Color
     private let content: (EdgeInsets) -> Content
 
     @State private var safeAreaInsets = EdgeInsets()
 
-    init(
+    package init(
         isZenModeEnabled: Bool,
         appliesTerminalInsets: Bool,
         backgroundColor: Color,
@@ -165,7 +171,7 @@ private struct TerminalZenChromeHost<Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         content(appliesTerminalInsets ? safeAreaInsets : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(backgroundColor)
@@ -184,8 +190,8 @@ private struct TerminalZenChromeHost<Content: View>: View {
     }
 }
 
-extension ConnectionTerminalContainer {
-    var platformBody: some View {
+package extension ConnectionTerminalContainer {
+    package var platformBody: some View {
         TerminalCommandBridgeHost { commandBridge in
             sharedBody
                 .focusedValue(\.openTerminalTab, handleNewTabCommand)
@@ -762,7 +768,7 @@ extension ConnectionTerminalContainer {
         return String(localized: "All terminal tabs for this server will be closed.")
     }
 
-    func platformChrome(backgroundColor: Color) -> some View {
+    package func platformChrome(backgroundColor: Color) -> some View {
         TerminalZenChromeHost(
             isZenModeEnabled: isZenModeEnabled,
             appliesTerminalInsets: isZenModeEnabled && selectedView == .terminal,
@@ -788,8 +794,10 @@ extension ConnectionTerminalContainer {
                 backgroundColor: backgroundColor,
                 sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
-                isDockerUnlocked: storeManager.allowsProFeatures
+                isDockerUnlocked: storeManager.allowsProFeatures,
+                presentDockerUpgrade: { isShowingDockerUpgrade = true }
             )
+            .proUpgradePresentation(isPresented: $isShowingDockerUpgrade, source: .dockerStats)
             .zIndex(1)
         }
     }
@@ -825,14 +833,14 @@ extension ConnectionTerminalContainer {
         }
     }
 
-    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {}
+    package func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {}
 
-    func platformPrepareForPaneClose() {}
+    package func platformPrepareForPaneClose() {}
 }
 
 private extension View {
     @ViewBuilder
-    func zenExpandedTopSafeArea(_ isEnabled: Bool) -> some View {
+    package func zenExpandedTopSafeArea(_ isEnabled: Bool) -> some View {
         if isEnabled {
             self.ignoresSafeArea(.container, edges: .top)
         } else {

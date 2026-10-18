@@ -1,24 +1,27 @@
 import Foundation
 import Darwin
 import os.log
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Keyboard Interactive Auth Helper
 
 /// Per-session storage for keyboard-interactive password (used by C callback).
 /// This avoids cross-session password races when multiple auth flows run concurrently.
-final class KeyboardInteractiveContext: @unchecked Sendable {
+final package class KeyboardInteractiveContext: @unchecked Sendable {
     private nonisolated(unsafe) var _password: String?
     private let lock = NSLock()
 
-    nonisolated init() {}
+    nonisolated package init() {}
 
-    nonisolated func setPassword(_ password: String?) {
+    nonisolated package func setPassword(_ password: String?) {
         lock.lock()
         defer { lock.unlock() }
         _password = password
     }
 
-    nonisolated func password() -> String? {
+    nonisolated package func password() -> String? {
         lock.lock()
         defer { lock.unlock() }
         return _password
@@ -66,10 +69,10 @@ nonisolated private func kbdintCallback(
     }
 }
 
-extension SSHSession {
+package extension SSHSession {
     // MARK: - Connection
 
-    func connect() async throws {
+    package func connect() async throws {
         try Task.checkCancellation()
         try LibSSH2Runtime.ensureInitialized()
         socket = -1

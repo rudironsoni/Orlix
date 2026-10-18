@@ -1,18 +1,21 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
     private let keychain: KeychainManager
 
-    init(keychain: KeychainManager) {
+    package init(keychain: KeychainManager) {
         self.keychain = keychain
     }
 
-    func loadKeys() -> [SSHKeyEntry] {
+    package func loadKeys() -> [SSHKeyEntry] {
         keychain.getStoredSSHKeys()
     }
 
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+    package func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         do {
             return try keychain.storeSSHKeyEntry(
                 name: request.name,
@@ -24,7 +27,7 @@ private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
         }
     }
 
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+    package func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         do {
             let key = try SSHKeyGenerator.generate(
                 type: request.keyType,
@@ -42,7 +45,7 @@ private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
         }
     }
 
-    func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
+    package func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
         do {
             try keychain.deleteStoredSSHKey(id)
         } catch {
@@ -74,8 +77,8 @@ private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
 }
 
 @MainActor
-enum SSHKeySettingsLiveComposition {
-    static func makeCoordinator(keychain: KeychainManager) -> SSHKeySettingsCoordinator {
+package enum SSHKeySettingsLiveComposition {
+    static package func makeCoordinator(keychain: KeychainManager) -> SSHKeySettingsCoordinator {
         SSHKeySettingsCoordinator(
             repository: KeychainSSHKeySettingsRepository(keychain: keychain)
         )
@@ -85,23 +88,23 @@ enum SSHKeySettingsLiveComposition {
 #if DEBUG
 @MainActor
 private final class PreviewSSHKeySettingsRepository: SSHKeySettingsRepository {
-    func loadKeys() -> [SSHKeyEntry] { [] }
+    package func loadKeys() -> [SSHKeyEntry] { [] }
 
-    func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+    package func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         throw .unavailable
     }
 
-    func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
+    package func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry {
         throw .unavailable
     }
 
-    func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
+    package func deleteKey(id: UUID) throws(SSHKeySettingsFailure) {
         throw .unavailable
     }
 }
 
-extension SSHKeySettingsCoordinator {
-    static var preview: SSHKeySettingsCoordinator {
+package extension SSHKeySettingsCoordinator {
+    static package var preview: SSHKeySettingsCoordinator {
         SSHKeySettingsCoordinator(repository: PreviewSSHKeySettingsRepository())
     }
 }

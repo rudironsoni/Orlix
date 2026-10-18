@@ -1,23 +1,65 @@
 import Foundation
 
-struct RemoteSessionSelectionInfo: Identifiable, Equatable {
-    let attachment: RemoteSessionAttachment
-    let attachedClientCount: Int?
-    let containerCount: Int?
+package struct RemoteSessionSelectionInfo: Identifiable, Equatable {
+    package let attachment: RemoteSessionAttachment
+    package let attachedClientCount: Int?
+    package let containerCount: Int?
 
-    var id: RemoteSessionIdentifier { attachment.identifier }
-    var displayName: String { id.rawValue }
+    package var id: RemoteSessionIdentifier { attachment.identifier }
+    package var displayName: String { id.rawValue }
+
+
+    package init(
+
+        attachment: RemoteSessionAttachment,
+
+        attachedClientCount: Int? = nil,
+
+        containerCount: Int? = nil
+
+    ) {
+
+        self.attachment = attachment
+
+        self.attachedClientCount = attachedClientCount
+
+        self.containerCount = containerCount
+
+    }
 }
 
-struct RemoteSessionAttachPrompt: Identifiable, Equatable {
+package struct RemoteSessionAttachPrompt: Identifiable, Equatable {
     /// Unique shell-start request that owns this prompt.
-    let id: UUID
-    let paneId: UUID
-    let backendName: String
-    let existingSessions: [RemoteSessionSelectionInfo]
+    package let id: UUID
+    package let paneId: UUID
+    package let backendName: String
+    package let existingSessions: [RemoteSessionSelectionInfo]
+
+
+    package init(
+
+        id: UUID,
+
+        paneId: UUID,
+
+        backendName: String,
+
+        existingSessions: [RemoteSessionSelectionInfo]
+
+    ) {
+
+        self.id = id
+
+        self.paneId = paneId
+
+        self.backendName = backendName
+
+        self.existingSessions = existingSessions
+
+    }
 }
 
-enum RemoteSessionAttachSelection: Equatable {
+package enum RemoteSessionAttachSelection: Equatable {
     case createManaged
     case attachExisting(RemoteSessionAttachment)
     case plainShell

@@ -1,26 +1,29 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Support Sheet
 
-struct SupportSheet: View {
+package struct SupportSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private struct ContactOption: Identifiable {
-        let id = UUID()
-        let title: String
-        let subtitle: String
-        let icon: String
-        let iconImage: String?
-        let iconText: String?
-        let color: Color
-        let url: String
+        package let id = UUID()
+        package let title: String
+        package let subtitle: String
+        package let icon: String
+        package let iconImage: String?
+        package let iconText: String?
+        package let color: Color
+        package let url: String
     }
 
     private let contactOptions: [ContactOption] = [
         ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/Orlix/issues")
     ]
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             // Header
             ZStack(alignment: .topTrailing) {
@@ -120,6 +123,9 @@ struct SupportSheet: View {
         .frame(width: 340)
         .adaptiveSoftScrollEdges()
     }
+
+
+    package init() {}
 }
 
 // MARK: - Preview

@@ -3,46 +3,103 @@
 //  Orlix
 //
 
-nonisolated enum TerminalColorAppearance: Equatable, Sendable {
+nonisolated package enum TerminalColorAppearance: Equatable, Sendable {
     case light
     case dark
 }
 
-nonisolated struct TerminalThemeSelection: Equatable, Sendable {
-    let darkThemeName: String
-    let lightThemeName: String
-    let usePerAppearanceTheme: Bool
+nonisolated package struct TerminalThemeSelection: Equatable, Sendable {
+    package let darkThemeName: String
+    package let lightThemeName: String
+    package let usePerAppearanceTheme: Bool
+
+
+    package init(
+
+        darkThemeName: String,
+
+        lightThemeName: String,
+
+        usePerAppearanceTheme: Bool
+
+    ) {
+
+        self.darkThemeName = darkThemeName
+
+        self.lightThemeName = lightThemeName
+
+        self.usePerAppearanceTheme = usePerAppearanceTheme
+
+    }
 }
 
-nonisolated struct TerminalThemePalette: Equatable, Sendable {
-    let backgroundHex: String
-    let foregroundHex: String
-    let cursorHex: String
-    let cursorTextHex: String
+nonisolated package struct TerminalThemePalette: Equatable, Sendable {
+    package let backgroundHex: String
+    package let foregroundHex: String
+    package let cursorHex: String
+    package let cursorTextHex: String
 
-    static let fallback = TerminalThemePalette(
+    static package let fallback = TerminalThemePalette(
         backgroundHex: "#101418",
         foregroundHex: "#D8E0EA",
         cursorHex: "#F8B26A",
         cursorTextHex: "#101418"
     )
+
+
+    package init(
+
+        backgroundHex: String,
+
+        foregroundHex: String,
+
+        cursorHex: String,
+
+        cursorTextHex: String
+
+    ) {
+
+        self.backgroundHex = backgroundHex
+
+        self.foregroundHex = foregroundHex
+
+        self.cursorHex = cursorHex
+
+        self.cursorTextHex = cursorTextHex
+
+    }
 }
 
-nonisolated struct ResolvedTerminalTheme: Equatable, Sendable {
-    let name: String
-    let palette: TerminalThemePalette
+nonisolated package struct ResolvedTerminalTheme: Equatable, Sendable {
+    package let name: String
+    package let palette: TerminalThemePalette
+
+
+    package init(
+
+        name: String,
+
+        palette: TerminalThemePalette
+
+    ) {
+
+        self.name = name
+
+        self.palette = palette
+
+    }
 }
 
-nonisolated struct TerminalAppearanceSnapshot: Equatable, Sendable {
-    let activeAppearance: TerminalColorAppearance
-    let lightTheme: ResolvedTerminalTheme
-    let darkTheme: ResolvedTerminalTheme
+nonisolated package struct TerminalAppearanceSnapshot: Equatable, Sendable {
+    package let activeAppearance: TerminalColorAppearance
+    package let lightTheme: ResolvedTerminalTheme
+    package let darkTheme: ResolvedTerminalTheme
 
-    var activeTheme: ResolvedTerminalTheme {
+    package var activeTheme: ResolvedTerminalTheme {
         theme(for: activeAppearance)
     }
 
-    func theme(for appearance: TerminalColorAppearance) -> ResolvedTerminalTheme {
+    package func theme(for appearance: TerminalColorAppearance) -> ResolvedTerminalTheme {
         switch appearance {
         case .light:
             lightTheme
@@ -51,7 +108,7 @@ nonisolated struct TerminalAppearanceSnapshot: Equatable, Sendable {
         }
     }
 
-    static let fallback = TerminalAppearanceSnapshot(
+    static package let fallback = TerminalAppearanceSnapshot(
         activeAppearance: .dark,
         lightTheme: ResolvedTerminalTheme(
             name: "Orlix Light",
@@ -62,4 +119,23 @@ nonisolated struct TerminalAppearanceSnapshot: Equatable, Sendable {
             palette: .fallback
         )
     )
+
+
+    package init(
+
+        activeAppearance: TerminalColorAppearance,
+
+        lightTheme: ResolvedTerminalTheme,
+
+        darkTheme: ResolvedTerminalTheme
+
+    ) {
+
+        self.activeAppearance = activeAppearance
+
+        self.lightTheme = lightTheme
+
+        self.darkTheme = darkTheme
+
+    }
 }

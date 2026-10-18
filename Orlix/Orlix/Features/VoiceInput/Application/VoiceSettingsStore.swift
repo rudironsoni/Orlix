@@ -1,50 +1,53 @@
 import Combine
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-protocol VoiceSettingsReading: AnyObject {
+package protocol VoiceSettingsReading: AnyObject {
     var currentSettings: VoiceSettings { get }
 }
 
 @MainActor
-protocol VoiceSettingsPersisting: AnyObject {
+package protocol VoiceSettingsPersisting: AnyObject {
     func loadSettings() -> VoiceSettings
     func saveSettings(_ settings: VoiceSettings)
 }
 
 @MainActor
-final class VoiceSettingsStore: ObservableObject, VoiceSettingsReading {
-    @Published private(set) var settings: VoiceSettings
+final package class VoiceSettingsStore: ObservableObject, VoiceSettingsReading {
+    @Published package private(set) var settings: VoiceSettings
 
     private let persistence: any VoiceSettingsPersisting
 
-    init(persistence: any VoiceSettingsPersisting) {
+    package init(persistence: any VoiceSettingsPersisting) {
         self.persistence = persistence
         settings = persistence.loadSettings()
     }
 
-    var currentSettings: VoiceSettings { settings }
+    package var currentSettings: VoiceSettings { settings }
 
-    func setProvider(_ provider: TranscriptionProvider) {
+    package func setProvider(_ provider: TranscriptionProvider) {
         update { $0.provider = provider }
     }
 
-    func setWhisperModelID(_ modelID: String) {
+    package func setWhisperModelID(_ modelID: String) {
         update { $0.whisperModelID = modelID }
     }
 
-    func setParakeetModelID(_ modelID: String) {
+    package func setParakeetModelID(_ modelID: String) {
         update { $0.parakeetModelID = modelID }
     }
 
-    func setLanguageCode(_ languageCode: String) {
+    package func setLanguageCode(_ languageCode: String) {
         update { $0.languageCode = languageCode }
     }
 
-    func setTerminalVoiceButtonEnabled(_ isEnabled: Bool) {
+    package func setTerminalVoiceButtonEnabled(_ isEnabled: Bool) {
         update { $0.terminalVoiceButtonEnabled = isEnabled }
     }
 
-    func useSystemProviderWhenMLXIsUnavailable() {
+    package func useSystemProviderWhenMLXIsUnavailable() {
         guard settings.provider != .system else { return }
         setProvider(.system)
     }

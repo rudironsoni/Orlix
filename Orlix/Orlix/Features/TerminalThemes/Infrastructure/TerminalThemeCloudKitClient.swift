@@ -1,8 +1,11 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
+final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
     TerminalThemeCloudMutationClient {
     private let transport: any CloudKitRecordTransport
     private let logger = Logger(
@@ -10,11 +13,11 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         category: "TerminalThemeCloudKit"
     )
 
-    init(transport: any CloudKitRecordTransport) {
+    package init(transport: any CloudKitRecordTransport) {
         self.transport = transport
     }
 
-    func fetchTerminalThemes() async throws -> [TerminalTheme] {
+    package func fetchTerminalThemes() async throws -> [TerminalTheme] {
         let records = try await transport.fetchCloudKitRecords(
             matchingRecordTypes: [TerminalThemeCloudKitRecordCodec.recordType],
             desiredKeys: TerminalThemeCloudKitRecordCodec.recordKeys
@@ -29,7 +32,7 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         return themes
     }
 
-    func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
+    package func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
         let recordID = TerminalThemePreferenceCloudKitRecordCodec.recordID(
             in: transport.cloudKitRecordZoneID
         )
@@ -48,7 +51,7 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         }
     }
 
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {
+    package func saveTerminalTheme(_ theme: TerminalTheme) async throws {
         let record = TerminalThemeCloudKitRecordCodec.record(
             for: theme,
             in: transport.cloudKitRecordZoneID
@@ -64,7 +67,7 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         }
     }
 
-    func saveTerminalThemePreference(
+    package func saveTerminalThemePreference(
         _ preference: TerminalThemePreference
     ) async throws {
         let record = TerminalThemePreferenceCloudKitRecordCodec.record(
@@ -83,4 +86,5 @@ final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
             throw error
         }
     }
+
 }

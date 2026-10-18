@@ -1,11 +1,15 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 /// The result of mapping a mounted volume to its physical storage topology.
 ///
 /// Resolution deliberately rejects ambiguous leaf mappings. Arrays are
 /// represented explicitly so one member is never mistaken for the whole
 /// volume.
-nonisolated enum StorageHealthTargetResolution: Hashable, Sendable {
+nonisolated package enum StorageHealthTargetResolution: Hashable, Sendable {
     case topology(StorageHealthResolvedTopology)
     case unavailable(StorageHealthUnavailableReason)
 }
@@ -13,16 +17,16 @@ nonisolated enum StorageHealthTargetResolution: Hashable, Sendable {
 /// Resolves transient mount metadata into the platform-specific locator used by
 /// `StorageHealthProbe`. Raw locators live only for the duration of the request;
 /// they are never persisted or copied into user-visible health attributes.
-nonisolated enum StorageHealthTargetResolver {
+nonisolated package enum StorageHealthTargetResolver {
     private static let timeout: Duration = .seconds(6)
 
-    static let resolutionBeginMarker = "__VVTERM_STORAGE_RESOLUTION_BEGIN__"
-    static let resolutionEndMarker = "__VVTERM_STORAGE_RESOLUTION_END__"
-    static let resolutionToolMissingMarker = "__VVTERM_STORAGE_RESOLUTION_TOOL_MISSING__"
-    static let btrfsStatsBeginMarker = "__VVTERM_BTRFS_STATS_BEGIN__"
-    static let btrfsStatsEndMarker = "__VVTERM_BTRFS_STATS_END__"
+    static package let resolutionBeginMarker = "__VVTERM_STORAGE_RESOLUTION_BEGIN__"
+    static package let resolutionEndMarker = "__VVTERM_STORAGE_RESOLUTION_END__"
+    static package let resolutionToolMissingMarker = "__VVTERM_STORAGE_RESOLUTION_TOOL_MISSING__"
+    static package let btrfsStatsBeginMarker = "__VVTERM_BTRFS_STATS_BEGIN__"
+    static package let btrfsStatsEndMarker = "__VVTERM_BTRFS_STATS_END__"
 
-    static func resolve(
+    static package func resolve(
         client: SSHClient,
         platform: RemotePlatform,
         volume: VolumeInfo
@@ -56,7 +60,7 @@ nonisolated enum StorageHealthTargetResolver {
         }
     }
 
-    static func unavailableReason(for volume: VolumeInfo) -> StorageHealthUnavailableReason? {
+    static package func unavailableReason(for volume: VolumeInfo) -> StorageHealthUnavailableReason? {
         switch volume.kind {
         case .network:
             return .networkVolume
@@ -69,7 +73,7 @@ nonisolated enum StorageHealthTargetResolver {
 
     // MARK: - Linux
 
-    static func linuxResolutionCommand(source: String, mountPoint: String) -> String? {
+    static package func linuxResolutionCommand(source: String, mountPoint: String) -> String? {
         guard isSafeLocator(source), isSafeLocator(mountPoint) else { return nil }
 
         let source = RemoteTerminalBootstrap.shellQuoted(source)
@@ -94,7 +98,7 @@ nonisolated enum StorageHealthTargetResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func parseLinuxResolution(
+    static package func parseLinuxResolution(
         _ output: String,
         fallbackSource: String,
         deviceID: StorageDeviceIdentity
@@ -178,7 +182,7 @@ nonisolated enum StorageHealthTargetResolver {
         return parseLinuxResolution(output, fallbackSource: volume.source, deviceID: deviceID)
     }
 
-    static func btrfsDiscoveryCommand(mountPoint: String) -> String? {
+    static package func btrfsDiscoveryCommand(mountPoint: String) -> String? {
         guard isSafeLocator(mountPoint) else { return nil }
         let mountPoint = RemoteTerminalBootstrap.shellQuoted(mountPoint)
         let script = """
@@ -197,7 +201,7 @@ nonisolated enum StorageHealthTargetResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func zfsDiscoveryCommand(source: String, mountPoint: String) -> String? {
+    static package func zfsDiscoveryCommand(source: String, mountPoint: String) -> String? {
         guard isSafeLocator(source), isSafeLocator(mountPoint) else { return nil }
         let source = RemoteTerminalBootstrap.shellQuoted(source)
         let mountPoint = RemoteTerminalBootstrap.shellQuoted(mountPoint)
@@ -223,7 +227,7 @@ nonisolated enum StorageHealthTargetResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func linuxDeviceResolutionCommand(devicePath: String) -> String? {
+    static package func linuxDeviceResolutionCommand(devicePath: String) -> String? {
         guard isDevicePath(devicePath) else { return nil }
         let device = RemoteTerminalBootstrap.shellQuoted(devicePath)
         let script = """
@@ -386,7 +390,7 @@ nonisolated enum StorageHealthTargetResolver {
 
     // MARK: - Darwin
 
-    static func darwinResolutionCommand(identifier: String) -> String? {
+    static package func darwinResolutionCommand(identifier: String) -> String? {
         guard isSafeLocator(identifier) else { return nil }
         let identifier = RemoteTerminalBootstrap.shellQuoted(identifier)
         let script = """
@@ -402,7 +406,7 @@ nonisolated enum StorageHealthTargetResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func parseDarwinDiskInfo(_ output: String) -> DarwinDiskInfoResolution? {
+    static package func parseDarwinDiskInfo(_ output: String) -> DarwinDiskInfoResolution? {
         guard let plist = markedSection(in: output),
               let data = plist.data(using: .utf8),
               let value = try? PropertyListSerialization.propertyList(from: data, format: nil),
@@ -429,7 +433,7 @@ nonisolated enum StorageHealthTargetResolver {
         )
     }
 
-    static func darwinUnavailableReason(
+    static package func darwinUnavailableReason(
         for info: DarwinDiskInfoResolution
     ) -> StorageHealthUnavailableReason? {
         info.isVirtual ? .virtualDevice : nil
@@ -538,7 +542,7 @@ nonisolated enum StorageHealthTargetResolver {
 
     // MARK: - Windows
 
-    static func windowsResolutionScript(source: String, mountPoint: String) -> String? {
+    static package func windowsResolutionScript(source: String, mountPoint: String) -> String? {
         let driveLetter = windowsDriveLetter(source) ?? windowsDriveLetter(mountPoint)
         let volumeLookup: String
         if let driveLetter {
@@ -573,7 +577,7 @@ nonisolated enum StorageHealthTargetResolver {
         """
     }
 
-    static func parseWindowsResolution(
+    static package func parseWindowsResolution(
         _ output: String,
         deviceID: StorageDeviceIdentity
     ) -> StorageHealthTargetResolution {
@@ -661,7 +665,7 @@ nonisolated enum StorageHealthTargetResolver {
 
     // MARK: - BSD
 
-    static func bsdResolutionCommand(platform: RemotePlatform) -> String? {
+    static package func bsdResolutionCommand(platform: RemotePlatform) -> String? {
         let key: String
         switch platform {
         case .freebsd:
@@ -685,7 +689,7 @@ nonisolated enum StorageHealthTargetResolver {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func parseBSDResolution(
+    static package func parseBSDResolution(
         _ output: String,
         platform: RemotePlatform,
         source: String,
@@ -785,7 +789,7 @@ nonisolated enum StorageHealthTargetResolver {
 
     // MARK: - Shared parsing and validation
 
-    static func markedSection(in output: String) -> String? {
+    static package func markedSection(in output: String) -> String? {
         guard let begin = output.range(of: resolutionBeginMarker),
               let end = output.range(
                 of: resolutionEndMarker,
@@ -852,14 +856,14 @@ nonisolated enum StorageHealthTargetResolver {
     }
 }
 
-nonisolated struct DarwinDiskInfoResolution: Equatable, Sendable {
-    let deviceIdentifier: String?
-    let parentWholeDisk: String?
-    let isWholeDisk: Bool
-    let isVirtual: Bool
-    let physicalStores: [String]
+nonisolated package struct DarwinDiskInfoResolution: Equatable, Sendable {
+    package let deviceIdentifier: String?
+    package let parentWholeDisk: String?
+    package let isWholeDisk: Bool
+    package let isVirtual: Bool
+    package let physicalStores: [String]
 
-    var wholeDiskIdentifier: String? {
+    package var wholeDiskIdentifier: String? {
         if let parentWholeDisk { return parentWholeDisk }
         guard isWholeDisk,
               let deviceIdentifier,
@@ -871,11 +875,11 @@ nonisolated struct DarwinDiskInfoResolution: Equatable, Sendable {
 }
 
 private nonisolated struct LinuxBlockDevices: Decodable {
-    let blockdevices: [LinuxBlockDevice]
+    package let blockdevices: [LinuxBlockDevice]
 }
 
 private nonisolated struct LinuxBlockDevice: Decodable {
-    let path: String?
-    let type: String?
-    let children: [LinuxBlockDevice]?
+    package let path: String?
+    package let type: String?
+    package let children: [LinuxBlockDevice]?
 }

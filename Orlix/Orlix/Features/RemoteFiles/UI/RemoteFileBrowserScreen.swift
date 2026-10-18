@@ -1,48 +1,52 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct RemoteFileBrowserScreen: View {
-    @ObservedObject var browser: RemoteFileBrowserStore
-    @ObservedObject var operationCoordinator: RemoteFileOperationCoordinator
-    let server: Server
-    let fileTab: RemoteFileTab
-    let appearance: TerminalAppearanceSnapshot
-    let initialPath: String?
-    let onCurrentPathChange: @MainActor (String?) -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
+package struct RemoteFileBrowserScreen: View {
+    @ObservedObject package var browser: RemoteFileBrowserStore
+    @ObservedObject package var operationCoordinator: RemoteFileOperationCoordinator
+    package let server: Server
+    package let fileTab: RemoteFileTab
+    package let appearance: TerminalAppearanceSnapshot
+    package let initialPath: String?
+    package let onCurrentPathChange: @MainActor (String?) -> Void
 
-    @Environment(\.colorScheme) var colorScheme
-    @EnvironmentObject var appLockManager: AppLockManager
-    @State var presentedPreviewPath: String?
-    @State var presentation: RemoteFileBrowserPresentation?
-    @State var isDropTargeted = false
-    @StateObject var platformState = RemoteFileBrowserPlatformState()
-    @StateObject var noticeHost = NoticeHostModel()
+    @Environment(\.colorScheme) package var colorScheme
+    @EnvironmentObject package var appLockManager: AppLockManager
+    @State package var presentedPreviewPath: String?
+    @State package var presentation: RemoteFileBrowserPresentation?
+    @State package var isDropTargeted = false
+    @StateObject package var platformState = RemoteFileBrowserPlatformState()
+    @StateObject package var noticeHost = NoticeHostModel()
 
-    struct Snapshot {
-        let currentPath: String
-        let breadcrumbs: [RemoteFileBreadcrumb]
-        let entries: [RemoteFileEntry]
-        let selectedEntry: RemoteFileEntry?
-        let viewerPayload: RemoteFileViewerPayload?
-        let directoryError: RemoteFileBrowserError?
-        let viewerError: RemoteFileBrowserError?
-        let isLoadingDirectory: Bool
-        let isLoadingViewer: Bool
-        let sort: RemoteFileSort
-        let sortDirection: RemoteFileSortDirection
-        let showHiddenFiles: Bool
-        let isTruncated: Bool
-        let selectedPath: String?
-        let filesystemStatus: RemoteFileFilesystemStatus?
+    package struct Snapshot {
+        package let currentPath: String
+        package let breadcrumbs: [RemoteFileBreadcrumb]
+        package let entries: [RemoteFileEntry]
+        package let selectedEntry: RemoteFileEntry?
+        package let viewerPayload: RemoteFileViewerPayload?
+        package let directoryError: RemoteFileBrowserError?
+        package let viewerError: RemoteFileBrowserError?
+        package let isLoadingDirectory: Bool
+        package let isLoadingViewer: Bool
+        package let sort: RemoteFileSort
+        package let sortDirection: RemoteFileSortDirection
+        package let showHiddenFiles: Bool
+        package let isTruncated: Bool
+        package let selectedPath: String?
+        package let filesystemStatus: RemoteFileFilesystemStatus?
     }
 
-    struct EmptyStateContent {
-        let icon: String
-        let title: String
-        let message: String
+    package struct EmptyStateContent {
+        package let icon: String
+        package let title: String
+        package let message: String
     }
 
-    init(
+    package init(
         browser: RemoteFileBrowserStore,
         server: Server,
         fileTab: RemoteFileTab,
@@ -61,7 +65,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var snapshot: Snapshot {
+    package var snapshot: Snapshot {
         let entries = browser.entries(for: fileTab)
         let viewerPayload = browser.viewerPayload(for: fileTab)
         let selectedPath = browser.selectedEntryPath(for: fileTab) ?? viewerPayload?.entry.path
@@ -86,20 +90,20 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var initialLoadTaskID: String {
+    package var initialLoadTaskID: String {
         "\(server.id.uuidString):\(fileTab.id.uuidString):\(initialPath ?? "")"
     }
 
-    var remoteRowDropTypeIdentifiers: [String] {
+    package var remoteRowDropTypeIdentifiers: [String] {
         RemoteFileItemProviderAdapter.acceptedTypeIdentifiers
     }
 
-    var terminalThemeBackgroundColor: Color {
+    package var terminalThemeBackgroundColor: Color {
         Color.fromHex(appearance.activeTheme.palette.backgroundHex)
     }
 
     @ViewBuilder
-    func renameSheet(entry: RemoteFileEntry) -> some View {
+    package func renameSheet(entry: RemoteFileEntry) -> some View {
         platformRenameSheetSizing(RemoteFileRenameSheet(
             entry: entry,
             proposedName: renameNameBinding,
@@ -109,7 +113,7 @@ struct RemoteFileBrowserScreen: View {
         ))
     }
 
-    func moveSheet(entry: RemoteFileEntry) -> some View {
+    package func moveSheet(entry: RemoteFileEntry) -> some View {
         let fileBrowser = browser
         let fileServer = server
 
@@ -126,7 +130,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func deleteSheet(entry: RemoteFileEntry) -> some View {
+    package func deleteSheet(entry: RemoteFileEntry) -> some View {
         RemoteFileDeleteConfirmationSheet(
             entry: entry,
             message: deleteAlertMessage(for: entry),
@@ -136,7 +140,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func permissionSheet(entry: RemoteFileEntry) -> some View {
+    package func permissionSheet(entry: RemoteFileEntry) -> some View {
         platformPermissionSheetSizing(RemoteFilePermissionEditorSheet(
             entry: entry,
             draft: permissionDraftBinding,
@@ -149,7 +153,7 @@ struct RemoteFileBrowserScreen: View {
         ))
     }
 
-    var body: some View {
+    package var body: some View {
         let base = fileNoticeHost {
             ZStack {
                 platformContent(snapshot)
@@ -208,7 +212,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func fileNoticeHost<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    package func fileNoticeHost<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         NoticeHost(
             topBanner: noticeHost.topBanner,
             bottomOperations: noticeHost.bottomOperations + operationNotices,
@@ -219,7 +223,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func downloadExportPresentation<Content: View>(_ content: Content) -> some View {
+    package func downloadExportPresentation<Content: View>(_ content: Content) -> some View {
         if #available(iOS 17, macOS 14, *) {
             content.fileExporter(
                 isPresented: downloadExporterBinding,
@@ -240,7 +244,7 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    var alertPresentationBinding: Binding<RemoteFileBrowserPresentation?> {
+    package var alertPresentationBinding: Binding<RemoteFileBrowserPresentation?> {
         Binding(
             get: {
                 guard presentation?.isAlert == true else { return nil }
@@ -256,7 +260,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func alert(for route: RemoteFileBrowserPresentation) -> Alert {
+    package func alert(for route: RemoteFileBrowserPresentation) -> Alert {
         switch route {
         case .operationError(let message):
             Alert(
@@ -278,7 +282,7 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    var downloadExporterBinding: Binding<Bool> {
+    package var downloadExporterBinding: Binding<Bool> {
         Binding(
             get: { presentation?.isDownloadExport == true },
             set: { isPresented in
@@ -289,17 +293,17 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var downloadExportDocument: RemoteFileDownloadDocument? {
+    package var downloadExportDocument: RemoteFileDownloadDocument? {
         guard case .downloadExport(let export) = presentation else { return nil }
         return export.document
     }
 
-    var downloadExportFilename: String {
+    package var downloadExportFilename: String {
         guard case .downloadExport(let export) = presentation else { return "" }
         return export.filename
     }
 
-    func deleteAlertMessage(for entry: RemoteFileEntry) -> String {
+    package func deleteAlertMessage(for entry: RemoteFileEntry) -> String {
         let itemName = entry.name.isEmpty ? entry.path : entry.name
         return String(
             format: String(localized: "This will permanently remove \"%@\" from the remote server. This cannot be undone."),
@@ -308,7 +312,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @MainActor
-    func copyPathToClipboard(_ path: String) {
+    package func copyPathToClipboard(_ path: String) {
         Clipboard.copy(path)
         noticeHost.show(
             NoticeItem(
@@ -322,7 +326,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func transferProgress(
+    package func transferProgress(
         completedUnitCount: Int?,
         totalUnitCount: Int?
     ) -> NoticeProgress? {
@@ -333,7 +337,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func transferDetail(fileName: String?, filePath: String?) -> String? {
+    package func transferDetail(fileName: String?, filePath: String?) -> String? {
         if let filePath, !filePath.isEmpty {
             return filePath
         }
@@ -345,11 +349,11 @@ struct RemoteFileBrowserScreen: View {
         return nil
     }
 
-    func transferCompletionAction(fileURL: URL?) -> NoticeAction? {
+    package func transferCompletionAction(fileURL: URL?) -> NoticeAction? {
         platformTransferCompletionAction(fileURL: fileURL)
     }
 
-    var operationNotices: [NoticeItem] {
+    package var operationNotices: [NoticeItem] {
         operationCoordinator.operations.map { operation in
             let message: String
             let level: NoticeLevel
@@ -406,7 +410,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @MainActor
-    func requestTransferCancellation(id: UUID) {
+    package func requestTransferCancellation(id: UUID) {
         guard let operation = operationCoordinator.operations.first(where: { $0.id == id }) else {
             return
         }
@@ -417,47 +421,47 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @MainActor
-    func cancelTransfer(id: UUID) {
+    package func cancelTransfer(id: UUID) {
         operationCoordinator.cancel(id)
         dismissPresentation()
     }
 
-    var trimmedNewFolderName: String {
+    package var trimmedNewFolderName: String {
         guard case .createFolder(let draft) = presentation else { return "" }
         return draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    var isRenameSubmitting: Bool {
+    package var isRenameSubmitting: Bool {
         guard case .rename(let draft) = presentation else { return false }
         return draft.isSubmitting
     }
 
-    var isMoveSubmitting: Bool {
+    package var isMoveSubmitting: Bool {
         guard case .move(let draft) = presentation else { return false }
         return draft.isSubmitting
     }
 
-    var isPermissionSubmitting: Bool {
+    package var isPermissionSubmitting: Bool {
         guard case .permissions(let draft) = presentation else { return false }
         return draft.isSubmitting
     }
 
-    var permissionOriginalAccessBits: UInt32 {
+    package var permissionOriginalAccessBits: UInt32 {
         guard case .permissions(let draft) = presentation else { return 0 }
         return draft.originalAccessBits
     }
 
-    var permissionPreservedBits: UInt32 {
+    package var permissionPreservedBits: UInt32 {
         guard case .permissions(let draft) = presentation else { return 0 }
         return draft.preservedBits
     }
 
-    var permissionErrorMessage: String? {
+    package var permissionErrorMessage: String? {
         guard case .permissions(let draft) = presentation else { return nil }
         return draft.errorMessage
     }
 
-    var createFolderNameBinding: Binding<String> {
+    package var createFolderNameBinding: Binding<String> {
         Binding(
             get: {
                 guard case .createFolder(let draft) = presentation else { return "" }
@@ -471,7 +475,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var renameNameBinding: Binding<String> {
+    package var renameNameBinding: Binding<String> {
         Binding(
             get: {
                 guard case .rename(let draft) = presentation else { return "" }
@@ -485,7 +489,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var moveDestinationBinding: Binding<String> {
+    package var moveDestinationBinding: Binding<String> {
         Binding(
             get: {
                 guard case .move(let draft) = presentation else { return "" }
@@ -499,7 +503,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    var permissionDraftBinding: Binding<RemoteFilePermissionDraft> {
+    package var permissionDraftBinding: Binding<RemoteFilePermissionDraft> {
         Binding(
             get: {
                 guard case .permissions(let draft) = presentation else {
@@ -515,11 +519,11 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func dismissPresentation() {
+    package func dismissPresentation() {
         presentation = nil
     }
 
-    func handlePendingToolbarCommand() {
+    package func handlePendingToolbarCommand() {
         guard let command = browser.pendingToolbarCommand,
               command.serverId == server.id,
               command.tabId == fileTab.id else {
@@ -537,7 +541,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func browserActionMenu(currentPath: String) -> some View {
+    package func browserActionMenu(currentPath: String) -> some View {
         Button {
             beginUpload(to: currentPath)
         } label: {
@@ -560,7 +564,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func entryActionMenu(_ entry: RemoteFileEntry) -> some View {
+    package func entryActionMenu(_ entry: RemoteFileEntry) -> some View {
         switch entry.type {
         case .directory:
             Button {
@@ -628,7 +632,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func inspectorActionMenu(_ entry: RemoteFileEntry) -> some View {
+    package func inspectorActionMenu(_ entry: RemoteFileEntry) -> some View {
         if entry.type != .directory {
             Button {
                 beginDownload(entry)
@@ -658,7 +662,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func permissionMenuAction(for entry: RemoteFileEntry) -> some View {
+    package func permissionMenuAction(for entry: RemoteFileEntry) -> some View {
         if canEditPermissions(for: entry) {
             Button {
                 beginEditPermissions(entry)
@@ -669,7 +673,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func renameAndMoveMenuActions(for entry: RemoteFileEntry) -> some View {
+    package func renameAndMoveMenuActions(for entry: RemoteFileEntry) -> some View {
         Button {
             beginRename(entry)
         } label: {
@@ -684,7 +688,7 @@ struct RemoteFileBrowserScreen: View {
     }
 
     @ViewBuilder
-    func clipboardMenuActions(for entry: RemoteFileEntry) -> some View {
+    package func clipboardMenuActions(for entry: RemoteFileEntry) -> some View {
         Button {
             Clipboard.copy(entry.name)
         } label: {
@@ -698,7 +702,7 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func deleteMenuAction(for entry: RemoteFileEntry) -> some View {
+    package func deleteMenuAction(for entry: RemoteFileEntry) -> some View {
         Button(role: .destructive) {
             requestDelete([entry])
         } label: {
@@ -706,16 +710,16 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func beginUpload(to remotePath: String) {
+    package func beginUpload(to remotePath: String) {
         platformBeginUpload(to: remotePath)
     }
 
-    func beginDownload(_ entry: RemoteFileEntry) {
+    package func beginDownload(_ entry: RemoteFileEntry) {
         guard entry.type != .directory else { return }
         platformBeginDownload(entry)
     }
 
-    func beginShare(_ entry: RemoteFileEntry) {
+    package func beginShare(_ entry: RemoteFileEntry) {
         guard entry.type != .directory else { return }
 
         cleanupShareItem()
@@ -735,22 +739,22 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func beginCreateFolder(in remotePath: String) {
+    package func beginCreateFolder(in remotePath: String) {
         platformBeginCreateFolder(in: remotePath)
     }
 
-    func beginRename(_ entry: RemoteFileEntry) {
+    package func beginRename(_ entry: RemoteFileEntry) {
         platformBeginRename(entry)
     }
 
-    func beginMove(_ entry: RemoteFileEntry) {
+    package func beginMove(_ entry: RemoteFileEntry) {
         presentation = .move(.init(
             entry: entry,
             destinationDirectory: RemoteFilePath.parent(of: entry.path)
         ))
     }
 
-    func beginEditPermissions(_ entry: RemoteFileEntry) {
+    package func beginEditPermissions(_ entry: RemoteFileEntry) {
         guard canEditPermissions(for: entry), let permissions = entry.permissions else { return }
         presentation = .permissions(.init(
             entry: entry,
@@ -761,7 +765,7 @@ struct RemoteFileBrowserScreen: View {
         ))
     }
 
-    func canEditPermissions(for entry: RemoteFileEntry) -> Bool {
+    package func canEditPermissions(for entry: RemoteFileEntry) -> Bool {
         guard entry.permissions != nil else { return false }
         switch entry.type {
         case .symlink:
@@ -771,21 +775,21 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func previewEntry(_ entry: RemoteFileEntry) {
+    package func previewEntry(_ entry: RemoteFileEntry) {
         Task {
             await browser.activate(entry, in: fileTab, server: server)
             await platformDidActivatePreviewEntry(entry)
         }
     }
 
-    func handleUploadSelection(_ result: Result<[URL], Error>, toPresentedDestination destinationPath: String) {
+    package func handleUploadSelection(_ result: Result<[URL], Error>, toPresentedDestination destinationPath: String) {
         guard case .upload(let currentDestination) = presentation,
               currentDestination == destinationPath else { return }
         dismissPresentation()
         handleUploadSelection(result, to: destinationPath)
     }
 
-    func handleUploadSelection(_ result: Result<[URL], Error>, to destinationPath: String) {
+    package func handleUploadSelection(_ result: Result<[URL], Error>, to destinationPath: String) {
         switch result {
         case .success(let urls):
             guard !urls.isEmpty else { return }
@@ -799,7 +803,7 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func handleDownloadExportCompletion(_ result: Result<URL, Error>) {
+    package func handleDownloadExportCompletion(_ result: Result<URL, Error>) {
         guard case .downloadExport(let export) = presentation else { return }
         let transferID = export.transferID
         let noticeID = transferID.uuidString
@@ -841,13 +845,13 @@ struct RemoteFileBrowserScreen: View {
 
     }
 
-    func handleDownloadExportCancellation() {
+    package func handleDownloadExportCancellation() {
         guard case .downloadExport(let export) = presentation else { return }
         cleanupDownloadExport()
         operationCoordinator.dismiss(export.transferID)
     }
 
-    func beginUploadFlow(urls: [URL], to destinationPath: String, initialMessage: String) {
+    package func beginUploadFlow(urls: [URL], to destinationPath: String, initialMessage: String) {
         operationCoordinator.upload(
             urls: urls,
             to: destinationPath,
@@ -858,13 +862,13 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func handleCurrentDirectoryDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
+    package func handleCurrentDirectoryDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
         RemoteFileItemProviderAdapter.acceptsRemoteItems(providers)
             ? handleRemoteDrop(providers, to: destinationPath)
             : handleLocalDrop(providers, to: destinationPath)
     }
 
-    func handleLocalDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
+    package func handleLocalDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
         guard RemoteFileItemProviderAdapter.acceptsLocalItems(providers) else { return false }
         RemoteFileItemProviderAdapter.loadLocalItems(from: providers) { result in
             switch result {
@@ -883,7 +887,7 @@ struct RemoteFileBrowserScreen: View {
         return true
     }
 
-    func handleRemoteDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
+    package func handleRemoteDrop(_ providers: [NSItemProvider], to destinationPath: String) -> Bool {
         guard RemoteFileItemProviderAdapter.acceptsRemoteItems(providers) else { return false }
 
         operationCoordinator.transferDroppedItems(
@@ -898,12 +902,12 @@ struct RemoteFileBrowserScreen: View {
         return true
     }
 
-    func handleFolderDrop(_ providers: [NSItemProvider], to entry: RemoteFileEntry) -> Bool {
+    package func handleFolderDrop(_ providers: [NSItemProvider], to entry: RemoteFileEntry) -> Bool {
         guard entry.type == .directory else { return false }
         return handleCurrentDirectoryDrop(providers, to: entry.path)
     }
 
-    func dragItemProvider(for entry: RemoteFileEntry) -> NSItemProvider {
+    package func dragItemProvider(for entry: RemoteFileEntry) -> NSItemProvider {
         RemoteFileItemProviderAdapter.makeProvider(
             payload: RemoteFileDragPayload(serverId: server.id, entries: [entry]),
             entry: entry
@@ -912,7 +916,7 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func createFolder() {
+    package func createFolder() {
         guard case .createFolder(var draft) = presentation else { return }
         guard !draft.isSubmitting else { return }
         guard !trimmedNewFolderName.isEmpty else {
@@ -943,7 +947,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func renameEntry() {
+    package func renameEntry() {
         guard case .rename(var draft) = presentation, !draft.isSubmitting else { return }
         draft.isSubmitting = true
         presentation = .rename(draft)
@@ -969,7 +973,7 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func moveEntry() {
+    package func moveEntry() {
         guard case .move(var draft) = presentation, !draft.isSubmitting else { return }
         draft.isSubmitting = true
         presentation = .move(draft)
@@ -995,14 +999,14 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func deleteEntry() {
+    package func deleteEntry() {
         guard case .delete(let entry) = presentation else { return }
         dismissPresentation()
 
         deleteEntries([entry])
     }
 
-    func deleteEntries(_ entries: [RemoteFileEntry]) {
+    package func deleteEntries(_ entries: [RemoteFileEntry]) {
         guard !entries.isEmpty else { return }
 
         operationCoordinator.delete(
@@ -1014,24 +1018,24 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func requestDelete(_ entries: [RemoteFileEntry]) {
+    package func requestDelete(_ entries: [RemoteFileEntry]) {
         guard !entries.isEmpty else { return }
         platformRequestDelete(entries)
     }
 
-    func resetNewFolderPrompt() {
+    package func resetNewFolderPrompt() {
         if case .createFolder = presentation { dismissPresentation() }
     }
 
-    func resetRenamePrompt() {
+    package func resetRenamePrompt() {
         if case .rename = presentation { dismissPresentation() }
     }
 
-    func resetMovePrompt() {
+    package func resetMovePrompt() {
         if case .move = presentation { dismissPresentation() }
     }
 
-    func applyPermissions() {
+    package func applyPermissions() {
         guard case .permissions(var draft) = presentation, !draft.isSubmitting else { return }
         draft.errorMessage = nil
         draft.isSubmitting = true
@@ -1058,43 +1062,43 @@ struct RemoteFileBrowserScreen: View {
         )
     }
 
-    func resetPermissionEditor() {
+    package func resetPermissionEditor() {
         if case .permissions = presentation { dismissPresentation() }
     }
 
-    func cleanupDownloadExport() {
+    package func cleanupDownloadExport() {
         guard case .downloadExport(let export) = presentation else { return }
         operationCoordinator.releasePreparedFile(export.transferID)
         dismissPresentation()
     }
 
-    func cleanupShareItem() {
+    package func cleanupShareItem() {
         guard case .share(let item) = presentation else { return }
         operationCoordinator.releasePreparedFile(item.id)
         dismissPresentation()
     }
 
-    func finishSharing(_ item: RemoteFileShareItem) {
+    package func finishSharing(_ item: RemoteFileShareItem) {
         guard case .share(let current) = presentation, current.id == item.id else { return }
         cleanupShareItem()
     }
 
-    func currentFolderTitle(for path: String) -> String {
+    package func currentFolderTitle(for path: String) -> String {
         RemoteFilePath.breadcrumbs(for: path).last?.title ?? "/"
     }
 
-    func itemCountLabel(for count: Int) -> String {
+    package func itemCountLabel(for count: Int) -> String {
         count == 1
             ? String(format: String(localized: "%lld item"), Int64(count))
             : String(format: String(localized: "%lld items"), Int64(count))
     }
 
-    func modifiedLabel(for entry: RemoteFileEntry) -> String {
+    package func modifiedLabel(for entry: RemoteFileEntry) -> String {
         guard let modifiedAt = entry.modifiedAt else { return "—" }
         return modifiedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
-    func deleteAlertTitle(for entry: RemoteFileEntry) -> String {
+    package func deleteAlertTitle(for entry: RemoteFileEntry) -> String {
         switch entry.type {
         case .directory:
             return String(localized: "Delete Folder?")
@@ -1105,12 +1109,12 @@ struct RemoteFileBrowserScreen: View {
         }
     }
 
-    func sizeLabel(for entry: RemoteFileEntry) -> String {
+    package func sizeLabel(for entry: RemoteFileEntry) -> String {
         guard entry.type != .directory, let size = entry.size else { return "—" }
         return RemoteFileByteCountFormatter.string(from: size)
     }
 
-    func kindLabel(for entry: RemoteFileEntry) -> String {
+    package func kindLabel(for entry: RemoteFileEntry) -> String {
         switch entry.type {
         case .directory:
             return String(localized: "Folder")

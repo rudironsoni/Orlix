@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-extension TrustedHostsSettingsView {
-    func platformHostRow(for knownHost: KnownHostSettingsItem) -> some View {
+package extension TrustedHostsSettingsView {
+    package func platformHostRow(for knownHost: KnownHostSettingsItem) -> some View {
         TrustedHostSettingsRow(knownHost: knownHost)
             .orlixListRowSeparatorLeadingZero()
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {

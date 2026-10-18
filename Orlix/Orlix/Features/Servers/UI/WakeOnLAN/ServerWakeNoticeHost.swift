@@ -1,11 +1,14 @@
 import SwiftUI
 
-struct ServerWakeNoticeHost<Content: View>: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ServerWakeNoticeHost<Content: View>: View {
     @ObservedObject private var coordinator: ServerWakeCoordinator
     @StateObject private var noticeHost = NoticeHostModel()
     private let content: Content
 
-    init(
+    package init(
         coordinator: ServerWakeCoordinator,
         @ViewBuilder content: () -> Content
     ) {
@@ -13,7 +16,7 @@ struct ServerWakeNoticeHost<Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(bottomOperations: noticeHost.bottomOperations) {
             content
         }
@@ -94,7 +97,7 @@ struct ServerWakeNoticeHost<Content: View>: View {
 }
 
 private extension ServerWakeFailure {
-    var message: String {
+    package var message: String {
         switch self {
         case .macAddressUnavailable:
             return String(
@@ -109,7 +112,7 @@ private extension ServerWakeFailure {
 }
 
 private extension WakeOnLANSendError {
-    var message: String {
+    package var message: String {
         switch self {
         case .localNetworkAccessDenied:
             return String(

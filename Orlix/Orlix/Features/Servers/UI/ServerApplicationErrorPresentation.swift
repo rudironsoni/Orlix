@@ -1,29 +1,10 @@
 import Foundation
 
-extension ServerConnectionTestFailure {
-    nonisolated var message: String {
-        switch reason {
-        case .message(let message):
-            return message
-        case .tailscale(let message):
-            let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
-            return message.contains(reminder) ? message : "\(message)\n\(reminder)"
-        case .eternalTerminal(let failure, let host, let port):
-            return TerminalConnectionFailurePresentation.message(
-                for: .eternalTerminal(
-                    failure: failure,
-                    host: host,
-                    port: port
-                )
-            )
-        case .hostKeyApprovalExpired:
-            return String(localized: "SSH host key approval expired. Try again.")
-        }
-    }
-}
-
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
 extension OrlixError: LocalizedError {
-    nonisolated var errorDescription: String? {
+    nonisolated package var errorDescription: String? {
         switch self {
         case .proRequired(let requirement):
             switch requirement {

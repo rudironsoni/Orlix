@@ -1,11 +1,14 @@
 import Foundation
 
-nonisolated extension LinuxStatsCollector {
-    static var systemInfoCommand: String {
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
+nonisolated package extension LinuxStatsCollector {
+    static package var systemInfoCommand: String {
         "uname -srm; echo '---SEP---'; hostname; echo '---SEP---'; nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 1"
     }
 
-    static var profileCommand: String {
+    static package var profileCommand: String {
         let script = """
             LC_ALL=C LANG=C; \
             hostname 2>/dev/null; echo '---SEP---'; \
@@ -20,7 +23,7 @@ nonisolated extension LinuxStatsCollector {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static var statsBatchCommand: String {
+    static package var statsBatchCommand: String {
         """
         grep '^cpu' /proc/stat; echo '---SEP---'; \
         cat /proc/meminfo; echo '---SEP---'; \
@@ -31,7 +34,7 @@ nonisolated extension LinuxStatsCollector {
         """
     }
 
-    static var fallbackStatsCommand: String {
+    static package var fallbackStatsCommand: String {
         let script = """
             export LC_ALL=C LANG=C; \
             top -bn1 2>/dev/null | head -20; echo '---SEP---'; \
@@ -50,7 +53,7 @@ nonisolated extension LinuxStatsCollector {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static var volumesCommand: String {
+    static package var volumesCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(
             "LC_ALL=C LANG=C; volume_df=$(df -BM -P -T -x tmpfs -x devtmpfs -x squashfs 2>/dev/null); "
                 + "if [ -n \"$volume_df\" ]; then printf '%s\\n' \"$volume_df\"; "
@@ -58,14 +61,14 @@ nonisolated extension LinuxStatsCollector {
         )
     }
 
-    static var processCountCommand: String { "ps -e 2>/dev/null | wc -l" }
-    static var memoryInfoCommand: String { "cat /proc/meminfo 2>/dev/null" }
+    static package var processCountCommand: String { "ps -e 2>/dev/null | wc -l" }
+    static package var memoryInfoCommand: String { "cat /proc/meminfo 2>/dev/null" }
 
-    static var gpuSamplesCommand: String {
+    static package var gpuSamplesCommand: String {
         "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits 2>/dev/null || true"
     }
 
-    static var volumeMetadataCommand: String {
+    static package var volumeMetadataCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand(
             "LC_ALL=C LANG=C lsblk -J -p -o NAME,UUID,FSTYPE 2>/dev/null"
         )

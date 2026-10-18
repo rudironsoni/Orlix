@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
+nonisolated package enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
     case permissionDenied
     case pathNotFound
     case disconnected
@@ -11,7 +11,7 @@ nonisolated enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable
     case resourceLimitExceeded
     case failed(String)
 
-    var id: String {
+    package var id: String {
         switch self {
         case .permissionDenied:
             return "permissionDenied"
@@ -34,7 +34,7 @@ nonisolated enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable
         }
     }
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .permissionDenied:
             return String(localized: "Permission denied.")
@@ -57,7 +57,7 @@ nonisolated enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable
         }
     }
 
-    static func map(_ error: Error) -> RemoteFileBrowserError {
+    static package func map(_ error: Error) -> RemoteFileBrowserError {
         if let browserError = error as? RemoteFileBrowserError {
             return browserError
         }

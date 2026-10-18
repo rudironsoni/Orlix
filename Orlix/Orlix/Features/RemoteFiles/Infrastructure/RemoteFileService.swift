@@ -1,6 +1,10 @@
 import Foundation
 
-protocol RemoteFileService: Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package protocol RemoteFileService: Sendable {
     func listDirectory(at path: String, maxEntries: Int?) async throws -> [RemoteFileEntry]
     func stat(at path: String) async throws -> RemoteFileEntry
     func lstat(at path: String) async throws -> RemoteFileEntry

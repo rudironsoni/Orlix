@@ -1,15 +1,15 @@
-nonisolated enum ServerProRequirement: Equatable, Sendable {
+nonisolated package enum ServerProRequirement: Equatable, Sendable {
     case unlimitedServers
     case unlimitedWorkspaces
     case moveIntoLockedWorkspace
 }
 
-nonisolated enum ServerMoveFailureReason: Equatable, Sendable {
+nonisolated package enum ServerMoveFailureReason: Equatable, Sendable {
     case destinationUnavailable
     case unavailable
 }
 
-nonisolated enum OrlixError: Error, Equatable, Sendable {
+nonisolated package enum OrlixError: Error, Equatable, Sendable {
     case proRequired(ServerProRequirement)
     case serverLocked(String)
     case workspaceLocked(String)
@@ -26,7 +26,7 @@ nonisolated enum OrlixError: Error, Equatable, Sendable {
     case workspaceDeletionChanged
     case timeout
 
-    var isLockedError: Bool {
+    package var isLockedError: Bool {
         switch self {
         case .serverLocked, .workspaceLocked: return true
         default: return false

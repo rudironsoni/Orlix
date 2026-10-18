@@ -1,17 +1,20 @@
 import SwiftUI
 
 #if os(iOS)
-struct RemoteFileTabsBar: View {
-    let tabs: [RemoteFileTab]
-    @Binding var selectedTabId: UUID?
-    let titleForTab: (RemoteFileTab) -> String
-    let onSelect: (RemoteFileTab) -> Void
-    let onClose: (RemoteFileTab) -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileTabsBar: View {
+    package let tabs: [RemoteFileTab]
+    @Binding package var selectedTabId: UUID?
+    package let titleForTab: (RemoteFileTab) -> String
+    package let onSelect: (RemoteFileTab) -> Void
+    package let onClose: (RemoteFileTab) -> Void
 
     private let minTabWidth: CGFloat = 120
     private let searchAlignedOuterHorizontalPadding: CGFloat = 24
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let count = max(tabs.count, 1)
             let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)
@@ -78,16 +81,30 @@ struct RemoteFileTabsBar: View {
         .padding(.horizontal, searchAlignedOuterHorizontalPadding)
         .padding(.vertical, 6)
     }
+
+    package init(
+        tabs: [RemoteFileTab],
+        selectedTabId: Binding<UUID?>,
+        titleForTab: @escaping (RemoteFileTab) -> String,
+        onSelect: @escaping (RemoteFileTab) -> Void,
+        onClose: @escaping (RemoteFileTab) -> Void
+    ) {
+        self.tabs = tabs
+        self._selectedTabId = selectedTabId
+        self.titleForTab = titleForTab
+        self.onSelect = onSelect
+        self.onClose = onClose
+    }
 }
 
 private struct RemoteFileTabButton: View {
-    let title: String
-    let isSelected: Bool
-    let fixedWidth: CGFloat?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package let title: String
+    package let isSelected: Bool
+    package let fixedWidth: CGFloat?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "folder")
                 .font(.system(size: 12, weight: .semibold))

@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated struct ShellHandle: Sendable {
-    let id: UUID
-    let stream: TerminalOutputStream
-    let transportState: ShellTransportState
-    let origin: ShellStartOrigin
+nonisolated package struct ShellHandle: Sendable {
+    package let id: UUID
+    package let stream: TerminalOutputStream
+    package let transportState: ShellTransportState
+    package let origin: ShellStartOrigin
 
-    var transport: ShellTransport { transportState.transport }
-    var fallbackReason: MoshFallbackReason? { transportState.fallbackReason }
-    var fallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
+    package var transport: ShellTransport { transportState.transport }
+    package var fallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    package var fallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 
-    init(
+    package init(
         id: UUID,
         stream: TerminalOutputStream,
         transportState: ShellTransportState = .ssh,
@@ -23,7 +23,7 @@ nonisolated struct ShellHandle: Sendable {
     }
 }
 
-nonisolated enum ShellStartOrigin: Equatable, Sendable {
+nonisolated package enum ShellStartOrigin: Equatable, Sendable {
     case fresh
     case restored
 }

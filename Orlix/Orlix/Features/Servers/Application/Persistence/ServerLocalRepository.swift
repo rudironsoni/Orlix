@@ -1,30 +1,33 @@
 import Foundation
 
-nonisolated struct ServerLocalStorageIssue: Identifiable, Equatable, Sendable {
-    nonisolated enum Collection: String, Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ServerLocalStorageIssue: Identifiable, Equatable, Sendable {
+    nonisolated package enum Collection: String, Equatable, Sendable {
         case servers
         case workspaces
     }
 
-    let collection: Collection
-    let quarantineKey: String
+    package let collection: Collection
+    package let quarantineKey: String
 
-    var id: Collection { collection }
+    package var id: Collection { collection }
 }
 
-nonisolated enum ServerLocalLoadResult<Value> {
+nonisolated package enum ServerLocalLoadResult<Value> {
     case missing
     case loaded(Value)
     case unreadable(ServerLocalStorageIssue)
 }
 
-nonisolated struct ServerLocalRepositorySnapshot {
-    let servers: ServerLocalLoadResult<[Server]>
-    let workspaces: ServerLocalLoadResult<[Workspace]>
+nonisolated package struct ServerLocalRepositorySnapshot {
+    package let servers: ServerLocalLoadResult<[Server]>
+    package let workspaces: ServerLocalLoadResult<[Workspace]>
 }
 
 @MainActor
-protocol ServerLocalRepository: ServerDataMutationJournalStoring {
+package protocol ServerLocalRepository: ServerDataMutationJournalStoring {
     func loadSnapshot() -> ServerLocalRepositorySnapshot
     func persist(servers: [Server], workspaces: [Workspace]) throws
     func clearServerData() throws

@@ -9,46 +9,46 @@
 import AppKit
 import UniformTypeIdentifiers
 
-struct ClipboardImagePayload: Sendable {
-    let data: Data
-    let mimeType: String
-    let utType: String
-    let suggestedExtension: String
+nonisolated package struct ClipboardImagePayload: Sendable {
+    nonisolated package let data: Data
+    nonisolated package let mimeType: String
+    nonisolated package let utType: String
+    nonisolated package let suggestedExtension: String
 
-    nonisolated var sizeBytes: Int { data.count }
+    nonisolated package var sizeBytes: Int { data.count }
 }
 
-struct ClipboardSnapshot: Sendable {
-    let text: String?
-    let image: ClipboardImagePayload?
+nonisolated package struct ClipboardSnapshot: Sendable {
+    nonisolated package let text: String?
+    nonisolated package let image: ClipboardImagePayload?
 
-    nonisolated var hasText: Bool {
+    nonisolated package var hasText: Bool {
         guard let text else { return false }
         return !text.isEmpty
     }
 
-    nonisolated var hasImage: Bool {
+    nonisolated package var hasImage: Bool {
         image != nil
     }
 }
 
-enum Clipboard {
-    static func copy(_ text: String) {
+package enum Clipboard {
+    static package func copy(_ text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
     }
 
-    static func readString() -> String? {
+    static package func readString() -> String? {
         NSPasteboard.general.string(forType: .string)
     }
 
-    static func copy(lines: [String], separator: String = "\n") {
+    static package func copy(lines: [String], separator: String = "\n") {
         copy(lines.joined(separator: separator))
     }
 
     @MainActor
-    static func snapshot() -> ClipboardSnapshot {
+    static package func snapshot() -> ClipboardSnapshot {
         let pasteboard = NSPasteboard.general
         return ClipboardSnapshot(
             text: normalizedText(pasteboard.string(forType: .string)),
@@ -103,44 +103,44 @@ enum Clipboard {
 import UIKit
 import UniformTypeIdentifiers
 
-struct ClipboardImagePayload: Sendable {
-    let data: Data
-    let mimeType: String
-    let utType: String
-    let suggestedExtension: String
+nonisolated package struct ClipboardImagePayload: Sendable {
+    nonisolated package let data: Data
+    nonisolated package let mimeType: String
+    nonisolated package let utType: String
+    nonisolated package let suggestedExtension: String
 
-    nonisolated var sizeBytes: Int { data.count }
+    nonisolated package var sizeBytes: Int { data.count }
 }
 
-struct ClipboardSnapshot: Sendable {
-    let text: String?
-    let image: ClipboardImagePayload?
+nonisolated package struct ClipboardSnapshot: Sendable {
+    nonisolated package let text: String?
+    nonisolated package let image: ClipboardImagePayload?
 
-    nonisolated var hasText: Bool {
+    nonisolated package var hasText: Bool {
         guard let text else { return false }
         return !text.isEmpty
     }
 
-    nonisolated var hasImage: Bool {
+    nonisolated package var hasImage: Bool {
         image != nil
     }
 }
 
-enum Clipboard {
-    static func copy(_ text: String) {
+package enum Clipboard {
+    static package func copy(_ text: String) {
         UIPasteboard.general.string = text
     }
 
-    static func readString() -> String? {
+    static package func readString() -> String? {
         UIPasteboard.general.string
     }
 
-    static func copy(lines: [String], separator: String = "\n") {
+    static package func copy(lines: [String], separator: String = "\n") {
         copy(lines.joined(separator: separator))
     }
 
     @MainActor
-    static func snapshot() -> ClipboardSnapshot {
+    static package func snapshot() -> ClipboardSnapshot {
         let pasteboard = UIPasteboard.general
         return ClipboardSnapshot(
             text: normalizedText(pasteboard.string),

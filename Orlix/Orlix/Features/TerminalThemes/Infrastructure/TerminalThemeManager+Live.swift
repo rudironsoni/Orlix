@@ -1,11 +1,14 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThemePreferenceChangeSource {
     private let defaults: UserDefaults
     private let notificationCenter: NotificationCenter
 
-    init(
+    package init(
         defaults: UserDefaults,
         notificationCenter: NotificationCenter
     ) {
@@ -13,7 +16,7 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
         self.notificationCenter = notificationCenter
     }
 
-    func observeChanges(
+    package func observeChanges(
         _ observer: @escaping @MainActor @Sendable () -> Void
     ) -> NSObjectProtocol {
         notificationCenter.addObserver(
@@ -27,24 +30,24 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
         }
     }
 
-    func removeObserver(_ observer: NSObjectProtocol) {
+    package func removeObserver(_ observer: NSObjectProtocol) {
         notificationCenter.removeObserver(observer)
     }
 }
 
 extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {
-    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws {
+    package func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws {
         try enqueue(.terminalThemeUpsert(theme))
     }
 
-    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws {
+    package func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws {
         try enqueue(.terminalThemePreferenceUpsert(preference))
     }
 }
 extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
 
-extension TerminalThemeManagerDependencies {
-    static func live(
+package extension TerminalThemeManagerDependencies {
+    static package func live(
         defaults: UserDefaults,
         notificationCenter: NotificationCenter,
         cloud: any TerminalThemeCloudClient,

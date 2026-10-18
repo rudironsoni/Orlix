@@ -1,11 +1,11 @@
 import SwiftUI
 
-struct NoticeBannerView: View {
-    let item: NoticeItem
-    var surfaceStyle: NoticeSurfaceStyle = .standard
+package struct NoticeBannerView: View {
+    package let item: NoticeItem
+    package var surfaceStyle: NoticeSurfaceStyle = .standard
     @State private var isShowingDetail = false
 
-    var body: some View {
+    package var body: some View {
         NoticeGlassGroup(spacing: 10) {
             HStack(spacing: 10) {
                 leadingView
@@ -99,15 +99,30 @@ struct NoticeBannerView: View {
         }
     }
 
+
+
+    package init(
+
+        item: NoticeItem,
+
+        surfaceStyle: NoticeSurfaceStyle = .standard
+
+    ) {
+
+        self.item = item
+
+        self.surfaceStyle = surfaceStyle
+
+    }
 }
 
 private struct NoticeDetailView: View {
-    let detail: String
+    package let detail: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var didCopy = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             ScrollView {
                 Text(detail)

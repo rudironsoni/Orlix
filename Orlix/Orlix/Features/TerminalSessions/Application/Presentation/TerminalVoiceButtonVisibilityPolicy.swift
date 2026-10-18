@@ -1,5 +1,5 @@
-nonisolated enum TerminalVoiceButtonVisibilityPolicy {
-    static func isVisible(
+nonisolated package enum TerminalVoiceButtonVisibilityPolicy {
+    static package func isVisible(
         settingEnabled: Bool,
         tabSelected: Bool,
         paneFocused: Bool,

@@ -2,8 +2,8 @@
 import AppKit
 import SwiftUI
 
-extension SupportSheet {
-    func openURL(_ urlString: String) {
+package extension SupportSheet {
+    package func openURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         NSWorkspace.shared.open(url)
     }

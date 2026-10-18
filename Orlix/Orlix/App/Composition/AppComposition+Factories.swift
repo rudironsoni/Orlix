@@ -1,7 +1,15 @@
 import Foundation
 
-extension AppComposition {
-    static func makeRemoteFileSecurityApprovalActions(
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
+package extension AppComposition {
+    static package func makeRemoteFileSecurityApprovalActions(
         knownHostsManager: KnownHostsManager
     ) -> RemoteFileSecurityApprovalActions {
         RemoteFileSecurityApprovalActions(
@@ -37,7 +45,7 @@ extension AppComposition {
         )
     }
 
-    static func makeStatsCollectorFactory(
+    static package func makeStatsCollectorFactory(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager,
         connectionOperations: SSHConnectionOperationService,
@@ -54,7 +62,7 @@ extension AppComposition {
         }
     }
 
-    static func makeTerminalSecurityActions(
+    static package func makeTerminalSecurityActions(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager
     ) -> TerminalSecurityActions {
@@ -85,7 +93,7 @@ extension AppComposition {
         )
     }
 
-    static func makeStatsSecurityApprovalActions(
+    static package func makeStatsSecurityApprovalActions(
         knownHostsManager: KnownHostsManager
     ) -> ServerStatsSecurityApprovalActions {
         ServerStatsSecurityApprovalActions(
@@ -106,7 +114,7 @@ extension AppComposition {
         )
     }
 
-    static func makeRemoteFileBrowserStore(
+    static package func makeRemoteFileBrowserStore(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         credentialRepository: any ServerCredentialTransactionRepository,

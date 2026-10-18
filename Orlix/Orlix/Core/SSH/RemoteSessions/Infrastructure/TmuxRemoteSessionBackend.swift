@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
-    let metadata = RemoteSessionBackendMetadata(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct TmuxRemoteSessionBackend: RemoteSessionBackend {
+    package let metadata = RemoteSessionBackendMetadata(
         identifier: .tmux,
         displayName: "tmux",
         installation: .automatic,
@@ -10,11 +13,11 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
 
     private let tmux: RemoteTmuxManager
 
-    init(tmux: RemoteTmuxManager) {
+    package init(tmux: RemoteTmuxManager) {
         self.tmux = tmux
     }
 
-    func availability(using client: SSHClient) async -> RemoteSessionAvailability {
+    package func availability(using client: SSHClient) async -> RemoteSessionAvailability {
         switch await tmux.tmuxAvailability(using: client) {
         case .unsupported:
             return .unsupportedEnvironment
@@ -30,7 +33,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -62,7 +65,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -77,7 +80,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan {
@@ -124,7 +127,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -146,7 +149,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -159,7 +162,7 @@ nonisolated struct TmuxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime

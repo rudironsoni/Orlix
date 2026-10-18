@@ -11,9 +11,17 @@ import WidgetKit
 import AppKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixComposition
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @main
-struct Orlix: App {
-    init() {
+package struct Orlix: App {
+    package init() {
         let composition = AppComposition.live()
         networkMonitor = composition.networkMonitor
         tabManager = composition.tabManager
@@ -81,9 +89,9 @@ struct Orlix: App {
     }
 
     #if os(macOS)
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @NSApplicationDelegateAdaptor(AppDelegate.self) package var appDelegate
     #else
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @UIApplicationDelegateAdaptor(AppDelegate.self) package var appDelegate
     #endif
 
     @StateObject private var ghosttyApp: GhosttyRuntime
@@ -409,7 +417,7 @@ struct Orlix: App {
     }
     #endif
 
-    var body: some Scene {
+    package var body: some Scene {
         WindowGroup("", id: "main") {
             let appLocale = AppLanguage(rawValue: appLanguage)?.locale ?? Locale.current
             AppLockContainer {
@@ -462,7 +470,7 @@ private enum OrlixLauncherWidgetRefresh {
     private static let renderingRevision = 1
     private static let renderingRevisionKey = "launcherWidgetRenderingRevision"
 
-    static func refreshIfNeeded() {
+    static package func refreshIfNeeded() {
         let defaults = UserDefaults.standard
         guard defaults.integer(forKey: renderingRevisionKey) < renderingRevision else { return }
 

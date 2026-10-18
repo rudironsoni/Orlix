@@ -2,6 +2,9 @@
 import Foundation
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
 @MainActor
 private final class TrustedHostsSettingsUITestRepository: KnownHostSettingsRepository {
     private var knownHosts = [
@@ -17,25 +20,25 @@ private final class TrustedHostsSettingsUITestRepository: KnownHostSettingsRepos
         ),
     ]
 
-    func loadKnownHosts() -> [KnownHostSettingsItem] {
+    package func loadKnownHosts() -> [KnownHostSettingsItem] {
         knownHosts
     }
 
-    func removeKnownHost(host: String, port: Int) {
+    package func removeKnownHost(host: String, port: Int) {
         knownHosts.removeAll { $0.host == host && $0.port == port }
     }
 
-    func removeAllKnownHosts() {
+    package func removeAllKnownHosts() {
         knownHosts.removeAll()
     }
 }
 
-struct TrustedHostsSettingsUITestHarness: View {
+package struct TrustedHostsSettingsUITestHarness: View {
     @StateObject private var coordinator = KnownHostSettingsCoordinator(
         repository: TrustedHostsSettingsUITestRepository()
     )
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             TrustedHostsSettingsView()
                 .navigationTitle("Trusted Hosts")
@@ -43,5 +46,8 @@ struct TrustedHostsSettingsUITestHarness: View {
         .environmentObject(coordinator)
         .accessibilityIdentifier("orlix.trustedHostsSettingsTest.root")
     }
+
+
+    package init() {}
 }
 #endif

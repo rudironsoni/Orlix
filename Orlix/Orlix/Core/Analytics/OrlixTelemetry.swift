@@ -4,13 +4,13 @@ import OpenTelemetryApi
 import OpenTelemetryProtocolExporterHttp
 import OpenTelemetrySdk
 
-enum OrlixTelemetryEnvironment: String, Equatable {
+package enum OrlixTelemetryEnvironment: String, Equatable {
     case development
     case simulatorValidation = "simulator-validation"
     case testflight
 }
 
-enum OrlixAnalyticsEvent: String, CaseIterable {
+package enum OrlixAnalyticsEvent: String, CaseIterable {
     case appStarted = "app_started"
     case appLaunched = "app_launched"
     case connectionSucceeded = "connection_succeeded"
@@ -41,35 +41,35 @@ enum OrlixAnalyticsEvent: String, CaseIterable {
     case themeChanged = "theme_changed"
 }
 
-struct OrlixTrackPayload: Equatable {
-    let event: OrlixAnalyticsEvent
-    let properties: [String: String]
+package struct OrlixTrackPayload: Equatable {
+    package let event: OrlixAnalyticsEvent
+    package let properties: [String: String]
 }
 
-enum OrlixBootOutcome: String, Equatable {
+package enum OrlixBootOutcome: String, Equatable {
     case succeeded
     case failed
 }
 
-enum OrlixDiagnosticEvent: Equatable {
+package enum OrlixDiagnosticEvent: Equatable {
     case appLaunch(startedAt: Date, finishedAt: Date)
     case linuxBoot(startedAt: Date, finishedAt: Date, outcome: OrlixBootOutcome)
     case watchdog
     case firstTerminalOutput(latencyMilliseconds: Double)
 }
 
-struct OrlixTelemetryConfiguration: Equatable {
-    let analyticsEnabled: Bool
-    let observabilityEnabled: Bool
-    let openPanelEndpoint: URL?
-    let openPanelClientID: String?
-    let signozEndpoint: URL?
-    let signozIngestionKey: String?
-    let environment: OrlixTelemetryEnvironment
-    let serviceName = "orlix-ios"
-    let serviceVersion: String
+package struct OrlixTelemetryConfiguration: Equatable {
+    package let analyticsEnabled: Bool
+    package let observabilityEnabled: Bool
+    package let openPanelEndpoint: URL?
+    package let openPanelClientID: String?
+    package let signozEndpoint: URL?
+    package let signozIngestionKey: String?
+    package let environment: OrlixTelemetryEnvironment
+    package let serviceName = "orlix-ios"
+    package let serviceVersion: String
 
-    init(
+    package init(
         environment suppliedProcessEnvironment: [String: String]? = nil,
         info: [String: Any] = Bundle.main.infoDictionary ?? [:]
     ) {
@@ -109,11 +109,11 @@ struct OrlixTelemetryConfiguration: Equatable {
         }
     }
 
-    var analyticsConfigured: Bool {
+    package var analyticsConfigured: Bool {
         analyticsEnabled && openPanelEndpoint != nil && openPanelClientID != nil
     }
 
-    var diagnosticsConfigured: Bool {
+    package var diagnosticsConfigured: Bool {
         observabilityEnabled && signozEndpoint != nil && signozIngestionKey != nil
     }
 
@@ -163,37 +163,37 @@ private func orlixTelemetryProcessEnvironment() -> [String: String] {
     }
 }
 
-protocol OrlixTelemetryTransport: AnyObject {
+package protocol OrlixTelemetryTransport: AnyObject {
     func send(_ request: URLRequest, completion: @escaping @Sendable (Bool) -> Void)
     func cancelAll()
 }
 
-final class OrlixURLSessionTransport: OrlixTelemetryTransport, @unchecked Sendable {
+final package class OrlixURLSessionTransport: OrlixTelemetryTransport, @unchecked Sendable {
     private let session: URLSession
 
-    init(session: URLSession = URLSession(configuration: .ephemeral)) {
+    package init(session: URLSession = URLSession(configuration: .ephemeral)) {
         self.session = session
     }
 
-    func send(_ request: URLRequest, completion: @escaping @Sendable (Bool) -> Void) {
+    package func send(_ request: URLRequest, completion: @escaping @Sendable (Bool) -> Void) {
         session.dataTask(with: request) { _, response, error in
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             completion(error == nil && (200 ... 299).contains(statusCode))
         }.resume()
     }
 
-    func cancelAll() {
+    package func cancelAll() {
         session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
     }
 }
 
-protocol OrlixDiagnosticsSink: AnyObject, Sendable {
+package protocol OrlixDiagnosticsSink: AnyObject, Sendable {
     func record(_ event: OrlixDiagnosticEvent)
     func flush()
     func shutdown()
 }
 
-final class OrlixOpenTelemetryDiagnosticsSink: OrlixDiagnosticsSink, @unchecked Sendable {
+final package class OrlixOpenTelemetryDiagnosticsSink: OrlixDiagnosticsSink, @unchecked Sendable {
     private let tracerProvider: TracerProviderSdk
     private let meterProvider: MeterProviderSdk
     private let tracer: Tracer
@@ -203,7 +203,7 @@ final class OrlixOpenTelemetryDiagnosticsSink: OrlixDiagnosticsSink, @unchecked 
     private var bootDurationHistogram: any DoubleHistogram
     private var firstOutputLatencyHistogram: any DoubleHistogram
 
-    init?(configuration: OrlixTelemetryConfiguration) {
+    package init?(configuration: OrlixTelemetryConfiguration) {
         guard let endpoint = configuration.signozEndpoint,
               let ingestionKey = configuration.signozIngestionKey else {
             return nil
@@ -244,7 +244,7 @@ final class OrlixOpenTelemetryDiagnosticsSink: OrlixDiagnosticsSink, @unchecked 
         firstOutputLatencyHistogram = meter.histogramBuilder(name: "orlix.terminal.first_output.latency").setUnit("ms").build()
     }
 
-    func record(_ event: OrlixDiagnosticEvent) {
+    package func record(_ event: OrlixDiagnosticEvent) {
         switch event {
         case let .appLaunch(startedAt, finishedAt):
             let span = tracer.spanBuilder(spanName: "orlix.app.launch")
@@ -273,22 +273,22 @@ final class OrlixOpenTelemetryDiagnosticsSink: OrlixDiagnosticsSink, @unchecked 
         }
     }
 
-    func shutdown() {
+    package func shutdown() {
         tracerProvider.shutdown()
         _ = meterProvider.shutdown()
     }
 
-    func flush() {
+    package func flush() {
         tracerProvider.forceFlush()
         _ = meterProvider.forceFlush()
     }
 }
 
-final class OrlixTelemetry: @unchecked Sendable {
-    static let shared = OrlixTelemetry()
+final package class OrlixTelemetry: @unchecked Sendable {
+    static package let shared = OrlixTelemetry()
 
-    static let analyticsOptOutKey = "Orlix.telemetry.analyticsOptOut"
-    static let diagnosticsOptOutKey = "Orlix.telemetry.diagnosticsOptOut"
+    static package let analyticsOptOutKey = "Orlix.telemetry.analyticsOptOut"
+    static package let diagnosticsOptOutKey = "Orlix.telemetry.diagnosticsOptOut"
 
     private let configuration: OrlixTelemetryConfiguration
     private let transport: OrlixTelemetryTransport
@@ -303,7 +303,7 @@ final class OrlixTelemetry: @unchecked Sendable {
     private var analyticsEnabled: Bool
     private var diagnosticsEnabled: Bool
 
-    init(
+    package init(
         configuration: OrlixTelemetryConfiguration = .init(),
         transport: OrlixTelemetryTransport = OrlixURLSessionTransport(),
         defaults: UserDefaults = .standard,
@@ -322,17 +322,17 @@ final class OrlixTelemetry: @unchecked Sendable {
         }
     }
 
-    var isAnalyticsEnabled: Bool { queue.sync { analyticsEnabled } }
-    var isDiagnosticsEnabled: Bool { queue.sync { diagnosticsEnabled } }
-    var isAnalyticsAvailable: Bool { configuration.analyticsConfigured }
-    var isDiagnosticsAvailable: Bool { configuration.diagnosticsConfigured }
-    var pendingAnalyticsCount: Int { queue.sync { analyticsQueue.count } }
+    package var isAnalyticsEnabled: Bool { queue.sync { analyticsEnabled } }
+    package var isDiagnosticsEnabled: Bool { queue.sync { diagnosticsEnabled } }
+    package var isAnalyticsAvailable: Bool { configuration.analyticsConfigured }
+    package var isDiagnosticsAvailable: Bool { configuration.diagnosticsConfigured }
+    package var pendingAnalyticsCount: Int { queue.sync { analyticsQueue.count } }
 
-    func synchronizeForTesting() {
+    package func synchronizeForTesting() {
         queue.sync {}
     }
 
-    func track(_ event: OrlixAnalyticsEvent, properties: [String: String] = [:]) {
+    package func track(_ event: OrlixAnalyticsEvent, properties: [String: String] = [:]) {
         queue.async { [self] in
             guard analyticsEnabled, configuration.analyticsConfigured else { return }
             guard analyticsQueue.count < queueLimit else { return }
@@ -341,21 +341,21 @@ final class OrlixTelemetry: @unchecked Sendable {
         }
     }
 
-    func record(_ event: OrlixDiagnosticEvent) {
+    package func record(_ event: OrlixDiagnosticEvent) {
         queue.async { [self] in
             guard diagnosticsEnabled else { return }
             diagnosticsSink?.record(event)
         }
     }
 
-    func flushDiagnostics() {
+    package func flushDiagnostics() {
         queue.async { [self] in
             guard diagnosticsEnabled else { return }
             diagnosticsSink?.flush()
         }
     }
 
-    func setAnalyticsEnabled(_ enabled: Bool) {
+    package func setAnalyticsEnabled(_ enabled: Bool) {
         queue.sync {
             guard analyticsEnabled != enabled else { return }
             analyticsEnabled = enabled
@@ -368,7 +368,7 @@ final class OrlixTelemetry: @unchecked Sendable {
         }
     }
 
-    func setDiagnosticsEnabled(_ enabled: Bool) {
+    package func setDiagnosticsEnabled(_ enabled: Bool) {
         queue.sync {
             guard diagnosticsEnabled != enabled else { return }
             diagnosticsEnabled = enabled
@@ -426,11 +426,11 @@ final class OrlixTelemetry: @unchecked Sendable {
 }
 
 private struct OpenPanelRequest: Encodable {
-    struct Payload: Encodable {
-        let name: String
-        let properties: [String: String]
+    package struct Payload: Encodable {
+        package let name: String
+        package let properties: [String: String]
     }
 
-    let type: String
-    let payload: Payload
+    package let type: String
+    package let payload: Payload
 }

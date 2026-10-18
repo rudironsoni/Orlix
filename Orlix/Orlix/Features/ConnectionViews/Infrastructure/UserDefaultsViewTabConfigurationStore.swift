@@ -1,18 +1,21 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfigurationPersisting {
-    static let configurationKey = "connectionViewTabConfiguration"
+final package class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfigurationPersisting {
+    static package let configurationKey = "connectionViewTabConfiguration"
 
     private enum LegacyKey {
-        static let order = "connectionViewTabOrder"
-        static let defaultTab = "connectionDefaultViewTab"
-        static let showStats = "showStatsTab"
-        static let showTerminal = "showTerminalTab"
-        static let showFiles = "showFilesTab"
+        static package let order = "connectionViewTabOrder"
+        static package let defaultTab = "connectionDefaultViewTab"
+        static package let showStats = "showStatsTab"
+        static package let showTerminal = "showTerminalTab"
+        static package let showFiles = "showFilesTab"
 
-        static let all = [order, defaultTab, showStats, showTerminal, showFiles]
+        static package let all = [order, defaultTab, showStats, showTerminal, showFiles]
     }
 
     private let defaults: UserDefaults
@@ -21,11 +24,11 @@ final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfiguratio
         category: "ViewTabConfigurationManager"
     )
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    func load() -> ConnectionViewTabConfiguration {
+    package func load() -> ConnectionViewTabConfiguration {
         if let data = defaults.data(forKey: Self.configurationKey) {
             do {
                 let configuration = try JSONDecoder().decode(
@@ -50,7 +53,7 @@ final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfiguratio
         return configuration
     }
 
-    func save(_ configuration: ConnectionViewTabConfiguration) {
+    package func save(_ configuration: ConnectionViewTabConfiguration) {
         _ = saveConfiguration(configuration)
     }
 
@@ -101,8 +104,8 @@ final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfiguratio
     }
 }
 
-extension ViewTabConfigurationManager {
-    convenience init(defaults: UserDefaults = .standard) {
+package extension ViewTabConfigurationManager {
+    convenience package init(defaults: UserDefaults = .standard) {
         self.init(
             persistence: UserDefaultsViewTabConfigurationStore(defaults: defaults)
         )

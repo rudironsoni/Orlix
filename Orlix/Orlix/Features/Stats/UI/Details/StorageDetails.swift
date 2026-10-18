@@ -2,15 +2,18 @@ import CryptoKit
 import Foundation
 import SwiftUI
 
-nonisolated enum StorageVolumeEditingState: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StorageVolumeEditingState: Equatable, Sendable {
     case browsing
     case editing
 
-    var isEditing: Bool { self == .editing }
+    package var isEditing: Bool { self == .editing }
 }
 
-nonisolated enum StorageVolumeListPolicy {
-    static func matchingVolumes(
+nonisolated package enum StorageVolumeListPolicy {
+    static package func matchingVolumes(
         _ volumes: [VolumeInfo],
         searchText: String
     ) -> [VolumeInfo] {
@@ -26,8 +29,8 @@ nonisolated enum StorageVolumeListPolicy {
     }
 }
 
-nonisolated enum StorageVolumePresentationPolicy {
-    static func visibleVolumes(
+nonisolated package enum StorageVolumePresentationPolicy {
+    static package func visibleVolumes(
         from volumes: [VolumeInfo],
         hiddenVolumeIDs: Set<VolumeIdentity>
     ) -> [VolumeInfo] {
@@ -37,23 +40,23 @@ nonisolated enum StorageVolumePresentationPolicy {
         )
     }
 
-    static func cardVolumes(from visibleVolumes: [VolumeInfo], limit: Int) -> [VolumeInfo] {
+    static package func cardVolumes(from visibleVolumes: [VolumeInfo], limit: Int) -> [VolumeInfo] {
         Array(visibleVolumes.prefix(max(0, limit)))
     }
 }
 
-struct StorageDetailsSheet: View {
-    let volumes: [VolumeInfo]
-    let hiddenVolumeIDs: Set<VolumeIdentity>
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
+package struct StorageDetailsSheet: View {
+    package let volumes: [VolumeInfo]
+    package let hiddenVolumeIDs: Set<VolumeIdentity>
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
     @State private var searchText = ""
     @State private var editingState: StorageVolumeEditingState = .browsing
     @State private var selectedHealthVolume: VolumeInfo?
 
-    var body: some View {
+    package var body: some View {
         StorageDetailsPlatformShell(
             searchText: $searchText,
             controls: { toolbarControl },
@@ -261,13 +264,40 @@ struct StorageDetailsSheet: View {
     private func isHidden(_ volume: VolumeInfo) -> Bool {
         hiddenVolumeIDs.contains(volume.identity)
     }
+
+
+    package init(
+
+        volumes: [VolumeInfo],
+
+        hiddenVolumeIDs: Set<VolumeIdentity>,
+
+        loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)? = nil,
+
+        setVolumeVisibility: @escaping (VolumeInfo, Bool) -> Void,
+
+        setVolumesVisibility: @escaping ([VolumeInfo], Bool) -> Void
+
+    ) {
+
+        self.volumes = volumes
+
+        self.hiddenVolumeIDs = hiddenVolumeIDs
+
+        self.loadStorageHealth = loadStorageHealth
+
+        self.setVolumeVisibility = setVolumeVisibility
+
+        self.setVolumesVisibility = setVolumesVisibility
+
+    }
 }
 
 private struct StorageVolumeSummaryRow: View {
-    let volume: VolumeInfo
-    let isHidden: Bool
+    package let volume: VolumeInfo
+    package let isHidden: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: volume.kind.systemImage)
                 .font(.headline)
@@ -320,10 +350,10 @@ private struct StorageVolumeSummaryRow: View {
 }
 
 private struct StorageVolumeEmptyRow: View {
-    let hasVolumes: Bool
-    let isFiltered: Bool
+    package let hasVolumes: Bool
+    package let isFiltered: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isFiltered ? "line.3.horizontal.decrease.circle" : "internaldrive")
                 .font(.title3)
@@ -354,7 +384,7 @@ private struct StorageVolumeEmptyRow: View {
 }
 
 private extension VolumeKind {
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .physical:
             return "internaldrive"
@@ -369,7 +399,7 @@ private extension VolumeKind {
         }
     }
 
-    var tint: Color {
+    package var tint: Color {
         switch self {
         case .physical:
             return .orange
@@ -384,7 +414,7 @@ private extension VolumeKind {
 }
 
 private extension VolumeInfo {
-    var usageTint: Color {
+    package var usageTint: Color {
         if percent > 90 { return .red }
         if percent > 80 { return .orange }
         return .green

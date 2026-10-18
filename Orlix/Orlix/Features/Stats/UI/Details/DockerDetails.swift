@@ -1,8 +1,11 @@
 import SwiftUI
 
-struct DockerDetailsSheet: View {
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct DockerDetailsSheet: View {
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
 
     @State private var docker: DockerStats
     @State private var searchText = ""
@@ -13,7 +16,7 @@ struct DockerDetailsSheet: View {
     @State private var errorMessage = ""
     @State private var showingError = false
 
-    init(
+    package init(
         docker: DockerStats,
         loadDockerStats: (() async throws -> DockerStats)?,
         performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
@@ -23,7 +26,7 @@ struct DockerDetailsSheet: View {
         _docker = State(initialValue: docker)
     }
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .alert(String(localized: "Could Not Load Containers"), isPresented: $showingError) {
                 Button(String(localized: "OK"), role: .cancel) {}
@@ -197,9 +200,9 @@ private enum DockerContainerSortOption: String, CaseIterable, Identifiable {
     case name
     case state
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .cpu:
             return String(localized: "CPU")
@@ -212,7 +215,7 @@ private enum DockerContainerSortOption: String, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .cpu:
             return "cpu"
@@ -225,7 +228,7 @@ private enum DockerContainerSortOption: String, CaseIterable, Identifiable {
         }
     }
 
-    func areInIncreasingOrder(_ lhs: DockerContainer, _ rhs: DockerContainer) -> Bool {
+    package func areInIncreasingOrder(_ lhs: DockerContainer, _ rhs: DockerContainer) -> Bool {
         switch self {
         case .cpu:
             if lhs.cpuPercent == rhs.cpuPercent {
@@ -254,9 +257,9 @@ private enum DockerContainerFilterOption: String, CaseIterable, Identifiable {
     case unhealthy
     case stopped
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .all:
             return String(localized: "All")
@@ -269,7 +272,7 @@ private enum DockerContainerFilterOption: String, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .all:
             return "line.3.horizontal"
@@ -282,7 +285,7 @@ private enum DockerContainerFilterOption: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ container: DockerContainer) -> Bool {
+    package func includes(_ container: DockerContainer) -> Bool {
         switch self {
         case .all:
             return true
@@ -297,9 +300,9 @@ private enum DockerContainerFilterOption: String, CaseIterable, Identifiable {
 }
 
 private struct DockerSummaryRows: View {
-    let docker: DockerStats
+    package let docker: DockerStats
 
-    var body: some View {
+    package var body: some View {
         InfoRow(title: String(localized: "Status"), value: dockerSummaryStatus)
         InfoRow(title: String(localized: "Running"), value: "\(docker.runningCount)")
         InfoRow(title: String(localized: "Stopped"), value: "\(docker.stoppedCount)")
@@ -316,9 +319,9 @@ private struct DockerSummaryRows: View {
 }
 
 private struct DockerContainerSheetRow: View {
-    let container: DockerContainer
+    package let container: DockerContainer
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Circle()
                 .fill(dockerStatusColor(container))
@@ -357,8 +360,8 @@ private struct DockerContainerSheetRow: View {
 }
 
 private struct DockerContainerDetailsSheet: View {
-    let performAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
-    let onDockerUpdated: (DockerStats) -> Void
+    package let performAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+    package let onDockerUpdated: (DockerStats) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var container: DockerContainer
@@ -367,7 +370,7 @@ private struct DockerContainerDetailsSheet: View {
     @State private var errorMessage = ""
     @State private var showingError = false
 
-    init(
+    package init(
         container: DockerContainer,
         performAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?,
         onDockerUpdated: @escaping (DockerStats) -> Void
@@ -377,7 +380,7 @@ private struct DockerContainerDetailsSheet: View {
         _container = State(initialValue: container)
     }
 
-    var body: some View {
+    package var body: some View {
         sheetContent
             .alert(String(localized: "Could Not Update Container"), isPresented: $showingError) {
                 Button(String(localized: "OK"), role: .cancel) {}
@@ -534,11 +537,11 @@ private struct DockerContainerDetailsSheet: View {
 }
 
 private struct DockerContainerListFooter: View {
-    let visibleCount: Int
-    let totalCount: Int
-    let isFiltered: Bool
+    package let visibleCount: Int
+    package let totalCount: Int
+    package let isFiltered: Bool
 
-    var body: some View {
+    package var body: some View {
         if isFiltered {
             Text(String(
                 format: String(localized: "%lld of %lld containers"),
@@ -550,10 +553,10 @@ private struct DockerContainerListFooter: View {
 }
 
 private struct EmptyDockerContainerRow: View {
-    let isFiltered: Bool
-    let isAvailable: Bool
+    package let isFiltered: Bool
+    package let isAvailable: Bool
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.headline)
@@ -582,7 +585,7 @@ private struct EmptyDockerContainerRow: View {
 }
 
 private extension DockerContainer {
-    func matches(_ query: String) -> Bool {
+    package func matches(_ query: String) -> Bool {
         let fields = [
             id,
             name,
@@ -599,7 +602,7 @@ private extension DockerContainer {
         }
     }
 
-    func hasSameIdentity(as other: DockerContainer) -> Bool {
+    package func hasSameIdentity(as other: DockerContainer) -> Bool {
         let ownKeys = Set([id, shortID, name].map { $0.lowercased() }.filter { !$0.isEmpty })
         let otherKeys = Set([other.id, other.shortID, other.name].map { $0.lowercased() }.filter { !$0.isEmpty })
         return !ownKeys.isDisjoint(with: otherKeys)
@@ -607,12 +610,12 @@ private extension DockerContainer {
 }
 
 private extension DockerStats {
-    func container(matching container: DockerContainer) -> DockerContainer? {
+    package func container(matching container: DockerContainer) -> DockerContainer? {
         containers.first { $0.hasSameIdentity(as: container) }
     }
 }
 
-func dockerStatusColor(_ container: DockerContainer) -> Color {
+package func dockerStatusColor(_ container: DockerContainer) -> Color {
     if container.health == .unhealthy {
         return .red
     }
@@ -630,7 +633,7 @@ func dockerStatusColor(_ container: DockerContainer) -> Color {
     }
 }
 
-func dockerStateTitle(_ state: DockerContainerState) -> String {
+package func dockerStateTitle(_ state: DockerContainerState) -> String {
     switch state {
     case .running:
         return String(localized: "Running")
@@ -651,7 +654,7 @@ func dockerStateTitle(_ state: DockerContainerState) -> String {
     }
 }
 
-func dockerHealthTitle(_ health: DockerHealthStatus) -> String {
+package func dockerHealthTitle(_ health: DockerHealthStatus) -> String {
     switch health {
     case .healthy:
         return String(localized: "Healthy")
@@ -664,7 +667,7 @@ func dockerHealthTitle(_ health: DockerHealthStatus) -> String {
     }
 }
 
-func dockerActionTitle(_ action: DockerContainerAction) -> String {
+package func dockerActionTitle(_ action: DockerContainerAction) -> String {
     switch action {
     case .start:
         return String(localized: "Start Container")
@@ -675,7 +678,7 @@ func dockerActionTitle(_ action: DockerContainerAction) -> String {
     }
 }
 
-func dockerActionSystemImage(_ action: DockerContainerAction) -> String {
+package func dockerActionSystemImage(_ action: DockerContainerAction) -> String {
     switch action {
     case .start:
         return "play.fill"
@@ -686,6 +689,6 @@ func dockerActionSystemImage(_ action: DockerContainerAction) -> String {
     }
 }
 
-func dockerActionRole(_ action: DockerContainerAction) -> ButtonRole? {
+package func dockerActionRole(_ action: DockerContainerAction) -> ButtonRole? {
     action == .stop ? .destructive : nil
 }

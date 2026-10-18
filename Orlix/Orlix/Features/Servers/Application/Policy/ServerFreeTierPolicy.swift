@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated enum FreePlanGeneration: String, Equatable, Sendable {
+nonisolated package enum FreePlanGeneration: String, Equatable, Sendable {
     case legacyThreeServers = "legacy_three_servers"
     case currentOneServer = "current_one_server"
 
-    var serverLimit: Int {
+    package var serverLimit: Int {
         switch self {
         case .legacyThreeServers: return FreeTierLimits.legacyMaxServers
         case .currentOneServer: return FreeTierLimits.currentMaxServers
@@ -12,26 +12,26 @@ nonisolated enum FreePlanGeneration: String, Equatable, Sendable {
     }
 }
 
-nonisolated struct ServerFreeTierPolicy: Equatable, Sendable {
-    let generation: FreePlanGeneration
+nonisolated package struct ServerFreeTierPolicy: Equatable, Sendable {
+    package let generation: FreePlanGeneration
 
-    var serverLimit: Int {
+    package var serverLimit: Int {
         generation.serverLimit
     }
 
-    var isLegacyPlan: Bool {
+    package var isLegacyPlan: Bool {
         generation == .legacyThreeServers
     }
 
-    func canAddServer(serverCount: Int, hasProAccess: Bool) -> Bool {
+    package func canAddServer(serverCount: Int, hasProAccess: Bool) -> Bool {
         hasProAccess || serverCount < serverLimit
     }
 
-    func canAddWorkspace(workspaceCount: Int, hasProAccess: Bool) -> Bool {
+    package func canAddWorkspace(workspaceCount: Int, hasProAccess: Bool) -> Bool {
         hasProAccess || workspaceCount < FreeTierLimits.maxWorkspaces
     }
 
-    func unlockedServerIDs(servers: [Server], hasProAccess: Bool) -> Set<UUID> {
+    package func unlockedServerIDs(servers: [Server], hasProAccess: Bool) -> Set<UUID> {
         if hasProAccess {
             return Set(servers.map(\.id))
         }
@@ -39,7 +39,7 @@ nonisolated struct ServerFreeTierPolicy: Equatable, Sendable {
         return Set(prioritized.prefix(serverLimit).map(\.id))
     }
 
-    func unlockedWorkspaceIDs(workspaces: [Workspace], hasProAccess: Bool) -> Set<UUID> {
+    package func unlockedWorkspaceIDs(workspaces: [Workspace], hasProAccess: Bool) -> Set<UUID> {
         if hasProAccess {
             return Set(workspaces.map(\.id))
         }
@@ -47,11 +47,18 @@ nonisolated struct ServerFreeTierPolicy: Equatable, Sendable {
         return Set(prioritized.prefix(FreeTierLimits.maxWorkspaces).map(\.id))
     }
 
-    func lockedServerCount(serverCount: Int, hasProAccess: Bool) -> Int {
+    package func lockedServerCount(serverCount: Int, hasProAccess: Bool) -> Int {
         hasProAccess ? 0 : max(0, serverCount - serverLimit)
     }
 
-    func lockedWorkspaceCount(workspaceCount: Int, hasProAccess: Bool) -> Int {
+    package func lockedWorkspaceCount(workspaceCount: Int, hasProAccess: Bool) -> Int {
         hasProAccess ? 0 : max(0, workspaceCount - FreeTierLimits.maxWorkspaces)
+    }
+
+
+    package init(generation: FreePlanGeneration) {
+
+        self.generation = generation
+
     }
 }

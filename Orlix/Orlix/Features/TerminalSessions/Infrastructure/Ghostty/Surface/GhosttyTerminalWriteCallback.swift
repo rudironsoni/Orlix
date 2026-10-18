@@ -7,7 +7,7 @@
 
 import Foundation
 
-nonisolated func ghosttyTerminalWriteCallback(
+nonisolated package func ghosttyTerminalWriteCallback(
     _ userdata: UnsafeMutableRawPointer?,
     _ bytes: UnsafePointer<UInt8>?,
     _ length: Int

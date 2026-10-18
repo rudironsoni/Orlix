@@ -6,32 +6,35 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-protocol ConnectionViewTabConfigurationPersisting {
+package protocol ConnectionViewTabConfigurationPersisting {
     func load() -> ConnectionViewTabConfiguration
     func save(_ configuration: ConnectionViewTabConfiguration)
 }
 
 @MainActor
-final class ViewTabConfigurationManager: ObservableObject {
+final package class ViewTabConfigurationManager: ObservableObject {
     private let persistence: any ConnectionViewTabConfigurationPersisting
 
     @Published private(set) var configuration: ConnectionViewTabConfiguration
 
-    init(persistence: any ConnectionViewTabConfigurationPersisting) {
+    package init(persistence: any ConnectionViewTabConfigurationPersisting) {
         self.persistence = persistence
         configuration = persistence.load()
     }
 
-    var tabOrder: [ConnectionViewTabID] {
+    package var tabOrder: [ConnectionViewTabID] {
         configuration.order
     }
 
-    var currentVisibleTabs: [ConnectionViewTabID] {
+    package var currentVisibleTabs: [ConnectionViewTabID] {
         configuration.orderedVisibleTabs
     }
 
-    func moveTab(from source: IndexSet, to destination: Int) {
+    package func moveTab(from source: IndexSet, to destination: Int) {
         guard source.allSatisfy(configuration.order.indices.contains),
               destination >= 0,
               destination <= configuration.order.count else {
@@ -57,7 +60,7 @@ final class ViewTabConfigurationManager: ObservableObject {
         )
     }
 
-    func setDefaultTab(_ tabID: ConnectionViewTabID) {
+    package func setDefaultTab(_ tabID: ConnectionViewTabID) {
         updateConfiguration(
             ConnectionViewTabConfiguration(
                 order: configuration.order,
@@ -67,7 +70,7 @@ final class ViewTabConfigurationManager: ObservableObject {
         )
     }
 
-    func setVisibility(for tabID: ConnectionViewTabID, isVisible: Bool) {
+    package func setVisibility(for tabID: ConnectionViewTabID, isVisible: Bool) {
         var visibleTabs = configuration.visibleTabs
 
         if isVisible {
@@ -86,19 +89,19 @@ final class ViewTabConfigurationManager: ObservableObject {
         )
     }
 
-    func resetToDefaults() {
+    package func resetToDefaults() {
         updateConfiguration(.default)
     }
 
-    func effectiveDefaultTab() -> ConnectionViewTabID {
+    package func effectiveDefaultTab() -> ConnectionViewTabID {
         configuration.effectiveDefaultTab
     }
 
-    func isTabVisible(_ tabID: ConnectionViewTabID) -> Bool {
+    package func isTabVisible(_ tabID: ConnectionViewTabID) -> Bool {
         configuration.visibleTabs.contains(tabID)
     }
 
-    func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
+    package func effectiveView(for storedView: ConnectionViewTabID?) -> ConnectionViewTabID {
         configuration.effectiveView(for: storedView)
     }
 

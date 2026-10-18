@@ -1,12 +1,15 @@
 #if os(macOS)
 import SwiftUI
 
-extension CustomThemeSaveSheet {
-    func platformThemeNameField(name: Binding<String>) -> some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension CustomThemeSaveSheet {
+    package func platformThemeNameField(name: Binding<String>) -> some View {
         TextField("Name", text: name, prompt: Text("Custom Theme"))
     }
 
-    var platformBody: some View {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Save Custom Theme") {
                 dismiss()

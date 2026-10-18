@@ -2,9 +2,12 @@ import CloudKit
 import Foundation
 import os.log
 
-nonisolated enum ServerCloudKitRecordCodec {
-    static let recordType = "Server"
-    static let recordKeys = [
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerCloudKitRecordCodec {
+    static package let recordType = "Server"
+    static package let recordKeys = [
         "workspaceId", "name", "host", "port", "eternalTerminalPort", "username",
         "connectionMode", "authMethod", "cloudflareAccessMode",
         "cloudflareTeamDomainOverride", "cloudflareAppDomainOverride", "tags", "notes",
@@ -21,7 +24,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         category: "Server.CloudKit"
     )
 
-    static func server(from record: CKRecord, now: Date) -> Server? {
+    static package func server(from record: CKRecord, now: Date) -> Server? {
         guard let id = UUID(uuidString: record.recordID.recordName) else {
             logger.error("Failed to decode server: invalid recordID '\(record.recordID.recordName)'")
             return nil
@@ -109,7 +112,7 @@ nonisolated enum ServerCloudKitRecordCodec {
         )
     }
 
-    static func record(
+    static package func record(
         for server: Server,
         in zoneID: CKRecordZone.ID,
         now: Date

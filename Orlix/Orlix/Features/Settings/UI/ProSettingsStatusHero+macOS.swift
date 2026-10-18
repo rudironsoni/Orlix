@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-extension ProSettingsStatusHero {
-    var platformBody: some View {
+package extension ProSettingsStatusHero {
+    package var platformBody: some View {
         ProSettingsStatusHeroLayout(
             state: state,
             onPrimaryAction: onPrimaryAction
@@ -13,10 +13,10 @@ extension ProSettingsStatusHero {
 private struct ProSettingsStatusHeroLayout: View {
     @ScaledMetric(relativeTo: .title2) private var iconSize = 34.0
 
-    let state: ProSettingsUserState
-    let onPrimaryAction: (ProSettingsPrimaryAction) -> Void
+    package let state: ProSettingsUserState
+    package let onPrimaryAction: (ProSettingsPrimaryAction) -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 14) {
             Group {
                 if state == .checking {

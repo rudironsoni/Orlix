@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class UserDefaultsServerVolumeVisibilityPersistence:
+final package class UserDefaultsServerVolumeVisibilityPersistence:
     ServerVolumeVisibilityPreferencesPersisting {
     static let storageKey = "stats.serverVolumeVisibility.v1"
 
@@ -11,7 +14,7 @@ final class UserDefaultsServerVolumeVisibilityPersistence:
         self.defaults = defaults
     }
 
-    func loadPreferences() -> ServerVolumeVisibilityPreferences {
+    package func loadPreferences() -> ServerVolumeVisibilityPreferences {
         guard let data = defaults.data(forKey: Self.storageKey),
               let preferences = try? JSONDecoder().decode(
                   ServerVolumeVisibilityPreferences.self,
@@ -22,7 +25,7 @@ final class UserDefaultsServerVolumeVisibilityPersistence:
         return preferences
     }
 
-    func savePreferences(_ preferences: ServerVolumeVisibilityPreferences) {
+    package func savePreferences(_ preferences: ServerVolumeVisibilityPreferences) {
         guard !containsFutureSchema else { return }
         guard let data = try? JSONEncoder().encode(preferences) else { return }
         defaults.set(data, forKey: Self.storageKey)
@@ -39,8 +42,8 @@ final class UserDefaultsServerVolumeVisibilityPersistence:
 }
 
 @MainActor
-extension ServerVolumeVisibilityStore {
-    static var live: ServerVolumeVisibilityStore {
+package extension ServerVolumeVisibilityStore {
+    static package var live: ServerVolumeVisibilityStore {
         ServerVolumeVisibilityStore(
             persistence: UserDefaultsServerVolumeVisibilityPersistence(defaults: .standard)
         )

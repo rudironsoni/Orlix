@@ -1,32 +1,39 @@
 import CloudKit
 
-nonisolated struct CloudKitRecordChangeFetchIdentity: Equatable, Sendable {
-    let desiredKeys: Set<String>
-    let forceFullFetch: Bool
+nonisolated package struct CloudKitRecordChangeFetchIdentity: Equatable, Sendable {
+    package let desiredKeys: Set<String>
+    package let forceFullFetch: Bool
 
-    init(forceFullFetch: Bool, desiredKeys: [String]) {
+    package init(forceFullFetch: Bool, desiredKeys: [String]) {
         self.desiredKeys = Set(desiredKeys)
         self.forceFullFetch = forceFullFetch
     }
 }
 
-nonisolated enum CloudKitRecordChangeStreamError: Error, Equatable, Sendable {
+nonisolated package enum CloudKitRecordChangeStreamError: Error, Equatable, Sendable {
     case incompatibleRequestInFlight
     case invalidCheckpoint
     case checkpointPersistenceFailed
 }
 
-nonisolated struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
-    let id: UUID
+nonisolated package struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
+    package let id: UUID
+
+
+    package init(id: UUID) {
+
+        self.id = id
+
+    }
 }
 
-nonisolated enum CloudKitRecordChangeRequestDecision: Equatable, Sendable {
+nonisolated package enum CloudKitRecordChangeRequestDecision: Equatable, Sendable {
     case start
     case coalesce
 }
 
-nonisolated enum CloudKitRecordChangeRequestPolicy {
-    static func decision(
+nonisolated package enum CloudKitRecordChangeRequestPolicy {
+    static package func decision(
         for request: CloudKitRecordChangeFetchIdentity,
         inFlight: CloudKitRecordChangeFetchIdentity?
     ) throws -> CloudKitRecordChangeRequestDecision {
@@ -37,13 +44,13 @@ nonisolated enum CloudKitRecordChangeRequestPolicy {
         return .coalesce
     }
 
-    static func requiresCancellationTeardown(activeWaiterCount: Int) -> Bool {
+    static package func requiresCancellationTeardown(activeWaiterCount: Int) -> Bool {
         activeWaiterCount == 0
     }
 }
 
-nonisolated enum CloudKitRecordChangeCheckpointPolicy {
-    static func validate(
+nonisolated package enum CloudKitRecordChangeCheckpointPolicy {
+    static package func validate(
         _ checkpoint: CloudKitRecordChangeCheckpoint,
         pending: CloudKitRecordChangeCheckpoint?
     ) throws {
@@ -54,20 +61,20 @@ nonisolated enum CloudKitRecordChangeCheckpointPolicy {
 }
 
 @MainActor
-enum CloudKitRawRecordChange {
+package enum CloudKitRawRecordChange {
     case record(CKRecord)
     case deletion(recordID: CKRecord.ID, recordType: String)
 }
 
 @MainActor
-struct CloudKitRawRecordChanges: @unchecked Sendable {
-    let changes: [CloudKitRawRecordChange]
-    let isFullFetch: Bool
-    let checkpoint: CloudKitRecordChangeCheckpoint
+package struct CloudKitRawRecordChanges: @unchecked Sendable {
+    package let changes: [CloudKitRawRecordChange]
+    package let isFullFetch: Bool
+    package let checkpoint: CloudKitRecordChangeCheckpoint
 }
 
 @MainActor
-protocol CloudKitRecordTransport: AnyObject {
+package protocol CloudKitRecordTransport: AnyObject {
     var cloudKitRecordZoneID: CKRecordZone.ID { get }
 
     func performCloudKitRecordMutation<T>(
@@ -87,7 +94,7 @@ protocol CloudKitRecordTransport: AnyObject {
 extension CloudKitManager: CloudKitRecordTransport {}
 
 @MainActor
-protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
+package protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
     var isCloudKitAvailable: Bool { get }
     var cloudKitSyncGeneration: UUID { get }
 

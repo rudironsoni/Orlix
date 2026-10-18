@@ -1,4 +1,4 @@
-nonisolated enum WelcomeFeatureID: String, CaseIterable, Codable, Hashable, Identifiable, Sendable {
+nonisolated package enum WelcomeFeatureID: String, CaseIterable, Codable, Hashable, Identifiable, Sendable {
     case sshTerminal = "ssh_terminal"
     case sftpFiles = "sftp_files"
     case serverStats = "server_stats"
@@ -8,5 +8,5 @@ nonisolated enum WelcomeFeatureID: String, CaseIterable, Codable, Hashable, Iden
     case secureStorage = "secure_storage"
     case voiceCommands = "voice_commands"
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 }

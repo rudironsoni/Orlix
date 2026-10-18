@@ -1,9 +1,12 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class UserDefaultsTerminalAccessoryProfileStore: TerminalAccessoryProfilePersisting {
-    static let storageKey = "terminalAccessoryProfileV1"
+final package class UserDefaultsTerminalAccessoryProfileStore: TerminalAccessoryProfilePersisting {
+    static package let storageKey = "terminalAccessoryProfileV1"
 
     private let defaults: UserDefaults
     private let key: String
@@ -12,12 +15,12 @@ final class UserDefaultsTerminalAccessoryProfileStore: TerminalAccessoryProfileP
         category: "TerminalAccessoryProfileStore"
     )
 
-    init(defaults: UserDefaults, key: String) {
+    package init(defaults: UserDefaults, key: String) {
         self.defaults = defaults
         self.key = key
     }
 
-    func loadProfile(defaultWriterID writerID: String) -> TerminalAccessoryProfile {
+    package func loadProfile(defaultWriterID writerID: String) -> TerminalAccessoryProfile {
         guard let data = defaults.data(forKey: key) else {
             return repairWithDefaultProfile(writerID: writerID)
         }
@@ -38,7 +41,7 @@ final class UserDefaultsTerminalAccessoryProfileStore: TerminalAccessoryProfileP
         }
     }
 
-    func saveProfile(_ profile: TerminalAccessoryProfile) {
+    package func saveProfile(_ profile: TerminalAccessoryProfile) {
         do {
             defaults.set(try JSONEncoder().encode(profile), forKey: key)
         } catch {

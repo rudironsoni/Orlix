@@ -1,28 +1,31 @@
 import Foundation
 import Darwin
 import os.log
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - SSH Session using libssh2
 
-actor SSHSession {
+package actor SSHSession {
     #if DEBUG
-    struct ShellStartupTestEvent: Sendable {
-        let stage: ShellStartupStage
-        let sessionIsBlocking: Bool
+    package struct ShellStartupTestEvent: Sendable {
+        package let stage: ShellStartupStage
+        package let sessionIsBlocking: Bool
     }
     #endif
 
-    final class ExecRequest {
-        let id: UUID
-        let command: String
-        let continuation: CheckedContinuation<String, Error>
-        var channel: OpaquePointer?
-        var output = Data()
-        var stderr = Data()
-        var outputBudget: SSHExecOutputBudget
-        var isStarted = false
+    final package class ExecRequest {
+        package let id: UUID
+        package let command: String
+        package let continuation: CheckedContinuation<String, Error>
+        package var channel: OpaquePointer?
+        package var output = Data()
+        package var stderr = Data()
+        package var outputBudget: SSHExecOutputBudget
+        package var isStarted = false
 
-        init(
+        package init(
             id: UUID,
             command: String,
             maximumOutputBytes: Int,
@@ -35,51 +38,51 @@ actor SSHSession {
         }
     }
 
-    final class ShellChannelState {
-        let id: UUID
-        var channel: OpaquePointer
-        let output: TerminalOutputChannel
-        var batchBuffer = Data()
-        var lastYieldTime: UInt64 = DispatchTime.now().uptimeNanoseconds
-        var recentBytesPerRead: Int = 0
-        var didRecordFirstByte = false
+    final package class ShellChannelState {
+        package let id: UUID
+        package var channel: OpaquePointer
+        package let output: TerminalOutputChannel
+        package var batchBuffer = Data()
+        package var lastYieldTime: UInt64 = DispatchTime.now().uptimeNanoseconds
+        package var recentBytesPerRead: Int = 0
+        package var didRecordFirstByte = false
 
-        init(id: UUID, channel: OpaquePointer, output: TerminalOutputChannel) {
+        package init(id: UUID, channel: OpaquePointer, output: TerminalOutputChannel) {
             self.id = id
             self.channel = channel
             self.output = output
         }
     }
 
-    let config: SSHSessionConfig
-    let hostKeyVerifier: any SSHHostKeyVerifying
-    var libssh2Session: OpaquePointer?
-    var sftpSession: OpaquePointer?
-    var shellChannels: [UUID: ShellChannelState] = [:]
-    var shellStartupsInFlight: Set<UUID> = []
-    var socket: Int32 = -1
-    var isActive = false
-    var ioTask: Task<Void, Never>?
-    var execRequests: [UUID: ExecRequest] = [:]
-    var connectedPeerAddress: String?
-    let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "SSHSession")
-    let startupTrace: SSHStartupTrace?
+    package let config: SSHSessionConfig
+    package let hostKeyVerifier: any SSHHostKeyVerifying
+    package var libssh2Session: OpaquePointer?
+    package var sftpSession: OpaquePointer?
+    package var shellChannels: [UUID: ShellChannelState] = [:]
+    package var shellStartupsInFlight: Set<UUID> = []
+    package var socket: Int32 = -1
+    package var isActive = false
+    package var ioTask: Task<Void, Never>?
+    package var execRequests: [UUID: ExecRequest] = [:]
+    package var connectedPeerAddress: String?
+    package let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "SSHSession")
+    package let startupTrace: SSHStartupTrace?
 
     /// Atomic socket storage for emergency abort from any thread
-    let atomicSocket = AtomicSocket()
+    package let atomicSocket = AtomicSocket()
 
     /// Session-specific auth callback context passed to libssh2 session abstract pointer.
-    let keyboardInteractiveContext = KeyboardInteractiveContext()
+    package let keyboardInteractiveContext = KeyboardInteractiveContext()
 
     /// Track if cleanup has been performed
-    var hasBeenCleaned = false
+    package var hasBeenCleaned = false
 
     #if DEBUG
-    var shellStartupTestHook: (@Sendable (ShellStartupTestEvent) -> Void)?
-    var discardedShellStartupChannelCount = 0
+    package var shellStartupTestHook: (@Sendable (ShellStartupTestEvent) -> Void)?
+    package var discardedShellStartupChannelCount = 0
     #endif
 
-    init(
+    package init(
         config: SSHSessionConfig,
         hostKeyVerifier: any SSHHostKeyVerifying,
         startupTrace: SSHStartupTrace? = nil
@@ -89,27 +92,27 @@ actor SSHSession {
         self.startupTrace = startupTrace
     }
 
-    var isConnected: Bool {
+    package var isConnected: Bool {
         isActive && libssh2Session != nil
     }
 
     /// Interrupt socket I/O from any thread; actor-owned cleanup performs the final close.
-    nonisolated func abort() {
+    nonisolated package func abort() {
         atomicSocket.interrupt()
     }
 
     #if DEBUG
-    func setShellStartupTestHook(
+    package func setShellStartupTestHook(
         _ hook: (@Sendable (ShellStartupTestEvent) -> Void)?
     ) {
         shellStartupTestHook = hook
     }
 
-    func discardedShellStartupChannelsForTesting() -> Int {
+    package func discardedShellStartupChannelsForTesting() -> Int {
         discardedShellStartupChannelCount
     }
 
-    func notifyShellStartupTestHook(
+    package func notifyShellStartupTestHook(
         _ stage: ShellStartupStage,
         session: OpaquePointer
     ) {
@@ -122,14 +125,14 @@ actor SSHSession {
     }
     #endif
 
-    func disconnect() async {
+    package func disconnect() async {
         invalidateTransport()
         cleanupLibssh2()
 
         logger.info("Disconnected")
     }
 
-    func invalidateTransport() {
+    package func invalidateTransport() {
         isActive = false
         connectedPeerAddress = nil
         abandonAllShellChannels()
@@ -140,7 +143,7 @@ actor SSHSession {
         socket = -1
     }
 
-    func cleanupLibssh2() {
+    package func cleanupLibssh2() {
         // A startup operation may still own a channel pointer across an actor
         // suspension. Its defer releases that ownership before final cleanup.
         guard shellStartupsInFlight.isEmpty else { return }
@@ -176,7 +179,7 @@ actor SSHSession {
         }
     }
 
-    func cleanup() {
+    package func cleanup() {
         // Close socket first to abort any blocking I/O
         atomicSocket.interrupt()
         socket = -1
@@ -184,11 +187,11 @@ actor SSHSession {
         cleanupLibssh2()
     }
 
-    func remoteEndpointHost() -> String? {
+    package func remoteEndpointHost() -> String? {
         connectedPeerAddress
     }
 
-    func startIOLoop() {
+    package func startIOLoop() {
         guard ioTask == nil else { return }
         ioTask = Task { [weak self] in
             await self?.ioLoop()
@@ -356,7 +359,7 @@ actor SSHSession {
         stopIOLoop()
     }
 
-    func waitForSocket() async {
+    package func waitForSocket() async {
         guard let session = libssh2Session, socket >= 0 else { return }
 
         let direction = libssh2_session_block_directions(session)
@@ -378,7 +381,7 @@ actor SSHSession {
         )
     }
 
-    func resolveNumericPeerAddress(for socket: Int32) -> String? {
+    package func resolveNumericPeerAddress(for socket: Int32) -> String? {
         var storage = sockaddr_storage()
         var storageLen = socklen_t(MemoryLayout<sockaddr_storage>.size)
 
@@ -409,7 +412,7 @@ actor SSHSession {
 
     // MARK: - Keep Alive
 
-    func sendKeepAlive() {
+    package func sendKeepAlive() {
         guard let session = libssh2Session else { return }
         var secondsToNext: Int32 = 0
         libssh2_keepalive_send(session, &secondsToNext)

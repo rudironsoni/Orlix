@@ -2,8 +2,11 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private extension TranscriptionProvider {
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .system:
             return String(localized: "System (Apple Speech)")
@@ -16,8 +19,8 @@ private extension TranscriptionProvider {
 }
 
 @MainActor
-class AudioService: NSObject, ObservableObject {
-    typealias StartupOperation = @MainActor (
+package class AudioService: NSObject, ObservableObject {
+    package typealias StartupOperation = @MainActor (
         UUID,
         @escaping @MainActor () -> AudioCaptureLifecycleState
     ) async throws -> Void
@@ -28,7 +31,7 @@ class AudioService: NSObject, ObservableObject {
         case recording(operationID: UUID, provider: TranscriptionProvider)
         case processing(operationID: UUID, provider: TranscriptionProvider)
 
-        var operationID: UUID? {
+        package var operationID: UUID? {
             switch self {
             case .idle:
                 return nil
@@ -39,7 +42,7 @@ class AudioService: NSObject, ObservableObject {
             }
         }
 
-        var provider: TranscriptionProvider? {
+        package var provider: TranscriptionProvider? {
             switch self {
             case .idle:
                 return nil
@@ -50,7 +53,7 @@ class AudioService: NSObject, ObservableObject {
             }
         }
 
-        var isRecording: Bool {
+        package var isRecording: Bool {
             if case .recording = self { return true }
             return false
         }
@@ -58,11 +61,11 @@ class AudioService: NSObject, ObservableObject {
 
     private let logger = Logger.audio
     @Published private var recordingState: RecordingState = .idle
-    @Published var transcribedText = ""
-    @Published var partialTranscription = ""
-    @Published var audioLevel: Float = 0.0
-    @Published var recordingDuration: TimeInterval = 0
-    @Published var permissionStatus: AudioPermissionManager.PermissionStatus = .notDetermined
+    @Published package var transcribedText = ""
+    @Published package var partialTranscription = ""
+    @Published package var audioLevel: Float = 0.0
+    @Published package var recordingDuration: TimeInterval = 0
+    @Published package var permissionStatus: AudioPermissionManager.PermissionStatus = .notDetermined
 
     private let permissionManager: AudioPermissionManager
     private let speechRecognitionService: SpeechRecognitionService
@@ -72,9 +75,9 @@ class AudioService: NSObject, ObservableObject {
     private let settingsReader: any VoiceSettingsReading
     private let startupOperation: StartupOperation?
 
-    var isRecording: Bool { recordingState.isRecording }
+    package var isRecording: Bool { recordingState.isRecording }
 
-    init(
+    package init(
         permissionManager: AudioPermissionManager,
         speechRecognitionService: SpeechRecognitionService,
         audioCaptureService: AudioCaptureService,
@@ -118,17 +121,17 @@ class AudioService: NSObject, ObservableObject {
 
     // MARK: - Permission Handling
 
-    func requestPermissions(includeSpeech: Bool) async -> Bool {
+    package func requestPermissions(includeSpeech: Bool) async -> Bool {
         return await permissionManager.requestPermissions(includeSpeech: includeSpeech)
     }
 
-    func checkPermissions(includeSpeech: Bool) -> Bool {
+    package func checkPermissions(includeSpeech: Bool) -> Bool {
         permissionManager.checkPermissions(includeSpeech: includeSpeech)
     }
 
     // MARK: - Recording Control
 
-    func startRecording(
+    package func startRecording(
         operationID: UUID,
         lifecycleState: @escaping @MainActor () -> AudioCaptureLifecycleState
     ) async throws {
@@ -193,7 +196,7 @@ class AudioService: NSObject, ObservableObject {
         }
     }
 
-    func stopRecording(operationID: UUID) async -> String {
+    package func stopRecording(operationID: UUID) async -> String {
         guard case .recording(let currentOperationID, let provider) = recordingState,
               currentOperationID == operationID else { return "" }
         recordingState = .processing(operationID: operationID, provider: provider)
@@ -247,7 +250,7 @@ class AudioService: NSObject, ObservableObject {
         }
     }
 
-    func cancelRecording() {
+    package func cancelRecording() {
         recordingState = .idle
 
         audioCaptureService.cancel()
@@ -257,7 +260,7 @@ class AudioService: NSObject, ObservableObject {
         partialTranscription = ""
     }
 
-    static func runStartupSequence(
+    static package func runStartupSequence(
         lifecycleState: @escaping @MainActor () -> AudioCaptureLifecycleState,
         operationIsCurrent: @escaping @MainActor () -> Bool,
         checkPermissions: @escaping @MainActor () -> Bool,
@@ -294,7 +297,7 @@ class AudioService: NSObject, ObservableObject {
         )
     }
 
-    static func runProcessingSequence(
+    static package func runProcessingSequence(
         operationIsCurrent: @escaping @MainActor () -> Bool,
         transcribe: @escaping @MainActor () async throws -> String,
         fallback: @escaping @MainActor (Error) async -> String?
@@ -324,7 +327,7 @@ class AudioService: NSObject, ObservableObject {
 
     // MARK: - Errors
 
-    enum RecordingError: LocalizedError {
+    package enum RecordingError: LocalizedError {
         case permissionDenied
         case speechRecognitionUnavailable
         case recordingFailed
@@ -332,7 +335,7 @@ class AudioService: NSObject, ObservableObject {
         case inputUnavailable
         case mlxUnavailable
 
-        var errorDescription: String? {
+        package var errorDescription: String? {
             switch self {
             case .permissionDenied:
                 return String(localized: "Microphone permission is required. The microphone will be automatically requested when recording starts.")

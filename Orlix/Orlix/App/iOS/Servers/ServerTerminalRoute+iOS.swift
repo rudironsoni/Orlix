@@ -7,30 +7,37 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 
 // MARK: - Server Terminal Route
 
-struct ServerTerminalRoute: View {
+package struct ServerTerminalRoute: View {
     private enum PresentedRouteSheet: Hashable, Identifiable {
         case settings
         case serverForm(ServerFormIntent)
 
-        var id: Self { self }
+        package var id: Self { self }
     }
 
-    let tabManager: TerminalTabManager
-    @ObservedObject var serverManager: ServerManager
-    @ObservedObject var fileTabs: RemoteFileTabManager
-    let fileBrowser: RemoteFileBrowserStore
-    let statsDependencies: ServerStatsScreenDependencies
-    let terminalSecurityActions: TerminalSecurityActions
-    let serverFormDependencies: ServerFormDependencies
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let voiceInputRuntimeStore: VoiceInputRuntimeStore
-    let analyticsOptOutAction: AnalyticsOptOutAction
-    let route: ServerTerminalNavigationRoute
-    let onBack: () -> Void
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let tabManager: TerminalTabManager
+    @ObservedObject package var serverManager: ServerManager
+    @ObservedObject package var fileTabs: RemoteFileTabManager
+    package let fileBrowser: RemoteFileBrowserStore
+    package let statsDependencies: ServerStatsScreenDependencies
+    package let terminalSecurityActions: TerminalSecurityActions
+    package let serverFormDependencies: ServerFormDependencies
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    package let analyticsOptOutAction: AnalyticsOptOutAction
+    package let route: ServerTerminalNavigationRoute
+    package let onBack: () -> Void
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
     @ObservedObject private var voiceSettingsStore: VoiceSettingsStore
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
@@ -52,7 +59,7 @@ struct ServerTerminalRoute: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
-    init(
+    package init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         fileTabs: RemoteFileTabManager,
@@ -175,7 +182,7 @@ struct ServerTerminalRoute: View {
         shouldShowFloatingTerminalControls && isFocusedTerminalPendingVoiceReturn
     }
 
-    var body: some View {
+    package var body: some View {
         content
             .overlay(alignment: .bottom) {
                 if shouldShowFloatingTerminalControls {

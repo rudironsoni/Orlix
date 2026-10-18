@@ -5,6 +5,7 @@ load("@rules_apple//apple:xcarchive.bzl", "xcarchive")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load(":app_modules.bzl", "orlix_app_modules")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -62,63 +63,58 @@ _TEST_SWIFT_FEATURES = [
     for flag in ["-enable-upcoming-feature", feature]
 ]
 
-# Single-module fallback. Implementation, terminal/Herdr-facing UI, and the app
-# shell cannot be separate Swift modules on this tree: declarations used across
-# those globs are internal, and the sources do not import sibling modules. Real
-# access control stays on. Terminal and app-shell edits invalidate this one
-# Orlix module together.
-[
-    swift_library(
-        name = name,
-        testonly = is_test_host,
-        srcs = glob([
-            "Orlix/App/**/*.swift",
-            "Orlix/Core/**/*.swift",
-            "Orlix/Features/**/*.swift",
-            "OrlixShared/*.swift",
-        ], exclude = ["Orlix/App/Orlix.swift"]) + [entrypoint],
-        copts = [
-            "-swift-version",
-            "5" if is_test_host else "6",
-            "-default-isolation=MainActor",
-            "-strict-concurrency=minimal",
-            "-DORLIX_BETA_OBSERVABILITY",
-            "-import-objc-header",
-            "Orlix/Orlix/ghostty-bridging-header.h",
-        ] + (_TEST_SWIFT_FEATURES + ["-enable-testing"] if is_test_host else []),
-        features = ["swift.add_target_name_to_output"] if is_test_host else [],
-        swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
-        defines = [
-            "ORLIX_APP_HOSTED_BOOT=1",
-            "ORLIX_BETA_OBSERVABILITY=1",
-            "ORLIX_GHOSTTY_SPM=1",
-        ],
-        module_name = "Orlix",
-        tags = ["manual"],
-        deps = [
-            ":GhosttyAbortShim",
-            ":ghostty_headers",
-            ":ssh2_headers",
-            "//OrlixOS/Sources/Session:OrlixOS",
-            "@swiftpkg_mlx_swift//:MLX",
-            "@swiftpkg_mlx_swift//:MLXFFT",
-            "@swiftpkg_mlx_swift//:MLXNN",
-            "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
-            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
-            "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
-            "@swiftpkg_swift_cloudflared//:Cloudflared",
-            "@swiftpkg_swift_et//:ETBootstrap",
-            "@swiftpkg_swift_et//:ETSession",
-            "@swiftpkg_swift_mosh//:MoshBootstrap",
-            "@swiftpkg_swift_mosh//:MoshCore",
-            "@swiftpkg_zipfoundation//:ZIPFoundation",
-        ],
-    )
-    for name, entrypoint, is_test_host in [
-        ("OrlixAppLibrary", "Orlix/App/Orlix.swift", False),
-        ("OrlixTestAppLibrary", "//OrlixTestApp:Sources/OrlixTestApp.swift", True),
-    ]
-]
+# Production features compile as separate Swift modules. The test host stays
+# one module named Orlix so @testable import Orlix still sees internal symbols.
+# ORLIX_MODULAR_APP is set only on the production modules.
+orlix_app_modules()
+
+swift_library(
+    name = "OrlixTestAppLibrary",
+    testonly = True,
+    srcs = glob([
+        "Orlix/App/**/*.swift",
+        "Orlix/Core/**/*.swift",
+        "Orlix/Features/**/*.swift",
+        "OrlixShared/*.swift",
+    ], exclude = ["Orlix/App/Orlix.swift"]) + ["//OrlixTestApp:Sources/OrlixTestApp.swift"],
+    copts = [
+        "-swift-version",
+        "6",
+        "-default-isolation=MainActor",
+        "-strict-concurrency=minimal",
+        "-DORLIX_BETA_OBSERVABILITY",
+        "-import-objc-header",
+        "Orlix/Orlix/ghostty-bridging-header.h",
+    ] + _TEST_SWIFT_FEATURES + ["-enable-testing"],
+    features = ["swift.add_target_name_to_output"],
+    swiftc_inputs = ["Orlix/ghostty-bridging-header.h"],
+    defines = [
+        "ORLIX_APP_HOSTED_BOOT=1",
+        "ORLIX_BETA_OBSERVABILITY=1",
+        "ORLIX_GHOSTTY_SPM=1",
+    ],
+    module_name = "Orlix",
+    package_name = "Orlix",
+    tags = ["manual"],
+    deps = [
+        ":GhosttyAbortShim",
+        ":ghostty_headers",
+        ":ssh2_headers",
+        "//OrlixOS/Sources/Session:OrlixOS",
+        "@swiftpkg_mlx_swift//:MLX",
+        "@swiftpkg_mlx_swift//:MLXFFT",
+        "@swiftpkg_mlx_swift//:MLXNN",
+        "@swiftpkg_opentelemetry_swift//:OpenTelemetryProtocolExporterHTTP",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetryApi",
+        "@swiftpkg_opentelemetry_swift_core//:OpenTelemetrySdk",
+        "@swiftpkg_swift_cloudflared//:Cloudflared",
+        "@swiftpkg_swift_et//:ETBootstrap",
+        "@swiftpkg_swift_et//:ETSession",
+        "@swiftpkg_swift_mosh//:MoshBootstrap",
+        "@swiftpkg_swift_mosh//:MoshCore",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
+    ],
+)
 
 swift_library(
     name = "OrlixLiveActivityLibrary",
@@ -128,9 +124,10 @@ swift_library(
     ]),
     copts = [
         "-swift-version",
-        "5",
+        "6",
     ],
     module_name = "OrlixLiveActivity",
+    package_name = "Orlix",
     tags = ["manual"],
 )
 
@@ -226,7 +223,7 @@ ios_application(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
-        ":OrlixAppLibrary",
+        ":OrlixApp",
         "//bazel/feasibility/native:native_link_smoke",
         "//bazel/product:OrlixKit",
     ],
@@ -288,8 +285,9 @@ swift_library(
     name = "OrlixTestsLibrary",
     testonly = True,
     srcs = glob(["OrlixTests/**/*.swift"]),
-    copts = ["-swift-version", "5"] + _TEST_SWIFT_FEATURES,
+    copts = ["-swift-version", "6"] + _TEST_SWIFT_FEATURES,
     module_name = "OrlixTests",
+    package_name = "Orlix",
     tags = ["manual"],
     deps = [
         ":OrlixTestAppLibrary",

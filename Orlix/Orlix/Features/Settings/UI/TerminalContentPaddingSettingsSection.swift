@@ -1,12 +1,15 @@
 import SwiftUI
 
-struct TerminalContentPaddingSettingsSection: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalContentPaddingSettingsSection: View {
     @AppStorage(TerminalDefaults.contentPaddingHorizontalKey)
     private var horizontalPadding = TerminalDefaults.defaultContentPadding
     @AppStorage(TerminalDefaults.contentPaddingVerticalKey)
     private var verticalPadding = TerminalDefaults.defaultContentPadding
 
-    var body: some View {
+    package var body: some View {
         Section {
             paddingControl(
                 "Horizontal",
@@ -80,4 +83,6 @@ struct TerminalContentPaddingSettingsSection: View {
             Int64(TerminalDefaults.clampedContentPadding(value))
         )
     }
+
+    package init() {}
 }

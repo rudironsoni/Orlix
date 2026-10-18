@@ -1,8 +1,8 @@
 import Foundation
 
-nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
-    let attachment: RemoteSessionAttachment
-    let observation: RemoteSessionLifecycleObservation
+nonisolated package struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
+    package let attachment: RemoteSessionAttachment
+    package let observation: RemoteSessionLifecycleObservation
 
     private enum CodingKeys: String, CodingKey {
         case attachment
@@ -11,7 +11,7 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
         case legacyTmuxMarkerToken
     }
 
-    init(
+    package init(
         attachment: RemoteSessionAttachment,
         envelope: RemoteSessionLifecycleEnvelope,
         presenceProbe: RemoteSessionPresenceProbe
@@ -20,7 +20,7 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
         observation = .current(envelope: envelope, presenceProbe: presenceProbe)
     }
 
-    init(
+    package init(
         attachment: RemoteSessionAttachment,
         legacyTmuxMarkerToken: String
     ) throws {
@@ -30,7 +30,7 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
         )
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         attachment = try container.decode(RemoteSessionAttachment.self, forKey: .attachment)
         if let envelope = try container.decodeIfPresent(
@@ -54,7 +54,7 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(attachment, forKey: .attachment)
         switch observation {
@@ -67,27 +67,46 @@ nonisolated struct RemoteSessionLifecycleContext: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct TerminalShellStartupPlan: Sendable {
-    let command: String?
-    let remoteSessionLifecycle: RemoteSessionLifecycleContext?
-    let mayExecuteUserStartupAction: Bool
+nonisolated package struct TerminalShellStartupPlan: Sendable {
+    package let command: String?
+    package let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    package let mayExecuteUserStartupAction: Bool
 
-    var mayExecuteStandaloneUserStartupAction: Bool {
+    package var mayExecuteStandaloneUserStartupAction: Bool {
         remoteSessionLifecycle == nil && mayExecuteUserStartupAction
     }
 
-    var allowsPostLaunchWorkingDirectoryRestore: Bool {
+    package var allowsPostLaunchWorkingDirectoryRestore: Bool {
         !mayExecuteStandaloneUserStartupAction
     }
 
-    nonisolated static let plainShell = TerminalShellStartupPlan(
+    nonisolated static package let plainShell = TerminalShellStartupPlan(
         command: nil,
         remoteSessionLifecycle: nil,
         mayExecuteUserStartupAction: false
     )
+
+
+    package init(
+
+        command: String? = nil,
+
+        remoteSessionLifecycle: RemoteSessionLifecycleContext? = nil,
+
+        mayExecuteUserStartupAction: Bool
+
+    ) {
+
+        self.command = command
+
+        self.remoteSessionLifecycle = remoteSessionLifecycle
+
+        self.mayExecuteUserStartupAction = mayExecuteUserStartupAction
+
+    }
 }
 
-nonisolated enum TerminalShellEndReason: Hashable, Sendable {
+nonisolated package enum TerminalShellEndReason: Hashable, Sendable {
     case transportInterrupted
     case standaloneStartupActionCompleted
     case remoteSessionDetached(RemoteSessionOwnership)
@@ -96,7 +115,7 @@ nonisolated enum TerminalShellEndReason: Hashable, Sendable {
     case remoteSessionAttachFailed
     case observationAmbiguous
 
-    nonisolated static func resolve(
+    nonisolated static package func resolve(
         lifecycle: RemoteSessionLifecycleContext?,
         event: RemoteSessionEvent?,
         sessionExists: Bool?
@@ -131,29 +150,29 @@ nonisolated enum TerminalShellEndReason: Hashable, Sendable {
     }
 }
 
-nonisolated enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
+nonisolated package enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
     // Keep raw values stable for local snapshot migration.
     case transportInterrupted = "transportEnded"
     case startupActionCompleted
     case remoteSessionDetached = "tmuxDetached"
     case externalRemoteSessionTerminated = "externalTmuxEnded"
 
-    var allowsAutomaticReconnect: Bool {
+    package var allowsAutomaticReconnect: Bool {
         self == .transportInterrupted
     }
 }
 
-nonisolated enum TerminalTeardownIntent: CaseIterable, Sendable {
+nonisolated package enum TerminalTeardownIntent: CaseIterable, Sendable {
     case explicitClose
     case explicitServerDisconnect
     case remoteSessionEnded
     case applicationTermination
 
-    var removesPersistedDescriptor: Bool {
+    package var removesPersistedDescriptor: Bool {
         self != .applicationTermination
     }
 
-    var terminatesManagedRemoteSession: Bool {
+    package var terminatesManagedRemoteSession: Bool {
         switch self {
         case .explicitClose, .explicitServerDisconnect:
             true
@@ -162,7 +181,7 @@ nonisolated enum TerminalTeardownIntent: CaseIterable, Sendable {
         }
     }
 
-    var deletesResumableSessionState: Bool {
+    package var deletesResumableSessionState: Bool {
         self != .applicationTermination
     }
 }

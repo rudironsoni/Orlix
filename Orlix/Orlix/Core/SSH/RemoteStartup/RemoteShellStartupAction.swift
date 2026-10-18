@@ -2,8 +2,8 @@ import Foundation
 
 /// A user-provided command. Unix hosts run it with `/bin/sh -lc`; Windows hosts use
 /// the detected PowerShell or cmd.exe shell.
-nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
-    enum ValidationError: Error, Equatable, Sendable {
+nonisolated package struct RemoteShellStartupAction: Hashable, Sendable {
+    package enum ValidationError: Error, Equatable, Sendable {
         case empty
         case containsUnsupportedControlCharacters
         case tooLong
@@ -11,11 +11,11 @@ nonisolated struct RemoteShellStartupAction: Hashable, Sendable {
 
     // psmux doubles each single quote before UTF-16LE and Base64 encoding.
     // Keep room for that worst case, its launch script, and PowerShell arguments.
-    static let maximumCommandByteCount = 4_000
+    static package let maximumCommandByteCount = 4_000
 
-    let command: String
+    package let command: String
 
-    init(command: String) throws {
+    package init(command: String) throws {
         let normalized = command
             .replacingOccurrences(of: "\r\n", with: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)

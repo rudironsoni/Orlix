@@ -1,6 +1,6 @@
 import Foundation
 
-enum SSHError: LocalizedError, Sendable {
+package enum SSHError: LocalizedError, Sendable {
     case notConnected
     case connectionFailed(String)
     case authenticationFailed
@@ -31,7 +31,7 @@ enum SSHError: LocalizedError, Sendable {
     case socketError(String)
     case unknown(String)
 
-    var provesStartupCommandWasNotDispatched: Bool {
+    package var provesStartupCommandWasNotDispatched: Bool {
         switch self {
         case .channelOpenFailed,
              .disconnectedBeforeShellRequest,
@@ -44,7 +44,7 @@ enum SSHError: LocalizedError, Sendable {
         }
     }
 
-    var allowsAutomaticReconnectRetry: Bool {
+    package var allowsAutomaticReconnectRetry: Bool {
         switch self {
         case .notConnected,
              .connectionFailed,
@@ -80,7 +80,7 @@ enum SSHError: LocalizedError, Sendable {
         }
     }
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .notConnected: return "Not connected to server"
         case .connectionFailed(let msg): return "Connection failed: \(msg)"

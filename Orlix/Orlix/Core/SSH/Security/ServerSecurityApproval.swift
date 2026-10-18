@@ -1,16 +1,19 @@
 import Foundation
 
-nonisolated enum ServerSecurityApprovalRequest: Identifiable, Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerSecurityApprovalRequest: Identifiable, Equatable, Sendable {
     case hostKey(KnownHostsManager.Challenge)
 
-    var id: String {
+    package var id: String {
         switch self {
         case .hostKey(let challenge):
             "host-key:\(challenge.id.uuidString)"
         }
     }
 
-    static func detect(
+    static package func detect(
         _ error: Error,
         host: String,
         port: Int,
@@ -28,12 +31,12 @@ nonisolated enum ServerSecurityApprovalRequest: Identifiable, Equatable, Sendabl
     }
 }
 
-nonisolated enum ServerSecurityApprovalError: LocalizedError, Equatable, Sendable {
+nonisolated package enum ServerSecurityApprovalError: LocalizedError, Equatable, Sendable {
     case cancelled
     case expired
     case unavailable
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .cancelled:
             String(localized: "Security approval was cancelled.")

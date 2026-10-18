@@ -1,20 +1,23 @@
 import Foundation
 
-nonisolated struct WakeOnLANNetworkInterface: Equatable, Sendable {
-    let address: WakeOnLANIPv4Address
-    let netmask: WakeOnLANIPv4Address
-    let isUp: Bool
-    let isRunning: Bool
-    let supportsBroadcast: Bool
-    let isLoopback: Bool
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct WakeOnLANNetworkInterface: Equatable, Sendable {
+    package let address: WakeOnLANIPv4Address
+    package let netmask: WakeOnLANIPv4Address
+    package let isUp: Bool
+    package let isRunning: Bool
+    package let supportsBroadcast: Bool
+    package let isLoopback: Bool
 }
 
-nonisolated protocol WakeOnLANInterfaceProviding: Sendable {
+nonisolated package protocol WakeOnLANInterfaceProviding: Sendable {
     func interfaces() throws -> [WakeOnLANNetworkInterface]
 }
 
-nonisolated enum WakeOnLANBroadcastResolver {
-    static func destinations(
+nonisolated package enum WakeOnLANBroadcastResolver {
+    static package func destinations(
         for interfaces: [WakeOnLANNetworkInterface]
     ) -> [WakeOnLANIPv4Address] {
         let addresses = interfaces.compactMap { interface -> WakeOnLANIPv4Address? in

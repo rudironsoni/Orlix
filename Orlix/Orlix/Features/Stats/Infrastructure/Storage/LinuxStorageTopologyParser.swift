@@ -1,24 +1,27 @@
 import Foundation
 
-nonisolated struct LinuxStorageMemberCandidate: Hashable, Sendable {
-    let role: StorageHealthMemberRole
-    let path: String?
-    let findings: [StorageHealthFinding]
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct LinuxStorageMemberCandidate: Hashable, Sendable {
+    package let role: StorageHealthMemberRole
+    package let path: String?
+    package let findings: [StorageHealthFinding]
 }
 
-nonisolated struct LinuxStorageTopologyDiscovery: Hashable, Sendable {
-    let kind: StorageTopologyKind
-    let name: String?
-    let findings: [StorageHealthFinding]
-    let members: [LinuxStorageMemberCandidate]
+nonisolated package struct LinuxStorageTopologyDiscovery: Hashable, Sendable {
+    package let kind: StorageTopologyKind
+    package let name: String?
+    package let findings: [StorageHealthFinding]
+    package let members: [LinuxStorageMemberCandidate]
 }
 
 /// Parses locale-stable, read-only BTRFS and ZFS command output. Raw paths are
 /// transient infrastructure locators and never cross into the domain report.
-nonisolated enum LinuxStorageTopologyParser {
-    static let maximumMemberCount = 32
+nonisolated package enum LinuxStorageTopologyParser {
+    static package let maximumMemberCount = 32
 
-    static func parseBTRFS(filesystem output: String, deviceStats: String) -> LinuxStorageTopologyDiscovery? {
+    static package func parseBTRFS(filesystem output: String, deviceStats: String) -> LinuxStorageTopologyDiscovery? {
         let lines = output.components(separatedBy: .newlines)
         guard lines.contains(where: { $0.localizedCaseInsensitiveContains("uuid:") }) else {
             return nil
@@ -65,7 +68,7 @@ nonisolated enum LinuxStorageTopologyParser {
         )
     }
 
-    static func parseZFSStatus(_ output: String) -> LinuxStorageTopologyDiscovery? {
+    static package func parseZFSStatus(_ output: String) -> LinuxStorageTopologyDiscovery? {
         let lines = output.components(separatedBy: .newlines)
         guard let poolLine = lines.first(where: {
             $0.trimmingCharacters(in: .whitespaces).hasPrefix("pool:")

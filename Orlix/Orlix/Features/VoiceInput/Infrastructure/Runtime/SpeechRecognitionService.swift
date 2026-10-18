@@ -3,12 +3,15 @@ import Combine
 import Speech
 import AVFoundation
 
-nonisolated enum SpeechRecognitionOperationState: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum SpeechRecognitionOperationState: Equatable, Sendable {
     case idle
     case running(UUID)
     case finishing(UUID)
 
-    var generation: UUID? {
+    package var generation: UUID? {
         switch self {
         case .idle:
             return nil
@@ -17,22 +20,22 @@ nonisolated enum SpeechRecognitionOperationState: Equatable, Sendable {
         }
     }
 
-    func acceptsResult(for generation: UUID) -> Bool {
+    package func acceptsResult(for generation: UUID) -> Bool {
         self.generation == generation
     }
 }
 
-nonisolated final class SpeechRecognitionResultState: @unchecked Sendable {
+nonisolated final package class SpeechRecognitionResultState: @unchecked Sendable {
     private let lock = NSLock()
     private let temporaryFileURL: URL?
     private var resolution: Result<String, any Error>?
     private var continuation: CheckedContinuation<String, any Error>?
 
-    init(temporaryFileURL: URL? = nil) {
+    package init(temporaryFileURL: URL? = nil) {
         self.temporaryFileURL = temporaryFileURL
     }
 
-    func value() async throws -> String {
+    package func value() async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             lock.lock()
             if let resolution {
@@ -46,7 +49,7 @@ nonisolated final class SpeechRecognitionResultState: @unchecked Sendable {
     }
 
     @discardableResult
-    func resolve(_ resolution: Result<String, any Error>) -> Bool {
+    package func resolve(_ resolution: Result<String, any Error>) -> Bool {
         lock.lock()
         guard self.resolution == nil else {
             lock.unlock()
@@ -66,9 +69,9 @@ nonisolated final class SpeechRecognitionResultState: @unchecked Sendable {
 }
 
 @MainActor
-class SpeechRecognitionService: ObservableObject {
-    @Published var transcribedText = ""
-    @Published var partialTranscription = ""
+package class SpeechRecognitionService: ObservableObject {
+    @Published package var transcribedText = ""
+    @Published package var partialTranscription = ""
 
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognizerLanguageCode: String?
@@ -80,11 +83,11 @@ class SpeechRecognitionService: ObservableObject {
     private var transcriptionResultState: SpeechRecognitionResultState?
     private let selectedLanguageCode: @MainActor () -> String
 
-    init(selectedLanguageCode: @escaping @MainActor () -> String) {
+    package init(selectedLanguageCode: @escaping @MainActor () -> String) {
         self.selectedLanguageCode = selectedLanguageCode
     }
 
-    var isAvailable: Bool {
+    package var isAvailable: Bool {
         resolvedRecognizer()?.isAvailable ?? false
     }
 
@@ -147,7 +150,7 @@ class SpeechRecognitionService: ObservableObject {
 
     // MARK: - Recognition Control
 
-    func startRecognition() throws {
+    package func startRecognition() throws {
         guard let speechRecognizer = resolvedRecognizer(), speechRecognizer.isAvailable else {
             throw SpeechRecognitionError.recognitionUnavailable
         }
@@ -194,11 +197,11 @@ class SpeechRecognitionService: ObservableObject {
         }
     }
 
-    func appendAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+    package func appendAudioBuffer(_ buffer: AVAudioPCMBuffer) {
         recognitionRequest?.append(buffer)
     }
 
-    func stopRecognition() async -> String {
+    package func stopRecognition() async -> String {
         if transcriptionResultState != nil {
             cancelRecognition()
             return ""
@@ -232,7 +235,7 @@ class SpeechRecognitionService: ObservableObject {
         return finalText
     }
 
-    func transcribe(samples: [Float], sampleRate: Double) async throws -> String {
+    package func transcribe(samples: [Float], sampleRate: Double) async throws -> String {
         guard Self.acceptsAudioInput(sampleCount: samples.count, sampleRate: sampleRate) else {
             throw SpeechRecognitionError.invalidAudio
         }
@@ -309,7 +312,7 @@ class SpeechRecognitionService: ObservableObject {
         }
     }
 
-    func cancelRecognition() {
+    package func cancelRecognition() {
         recognitionState = .idle
         recognitionRequest?.endAudio()
         cancelBatchTranscription()
@@ -323,12 +326,12 @@ class SpeechRecognitionService: ObservableObject {
         partialTranscription = ""
     }
 
-    func resetTranscriptions() {
+    package func resetTranscriptions() {
         transcribedText = ""
         partialTranscription = ""
     }
 
-    nonisolated static func waitForRecognitionCompletion(
+    nonisolated static package func waitForRecognitionCompletion(
         _ stream: AsyncStream<Void>,
         timeout: Duration
     ) async {
@@ -344,7 +347,7 @@ class SpeechRecognitionService: ObservableObject {
         }
     }
 
-    nonisolated static func acceptsAudioInput(sampleCount: Int, sampleRate: Double) -> Bool {
+    nonisolated static package func acceptsAudioInput(sampleCount: Int, sampleRate: Double) -> Bool {
         sampleCount > 0
             && sampleCount <= Int(AVAudioFrameCount.max)
             && sampleRate.isFinite
@@ -364,11 +367,11 @@ class SpeechRecognitionService: ObservableObject {
 
     // MARK: - Errors
 
-    enum SpeechRecognitionError: LocalizedError {
+    package enum SpeechRecognitionError: LocalizedError {
         case recognitionUnavailable
         case invalidAudio
 
-        var errorDescription: String? {
+        package var errorDescription: String? {
             switch self {
             case .recognitionUnavailable:
                 return "Speech recognition is not available. Please enable Siri in System Settings > Siri & Spotlight."

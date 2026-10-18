@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated struct ServerDataLoadState: Equatable, Sendable {
-    nonisolated enum Phase: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ServerDataLoadState: Equatable, Sendable {
+    nonisolated package enum Phase: Equatable, Sendable {
         case idle
         case loading(operationID: UUID)
         case failed(message: String)
@@ -9,53 +12,53 @@ nonisolated struct ServerDataLoadState: Equatable, Sendable {
 
     private(set) var phase: Phase = .idle
 
-    var isLoading: Bool {
+    package var isLoading: Bool {
         if case .loading = phase {
             return true
         }
         return false
     }
 
-    var errorMessage: String? {
+    package var errorMessage: String? {
         if case .failed(let message) = phase {
             return message
         }
         return nil
     }
 
-    mutating func start(operationID: UUID) -> UUID {
+    mutating package func start(operationID: UUID) -> UUID {
         phase = .loading(operationID: operationID)
         return operationID
     }
 
     @discardableResult
-    mutating func finish(operationID: UUID) -> Bool {
+    mutating package func finish(operationID: UUID) -> Bool {
         guard case .loading(operationID) = phase else { return false }
         phase = .idle
         return true
     }
 
     @discardableResult
-    mutating func fail(operationID: UUID, message: String) -> Bool {
+    mutating package func fail(operationID: UUID, message: String) -> Bool {
         guard case .loading(operationID) = phase else { return false }
         phase = .failed(message: message)
         return true
     }
 
-    mutating func reset() {
+    mutating package func reset() {
         phase = .idle
     }
 }
 
-nonisolated struct ServerManagerSnapshot: Equatable, Sendable {
-    var servers: [Server]
-    var workspaces: [Workspace]
-    var loadState: ServerDataLoadState
-    var localStorageIssues: [ServerLocalStorageIssue]
-    var ambiguousCloudRecovery: AmbiguousCloudRecoveryState?
-    var freePlanGeneration: FreePlanGeneration
+nonisolated package struct ServerManagerSnapshot: Equatable, Sendable {
+    package var servers: [Server]
+    package var workspaces: [Workspace]
+    package var loadState: ServerDataLoadState
+    package var localStorageIssues: [ServerLocalStorageIssue]
+    package var ambiguousCloudRecovery: AmbiguousCloudRecoveryState?
+    package var freePlanGeneration: FreePlanGeneration
 
-    init(
+    package init(
         servers: [Server] = [],
         workspaces: [Workspace] = [],
         loadState: ServerDataLoadState = ServerDataLoadState(),

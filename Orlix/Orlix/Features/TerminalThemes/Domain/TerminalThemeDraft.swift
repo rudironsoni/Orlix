@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated struct TerminalThemeDraft: Equatable, Sendable {
-    static let paletteCount = 16
+nonisolated package struct TerminalThemeDraft: Equatable, Sendable {
+    static package let paletteCount = 16
 
-    var background: String
-    var foreground: String
-    var cursorColor: String
-    var cursorText: String
-    var selectionBackground: String
-    var selectionForeground: String
-    var paletteColors: [String]
-    var advancedLines: String
+    package var background: String
+    package var foreground: String
+    package var cursorColor: String
+    package var cursorText: String
+    package var selectionBackground: String
+    package var selectionForeground: String
+    package var paletteColors: [String]
+    package var advancedLines: String
 
-    init(
+    package init(
         background: String = "#101418",
         foreground: String = "#D8E0EA",
         cursorColor: String = "#F8B26A",
@@ -32,7 +32,7 @@ nonisolated struct TerminalThemeDraft: Equatable, Sendable {
         self.advancedLines = advancedLines
     }
 
-    var hasValidBuilderValues: Bool {
+    package var hasValidBuilderValues: Bool {
         guard TerminalThemeValidator.isValidHexColor(background),
               TerminalThemeValidator.isValidHexColor(foreground),
               cursorColor.isEmpty || TerminalThemeValidator.isValidHexColor(cursorColor),
@@ -49,7 +49,7 @@ nonisolated struct TerminalThemeDraft: Equatable, Sendable {
         }
     }
 
-    static func decode(_ content: String?) -> Self {
+    static package func decode(_ content: String?) -> Self {
         guard let content, !content.isEmpty else { return Self() }
 
         var draft = Self()
@@ -108,7 +108,7 @@ nonisolated struct TerminalThemeDraft: Equatable, Sendable {
         return draft
     }
 
-    func encodedContent() throws -> String {
+    package func encodedContent() throws -> String {
         var lines = [
             "background = \(TerminalThemeValidator.normalizeHexColor(background) ?? background)",
             "foreground = \(TerminalThemeValidator.normalizeHexColor(foreground) ?? foreground)"

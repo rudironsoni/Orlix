@@ -2,8 +2,11 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalFontCloudKitClient: TerminalFontCloudClient,
+final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
     TerminalFontCloudMutationClient {
     private let transport: any CloudKitRecordTransport
     private let repository: any TerminalFontAssetRepository
@@ -12,7 +15,7 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
         category: "TerminalFontCloudKit"
     )
 
-    init(
+    package init(
         transport: any CloudKitRecordTransport,
         repository: any TerminalFontAssetRepository
     ) {
@@ -20,7 +23,7 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
         self.repository = repository
     }
 
-    func fetchTerminalFonts() async throws -> [TerminalFont] {
+    package func fetchTerminalFonts() async throws -> [TerminalFont] {
         let records = try await transport.fetchCloudKitRecords(
             matchingRecordTypes: [TerminalFontCloudKitRecordCodec.recordType],
             desiredKeys: TerminalFontCloudKitRecordCodec.metadataKeys
@@ -58,7 +61,7 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
         return fonts
     }
 
-    func fetchTerminalFontPreference() async throws -> TerminalFontPreference? {
+    package func fetchTerminalFontPreference() async throws -> TerminalFontPreference? {
         let recordID = TerminalFontPreferenceCloudKitRecordCodec.recordID(
             in: transport.cloudKitRecordZoneID
         )
@@ -77,7 +80,7 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
         }
     }
 
-    func saveTerminalFont(_ font: TerminalFont) async throws {
+    package func saveTerminalFont(_ font: TerminalFont) async throws {
         let assetURL = font.isDeleted ? nil : repository.existingFileURL(for: font)
         if !font.isDeleted, assetURL == nil {
             throw TerminalFontValidationError.fileUnavailable
@@ -92,7 +95,7 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
         }
     }
 
-    func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws {
+    package func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws {
         let record = TerminalFontPreferenceCloudKitRecordCodec.record(
             for: preference,
             in: transport.cloudKitRecordZoneID
@@ -101,4 +104,5 @@ final class TerminalFontCloudKitClient: TerminalFontCloudClient,
             try await transport.upsertCloudKitRecord(record)
         }
     }
+
 }

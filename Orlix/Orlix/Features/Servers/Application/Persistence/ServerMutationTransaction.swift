@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sendable {
-    enum Kind: Codable, Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sendable {
+    package enum Kind: Codable, Equatable, Sendable {
         case serverSave(UUID)
         case serverDelete(UUID)
         case workspaceUpsert(UUID)
@@ -10,7 +13,7 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         case environmentDelete(workspaceID: UUID, environmentID: UUID)
     }
 
-    enum CredentialAction: Codable, Equatable, Sendable {
+    package enum CredentialAction: Codable, Equatable, Sendable {
         case none
         case replace(
             transactionID: UUID,
@@ -20,16 +23,16 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         case delete([Server])
     }
 
-    let id: UUID
-    let kind: Kind
-    let previousServers: [Server]
-    let previousWorkspaces: [Workspace]
-    let resultingServers: [Server]
-    let resultingWorkspaces: [Workspace]
-    let pendingMutations: [ServerPendingMutation]
-    let credentialAction: CredentialAction
+    package let id: UUID
+    package let kind: Kind
+    package let previousServers: [Server]
+    package let previousWorkspaces: [Workspace]
+    package let resultingServers: [Server]
+    package let resultingWorkspaces: [Workspace]
+    package let pendingMutations: [ServerPendingMutation]
+    package let credentialAction: CredentialAction
 
-    init(
+    package init(
         id: UUID,
         kind: Kind,
         previousServers: [Server],
@@ -49,7 +52,7 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         self.credentialAction = credentialAction
     }
 
-    init(
+    package init(
         id: UUID,
         previousServers: [Server],
         previousWorkspaces: [Workspace],
@@ -82,7 +85,7 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         )
     }
 
-    init(workspaceDeletion plan: WorkspaceDeletionPlan) {
+    package init(workspaceDeletion plan: WorkspaceDeletionPlan) {
         self.init(
             id: plan.id,
             kind: .workspaceDelete(plan.workspace.id),
@@ -95,7 +98,7 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         )
     }
 
-    init(
+    package init(
         environmentDeletion plan: EnvironmentDeletionPlan,
         previousServers: [Server],
         previousWorkspaces: [Workspace]
@@ -114,14 +117,14 @@ nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sen
         )
     }
 
-    var deletedServers: [Server] {
+    package var deletedServers: [Server] {
         guard case .delete(let servers) = credentialAction else { return [] }
         return servers
     }
 }
 
-nonisolated struct ServerDataMutationJournal: Codable, Equatable, Sendable {
-    enum FailureStage: String, Codable, Equatable, Sendable {
+nonisolated package struct ServerDataMutationJournal: Codable, Equatable, Sendable {
+    package enum FailureStage: String, Codable, Equatable, Sendable {
         case credentialPreparation
         case localPersistence
         case credentialFinalization
@@ -129,12 +132,12 @@ nonisolated struct ServerDataMutationJournal: Codable, Equatable, Sendable {
         case credentialStagingCleanup
     }
 
-    struct Failure: Codable, Equatable, Sendable {
-        let stage: FailureStage
-        let message: String
+    package struct Failure: Codable, Equatable, Sendable {
+        package let stage: FailureStage
+        package let message: String
     }
 
-    enum Phase: Equatable, Sendable {
+    package enum Phase: Equatable, Sendable {
         case preparingCredentials
         case materializing
         case finalizingCredentials
@@ -144,17 +147,17 @@ nonisolated struct ServerDataMutationJournal: Codable, Equatable, Sendable {
         case complete
     }
 
-    let plan: ServerDataMutationPlan
-    var didPrepareCredentials: Bool
-    var didMaterializeLocalState = false
-    var pendingCredentialServerIDs: [UUID]
-    var didFinalizeCredentials: Bool
-    var didEnqueuePendingMutations = false
-    var didCleanCredentialStaging: Bool
-    var didFinalize = false
-    var lastFailure: Failure?
+    package let plan: ServerDataMutationPlan
+    package var didPrepareCredentials: Bool
+    package var didMaterializeLocalState = false
+    package var pendingCredentialServerIDs: [UUID]
+    package var didFinalizeCredentials: Bool
+    package var didEnqueuePendingMutations = false
+    package var didCleanCredentialStaging: Bool
+    package var didFinalize = false
+    package var lastFailure: Failure?
 
-    init(plan: ServerDataMutationPlan) {
+    package init(plan: ServerDataMutationPlan) {
         self.plan = plan
         switch plan.credentialAction {
         case .none:
@@ -175,7 +178,7 @@ nonisolated struct ServerDataMutationJournal: Codable, Equatable, Sendable {
         }
     }
 
-    var phase: Phase {
+    package var phase: Phase {
         if !didPrepareCredentials { return .preparingCredentials }
         if !didMaterializeLocalState { return .materializing }
         if !didFinalizeCredentials { return .finalizingCredentials }
@@ -184,13 +187,13 @@ nonisolated struct ServerDataMutationJournal: Codable, Equatable, Sendable {
         return didFinalize ? .complete : .finalizing
     }
 
-    var presentsResultingState: Bool {
+    package var presentsResultingState: Bool {
         didMaterializeLocalState && didFinalizeCredentials
     }
 }
 
 @MainActor
-protocol ServerDataMutationJournalStoring {
+package protocol ServerDataMutationJournalStoring {
     func loadServerDataMutationJournal() throws -> ServerDataMutationJournal?
     func storeServerDataMutationJournal(_ journal: ServerDataMutationJournal) throws
     func materializeServerDataMutation(_ plan: ServerDataMutationPlan) throws
@@ -198,12 +201,12 @@ protocol ServerDataMutationJournalStoring {
 }
 
 @MainActor
-protocol ServerDataMutationEnqueuing {
+package protocol ServerDataMutationEnqueuing {
     func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws
 }
 
 @MainActor
-protocol ServerMutationCredentialTransacting {
+package protocol ServerMutationCredentialTransacting {
     func prepareServerCredentialTransaction(
         id: UUID,
         previousServer: Server?,
@@ -220,12 +223,12 @@ protocol ServerMutationCredentialTransacting {
 }
 
 @MainActor
-struct ServerDataMutationTransaction {
+package struct ServerDataMutationTransaction {
     private let store: any ServerDataMutationJournalStoring
     private let mutationQueue: any ServerDataMutationEnqueuing
     private let credentials: any ServerMutationCredentialTransacting
 
-    init(
+    package init(
         store: any ServerDataMutationJournalStoring,
         mutationQueue: any ServerDataMutationEnqueuing,
         credentials: any ServerMutationCredentialTransacting
@@ -235,7 +238,7 @@ struct ServerDataMutationTransaction {
         self.credentials = credentials
     }
 
-    func commitSave(
+    package func commitSave(
         _ plan: ServerDataMutationPlan,
         credentials newCredentials: ServerCredentials
     ) throws -> ServerDataMutationJournal {
@@ -268,7 +271,7 @@ struct ServerDataMutationTransaction {
         return resume(journal)
     }
 
-    func commit(_ plan: ServerDataMutationPlan) throws -> ServerDataMutationJournal {
+    package func commit(_ plan: ServerDataMutationPlan) throws -> ServerDataMutationJournal {
         guard try store.loadServerDataMutationJournal() == nil else {
             throw ServerDataMutationTransactionError.recoveryPending
         }
@@ -280,7 +283,7 @@ struct ServerDataMutationTransaction {
         preconditionFailure("Use commitSave for a credential replacement")
     }
 
-    func resumePending() throws -> ServerDataMutationJournal? {
+    package func resumePending() throws -> ServerDataMutationJournal? {
         guard let journal = try store.loadServerDataMutationJournal() else { return nil }
         if !journal.didPrepareCredentials {
             if case .replace(let transactionID, _, _) = journal.plan.credentialAction {
@@ -389,10 +392,10 @@ struct ServerDataMutationTransaction {
     }
 }
 
-nonisolated enum ServerDataMutationTransactionError: LocalizedError, Equatable, Sendable {
+nonisolated package enum ServerDataMutationTransactionError: LocalizedError, Equatable, Sendable {
     case recoveryPending
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         String(localized: "A server data change is still recovering. Try again after recovery completes.")
     }
 }

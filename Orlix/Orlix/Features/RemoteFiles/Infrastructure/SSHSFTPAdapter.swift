@@ -1,8 +1,13 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
-final class SSHSFTPAdapter {
-    typealias BorrowedClientProvider = @MainActor @Sendable (UUID) -> SSHClient?
+final package class SSHSFTPAdapter {
+    package typealias BorrowedClientProvider = @MainActor @Sendable (UUID) -> SSHClient?
 
     private enum ClientOwnership {
         case borrowed
@@ -10,8 +15,8 @@ final class SSHSFTPAdapter {
     }
 
     private struct ClientRegistration {
-        let client: SSHClient
-        let ownership: ClientOwnership
+        package let client: SSHClient
+        package let ownership: ClientOwnership
     }
 
     private var clients: [UUID: ClientRegistration] = [:]
@@ -20,7 +25,7 @@ final class SSHSFTPAdapter {
     private let connectionOperations: SSHConnectionOperationService
     private let clientFactory: SSHClientFactory
 
-    init(
+    package init(
         borrowedClientProvider: @escaping BorrowedClientProvider,
         credentialRepository: any ServerCredentialTransactionRepository,
         connectionOperations: SSHConnectionOperationService,
@@ -32,7 +37,7 @@ final class SSHSFTPAdapter {
         self.clientFactory = clientFactory
     }
 
-    func withService<T: Sendable>(
+    package func withService<T: Sendable>(
         for server: Server,
         operation: @MainActor @escaping @Sendable (any RemoteFileService) async throws -> T
     ) async throws -> T {
@@ -56,7 +61,7 @@ final class SSHSFTPAdapter {
         }
     }
 
-    func disconnect(serverId: UUID) {
+    package func disconnect(serverId: UUID) {
         guard let registration = clients.removeValue(forKey: serverId) else { return }
         guard registration.ownership == .owned else { return }
 

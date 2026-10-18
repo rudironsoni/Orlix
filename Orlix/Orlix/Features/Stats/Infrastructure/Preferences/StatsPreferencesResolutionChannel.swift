@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class StatsPreferencesResolutionChannel:
+final package class StatsPreferencesResolutionChannel:
     StatsPreferencesResolutionSource,
     StatsPreferencesResolutionPublishing {
     typealias Observer = (StatsPreferences) -> Void
@@ -9,21 +12,23 @@ final class StatsPreferencesResolutionChannel:
     private var observers: [UUID: Observer] = [:]
 
     @discardableResult
-    func observeStatsPreferences(
-        _ observer: @escaping Observer
+    package func observeStatsPreferences(
+        _ observer: @escaping (StatsPreferences) -> Void
     ) -> UUID {
         let id = UUID()
         observers[id] = observer
         return id
     }
 
-    func removeStatsPreferencesObserver(_ id: UUID) {
+    package func removeStatsPreferencesObserver(_ id: UUID) {
         observers.removeValue(forKey: id)
     }
 
-    func publishStatsPreferences(_ preferences: StatsPreferences) {
+    package func publishStatsPreferences(_ preferences: StatsPreferences) {
         for observer in Array(observers.values) {
             observer(preferences)
         }
     }
+
+    package init() {}
 }

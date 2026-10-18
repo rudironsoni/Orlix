@@ -1,17 +1,20 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalConnectionStatusView: View {
-    let presentation: TerminalConnectionStatusPresentation
-    let connectionAttemptID: UUID
-    let surfaceStyle: NoticeSurfaceStyle
-    let isActive: Bool
-    let onRetry: () -> Void
-    let onTrustNewHostKey: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalConnectionStatusView: View {
+    package let presentation: TerminalConnectionStatusPresentation
+    package let connectionAttemptID: UUID
+    package let surfaceStyle: NoticeSurfaceStyle
+    package let isActive: Bool
+    package let onRetry: () -> Void
+    package let onTrustNewHostKey: () -> Void
 
     @State private var dismissedIdentity: TerminalConnectionStatusPresentationIdentity?
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .top) {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -260,6 +263,22 @@ struct TerminalConnectionStatusView: View {
         case .failed(_, let allowsHostKeyReplacement):
             return allowsHostKeyReplacement ? 500 : 420
         }
+    }
+
+    package init(
+        presentation: TerminalConnectionStatusPresentation,
+        connectionAttemptID: UUID,
+        surfaceStyle: NoticeSurfaceStyle,
+        isActive: Bool,
+        onRetry: @escaping () -> Void,
+        onTrustNewHostKey: @escaping () -> Void
+    ) {
+        self.presentation = presentation
+        self.connectionAttemptID = connectionAttemptID
+        self.surfaceStyle = surfaceStyle
+        self.isActive = isActive
+        self.onRetry = onRetry
+        self.onTrustNewHostKey = onTrustNewHostKey
     }
 }
 #endif

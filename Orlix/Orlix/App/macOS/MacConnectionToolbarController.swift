@@ -15,20 +15,24 @@ import Combine
 import SwiftUI
 import AppKit
 
-extension NSToolbarItem.Identifier {
-    static let vvViewPicker = NSToolbarItem.Identifier("orlix.viewPicker")
-    static let vvTabStrip = NSToolbarItem.Identifier("orlix.tabStrip")
-    static let vvFilesMenu = NSToolbarItem.Identifier("orlix.filesMenu")
-    static let vvEnterZen = NSToolbarItem.Identifier("orlix.enterZen")
-    static let vvServerMenu = NSToolbarItem.Identifier("orlix.serverMenu")
-    static let vvZenControls = NSToolbarItem.Identifier("orlix.zenControls")
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixTerminal
+#endif
+package extension NSToolbarItem.Identifier {
+    static package let vvViewPicker = NSToolbarItem.Identifier("orlix.viewPicker")
+    static package let vvTabStrip = NSToolbarItem.Identifier("orlix.tabStrip")
+    static package let vvFilesMenu = NSToolbarItem.Identifier("orlix.filesMenu")
+    static package let vvEnterZen = NSToolbarItem.Identifier("orlix.enterZen")
+    static package let vvServerMenu = NSToolbarItem.Identifier("orlix.serverMenu")
+    static package let vvZenControls = NSToolbarItem.Identifier("orlix.zenControls")
 }
 
 /// Hosts the SwiftUI tab strip and re-renders as tabs/selection/view change.
 private struct MacTabStripHost: View {
-    @ObservedObject var bridge = MacToolbarBridge.shared
+    @ObservedObject package var bridge = MacToolbarBridge.shared
 
-    var body: some View {
+    package var body: some View {
         bridge.makeTabStripView()
             .frame(
                 maxWidth: .infinity,
@@ -40,17 +44,17 @@ private struct MacTabStripHost: View {
 
 /// Hosts the SwiftUI zen panel inside the zen controls popover.
 private struct MacZenControlHost: View {
-    @ObservedObject var bridge = MacToolbarBridge.shared
+    @ObservedObject package var bridge = MacToolbarBridge.shared
 
-    var body: some View {
+    package var body: some View {
         bridge.makeZenPanelView()
     }
 }
 
-final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuDelegate {
-    static let shared = MacConnectionToolbarController()
+final package class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuDelegate {
+    static package let shared = MacConnectionToolbarController()
 
-    let toolbar: NSToolbar
+    package let toolbar: NSToolbar
     private let bridge = MacToolbarBridge.shared
     private weak var tabManager: TerminalTabManager?
     private var cancellable: AnyCancellable?
@@ -63,7 +67,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     private static let filesMenuIdentifier = NSUserInterfaceItemIdentifier("orlix.filesMenu.menu")
     private static let serverMenuIdentifier = NSUserInterfaceItemIdentifier("orlix.serverMenu.menu")
 
-    override init() {
+    override package init() {
         toolbar = NSToolbar(identifier: "orlix.connection.toolbar")
         super.init()
         toolbar.delegate = self
@@ -75,7 +79,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
             .sink { [weak self] _ in self?.reconcile() }
     }
 
-    func configure(tabManager: TerminalTabManager) {
+    package func configure(tabManager: TerminalTabManager) {
         if let currentManager = self.tabManager {
             precondition(
                 currentManager === tabManager,
@@ -153,17 +157,17 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
 
     // MARK: NSToolbarDelegate
 
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    package func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         desiredIdentifiers
     }
 
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    package func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.toggleSidebar, .sidebarTrackingSeparator, .vvViewPicker, .vvTabStrip,
          .vvFilesMenu, .vvEnterZen, .vvServerMenu, .vvZenControls,
          .flexibleSpace, .space]
     }
 
-    func toolbar(
+    package func toolbar(
         _ toolbar: NSToolbar,
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
@@ -347,7 +351,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
     /// Rebuild the about-to-open menu from the current bridge entries. Called by
     /// AppKit just before display, so the menus stay fresh without being rebuilt
     /// on every snapshot update.
-    func menuNeedsUpdate(_ menu: NSMenu) {
+    package func menuNeedsUpdate(_ menu: NSMenu) {
         switch menu.identifier {
         case Self.filesMenuIdentifier:
             populate(menu, with: bridge.snapshot.filesMenu)
@@ -388,7 +392,7 @@ final class MacConnectionToolbarController: NSObject, NSToolbarDelegate, NSMenuD
 
 /// Boxes a typed command for storage in NSMenuItem.representedObject.
 private final class MenuActionBox {
-    let command: MacToolbarCommandID
-    init(_ command: MacToolbarCommandID) { self.command = command }
+    package let command: MacToolbarCommandID
+    package init(_ command: MacToolbarCommandID) { self.command = command }
 }
 #endif

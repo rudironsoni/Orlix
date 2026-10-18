@@ -9,8 +9,8 @@
 import GameController
 import UIKit
 
-extension GhosttyTerminalView {
-    func setupHardwareKeyboardObservation() {
+package extension GhosttyTerminalView {
+    package func setupHardwareKeyboardObservation() {
         guard hardwareKeyboardObservers.isEmpty else { return }
         let center = NotificationCenter.default
         hardwareKeyboardObservers.append(
@@ -38,14 +38,14 @@ extension GhosttyTerminalView {
         updateHardwareKeyboardState(reloadInputViewsIfNeeded: false)
     }
 
-    func removeHardwareKeyboardObservers() {
+    package func removeHardwareKeyboardObservers() {
         for observer in hardwareKeyboardObservers {
             NotificationCenter.default.removeObserver(observer)
         }
         hardwareKeyboardObservers.removeAll()
     }
 
-    func refreshHardwareKeyboardAttachmentFromSystem() {
+    package func refreshHardwareKeyboardAttachmentFromSystem() {
         let hasHardwareKeyboard = detectedHardwareKeyboardAttached
         let previousInputConfiguration = terminalInputConfiguration
         if setHardwareKeyboardAttached(hasHardwareKeyboard) {
@@ -55,7 +55,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func updateHardwareKeyboardState(reloadInputViewsIfNeeded: Bool) {
+    package func updateHardwareKeyboardState(reloadInputViewsIfNeeded: Bool) {
         let hasHardwareKeyboard = detectedHardwareKeyboardAttached
         let previousInputConfiguration = terminalInputConfiguration
         let didChange = setHardwareKeyboardAttached(hasHardwareKeyboard)
@@ -86,7 +86,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func setHardwareKeyboardAttached(_ attached: Bool) -> Bool {
+    package func setHardwareKeyboardAttached(_ attached: Bool) -> Bool {
         guard attached != hasHardwareKeyboardAttached else { return false }
         if !attached {
             cancelTrackedHardwareInput()
@@ -95,7 +95,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func markHardwareKeyboardDetectedFromKeyPress() {
+    package func markHardwareKeyboardDetectedFromKeyPress() {
         #if DEBUG
         if keyboardUITestHardwareKeyboardOverride == false { return }
         #endif

@@ -2,9 +2,14 @@ import ETSession
 import Foundation
 import MoshBootstrap
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 extension KnownHostsManager: ServerHostKeyRepository {}
 
-nonisolated protocol ServerConnectionOperationRunning: Sendable {
+nonisolated package protocol ServerConnectionOperationRunning: Sendable {
     func runServerConnectionTest(
         server: Server,
         credentials: ServerCredentials,
@@ -12,7 +17,7 @@ nonisolated protocol ServerConnectionOperationRunning: Sendable {
     ) async throws
 }
 
-nonisolated protocol ServerMoshConnectionTesting: Sendable {
+nonisolated package protocol ServerMoshConnectionTesting: Sendable {
     func testServerConnection(
         using client: SSHClient,
         portRange: ClosedRange<Int>
@@ -20,7 +25,7 @@ nonisolated protocol ServerMoshConnectionTesting: Sendable {
 }
 
 extension SSHConnectionOperationService: ServerConnectionOperationRunning {
-    func runServerConnectionTest(
+    package func runServerConnectionTest(
         server: Server,
         credentials: ServerCredentials,
         operation: @escaping @Sendable (SSHClient) async throws -> Void
@@ -34,7 +39,7 @@ extension SSHConnectionOperationService: ServerConnectionOperationRunning {
 }
 
 extension RemoteMoshManager: ServerMoshConnectionTesting {
-    func testServerConnection(
+    package func testServerConnection(
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws {
@@ -54,12 +59,12 @@ extension RemoteMoshManager: ServerMoshConnectionTesting {
     }
 }
 
-nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
+nonisolated package enum ServerConnectionTestPlan: Equatable, Sendable {
     case sshOnly
     case mosh(portRange: ClosedRange<Int>)
     case eternalTerminal(port: UInt16)
 
-    init(server: Server) {
+    package init(server: Server) {
         switch server.connectionMode {
         case .standard, .tailscale, .cloudflare:
             self = .sshOnly
@@ -73,12 +78,12 @@ nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
     }
 }
 
-nonisolated enum ServerConnectionApprovalRequirement: Equatable, Sendable {
+nonisolated package enum ServerConnectionApprovalRequirement: Equatable, Sendable {
     case hostKey(host: String, port: Int)
 }
 
-nonisolated enum ServerConnectionApprovalPolicy {
-    static func requirement(
+nonisolated package enum ServerConnectionApprovalPolicy {
+    static package func requirement(
         for error: Error,
         server: Server
     ) -> ServerConnectionApprovalRequirement? {
@@ -90,8 +95,8 @@ nonisolated enum ServerConnectionApprovalPolicy {
     }
 }
 
-extension ServerFormDependencies {
-    static func live(
+package extension ServerFormDependencies {
+    static package func live(
         credentials: any ServerCredentialRepository,
         hostKeys: any ServerHostKeyRepository,
         connectionOperations: any ServerConnectionOperationRunning,
@@ -125,13 +130,13 @@ extension ServerFormDependencies {
     }
 }
 
-nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
+nonisolated package struct AppServerConnectionTester: ServerConnectionTesting {
     private let connectionOperations: any ServerConnectionOperationRunning
     private let remoteMosh: any ServerMoshConnectionTesting
     private let hostKeys: any ServerHostKeyRepository
     private let now: @Sendable () -> Date
 
-    init(
+    package init(
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
@@ -143,7 +148,7 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
         self.now = now
     }
 
-    func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
+    package func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
         let plan = ServerConnectionTestPlan(server: server)
         do {
             try Task.checkCancellation()

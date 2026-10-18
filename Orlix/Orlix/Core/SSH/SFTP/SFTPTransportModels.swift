@@ -2,23 +2,23 @@ import Foundation
 
 /// Neutral SFTP values returned by the SSH transport. Feature adapters map
 /// these values into product-owned models and errors.
-nonisolated enum SFTPFileType: Hashable, Sendable {
+nonisolated package enum SFTPFileType: Hashable, Sendable {
     case file
     case directory
     case symlink
     case other
 }
 
-nonisolated struct SFTPFileEntry: Hashable, Sendable {
-    let name: String
-    let path: String
-    let type: SFTPFileType
-    let size: UInt64?
-    let modifiedAt: Date?
-    let permissions: UInt32?
-    let symlinkTarget: String?
+nonisolated package struct SFTPFileEntry: Hashable, Sendable {
+    package let name: String
+    package let path: String
+    package let type: SFTPFileType
+    package let size: UInt64?
+    package let modifiedAt: Date?
+    package let permissions: UInt32?
+    package let symlinkTarget: String?
 
-    static func from(
+    static package func from(
         name: String,
         path: String,
         attributes: LIBSSH2_SFTP_ATTRIBUTES,
@@ -61,19 +61,19 @@ nonisolated struct SFTPFileEntry: Hashable, Sendable {
     }
 }
 
-nonisolated struct SFTPFilesystemStatus: Hashable, Sendable {
-    let blockSize: UInt64
-    let totalBlocks: UInt64
-    let freeBlocks: UInt64
-    let availableBlocks: UInt64
+nonisolated package struct SFTPFilesystemStatus: Hashable, Sendable {
+    package let blockSize: UInt64
+    package let totalBlocks: UInt64
+    package let freeBlocks: UInt64
+    package let availableBlocks: UInt64
 }
 
-nonisolated enum SFTPFilesystemCapacity: Hashable, Sendable {
+nonisolated package enum SFTPFilesystemCapacity: Hashable, Sendable {
     case known(SFTPFilesystemStatus)
     case unavailable
 }
 
-nonisolated enum SFTPTransportError: LocalizedError, Equatable, Sendable {
+nonisolated package enum SFTPTransportError: LocalizedError, Equatable, Sendable {
     case permissionDenied
     case pathNotFound
     case disconnected
@@ -81,7 +81,7 @@ nonisolated enum SFTPTransportError: LocalizedError, Equatable, Sendable {
     case resourceLimitExceeded
     case failed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .permissionDenied: return String(localized: "Permission denied.")
         case .pathNotFound: return String(localized: "The remote path could not be found.")
@@ -93,8 +93,8 @@ nonisolated enum SFTPTransportError: LocalizedError, Equatable, Sendable {
     }
 }
 
-nonisolated enum SFTPRemotePath {
-    static func normalize(_ path: String) -> String {
+nonisolated package enum SFTPRemotePath {
+    static package func normalize(_ path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "/" }
 
@@ -111,7 +111,7 @@ nonisolated enum SFTPRemotePath {
         return "/" + normalized.joined(separator: "/")
     }
 
-    static func appending(_ name: String, to directoryPath: String) throws -> String {
+    static package func appending(_ name: String, to directoryPath: String) throws -> String {
         guard isValidLeaf(name) else { throw SFTPTransportError.invalidEntryName }
         let directory = normalize(directoryPath)
         return directory == "/" ? "/" + name : directory + "/" + name

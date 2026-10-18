@@ -1,8 +1,11 @@
 import Foundation
 import os
 
-nonisolated enum RemoteTerminalTypeResolver {
-    typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum RemoteTerminalTypeResolver {
+    package typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Orlix",
@@ -23,7 +26,7 @@ nonisolated enum RemoteTerminalTypeResolver {
         case failed
     }
 
-    static func resolve(
+    static package func resolve(
         environment: RemoteEnvironment,
         execute: CommandExecutor,
         bundle: Bundle = .main,
@@ -54,7 +57,7 @@ nonisolated enum RemoteTerminalTypeResolver {
         }
     }
 
-    static func probeCommand(okMarker: String = probeMarker) -> String {
+    static package func probeCommand(okMarker: String = probeMarker) -> String {
         let body = """
         \(RemoteTerminalBootstrap.shellPathExport());
         \(currentGhosttyTerminfoFunction())
@@ -67,7 +70,7 @@ nonisolated enum RemoteTerminalTypeResolver {
         return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
     }
 
-    static func installCommand(
+    static package func installCommand(
         terminfoSource: String,
         okMarker: String = installMarker,
         missingTicMarker: String = missingTicMarker,

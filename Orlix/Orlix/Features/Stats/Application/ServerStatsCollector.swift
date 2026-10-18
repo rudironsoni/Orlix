@@ -2,15 +2,18 @@ import Combine
 import Foundation
 import os.log
 
-nonisolated enum ServerStatsCollectionFailure: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum ServerStatsCollectionFailure: Equatable, Sendable {
     case securityApprovalCancelled
     case securityApprovalExpired
     case securityApprovalUnavailable
     case external(detail: String)
 }
 
-nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
-    nonisolated enum Phase: Equatable, Sendable {
+nonisolated package struct ServerStatsCollectionState: Equatable, Sendable {
+    nonisolated package enum Phase: Equatable, Sendable {
         case idle
         case starting(attemptID: UUID)
         case startingPaused(attemptID: UUID)
@@ -19,7 +22,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         case approvalRequired(ServerStatsApprovalRequest)
         case failed(ServerStatsCollectionFailure)
 
-        var attemptID: UUID? {
+        package var attemptID: UUID? {
             switch self {
             case .starting(let attemptID),
                  .startingPaused(let attemptID),
@@ -34,7 +37,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     private(set) var phase: Phase = .idle
 
-    var isCollecting: Bool {
+    package var isCollecting: Bool {
         switch phase {
         case .starting, .collecting:
             return true
@@ -43,22 +46,22 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         }
     }
 
-    var isPolling: Bool {
+    package var isPolling: Bool {
         if case .collecting = phase { return true }
         return false
     }
 
-    var approvalRequest: ServerStatsApprovalRequest? {
+    package var approvalRequest: ServerStatsApprovalRequest? {
         guard case .approvalRequired(let request) = phase else { return nil }
         return request
     }
 
-    mutating func start(attemptID: UUID) {
+    mutating package func start(attemptID: UUID) {
         phase = .starting(attemptID: attemptID)
     }
 
     @discardableResult
-    mutating func markConnected(attemptID: UUID) -> Bool {
+    mutating package func markConnected(attemptID: UUID) -> Bool {
         switch phase {
         case .starting(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .collecting(attemptID: attemptID)
@@ -72,7 +75,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func pause(attemptID: UUID) -> Bool {
+    mutating package func pause(attemptID: UUID) -> Bool {
         switch phase {
         case .starting(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .startingPaused(attemptID: attemptID)
@@ -90,7 +93,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func resume(attemptID: UUID) -> Bool {
+    mutating package func resume(attemptID: UUID) -> Bool {
         switch phase {
         case .startingPaused(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .starting(attemptID: attemptID)
@@ -108,7 +111,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func finish(
+    mutating package func finish(
         attemptID: UUID,
         failure: ServerStatsCollectionFailure? = nil
     ) -> Bool {
@@ -121,12 +124,12 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         return true
     }
 
-    mutating func stop() {
+    mutating package func stop() {
         phase = .idle
     }
 
     @discardableResult
-    mutating func requireApproval(
+    mutating package func requireApproval(
         attemptID: UUID,
         request: ServerStatsApprovalRequest
     ) -> Bool {
@@ -136,7 +139,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func resolveApproval(
+    mutating package func resolveApproval(
         _ request: ServerStatsApprovalRequest,
         failure: ServerStatsCollectionFailure? = nil
     ) -> Bool {
@@ -152,40 +155,40 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
 /// Coordinates one stats collection attempt without owning transport details.
 @MainActor
-final class ServerStatsCollector: ObservableObject {
-    @Published var stats = ServerStats()
-    @Published var cpuHistory: [StatsPoint] = []
-    @Published var memoryHistory: [StatsPoint] = []
-    @Published var networkRxHistory: [StatsPoint] = []
-    @Published var networkTxHistory: [StatsPoint] = []
-    @Published var gpuUtilizationHistoryByDeviceID: [String: [StatsPoint]] = [:]
-    @Published var dockerCPUHistory: [StatsPoint] = []
-    @Published var dockerMemoryHistory: [StatsPoint] = []
+final package class ServerStatsCollector: ObservableObject {
+    @Published package var stats = ServerStats()
+    @Published package var cpuHistory: [StatsPoint] = []
+    @Published package var memoryHistory: [StatsPoint] = []
+    @Published package var networkRxHistory: [StatsPoint] = []
+    @Published package var networkTxHistory: [StatsPoint] = []
+    @Published package var gpuUtilizationHistoryByDeviceID: [String: [StatsPoint]] = [:]
+    @Published package var dockerCPUHistory: [StatsPoint] = []
+    @Published package var dockerMemoryHistory: [StatsPoint] = []
     @Published private(set) var collectionState = ServerStatsCollectionState()
 
     private let logger = Logger(subsystem: "com.rudironsoni.orlix", category: "Stats")
     private let dependencies: ServerStatsCollectorDependencies
 
     private struct CollectionIdentity: Equatable {
-        let serverID: UUID
-        let connectionID: ServerStatsConnectionIdentity
-        let ownership: ServerStatsClientOwnership
+        package let serverID: UUID
+        package let connectionID: ServerStatsConnectionIdentity
+        package let ownership: ServerStatsClientOwnership
     }
 
     private final class AttemptIdentity: Sendable {}
 
     @MainActor
     private final class CollectionAttempt {
-        let id: UUID
-        let attemptIdentity = AttemptIdentity()
-        let serverID: UUID
-        let session: any ServerStatsCollectionSession
-        let identity: CollectionIdentity
-        var collectDocker: Bool
-        var primaryTask: Task<Void, Never>?
-        var operationTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+        package let id: UUID
+        package let attemptIdentity = AttemptIdentity()
+        package let serverID: UUID
+        package let session: any ServerStatsCollectionSession
+        package let identity: CollectionIdentity
+        package var collectDocker: Bool
+        package var primaryTask: Task<Void, Never>?
+        package var operationTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
-        init(
+        package init(
             id: UUID,
             serverID: UUID,
             session: any ServerStatsCollectionSession,
@@ -202,7 +205,7 @@ final class ServerStatsCollector: ObservableObject {
             self.collectDocker = collectDocker
         }
 
-        func cancelAllTasks() {
+        package func cancelAllTasks() {
             primaryTask?.cancel()
             primaryTask = nil
             let tasks = Array(operationTasks.values)
@@ -213,7 +216,7 @@ final class ServerStatsCollector: ObservableObject {
 
     @MainActor
     private final class TrackedOperationResult<Output> {
-        var value: Result<Output, Error>?
+        package var value: Result<Output, Error>?
 
         #if compiler(<6.4)
         // Xcode 26.5 crashes while optimizing the isolated destructor of a
@@ -227,10 +230,10 @@ final class ServerStatsCollector: ObservableObject {
     private var pendingApprovalReference: (any ServerStatsApprovalReference)?
     private var cleanupTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
-    var isCollecting: Bool { collectionState.isCollecting }
-    var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
+    package var isCollecting: Bool { collectionState.isCollecting }
+    package var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
 
-    var presentationSnapshot: ServerStatsPresentationSnapshot {
+    package var presentationSnapshot: ServerStatsPresentationSnapshot {
         ServerStatsPresentationSnapshot(
             stats: stats,
             cpuHistory: cpuHistory,
@@ -243,11 +246,11 @@ final class ServerStatsCollector: ObservableObject {
         )
     }
 
-    var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
+    package var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
         pendingApprovalReference
     }
 
-    init(dependencies: ServerStatsCollectorDependencies) {
+    package init(dependencies: ServerStatsCollectorDependencies) {
         self.dependencies = dependencies
     }
 
@@ -259,7 +262,7 @@ final class ServerStatsCollector: ObservableObject {
 
     // MARK: - Collection Control
 
-    func startCollecting(
+    package func startCollecting(
         for target: any ServerStatsCollectionTarget,
         using sharedConnection: (any ServerStatsConnectionReference)? = nil,
         collectDocker: Bool = false
@@ -359,12 +362,12 @@ final class ServerStatsCollector: ObservableObject {
         attempt.primaryTask = task
     }
 
-    func pauseCollecting() {
+    package func pauseCollecting() {
         guard let activeAttempt else { return }
         _ = collectionState.pause(attemptID: activeAttempt.id)
     }
 
-    func stopCollecting() {
+    package func stopCollecting() {
         pendingApprovalReference = nil
         guard let attempt = activeAttempt else {
             collectionState.stop()
@@ -376,7 +379,7 @@ final class ServerStatsCollector: ObservableObject {
         cancel(attempt)
     }
 
-    func resolveSecurityApproval(
+    package func resolveSecurityApproval(
         _ request: ServerStatsApprovalRequest,
         failure: ServerStatsCollectionFailure? = nil
     ) {
@@ -426,7 +429,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    func loadDockerStats() async throws -> DockerStats {
+    package func loadDockerStats() async throws -> DockerStats {
         let attempt = try requireActiveAttempt()
         let fallback = stats.docker
         let dockerStats = try await performTrackedOperation(for: attempt) { session in
@@ -436,7 +439,7 @@ final class ServerStatsCollector: ObservableObject {
         return dockerStats
     }
 
-    func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
+    package func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
         let attempt = try requireActiveAttempt()
         guard let currentVolume = VolumeVisibilityPolicy.normalized(stats.volumes)
             .first(where: { $0.identity == volume.identity }) else {
@@ -447,7 +450,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    func performDockerAction(
+    package func performDockerAction(
         _ action: DockerContainerAction,
         on container: DockerContainer
     ) async throws -> DockerStats {
@@ -675,7 +678,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    nonisolated static func resolvedCPUCoreCount(existing: Int, collected: Int) -> Int {
+    nonisolated static package func resolvedCPUCoreCount(existing: Int, collected: Int) -> Int {
         if existing > 0, collected > 0 {
             return max(existing, collected)
         }
@@ -686,7 +689,7 @@ final class ServerStatsCollector: ObservableObject {
     }
 }
 
-nonisolated enum ProcessControlError: Error, Equatable, Sendable {
+nonisolated package enum ProcessControlError: Error, Equatable, Sendable {
     case notConnected
     case protectedProcess
 }
