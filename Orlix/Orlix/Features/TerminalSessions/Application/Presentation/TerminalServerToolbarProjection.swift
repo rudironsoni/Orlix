@@ -6,7 +6,7 @@ import OrlixModels
 #endif
 @MainActor
 final package class TerminalPaneTitleStore: ObservableObject {
-    @Published private(set) var runtimeTitles: [UUID: String] = [:]
+    @Published package private(set) var runtimeTitles: [UUID: String] = [:]
     @Published private(set) var overrides: [UUID: String] = [:]
 
     @discardableResult
@@ -63,7 +63,7 @@ final package class TerminalPaneTitleStore: ObservableObject {
 
 @MainActor
 final package class TerminalSessionNavigationProjection: ObservableObject {
-    @Published private(set) var state: TerminalSessionNavigationState
+    @Published package private(set) var state: TerminalSessionNavigationState
     private var cancellable: AnyCancellable?
 
     package init(sessionState: TerminalSessionStateStore) {
@@ -120,7 +120,7 @@ package struct TerminalServerFloatingControlState: Equatable {
 
 @MainActor
 final package class TerminalServerContentProjection: ObservableObject {
-    @Published private(set) var state: TerminalServerContentState
+    @Published package private(set) var state: TerminalServerContentState
 
     package init(state: TerminalServerContentState) {
         self.state = state
@@ -149,7 +149,7 @@ final package class TerminalServerToolbarTabStripProjection: ObservableObject {
 #if os(iOS)
 @MainActor
 final package class TerminalServerFloatingControlProjection: ObservableObject {
-    @Published private(set) var state: TerminalServerFloatingControlState
+    @Published package private(set) var state: TerminalServerFloatingControlState
 
     package init(state: TerminalServerFloatingControlState) {
         self.state = state

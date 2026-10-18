@@ -5,7 +5,7 @@ import Foundation
 @MainActor
 final package class EngagementTracker: ObservableObject {
     /// Incremented when a root view should call the system review request action.
-    @Published private(set) var reviewRequestToken = 0
+    @Published package private(set) var reviewRequestToken = 0
 
     private static let reviewMinimumConnections = 3
     private static let reviewMinimumUsageDays = 2

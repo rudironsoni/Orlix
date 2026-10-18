@@ -29,8 +29,17 @@ nonisolated package struct OrlixActivityAttributes: ActivityAttributes {
     package struct ContentState: Codable, Hashable {
         package var status: OrlixLiveActivityStatus
         package var activeCount: Int
+
+        package init(status: OrlixLiveActivityStatus, activeCount: Int) {
+            self.status = status
+            self.activeCount = activeCount
+        }
     }
 
     package var appName: String
+
+    package init(appName: String) {
+        self.appName = appName
+    }
 }
 #endif

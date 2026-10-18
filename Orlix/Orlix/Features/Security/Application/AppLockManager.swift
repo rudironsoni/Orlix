@@ -11,7 +11,7 @@ final package class AppLockManager: ObservableObject {
     @Published private(set) var lastFailure: AppLockFailure?
     @Published private(set) var biometricAvailability: BiometricAvailability
 
-    @Published private(set) var fullAppLockEnabled: Bool {
+    @Published package private(set) var fullAppLockEnabled: Bool {
         didSet {
             dependencies.preferences.fullAppLockEnabled = fullAppLockEnabled
             if !fullAppLockEnabled {

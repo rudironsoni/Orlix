@@ -16,7 +16,7 @@ package protocol VoiceSettingsPersisting: AnyObject {
 
 @MainActor
 final package class VoiceSettingsStore: ObservableObject, VoiceSettingsReading {
-    @Published private(set) var settings: VoiceSettings
+    @Published package private(set) var settings: VoiceSettings
 
     private let persistence: any VoiceSettingsPersisting
 

@@ -230,11 +230,11 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         package var findNavigatorActive: Bool
     }
 
-    @Published private(set) var isUserHidden = false
+    @Published package private(set) var isUserHidden = false
     /// One source of truth for software-keyboard visibility and geometry.
     /// Layout consumers convert the associated screen-space frame into their
     /// own window before using it.
-    @Published private(set) var softwareKeyboardPresentation = SoftwareKeyboardPresentation.hidden
+    @Published package private(set) var softwareKeyboardPresentation = SoftwareKeyboardPresentation.hidden
     package var isSoftwareKeyboardVisible: Bool {
         softwareKeyboardPresentation.isVisible
     }

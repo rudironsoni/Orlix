@@ -23,7 +23,7 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
         self.repository = repository
     }
 
-    func fetchTerminalFonts() async throws -> [TerminalFont] {
+    package func fetchTerminalFonts() async throws -> [TerminalFont] {
         let records = try await transport.fetchCloudKitRecords(
             matchingRecordTypes: [TerminalFontCloudKitRecordCodec.recordType],
             desiredKeys: TerminalFontCloudKitRecordCodec.metadataKeys
@@ -61,7 +61,7 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
         return fonts
     }
 
-    func fetchTerminalFontPreference() async throws -> TerminalFontPreference? {
+    package func fetchTerminalFontPreference() async throws -> TerminalFontPreference? {
         let recordID = TerminalFontPreferenceCloudKitRecordCodec.recordID(
             in: transport.cloudKitRecordZoneID
         )
@@ -80,7 +80,7 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
         }
     }
 
-    func saveTerminalFont(_ font: TerminalFont) async throws {
+    package func saveTerminalFont(_ font: TerminalFont) async throws {
         let assetURL = font.isDeleted ? nil : repository.existingFileURL(for: font)
         if !font.isDeleted, assetURL == nil {
             throw TerminalFontValidationError.fileUnavailable
@@ -95,7 +95,7 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
         }
     }
 
-    func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws {
+    package func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws {
         let record = TerminalFontPreferenceCloudKitRecordCodec.record(
             for: preference,
             in: transport.cloudKitRecordZoneID
