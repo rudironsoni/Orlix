@@ -34,10 +34,10 @@ package struct TerminalSecurityActions {
     package let reject: Reject
 
     package init(
-        loadCredentials: LoadCredentials,
-        pendingHostKeyApproval: PendingHostKeyApproval,
-        approve: Approve,
-        reject: Reject
+        loadCredentials: @escaping LoadCredentials,
+        pendingHostKeyApproval: @escaping PendingHostKeyApproval,
+        approve: @escaping Approve,
+        reject: @escaping Reject
     ) {
         self.loadCredentials = loadCredentials
         self.pendingHostKeyApproval = pendingHostKeyApproval
