@@ -1,32 +1,32 @@
 import Foundation
 
-nonisolated package enum TerminalSplitCommand: Equatable, Sendable {
-    package case splitRight
-    package case splitDown
-    package case closeFocusedPane
-    package case toggleZoom
-    package case selectPrevious
-    package case selectNext
-    package case selectAbove
-    package case selectBelow
-    package case selectLeft
-    package case selectRight
-    package case equalize
-    package case moveDividerUp
-    package case moveDividerDown
-    package case moveDividerLeft
-    package case moveDividerRight
+nonisolated public enum TerminalSplitCommand: Equatable, Sendable {
+    public case splitRight
+    public case splitDown
+    public case closeFocusedPane
+    public case toggleZoom
+    public case selectPrevious
+    public case selectNext
+    public case selectAbove
+    public case selectBelow
+    public case selectLeft
+    public case selectRight
+    public case equalize
+    public case moveDividerUp
+    public case moveDividerDown
+    public case moveDividerLeft
+    public case moveDividerRight
 
-    package var createsPane: Bool {
+    public var createsPane: Bool {
         self == .splitRight || self == .splitDown
     }
 }
 
-package enum TerminalSplitCommandOutcome: Equatable {
-    package case performed
-    package case unavailable
-    package case requiresUpgrade
-    package case requiresCloseConfirmation
+public enum TerminalSplitCommandOutcome: Equatable {
+    public case performed
+    public case unavailable
+    public case requiresUpgrade
+    public case requiresCloseConfirmation
 }
 
 nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
@@ -38,12 +38,12 @@ nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
     static package let alternate = Self(rawValue: 1 << 3)
 }
 
-nonisolated package enum TerminalSplitShortcutKey: Equatable, Sendable {
-    package case character(String)
-    package case upArrow
-    package case downArrow
-    package case leftArrow
-    package case rightArrow
+nonisolated public enum TerminalSplitShortcutKey: Equatable, Sendable {
+    public case character(String)
+    public case upArrow
+    public case downArrow
+    public case leftArrow
+    public case rightArrow
 }
 
 nonisolated package enum TerminalSplitShortcutRouting {

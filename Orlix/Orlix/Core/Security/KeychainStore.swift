@@ -307,15 +307,15 @@ nonisolated final package class KeychainStore: @unchecked Sendable {
     }
 }
 
-nonisolated package enum KeychainError: LocalizedError {
-    package case unhandled(OSStatus)
-    package case encodingFailed
-    package case decodingFailed
-    package case itemNotFound
-    package case credentialServerMismatch
-    package case copyVerificationFailed
+nonisolated public enum KeychainError: LocalizedError {
+    public case unhandled(OSStatus)
+    public case encodingFailed
+    public case decodingFailed
+    public case itemNotFound
+    public case credentialServerMismatch
+    public case copyVerificationFailed
 
-    package var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unhandled(let status):
             "Keychain error: \(status)"

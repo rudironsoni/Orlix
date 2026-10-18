@@ -239,43 +239,43 @@ nonisolated package struct Server: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-nonisolated package enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case standard
-    package case tailscale
-    package case mosh
-    package case eternalTerminal
-    package case cloudflare
+nonisolated public enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    public case standard
+    public case tailscale
+    public case mosh
+    public case eternalTerminal
+    public case cloudflare
 
-    package var id: String { rawValue }
+    public var id: String { rawValue }
 
-    package init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = (try? container.decode(String.self)) ?? Self.standard.rawValue
         self = Self(rawValue: rawValue) ?? .standard
     }
 
-    package func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
 }
 
-nonisolated package enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case oauth
-    package case serviceToken
+nonisolated public enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    public case oauth
+    public case serviceToken
 
-    package var id: String { rawValue }
+    public var id: String { rawValue }
 
 }
 
 // MARK: - Authentication Method
 
-nonisolated package enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case password
-    package case sshKey
-    package case sshKeyWithPassphrase
+nonisolated public enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
+    public case password
+    public case sshKey
+    public case sshKeyWithPassphrase
 
-    package var id: String { rawValue }
+    public var id: String { rawValue }
 
 }
 

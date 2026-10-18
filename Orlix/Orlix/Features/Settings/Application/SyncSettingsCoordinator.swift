@@ -51,10 +51,10 @@ nonisolated package struct SyncSettingsCloudState: Equatable, Sendable {
     }
 }
 
-nonisolated package enum SyncSettingsCredentialState: Equatable, Sendable {
-    package case storedInICloudKeychain
-    package case storedOnThisDevice
-    package case needsAttention
+nonisolated public enum SyncSettingsCredentialState: Equatable, Sendable {
+    public case storedInICloudKeychain
+    public case storedOnThisDevice
+    public case needsAttention
 }
 
 nonisolated enum SyncSettingsUserState: Equatable, Sendable {
