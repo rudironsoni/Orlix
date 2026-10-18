@@ -329,7 +329,14 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", text)
         self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", text)
         self.assertNotIn("Bazel/disk-cache", text)
-        self.assertNotIn("Orlix/ccache", text)
+        self.assertIn("path: ~/Library/Caches/Orlix/ccache", text)
+        self.assertIn("orlix-ccache-${{ steps.compiler.outputs.digest }}", text)
+        self.assertIn("Restore local compiler object cache", text)
+        ccache = text.split("Restore local compiler object cache", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        self.assertNotIn("remote cache hit", ccache)
+        self.assertNotIn("BuildBuddy", ccache)
         self.assertIn(
             "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150",
             text,
