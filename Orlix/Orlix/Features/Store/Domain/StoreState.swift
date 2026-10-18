@@ -59,7 +59,7 @@ nonisolated package enum PurchaseState: Equatable {
     case purchased
     case failed(String)
 
-    static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
+    package static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.purchasing, .purchasing), (.purchased, .purchased):
             return true
@@ -77,7 +77,7 @@ nonisolated package enum RestoreState: Equatable {
     case restored(hasAccess: Bool)
     case failed(String)
 
-    static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
+    package static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.restoring, .restoring):
             return true

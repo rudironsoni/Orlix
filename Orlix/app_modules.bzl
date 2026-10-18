@@ -466,6 +466,7 @@ ORLIX_APP_MODULE_SRCS = {
         "Orlix/Features/Store/Infrastructure/AnalyticsTracker+StoreAnalytics.swift",
         "Orlix/Features/Store/Infrastructure/StoreKitClient.swift",
         "Orlix/Features/Store/Infrastructure/StoreManagerEffects+Live.swift",
+        "Orlix/Features/Store/UI/MultiConnectionUpgradeEmptyState.swift",
         "Orlix/Features/Store/UI/ProLimitView.swift",
         "Orlix/Features/Store/UI/ProPlanPresentation.swift",
         "Orlix/Features/Store/UI/ProUpgradeSheet+iOS.swift",

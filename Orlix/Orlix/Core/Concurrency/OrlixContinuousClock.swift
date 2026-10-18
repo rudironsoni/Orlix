@@ -44,11 +44,11 @@ nonisolated package struct Duration: Sendable, Hashable, Comparable {
         )
     }
 
-    static func < (lhs: Duration, rhs: Duration) -> Bool {
+    package static func < (lhs: Duration, rhs: Duration) -> Bool {
         lhs.nanoseconds < rhs.nanoseconds
     }
 
-    static func * (lhs: Duration, rhs: Int) -> Duration {
+    package static func * (lhs: Duration, rhs: Int) -> Duration {
         Duration(nanoseconds: multipliedClamping(lhs.nanoseconds, by: Int64(rhs)))
     }
 
@@ -98,11 +98,11 @@ nonisolated package struct ContinuousClock: Sendable {
             return Duration(nanoseconds: delta > UInt64(Int64.max) ? .min : -Int64(delta))
         }
 
-        static func < (lhs: Instant, rhs: Instant) -> Bool {
+        package static func < (lhs: Instant, rhs: Instant) -> Bool {
             lhs.uptimeNanoseconds < rhs.uptimeNanoseconds
         }
 
-        static func - (lhs: Instant, rhs: Instant) -> Duration {
+        package static func - (lhs: Instant, rhs: Instant) -> Duration {
             rhs.duration(to: lhs)
         }
     }
