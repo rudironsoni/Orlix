@@ -27,6 +27,7 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn('name = "bison_share"', text)
         self.assertIn('glob(["tools/share/bison/**"])', text)
         self.assertIn('name = "macos_sdk"', text)
+        self.assertIn('name = "python_home"', text)
         self.assertIn('name = "mlibc_support"', text)
 
     def test_linux_and_mlibc_archives_have_sha256(self) -> None:

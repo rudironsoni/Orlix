@@ -18,11 +18,8 @@ POLICY = {
     "no_remote_cache_does_not_block": ("output_base_action_cache",),
     "no_remote_exec": True,
 }
-# These stay uncached until the executed tools and their data are inputs:
-# OrlixTctiIsaRestore does not input gmake's libraries or /usr/bin/python3.
-REQUIRED_NO_REMOTE_CACHE = (
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
-)
+# No foreign producer still lacks its executed tools as inputs.
+REQUIRED_NO_REMOTE_CACHE = ()
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
     ("bazel/feasibility/packages/coreutils.bzl", "OrlixGuestPackage"),
@@ -37,6 +34,7 @@ FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/feasibility/packages/package.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/local.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
 )
 MNEMONIC = re.compile(r'mnemonic\s*=\s*"([^"]+)"')
 REQUIREMENTS = re.compile(r"execution_requirements\s*=\s*\{([^}]*)\}", re.DOTALL)
@@ -69,9 +67,7 @@ class RemoteCachePolicyTests(unittest.TestCase):
         seen = {mnemonic for _path, mnemonic in REQUIRED_NO_REMOTE_CACHE}
         self.assertEqual(
             seen,
-            {
-                "OrlixTctiIsaRestore",
-            },
+            set(),
         )
         for path, mnemonic in REQUIRED_NO_REMOTE_CACHE:
             matches = _requirements(path)[mnemonic]

@@ -268,6 +268,12 @@ filegroup(
 )
 
 filegroup(
+    name = "python_home",
+    srcs = glob(["tools/python-home/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
     name = "clang_resources",
     srcs = glob(["tools/lib/clang/**"]),
     visibility = ["//visibility:public"],
