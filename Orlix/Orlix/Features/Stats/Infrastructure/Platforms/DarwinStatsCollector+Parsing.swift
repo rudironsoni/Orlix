@@ -196,7 +196,7 @@ nonisolated package extension DarwinStatsCollector {
         return !excludedPrefixes.contains { iface.hasPrefix($0) }
     }
 
-    package func parsePs(_ output: String) -> [ProcessInfo] {
+    func parsePs(_ output: String) -> [ProcessInfo] {
         var processes: [ProcessInfo] = []
 
         let lines = output.components(separatedBy: .newlines)

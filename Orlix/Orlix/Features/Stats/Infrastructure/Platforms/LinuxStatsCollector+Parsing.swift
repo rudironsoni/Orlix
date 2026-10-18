@@ -651,7 +651,7 @@ nonisolated package extension LinuxStatsCollector {
         return metadata
     }
 
-    package func parsePs(_ output: String) -> [ProcessInfo] {
+    func parsePs(_ output: String) -> [ProcessInfo] {
         let lines = output.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
