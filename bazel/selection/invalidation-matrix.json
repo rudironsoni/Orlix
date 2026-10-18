@@ -138,6 +138,7 @@
           "coreutils",
           "guest_packages",
           "mlibc",
+          "native_ssh_archive",
           "rootfs"
         ]
       }
@@ -155,7 +156,7 @@
       "edit": "mlibc",
       "effect": {
         "rebuilds": ["ninja_closure", "rootfs", "sysroot_consumers"],
-        "stays_reusable": ["bootloader", "compiler_runtime", "host_adapter", "kernel"]
+        "stays_reusable": ["bootloader", "compiler_runtime", "host_adapter", "kernel", "native_ssh_archive"]
       }
     },
     {
@@ -163,7 +164,15 @@
       "edit": "One Coreutils or guest package",
       "effect": {
         "rebuilds": ["guest_package", "rootfs"],
-        "stays_reusable": ["kernel", "mlibc", "mlibc_compilation", "other_guest_packages"]
+        "stays_reusable": ["kernel", "mlibc", "mlibc_compilation", "native_ssh_archive", "other_guest_packages"]
+      }
+    },
+    {
+      "id": "native_ssh_archive",
+      "edit": "Native SSH archive sources",
+      "effect": {
+        "rebuilds": ["native_ssh_archive"],
+        "stays_reusable": ["guest_packages", "kernel", "mlibc"]
       }
     },
     {

@@ -23,6 +23,7 @@ REQUIRED_ROW_IDS = (
     "installed_uapi_bytes",
     "mlibc",
     "one_guest_package",
+    "native_ssh_archive",
     "rootfs_policy",
     "proof_lock_or_build_noise",
     "toolchain_or_module_bazel",
@@ -138,6 +139,17 @@ class InvalidationMatrixTests(unittest.TestCase):
         effect = accepted_effect(self.matrix, self.rows["one_guest_package"])
         self.assertEqual(set(effect["rebuilds"]), {"guest_package", "rootfs"})
         for token in ("kernel", "mlibc", "mlibc_compilation", "other_guest_packages"):
+            self.assertNotIn(token, effect["rebuilds"])
+            self.assertIn(token, effect["stays_reusable"])
+
+    def test_native_ssh_archive_invalidates_only_itself(self) -> None:
+        for row_id in ("kernel_or_tcti_uapi_unchanged", "mlibc", "one_guest_package"):
+            effect = accepted_effect(self.matrix, self.rows[row_id])
+            self.assertIn("native_ssh_archive", effect["stays_reusable"])
+            self.assertNotIn("native_ssh_archive", effect["rebuilds"])
+        effect = accepted_effect(self.matrix, self.rows["native_ssh_archive"])
+        self.assertEqual(effect["rebuilds"], ["native_ssh_archive"])
+        for token in ("guest_packages", "kernel", "mlibc"):
             self.assertNotIn(token, effect["rebuilds"])
             self.assertIn(token, effect["stays_reusable"])
 
