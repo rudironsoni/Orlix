@@ -12,36 +12,41 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
-final class TerminalTabManager {
+final package class TerminalTabManager {
     // MARK: - Session State
 
-    let sessionState: TerminalSessionStateStore
-    let connectionViewSelections: ConnectionViewSelectionStore
-    let presentationState = TerminalPresentationStateStore()
+    package let sessionState: TerminalSessionStateStore
+    package let connectionViewSelections: ConnectionViewSelectionStore
+    package let presentationState = TerminalPresentationStateStore()
 
     // MARK: - Terminal Registry
 
-    let terminalSurfaceStore: any TerminalSurfaceStoring
-    let transportCoordinator: TerminalTransportCoordinator
-    lazy var reconnectCoordinator = makeReconnectCoordinator()
+    package let terminalSurfaceStore: any TerminalSurfaceStoring
+    package let transportCoordinator: TerminalTransportCoordinator
+    lazy package var reconnectCoordinator = makeReconnectCoordinator()
     /// The current tab-open authorization attempt for each server.
     private var tabOpenAttemptsByServer: [UUID: UUID] = [:]
 
-    let titleStore = TerminalPaneTitleStore()
-    let richPasteRuntimeStore = TerminalRichPasteRuntimeStore()
+    package let titleStore = TerminalPaneTitleStore()
+    package let richPasteRuntimeStore = TerminalRichPasteRuntimeStore()
     #if os(iOS)
-    let keyboardCoordinator = TerminalKeyboardCoordinator()
+    package let keyboardCoordinator = TerminalKeyboardCoordinator()
     #endif
 
-    let remoteSessionCoordinator: TerminalRemoteSessionCoordinator
+    package let remoteSessionCoordinator: TerminalRemoteSessionCoordinator
 
-    let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
+    package let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "TerminalTabManager")
 
     private let dependencies: TerminalTabManagerDependencies
     private var stateCancellables: Set<AnyCancellable> = []
 
-    init(
+    package init(
         snapshotStore: any TerminalTabSnapshotStoring,
         dependencies: TerminalTabManagerDependencies,
         remoteSessionConfiguration: TerminalRemoteSessionConfiguration,
@@ -238,7 +243,7 @@ final class TerminalTabManager {
     }
 
     #if DEBUG
-    convenience init(
+    convenience package init(
         snapshotStore: any TerminalTabSnapshotStoring,
         networkReadinessPublisher: AnyPublisher<TerminalNetworkReadiness, Never>?,
         liveActivityRefresh: @escaping ([ConnectionState]) -> Void,
@@ -300,7 +305,7 @@ final class TerminalTabManager {
 
     // MARK: - Tab Management
 
-    func workingDirectoryCandidate(for serverId: UUID) -> String? {
+    package func workingDirectoryCandidate(for serverId: UUID) -> String? {
         if let selectedTab = sessionState.selectedTab(for: serverId),
            let directory = sessionState.paneState(for: selectedTab.focusedPaneId)?.workingDirectory {
             return directory
@@ -310,7 +315,7 @@ final class TerminalTabManager {
 
     /// Open a new tab for a server
     @discardableResult
-    func openTab(for server: Server) async throws -> TerminalTab {
+    package func openTab(for server: Server) async throws -> TerminalTab {
         if tabOpenAttemptsByServer[server.id] != nil {
             throw TerminalTabOpeningError.alreadyOpening
         }
@@ -351,7 +356,7 @@ final class TerminalTabManager {
     }
 
     /// Close a tab
-    func closeTab(_ tab: TerminalTab) {
+    package func closeTab(_ tab: TerminalTab) {
         closeTab(tab, intent: .explicitClose)
     }
 
@@ -379,7 +384,7 @@ final class TerminalTabManager {
     }
 
     /// Close all tabs for a server
-    func closeAllTabs(for serverId: UUID) {
+    package func closeAllTabs(for serverId: UUID) {
         tabOpenAttemptsByServer[serverId] = nil
         closeAllTabs(for: serverId, intent: .explicitClose)
     }
@@ -395,7 +400,7 @@ final class TerminalTabManager {
     }
 
     /// Disconnect all terminal tabs for a specific server.
-    func disconnectServer(_ serverId: UUID) {
+    package func disconnectServer(_ serverId: UUID) {
         tabOpenAttemptsByServer[serverId] = nil
         closeAllTabs(for: serverId, intent: .explicitServerDisconnect)
         sessionState.removeServer(serverId)
@@ -405,7 +410,7 @@ final class TerminalTabManager {
     }
 
     /// Disconnect every active terminal tab.
-    func disconnectAll() {
+    package func disconnectAll() {
         tabOpenAttemptsByServer.removeAll()
         for serverId in sessionState.serverIdsWithTabs {
             disconnectServer(serverId)
@@ -417,7 +422,7 @@ final class TerminalTabManager {
     /// Flushes reconnectable state and releases local runtime resources without
     /// deleting tabs or terminating remote resumable sessions.
     @discardableResult
-    func beginApplicationTermination() -> Task<Void, Never> {
+    package func beginApplicationTermination() -> Task<Void, Never> {
         let paneIds = sessionState.prepareForApplicationTermination()
             .union(transportCoordinator.ownedPaneIds)
         reconnectCoordinator.prepareForApplicationTermination()
@@ -506,14 +511,14 @@ final class TerminalTabManager {
         )
     }
 
-    func clearMoshFallbackDiagnostics(for paneId: UUID) {
+    package func clearMoshFallbackDiagnostics(for paneId: UUID) {
         sessionState.updatePane(paneId) { $0.transportState.clearFallbackDiagnostics() }
     }
 
     // MARK: - Split Management
 
     /// Split a pane horizontally (left | right)
-    func splitHorizontal(
+    package func splitHorizontal(
         tab: TerminalTab,
         paneId: UUID,
         hasProAccess: Bool
@@ -521,7 +526,7 @@ final class TerminalTabManager {
         splitRight(tab: tab, paneId: paneId, hasProAccess: hasProAccess)
     }
 
-    func splitRight(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+    package func splitRight(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
         splitPane(
             tab: tab,
             paneId: paneId,
@@ -530,7 +535,7 @@ final class TerminalTabManager {
         )
     }
 
-    func splitLeft(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+    package func splitLeft(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
         splitPane(
             tab: tab,
             paneId: paneId,
@@ -539,7 +544,7 @@ final class TerminalTabManager {
         )
     }
 
-    func splitDown(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+    package func splitDown(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
         splitPane(
             tab: tab,
             paneId: paneId,
@@ -548,7 +553,7 @@ final class TerminalTabManager {
         )
     }
 
-    func splitUp(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
+    package func splitUp(tab: TerminalTab, paneId: UUID, hasProAccess: Bool) -> UUID? {
         splitPane(
             tab: tab,
             paneId: paneId,
@@ -590,7 +595,7 @@ final class TerminalTabManager {
     }
 
     /// Close a pane within a tab
-    func closePane(tab: TerminalTab, paneId: UUID) {
+    package func closePane(tab: TerminalTab, paneId: UUID) {
         closePane(tab: tab, paneId: paneId, intent: .explicitClose)
     }
 
@@ -617,12 +622,12 @@ final class TerminalTabManager {
         }
     }
 
-    func focusPane(in tab: TerminalTab, paneId: UUID) {
+    package func focusPane(in tab: TerminalTab, paneId: UUID) {
         guard let updatedTab = sessionState.focusPane(in: tab, paneId: paneId) else { return }
         remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
-    func updateSplitRatio(
+    package func updateSplitRatio(
         in tab: TerminalTab,
         node: TerminalSplitNode,
         ratio: Double
@@ -635,12 +640,12 @@ final class TerminalTabManager {
         remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
-    func equalizeSplitLayout(in tab: TerminalTab) {
+    package func equalizeSplitLayout(in tab: TerminalTab) {
         guard let updatedTab = sessionState.equalizeSplitLayout(in: tab) else { return }
         remoteSessionCoordinator.updateFocus(for: updatedTab)
     }
 
-    func isSplitZoomed(in tab: TerminalTab) -> Bool {
+    package func isSplitZoomed(in tab: TerminalTab) -> Bool {
         guard presentationState.splitZoomedTabIds.contains(tab.id),
               let currentTab = sessionState.tab(id: tab.id, for: tab.serverId) else {
             return false
@@ -648,7 +653,7 @@ final class TerminalTabManager {
         return currentTab.hasSplits
     }
 
-    func canPerformSplitCommand(
+    package func canPerformSplitCommand(
         _ command: TerminalSplitCommand,
         in tab: TerminalTab
     ) -> Bool {
@@ -706,7 +711,7 @@ final class TerminalTabManager {
     }
 
     @discardableResult
-    func performSplitCommand(
+    package func performSplitCommand(
         _ command: TerminalSplitCommand,
         in tab: TerminalTab,
         hasProAccess: Bool
@@ -812,7 +817,7 @@ final class TerminalTabManager {
 
     // MARK: - Terminal Registry
 
-    func registerTerminalSurface(_ terminal: any TerminalSurface, for paneId: UUID, inputEligible: Bool? = nil) {
+    package func registerTerminalSurface(_ terminal: any TerminalSurface, for paneId: UUID, inputEligible: Bool? = nil) {
         #if os(iOS)
         terminal.setLifecycleCallbacks(TerminalSurfaceLifecycleCallbacks(
             windowAttachmentChanged: { [weak self, weak terminal] _ in
@@ -894,7 +899,7 @@ final class TerminalTabManager {
     /// Unregister a dismantled platform view only if it is still the pane's
     /// registered terminal. SwiftUI may create its replacement before the old
     /// view's deferred teardown runs during window reconstruction.
-    func unregisterTerminalSurface(
+    package func unregisterTerminalSurface(
         _ terminal: any TerminalSurface,
         for paneId: UUID
     ) {
@@ -946,7 +951,7 @@ final class TerminalTabManager {
     }
 
     /// DEV-228 compatibility for the excluded SSHSFTPAdapter default provider.
-    func sharedStatsClient(for serverId: UUID) -> SSHClient? {
+    package func sharedStatsClient(for serverId: UUID) -> SSHClient? {
         transportCoordinator.sharedStatsClient(for: serverId)
     }
 
@@ -999,7 +1004,7 @@ final class TerminalTabManager {
     #endif
 
     /// Update connection state for a pane
-    func updatePaneState(_ paneId: UUID, connectionState: ConnectionState) {
+    package func updatePaneState(_ paneId: UUID, connectionState: ConnectionState) {
         let clearedDisconnectReason = connectionState.isConnected
             && sessionState.paneState(for: paneId)?.disconnectReason != nil
         sessionState.updatePane(paneId, persist: clearedDisconnectReason) { paneState in
@@ -1035,7 +1040,7 @@ final class TerminalTabManager {
         reconnectCoordinator.connectionStateDidChange(for: paneId)
     }
 
-    func handleConnectionFailure(
+    package func handleConnectionFailure(
         for paneId: UUID,
         failure: TerminalConnectionFailure
     ) {
@@ -1046,7 +1051,7 @@ final class TerminalTabManager {
         updatePaneState(paneId, connectionState: .failed(failure))
     }
 
-    func handleShellEnd(for paneId: UUID, reason: TerminalShellEndReason) {
+    package func handleShellEnd(for paneId: UUID, reason: TerminalShellEndReason) {
         handleShellEnd(for: paneId, reason: reason, ownership: nil)
     }
 
@@ -1121,25 +1126,25 @@ final class TerminalTabManager {
         sessionState.hasConnectedPanes
     }
 
-    func updatePaneWorkingDirectory(_ paneId: UUID, rawDirectory: String) {
+    package func updatePaneWorkingDirectory(_ paneId: UUID, rawDirectory: String) {
         guard let normalized = normalizeWorkingDirectory(rawDirectory) else { return }
         setPaneWorkingDirectory(normalized, for: paneId)
     }
 
-    func updatePaneTitle(_ paneId: UUID, rawTitle: String) {
+    package func updatePaneTitle(_ paneId: UUID, rawTitle: String) {
         guard sessionState.containsPane(paneId) else { return }
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         setPaneTitle(title, for: paneId)
     }
 
-    func setPaneTitleOverride(_ rawTitle: String?, for paneId: UUID) {
+    package func setPaneTitleOverride(_ rawTitle: String?, for paneId: UUID) {
         guard sessionState.containsPane(paneId) else { return }
         let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         titleStore.setOverride(title.isEmpty ? nil : title, for: paneId)
     }
 
-    func handleTerminalZoom(_ action: TerminalZoomAction, for paneId: UUID) -> TerminalZoomResult? {
+    package func handleTerminalZoom(_ action: TerminalZoomAction, for paneId: UUID) -> TerminalZoomResult? {
         guard sessionState.containsPane(paneId) else { return nil }
 
         let currentOverrides = sessionState.presentationOverrides(for: paneId)
@@ -1162,9 +1167,9 @@ final class TerminalTabManager {
 }
 
 #if DEBUG
-extension TerminalTabManager {
+package extension TerminalTabManager {
     /// Resets manager state for deterministic integration tests.
-    func resetForTesting() async {
+    package func resetForTesting() async {
         let allPaneIds = sessionState.paneIds
             .union(transportCoordinator.ownedPaneIds)
         remoteSessionCoordinator.resetRuntimeState(for: allPaneIds)

@@ -1,15 +1,15 @@
 import Foundation
 
-nonisolated enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendable {
-    case disabled
-    case askOnce
-    case automatic
+nonisolated package enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendable {
+    package case disabled
+    package case askOnce
+    package case automatic
 
-    static let userDefaultsKey = "terminalImagePasteBehavior"
+    static package let userDefaultsKey = "terminalImagePasteBehavior"
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var settingsTitle: String {
+    package var settingsTitle: String {
         switch self {
         case .automatic:
             return String(localized: "Automatically")
@@ -21,22 +21,22 @@ nonisolated enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendabl
     }
 }
 
-nonisolated struct RichClipboardSettings: Sendable {
-    static let maximumImageBytes = 50 * 1024 * 1024
+nonisolated package struct RichClipboardSettings: Sendable {
+    static package let maximumImageBytes = 50 * 1024 * 1024
 
-    let imagePasteBehavior: ImagePasteBehavior
-    let maximumImageBytes: Int
+    package let imagePasteBehavior: ImagePasteBehavior
+    package let maximumImageBytes: Int
 
-    init(defaults: UserDefaults = .standard) {
+    package init(defaults: UserDefaults = .standard) {
         self.imagePasteBehavior = Self.resolvedImagePasteBehavior(defaults: defaults)
         self.maximumImageBytes = Self.maximumImageBytes
     }
 
-    var isImagePasteEnabled: Bool {
+    package var isImagePasteEnabled: Bool {
         imagePasteBehavior != .disabled
     }
 
-    static func resolvedImagePasteBehavior(defaults: UserDefaults = .standard) -> ImagePasteBehavior {
+    static package func resolvedImagePasteBehavior(defaults: UserDefaults = .standard) -> ImagePasteBehavior {
         if let rawValue = defaults.string(forKey: ImagePasteBehavior.userDefaultsKey),
            let behavior = ImagePasteBehavior(rawValue: rawValue) {
             return behavior
@@ -45,7 +45,7 @@ nonisolated struct RichClipboardSettings: Sendable {
         return .askOnce
     }
 
-    static func persistImagePasteBehavior(
+    static package func persistImagePasteBehavior(
         _ behavior: ImagePasteBehavior,
         defaults: UserDefaults = .standard
     ) {

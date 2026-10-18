@@ -1,3 +1,6 @@
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol StoreAnalyticsRecording {
     func record(_ event: StoreAnalyticsEvent)

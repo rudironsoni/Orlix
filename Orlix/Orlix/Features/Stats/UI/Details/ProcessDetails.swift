@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct ProcessesSheet: View {
     let processes: [ProcessInfo]
     let processCount: Int
@@ -490,7 +493,7 @@ private struct EmptyProcessListRow: View {
 }
 
 private extension ProcessInfo {
-    func matches(_ query: String) -> Bool {
+    package func matches(_ query: String) -> Bool {
         let fields = [
             name,
             command,

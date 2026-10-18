@@ -1,5 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 nonisolated enum WakeOnLANMACAddressResolutionError: Error, Equatable, Sendable {
     case unsupportedRemoteShell
     case addressNotFound
@@ -75,14 +80,14 @@ nonisolated enum RemoteWakeOnLANMACAddressDiscovery {
     """#
 }
 
-nonisolated struct SSHServerWakeOnLANMACAddressResolver: WakeOnLANMACAddressResolving {
+nonisolated package struct SSHServerWakeOnLANMACAddressResolver: WakeOnLANMACAddressResolving {
     private let connectionOperations: any ServerConnectionOperationRunning
 
-    init(connectionOperations: any ServerConnectionOperationRunning) {
+    package init(connectionOperations: any ServerConnectionOperationRunning) {
         self.connectionOperations = connectionOperations
     }
 
-    func resolveMACAddress(
+    package func resolveMACAddress(
         for server: Server,
         credentials: ServerCredentials
     ) async throws -> WakeOnLANMACAddress {

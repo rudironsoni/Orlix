@@ -1,9 +1,12 @@
 import Foundation
 
-nonisolated enum StatsPreferencesPendingCloudKitPayloadCodec {
-    static let entityType = "statsPreferences"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum StatsPreferencesPendingCloudKitPayloadCodec {
+    static package let entityType = "statsPreferences"
 
-    static func encode(_ preferences: StatsPreferences) throws -> PendingCloudKitPayloadEnvelope {
+    static package func encode(_ preferences: StatsPreferences) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
             entityType: entityType,
             entityKey: StatsPreferences.recordName,
@@ -13,7 +16,7 @@ nonisolated enum StatsPreferencesPendingCloudKitPayloadCodec {
         )
     }
 
-    static func decode(_ payload: PendingCloudKitPayloadEnvelope) throws -> StatsPreferences? {
+    static package func decode(_ payload: PendingCloudKitPayloadEnvelope) throws -> StatsPreferences? {
         guard let preferences = try payload.decode(
             StatsPreferences.self,
             entityType: entityType,
@@ -25,7 +28,7 @@ nonisolated enum StatsPreferencesPendingCloudKitPayloadCodec {
         return preferences
     }
 
-    static func migrateLegacy(
+    static package func migrateLegacy(
         kind: String,
         encodedValue: Data
     ) throws -> PendingCloudKitPayloadEnvelope? {
@@ -34,8 +37,8 @@ nonisolated enum StatsPreferencesPendingCloudKitPayloadCodec {
     }
 }
 
-nonisolated extension PendingCloudKitPayloadEnvelope {
-    static func statsPreferencesUpsert(_ preferences: StatsPreferences) throws -> Self {
+nonisolated package extension PendingCloudKitPayloadEnvelope {
+    static package func statsPreferencesUpsert(_ preferences: StatsPreferences) throws -> Self {
         try StatsPreferencesPendingCloudKitPayloadCodec.encode(preferences)
     }
 }

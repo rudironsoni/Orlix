@@ -1,6 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct TerminalKeyboardInputPlatformSettingsView: View {
     @AppStorage(TerminalDefaults.optionAsAltModeKey) private var optionAsAltModeRaw = TerminalOptionAsAltMode.none.rawValue
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var preserveTerminalSizeForKeyboard = false

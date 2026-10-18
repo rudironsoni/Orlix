@@ -8,8 +8,8 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    override func layoutSubviews() {
+package extension GhosttyTerminalView {
+    override package func layoutSubviews() {
         super.layoutSubviews()
         imeProxyTextView.frame = bounds
         nativeFindOverlay.frame = bounds
@@ -24,7 +24,7 @@ extension GhosttyTerminalView {
 
     }
 
-    override func didMoveToWindow() {
+    override package func didMoveToWindow() {
         super.didMoveToWindow()
 
         let isVisible = (window != nil)
@@ -46,7 +46,7 @@ extension GhosttyTerminalView {
     }
 
     // Use trait change registration API (iOS 17+) with fallback
-    func registerColorSchemeObserver() {
+    package func registerColorSchemeObserver() {
         if #available(iOS 17.0, *) {
             registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (view: GhosttyTerminalView, _: UITraitCollection) in
                 self?.updateColorScheme()

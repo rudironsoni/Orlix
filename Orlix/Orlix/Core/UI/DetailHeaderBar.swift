@@ -55,12 +55,12 @@ struct DetailHeaderBar<Leading: View, Trailing: View>: View {
     }
 }
 
-struct DetailCloseButton: View {
-    let action: () -> Void
-    var size: CGFloat = 16
-    var color: Color = .secondary
+package struct DetailCloseButton: View {
+    package let action: () -> Void
+    package var size: CGFloat = 16
+    package var color: Color = .secondary
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: size))

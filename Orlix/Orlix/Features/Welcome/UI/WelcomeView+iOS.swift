@@ -2,8 +2,8 @@
 import SwiftUI
 import UIKit
 
-extension WelcomeView {
-    var platformContent: some View {
+package extension WelcomeView {
+    package var platformContent: some View {
         WelcomeContent(
             hasSeenWelcome: $hasSeenWelcome,
             onCompleted: onCompleted

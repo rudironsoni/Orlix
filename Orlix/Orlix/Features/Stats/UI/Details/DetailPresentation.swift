@@ -6,7 +6,7 @@ enum StatsSheetClosePlacement {
     case trailing
 }
 
-enum StatsPresentationSize {
-    static let standard = CGSize(width: 720, height: 640)
-    static let large = CGSize(width: 900, height: 760)
+package enum StatsPresentationSize {
+    static package let standard = CGSize(width: 720, height: 640)
+    static package let large = CGSize(width: 900, height: 760)
 }

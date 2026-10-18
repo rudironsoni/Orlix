@@ -1,10 +1,13 @@
 import SwiftUI
 
-struct AppearanceLanguageSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct AppearanceLanguageSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("appLanguage") private var appLanguage = AppLanguage.system.rawValue
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Picker("Language", selection: $appLanguage) {

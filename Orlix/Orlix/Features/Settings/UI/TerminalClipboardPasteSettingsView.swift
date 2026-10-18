@@ -1,6 +1,9 @@
 import SwiftUI
 
-struct TerminalClipboardPasteSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalClipboardPasteSettingsView: View {
     @AppStorage("terminalCopyTrimTrailingWhitespace") private var copyTrimTrailingWhitespace = true
     @AppStorage("terminalCopyCollapseBlankLines") private var copyCollapseBlankLines = false
     @AppStorage("terminalCopyStripShellPrompts") private var copyStripShellPrompts = false
@@ -33,7 +36,7 @@ struct TerminalClipboardPasteSettingsView: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Toggle("Trim trailing whitespace", isOn: $copyTrimTrailingWhitespace)

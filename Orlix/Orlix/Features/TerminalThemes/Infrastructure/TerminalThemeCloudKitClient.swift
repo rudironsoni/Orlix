@@ -1,8 +1,11 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
+final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
     TerminalThemeCloudMutationClient {
     private let transport: any CloudKitRecordTransport
     private let logger = Logger(

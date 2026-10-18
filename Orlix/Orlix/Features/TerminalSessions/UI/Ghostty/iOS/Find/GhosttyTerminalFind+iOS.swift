@@ -9,8 +9,8 @@
 import UIKit
 
 @available(iOS 16.0, *)
-extension GhosttyTerminalView: UIFindInteractionDelegate {
-    func findInteraction(_ interaction: UIFindInteraction, sessionFor view: UIView) -> UIFindSession? {
+package extension GhosttyTerminalView: UIFindInteractionDelegate {
+    package func findInteraction(_ interaction: UIFindInteraction, sessionFor view: UIView) -> UIFindSession? {
         guard view === self, usesNativeTouchSelection else { return nil }
         refreshNativeSelectionSnapshot()
         if let nativeFindSession {
@@ -37,7 +37,7 @@ extension GhosttyTerminalView: UIFindInteractionDelegate {
         return session
     }
 
-    func findInteraction(_ interaction: UIFindInteraction, didBegin session: UIFindSession) {
+    package func findInteraction(_ interaction: UIFindInteraction, didBegin session: UIFindSession) {
         if !findNavigatorLifecycle.isActive {
             findNavigatorLifecycle.begin(restoreTerminalFocus: isTerminalTextInputActive)
         }
@@ -46,20 +46,20 @@ extension GhosttyTerminalView: UIFindInteractionDelegate {
         notifyFindNavigatorVisibilityChange()
     }
 
-    func findInteraction(_ interaction: UIFindInteraction, didEnd session: UIFindSession) {
+    package func findInteraction(_ interaction: UIFindInteraction, didEnd session: UIFindSession) {
         completeFindNavigatorDismissal()
     }
 }
 
 @available(iOS 16.0, *)
-extension GhosttyTerminalView: UITextSearching {
-    var selectedTextRange: UITextRange? {
+package extension GhosttyTerminalView: UITextSearching {
+    package var selectedTextRange: UITextRange? {
         imeProxyTextView.selectedTextRange
     }
 
-    typealias DocumentIdentifier = String
+    package typealias DocumentIdentifier = String
 
-    func compare(_ foundRange: UITextRange, toRange: UITextRange, document: String?) -> ComparisonResult {
+    package func compare(_ foundRange: UITextRange, toRange: UITextRange, document: String?) -> ComparisonResult {
         guard let lhs = nativeSelectionSnapshot.nativeRange(from: foundRange),
               let rhs = nativeSelectionSnapshot.nativeRange(from: toRange) else {
             return .orderedSame
@@ -71,7 +71,7 @@ extension GhosttyTerminalView: UITextSearching {
         return .orderedSame
     }
 
-    func performTextSearch(queryString: String, options: UITextSearchOptions, resultAggregator: UITextSearchAggregator<String>) {
+    package func performTextSearch(queryString: String, options: UITextSearchOptions, resultAggregator: UITextSearchAggregator<String>) {
         refreshNativeSelectionSnapshot()
         nativeFindDecorations.removeAll()
 
@@ -83,7 +83,7 @@ extension GhosttyTerminalView: UITextSearching {
         resultAggregator.finishedSearching()
     }
 
-    func decorate(foundTextRange: UITextRange, document: String?, usingStyle style: UITextSearchFoundTextStyle) {
+    package func decorate(foundTextRange: UITextRange, document: String?, usingStyle style: UITextSearchFoundTextStyle) {
         guard let range = nativeSelectionSnapshot.nativeRange(from: foundTextRange) else { return }
         nativeFindDecorations.removeAll { NSEqualRanges($0.range, range) }
         let decorationStyle: TerminalNativeFindDecorationStyle = style == .highlighted
@@ -92,29 +92,29 @@ extension GhosttyTerminalView: UITextSearching {
         nativeFindDecorations.append(TerminalNativeFindDecoration(range: range, style: decorationStyle))
     }
 
-    func clearAllDecoratedFoundText() {
+    package func clearAllDecoratedFoundText() {
         nativeFindDecorations.removeAll()
     }
 
-    func willHighlight(foundTextRange: UITextRange, document: String?) {
+    package func willHighlight(foundTextRange: UITextRange, document: String?) {
         requestRender()
     }
 
-    func scrollRangeToVisible(_ range: UITextRange, inDocument document: String?) {
+    package func scrollRangeToVisible(_ range: UITextRange, inDocument document: String?) {
         requestRender()
     }
 
-    var selectedTextSearchDocument: String? {
+    package var selectedTextSearchDocument: String? {
         nativeFindDocumentIdentifier
     }
 
-    func compare(document: String, toDocument other: String) -> ComparisonResult {
+    package func compare(document: String, toDocument other: String) -> ComparisonResult {
         document.compare(other)
     }
 }
 
-extension GhosttyTerminalView {
-    func setupNativeFindInteraction() {
+package extension GhosttyTerminalView {
+    package func setupNativeFindInteraction() {
         guard #available(iOS 16.0, *), nativeFindInteraction == nil else { return }
         let interaction = UIFindInteraction(sessionDelegate: self)
         interaction.optionsMenuProvider = { _ in nil }
@@ -122,7 +122,7 @@ extension GhosttyTerminalView {
         nativeFindInteraction = interaction
     }
 
-    func updateNativeFindOverlay() {
+    package func updateNativeFindOverlay() {
         guard usesNativeTouchSelection else { return }
         let highlights = nativeFindDecorations.flatMap { decoration in
             nativeSelectionSnapshot.selectionRects(for: decoration.range).map {
@@ -158,7 +158,7 @@ extension GhosttyTerminalView {
     }
 
     @available(iOS 16.0, *)
-    func completeFindNavigatorDismissal() {
+    package func completeFindNavigatorDismissal() {
         guard findNavigatorLifecycle.isActive else { return }
         logKeyboardLifecycle("find.end.begin")
         let shouldRestoreTerminalFocus = endFindNavigatorLifecycle()
@@ -185,7 +185,7 @@ extension GhosttyTerminalView {
     }
 
     @available(iOS 16.0, *)
-    func presentFindNavigator(prefillingSelectedText: Bool = false) {
+    package func presentFindNavigator(prefillingSelectedText: Bool = false) {
         guard let nativeFindInteraction else { return }
         beginFindNavigatorPresentation(restoreTerminalFocus: isTerminalTextInputActive)
         refreshNativeSelectionSnapshot()
@@ -197,14 +197,14 @@ extension GhosttyTerminalView {
         nativeFindInteraction.presentFindNavigator(showingReplace: false)
     }
 
-    func showFindNavigator(prefillingSelectedText: Bool = false) {
+    package func showFindNavigator(prefillingSelectedText: Bool = false) {
         guard usesNativeTouchSelection else { return }
         if #available(iOS 16.0, *) {
             presentFindNavigator(prefillingSelectedText: prefillingSelectedText)
         }
     }
 
-    func dismissFindNavigator() {
+    package func dismissFindNavigator() {
         guard #available(iOS 16.0, *), isFindNavigatorActive else { return }
         if nativeFindInteraction?.isFindNavigatorVisible == true {
             nativeFindInteraction?.dismissFindNavigator()
@@ -215,7 +215,7 @@ extension GhosttyTerminalView {
 
     @MainActor
     @discardableResult
-    func performGhosttyFindQuery(
+    package func performGhosttyFindQuery(
         _ query: String,
         keepNavigatorVisibleOnSearchEnd: Bool = false
     ) -> Bool {
@@ -240,7 +240,7 @@ extension GhosttyTerminalView {
     }
 
     @MainActor
-    func navigateGhosttyFind(_ direction: UITextStorageDirection) {
+    package func navigateGhosttyFind(_ direction: UITextStorageDirection) {
         guard let surface else { return }
         let action = direction == .backward ? "navigate_search:previous" : "navigate_search:next"
         _ = surface.perform(action: action)
@@ -258,12 +258,12 @@ extension GhosttyTerminalView {
     }
 
     @MainActor
-    func invalidateGhosttyFindWithoutClosingNavigator() {
+    package func invalidateGhosttyFindWithoutClosingNavigator() {
         performGhosttyFindQuery("", keepNavigatorVisibleOnSearchEnd: true)
     }
 
     @MainActor
-    func applyStoredGhosttyFindResultsToNativeSession() {
+    package func applyStoredGhosttyFindResultsToNativeSession() {
         guard #available(iOS 16.0, *), let nativeFindSession else { return }
         if nativeFindSession.updateReportedResults(
             total: ghosttyFindReportedTotal,
@@ -273,7 +273,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleGhosttySearchStarted(needle: String) {
+    package func handleGhosttySearchStarted(needle: String) {
         guard usesNativeTouchSelection else { return }
         ghosttyFindReportedTotal = 0
         ghosttyFindReportedSelectedIndex = nil
@@ -288,7 +288,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleGhosttySearchEnded() {
+    package func handleGhosttySearchEnded() {
         guard usesNativeTouchSelection else { return }
         ghosttyFindReportedTotal = 0
         ghosttyFindReportedSelectedIndex = nil
@@ -306,7 +306,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleGhosttySearchTotalChange(_ total: Int?) {
+    package func handleGhosttySearchTotalChange(_ total: Int?) {
         guard usesNativeTouchSelection else { return }
         ghosttyFindReportedTotal = total
         if #available(iOS 16.0, *) {
@@ -314,7 +314,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleGhosttySearchSelectedChange(_ selected: Int?) {
+    package func handleGhosttySearchSelectedChange(_ selected: Int?) {
         guard usesNativeTouchSelection else { return }
         ghosttyFindReportedSelectedIndex = selected
         if #available(iOS 16.0, *) {

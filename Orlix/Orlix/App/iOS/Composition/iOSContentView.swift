@@ -6,21 +6,28 @@
 import SwiftUI
 import StoreKit
 #if os(iOS)
-struct iOSContentView: View {
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
+package struct iOSContentView: View {
     /// Keeps one tab-open operation alive if its navigation route is popped and retried.
     private struct PendingConnection {
         let operationID: UUID
         let task: Task<TerminalTab, Error>
     }
 
-    let fileTabs: RemoteFileTabManager
-    let fileBrowser: RemoteFileBrowserStore
-    let statsDependencies: ServerStatsScreenDependencies
-    let terminalSecurityActions: TerminalSecurityActions
-    let serverFormDependencies: ServerFormDependencies
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let voiceInputRuntimeStore: VoiceInputRuntimeStore
-    let analyticsOptOutAction: AnalyticsOptOutAction
+    package let fileTabs: RemoteFileTabManager
+    package let fileBrowser: RemoteFileBrowserStore
+    package let statsDependencies: ServerStatsScreenDependencies
+    package let terminalSecurityActions: TerminalSecurityActions
+    package let serverFormDependencies: ServerFormDependencies
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    package let analyticsOptOutAction: AnalyticsOptOutAction
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     private let serverWakeCoordinator: ServerWakeCoordinator
@@ -35,7 +42,7 @@ struct iOSContentView: View {
     @State private var showingTabLimitAlert = false
     @State private var lockedServerName: String?
 
-    init(
+    package init(
         serverManager: ServerManager,
         serverWakeCoordinator: ServerWakeCoordinator,
         engagementTracker: EngagementTracker,
@@ -168,7 +175,7 @@ struct iOSContentView: View {
         SKStoreReviewController.requestReview(in: scene)
     }
 
-    var body: some View {
+    package var body: some View {
         ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
             navigationContent
         }

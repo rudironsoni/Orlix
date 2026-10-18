@@ -1,21 +1,21 @@
 import Foundation
 
-nonisolated enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
-    case owner
-    case group
-    case everyone
+nonisolated package enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
+    package case owner
+    package case group
+    package case everyone
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
-nonisolated enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
-    case read
-    case write
-    case execute
+nonisolated package enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
+    package case read
+    package case write
+    package case execute
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    func bit(for audience: RemoteFilePermissionAudience) -> UInt32 {
+    package func bit(for audience: RemoteFilePermissionAudience) -> UInt32 {
         switch (audience, self) {
         case (.owner, .read):
             return UInt32(LIBSSH2_SFTP_S_IRUSR)
@@ -39,35 +39,35 @@ nonisolated enum RemoteFilePermissionCapability: String, CaseIterable, Identifia
     }
 }
 
-nonisolated struct RemoteFilePermissionDraft: Equatable, Sendable {
+nonisolated package struct RemoteFilePermissionDraft: Equatable, Sendable {
     private var bits: UInt32
 
-    init(accessBits: UInt32) {
+    package init(accessBits: UInt32) {
         bits = accessBits & 0o777
     }
 
-    init(entry: RemoteFileEntry) {
+    package init(entry: RemoteFileEntry) {
         self.init(accessBits: entry.permissions ?? 0)
     }
 
-    var accessBits: UInt32 {
+    package var accessBits: UInt32 {
         bits & 0o777
     }
 
-    var octalSummary: String {
+    package var octalSummary: String {
         let octal = String(accessBits, radix: 8)
         return String(repeating: "0", count: max(0, 3 - octal.count)) + octal
     }
 
-    var symbolicSummary: String {
+    package var symbolicSummary: String {
         RemoteFileEntry.symbolicPermissions(for: accessBits)
     }
 
-    func isEnabled(_ capability: RemoteFilePermissionCapability, for audience: RemoteFilePermissionAudience) -> Bool {
+    package func isEnabled(_ capability: RemoteFilePermissionCapability, for audience: RemoteFilePermissionAudience) -> Bool {
         accessBits & capability.bit(for: audience) != 0
     }
 
-    mutating func set(
+    mutating package func set(
         _ isEnabled: Bool,
         capability: RemoteFilePermissionCapability,
         for audience: RemoteFilePermissionAudience

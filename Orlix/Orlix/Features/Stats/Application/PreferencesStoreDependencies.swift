@@ -1,12 +1,15 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum StatsPreferencesCloudClientError: Error, Equatable, Sendable {
     case conflictRetryLimitReached
 }
 
 @MainActor
-protocol StatsPreferencesCloudClient: AnyObject {
-    func syncStatsPreferences(
+package protocol StatsPreferencesCloudClient: AnyObject {
+    package func syncStatsPreferences(
         _ localPreferences: StatsPreferences
     ) async throws -> StatsPreferences
 }

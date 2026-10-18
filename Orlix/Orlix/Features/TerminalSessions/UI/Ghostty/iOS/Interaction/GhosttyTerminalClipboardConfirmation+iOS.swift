@@ -8,8 +8,11 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func handleClipboardWrite(_ text: String, action: TerminalClipboardWriteAction) {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package func handleClipboardWrite(_ text: String, action: TerminalClipboardWriteAction) {
         switch action {
         case .writeImmediately:
             Clipboard.copy(text)
@@ -22,7 +25,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleClipboardConfirmation(
+    package func handleClipboardConfirmation(
         _ text: String?,
         availableMIMETypes: [String],
         state: UnsafeMutableRawPointer,
@@ -109,7 +112,7 @@ extension GhosttyTerminalView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
     }
 
-    func cancelClipboardConfirmations() {
+    package func cancelClipboardConfirmations() {
         clipboardConfirmationRetryWorkItem?.cancel()
         clipboardConfirmationRetryWorkItem = nil
         clipboardConfirmationRetryCount = 0

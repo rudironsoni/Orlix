@@ -7,15 +7,18 @@
 
 #if os(iOS)
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Keyboard Accessory View
 
-extension GhosttyTerminalView {
-    var shouldHideKeyboardAccessoryBar: Bool {
+package extension GhosttyTerminalView {
+    package var shouldHideKeyboardAccessoryBar: Bool {
         terminalInputConfiguration != .systemWithAccessory
     }
 
-    func resolvedInputAccessoryView() -> UIView? {
+    package func resolvedInputAccessoryView() -> UIView? {
         guard !shouldHideKeyboardAccessoryBar else {
             return nil
         }
@@ -42,13 +45,13 @@ extension GhosttyTerminalView {
         return keyboardToolbar
     }
 
-    func applyTerminalAccessoryInputSnapshot(_ snapshot: TerminalAccessoryInputSnapshot) {
+    package func applyTerminalAccessoryInputSnapshot(_ snapshot: TerminalAccessoryInputSnapshot) {
         guard snapshot != terminalAccessoryInputSnapshot else { return }
         terminalAccessoryInputSnapshot = snapshot
         keyboardToolbar?.apply(snapshot)
     }
 
-    func refreshTerminalInputAccessoryAppearance() {
+    package func refreshTerminalInputAccessoryAppearance() {
         keyboardToolbar?.refreshAppearance()
     }
 

@@ -3,11 +3,14 @@ import Darwin
 import os.log
 import MoshCore
 import MoshBootstrap
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - SSH Client using libssh2
 
-actor SSHClient {
-    struct ConnectingState {
+package actor SSHClient {
+    package struct ConnectingState {
         let id: UUID
         let key: String
         let task: Task<SSHSession, Error>
@@ -15,7 +18,7 @@ actor SSHClient {
         let startupTrace: SSHStartupTrace
     }
 
-    struct ConnectedState {
+    package struct ConnectedState {
         let id: UUID
         let key: String
         var server: Server
@@ -25,18 +28,18 @@ actor SSHClient {
         let startupTrace: SSHStartupTrace
     }
 
-    struct AbortedState {
+    package struct AbortedState {
         let operationID: UUID?
         let session: SSHSession?
         let connectTask: Task<SSHSession, Error>?
     }
 
-    struct DisconnectOperation {
+    package struct DisconnectOperation {
         let id: UUID
         let task: Task<Void, Never>
     }
 
-    enum Lifecycle {
+    package enum Lifecycle {
         case disconnected
         case connecting(ConnectingState)
         case connected(ConnectedState)
@@ -45,23 +48,23 @@ actor SSHClient {
         case aborted(AbortedState)
     }
 
-    let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "SSH")
+    package let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "SSH")
     private var keepAliveTask: Task<Void, Never>?
-    var lifecycle: Lifecycle = .disconnected
-    var moshRuntimeGeneration = UUID()
-    var moshShells: [UUID: MoshShellRuntime] = [:]
-    var pendingMoshServerLeases: [UUID: RemoteMoshServerLease] = [:]
+    package var lifecycle: Lifecycle = .disconnected
+    package var moshRuntimeGeneration = UUID()
+    package var moshShells: [UUID: MoshShellRuntime] = [:]
+    package var pendingMoshServerLeases: [UUID: RemoteMoshServerLease] = [:]
     private let cloudflareTransportManager = CloudflareTransportManager()
-    let moshStartupTimeout: Duration = .seconds(8)
+    package let moshStartupTimeout: Duration = .seconds(8)
     private let connectTimeout: Duration
     private let disconnectTimeout: Duration = .seconds(4)
-    let execTimeout: Duration = .seconds(20)
-    let uploadTimeout: Duration = .seconds(60)
+    package let execTimeout: Duration = .seconds(20)
+    package let uploadTimeout: Duration = .seconds(60)
     private let runtimeSettings: SSHRuntimeSettings
     private let hostKeyVerifier: any SSHHostKeyVerifying
-    let moshBootstrap: any SSHMoshBootstrapping
+    package let moshBootstrap: any SSHMoshBootstrapping
 
-    init(
+    package init(
         connectTimeout: Duration = .seconds(30),
         runtimeSettings: SSHRuntimeSettings,
         hostKeyVerifier: any SSHHostKeyVerifying,
@@ -74,17 +77,17 @@ actor SSHClient {
     }
 
     #if DEBUG
-    func runtimeSettingsForTesting() -> SSHRuntimeSettings {
+    package func runtimeSettingsForTesting() -> SSHRuntimeSettings {
         runtimeSettings
     }
 
-    func hostKeyDecisionForTesting(
+    package func hostKeyDecisionForTesting(
         _ candidate: SSHHostKeyCandidate
     ) -> SSHHostKeyVerificationDecision {
         hostKeyVerifier.verify(candidate)
     }
 
-    func bootstrapMoshForTesting(
+    package func bootstrapMoshForTesting(
         execute: @escaping SSHMoshCommandExecutor
     ) async throws -> MoshServerConnectInfo {
         try await moshBootstrap.bootstrapConnectInfo(
@@ -95,7 +98,7 @@ actor SSHClient {
         )
     }
 
-    func terminateMoshForTesting(
+    package func terminateMoshForTesting(
         pid: Int32,
         execute: @escaping SSHMoshCommandExecutor
     ) async {
@@ -104,7 +107,7 @@ actor SSHClient {
     #endif
 
     /// Check if the client has been aborted
-    var isAborted: Bool {
+    package var isAborted: Bool {
         switch lifecycle {
         case .aborted, .disconnecting:
             return true
@@ -113,7 +116,7 @@ actor SSHClient {
         }
     }
 
-    var lifecyclePhase: LifecyclePhase {
+    package var lifecyclePhase: LifecyclePhase {
         switch lifecycle {
         case .disconnected:
             return .disconnected
@@ -130,17 +133,17 @@ actor SSHClient {
         }
     }
 
-    var session: SSHSession? {
+    package var session: SSHSession? {
         guard case .connected(let state) = lifecycle else { return nil }
         return state.session
     }
 
-    var connectedServer: Server? {
+    package var connectedServer: Server? {
         guard case .connected(let state) = lifecycle else { return nil }
         return state.server
     }
 
-    var startupTrace: SSHStartupTrace? {
+    package var startupTrace: SSHStartupTrace? {
         switch lifecycle {
         case .connecting(let state):
             return state.startupTrace
@@ -151,7 +154,7 @@ actor SSHClient {
         }
     }
 
-    func probeLiveTransport(
+    package func probeLiveTransport(
         shellId: UUID,
         transport: ShellTransport
     ) async -> Bool {
@@ -178,7 +181,7 @@ actor SSHClient {
     }
 
     /// Interrupts an active or pending transport before bounded cleanup starts.
-    func abortConnection() {
+    package func abortConnection() {
         moshRuntimeGeneration = UUID()
         switch lifecycle {
         case .connecting(let state):
@@ -207,7 +210,7 @@ actor SSHClient {
 
     // MARK: - Connection
 
-    func connect(to server: Server, credentials: ServerCredentials) async throws -> SSHSession {
+    package func connect(to server: Server, credentials: ServerCredentials) async throws -> SSHSession {
         let key = connectionKey(for: server)
 
         connectionPreparation: while true {
@@ -482,7 +485,7 @@ actor SSHClient {
         }
     }
 
-    func disconnect() async {
+    package func disconnect() async {
         if case .disconnecting(let operation) = lifecycle {
             await operation.task.value
             return
@@ -578,7 +581,7 @@ actor SSHClient {
         )
     }
 
-    nonisolated static func cleanupPendingMoshServerLeases(
+    nonisolated static package func cleanupPendingMoshServerLeases(
         _ leases: [RemoteMoshServerLease]
     ) async -> Bool {
         guard !leases.isEmpty else { return true }
@@ -648,13 +651,13 @@ actor SSHClient {
 
     // MARK: - State
 
-    var isConnected: Bool {
+    package var isConnected: Bool {
         get async {
             await session?.isConnected ?? false
         }
     }
 
-    nonisolated static func runWithDeadline<T: Sendable>(
+    nonisolated static package func runWithDeadline<T: Sendable>(
         _ timeout: Duration,
         onTimeout: @escaping @Sendable () -> Void = {},
         operation: @escaping @Sendable () async throws -> T
@@ -672,7 +675,7 @@ actor SSHClient {
 
     /// Allows slow large transfers while keeping one operation bounded.
     /// The timeout assumes at least 64 KiB/s and is capped at 24 hours.
-    nonisolated static func streamTransferTimeout(for byteCount: UInt64) -> Duration {
+    nonisolated static package func streamTransferTimeout(for byteCount: UInt64) -> Duration {
         let secondsForBytes = byteCount / UInt64(64 * 1_024)
         let secondsWithSetup = secondsForBytes.addingReportingOverflow(120)
         let requestedSeconds = secondsWithSetup.overflow ? UInt64.max : secondsWithSetup.partialValue

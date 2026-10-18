@@ -1,8 +1,13 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
-enum TerminalRemoteSessionLiveComposition {
-    static func makeConfiguration(
+package enum TerminalRemoteSessionLiveComposition {
+    static package func makeConfiguration(
         defaults: UserDefaults,
         serverManager: ServerManager,
         deviceID: String,
@@ -68,7 +73,7 @@ enum TerminalRemoteSessionLiveComposition {
         }
     }
 
-    nonisolated static func themeStyle(for storedName: String?) -> RemoteSessionThemeStyle {
+    nonisolated static package func themeStyle(for storedName: String?) -> RemoteSessionThemeStyle {
         let name = (try? TerminalThemeValidator.validateAndNormalizeThemeName(
             storedName ?? "Orlix Dark"
         )) ?? "Orlix Dark"
@@ -79,4 +84,4 @@ enum TerminalRemoteSessionLiveComposition {
     }
 }
 
-extension RemoteSessionClient: TerminalRemoteSessionServicing {}
+package extension RemoteSessionClient: TerminalRemoteSessionServicing {}

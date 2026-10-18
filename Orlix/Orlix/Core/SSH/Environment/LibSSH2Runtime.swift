@@ -1,4 +1,7 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// libssh2 has process-global lifecycle (`libssh2_init`/`libssh2_exit`).
 /// Initialize once and keep alive for the app lifetime to avoid tearing down

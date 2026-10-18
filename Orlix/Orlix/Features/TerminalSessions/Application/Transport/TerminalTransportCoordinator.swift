@@ -1,6 +1,10 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum TerminalTransportEndOwnership: Sendable {
     case ssh(client: SSHClient, shellId: UUID)
     case eternalTerminal(runtimeToken: UUID)

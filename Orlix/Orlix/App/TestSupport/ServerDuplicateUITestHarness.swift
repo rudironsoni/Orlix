@@ -1,15 +1,19 @@
 #if DEBUG
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 @MainActor
-struct ServerDuplicateUITestHarness: View {
+package struct ServerDuplicateUITestHarness: View {
     private static let fallbackWorkspaceID = UUID(
         uuidString: "9B678329-F5FC-4A81-971C-CFCAC3261656"
     )!
 
-    let serverManager: ServerManager
-    let dependencies: ServerFormDependencies
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let serverManager: ServerManager
+    package let dependencies: ServerFormDependencies
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
 
     @State private var formIntent: ServerFormIntent?
     @State private var wakeActionCount = 0
@@ -31,7 +35,7 @@ struct ServerDuplicateUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             List {
                 #if os(iOS)

@@ -1,6 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct CustomFontLibraryView: View {
     enum Presentation {
         case importer

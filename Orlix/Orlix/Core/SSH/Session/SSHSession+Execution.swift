@@ -1,6 +1,9 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension SSHSession {
     func failAllExecRequests(error: Error) {
         let requests = execRequests

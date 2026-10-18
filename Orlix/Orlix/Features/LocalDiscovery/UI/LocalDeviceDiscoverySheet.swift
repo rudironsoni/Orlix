@@ -5,23 +5,26 @@ import UIKit
 import AppKit
 #endif
 
-typealias LocalSSHDiscoveryManagerFactory = @MainActor () -> LocalSSHDiscoveryManager
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package typealias LocalSSHDiscoveryManagerFactory = @MainActor () -> LocalSSHDiscoveryManager
 
 @MainActor
-struct LocalDeviceDiscoveryPresentation: Identifiable {
-    let manager: LocalSSHDiscoveryManager
+package struct LocalDeviceDiscoveryPresentation: Identifiable {
+    package let manager: LocalSSHDiscoveryManager
 
-    init(makeManager: LocalSSHDiscoveryManagerFactory) {
+    package init(makeManager: LocalSSHDiscoveryManagerFactory) {
         manager = makeManager()
     }
 
-    var id: ObjectIdentifier {
+    package var id: ObjectIdentifier {
         ObjectIdentifier(manager)
     }
 }
 
-struct LocalDeviceDiscoverySheet: View {
-    let onUse: (DiscoveredSSHHost) -> Void
+package struct LocalDeviceDiscoverySheet: View {
+    package let onUse: (DiscoveredSSHHost) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var manager: LocalSSHDiscoveryManager
@@ -30,7 +33,7 @@ struct LocalDeviceDiscoverySheet: View {
     @State private var hoveredHostID: String?
     #endif
 
-    init(
+    package init(
         manager: LocalSSHDiscoveryManager,
         onUse: @escaping (DiscoveredSSHHost) -> Void
     ) {
@@ -38,7 +41,7 @@ struct LocalDeviceDiscoverySheet: View {
         _manager = StateObject(wrappedValue: manager)
     }
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         NavigationView {
             Form {

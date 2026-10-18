@@ -3,6 +3,9 @@ import Combine
 import AVFoundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct AudioPCMBufferSnapshot {
     let format: AVAudioFormat
     let frameLength: AVAudioFrameCount

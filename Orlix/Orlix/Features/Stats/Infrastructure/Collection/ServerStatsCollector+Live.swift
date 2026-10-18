@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 private struct LiveServerStatsTarget: ServerStatsCollectionTarget {
     let server: Server
@@ -31,8 +35,8 @@ final class LiveServerStatsApprovalReference: ServerStatsApprovalReference {
 }
 
 @MainActor
-extension ServerStatsCollectorDependencies {
-    static func live(
+package extension ServerStatsCollectorDependencies {
+    static package func live(
         keychainManager: KeychainManager,
         knownHostsManager: KnownHostsManager,
         connectionOperations: SSHConnectionOperationService,
@@ -65,12 +69,12 @@ extension ServerStatsCollectorDependencies {
 }
 
 @MainActor
-extension ServerStatsCollector {
-    var securityApproval: ServerSecurityApprovalRequest? {
+package extension ServerStatsCollector {
+    package var securityApproval: ServerSecurityApprovalRequest? {
         (approvalReferenceForPresentation as? LiveServerStatsApprovalReference)?.rawValue
     }
 
-    func startCollecting(
+    package func startCollecting(
         for server: Server,
         using sharedClient: SSHClient? = nil,
         collectDocker: Bool = false
@@ -82,7 +86,7 @@ extension ServerStatsCollector {
         )
     }
 
-    func resolveSecurityApproval(
+    package func resolveSecurityApproval(
         _ request: ServerSecurityApprovalRequest,
         error: ServerSecurityApprovalError? = nil
     ) {

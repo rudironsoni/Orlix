@@ -2,8 +2,11 @@ import Combine
 import Foundation
 import os.log
 
-extension RemoteFileBrowserStore {
-    func loadPreview(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension RemoteFileBrowserStore {
+    package func loadPreview(
         for entry: RemoteFileEntry,
         in tab: RemoteFileTab,
         server: Server,
@@ -167,14 +170,14 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func clearViewer(for tab: RemoteFileTab) {
+    package func clearViewer(for tab: RemoteFileTab) {
         cleanupPreviewArtifact(for: state(for: tab).viewerPayload)
         updateState(for: tab) { state in
             state.viewerPhase = .idle
         }
     }
 
-    func saveTextPreview(
+    package func saveTextPreview(
         _ text: String,
         for entry: RemoteFileEntry,
         in tab: RemoteFileTab,
@@ -214,19 +217,19 @@ extension RemoteFileBrowserStore {
         }
     }
 
-    func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
+    package func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
         try temporaryStorage.makePreviewFileURL(for: entry)
     }
 
-    func cleanupPreviewArtifact(for payload: RemoteFileViewerPayload?) {
+    package func cleanupPreviewArtifact(for payload: RemoteFileViewerPayload?) {
         temporaryStorage.removePreviewArtifact(for: payload)
     }
 
-    func validateDownloadedPreview(at url: URL, kind: RemoteFilePreviewKind) async -> Bool {
+    package func validateDownloadedPreview(at url: URL, kind: RemoteFilePreviewKind) async -> Bool {
         await previewLoader.validateDownloadedPreview(at: url, kind: kind, logger: logger)
     }
 
-    func validatedPreviewURL(at url: URL, passedValidation: Bool) -> URL? {
+    package func validatedPreviewURL(at url: URL, passedValidation: Bool) -> URL? {
         guard passedValidation else {
             temporaryStorage.removeItem(at: url)
             return nil

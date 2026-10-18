@@ -1,7 +1,10 @@
 import Foundation
 
-extension Ghostty {
-    struct RuntimeConfiguration: Equatable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension Ghostty {
+    package struct RuntimeConfiguration: Equatable {
         let fontSelection: TerminalFontRuntimeSelection
         let fontSize: Double
         let contentPadding: TerminalContentPadding

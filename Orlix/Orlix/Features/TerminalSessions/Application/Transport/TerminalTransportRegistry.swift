@@ -1,4 +1,7 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 
 /// Owns the live transport identities and tasks for terminal panes.
 @MainActor

@@ -1,7 +1,10 @@
 import Foundation
 
-nonisolated extension TerminalSnippetSendMode {
-    var title: String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package extension TerminalSnippetSendMode {
+    package var title: String {
         switch self {
         case .insert:
             return String(localized: "Insert")
@@ -11,8 +14,8 @@ nonisolated extension TerminalSnippetSendMode {
     }
 }
 
-nonisolated extension TerminalAccessoryCustomActionKind {
-    var title: String {
+nonisolated package extension TerminalAccessoryCustomActionKind {
+    package var title: String {
         switch self {
         case .command:
             return String(localized: "Command")
@@ -22,8 +25,8 @@ nonisolated extension TerminalAccessoryCustomActionKind {
     }
 }
 
-nonisolated extension TerminalAccessoryShortcutModifiers {
-    var displayParts: [String] {
+nonisolated package extension TerminalAccessoryShortcutModifiers {
+    package var displayParts: [String] {
         var parts: [String] = []
         if control {
             parts.append(String(localized: "Ctrl"))
@@ -40,13 +43,13 @@ nonisolated extension TerminalAccessoryShortcutModifiers {
         return parts
     }
 
-    func displayTitle(for keyTitle: String) -> String {
+    package func displayTitle(for keyTitle: String) -> String {
         (displayParts + [keyTitle]).joined(separator: "+")
     }
 }
 
-nonisolated extension TerminalAccessoryShortcutKey {
-    var title: String {
+nonisolated package extension TerminalAccessoryShortcutKey {
+    package var title: String {
         switch self {
         case .a: return "A"
         case .b: return "B"
@@ -126,8 +129,8 @@ nonisolated extension TerminalAccessoryShortcutKey {
     }
 }
 
-nonisolated extension TerminalAccessorySystemActionID {
-    var listTitle: String {
+nonisolated package extension TerminalAccessorySystemActionID {
+    package var listTitle: String {
         switch self {
         case .commandModifier: return String(localized: "Cmd")
         case .escape: return String(localized: "Esc")
@@ -170,7 +173,7 @@ nonisolated extension TerminalAccessorySystemActionID {
         }
     }
 
-    var toolbarTitle: String {
+    package var toolbarTitle: String {
         switch self {
         case .commandModifier: return String(localized: "Cmd")
         case .escape: return String(localized: "Esc")
@@ -210,7 +213,7 @@ nonisolated extension TerminalAccessorySystemActionID {
         }
     }
 
-    var iconName: String? {
+    package var iconName: String? {
         switch self {
         case .arrowUp: return "arrow.up"
         case .arrowDown: return "arrow.down"
@@ -222,8 +225,8 @@ nonisolated extension TerminalAccessorySystemActionID {
     }
 }
 
-nonisolated extension TerminalAccessoryCustomAction {
-    var detailText: String {
+nonisolated package extension TerminalAccessoryCustomAction {
+    package var detailText: String {
         switch kind {
         case .command:
             return commandSendMode.title

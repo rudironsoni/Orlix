@@ -1,6 +1,6 @@
-extension Ghostty {
+package extension Ghostty {
     /// Tracks a native surface without extending the terminal view lifetime.
-    final class SurfaceReference {
+    final package class SurfaceReference {
         let surface: ghostty_surface_t
         weak var terminalView: GhosttyTerminalView?
 

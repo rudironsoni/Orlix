@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct LinuxStorageMemberCandidate: Hashable, Sendable {
     let role: StorageHealthMemberRole
     let path: String?

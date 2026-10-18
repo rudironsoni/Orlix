@@ -16,8 +16,8 @@ nonisolated enum CloudKitRecordChangeStreamError: Error, Equatable, Sendable {
     case checkpointPersistenceFailed
 }
 
-nonisolated struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
-    let id: UUID
+nonisolated package struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
+    package let id: UUID
 }
 
 nonisolated enum CloudKitRecordChangeRequestDecision: Equatable, Sendable {
@@ -60,48 +60,48 @@ enum CloudKitRawRecordChange {
 }
 
 @MainActor
-struct CloudKitRawRecordChanges: @unchecked Sendable {
-    let changes: [CloudKitRawRecordChange]
-    let isFullFetch: Bool
-    let checkpoint: CloudKitRecordChangeCheckpoint
+package struct CloudKitRawRecordChanges: @unchecked Sendable {
+    package let changes: [CloudKitRawRecordChange]
+    package let isFullFetch: Bool
+    package let checkpoint: CloudKitRecordChangeCheckpoint
 }
 
 @MainActor
-protocol CloudKitRecordTransport: AnyObject {
-    var cloudKitRecordZoneID: CKRecordZone.ID { get }
+package protocol CloudKitRecordTransport: AnyObject {
+    package var cloudKitRecordZoneID: CKRecordZone.ID { get }
 
-    func performCloudKitRecordMutation<T>(
+    package func performCloudKitRecordMutation<T>(
         _ operation: () async throws -> T
     ) async throws -> T
-    func fetchCloudKitRecords(
+    package func fetchCloudKitRecords(
         matchingRecordTypes recordTypes: Set<String>,
         desiredKeys: [String]
     ) async throws -> [CKRecord]
-    func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord
-    func upsertCloudKitRecord(_ record: CKRecord) async throws
-    func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws
-    func cloudKitServerRecord(from error: Error) -> CKRecord?
-    func isCloudKitRecordMissing(_ error: Error) -> Bool
+    package func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord
+    package func upsertCloudKitRecord(_ record: CKRecord) async throws
+    package func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws
+    package func cloudKitServerRecord(from error: Error) -> CKRecord?
+    package func isCloudKitRecordMissing(_ error: Error) -> Bool
 }
 
-extension CloudKitManager: CloudKitRecordTransport {}
+package extension CloudKitManager: CloudKitRecordTransport {}
 
 @MainActor
-protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
-    var isCloudKitAvailable: Bool { get }
-    var cloudKitSyncGeneration: UUID { get }
+package protocol CloudKitRecordChangeTransport: CloudKitRecordTransport {
+    package var isCloudKitAvailable: Bool { get }
+    package var cloudKitSyncGeneration: UUID { get }
 
     /// Reads the zone's single primary change stream without advancing its shared token.
     /// One consumer owns this stream. Every call must use that consumer's normalized keys.
     /// Concurrent calls coalesce only when their keys and fetch mode match exactly.
-    func fetchCloudKitRecordChanges(
+    package func fetchCloudKitRecordChanges(
         forceFullFetch: Bool,
         desiredKeys: [String]
     ) async throws -> CloudKitRawRecordChanges
-    func commitCloudKitRecordChanges(
+    package func commitCloudKitRecordChanges(
         _ checkpoint: CloudKitRecordChangeCheckpoint
     ) throws
-    func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws
+    package func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws
 }
 
-extension CloudKitManager: CloudKitRecordChangeTransport {}
+package extension CloudKitManager: CloudKitRecordChangeTransport {}

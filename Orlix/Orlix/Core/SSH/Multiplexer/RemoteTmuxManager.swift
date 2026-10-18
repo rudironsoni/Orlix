@@ -1,7 +1,10 @@
 import Foundation
 import os.log
 
-actor RemoteTmuxManager {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package actor RemoteTmuxManager {
     private let availabilityTimeout: Duration = .seconds(8)
     private let listTimeout: Duration = .seconds(12)
     private let configTimeout: Duration = .seconds(20)
@@ -12,9 +15,9 @@ actor RemoteTmuxManager {
         category: "Tmux"
     )
 
-    init() {}
+    package init() {}
 
-    func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
+    package func tmuxAvailability(using client: SSHClient) async -> RemoteTmuxAvailability {
         let probeId = UUID().uuidString
         let startedAt = ContinuousClock.now
         logger.info("Starting tmux availability probe \(probeId, privacy: .public)")
@@ -32,7 +35,7 @@ actor RemoteTmuxManager {
         return result
     }
 
-    func tmuxAvailability(
+    package func tmuxAvailability(
         in environment: RemoteEnvironment,
         execute: RemoteEnvironmentResolver.CommandExecutor
     ) async -> RemoteTmuxAvailability {
@@ -86,7 +89,7 @@ actor RemoteTmuxManager {
         return await availableBackend(using: client)
     }
 
-    func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
+    package func tmuxInstallBackend(using client: SSHClient) async -> RemoteTmuxBackend? {
         let environment = await client.remoteEnvironment()
         guard environment.supportsTmuxRuntime else { return nil }
 
@@ -107,7 +110,7 @@ actor RemoteTmuxManager {
         return .unixTmux
     }
 
-    func listSessions(
+    package func listSessions(
         using client: SSHClient,
         backend: RemoteTmuxBackend
     ) async throws -> [RemoteTmuxSession] {
@@ -138,7 +141,7 @@ actor RemoteTmuxManager {
         throw lastError ?? SSHError.unknown("Unable to list tmux sessions")
     }
 
-    func prepareConfig(
+    package func prepareConfig(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -154,13 +157,13 @@ actor RemoteTmuxManager {
         _ = try? await client.execute(command, timeout: configTimeout)
     }
 
-    func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
+    package func sendScript(_ script: String, using client: SSHClient, shellId: UUID) async throws {
         let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
         guard let data = payload.data(using: .utf8) else { return }
         try await client.write(data, to: shellId)
     }
 
-    func killSession(
+    package func killSession(
         named sessionName: String,
         using client: SSHClient,
         backend explicitBackend: RemoteTmuxBackend? = nil
@@ -174,7 +177,7 @@ actor RemoteTmuxManager {
         _ = try? await client.execute(command, timeout: killTimeout)
     }
 
-    func currentPath(
+    package func currentPath(
         sessionName: String,
         using client: SSHClient,
         backend explicitBackend: RemoteTmuxBackend? = nil

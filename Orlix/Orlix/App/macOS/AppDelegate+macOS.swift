@@ -2,7 +2,12 @@
 import AppKit
 import os.log
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
+package class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private weak var tabManager: TerminalTabManager?
@@ -14,7 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         category: "Lifecycle"
     )
 
-    func configure(
+    package func configure(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         appLockManager: AppLockManager,
@@ -63,7 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return lifecycleDependencies
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    package func applicationDidFinishLaunching(_ notification: Notification) {
         let subscribeToRemoteChanges = configuredLifecycleDependencies.subscribeToRemoteChanges
         Task {
             await subscribeToRemoteChanges()
@@ -97,7 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
+    package func applicationDidBecomeActive(_ notification: Notification) {
         logger.info(
             "Application became active monotonic=\(Foundation.ProcessInfo.processInfo.systemUptime, privacy: .public)"
         )
@@ -114,14 +119,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationDidResignActive(_ notification: Notification) {
+    package func applicationDidResignActive(_ notification: Notification) {
         logger.info("Application resigned active")
         Task { @MainActor in
             configuredAppLockManager.lockIfNeededForBackground()
         }
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    package func applicationWillTerminate(_ notification: Notification) {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         let cleanupTask = configuredTabManager.beginApplicationTermination()
         let semaphore = DispatchSemaphore(value: 0)
@@ -132,11 +137,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = semaphore.wait(timeout: .now() + 2)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    package func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
 
-    func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
+    package func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
         guard SyncSettings.isEnabled else { return }
         Task {
             await configuredServerManager.loadData()

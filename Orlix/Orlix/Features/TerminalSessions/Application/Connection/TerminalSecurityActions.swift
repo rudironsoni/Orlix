@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum TerminalSecurityApprovalFailure: Equatable, Sendable {
     case expired
 }
@@ -11,21 +15,21 @@ nonisolated enum TerminalSecurityApprovalOutcome: Equatable, Sendable {
 
 /// App-owned security effects used by terminal session presentation.
 @MainActor
-struct TerminalSecurityActions {
-    typealias LoadCredentials = @MainActor @Sendable (Server) throws -> ServerCredentials
-    typealias PendingHostKeyApproval = @MainActor @Sendable (
+package struct TerminalSecurityActions {
+    package typealias LoadCredentials = @MainActor @Sendable (Server) throws -> ServerCredentials
+    package typealias PendingHostKeyApproval = @MainActor @Sendable (
         _ server: Server
     ) -> ServerSecurityApprovalRequest?
-    typealias Approve = @MainActor @Sendable (
+    package typealias Approve = @MainActor @Sendable (
         _ request: ServerSecurityApprovalRequest,
         _ server: Server
     ) -> TerminalSecurityApprovalOutcome
-    typealias Reject = @MainActor @Sendable (
+    package typealias Reject = @MainActor @Sendable (
         _ request: ServerSecurityApprovalRequest
     ) -> Void
 
-    let loadCredentials: LoadCredentials
-    let pendingHostKeyApproval: PendingHostKeyApproval
-    let approve: Approve
-    let reject: Reject
+    package let loadCredentials: LoadCredentials
+    package let pendingHostKeyApproval: PendingHostKeyApproval
+    package let approve: Approve
+    package let reject: Reject
 }

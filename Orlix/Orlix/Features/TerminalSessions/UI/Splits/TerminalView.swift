@@ -14,6 +14,11 @@ import AppKit
 #elseif os(iOS)
 import UIKit
 #endif
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 
 // MARK: - Terminal Tab View
 

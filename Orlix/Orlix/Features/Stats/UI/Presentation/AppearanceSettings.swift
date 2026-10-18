@@ -1,9 +1,12 @@
 import SwiftUI
 
-struct StatsAppearanceSettingsSheet: View {
-    let store: PreferencesStore
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct StatsAppearanceSettingsSheet: View {
+    package let store: PreferencesStore
 
-    var body: some View {
+    package var body: some View {
         #if os(macOS)
         StatsDetailShell(
             String(localized: "Stats Appearance"),

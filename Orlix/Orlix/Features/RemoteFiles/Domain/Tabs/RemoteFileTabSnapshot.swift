@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated struct RemoteFileTabSnapshot: Codable, Equatable, Sendable {
-    var tabsByServer: [String: [RemoteFileTab]]
-    var selectedTabByServer: [String: UUID]
-    var schemaVersion: Int
+nonisolated package struct RemoteFileTabSnapshot: Codable, Equatable, Sendable {
+    package var tabsByServer: [String: [RemoteFileTab]]
+    package var selectedTabByServer: [String: UUID]
+    package var schemaVersion: Int
 
-    init(
+    package init(
         tabsByServer: [String: [RemoteFileTab]] = [:],
         selectedTabByServer: [String: UUID] = [:],
         schemaVersion: Int = Self.currentSchemaVersion
@@ -15,5 +15,5 @@ nonisolated struct RemoteFileTabSnapshot: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
     }
 
-    static let currentSchemaVersion = 1
+    static package let currentSchemaVersion = 1
 }

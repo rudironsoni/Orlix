@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 enum RemoteFileBrowserPresentation: Identifiable {
     enum ID: Hashable {
         case upload

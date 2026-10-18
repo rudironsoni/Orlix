@@ -15,6 +15,9 @@ import Combine
 import SwiftUI
 import AppKit
 
+#if ORLIX_MODULAR_APP
+import OrlixTerminal
+#endif
 nonisolated enum MacShellContentReplacementPolicy {
     static func shouldReplace(current: AnyHashable?, next: AnyHashable) -> Bool {
         current != next

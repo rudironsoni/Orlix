@@ -1,18 +1,22 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum TerminalNetworkReadiness: String, Hashable, Sendable {
     case unknown
     case ready
     case unavailable
 }
 
-nonisolated enum TerminalRemoteSessionDefaults {
-    static let enabledKey = "terminalRemoteSessionEnabledDefault"
-    static let backendIdentifierKey = "terminalRemoteSessionBackendIdentifierDefault"
-    static let startupBehaviorKey = "terminalRemoteSessionStartupBehaviorDefault"
-    static let legacyEnabledKey = "terminalTmuxEnabledDefault"
-    static let legacyStartupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
+nonisolated package enum TerminalRemoteSessionDefaults {
+    static package let enabledKey = "terminalRemoteSessionEnabledDefault"
+    static package let backendIdentifierKey = "terminalRemoteSessionBackendIdentifierDefault"
+    static package let startupBehaviorKey = "terminalRemoteSessionStartupBehaviorDefault"
+    static package let legacyEnabledKey = "terminalTmuxEnabledDefault"
+    static package let legacyStartupBehaviorKey = "terminalTmuxStartupBehaviorDefault"
 }
 
 nonisolated protocol TerminalRemoteSessionServicing: Sendable {

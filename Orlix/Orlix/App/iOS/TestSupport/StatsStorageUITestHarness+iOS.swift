@@ -1,7 +1,11 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-struct StatsStorageUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixStats
+#endif
+package struct StatsStorageUITestHarness: View {
     @State private var hiddenVolumeIDs: Set<VolumeIdentity>
 
     private static let volumes = [
@@ -42,11 +46,11 @@ struct StatsStorageUITestHarness: View {
         )
     ]
 
-    init() {
+    package init() {
         _hiddenVolumeIDs = State(initialValue: [Self.volumes[3].identity])
     }
 
-    var body: some View {
+    package var body: some View {
         StorageDetailsSheet(
             volumes: Self.volumes,
             hiddenVolumeIDs: hiddenVolumeIDs,

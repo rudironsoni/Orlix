@@ -1,5 +1,5 @@
-extension SSHClient {
-    enum LifecyclePhase: Equatable, Sendable {
+package extension SSHClient {
+    package enum LifecyclePhase: Equatable, Sendable {
         case disconnected
         case connecting
         case connected

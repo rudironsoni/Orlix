@@ -1,23 +1,23 @@
 import Foundation
 
-nonisolated enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
-    case bonjour
-    case portScan
+nonisolated package enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
+    package case bonjour
+    package case portScan
 }
 
-nonisolated struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
-    var displayName: String
-    var host: String
-    var port: Int
-    var sources: Set<DiscoverySource>
-    var lastSeenAt: Date
-    var latencyMs: Int?
+nonisolated package struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
+    package var displayName: String
+    package var host: String
+    package var port: Int
+    package var sources: Set<DiscoverySource>
+    package var lastSeenAt: Date
+    package var latencyMs: Int?
 
-    var id: String {
+    package var id: String {
         "\(host):\(port)"
     }
 
-    init(
+    package init(
         displayName: String,
         host: String,
         port: Int = 22,
@@ -33,7 +33,7 @@ nonisolated struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
         self.latencyMs = latencyMs
     }
 
-    mutating func merge(with newer: DiscoveredSSHHost) {
+    mutating package func merge(with newer: DiscoveredSSHHost) {
         if !newer.displayName.isEmpty && newer.displayName != newer.host {
             displayName = newer.displayName
         }

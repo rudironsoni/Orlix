@@ -1,6 +1,12 @@
 #if os(iOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+#endif
 private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
     private var preservesTerminalSizeForKeyboard = false
@@ -25,8 +31,8 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     }
 }
 
-extension ConnectionTerminalContainer {
-    var platformBody: some View {
+package extension ConnectionTerminalContainer {
+    package var platformBody: some View {
         sharedBody
             .alert(
                 disconnectAlertTitle,
@@ -63,7 +69,7 @@ extension ConnectionTerminalContainer {
             }
     }
 
-    func platformChrome(backgroundColor: Color) -> some View {
+    package func platformChrome(backgroundColor: Color) -> some View {
         TerminalKeyboardSafeAreaHost(isTerminalSelected: selectedView == .terminal) {
             VStack(spacing: 0) {
                 if !isZenModeEnabled {
@@ -124,7 +130,7 @@ extension ConnectionTerminalContainer {
     }
 
     @ViewBuilder
-    var terminalLayer: some View {
+    package var terminalLayer: some View {
         if selectedView == .terminal, let tab = selectedTab {
             let voiceRuntime = voiceInputRuntimeStore.runtime(for: tab.id)
             TerminalTabView(
@@ -185,7 +191,7 @@ extension ConnectionTerminalContainer {
         fileTabManager.disconnect(serverId: server.id)
     }
 
-    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
+    package func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {
         guard selectedView != .terminal else { return }
         for tab in serverTabs {
             for paneId in tab.allPaneIds {
@@ -194,7 +200,7 @@ extension ConnectionTerminalContainer {
         }
     }
 
-    func platformPrepareForPaneClose() {
+    package func platformPrepareForPaneClose() {
         tabManager.keyboardCoordinator.deactivateInputImmediately(reason: .routeModal)
     }
 

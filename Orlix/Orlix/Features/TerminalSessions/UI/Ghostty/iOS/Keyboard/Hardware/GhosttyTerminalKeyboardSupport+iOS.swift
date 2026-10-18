@@ -2,6 +2,9 @@
 import OSLog
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct IMEProxySnapshot: Equatable, Sendable {
     var text: String
     var selectedRange: NSRange
@@ -170,8 +173,8 @@ extension Ghostty.Input.Mods {
     }
 }
 
-extension TerminalAccessoryShortcutModifiers {
-    var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
+package extension TerminalAccessoryShortcutModifiers {
+    package var terminalSplitShortcutModifiers: TerminalSplitShortcutModifiers {
         var result: TerminalSplitShortcutModifiers = []
         if command { result.insert(.command) }
         if shift { result.insert(.shift) }
@@ -181,8 +184,8 @@ extension TerminalAccessoryShortcutModifiers {
     }
 }
 
-extension TerminalAccessoryShortcutKey {
-    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+package extension TerminalAccessoryShortcutKey {
+    package var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
         switch self {
         case .enter:
             return .character("\r")

@@ -1,6 +1,9 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol ServerVolumeVisibilityPreferencesPersisting: AnyObject {
     func loadPreferences() -> ServerVolumeVisibilityPreferences
@@ -8,12 +11,12 @@ protocol ServerVolumeVisibilityPreferencesPersisting: AnyObject {
 }
 
 @MainActor
-final class ServerVolumeVisibilityStore: ObservableObject {
+final package class ServerVolumeVisibilityStore: ObservableObject {
     @Published private(set) var preferences: ServerVolumeVisibilityPreferences
 
     private let persistence: any ServerVolumeVisibilityPreferencesPersisting
 
-    init(persistence: any ServerVolumeVisibilityPreferencesPersisting) {
+    package init(persistence: any ServerVolumeVisibilityPreferencesPersisting) {
         self.persistence = persistence
         preferences = persistence.loadPreferences()
         if preferences.requiresSchemaMigration {
@@ -22,7 +25,7 @@ final class ServerVolumeVisibilityStore: ObservableObject {
         }
     }
 
-    func hiddenVolumeIDs(
+    package func hiddenVolumeIDs(
         for serverID: UUID,
         volumes: [VolumeInfo]
     ) -> Set<VolumeIdentity> {
@@ -32,13 +35,13 @@ final class ServerVolumeVisibilityStore: ObservableObject {
         )
     }
 
-    func setVolume(_ volume: VolumeInfo, isVisible: Bool, for serverID: UUID) {
+    package func setVolume(_ volume: VolumeInfo, isVisible: Bool, for serverID: UUID) {
         updateVisibilityOverrides(for: [volume], serverID: serverID) { _ in
             isVisible
         }
     }
 
-    func setVolumes(_ volumes: [VolumeInfo], areVisible: Bool, for serverID: UUID) {
+    package func setVolumes(_ volumes: [VolumeInfo], areVisible: Bool, for serverID: UUID) {
         updateVisibilityOverrides(for: volumes, serverID: serverID) { _ in
             areVisible
         }

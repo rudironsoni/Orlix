@@ -1,8 +1,11 @@
 import Foundation
 import os.log
 
-extension TerminalFontStore {
-    func startSynchronizationIfNeeded() {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension TerminalFontStore {
+    package func startSynchronizationIfNeeded() {
         guard dependencies.startsSynchronization else { return }
         lifecycleObserverID = dependencies.syncLifecycle.observe { [weak self] event in
             self?.handleSyncLifecycleEvent(event)
@@ -10,7 +13,7 @@ extension TerminalFontStore {
         syncTask = makeCloudSyncTask()
     }
 
-    func enqueueFont(_ font: TerminalFont) {
+    package func enqueueFont(_ font: TerminalFont) {
         guard dependencies.isSyncEnabled() else { return }
         let queue = dependencies.mutationQueue
         do {
@@ -24,7 +27,7 @@ extension TerminalFontStore {
         }
     }
 
-    func enqueuePreference(_ preference: TerminalFontPreference) {
+    package func enqueuePreference(_ preference: TerminalFontPreference) {
         guard dependencies.isSyncEnabled() else { return }
         let queue = dependencies.mutationQueue
         do {
@@ -38,7 +41,7 @@ extension TerminalFontStore {
         }
     }
 
-    func synchronizeWithCloud() async throws {
+    package func synchronizeWithCloud() async throws {
         try Task.checkCancellation()
         guard dependencies.isSyncEnabled() else { return }
 

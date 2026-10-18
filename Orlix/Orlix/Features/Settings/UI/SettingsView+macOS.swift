@@ -1,6 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
 private extension View {
     @ViewBuilder
     func removingSidebarToggle() -> some View {
@@ -12,8 +15,8 @@ private extension View {
     }
 }
 
-extension SettingsView {
-    var platformBody: some View {
+package extension SettingsView {
+    package var platformBody: some View {
         NavigationSplitView {
             List(selection: $selectedRouteRaw) {
                 ForEach(visibleRoutes(from: SettingsRouteCatalog.leadingRoutes)) { route in

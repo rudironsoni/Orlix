@@ -6,6 +6,11 @@
 import SwiftUI
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
 // MARK: - Server List Row
 
 struct ServerListRow: View {

@@ -67,45 +67,45 @@ struct ServerViewNewTabButton: View {
     }
 }
 
-enum ServerViewTopTabBarMetrics {
-    static let tabHeight: CGFloat = 36
-    static let tabVerticalPadding: CGFloat = 7
-    static let barVerticalInset: CGFloat = 4
-    static let tabSpacing: CGFloat = 4
-    static let horizontalPadding: CGFloat = 4
-    static let outerHorizontalPadding: CGFloat = 12
+package enum ServerViewTopTabBarMetrics {
+    static package let tabHeight: CGFloat = 36
+    static package let tabVerticalPadding: CGFloat = 7
+    static package let barVerticalInset: CGFloat = 4
+    static package let tabSpacing: CGFloat = 4
+    static package let horizontalPadding: CGFloat = 4
+    static package let outerHorizontalPadding: CGFloat = 12
     #if os(macOS)
-    static let toolbarTabCapsuleHeight: CGFloat = 28
+    static package let toolbarTabCapsuleHeight: CGFloat = 28
     /// Outer height of a toolbar tab cell. Kept close to the native toolbar
     /// control height so the tab strip isn't taller than the other items.
-    static let toolbarTabStripHeight: CGFloat = 30
-    static let toolbarTabStripIdealWidth: CGFloat = 640
-    static let toolbarTabStripFallbackWidth: CGFloat = 1_600
+    static package let toolbarTabStripHeight: CGFloat = 30
+    static package let toolbarTabStripIdealWidth: CGFloat = 640
+    static package let toolbarTabStripFallbackWidth: CGFloat = 1_600
     /// Per-tab sizing shared by terminal and file tabs (browser-like).
-    static let toolbarTabMinimumWidth: CGFloat = 120
-    static let toolbarTabMaximumWidth: CGFloat = 240
+    static package let toolbarTabMinimumWidth: CGFloat = 120
+    static package let toolbarTabMaximumWidth: CGFloat = 240
     #endif
-    static var barHeight: CGFloat { tabHeight + barVerticalInset * 2 }
+    static package var barHeight: CGFloat { tabHeight + barVerticalInset * 2 }
 }
 
 #if os(macOS)
-struct ServerToolbarTabCell: View {
-    let title: String
-    let isSelected: Bool
-    let statusColor: Color
-    let width: CGFloat
-    var accessibilityLabel: String?
+package struct ServerToolbarTabCell: View {
+    package let title: String
+    package let isSelected: Bool
+    package let statusColor: Color
+    package let width: CGFloat
+    package var accessibilityLabel: String?
     /// Shared namespace so the selected glass capsule morphs between tabs.
-    var glassNamespace: Namespace.ID?
+    package var glassNamespace: Namespace.ID?
     /// 1-based tab position; shows a ⌘N hint on hover for the first nine tabs.
-    var shortcutNumber: Int?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package var shortcutNumber: Int?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: onSelect) {
             ZStack {
                 tabSurface
@@ -338,18 +338,18 @@ struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where 
     }
 }
 
-struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
-    let items: [Item]
-    let selectedId: Item.ID?
-    let previousHelp: String
-    let nextHelp: String
-    let newHelp: String
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-    let onNew: () -> Void
-    var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
+package struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
+    package let items: [Item]
+    package let selectedId: Item.ID?
+    package let previousHelp: String
+    package let nextHelp: String
+    package let newHelp: String
+    package let onPrevious: () -> Void
+    package let onNext: () -> Void
+    package let onNew: () -> Void
+    package var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 4) {
             HStack(spacing: 4) {
                 ServerViewTabNavigationButton(

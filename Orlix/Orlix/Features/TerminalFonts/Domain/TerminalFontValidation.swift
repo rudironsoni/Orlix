@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated enum TerminalFontValidationError: LocalizedError, Equatable, Sendable {
-    case unsupportedFormat
-    case fileTooLarge
-    case invalidFont
-    case invalidMetadata
-    case checksumMismatch
-    case fileUnavailable
-    case registrationFailed(String)
-    case requiresPro
+nonisolated package enum TerminalFontValidationError: LocalizedError, Equatable, Sendable {
+    package case unsupportedFormat
+    package case fileTooLarge
+    package case invalidFont
+    package case invalidMetadata
+    package case checksumMismatch
+    package case fileUnavailable
+    package case registrationFailed(String)
+    package case requiresPro
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .unsupportedFormat:
             return String(localized: "Choose a TTF, OTF, TTC, or OTC font file.")
@@ -35,13 +35,13 @@ nonisolated enum TerminalFontValidationError: LocalizedError, Equatable, Sendabl
     }
 }
 
-nonisolated enum TerminalFontValidator {
-    static let maximumFileSize: Int64 = 48 * 1_024 * 1_024
+nonisolated package enum TerminalFontValidator {
+    static package let maximumFileSize: Int64 = 48 * 1_024 * 1_024
     private static let maximumFamilyCount = 64
     private static let maximumNameLength = 256
     private static let normalizationLocale = Locale(identifier: "en_US_POSIX")
 
-    static func validateStoredFont(_ font: TerminalFont) throws -> TerminalFont {
+    static package func validateStoredFont(_ font: TerminalFont) throws -> TerminalFont {
         let families = normalizedNames(font.familyNames)
         guard !families.isEmpty,
               families.count <= maximumFamilyCount,
@@ -69,7 +69,7 @@ nonisolated enum TerminalFontValidator {
         )
     }
 
-    static func validatePreference(
+    static package func validatePreference(
         _ preference: TerminalFontPreference
     ) throws -> TerminalFontPreference {
         let normalized = TerminalFontPreference(
@@ -86,7 +86,7 @@ nonisolated enum TerminalFontValidator {
         return normalized
     }
 
-    static func normalizedNames(_ names: [String]) -> [String] {
+    static package func normalizedNames(_ names: [String]) -> [String] {
         var seen = Set<String>()
         return names.compactMap { name in
             let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -100,7 +100,7 @@ nonisolated enum TerminalFontValidator {
         }
     }
 
-    static func isValidOriginalFilename(_ filename: String) -> Bool {
+    static package func isValidOriginalFilename(_ filename: String) -> Bool {
         let value = filename.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, value.count <= maximumNameLength else { return false }
         return value == URL(fileURLWithPath: value).lastPathComponent

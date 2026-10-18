@@ -8,6 +8,9 @@ import AppKit
 import Metal
 import OSLog
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension GhosttyRenderingSetup {
     // MARK: - Layer Setup
 

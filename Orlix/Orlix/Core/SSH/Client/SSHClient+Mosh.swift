@@ -3,44 +3,47 @@ import os.log
 import MoshCore
 import MoshBootstrap
 
-extension SSHClient {
-    struct MoshShellRuntime {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension SSHClient {
+    package struct MoshShellRuntime {
         let session: MoshClientSession
         let output: TerminalOutputChannel
         let streamTask: Task<Void, Never>
     }
 
-    struct PreparedMoshShell: Sendable {
+    package struct PreparedMoshShell: Sendable {
         let session: MoshClientSession
         let pendingOps: [MoshHostOp]
     }
 
-    struct PreparedMoshBootstrap: Sendable {
+    package struct PreparedMoshBootstrap: Sendable {
         let shell: PreparedMoshShell
         let leaseID: UUID
         let lease: RemoteMoshServerLease
     }
 
-    func prepareMoshShellForApplicationBackground(
+    package func prepareMoshShellForApplicationBackground(
         _ shellId: UUID
     ) async throws -> MoshSnapshot? {
         guard let runtime = moshShells[shellId] else { return nil }
         return try await runtime.session.prepareForApplicationBackground()
     }
 
-    func resumeMoshShellFromApplicationBackground(_ shellId: UUID) async throws {
+    package func resumeMoshShellFromApplicationBackground(_ shellId: UUID) async throws {
         guard let runtime = moshShells[shellId] else { return }
         try await runtime.session.resumeFromApplicationBackground()
     }
 
-    func moshSnapshot(for shellId: UUID) async throws -> MoshSnapshot? {
+    package func moshSnapshot(for shellId: UUID) async throws -> MoshSnapshot? {
         guard let runtime = moshShells[shellId] else { return nil }
         return try await runtime.session.makeSnapshot()
     }
 
     // MARK: - Mosh
 
-    func restoreMoshShell(
+    package func restoreMoshShell(
         from snapshot: MoshSnapshot,
         cols: Int,
         rows: Int
@@ -87,7 +90,7 @@ extension SSHClient {
         moshRuntimeGeneration == generation && !isAborted
     }
 
-    func prepareMoshShell(
+    package func prepareMoshShell(
         using expectedSession: SSHSession,
         cols: Int,
         rows: Int,
@@ -204,7 +207,7 @@ extension SSHClient {
         }
     }
 
-    func discardPreparedMoshShell(_ prepared: PreparedMoshBootstrap) async {
+    package func discardPreparedMoshShell(_ prepared: PreparedMoshBootstrap) async {
         await prepared.lease.cleanup()
         await prepared.shell.session.stop()
         pendingMoshServerLeases.removeValue(forKey: prepared.leaseID)
@@ -350,7 +353,7 @@ extension SSHClient {
         return fallback
     }
 
-    func registerMoshShell(
+    package func registerMoshShell(
         _ prepared: PreparedMoshShell,
         origin: ShellStartOrigin = .fresh
     ) -> ShellHandle {
@@ -437,7 +440,7 @@ extension SSHClient {
         await runtime.session.stop()
     }
 
-    nonisolated static func waitForMoshTransportReadiness(
+    nonisolated static package func waitForMoshTransportReadiness(
         pollInterval: Duration = .milliseconds(20),
         draining drainHostOps: @escaping @Sendable () async -> [MoshHostOp]
     ) async throws -> [MoshHostOp] {
@@ -451,7 +454,7 @@ extension SSHClient {
         }
     }
 
-    func fallbackReason(for error: Error) -> MoshFallbackReason {
+    package func fallbackReason(for error: Error) -> MoshFallbackReason {
         let sshError = (error as? MoshStartupFailure)?.underlying
             ?? (error as? SSHError)
         guard let sshError else {

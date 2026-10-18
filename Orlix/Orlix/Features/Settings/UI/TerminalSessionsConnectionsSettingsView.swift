@@ -1,5 +1,10 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 struct TerminalSessionsConnectionsSettingsView: View {
     let backends: [RemoteSessionBackendMetadata]
 

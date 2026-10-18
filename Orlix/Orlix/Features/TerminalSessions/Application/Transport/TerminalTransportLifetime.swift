@@ -1,4 +1,8 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 /// Owns transport identities, queued I/O, and cleanup for one terminal manager.
 @MainActor

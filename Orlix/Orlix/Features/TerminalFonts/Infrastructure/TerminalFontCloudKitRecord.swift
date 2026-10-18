@@ -1,6 +1,9 @@
 import CloudKit
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalFontCloudKitRecordCodec {
     static let recordType = "TerminalFont"
     static let assetKey = "asset"

@@ -1,6 +1,9 @@
 import CloudKit
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum WorkspaceCloudKitRecordCodec {
     static let recordType = "Workspace"
     static let recordKeys = [

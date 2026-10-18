@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct EnvironmentDeletionResult: Equatable, Sendable {
     let workspace: Workspace
     let selectedEnvironment: ServerEnvironment

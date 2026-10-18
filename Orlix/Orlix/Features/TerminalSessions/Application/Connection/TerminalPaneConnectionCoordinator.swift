@@ -1,5 +1,8 @@
 import CoreGraphics
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// Selects one application transport coordinator per pane. Transport state is
 /// retained by the app-scoped transport owner so view reconstruction cannot

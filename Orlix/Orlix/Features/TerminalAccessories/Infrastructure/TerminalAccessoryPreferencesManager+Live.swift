@@ -1,11 +1,14 @@
 import Foundation
 
-extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {
-    func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension CloudKitSyncCoordinator: TerminalAccessoryMutationQueue {
+    package func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws {
         try enqueue(.terminalAccessoryProfileUpsert(profile))
     }
 }
-extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}
+package extension CloudKitSyncLifecycleDriver: TerminalAccessorySyncLifecycle {}
 
 extension TerminalAccessoryPreferencesDependencies {
     static func live(

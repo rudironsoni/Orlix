@@ -1,4 +1,8 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 /// Shared Unix process telemetry with one cross-platform contract:
 /// CPU is the share of total machine capacity during the latest interval and

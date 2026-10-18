@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct WorkspaceDeletionPlan: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let workspace: Workspace

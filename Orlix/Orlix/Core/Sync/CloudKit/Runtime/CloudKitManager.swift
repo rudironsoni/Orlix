@@ -5,39 +5,39 @@ import os.log
 // MARK: - CloudKit Manager
 
 @MainActor
-final class CloudKitManager {
-    static let shared = CloudKitManager()
+final package class CloudKitManager {
+    static package let shared = CloudKitManager()
 
-    typealias SyncStatus = CloudKitSyncState.Status
+    package typealias SyncStatus = CloudKitSyncState.Status
 
-    let statusStore = CloudKitSyncStatusStore()
+    package let statusStore = CloudKitSyncStatusStore()
 
-    var syncState: CloudKitSyncState { statusStore.syncState }
-    var lastSyncDate: Date? { statusStore.lastSyncDate }
-    var accountState: CloudKitAccountState { statusStore.accountState }
-    var syncStatus: SyncStatus { statusStore.syncState.status }
-    var isAvailable: Bool { statusStore.syncState.isAvailable }
-    var cloudKitSyncGeneration = UUID()
+    package var syncState: CloudKitSyncState { statusStore.syncState }
+    package var lastSyncDate: Date? { statusStore.lastSyncDate }
+    package var accountState: CloudKitAccountState { statusStore.accountState }
+    package var syncStatus: SyncStatus { statusStore.syncState.status }
+    package var isAvailable: Bool { statusStore.syncState.isAvailable }
+    package var cloudKitSyncGeneration = UUID()
 
-    let container: CKContainer?
-    let database: CKDatabase?
-    let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
-    let recordZoneName = CloudKitSyncConstants.recordZoneName
-    lazy var recordZone = CKRecordZone(zoneName: recordZoneName)
-    var recordZoneID: CKRecordZone.ID { recordZone.zoneID }
-    var changeTokenKey: String { CloudKitSyncConstants.changeTokenKey(for: recordZoneName) }
-    var zoneReadyKey: String { CloudKitSyncConstants.zoneReadyKey(for: recordZoneName) }
+    package let container: CKContainer?
+    package let database: CKDatabase?
+    package let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "CloudKit")
+    package let recordZoneName = CloudKitSyncConstants.recordZoneName
+    lazy package var recordZone = CKRecordZone(zoneName: recordZoneName)
+    package var recordZoneID: CKRecordZone.ID { recordZone.zoneID }
+    package var changeTokenKey: String { CloudKitSyncConstants.changeTokenKey(for: recordZoneName) }
+    package var zoneReadyKey: String { CloudKitSyncConstants.zoneReadyKey(for: recordZoneName) }
 
-    let syncEnabled: @MainActor @Sendable () -> Bool
-    let fetchAccountStatus: @MainActor @Sendable () async throws -> CKAccountStatus
-    var isSyncEnabled: Bool { syncEnabled() }
-    struct AccountStatusCheck {
+    package let syncEnabled: @MainActor @Sendable () -> Bool
+    package let fetchAccountStatus: @MainActor @Sendable () async throws -> CKAccountStatus
+    package var isSyncEnabled: Bool { syncEnabled() }
+    package struct AccountStatusCheck {
         let id: UUID
         let generation: UUID
         let task: Task<CKAccountStatus, Error>
     }
 
-    struct InFlightRecordChanges {
+    package struct InFlightRecordChanges {
         let id: UUID
         let identity: CloudKitRecordChangeFetchIdentity
         let task: Task<CloudKitRawRecordChanges, Error>
@@ -45,23 +45,23 @@ final class CloudKitManager {
         var teardownWaiters: [UUID: CloudKitTaskContinuation<Void>]
     }
 
-    struct PendingRecordChanges {
+    package struct PendingRecordChanges {
         let identity: CloudKitRecordChangeFetchIdentity
         let changes: CloudKitRawRecordChanges
         let token: CKServerChangeToken?
     }
 
-    struct FetchedRecordChanges {
+    package struct FetchedRecordChanges {
         let changes: [CloudKitRawRecordChange]
         let isFullFetch: Bool
         let token: CKServerChangeToken?
     }
 
-    var inFlightRecordChanges: InFlightRecordChanges?
-    var pendingRecordChanges: PendingRecordChanges?
-    var accountStatusCheck: AccountStatusCheck?
-    var ensureZoneTask: Task<Void, Error>?
-    var zoneReady: Bool
+    package var inFlightRecordChanges: InFlightRecordChanges?
+    package var pendingRecordChanges: PendingRecordChanges?
+    package var accountStatusCheck: AccountStatusCheck?
+    package var ensureZoneTask: Task<Void, Error>?
+    package var zoneReady: Bool
 
     private convenience init() {
         if Self.hasICloudContainerEntitlement() {
@@ -82,7 +82,7 @@ final class CloudKitManager {
         )
     }
 
-    convenience init(
+    convenience package init(
         container: CKContainer,
         syncEnabled: @escaping @MainActor @Sendable () -> Bool,
         accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
@@ -98,7 +98,7 @@ final class CloudKitManager {
         )
     }
 
-    init(
+    package init(
         container: CKContainer?,
         syncEnabled: @escaping @MainActor @Sendable () -> Bool,
         accountStatus: @escaping @MainActor @Sendable () async throws -> CKAccountStatus,
@@ -121,7 +121,7 @@ final class CloudKitManager {
         }
     }
 
-    static func hasICloudContainerEntitlement() -> Bool {
+    static package func hasICloudContainerEntitlement() -> Bool {
         #if targetEnvironment(simulator)
         return true
         #else
@@ -135,7 +135,7 @@ final class CloudKitManager {
         #endif
     }
 
-    func cloudDatabase() throws -> CKDatabase {
+    package func cloudDatabase() throws -> CKDatabase {
         guard let database else {
             throw CloudKitError.notAvailable
         }

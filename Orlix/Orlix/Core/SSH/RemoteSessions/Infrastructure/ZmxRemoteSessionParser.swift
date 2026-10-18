@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ZmxRemoteSessionParser {
     static let maximumOutputBytes = 32 * 1_024
     static let maximumSessionCount = 256

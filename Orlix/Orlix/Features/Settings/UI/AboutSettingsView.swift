@@ -32,7 +32,7 @@ private let contactOptions: [ContactOption] = [
 
 // MARK: - About Settings View
 
-struct AboutSettingsView: View {
+package struct AboutSettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var isShowingOpenSourceLicenses = false
 
@@ -83,7 +83,7 @@ struct AboutSettingsView: View {
         return "© \(year) Orlix"
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 VStack(spacing: 16) {

@@ -1,22 +1,25 @@
 import SwiftUI
 
-extension Workspace {
-    var color: Color {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension Workspace {
+    package var color: Color {
         Color.fromHex(colorHex)
     }
 
-    static let defaultColors: [String] = [
+    static package let defaultColors: [String] = [
         "#007AFF", "#AF52DE", "#FF2D55", "#FF3B30", "#FF9500",
         "#FFCC00", "#34C759", "#5AC8FA", "#00C7BE", "#5856D6"
     ]
 }
 
-extension ServerEnvironment {
-    var color: Color {
+package extension ServerEnvironment {
+    package var color: Color {
         Color.fromHex(colorHex)
     }
 
-    nonisolated var displayName: String {
+    nonisolated package var displayName: String {
         guard isBuiltIn else { return name }
         switch id {
         case ServerEnvironment.production.id: return String(localized: "Production")
@@ -26,7 +29,7 @@ extension ServerEnvironment {
         }
     }
 
-    nonisolated var displayShortName: String {
+    nonisolated package var displayShortName: String {
         guard isBuiltIn else { return shortName }
         switch id {
         case ServerEnvironment.production.id: return String(localized: "Prod")
@@ -37,8 +40,8 @@ extension ServerEnvironment {
     }
 }
 
-extension CloudflareAccessMode {
-    var displayName: String {
+package extension CloudflareAccessMode {
+    package var displayName: String {
         switch self {
         case .oauth: return String(localized: "OAuth")
         case .serviceToken: return String(localized: "Service Token")
@@ -46,8 +49,8 @@ extension CloudflareAccessMode {
     }
 }
 
-extension AuthMethod {
-    var displayName: String {
+package extension AuthMethod {
+    package var displayName: String {
         switch self {
         case .password: return String(localized: "Password")
         case .sshKey: return String(localized: "SSH Key")
@@ -55,7 +58,7 @@ extension AuthMethod {
         }
     }
 
-    var icon: String {
+    package var icon: String {
         switch self {
         case .password: return "key.fill"
         case .sshKey: return "lock.doc.fill"

@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 struct ServerLocalStore {
     static let serversStorageKey = "com.rudironsoni.orlix.servers"

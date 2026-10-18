@@ -5,17 +5,17 @@ enum NoticeLane {
     case bottomOperation
 }
 
-enum NoticeLevel {
-    case info
-    case success
-    case warning
-    case error
+package enum NoticeLevel {
+    package case info
+    package case success
+    package case warning
+    package case error
 }
 
-enum NoticeLeading {
-    case none
-    case icon(String)
-    case activity
+package enum NoticeLeading {
+    package case none
+    package case icon(String)
+    package case activity
 }
 
 enum NoticeLifetime {
@@ -23,23 +23,23 @@ enum NoticeLifetime {
     case autoDismiss(Duration)
 }
 
-struct NoticeProgress: Equatable {
-    var completedUnitCount: Int?
-    var totalUnitCount: Int?
+package struct NoticeProgress: Equatable {
+    package var completedUnitCount: Int?
+    package var totalUnitCount: Int?
 
-    var isDeterminate: Bool {
+    package var isDeterminate: Bool {
         guard let totalUnitCount, totalUnitCount > 0 else { return false }
         return completedUnitCount != nil
     }
 }
 
-struct NoticeAction: Identifiable {
-    let id: String
-    let title: String
-    let role: ButtonRole?
-    let handler: () -> Void
+package struct NoticeAction: Identifiable {
+    package let id: String
+    package let title: String
+    package let role: ButtonRole?
+    package let handler: () -> Void
 
-    init(
+    package init(
         id: String,
         title: String,
         role: ButtonRole? = nil,
@@ -52,20 +52,20 @@ struct NoticeAction: Identifiable {
     }
 }
 
-struct NoticeItem: Identifiable {
-    let id: String
-    let lane: NoticeLane
-    let level: NoticeLevel
-    let leading: NoticeLeading
-    let title: String?
-    let message: String
-    let detail: String?
-    let progress: NoticeProgress?
-    let lifetime: NoticeLifetime
-    let action: NoticeAction?
-    let dismissAction: (() -> Void)?
+package struct NoticeItem: Identifiable {
+    package let id: String
+    package let lane: NoticeLane
+    package let level: NoticeLevel
+    package let leading: NoticeLeading
+    package let title: String?
+    package let message: String
+    package let detail: String?
+    package let progress: NoticeProgress?
+    package let lifetime: NoticeLifetime
+    package let action: NoticeAction?
+    package let dismissAction: (() -> Void)?
 
-    init(
+    package init(
         id: String,
         lane: NoticeLane,
         level: NoticeLevel,

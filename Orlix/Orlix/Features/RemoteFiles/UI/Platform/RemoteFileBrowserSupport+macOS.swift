@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 import AppKit
 import ObjectiveC.runtime
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteFileSharePicker: NSViewRepresentable {
     let item: RemoteFileShareItem
     let onComplete: () -> Void

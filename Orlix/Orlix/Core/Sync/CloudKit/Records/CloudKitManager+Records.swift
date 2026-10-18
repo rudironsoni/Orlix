@@ -3,10 +3,10 @@ import Foundation
 import os.log
 
 @MainActor
-extension CloudKitManager {
+package extension CloudKitManager {
     // MARK: - Record Operations
 
-    func prepareSyncMutation(generation: UUID) async throws {
+    package func prepareSyncMutation(generation: UUID) async throws {
         try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
             throw CloudKitError.notAvailable
@@ -15,7 +15,7 @@ extension CloudKitManager {
         try requireCurrentGeneration(generation)
     }
 
-    func performSyncOperation<T>(
+    package func performSyncOperation<T>(
         generation: UUID,
         _ operation: () async throws -> T
     ) async throws -> T {
@@ -44,15 +44,15 @@ extension CloudKitManager {
 
     // MARK: - Raw Record Transport
 
-    var cloudKitRecordZoneID: CKRecordZone.ID {
+    package var cloudKitRecordZoneID: CKRecordZone.ID {
         recordZoneID
     }
 
-    var isCloudKitAvailable: Bool {
+    package var isCloudKitAvailable: Bool {
         isAvailable
     }
 
-    func performCloudKitRecordMutation<T>(
+    package func performCloudKitRecordMutation<T>(
         _ operation: () async throws -> T
     ) async throws -> T {
         let generation = cloudKitSyncGeneration
@@ -65,7 +65,7 @@ extension CloudKitManager {
         return result
     }
 
-    func fetchCloudKitRecords(
+    package func fetchCloudKitRecords(
         matchingRecordTypes recordTypes: Set<String>,
         desiredKeys: [String]
     ) async throws -> [CKRecord] {
@@ -85,7 +85,7 @@ extension CloudKitManager {
         return records
     }
 
-    func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord {
+    package func fetchCloudKitRecord(_ recordID: CKRecord.ID) async throws -> CKRecord {
         let generation = cloudKitSyncGeneration
         try await ensureAccountStatusChecked(for: generation)
         guard isAvailable else {
@@ -99,7 +99,7 @@ extension CloudKitManager {
         return record
     }
 
-    func upsertCloudKitRecord(_ record: CKRecord) async throws {
+    package func upsertCloudKitRecord(_ record: CKRecord) async throws {
         let generation = cloudKitSyncGeneration
         try await withZoneRetry {
             try await saveRecordWithUpsert(record)
@@ -107,7 +107,7 @@ extension CloudKitManager {
         try requireCurrentGeneration(generation)
     }
 
-    func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws {
+    package func deleteCloudKitRecord(_ recordID: CKRecord.ID) async throws {
         let generation = cloudKitSyncGeneration
         _ = try await withZoneRetry {
             try await cloudDatabase().modifyRecords(saving: [], deleting: [recordID])
@@ -115,7 +115,7 @@ extension CloudKitManager {
         try requireCurrentGeneration(generation)
     }
 
-    func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
+    package func saveCloudKitRecordIfUnchanged(_ record: CKRecord) async throws {
         let generation = cloudKitSyncGeneration
         try await withZoneRetry {
             try await saveRecord(record, savePolicy: .ifServerRecordUnchanged)
@@ -123,18 +123,18 @@ extension CloudKitManager {
         try requireCurrentGeneration(generation)
     }
 
-    func cloudKitServerRecord(from error: Error) -> CKRecord? {
+    package func cloudKitServerRecord(from error: Error) -> CKRecord? {
         extractServerRecord(from: error)
     }
 
-    func isCloudKitRecordMissing(_ error: Error) -> Bool {
+    package func isCloudKitRecordMissing(_ error: Error) -> Bool {
         isUnknownItemError(error)
     }
 
 
     // MARK: - Record Fetching (No Queries)
 
-    struct ZoneChangeBatch: @unchecked Sendable {
+    package struct ZoneChangeBatch: @unchecked Sendable {
         let records: [CKRecord]
         let deletions: [Deletion]
         let recordByteCount: Int
@@ -142,19 +142,19 @@ extension CloudKitManager {
         let moreComing: Bool
     }
 
-    struct Deletion {
+    package struct Deletion {
         let recordID: CKRecord.ID
         let recordType: CKRecord.RecordType
     }
 
-    func loadChangeToken() -> CKServerChangeToken? {
+    package func loadChangeToken() -> CKServerChangeToken? {
         guard let data = UserDefaults.standard.data(forKey: changeTokenKey) else {
             return nil
         }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: data)
     }
 
-    func saveChangeToken(_ token: CKServerChangeToken) throws {
+    package func saveChangeToken(_ token: CKServerChangeToken) throws {
         let data = try NSKeyedArchiver.archivedData(
             withRootObject: token,
             requiringSecureCoding: true
@@ -165,18 +165,18 @@ extension CloudKitManager {
         }
     }
 
-    func clearChangeToken() {
+    package func clearChangeToken() {
         UserDefaults.standard.removeObject(forKey: changeTokenKey)
     }
 
-    func isChangeTokenExpired(_ error: Error) -> Bool {
+    package func isChangeTokenExpired(_ error: Error) -> Bool {
         guard let ckError = error as? CKError else {
             return false
         }
         return ckError.code == .changeTokenExpired
     }
 
-    func fetchAllRecordsFromCloudKit(
+    package func fetchAllRecordsFromCloudKit(
         matchingRecordTypes recordTypes: Set<String>? = nil,
         desiredKeys: [String]
     ) async throws -> [CKRecord] {
@@ -215,7 +215,7 @@ extension CloudKitManager {
         return Array(recordsByID.values)
     }
 
-    func fetchZoneChanges(
+    package func fetchZoneChanges(
         zoneID: CKRecordZone.ID,
         previousToken: CKServerChangeToken?,
         budget: CloudKitSyncBudget,
@@ -330,7 +330,7 @@ extension CloudKitManager {
         }
     }
 
-    func extractServerRecord(from error: Error) -> CKRecord? {
+    package func extractServerRecord(from error: Error) -> CKRecord? {
         guard let ckError = error as? CKError else { return nil }
 
         if ckError.code == .serverRecordChanged {
@@ -349,7 +349,7 @@ extension CloudKitManager {
         return nil
     }
 
-    func isUnknownItemError(_ error: Error) -> Bool {
+    package func isUnknownItemError(_ error: Error) -> Bool {
         guard let ckError = error as? CKError else { return false }
 
         if ckError.code == .unknownItem || ckError.code == .zoneNotFound {
@@ -368,11 +368,11 @@ extension CloudKitManager {
 
     /// Save a record using CKModifyRecordsOperation with changedKeys policy
     /// This handles both insert (new record) and update (existing record)
-    func saveRecordWithUpsert(_ record: CKRecord) async throws {
+    package func saveRecordWithUpsert(_ record: CKRecord) async throws {
         try await saveRecord(record, savePolicy: .changedKeys)
     }
 
-    func saveRecord(
+    package func saveRecord(
         _ record: CKRecord,
         savePolicy: CKModifyRecordsOperation.RecordSavePolicy
     ) async throws {
@@ -398,7 +398,7 @@ extension CloudKitManager {
         }
     }
 
-    func recordKey(
+    package func recordKey(
         _ recordID: CKRecord.ID,
         recordType: CKRecord.RecordType
     ) -> String {

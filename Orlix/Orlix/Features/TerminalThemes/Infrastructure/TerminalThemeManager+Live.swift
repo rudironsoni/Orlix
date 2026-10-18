@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThemePreferenceChangeSource {
     private let defaults: UserDefaults
@@ -32,16 +35,16 @@ private final class UserDefaultsTerminalThemePreferenceChangeSource: TerminalThe
     }
 }
 
-extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {
-    func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws {
+package extension CloudKitSyncCoordinator: TerminalThemeMutationQueue {
+    package func enqueueTerminalThemeUpsert(_ theme: TerminalTheme) throws {
         try enqueue(.terminalThemeUpsert(theme))
     }
 
-    func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws {
+    package func enqueueTerminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws {
         try enqueue(.terminalThemePreferenceUpsert(preference))
     }
 }
-extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
+package extension CloudKitSyncLifecycleDriver: TerminalThemeSyncLifecycle {}
 
 extension TerminalThemeManagerDependencies {
     static func live(

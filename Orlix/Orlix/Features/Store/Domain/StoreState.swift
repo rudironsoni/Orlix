@@ -1,63 +1,63 @@
 import Foundation
 
-nonisolated struct StoreProduct: Identifiable, Equatable, Sendable {
-    let id: String
-    let displayName: String
-    let displayPrice: String
+nonisolated package struct StoreProduct: Identifiable, Equatable, Sendable {
+    package let id: String
+    package let displayName: String
+    package let displayPrice: String
 }
 
-nonisolated enum StorePurchaseResult: Equatable, Sendable {
-    case verified(productId: String)
-    case unverified(productId: String)
-    case userCancelled
-    case pending
-    case unknown
+nonisolated package enum StorePurchaseResult: Equatable, Sendable {
+    package case verified(productId: String)
+    package case unverified(productId: String)
+    package case userCancelled
+    package case pending
+    package case unknown
 }
 
-nonisolated enum StoreTransactionUpdate: Equatable, Sendable {
-    case verified(productId: String)
-    case unverified(productId: String)
+nonisolated package enum StoreTransactionUpdate: Equatable, Sendable {
+    package case verified(productId: String)
+    package case unverified(productId: String)
 }
 
-nonisolated enum StoreSubscriptionState: Equatable, Sendable {
-    case subscribed
-    case inGracePeriod
-    case inBillingRetryPeriod
-    case expired
-    case revoked
-    case unknown
+nonisolated package enum StoreSubscriptionState: Equatable, Sendable {
+    package case subscribed
+    package case inGracePeriod
+    package case inBillingRetryPeriod
+    package case expired
+    package case revoked
+    package case unknown
 }
 
-nonisolated struct StoreSubscriptionEntitlement: Equatable, Sendable {
-    let state: StoreSubscriptionState
-    let isVerified: Bool
+nonisolated package struct StoreSubscriptionEntitlement: Equatable, Sendable {
+    package let state: StoreSubscriptionState
+    package let isVerified: Bool
 }
 
-nonisolated enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
-    case verified(Value)
-    case unverified
+nonisolated package enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
+    package case verified(Value)
+    package case unverified
 }
 
-nonisolated struct StoreSubscriptionTransaction: Equatable, Sendable {
-    let productID: String
-    let expirationDate: Date?
+nonisolated package struct StoreSubscriptionTransaction: Equatable, Sendable {
+    package let productID: String
+    package let expirationDate: Date?
 }
 
-nonisolated struct StoreSubscriptionStatus: Equatable, Sendable {
-    let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
-    let state: StoreSubscriptionState
+nonisolated package struct StoreSubscriptionStatus: Equatable, Sendable {
+    package let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
+    package let state: StoreSubscriptionState
 
-    var expirationDate: Date? {
+    package var expirationDate: Date? {
         guard case .verified(let transaction) = transaction else { return nil }
         return transaction.expirationDate
     }
 }
 
-nonisolated enum PurchaseState: Equatable {
-    case idle
-    case purchasing
-    case purchased
-    case failed(String)
+nonisolated package enum PurchaseState: Equatable {
+    package case idle
+    package case purchasing
+    package case purchased
+    package case failed(String)
 
     static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
         switch (lhs, rhs) {
@@ -71,11 +71,11 @@ nonisolated enum PurchaseState: Equatable {
     }
 }
 
-nonisolated enum RestoreState: Equatable {
-    case idle
-    case restoring
-    case restored(hasAccess: Bool)
-    case failed(String)
+nonisolated package enum RestoreState: Equatable {
+    package case idle
+    package case restoring
+    package case restored(hasAccess: Bool)
+    package case failed(String)
 
     static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
         switch (lhs, rhs) {
@@ -91,32 +91,32 @@ nonisolated enum RestoreState: Equatable {
     }
 }
 
-nonisolated enum PaywallSource: String, Equatable, Sendable {
-    case general
-    case serverLimit = "server_limit"
-    case workspaceLimit = "workspace_limit"
-    case tabLimit = "tab_limit"
-    case fileTabLimit = "file_tab_limit"
-    case splitPane = "split_pane"
-    case customEnvironment = "custom_environment"
-    case snippetLimit = "snippet_limit"
-    case welcome
-    case settings
-    case sidebarBanner = "sidebar_banner"
-    case dockerStats = "docker_stats"
+nonisolated package enum PaywallSource: String, Equatable, Sendable {
+    package case general
+    package case serverLimit = "server_limit"
+    package case workspaceLimit = "workspace_limit"
+    package case tabLimit = "tab_limit"
+    package case fileTabLimit = "file_tab_limit"
+    package case splitPane = "split_pane"
+    package case customEnvironment = "custom_environment"
+    package case snippetLimit = "snippet_limit"
+    package case welcome
+    package case settings
+    package case sidebarBanner = "sidebar_banner"
+    package case dockerStats = "docker_stats"
 }
 
-nonisolated enum OrlixProducts {
-    static let proMonthly = "com.rudironsoni.orlix.pro.monthly"
-    static let proYearly = "com.rudironsoni.orlix.pro.yearly"
-    static let proLifetime = "com.rudironsoni.orlix.pro.lifetime"
+nonisolated package enum OrlixProducts {
+    static package let proMonthly = "com.rudironsoni.orlix.pro.monthly"
+    static package let proYearly = "com.rudironsoni.orlix.pro.yearly"
+    static package let proLifetime = "com.rudironsoni.orlix.pro.lifetime"
 
-    static let subscriptionGroupId = "orlix_pro"
-    static let allProducts = [proMonthly, proYearly, proLifetime]
+    static package let subscriptionGroupId = "orlix_pro"
+    static package let allProducts = [proMonthly, proYearly, proLifetime]
 }
 
-nonisolated enum StoreError: Error {
-    case verificationFailed
-    case productNotFound
-    case purchaseFailed(String)
+nonisolated package enum StoreError: Error {
+    package case verificationFailed
+    package case productNotFound
+    package case purchaseFailed(String)
 }

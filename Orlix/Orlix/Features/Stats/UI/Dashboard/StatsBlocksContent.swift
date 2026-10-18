@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct StatsAppearancePreviewContent: View {
     let preferences: StatsPreferences
 
@@ -207,32 +210,32 @@ private struct StatsCardsGridLayout: Layout {
     }
 }
 
-struct StatsBlocksContent: View {
+package struct StatsBlocksContent: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(StatsResolvedAppearance.storageKey) private var appearanceMode = "system"
 
-    let serverName: String
-    let snapshot: ServerStatsPresentationSnapshot
-    let preferences: StatsPreferences
-    let storageVolumes: [VolumeInfo]
-    let hiddenStorageVolumeIDs: Set<VolumeIdentity>
-    let backgroundColor: Color
-    let surface: StatsVisualStyle.Surface
-    let constrainsWidth: Bool
-    let usesPagePadding: Bool
-    let isDockerUnlocked: Bool
-    let showsCustomizationEntryPoint: Bool
-    let customizeAction: (() -> Void)?
-    let dockerUpgradeAction: (() -> Void)?
-    let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    let loadProcesses: (() async throws -> [ProcessInfo])?
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
+    package let serverName: String
+    package let snapshot: ServerStatsPresentationSnapshot
+    package let preferences: StatsPreferences
+    package let storageVolumes: [VolumeInfo]
+    package let hiddenStorageVolumeIDs: Set<VolumeIdentity>
+    package let backgroundColor: Color
+    package let surface: StatsVisualStyle.Surface
+    package let constrainsWidth: Bool
+    package let usesPagePadding: Bool
+    package let isDockerUnlocked: Bool
+    package let showsCustomizationEntryPoint: Bool
+    package let customizeAction: (() -> Void)?
+    package let dockerUpgradeAction: (() -> Void)?
+    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
-    static func pageBackground(
+    static package func pageBackground(
         for preferencesStyle: StatsPreferences.Style,
         backgroundColor: Color,
         colorScheme: ColorScheme = .dark
@@ -249,7 +252,7 @@ struct StatsBlocksContent: View {
         #endif
     }
 
-    var body: some View {
+    package var body: some View {
         let resolvedColorScheme = StatsResolvedAppearance.colorScheme(from: appearanceMode, fallback: colorScheme)
         let style = StatsVisualStyle(
             preferencesStyle: preferences.style,

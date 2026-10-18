@@ -1,16 +1,19 @@
 #if os(macOS)
 import SwiftUI
 
-struct TerminalConnectionStatusView: View {
-    let presentation: TerminalConnectionStatusPresentation
-    let connectionAttemptID: UUID
-    let surfaceStyle: NoticeSurfaceStyle
-    let isActive: Bool
-    let onRetry: () -> Void
-    let onTrustNewHostKey: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalConnectionStatusView: View {
+    package let presentation: TerminalConnectionStatusPresentation
+    package let connectionAttemptID: UUID
+    package let surfaceStyle: NoticeSurfaceStyle
+    package let isActive: Bool
+    package let onRetry: () -> Void
+    package let onTrustNewHostKey: () -> Void
 
     @ViewBuilder
-    var body: some View {
+    package var body: some View {
         switch presentation {
         case .hidden:
             EmptyView()

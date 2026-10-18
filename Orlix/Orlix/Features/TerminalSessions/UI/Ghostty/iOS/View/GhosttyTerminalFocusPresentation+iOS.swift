@@ -8,18 +8,21 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    enum TerminalInputConfiguration: Equatable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package enum TerminalInputConfiguration: Equatable {
         case systemWithAccessory
         case systemWithoutAccessory
         case suppressed
     }
 
-    override var canBecomeFirstResponder: Bool {
+    override package var canBecomeFirstResponder: Bool {
         return true
     }
 
-    var isTextInputSessionEligible: Bool {
+    package var isTextInputSessionEligible: Bool {
         guard !isShuttingDown else { return false }
         guard window != nil, !isHidden, alpha > 0.01 else { return false }
         if let activationState = window?.windowScene?.activationState {
@@ -28,55 +31,55 @@ extension GhosttyTerminalView {
         return UIApplication.shared.applicationState == .active
     }
 
-    var isFindNavigatorVisible: Bool {
+    package var isFindNavigatorVisible: Bool {
         isFindNavigatorActive
     }
 
-    var isHardwareKeyboardAttached: Bool {
+    package var isHardwareKeyboardAttached: Bool {
         hasHardwareKeyboardAttached
     }
 
-    var shouldRestoreKeyboardFocusOnReconnect: Bool {
+    package var shouldRestoreKeyboardFocusOnReconnect: Bool {
         keyboardFocusPolicy.shouldRestoreOnReconnect
     }
 
-    var allowsAutomaticKeyboardFocus: Bool {
+    package var allowsAutomaticKeyboardFocus: Bool {
         keyboardFocusPolicy.allowsAutomaticFocus && !isFindNavigatorActive
     }
 
-    var isKeyboardInBrowseMode: Bool {
+    package var isKeyboardInBrowseMode: Bool {
         keyboardFocusPolicy.isBrowsing
     }
 
-    var isFindNavigatorActive: Bool {
+    package var isFindNavigatorActive: Bool {
         guard #available(iOS 16.0, *) else { return false }
         return findNavigatorLifecycle.isActive
             || nativeFindInteraction?.isFindNavigatorVisible == true
     }
 
-    var canRouteTerminalInput: Bool {
+    package var canRouteTerminalInput: Bool {
         acceptsTerminalInput && !isFindNavigatorActive
     }
 
-    var canRouteProxyDeleteBackward: Bool {
+    package var canRouteProxyDeleteBackward: Bool {
         canRouteTerminalInput
     }
 
-    var isTerminalTextInputActive: Bool {
+    package var isTerminalTextInputActive: Bool {
         isKeyboardTextInputActive || super.isFirstResponder
     }
 
-    var isKeyboardTextInputActive: Bool {
+    package var isKeyboardTextInputActive: Bool {
         imeProxyTextView.isFirstResponder
     }
 
-    var shouldSuppressSoftwareKeyboard: Bool {
+    package var shouldSuppressSoftwareKeyboard: Bool {
         keyboardFocusPolicy.shouldSuppressSoftwareKeyboard(
             hasHardwareKeyboardAttached: hasHardwareKeyboardAttached
         )
     }
 
-    var terminalInputConfiguration: TerminalInputConfiguration {
+    package var terminalInputConfiguration: TerminalInputConfiguration {
         if shouldSuppressSoftwareKeyboard {
             return .suppressed
         }
@@ -86,7 +89,7 @@ extension GhosttyTerminalView {
         return .systemWithAccessory
     }
 
-    func resolvedInputView() -> UIView? {
+    package func resolvedInputView() -> UIView? {
         #if DEBUG
         if keyboardUITestSoftwareKeyboardFailure == .untilSessionRebuild {
             return hiddenKeyboardInputView
@@ -95,7 +98,7 @@ extension GhosttyTerminalView {
         return shouldSuppressSoftwareKeyboard ? hiddenKeyboardInputView : nil
     }
 
-    func reloadTerminalInputViewsIfActive() {
+    package func reloadTerminalInputViewsIfActive() {
         guard imeProxyTextView.isFirstResponder else { return }
         #if DEBUG
         keyboardInputViewReloadCount += 1
@@ -103,7 +106,7 @@ extension GhosttyTerminalView {
         imeProxyTextView.reloadInputViews()
     }
 
-    func reloadTerminalInputViews(
+    package func reloadTerminalInputViews(
         ifChangedFrom previousInputConfiguration: TerminalInputConfiguration
     ) {
         guard previousInputConfiguration != terminalInputConfiguration else { return }
@@ -111,17 +114,17 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func acquireTerminalInput() -> Bool {
+    package func acquireTerminalInput() -> Bool {
         requestKeyboardFocus(for: .initialActivation)
     }
 
     @discardableResult
-    func forceSoftwareKeyboardInput() -> Bool {
+    package func forceSoftwareKeyboardInput() -> Bool {
         requestKeyboardFocus(for: .explicitUserRequest)
     }
 
     @discardableResult
-    func requestKeyboardFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
+    package func requestKeyboardFocus(for reason: TerminalKeyboardFocusReason) -> Bool {
         let reasonDescription = String(describing: reason)
         logKeyboardLifecycle("focus.request.begin", detail: "reason=\(reasonDescription)")
         guard prepareKeyboardFocus(for: reason) else {
@@ -147,7 +150,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func dismissKeyboardForUser(suppressDirectTouchRefocus: Bool = false) {
+    package func dismissKeyboardForUser(suppressDirectTouchRefocus: Bool = false) {
         let previousInputConfiguration = terminalInputConfiguration
         keyboardFocusPolicy.dismissForUser()
         notifyKeyboardBrowseModeChange(
@@ -162,7 +165,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool {
+    package func focusTerminalInputWithoutShowingSoftwareKeyboard() -> Bool {
         guard !isFindNavigatorActive else { return false }
         let previousInputConfiguration = terminalInputConfiguration
         keyboardFocusPolicy.dismissForUser()
@@ -174,7 +177,7 @@ extension GhosttyTerminalView {
         return becomeFirstResponder()
     }
 
-    func focusForHardwareKeyboardIfNeeded() {
+    package func focusForHardwareKeyboardIfNeeded() {
         guard hasHardwareKeyboardAttached,
               canRouteTerminalInput,
               isTextInputSessionEligible,
@@ -188,7 +191,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func exitNativeSelectionTextInputContextForTerminalInput() -> Bool {
+    package func exitNativeSelectionTextInputContextForTerminalInput() -> Bool {
         guard isNativeSelectionTextInputContext else { return true }
         guard !isFindNavigatorActive else { return false }
 
@@ -197,7 +200,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func clearNativeSelectionStateForTerminalInput() {
+    package func clearNativeSelectionStateForTerminalInput() {
         guard usesNativeTouchSelection else { return }
         let hadSelection = nativeSelectionLifecycle.selection != nil
         if hadSelection {
@@ -209,11 +212,11 @@ extension GhosttyTerminalView {
         }
     }
 
-    func releaseTerminalInput() {
+    package func releaseTerminalInput() {
         _ = resignFirstResponder()
     }
 
-    func dismissKeyboardFromToolbar() {
+    package func dismissKeyboardFromToolbar() {
         #if DEBUG
         keyboardHideRequestCount += 1
         #endif
@@ -224,14 +227,14 @@ extension GhosttyTerminalView {
         dismissKeyboardForUser(suppressDirectTouchRefocus: true)
     }
 
-    func shouldAutoFocusKeyboard(for touches: Set<UITouch>) -> Bool {
+    package func shouldAutoFocusKeyboard(for touches: Set<UITouch>) -> Bool {
         guard !isFindNavigatorActive else { return false }
         guard keyboardFocusPolicy.allowsAutomaticFocus else { return false }
         guard touches.contains(where: { $0.type == .direct }) else { return true }
         return Date() >= suppressDirectTouchKeyboardFocusUntil
     }
 
-    func setTerminalInputAccessorySuppressed(_ suppressed: Bool) {
+    package func setTerminalInputAccessorySuppressed(_ suppressed: Bool) {
         guard suppressAccessoryForMissingSoftwareKeyboard != suppressed else { return }
         let previousInputConfiguration = terminalInputConfiguration
         suppressAccessoryForMissingSoftwareKeyboard = suppressed
@@ -241,7 +244,7 @@ extension GhosttyTerminalView {
         logKeyboardLifecycle("accessory.suppression.changed", detail: "suppressed=\(suppressed)")
     }
 
-    func notifyKeyboardBrowseModeChange(
+    package func notifyKeyboardBrowseModeChange(
         previousInputConfiguration: TerminalInputConfiguration
     ) {
         onKeyboardBrowseModeChange?(keyboardFocusPolicy.isBrowsing)
@@ -255,7 +258,7 @@ extension GhosttyTerminalView {
     /// changed" and cannot revive a dead keyboard scene (iOS 26 "No scene
     /// exists for this identity"); the responder-free turn gives InputUI a
     /// real session boundary before the coordinator requests reacquisition.
-    func releaseTerminalInputForReacquisition(completion: @escaping () -> Void) {
+    package func releaseTerminalInputForReacquisition(completion: @escaping () -> Void) {
         #if DEBUG
         keyboardInputSessionRebuildCount += 1
         #endif
@@ -273,26 +276,26 @@ extension GhosttyTerminalView {
         }
     }
 
-    func notifyFindNavigatorVisibilityChange(_ visibilityOverride: Bool? = nil) {
+    package func notifyFindNavigatorVisibilityChange(_ visibilityOverride: Bool? = nil) {
         onFindNavigatorVisibilityChange?(visibilityOverride ?? isFindNavigatorVisible)
     }
 
-    func notifyDirectTouchOnTerminal(isFocusTap: Bool = false) {
+    package func notifyDirectTouchOnTerminal(isFocusTap: Bool = false) {
         guard !isFindNavigatorActive else { return }
         terminalContextMenuActions?.focus()
         onTerminalDirectTouch?(isFocusTap)
     }
 
-    override var isFirstResponder: Bool {
+    override package var isFirstResponder: Bool {
         isTerminalTextInputActive
     }
 
-    override func becomeFirstResponder() -> Bool {
+    override package func becomeFirstResponder() -> Bool {
         guard isTextInputSessionEligible else { return false }
         return imeProxyTextView.becomeFirstResponder()
     }
 
-    override func resignFirstResponder() -> Bool {
+    override package func resignFirstResponder() -> Bool {
         guard imeProxyTextView.isFirstResponder || super.isFirstResponder else { return true }
         let proxyResult: Bool
         if imeProxyTextView.isFirstResponder {

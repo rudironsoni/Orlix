@@ -6,6 +6,9 @@
 import SwiftUI
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct TerminalThemePreviewPalette {
     let background: Color
     let foreground: Color
@@ -253,16 +256,16 @@ struct ThemeColorParser {
 }
 
 @MainActor
-struct ThemeColorParserPaletteResolver: TerminalThemePaletteResolving {
-    func palette(forThemeNamed name: String) -> TerminalThemePalette {
+package struct ThemeColorParserPaletteResolver: TerminalThemePaletteResolving {
+    package func palette(forThemeNamed name: String) -> TerminalThemePalette {
         ThemeColorParser.appearancePalette(for: name)
     }
 
-    func palette(forThemeContent content: String) -> TerminalThemePalette {
+    package func palette(forThemeContent content: String) -> TerminalThemePalette {
         ThemeColorParser.appearancePalette(themeContent: content)
     }
 
-    func invalidateCache() {
+    package func invalidateCache() {
         ThemeColorParser.invalidateCache()
     }
 }

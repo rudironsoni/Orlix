@@ -1,9 +1,12 @@
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class StatsPreferencesPendingMutationHandler {
+final package class StatsPreferencesPendingMutationHandler {
     private let cloud: any StatsPreferencesCloudClient
     private let resolutionPublisher: any StatsPreferencesResolutionPublishing
 
-    init(
+    package init(
         cloud: any StatsPreferencesCloudClient,
         resolutionPublisher: any StatsPreferencesResolutionPublishing
     ) {
@@ -11,7 +14,7 @@ final class StatsPreferencesPendingMutationHandler {
         self.resolutionPublisher = resolutionPublisher
     }
 
-    func handle(_ preferences: StatsPreferences) async throws {
+    package func handle(_ preferences: StatsPreferences) async throws {
         let resolvedPreferences = try await cloud.syncStatsPreferences(preferences)
         resolutionPublisher.publishStatsPreferences(resolvedPreferences)
     }

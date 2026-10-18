@@ -1,16 +1,20 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 
 // MARK: - Server Sidebar View (macOS)
 
-struct ServerSidebarView: View {
-    let serverManager: ServerManager
-    let serverFormDependencies: ServerFormDependencies
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
-    let onOpenSettings: () -> Void
+package struct ServerSidebarView: View {
+    package let serverManager: ServerManager
+    package let serverFormDependencies: ServerFormDependencies
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let onOpenSettings: () -> Void
     @ObservedObject private var stateStore: ServerStateStore
     @ObservedObject private var workspaceSelectionStore: WorkspaceSelectionStore
-    @Binding var selectedWorkspace: Workspace?
-    @Binding var selectedServer: Server?
+    @Binding package var selectedWorkspace: Workspace?
+    @Binding package var selectedServer: Server?
 
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var appLockManager: AppLockManager
@@ -39,7 +43,7 @@ struct ServerSidebarView: View {
     @State private var lockedServerAlert: Server?
     @State private var queuedDiscoveryPrefill: ServerFormPrefill?
 
-    init(
+    package init(
         serverManager: ServerManager,
         tabManager: TerminalTabManager,
         terminalNavigation: TerminalSessionNavigationProjection,
@@ -133,7 +137,7 @@ struct ServerSidebarView: View {
         return stateStore.servers.filter { $0.workspaceId == workspace.id }.count
     }
 
-    var filteredServers: [Server] {
+    package var filteredServers: [Server] {
         guard let workspace = selectedWorkspace else { return [] }
 
         var servers = stateStore.servers.filter { $0.workspaceId == workspace.id }
@@ -157,7 +161,7 @@ struct ServerSidebarView: View {
 
     // MARK: - Body
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             // Workspace section
             VStack(alignment: .leading, spacing: 8) {

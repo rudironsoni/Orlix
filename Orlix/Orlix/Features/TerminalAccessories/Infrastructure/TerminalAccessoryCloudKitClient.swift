@@ -2,9 +2,12 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
-    static let maximumConflictAttempts = 4
+final package class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
+    static package let maximumConflictAttempts = 4
 
     private let transport: any CloudKitRecordTransport
     private let logger = Logger(
@@ -12,11 +15,11 @@ final class TerminalAccessoryCloudKitClient: TerminalAccessoryCloudClient {
         category: "TerminalAccessoryCloudKit"
     )
 
-    init(transport: any CloudKitRecordTransport) {
+    package init(transport: any CloudKitRecordTransport) {
         self.transport = transport
     }
 
-    func syncTerminalAccessoryProfile(
+    package func syncTerminalAccessoryProfile(
         _ localProfile: TerminalAccessoryProfile
     ) async throws -> TerminalAccessoryProfile {
         try await transport.performCloudKitRecordMutation { [self] in

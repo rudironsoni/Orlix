@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private struct RemoteFileSheetActionLabel: View {
     let title: String
     let isSubmitting: Bool

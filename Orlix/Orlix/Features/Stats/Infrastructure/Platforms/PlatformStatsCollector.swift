@@ -1,4 +1,8 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Platform Stats Protocol
 
@@ -333,9 +337,9 @@ nonisolated struct LinuxCpuValues: Sendable {
 
 // MARK: - Platform Collector Factory
 
-extension RemotePlatform {
+package extension RemotePlatform {
     /// Get the appropriate stats collector for this platform
-    func createCollector() -> PlatformStatsCollector {
+    package func createCollector() -> PlatformStatsCollector {
         switch self {
         case .linux:
             return LinuxStatsCollector()

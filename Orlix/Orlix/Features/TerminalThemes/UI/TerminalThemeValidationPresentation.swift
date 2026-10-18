@@ -1,7 +1,10 @@
 import Foundation
 
-extension TerminalThemeValidationError: LocalizedError {
-    nonisolated var errorDescription: String? {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension TerminalThemeValidationError: LocalizedError {
+    nonisolated package var errorDescription: String? {
         switch self {
         case .emptyContent:
             return String(localized: "Theme content is empty.")

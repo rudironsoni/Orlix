@@ -9,6 +9,9 @@
 import CoreImage
 import SwiftUI
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Native UIKit Input Accessory View with Glass Effect
 

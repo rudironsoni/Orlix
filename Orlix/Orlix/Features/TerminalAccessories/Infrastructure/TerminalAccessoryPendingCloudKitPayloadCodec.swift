@@ -1,9 +1,12 @@
 import Foundation
 
-nonisolated enum TerminalAccessoryPendingCloudKitPayloadCodec {
-    static let entityType = "terminalAccessoryProfile"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum TerminalAccessoryPendingCloudKitPayloadCodec {
+    static package let entityType = "terminalAccessoryProfile"
 
-    static func encode(
+    static package func encode(
         _ profile: TerminalAccessoryProfile
     ) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
@@ -15,7 +18,7 @@ nonisolated enum TerminalAccessoryPendingCloudKitPayloadCodec {
         )
     }
 
-    static func decode(
+    static package func decode(
         _ payload: PendingCloudKitPayloadEnvelope
     ) throws -> TerminalAccessoryProfile? {
         guard let profile = try payload.decode(
@@ -32,7 +35,7 @@ nonisolated enum TerminalAccessoryPendingCloudKitPayloadCodec {
         return profile
     }
 
-    static func migrateLegacy(
+    static package func migrateLegacy(
         kind: String,
         encodedValue: Data
     ) throws -> PendingCloudKitPayloadEnvelope? {
@@ -43,8 +46,8 @@ nonisolated enum TerminalAccessoryPendingCloudKitPayloadCodec {
     }
 }
 
-nonisolated extension PendingCloudKitPayloadEnvelope {
-    static func terminalAccessoryProfileUpsert(
+nonisolated package extension PendingCloudKitPayloadEnvelope {
+    static package func terminalAccessoryProfileUpsert(
         _ profile: TerminalAccessoryProfile
     ) throws -> Self {
         try TerminalAccessoryPendingCloudKitPayloadCodec.encode(profile)

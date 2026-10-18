@@ -1,11 +1,15 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-struct StatsCardsLayoutUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixStats
+#endif
+package struct StatsCardsLayoutUITestHarness: View {
     private let style: StatsPreferences.Style
     private let isDockerUnlocked: Bool
 
-    init(arguments: [String] = Foundation.ProcessInfo.processInfo.arguments) {
+    package init(arguments: [String] = Foundation.ProcessInfo.processInfo.arguments) {
         if arguments.contains("--orlix-ui-test-stats-cards-classic") {
             style = .classic
         } else if arguments.contains("--orlix-ui-test-stats-cards-compact") {
@@ -16,7 +20,7 @@ struct StatsCardsLayoutUITestHarness: View {
         isDockerUnlocked = !arguments.contains("--orlix-ui-test-stats-cards-locked-docker")
     }
 
-    var body: some View {
+    package var body: some View {
         let snapshot = StatsPreviewFixture.presentationSnapshot
 
         ScrollView {

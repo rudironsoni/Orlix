@@ -10,15 +10,15 @@ protocol TerminalIdleTimerControlling: AnyObject {
 /// Aggregates visible terminal routes because the iOS idle timer is shared by
 /// every Orlix window in the process.
 @MainActor
-final class TerminalScreenAwakeCoordinator: ObservableObject {
+final package class TerminalScreenAwakeCoordinator: ObservableObject {
     private var requestingRouteIDs: Set<UUID> = []
     private let idleTimer: any TerminalIdleTimerControlling
 
-    init(idleTimer: any TerminalIdleTimerControlling) {
+    package init(idleTimer: any TerminalIdleTimerControlling) {
         self.idleTimer = idleTimer
     }
 
-    nonisolated static func shouldRequest(
+    nonisolated static package func shouldRequest(
         preferenceEnabled: Bool,
         routeVisible: Bool,
         terminalSelected: Bool,
@@ -30,7 +30,7 @@ final class TerminalScreenAwakeCoordinator: ObservableObject {
             && !sceneIsInBackground
     }
 
-    func update(isRequested: Bool, for routeID: UUID) {
+    package func update(isRequested: Bool, for routeID: UUID) {
         let wasIdleTimerDisabled = !requestingRouteIDs.isEmpty
 
         if isRequested {

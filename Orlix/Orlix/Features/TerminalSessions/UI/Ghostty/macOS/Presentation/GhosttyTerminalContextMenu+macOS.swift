@@ -8,8 +8,8 @@
 #if os(macOS)
 import AppKit
 
-extension GhosttyTerminalView {
-    override func menu(for event: NSEvent) -> NSMenu? {
+package extension GhosttyTerminalView {
+    override package func menu(for event: NSEvent) -> NSMenu? {
         switch event.type {
         case .rightMouseDown:
             break
@@ -25,7 +25,7 @@ extension GhosttyTerminalView {
         return makeTerminalContextMenu()
     }
 
-    func updateReadonlyState(_ isReadonly: Bool) {
+    package func updateReadonlyState(_ isReadonly: Bool) {
         readonly = isReadonly
     }
 
@@ -102,7 +102,7 @@ extension GhosttyTerminalView {
         return item
     }
 
-    func focusContextMenuTarget() {
+    package func focusContextMenuTarget() {
         window?.makeFirstResponder(self)
         terminalContextMenuActions?.focus()
     }
@@ -132,7 +132,7 @@ extension GhosttyTerminalView {
         resetTerminalForReconnect()
     }
 
-    @objc func toggleReadonly(_ sender: Any?) {
+    @objc package func toggleReadonly(_ sender: Any?) {
         focusContextMenuTarget()
         if surface?.perform(action: "toggle_readonly") == true {
             readonly.toggle()

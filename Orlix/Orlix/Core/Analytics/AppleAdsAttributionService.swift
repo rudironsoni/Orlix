@@ -2,6 +2,9 @@
 import AdServices
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct AppleAdsAttributionRecord: Codable, Equatable, Sendable {
     let isAttributed: Bool
     let organizationID: Int64?

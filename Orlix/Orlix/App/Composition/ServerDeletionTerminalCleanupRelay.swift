@@ -1,4 +1,7 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixTerminal
+#endif
 
 /// Breaks the production initialization cycle between server state and terminal state.
 @MainActor

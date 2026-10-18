@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated struct ServerFormPrefill: Equatable, Hashable, Sendable {
-    var name: String
-    var host: String
-    var port: Int
-    var username: String?
+nonisolated package struct ServerFormPrefill: Equatable, Hashable, Sendable {
+    package var name: String
+    package var host: String
+    package var port: Int
+    package var username: String?
 
-    init(
+    package init(
         name: String,
         host: String,
         port: Int = 22,

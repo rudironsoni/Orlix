@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ZmxRemoteSessionCommandBuilder {
     static let availableMarker = "__VVTERM_ZMX_OK__"
     static let missingMarker = "__VVTERM_ZMX_NO__"

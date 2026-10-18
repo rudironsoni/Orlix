@@ -2,8 +2,8 @@ import Combine
 import Foundation
 
 @MainActor
-final class CloudKitSyncStatusStore: ObservableObject {
-    @Published var syncState = CloudKitSyncState()
-    @Published var lastSyncDate: Date?
-    @Published var accountState: CloudKitAccountState = .checking
+final package class CloudKitSyncStatusStore: ObservableObject {
+    @Published package var syncState = CloudKitSyncState()
+    @Published package var lastSyncDate: Date?
+    @Published package var accountState: CloudKitAccountState = .checking
 }

@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 nonisolated struct SSHShellRegistry {
     nonisolated struct StartToken: Hashable, Sendable {
         let id: UUID

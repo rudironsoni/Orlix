@@ -7,12 +7,12 @@ import SwiftUI
 
 // MARK: - Empty State Views
 
-struct ServerConnectEmptyState: View {
-    let server: Server
-    let onConnect: () -> Void
+package struct ServerConnectEmptyState: View {
+    package let server: Server
+    package let onConnect: () -> Void
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -51,8 +51,8 @@ struct ServerConnectEmptyState: View {
     }
 }
 
-struct NoServerSelectedEmptyState: View {
-    var body: some View {
+package struct NoServerSelectedEmptyState: View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -79,11 +79,11 @@ struct NoServerSelectedEmptyState: View {
     }
 }
 
-struct MultiConnectionUpgradeEmptyState: View {
-    let server: Server
+package struct MultiConnectionUpgradeEmptyState: View {
+    package let server: Server
     @State private var showingTabLimitAlert = false
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -134,12 +134,12 @@ struct MultiConnectionUpgradeEmptyState: View {
     }
 }
 
-struct NoServersEmptyState: View {
-    let onAddServer: () -> Void
-    var onAddWorkspace: (() -> Void)? = nil
-    var requiresWorkspace = false
+package struct NoServersEmptyState: View {
+    package let onAddServer: () -> Void
+    package var onAddWorkspace: (() -> Void)? = nil
+    package var requiresWorkspace = false
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 16) {
                 if requiresWorkspace {

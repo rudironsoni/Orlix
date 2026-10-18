@@ -1,28 +1,18 @@
 import Foundation
 
-nonisolated struct RemoteSessionBackendIdentifier: RawRepresentable, Codable, Hashable, Sendable {
-    static let herdr = Self(rawValue: "herdr")
-    static let tmux = Self(rawValue: "tmux")
-    static let zellij = Self(rawValue: "zellij")
-    static let zmx = Self(rawValue: "zmx")
-
-    let rawValue: String
-
-    init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-}
-
-nonisolated struct RemoteSessionBackendMetadata: Hashable, Sendable {
-    enum Installation: Hashable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct RemoteSessionBackendMetadata: Hashable, Sendable {
+    package enum Installation: Hashable, Sendable {
         case automatic
         case documentation(URL)
     }
 
-    let identifier: RemoteSessionBackendIdentifier
-    let displayName: String
-    let installation: Installation
-    let managedStartupCommandSupport: ManagedStartupCommandSupport
+    package let identifier: RemoteSessionBackendIdentifier
+    package let displayName: String
+    package let installation: Installation
+    package let managedStartupCommandSupport: ManagedStartupCommandSupport
 }
 
 nonisolated enum ManagedStartupCommandSupport: Hashable, Sendable {
@@ -30,9 +20,9 @@ nonisolated enum ManagedStartupCommandSupport: Hashable, Sendable {
     case unsupported
 }
 
-nonisolated struct RemoteSessionThemeStyle: Hashable, Sendable {
-    let name: String
-    let modeStyle: String
+nonisolated package struct RemoteSessionThemeStyle: Hashable, Sendable {
+    package let name: String
+    package let modeStyle: String
 }
 
 nonisolated struct RemoteSessionSemanticVersion: Codable, Comparable, Hashable, Sendable {
@@ -205,40 +195,40 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
     }
 }
 
-nonisolated enum RemoteSessionAvailability: Hashable, Sendable {
-    case unsupportedEnvironment
-    case available(RemoteSessionProbe)
-    case confirmedMissing
-    case incompatible(RemoteSessionProbe)
-    case indeterminate(RemoteSessionProbeFailure)
+nonisolated package enum RemoteSessionAvailability: Hashable, Sendable {
+    package case unsupportedEnvironment
+    package case available(RemoteSessionProbe)
+    package case confirmedMissing
+    package case incompatible(RemoteSessionProbe)
+    package case indeterminate(RemoteSessionProbeFailure)
 }
 
-nonisolated struct RemoteSessionRuntime: Codable, Hashable, Sendable {
-    let probe: RemoteSessionProbe
+nonisolated package struct RemoteSessionRuntime: Codable, Hashable, Sendable {
+    package let probe: RemoteSessionProbe
 
-    var backendIdentifier: RemoteSessionBackendIdentifier {
+    package var backendIdentifier: RemoteSessionBackendIdentifier {
         probe.backendIdentifier
     }
 }
 
-nonisolated struct RemoteSessionIdentifier: Codable, Hashable, Sendable {
-    enum ValidationError: Error, Equatable, Sendable {
+nonisolated package struct RemoteSessionIdentifier: Codable, Hashable, Sendable {
+    package enum ValidationError: Error, Equatable, Sendable {
         case empty
         case tooLong
         case containsControlCharacters
     }
 
-    static let maximumRawValueLength = 128
+    static package let maximumRawValueLength = 128
 
     private enum CodingKeys: String, CodingKey {
         case backendIdentifier
         case rawValue
     }
 
-    let backendIdentifier: RemoteSessionBackendIdentifier
-    let rawValue: String
+    package let backendIdentifier: RemoteSessionBackendIdentifier
+    package let rawValue: String
 
-    init(
+    package init(
         backendIdentifier: RemoteSessionBackendIdentifier,
         validating rawValue: String
     ) throws {
@@ -253,7 +243,7 @@ nonisolated struct RemoteSessionIdentifier: Codable, Hashable, Sendable {
         self.rawValue = rawValue
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let backendIdentifier = try container.decode(
             RemoteSessionBackendIdentifier.self,
@@ -271,82 +261,45 @@ nonisolated struct RemoteSessionIdentifier: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(backendIdentifier, forKey: .backendIdentifier)
         try container.encode(rawValue, forKey: .rawValue)
     }
 }
 
-nonisolated enum RemoteSessionOwnership: String, Codable, Hashable, Sendable {
-    case managed
-    case external
+nonisolated package enum RemoteSessionOwnership: String, Codable, Hashable, Sendable {
+    package case managed
+    package case external
 }
 
-nonisolated enum RemoteSessionStartupBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
-    case createManaged
-    case ask
-    case plainShell
-
-    var id: String { rawValue }
-    init?(persistedRawValue: String) {
-        switch persistedRawValue {
-        case Self.createManaged.rawValue, "orlixManaged":
-            self = .createManaged
-        case Self.ask.rawValue, "askEveryTime":
-            self = .ask
-        case Self.plainShell.rawValue, "skipTmux":
-            self = .plainShell
-        default:
-            return nil
-        }
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let rawValue = try container.decode(String.self)
-        guard let value = Self(persistedRawValue: rawValue) else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Unknown remote session startup behavior"
-            )
-        }
-        self = value
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
+nonisolated package struct RemoteSessionAttachment: Codable, Hashable, Sendable {
+    package let identifier: RemoteSessionIdentifier
+    package let ownership: RemoteSessionOwnership
 }
 
-nonisolated struct RemoteSessionAttachment: Codable, Hashable, Sendable {
-    let identifier: RemoteSessionIdentifier
-    let ownership: RemoteSessionOwnership
+nonisolated package struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sendable {
+    package let attachment: RemoteSessionAttachment
+    package let attachedClientCount: Int?
+    package let containerCount: Int?
+    package let cleanupDisposition: RemoteSessionCleanupDisposition
+
+    package var id: RemoteSessionIdentifier { attachment.identifier }
 }
 
-nonisolated struct RemoteSessionDescriptor: Codable, Hashable, Identifiable, Sendable {
-    let attachment: RemoteSessionAttachment
-    let attachedClientCount: Int?
-    let containerCount: Int?
-    let cleanupDisposition: RemoteSessionCleanupDisposition
-
-    var id: RemoteSessionIdentifier { attachment.identifier }
+nonisolated package enum RemoteSessionListScope: Hashable, Sendable {
+    package case userVisible
+    package case managedCleanup
 }
 
-nonisolated enum RemoteSessionListScope: Hashable, Sendable {
-    case userVisible
-    case managedCleanup
-}
-
-nonisolated enum RemoteSessionLaunchIntent: Hashable, Sendable {
-    case attach(RemoteSessionAttachment)
-    case ensureManaged(
+nonisolated package enum RemoteSessionLaunchIntent: Hashable, Sendable {
+    package case attach(RemoteSessionAttachment)
+    package case ensureManaged(
         identifier: RemoteSessionIdentifier,
         initialCommand: String?
     )
 
-    var attachment: RemoteSessionAttachment {
+    package var attachment: RemoteSessionAttachment {
         switch self {
         case .attach(let attachment):
             return attachment
@@ -360,14 +313,14 @@ nonisolated enum RemoteSessionLaunchIntent: Hashable, Sendable {
 
 }
 
-nonisolated struct RemoteSessionLaunchRequest: Hashable, Sendable {
-    let intent: RemoteSessionLaunchIntent
-    let workingDirectory: String
-    let lifecycleEnvelope: RemoteSessionLifecycleEnvelope
-    let transport: ShellTransport
-    let themeStyle: RemoteSessionThemeStyle
+nonisolated package struct RemoteSessionLaunchRequest: Hashable, Sendable {
+    package let intent: RemoteSessionLaunchIntent
+    package let workingDirectory: String
+    package let lifecycleEnvelope: RemoteSessionLifecycleEnvelope
+    package let transport: ShellTransport
+    package let themeStyle: RemoteSessionThemeStyle
 
-    var attachment: RemoteSessionAttachment { intent.attachment }
+    package var attachment: RemoteSessionAttachment { intent.attachment }
 }
 
 nonisolated struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {
@@ -386,7 +339,7 @@ nonisolated struct RemoteSessionPresenceProbe: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct RemoteSessionBackendLaunchPlan: Hashable, Sendable {
-    let command: String
-    let presenceProbe: RemoteSessionPresenceProbe
+nonisolated package struct RemoteSessionBackendLaunchPlan: Hashable, Sendable {
+    package let command: String
+    package let presenceProbe: RemoteSessionPresenceProbe
 }

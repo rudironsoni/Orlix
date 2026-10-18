@@ -1,7 +1,11 @@
 import SwiftUI
 
-extension RemoteFileBrowserScreen {
-    func securityApprovalPresentation<Content: View>(_ content: Content) -> some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package extension RemoteFileBrowserScreen {
+    package func securityApprovalPresentation<Content: View>(_ content: Content) -> some View {
         content
             .sshHostKeyTrustAlert(
                 request: effectiveSecurityApprovalRequest,
@@ -11,12 +15,12 @@ extension RemoteFileBrowserScreen {
             )
     }
 
-    func remoteOperationErrorMessage(for error: Error) -> String {
+    package func remoteOperationErrorMessage(for error: Error) -> String {
         RemoteFileBrowserError.map(error).errorDescription ?? error.localizedDescription
     }
 
     @MainActor
-    func presentOperationError(
+    package func presentOperationError(
         _ error: Error,
         retry: (@MainActor () -> Void)? = nil,
         onCancellation: (@MainActor () -> Void)? = nil
@@ -31,24 +35,24 @@ extension RemoteFileBrowserScreen {
         presentation = .operationError(remoteOperationErrorMessage(for: error))
     }
 
-    var hostKeyApprovalChallenge: KnownHostsManager.Challenge? {
+    package var hostKeyApprovalChallenge: KnownHostsManager.Challenge? {
         guard case .hostKey(let challenge) = effectiveSecurityApprovalRequest else {
             return nil
         }
         return challenge
     }
 
-    var effectiveSecurityApprovalRequest: ServerSecurityApprovalRequest? {
+    package var effectiveSecurityApprovalRequest: ServerSecurityApprovalRequest? {
         operationCoordinator.securityApprovalRequest
     }
 
-    var hostKeyApprovalBinding: Binding<Bool> {
+    package var hostKeyApprovalBinding: Binding<Bool> {
         Binding(get: { hostKeyApprovalChallenge != nil }, set: { _ in })
     }
 
     @discardableResult
     @MainActor
-    func presentSecurityApproval(
+    package func presentSecurityApproval(
         for error: Error,
         retry: (@MainActor () -> Void)?,
         onCancellation: (@MainActor () -> Void)? = nil
@@ -69,7 +73,7 @@ extension RemoteFileBrowserScreen {
     }
 
     @MainActor
-    func presentDirectorySecurityApprovalIfNeeded() {
+    package func presentDirectorySecurityApprovalIfNeeded() {
         guard let error = browser.error(for: fileTab) else { return }
         _ = presentSecurityApproval(for: error, retry: {
             Task {
@@ -79,7 +83,7 @@ extension RemoteFileBrowserScreen {
     }
 
     @MainActor
-    func presentViewerSecurityApprovalIfNeeded() {
+    package func presentViewerSecurityApprovalIfNeeded() {
         guard let error = browser.viewerError(for: fileTab),
               let entry = snapshot.selectedEntry else { return }
         _ = presentSecurityApproval(for: error, retry: {
@@ -90,7 +94,7 @@ extension RemoteFileBrowserScreen {
     }
 
     @MainActor
-    func cancelSecurityApproval() {
+    package func cancelSecurityApproval() {
         guard effectiveSecurityApprovalRequest != nil else { return }
         if let error = operationCoordinator.cancelSecurityRequest() {
             presentation = .operationError(error.localizedDescription)
@@ -98,7 +102,7 @@ extension RemoteFileBrowserScreen {
     }
 
     @MainActor
-    func approveHostKeyAndRetry() {
+    package func approveHostKeyAndRetry() {
         guard effectiveSecurityApprovalRequest != nil else { return }
         if let error = operationCoordinator.approveSecurityRequest() {
             presentation = .operationError(error.localizedDescription)

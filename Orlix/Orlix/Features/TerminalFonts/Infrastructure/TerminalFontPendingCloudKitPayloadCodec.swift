@@ -1,12 +1,15 @@
 import Foundation
 
-nonisolated enum TerminalFontPendingCloudKitPayloadCodec {
-    static let fontEntityType = "terminalFont"
-    static let preferenceEntityType = "terminalFontPreference"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum TerminalFontPendingCloudKitPayloadCodec {
+    static package let fontEntityType = "terminalFont"
+    static package let preferenceEntityType = "terminalFontPreference"
     private static let fontDrainPriority = 2
     private static let preferenceDrainPriority = 3
 
-    static func encodeFont(_ font: TerminalFont) throws -> PendingCloudKitPayloadEnvelope {
+    static package func encodeFont(_ font: TerminalFont) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
             entityType: fontEntityType,
             entityKey: font.id,
@@ -16,7 +19,7 @@ nonisolated enum TerminalFontPendingCloudKitPayloadCodec {
         )
     }
 
-    static func encodePreference(
+    static package func encodePreference(
         _ preference: TerminalFontPreference
     ) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
@@ -28,7 +31,7 @@ nonisolated enum TerminalFontPendingCloudKitPayloadCodec {
         )
     }
 
-    static func decodeFont(_ payload: PendingCloudKitPayloadEnvelope) throws -> TerminalFont? {
+    static package func decodeFont(_ payload: PendingCloudKitPayloadEnvelope) throws -> TerminalFont? {
         guard let font = try payload.decode(
             TerminalFont.self,
             entityType: fontEntityType,
@@ -40,7 +43,7 @@ nonisolated enum TerminalFontPendingCloudKitPayloadCodec {
         return try TerminalFontValidator.validateStoredFont(font)
     }
 
-    static func decodePreference(
+    static package func decodePreference(
         _ payload: PendingCloudKitPayloadEnvelope
     ) throws -> TerminalFontPreference? {
         guard let preference = try payload.decode(
@@ -58,12 +61,12 @@ nonisolated enum TerminalFontPendingCloudKitPayloadCodec {
     }
 }
 
-nonisolated extension PendingCloudKitPayloadEnvelope {
-    static func terminalFontUpsert(_ font: TerminalFont) throws -> Self {
+nonisolated package extension PendingCloudKitPayloadEnvelope {
+    static package func terminalFontUpsert(_ font: TerminalFont) throws -> Self {
         try TerminalFontPendingCloudKitPayloadCodec.encodeFont(font)
     }
 
-    static func terminalFontPreferenceUpsert(_ preference: TerminalFontPreference) throws -> Self {
+    static package func terminalFontPreferenceUpsert(_ preference: TerminalFontPreference) throws -> Self {
         try TerminalFontPendingCloudKitPayloadCodec.encodePreference(preference)
     }
 }
