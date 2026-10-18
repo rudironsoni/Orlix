@@ -92,7 +92,7 @@ package actor RemoteClipboardTransferService {
     }
 
     private func createRemoteTemporaryPath(
-        package extension fileExtension: String,
+        extension fileExtension: String,
         plan: RemoteClipboardTransferPlan,
         using sshClient: SSHClient
     ) async throws -> String {
