@@ -125,7 +125,11 @@ class PackageRootfsInputTests(unittest.TestCase):
         self.assertIn('autom4te_perllibdir="$share/autoconf"', autotools)
         self.assertNotIn("xcrun", autotools)
         kernel = (ROOT / "bazel/feasibility/kernel/kernel_macho.bzl").read_text(encoding="utf-8")
-        self.assertIn('"no-remote-cache": "1"', kernel)
+        for mnemonic in ("OrlixTctiIsaRestore", "OrlixKernelMachOArchive"):
+            start = kernel.index(f'mnemonic = "{mnemonic}"')
+            block = kernel[start:kernel.index("\n", kernel.index("execution_requirements = ", start))]
+            self.assertNotIn("no-remote-cache", block, mnemonic)
+            self.assertIn('"no-remote-exec": "1"', block, mnemonic)
         self.assertIn('"no-sandbox": "1"', kernel)
         for name in ("coreutils.bzl", "bash.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")
