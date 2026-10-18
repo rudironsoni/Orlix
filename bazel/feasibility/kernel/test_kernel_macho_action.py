@@ -67,7 +67,9 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertIn("source_state.resume", restore)
         self.assertIn("ctx.files.tool_libs", restore)
         self.assertIn("ctx.files.python_home", restore)
+        self.assertIn('"$printf_bin"', restore)
         self.assertIn("tools/bin/meson-python", self.rule)
+        self.assertIn("tools/bin/printf", self.rule)
 
     def test_kernel_archive_executes_staged_tools(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")

@@ -60,8 +60,9 @@ tree="$exec_root/$6"
 gmake="$exec_root/$7"
 awk_bin="$exec_root/$8"
 python_bin="$exec_root/$9"
-members="$exec_root/${10}"
-identity="$exec_root/${11}"
+printf_bin="$exec_root/${10}"
+members="$exec_root/${11}"
+identity="$exec_root/${12}"
 tool_bin="${gmake%/*}"
 tool_root="${tool_bin%/*}"
 tool_lib="$tool_root/lib"
@@ -77,9 +78,10 @@ test -s "$serializer"
 test -x "$gmake"
 test -x "$awk_bin"
 test -x "$python_bin"
+test -x "$printf_bin"
 test -d "$tool_lib"
 test -d "$python_home"
-"$python_bin" -B -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$identity" "$gmake" "$awk_bin" "$python_bin" "$tool_lib" "$python_home" "$members_make" "$members_def" "$serializer"
+"$python_bin" -B -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$identity" "$gmake" "$awk_bin" "$python_bin" "$printf_bin" "$tool_lib" "$python_home" "$members_make" "$members_def" "$serializer"
 "$gmake" --no-print-directory --no-builtin-rules \
   -f "$members_make" ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$members_def" \
   __orlix-tcti-isa-archive-members > "$members"
@@ -95,6 +97,7 @@ test -d "$python_home"
             ctx.file.gmake.path,
             ctx.file.awk.path,
             ctx.file.python_bin.path,
+            ctx.file.printf_bin.path,
             members.path,
             identity.path,
         ],
@@ -107,6 +110,7 @@ test -d "$python_home"
             ctx.file.gmake,
             ctx.file.awk,
             ctx.file.python_bin,
+            ctx.file.printf_bin,
             ctx.file.source_state,
             ctx.file.build_state,
         ] + ctx.files.tool_libs + ctx.files.python_home,
@@ -130,6 +134,7 @@ orlix_tcti_isa_prepare = rule(
         "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
         "awk": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/awk")),
         "python_bin": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/meson-python")),
+        "printf_bin": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/printf")),
         "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
         "python_home": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:python_home")),
         "source_state": attr.label(allow_single_file = True, default = Label("//OrlixKernel/Sources:ports/orlix/kbuild/source_state.py")),
