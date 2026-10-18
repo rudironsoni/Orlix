@@ -7,7 +7,7 @@ import UIKit
 /// Owns the one current terminal surface identity for each pane.
 @MainActor
 final package class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
-    @Published private(set) var latestChange: TerminalSurfaceStoreChange?
+    @Published package private(set) var latestChange: TerminalSurfaceStoreChange?
 
     private var surfacesByPane: [UUID: any TerminalSurface] = [:]
 

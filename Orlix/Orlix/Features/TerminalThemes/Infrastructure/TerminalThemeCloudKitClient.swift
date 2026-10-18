@@ -17,7 +17,7 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         self.transport = transport
     }
 
-    func fetchTerminalThemes() async throws -> [TerminalTheme] {
+    package func fetchTerminalThemes() async throws -> [TerminalTheme] {
         let records = try await transport.fetchCloudKitRecords(
             matchingRecordTypes: [TerminalThemeCloudKitRecordCodec.recordType],
             desiredKeys: TerminalThemeCloudKitRecordCodec.recordKeys
@@ -32,7 +32,7 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         return themes
     }
 
-    func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
+    package func fetchTerminalThemePreference() async throws -> TerminalThemePreference? {
         let recordID = TerminalThemePreferenceCloudKitRecordCodec.recordID(
             in: transport.cloudKitRecordZoneID
         )
@@ -51,7 +51,7 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         }
     }
 
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws {
+    package func saveTerminalTheme(_ theme: TerminalTheme) async throws {
         let record = TerminalThemeCloudKitRecordCodec.record(
             for: theme,
             in: transport.cloudKitRecordZoneID
@@ -67,7 +67,7 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         }
     }
 
-    func saveTerminalThemePreference(
+    package func saveTerminalThemePreference(
         _ preference: TerminalThemePreference
     ) async throws {
         let record = TerminalThemePreferenceCloudKitRecordCodec.record(

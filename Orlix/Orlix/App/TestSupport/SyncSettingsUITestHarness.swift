@@ -46,7 +46,7 @@ private final class SyncSettingsUITestCloud: SyncSettingsCloudSyncing {
 
 @MainActor
 private final class SyncSettingsUITestCredentials: SyncSettingsCredentialSyncing {
-    private(set) var currentState: SyncSettingsCredentialState
+    package private(set) var currentState: SyncSettingsCredentialState
 
     package init(isEnabled: Bool) {
         currentState = isEnabled ? .storedInICloudKeychain : .storedOnThisDevice
@@ -81,7 +81,7 @@ private final class SyncSettingsUITestContent: SyncSettingsContentSummarizing {
 
 @MainActor
 private final class SyncSettingsUITestHistory: SyncSettingsHistoryStoring {
-    private(set) var lastSuccessfulSyncDate: Date? = Date()
+    package private(set) var lastSuccessfulSyncDate: Date? = Date()
 
     package func recordSuccessfulSync(at date: Date) throws {
         lastSuccessfulSyncDate = date

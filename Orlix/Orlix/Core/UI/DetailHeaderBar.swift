@@ -60,6 +60,16 @@ package struct DetailCloseButton: View {
     package var size: CGFloat = 16
     package var color: Color = .secondary
 
+    package init(
+        action: @escaping () -> Void,
+        size: CGFloat = 16,
+        color: Color = .secondary
+    ) {
+        self.action = action
+        self.size = size
+        self.color = color
+    }
+
     package var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
