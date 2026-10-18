@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated public enum HardOperationDeadlineError: Error {
-    public case exceeded
+nonisolated package enum HardOperationDeadlineError: Error {
+    package case exceeded
 }
 
 private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unchecked Sendable {

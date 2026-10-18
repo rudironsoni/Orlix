@@ -1,8 +1,8 @@
 import Foundation
 
-nonisolated public enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
-    public case bonjour
-    public case portScan
+nonisolated package enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
+    package case bonjour
+    package case portScan
 }
 
 nonisolated package struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {

@@ -195,12 +195,12 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
     }
 }
 
-nonisolated public enum RemoteSessionAvailability: Hashable, Sendable {
-    public case unsupportedEnvironment
-    public case available(RemoteSessionProbe)
-    public case confirmedMissing
-    public case incompatible(RemoteSessionProbe)
-    public case indeterminate(RemoteSessionProbeFailure)
+nonisolated package enum RemoteSessionAvailability: Hashable, Sendable {
+    package case unsupportedEnvironment
+    package case available(RemoteSessionProbe)
+    package case confirmedMissing
+    package case incompatible(RemoteSessionProbe)
+    package case indeterminate(RemoteSessionProbeFailure)
 }
 
 nonisolated package struct RemoteSessionRuntime: Codable, Hashable, Sendable {
@@ -268,9 +268,9 @@ nonisolated package struct RemoteSessionIdentifier: Codable, Hashable, Sendable 
     }
 }
 
-nonisolated public enum RemoteSessionOwnership: String, Codable, Hashable, Sendable {
-    public case managed
-    public case external
+nonisolated package enum RemoteSessionOwnership: String, Codable, Hashable, Sendable {
+    package case managed
+    package case external
 }
 
 nonisolated package struct RemoteSessionAttachment: Codable, Hashable, Sendable {
@@ -287,19 +287,19 @@ nonisolated package struct RemoteSessionDescriptor: Codable, Hashable, Identifia
     package var id: RemoteSessionIdentifier { attachment.identifier }
 }
 
-nonisolated public enum RemoteSessionListScope: Hashable, Sendable {
-    public case userVisible
-    public case managedCleanup
+nonisolated package enum RemoteSessionListScope: Hashable, Sendable {
+    package case userVisible
+    package case managedCleanup
 }
 
-nonisolated public enum RemoteSessionLaunchIntent: Hashable, Sendable {
-    public case attach(RemoteSessionAttachment)
-    public case ensureManaged(
+nonisolated package enum RemoteSessionLaunchIntent: Hashable, Sendable {
+    package case attach(RemoteSessionAttachment)
+    package case ensureManaged(
         identifier: RemoteSessionIdentifier,
         initialCommand: String?
     )
 
-    public var attachment: RemoteSessionAttachment {
+    package var attachment: RemoteSessionAttachment {
         switch self {
         case .attach(let attachment):
             return attachment

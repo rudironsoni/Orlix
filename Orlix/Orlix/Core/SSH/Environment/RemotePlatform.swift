@@ -1,15 +1,15 @@
 import Foundation
 
-nonisolated public enum RemotePlatform: String, Sendable {
-    public case linux = "linux"
-    public case darwin = "darwin"
-    public case freebsd = "freebsd"
-    public case openbsd = "openbsd"
-    public case netbsd = "netbsd"
-    public case windows = "windows"
-    public case unknown = "unknown"
+nonisolated package enum RemotePlatform: String, Sendable {
+    package case linux = "linux"
+    package case darwin = "darwin"
+    package case freebsd = "freebsd"
+    package case openbsd = "openbsd"
+    package case netbsd = "netbsd"
+    package case windows = "windows"
+    package case unknown = "unknown"
 
-    static public func detect(from unameOutput: String) -> RemotePlatform {
+    static package func detect(from unameOutput: String) -> RemotePlatform {
         let os = unameOutput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         if os.contains("darwin") {

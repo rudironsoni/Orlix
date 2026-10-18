@@ -3,15 +3,15 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated public enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
-    public case general
-    public case terminal
-    public case connections
-    public case privacyAndData
+nonisolated package enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
+    package case general
+    package case terminal
+    package case connections
+    package case privacyAndData
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var title: String {
+    package var title: String {
         switch self {
         case .general:
             String(localized: "General")
@@ -25,26 +25,26 @@ nonisolated public enum SettingsGroup: String, CaseIterable, Hashable, Identifia
     }
 }
 
-nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
-    public case pro
-    public case appearanceAndLanguage
-    public case navigationAndStats
-    public case terminalAppearance
-    public case keyboardAndInput
-    public case transcription
-    public case clipboardAndPaste
-    public case sessionsAndConnections
-    public case sshKeys
-    public case trustedHosts
-    public case privacyAndAppLock
-    public case iCloudSync
-    public case aboutAndSupport
+nonisolated package enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
+    package case pro
+    package case appearanceAndLanguage
+    package case navigationAndStats
+    package case terminalAppearance
+    package case keyboardAndInput
+    package case transcription
+    package case clipboardAndPaste
+    package case sessionsAndConnections
+    package case sshKeys
+    package case trustedHosts
+    package case privacyAndAppLock
+    package case iCloudSync
+    package case aboutAndSupport
 
-    static public let defaultRoute = SettingsRoute.appearanceAndLanguage
+    static package let defaultRoute = SettingsRoute.appearanceAndLanguage
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var group: SettingsGroup? {
+    package var group: SettingsGroup? {
         switch self {
         case .pro:
             nil
@@ -61,7 +61,7 @@ nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifia
         }
     }
 
-    public var title: String {
+    package var title: String {
         switch self {
         case .pro:
             String(localized: "Orlix Pro")
@@ -92,7 +92,7 @@ nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifia
         }
     }
 
-    public var icon: String {
+    package var icon: String {
         switch self {
         case .pro:
             "sparkles"
@@ -123,7 +123,7 @@ nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifia
         }
     }
 
-    public var searchKeywords: [String] {
+    package var searchKeywords: [String] {
         switch self {
         case .pro:
             ["subscription", "upgrade", "purchase", "billing", "restore", "plan"]
@@ -170,7 +170,7 @@ nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifia
         }
     }
 
-    public var searchLocalizationKeys: [String] {
+    package var searchLocalizationKeys: [String] {
         switch self {
         case .pro:
             [
@@ -236,7 +236,7 @@ nonisolated public enum SettingsRoute: String, CaseIterable, Hashable, Identifia
     }
 
     @MainActor
-    public var localizedSearchTerms: Set<String> {
+    package var localizedSearchTerms: Set<String> {
         searchLocalizationKeys.reduce(into: Set(searchKeywords)) { terms, key in
             terms.formUnion(AppLanguage.localizedValues(for: key))
         }
