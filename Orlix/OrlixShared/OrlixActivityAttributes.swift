@@ -5,10 +5,10 @@ import ActivityKit
 
 @available(iOS 16.1, *)
 nonisolated package enum OrlixLiveActivityStatus: String, Codable, Hashable {
-    package case connected
-    package case connecting
-    package case reconnecting
-    package case disconnected
+    case connected
+    case connecting
+    case reconnecting
+    case disconnected
 
     package var label: String {
         switch self {

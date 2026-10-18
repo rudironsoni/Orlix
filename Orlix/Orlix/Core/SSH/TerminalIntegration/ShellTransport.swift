@@ -1,21 +1,21 @@
 import Foundation
 
 nonisolated package enum ShellTransport: String, Codable, Hashable, Sendable {
-    package case ssh
-    package case mosh
-    package case eternalTerminal
-    package case sshFallback
+    case ssh
+    case mosh
+    case eternalTerminal
+    case sshFallback
 }
 
 nonisolated package enum MoshFallbackReason: String, Codable, CaseIterable, Hashable, Sendable {
-    package case serverMissing
-    package case serverRuntimeBroken
-    package case bootstrapFailed
-    package case sessionFailed
-    package case unsupportedRemoteCapabilities
-    package case invalidEndpoint
-    package case udpTimeout
-    package case clientSessionFailed
+    case serverMissing
+    case serverRuntimeBroken
+    case bootstrapFailed
+    case sessionFailed
+    case unsupportedRemoteCapabilities
+    case invalidEndpoint
+    case udpTimeout
+    case clientSessionFailed
 
     package var bannerMessage: String {
         switch self {
@@ -40,15 +40,15 @@ nonisolated package enum MoshFallbackReason: String, Codable, CaseIterable, Hash
 }
 
 nonisolated package enum MoshServerMaintenanceAction: Equatable, Sendable {
-    package case install
-    package case repair
+    case install
+    case repair
 }
 
 nonisolated package enum ShellTransportState: Equatable, Sendable {
-    package case ssh
-    package case mosh
-    package case eternalTerminal
-    package case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
+    case ssh
+    case mosh
+    case eternalTerminal
+    case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
 
     package var transport: ShellTransport {
         switch self {

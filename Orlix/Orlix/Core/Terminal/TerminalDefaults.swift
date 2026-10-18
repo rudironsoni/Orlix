@@ -12,10 +12,10 @@ import AppKit
 #endif
 
 nonisolated package enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable, Sendable {
-    package case block
-    package case bar
-    package case underline
-    package case blockHollow = "block_hollow"
+    case block
+    case bar
+    case underline
+    case blockHollow = "block_hollow"
 
     package var id: String { rawValue }
 
@@ -30,19 +30,19 @@ nonisolated package enum TerminalCursorStyle: String, CaseIterable, Codable, Ide
 }
 
 nonisolated package enum TerminalZoomAction: Equatable, Sendable {
-    package case zoomIn
-    package case zoomOut
-    package case reset
+    case zoomIn
+    case zoomOut
+    case reset
 }
 
 nonisolated package enum TerminalZoomShortcutKey: Sendable {
-    package case equal
-    package case literalPlus
-    package case minus
-    package case zero
-    package case keypadPlus
-    package case keypadMinus
-    package case keypadZero
+    case equal
+    case literalPlus
+    case minus
+    case zero
+    case keypadPlus
+    case keypadMinus
+    case keypadZero
 }
 
 nonisolated package enum TerminalZoomShortcutRouting {
@@ -93,10 +93,10 @@ nonisolated package enum TerminalZoomShortcutRouting {
 }
 
 nonisolated package enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable, Sendable {
-    package case none
-    package case left
-    package case right
-    package case both
+    case none
+    case left
+    case right
+    case both
 
     package var id: String { rawValue }
 
@@ -119,8 +119,8 @@ nonisolated package enum TerminalOptionAsAltMode: String, CaseIterable, Identifi
 }
 
 nonisolated package enum TerminalOptionKeySide: Sendable {
-    package case left
-    package case right
+    case left
+    case right
 }
 
 nonisolated package struct TerminalZoomResult: Hashable, Sendable {

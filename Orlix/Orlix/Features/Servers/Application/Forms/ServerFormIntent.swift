@@ -4,9 +4,9 @@ import Foundation
 import OrlixModels
 #endif
 nonisolated package enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
-    package case create(prefill: ServerFormPrefill?)
-    package case edit(Server)
-    package case duplicate(Server)
+    case create(prefill: ServerFormPrefill?)
+    case edit(Server)
+    case duplicate(Server)
 
     package var id: String {
         switch self {

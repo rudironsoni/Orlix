@@ -1,10 +1,10 @@
 nonisolated package enum TerminalKeyboardFocusReason: Sendable {
-    package case explicitUserRequest
-    package case initialActivation
-    package case reconnectRestore
-    package case directTouch
-    package case selectionGesture
-    package case hardwareKeyboard
+    case explicitUserRequest
+    case initialActivation
+    case reconnectRestore
+    case directTouch
+    case selectionGesture
+    case hardwareKeyboard
 }
 
 nonisolated package struct TerminalKeyboardFocusPolicy: Sendable {

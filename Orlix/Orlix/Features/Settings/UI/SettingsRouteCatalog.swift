@@ -4,10 +4,10 @@ import Foundation
 import OrlixModels
 #endif
 nonisolated package enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
-    package case general
-    package case terminal
-    package case connections
-    package case privacyAndData
+    case general
+    case terminal
+    case connections
+    case privacyAndData
 
     package var id: String { rawValue }
 
@@ -26,19 +26,19 @@ nonisolated package enum SettingsGroup: String, CaseIterable, Hashable, Identifi
 }
 
 nonisolated package enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
-    package case pro
-    package case appearanceAndLanguage
-    package case navigationAndStats
-    package case terminalAppearance
-    package case keyboardAndInput
-    package case transcription
-    package case clipboardAndPaste
-    package case sessionsAndConnections
-    package case sshKeys
-    package case trustedHosts
-    package case privacyAndAppLock
-    package case iCloudSync
-    package case aboutAndSupport
+    case pro
+    case appearanceAndLanguage
+    case navigationAndStats
+    case terminalAppearance
+    case keyboardAndInput
+    case transcription
+    case clipboardAndPaste
+    case sessionsAndConnections
+    case sshKeys
+    case trustedHosts
+    case privacyAndAppLock
+    case iCloudSync
+    case aboutAndSupport
 
     static package let defaultRoute = SettingsRoute.appearanceAndLanguage
 

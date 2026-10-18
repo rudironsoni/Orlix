@@ -1,13 +1,13 @@
 import Foundation
 
 nonisolated package enum RemotePlatform: String, Sendable {
-    package case linux = "linux"
-    package case darwin = "darwin"
-    package case freebsd = "freebsd"
-    package case openbsd = "openbsd"
-    package case netbsd = "netbsd"
-    package case windows = "windows"
-    package case unknown = "unknown"
+    case linux = "linux"
+    case darwin = "darwin"
+    case freebsd = "freebsd"
+    case openbsd = "openbsd"
+    case netbsd = "netbsd"
+    case windows = "windows"
+    case unknown = "unknown"
 
     static package func detect(from unameOutput: String) -> RemotePlatform {
         let os = unameOutput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

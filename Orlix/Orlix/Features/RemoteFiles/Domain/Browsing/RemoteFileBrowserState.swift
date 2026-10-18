@@ -20,8 +20,8 @@ nonisolated package struct RemoteFileFilesystemStatus: Hashable, Sendable {
 }
 
 nonisolated package enum RemoteFileFilesystemCapacity: Hashable, Sendable {
-    package case known(RemoteFileFilesystemStatus)
-    package case unavailable
+    case known(RemoteFileFilesystemStatus)
+    case unavailable
 
     package var status: RemoteFileFilesystemStatus? {
         guard case .known(let status) = self else { return nil }
@@ -30,10 +30,10 @@ nonisolated package enum RemoteFileFilesystemCapacity: Hashable, Sendable {
 }
 
 nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
-    package case notLoaded
-    package case loading(requestID: UUID, hasLoadedDirectory: Bool)
-    package case loaded
-    package case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
+    case notLoaded
+    case loading(requestID: UUID, hasLoadedDirectory: Bool)
+    case loaded
+    case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
 
     package var isLoading: Bool {
         if case .loading = self { return true }
@@ -78,11 +78,11 @@ nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
 }
 
 nonisolated package enum RemoteFileViewerPhase: Equatable, Sendable {
-    package case idle
-    package case selected(path: String)
-    package case loading(path: String, requestID: UUID)
-    package case loaded(RemoteFileViewerPayload)
-    package case failed(path: String, RemoteFileBrowserError)
+    case idle
+    case selected(path: String)
+    case loading(path: String, requestID: UUID)
+    case loaded(RemoteFileViewerPayload)
+    case failed(path: String, RemoteFileBrowserError)
 
     package var selectedEntryPath: String? {
         switch self {

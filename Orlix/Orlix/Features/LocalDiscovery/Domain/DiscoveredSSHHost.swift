@@ -1,8 +1,8 @@
 import Foundation
 
 nonisolated package enum DiscoverySource: String, CaseIterable, Codable, Hashable, Sendable {
-    package case bonjour
-    package case portScan
+    case bonjour
+    case portScan
 }
 
 nonisolated package struct DiscoveredSSHHost: Identifiable, Hashable, Sendable {
