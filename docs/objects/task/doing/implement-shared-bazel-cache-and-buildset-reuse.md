@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-10-17
+updated: 2026-10-18
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -24,14 +24,16 @@ owned_paths:
   - "make/bazel-migration.mk"
   - "MODULE.bazel.lock"
   - ".github/workflows/bazel-ci.yml"
+  - ".github/workflows/bazel-benchmark.yml"
+  - ".github/workflows/bazel-nightly.yml"
+  - ".github/workflows/bazel-promote.yml"
+  - ".github/workflows/bazel-promoted-consumer-proof.yml"
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"
   - "OrlixKernel/Sources/ports/orlix/kbuild/source_state.py"
 read_only_paths:
   - "artifacts.lock.json"
   - "project.yml"
-  - ".github/workflows/bazel-nightly.yml"
-  - ".github/workflows/bazel-promote.yml"
   - ".github/workflows/testflight-beta.yml"
 forbidden_paths:
   - "Orlix/**"
@@ -90,3 +92,5 @@ cannot justify removing those directories from the full-tree comparison.
 Rootfs uses its existing filesystem images as the cacheable product outputs.
 The producing action owns temporary assembly trees and validates their
 contents in the images. The provider and app consumers share this image boundary.
+
+GitHub Actions caches the slow setup that is outside Bazel action results. `xcodes runtimes install` for iOS 15.5 is skipped when that runtime is already available from the runner image. A restored `~/Library/Caches/Orlix/ios15-runtime` archive is installed from that directory and is not downloaded again. The iOS 26.5 runtime uses the same archive cache only when a job has to download it. The `macos-26` image is used directly when it already has that runtime. The Xcode named by `.xcode-version` is selected when it is already on the runner. Its download is cached only when `maxim-lobanov/setup-xcode` would not find that version. Homebrew source bottles for the Brewfile are cached, and the xcodes assertion stays `2.1.0`. `~/Library/Caches/Orlix/ccache` is cached with the pinned compiler identity. That directory is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. Kernel and Autotools keep `no-remote-cache`.

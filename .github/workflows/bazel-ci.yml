@@ -94,10 +94,28 @@ jobs:
           test -s .xcode-version
           echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
 
+      - name: See whether the requested Xcode is already on the runner
+        id: xcode-present
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}"; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Select Xcode
+        if: steps.xcode-present.outputs.installed == 'true'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Restore cached Xcode archive
+        if: steps.xcode-present.outputs.installed != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: "~/Library/Application Support/com.robotsandpencils.xcodes"
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
 
       - name: Restore Bazel repository cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -113,7 +131,20 @@ jobs:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
+      - name: Restore iOS 26.5 runtime archive
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios26-runtime
+          key: orlix-ios-runtime-26.5-arm64
+
+      - name: Restore Homebrew source bottles
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/homebrew-bottles
+          key: orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+
       - name: Install declared build tools
+        id: tools
         run: |
           set -euo pipefail
           xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
@@ -121,10 +152,23 @@ jobs:
           git -C "$(brew --repo xcodesorg/made)" fetch origin "$xcodes_tap_revision"
           git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
           brew trust --formula xcodesorg/made/xcodes
+          python3 bazel/ci/setup_cache.py install-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles"
           brew bundle --file Brewfile
           test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
           test "$(xcodes version)" = "2.1.0"
+          python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles" --brewfile Brewfile
+          if compgen -G "$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz" > /dev/null; then
+            echo "bottles=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bottles=false" >> "$GITHUB_OUTPUT"
+          fi
 
+      - name: Install the requested Xcode from the cache or Apple
+        if: steps.xcode-present.outputs.installed != 'true'
+        run: |
+          set -euo pipefail
+          xcodes install "${{ steps.xcode-version.outputs.version }}"
+          xcodes select --print-path
 
       - name: Export the selected Xcode to Make
         run: |
@@ -136,6 +180,22 @@ jobs:
         run: |
           set -euo pipefail
           python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
+      - name: Resolve the pinned compiler identity
+        id: compiler
+        run: |
+          set -euo pipefail
+          # The uploaded compiler cache stays small enough to share the repository
+          # cache budget with the runtime archive and repository downloads.
+          echo "CCACHE_MAXSIZE=4G" >> "$GITHUB_ENV"
+          digest="$(python3 bazel/ci/setup_cache.py compiler-identity --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR")"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Restore local compiler object cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ccache
+          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
 
       - name: Capture the toolchain manifest before simulator preparation
         run: |
@@ -164,10 +224,21 @@ jobs:
         run: make __bazel-buildbuddy-configure
 
       - name: Prepare both simulator runtimes
+        id: runtimes
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/Library/Caches/Orlix/ios15-runtime"
-          sudo xcodes runtimes install "iOS 15.5" --architecture arm64 --directory "$HOME/Library/Caches/Orlix/ios15-runtime" --keep-archive --no-color
+          python3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"
+          python3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"
+          if python3 bazel/ci/setup_cache.py archive-present --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"; then
+            echo "ios15_archive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ios15_archive=false" >> "$GITHUB_OUTPUT"
+          fi
+          if python3 bazel/ci/setup_cache.py archive-present --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"; then
+            echo "ios26_archive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ios26_archive=false" >> "$GITHUB_OUTPUT"
+          fi
           current_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "26.5" and .isAvailable == true) | .identifier' | head -n 1)"
           ios15_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
           test -n "$current_runtime_id"
@@ -423,11 +494,39 @@ jobs:
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
 
       - name: Save iOS 15.5 runtime archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Save iOS 26.5 runtime archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios26-runtime
+          key: orlix-ios-runtime-26.5-arm64
+
+      - name: Save cached Xcode archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: "~/Library/Application Support/com.robotsandpencils.xcodes"
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
+
+      - name: Save Homebrew source bottles
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/homebrew-bottles
+          key: orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+
+      - name: Save local compiler object cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ccache
+          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
 
       - name: Remove BuildBuddy credentials
         if: always()
