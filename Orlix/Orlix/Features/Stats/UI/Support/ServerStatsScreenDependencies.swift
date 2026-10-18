@@ -23,8 +23,8 @@ package struct ServerStatsSecurityApprovalActions {
     package let reject: Reject
 
     package init(
-        approve: Approve,
-        reject: Reject
+        approve: @escaping Approve,
+        reject: @escaping Reject
     ) {
         self.approve = approve
         self.reject = reject
