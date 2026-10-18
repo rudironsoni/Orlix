@@ -2,19 +2,19 @@ import Foundation
 
 // MARK: - Workspace Model
 
-nonisolated struct Workspace: Identifiable, Codable, Hashable, Sendable {
-    let id: UUID
-    var name: String
-    var colorHex: String
-    var icon: String?
-    var order: Int
-    var environments: [ServerEnvironment]
-    var lastSelectedEnvironmentId: UUID?
-    var lastSelectedServerId: UUID?
-    var createdAt: Date
-    var updatedAt: Date
+nonisolated package struct Workspace: Identifiable, Codable, Hashable, Sendable {
+    package let id: UUID
+    package var name: String
+    package var colorHex: String
+    package var icon: String?
+    package var order: Int
+    package var environments: [ServerEnvironment]
+    package var lastSelectedEnvironmentId: UUID?
+    package var lastSelectedServerId: UUID?
+    package var createdAt: Date
+    package var updatedAt: Date
 
-    init(
+    package init(
         id: UUID = UUID(),
         name: String,
         colorHex: String = "#007AFF",
@@ -38,11 +38,11 @@ nonisolated struct Workspace: Identifiable, Codable, Hashable, Sendable {
         self.updatedAt = updatedAt
     }
 
-    func environment(withId id: UUID) -> ServerEnvironment? {
+    package func environment(withId id: UUID) -> ServerEnvironment? {
         environments.first { $0.id == id }
     }
 
-    func containsEnvironment(_ candidate: ServerEnvironment) -> Bool {
+    package func containsEnvironment(_ candidate: ServerEnvironment) -> Bool {
         environment(withId: candidate.id) != nil
     }
 

@@ -1,4 +1,8 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 
 // MARK: - Workspace Switcher Sheet
 
@@ -307,15 +311,15 @@ struct WorkspaceSwitcherRow: View {
     }
 }
 
-struct LockedWorkspaceServerManagementSheet: View {
+package struct LockedWorkspaceServerManagementSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let serverManager: ServerManager
+    package let serverManager: ServerManager
     @ObservedObject private var stateStore: ServerStateStore
-    let workspace: Workspace
+    package let workspace: Workspace
 
     @State private var serverToMove: Server?
 
-    init(serverManager: ServerManager, workspace: Workspace) {
+    package init(serverManager: ServerManager, workspace: Workspace) {
         self.serverManager = serverManager
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
         self.workspace = workspace
@@ -327,7 +331,7 @@ struct LockedWorkspaceServerManagementSheet: View {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    var body: some View {
+    package var body: some View {
         #if os(iOS)
         content
         #else

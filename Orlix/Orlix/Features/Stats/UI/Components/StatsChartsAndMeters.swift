@@ -1,5 +1,8 @@
 import SwiftUI
 import Charts
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Charts
 

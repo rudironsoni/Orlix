@@ -1,11 +1,17 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+#endif
 @MainActor
-enum TerminalTabManagerLiveComposition {
+package enum TerminalTabManagerLiveComposition {
     private static let persistenceKey = "terminalTabsSnapshot.v1"
 
-    static func makeManager(
+    static package func makeManager(
         defaults: UserDefaults,
         sshClientFactory: SSHClientFactory,
         networkMonitor: NetworkMonitor,
@@ -95,7 +101,7 @@ enum TerminalTabManagerLiveComposition {
     }
 }
 
-extension RemoteMoshManager: TerminalRemoteMoshServicing {}
+package extension RemoteMoshManager: TerminalRemoteMoshServicing {}
 
 private extension TerminalNetworkReadiness {
     init(_ readiness: NetworkMonitor.Readiness) {

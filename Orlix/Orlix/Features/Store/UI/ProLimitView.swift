@@ -1,4 +1,7 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Pro Limit Banner
 
@@ -205,27 +208,6 @@ extension View {
     }
 }
 
-// MARK: - Pro Badge
-
-struct ProBadge: View {
-    var compact: Bool = false
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "star.fill")
-                .font(compact ? .caption2 : .caption)
-            if !compact {
-                Text("PRO")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-            }
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, compact ? 4 : 6)
-        .padding(.vertical, 2)
-        .background(.orange, in: Capsule())
-    }
-}
 
 // MARK: - Pro Gate View
 
@@ -347,20 +329,6 @@ extension View {
     }
 }
 
-// MARK: - Locked Overlay Badge
-
-struct LockedBadge: View {
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "lock.fill")
-                .font(.caption2)
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(.secondary.opacity(0.8), in: Capsule())
-    }
-}
 
 // MARK: - Downgrade Banner (shown when user has locked items)
 

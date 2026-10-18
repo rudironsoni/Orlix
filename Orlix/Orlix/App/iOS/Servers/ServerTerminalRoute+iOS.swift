@@ -7,6 +7,13 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 
 // MARK: - Server Terminal Route
 

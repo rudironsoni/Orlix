@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct ServerLocalStorageIssue: Identifiable, Equatable, Sendable {
     nonisolated enum Collection: String, Equatable, Sendable {
         case servers

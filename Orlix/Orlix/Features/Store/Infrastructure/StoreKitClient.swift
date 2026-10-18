@@ -1,17 +1,20 @@
 import Foundation
 import StoreKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class AppStoreKitClient: StoreClient {
+final package class AppStoreKitClient: StoreClient {
     private var productsById: [String: Product] = [:]
 
-    func products(for identifiers: [String]) async throws -> [StoreProduct] {
+    package func products(for identifiers: [String]) async throws -> [StoreProduct] {
         let products = try await Product.products(for: identifiers)
         productsById = Dictionary(uniqueKeysWithValues: products.map { ($0.id, $0) })
         return products.map(StoreProduct.init)
     }
 
-    func purchase(productId: String) async throws -> StorePurchaseResult {
+    package func purchase(productId: String) async throws -> StorePurchaseResult {
         let product = try await product(for: productId)
 
         switch try await product.purchase() {
@@ -32,11 +35,11 @@ final class AppStoreKitClient: StoreClient {
         }
     }
 
-    func sync() async throws {
+    package func sync() async throws {
         try await AppStore.sync()
     }
 
-    func entitlements(subscriptionProductIds: [String]) async -> StoreEntitlementResult {
+    package func entitlements(subscriptionProductIds: [String]) async -> StoreEntitlementResult {
         var verifiedProductIds = Set<String>()
 
         for await result in Transaction.currentEntitlements {
@@ -65,7 +68,7 @@ final class AppStoreKitClient: StoreClient {
         )
     }
 
-    func introductoryOfferState(productId: String) async -> ProPlanIntroductoryOfferState {
+    package func introductoryOfferState(productId: String) async -> ProPlanIntroductoryOfferState {
         guard productId == OrlixProducts.proYearly,
               let product = try? await product(for: productId),
               let subscription = product.subscription,
@@ -81,7 +84,7 @@ final class AppStoreKitClient: StoreClient {
             : .ineligible
     }
 
-    func transactionUpdates() -> AsyncStream<StoreTransactionUpdate> {
+    package func transactionUpdates() -> AsyncStream<StoreTransactionUpdate> {
         AsyncStream { continuation in
             let task = Task {
                 for await result in Transaction.updates {
@@ -121,7 +124,7 @@ final class AppStoreKitClient: StoreClient {
 }
 
 private extension StoreProduct {
-    init(product: Product) {
+    package init(product: Product) {
         self.init(
             id: product.id,
             displayName: product.displayName,
@@ -131,7 +134,7 @@ private extension StoreProduct {
 }
 
 private extension StoreSubscriptionEntitlement {
-    init(status: Product.SubscriptionInfo.Status) {
+    package init(status: Product.SubscriptionInfo.Status) {
         let isVerified: Bool
         if case .verified = status.transaction {
             isVerified = true
@@ -144,7 +147,7 @@ private extension StoreSubscriptionEntitlement {
 }
 
 private extension StoreSubscriptionState {
-    init(_ state: Product.SubscriptionInfo.RenewalState) {
+    package init(_ state: Product.SubscriptionInfo.RenewalState) {
         switch state {
         case .subscribed:
             self = .subscribed
@@ -163,7 +166,7 @@ private extension StoreSubscriptionState {
 }
 
 private extension StoreSubscriptionStatus {
-    init(status: Product.SubscriptionInfo.Status) {
+    package init(status: Product.SubscriptionInfo.Status) {
         let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
         if case .verified(let verifiedTransaction) = status.transaction {
             transaction = .verified(StoreSubscriptionTransaction(

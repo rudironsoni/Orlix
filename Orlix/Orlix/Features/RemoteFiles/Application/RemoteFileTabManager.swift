@@ -1,8 +1,11 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class RemoteFileTabManager: ObservableObject {
+final package class RemoteFileTabManager: ObservableObject {
     @Published private(set) var tabsByServer: [UUID: [RemoteFileTab]] = [:] {
         didSet { persistSnapshotIfNeeded() }
     }
@@ -14,16 +17,16 @@ final class RemoteFileTabManager: ObservableObject {
     private let persistenceKey = "remoteFileTabsSnapshot.v1"
     private var isRestoring = false
 
-    init(defaults: UserDefaults = .standard) {
+    package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         restoreSnapshot()
     }
 
-    func tabs(for serverId: UUID) -> [RemoteFileTab] {
+    package func tabs(for serverId: UUID) -> [RemoteFileTab] {
         tabsByServer[serverId] ?? []
     }
 
-    func selectedTab(for serverId: UUID) -> RemoteFileTab? {
+    package func selectedTab(for serverId: UUID) -> RemoteFileTab? {
         let serverTabs = tabs(for: serverId)
         guard !serverTabs.isEmpty else { return nil }
 
@@ -35,11 +38,11 @@ final class RemoteFileTabManager: ObservableObject {
         return serverTabs.first
     }
 
-    func hasInitializedTabs(for serverId: UUID) -> Bool {
+    package func hasInitializedTabs(for serverId: UUID) -> Bool {
         tabsByServer[serverId] != nil
     }
 
-    func canOpenNewTab(for serverId: UUID, hasProAccess: Bool) -> Bool {
+    package func canOpenNewTab(for serverId: UUID, hasProAccess: Bool) -> Bool {
         if hasProAccess {
             return true
         }
@@ -48,7 +51,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func ensureInitialTab(
+    package func ensureInitialTab(
         for server: Server,
         seedPath: String? = nil,
         hasProAccess: Bool
@@ -72,7 +75,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func openTab(
+    package func openTab(
         for server: Server,
         seedPath: String? = nil,
         hasProAccess: Bool
@@ -87,7 +90,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func duplicateTab(
+    package func duplicateTab(
         _ tab: RemoteFileTab,
         seedPath: String? = nil,
         hasProAccess: Bool
@@ -105,13 +108,13 @@ final class RemoteFileTabManager: ObservableObject {
         return duplicate
     }
 
-    func selectTab(_ tab: RemoteFileTab) {
+    package func selectTab(_ tab: RemoteFileTab) {
         guard tabs(for: tab.serverId).contains(where: { $0.id == tab.id }) else { return }
         selectedTabByServer[tab.serverId] = tab.id
     }
 
     @discardableResult
-    func closeTab(_ tab: RemoteFileTab) -> RemoteFileTab? {
+    package func closeTab(_ tab: RemoteFileTab) -> RemoteFileTab? {
         guard var serverTabs = tabsByServer[tab.serverId],
               let index = serverTabs.firstIndex(where: { $0.id == tab.id }) else {
             return nil
@@ -135,7 +138,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func closeOtherTabs(except tab: RemoteFileTab) -> [RemoteFileTab] {
+    package func closeOtherTabs(except tab: RemoteFileTab) -> [RemoteFileTab] {
         let serverTabs = tabs(for: tab.serverId)
         let removedTabs = serverTabs.filter { $0.id != tab.id }
         guard !removedTabs.isEmpty else { return [] }
@@ -145,7 +148,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func closeTabsToLeft(of tab: RemoteFileTab) -> [RemoteFileTab] {
+    package func closeTabsToLeft(of tab: RemoteFileTab) -> [RemoteFileTab] {
         guard let index = tabs(for: tab.serverId).firstIndex(where: { $0.id == tab.id }),
               index > 0 else {
             return []
@@ -160,7 +163,7 @@ final class RemoteFileTabManager: ObservableObject {
     }
 
     @discardableResult
-    func closeTabsToRight(of tab: RemoteFileTab) -> [RemoteFileTab] {
+    package func closeTabsToRight(of tab: RemoteFileTab) -> [RemoteFileTab] {
         let serverTabs = tabs(for: tab.serverId)
         guard let index = serverTabs.firstIndex(where: { $0.id == tab.id }),
               index < serverTabs.count - 1 else {
@@ -174,7 +177,7 @@ final class RemoteFileTabManager: ObservableObject {
         return removedTabs
     }
 
-    func selectNextTab(for serverId: UUID) {
+    package func selectNextTab(for serverId: UUID) {
         let serverTabs = tabs(for: serverId)
         guard serverTabs.count > 1 else { return }
 
@@ -183,7 +186,7 @@ final class RemoteFileTabManager: ObservableObject {
         selectedTabByServer[serverId] = serverTabs[currentIndex + 1].id
     }
 
-    func selectPreviousTab(for serverId: UUID) {
+    package func selectPreviousTab(for serverId: UUID) {
         let serverTabs = tabs(for: serverId)
         guard serverTabs.count > 1 else { return }
 
@@ -192,7 +195,7 @@ final class RemoteFileTabManager: ObservableObject {
         selectedTabByServer[serverId] = serverTabs[currentIndex - 1].id
     }
 
-    func updateLastKnownPath(_ path: String?, for tabId: UUID) {
+    package func updateLastKnownPath(_ path: String?, for tabId: UUID) {
         guard let path else { return }
 
         for (serverId, serverTabs) in tabsByServer {
@@ -208,7 +211,7 @@ final class RemoteFileTabManager: ObservableObject {
         }
     }
 
-    func disconnect(serverId: UUID) {
+    package func disconnect(serverId: UUID) {
         tabsByServer.removeValue(forKey: serverId)
         selectedTabByServer.removeValue(forKey: serverId)
     }

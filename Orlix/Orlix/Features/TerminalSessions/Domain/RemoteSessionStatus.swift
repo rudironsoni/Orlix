@@ -1,14 +1,14 @@
 import Foundation
 
-nonisolated enum RemoteSessionStatus: String, Codable, Hashable, Sendable {
-    case foreground
-    case background
-    case off
-    case missing
-    case installing
-    case unknown
+nonisolated package enum RemoteSessionStatus: String, Codable, Hashable, Sendable {
+    package case foreground
+    package case background
+    package case off
+    package case missing
+    package case installing
+    package case unknown
 
-    var indicatesPersistentSession: Bool {
+    package var indicatesPersistentSession: Bool {
         switch self {
         case .foreground, .background, .unknown:
             true

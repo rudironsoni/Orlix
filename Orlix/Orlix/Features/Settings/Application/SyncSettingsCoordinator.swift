@@ -1,8 +1,11 @@
 import Combine
 import Foundation
 
-nonisolated struct SyncSettingsCloudState: Equatable, Sendable {
-    nonisolated enum Status: Equatable, Sendable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct SyncSettingsCloudState: Equatable, Sendable {
+    nonisolated package enum Status: Equatable, Sendable {
         case idle
         case syncing
         case error
@@ -10,16 +13,16 @@ nonisolated struct SyncSettingsCloudState: Equatable, Sendable {
         case disabled
     }
 
-    let status: Status
-    let isAvailable: Bool
-    let accountState: CloudKitAccountState
-    let pendingOperationCount: Int
-    let hasPendingFailure: Bool
-    let quarantinedOperationCount: Int
-    let pendingQueueHealth: PendingCloudKitQueueHealth
-    let lastSuccessfulSyncDate: Date?
+    package let status: Status
+    package let isAvailable: Bool
+    package let accountState: CloudKitAccountState
+    package let pendingOperationCount: Int
+    package let hasPendingFailure: Bool
+    package let quarantinedOperationCount: Int
+    package let pendingQueueHealth: PendingCloudKitQueueHealth
+    package let lastSuccessfulSyncDate: Date?
 
-    init(
+    package init(
         status: Status,
         isAvailable: Bool,
         accountState: CloudKitAccountState,
@@ -39,19 +42,19 @@ nonisolated struct SyncSettingsCloudState: Equatable, Sendable {
         self.lastSuccessfulSyncDate = lastSuccessfulSyncDate
     }
 
-    var outstandingOperationCount: Int {
+    package var outstandingOperationCount: Int {
         pendingOperationCount + quarantinedOperationCount
     }
 
-    var hasBlockedPendingWork: Bool {
+    package var hasBlockedPendingWork: Bool {
         quarantinedOperationCount > 0 || pendingQueueHealth == .migrationBlocked
     }
 }
 
-nonisolated enum SyncSettingsCredentialState: Equatable, Sendable {
-    case storedInICloudKeychain
-    case storedOnThisDevice
-    case needsAttention
+nonisolated package enum SyncSettingsCredentialState: Equatable, Sendable {
+    package case storedInICloudKeychain
+    package case storedOnThisDevice
+    package case needsAttention
 }
 
 nonisolated enum SyncSettingsUserState: Equatable, Sendable {
@@ -85,19 +88,19 @@ nonisolated struct SyncSettingsErrorRecord: Equatable, Sendable {
     let date: Date
 }
 
-nonisolated struct SyncSettingsRuntimeInfo: Equatable, Sendable {
-    let appVersion: String
-    let buildVersion: String
-    let platform: String
+nonisolated package struct SyncSettingsRuntimeInfo: Equatable, Sendable {
+    package let appVersion: String
+    package let buildVersion: String
+    package let platform: String
 }
 
-nonisolated struct SyncSettingsContentSummary: Equatable, Sendable {
-    let workspaceCount: Int
-    let serverCount: Int
-    let customThemeCount: Int
-    let customFontCount: Int
-    let serverCredentialCount: Int
-    let reusableSSHKeyCount: Int
+nonisolated package struct SyncSettingsContentSummary: Equatable, Sendable {
+    package let workspaceCount: Int
+    package let serverCount: Int
+    package let customThemeCount: Int
+    package let customFontCount: Int
+    package let serverCredentialCount: Int
+    package let reusableSSHKeyCount: Int
 }
 
 nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {
@@ -165,7 +168,7 @@ nonisolated struct SyncSettingsDiagnostics: Equatable, Sendable {
 }
 
 private extension PendingCloudKitQueueHealth {
-    nonisolated var diagnosticValue: String {
+    nonisolated package var diagnosticValue: String {
         switch self {
         case .ready: "ready"
         case .migrationBlocked: "migrationBlocked"
@@ -188,42 +191,42 @@ private extension SyncSettingsUserState {
 }
 
 @MainActor
-protocol SyncSettingsCloudSyncing: AnyObject {
-    var currentState: SyncSettingsCloudState { get }
-    var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> { get }
+package protocol SyncSettingsCloudSyncing: AnyObject {
+    package var currentState: SyncSettingsCloudState { get }
+    package var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> { get }
 
-    func setSyncEnabled(_ enabled: Bool)
-    func checkAccountStatus() async
+    package func setSyncEnabled(_ enabled: Bool)
+    package func checkAccountStatus() async
 }
 
 @MainActor
-protocol SyncSettingsCredentialSyncing: AnyObject {
-    var currentState: SyncSettingsCredentialState { get }
+package protocol SyncSettingsCredentialSyncing: AnyObject {
+    package var currentState: SyncSettingsCredentialState { get }
 
-    func prepareCredentialStorage(isSyncEnabled: Bool) throws
-    func removeCredentialsFromICloud() throws
+    package func prepareCredentialStorage(isSyncEnabled: Bool) throws
+    package func removeCredentialsFromICloud() throws
 }
 
 @MainActor
-protocol SyncSettingsDataRefreshing: AnyObject {
-    func handleSyncDisabled()
-    func syncNow() async throws
+package protocol SyncSettingsDataRefreshing: AnyObject {
+    package func handleSyncDisabled()
+    package func syncNow() async throws
 }
 
 @MainActor
-protocol SyncSettingsContentSummarizing: AnyObject {
-    var currentSummary: SyncSettingsContentSummary { get }
+package protocol SyncSettingsContentSummarizing: AnyObject {
+    package var currentSummary: SyncSettingsContentSummary { get }
 }
 
 @MainActor
-protocol SyncSettingsHistoryStoring: AnyObject {
-    var lastSuccessfulSyncDate: Date? { get }
-    func recordSuccessfulSync(at date: Date) throws
+package protocol SyncSettingsHistoryStoring: AnyObject {
+    package var lastSuccessfulSyncDate: Date? { get }
+    package func recordSuccessfulSync(at date: Date) throws
 }
 
 @MainActor
-final class SyncSettingsCoordinator: ObservableObject {
-    enum CredentialFailure: Equatable {
+final package class SyncSettingsCoordinator: ObservableObject {
+    package enum CredentialFailure: Equatable {
         case toggle
         case sync
         case removal
@@ -247,7 +250,7 @@ final class SyncSettingsCoordinator: ObservableObject {
     private var cloudStateObservation: AnyCancellable?
     private var manualSyncOperationID = UUID()
 
-    init(
+    package init(
         cloud: any SyncSettingsCloudSyncing,
         credentials: any SyncSettingsCredentialSyncing,
         data: any SyncSettingsDataRefreshing,
@@ -280,7 +283,7 @@ final class SyncSettingsCoordinator: ObservableObject {
             }
     }
 
-    var userState: SyncSettingsUserState {
+    package var userState: SyncSettingsUserState {
         if case .disabled = cloudState.status {
             return .disabled
         }
@@ -338,11 +341,11 @@ final class SyncSettingsCoordinator: ObservableObject {
         return lastSuccessfulSyncDate == nil ? .readyToSync : .upToDate
     }
 
-    var canSyncNow: Bool {
+    package var canSyncNow: Bool {
         cloudState.isAvailable && manualSyncState != .running
     }
 
-    var diagnostics: SyncSettingsDiagnostics {
+    package var diagnostics: SyncSettingsDiagnostics {
         SyncSettingsDiagnostics(
             state: userState,
             account: SyncSettingsAccountCategory(cloudState.accountState),
@@ -356,7 +359,7 @@ final class SyncSettingsCoordinator: ObservableObject {
     }
 
     @discardableResult
-    func setSyncEnabled(_ enabled: Bool) -> Bool {
+    package func setSyncEnabled(_ enabled: Bool) -> Bool {
         invalidateManualSync()
         do {
             try credentials.prepareCredentialStorage(isSyncEnabled: enabled)
@@ -377,7 +380,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         return true
     }
 
-    func syncNow() async {
+    package func syncNow() async {
         guard manualSyncState != .running else { return }
         manualSyncOperationID = UUID()
         let operationID = manualSyncOperationID
@@ -454,14 +457,14 @@ final class SyncSettingsCoordinator: ObservableObject {
         }
     }
 
-    func checkICloudStatus() async {
+    package func checkICloudStatus() async {
         guard manualSyncState != .running else { return }
         await cloud.checkAccountStatus()
         refreshSnapshots()
     }
 
     @discardableResult
-    func removeCredentialsFromICloud() -> Bool {
+    package func removeCredentialsFromICloud() -> Bool {
         do {
             try credentials.removeCredentialsFromICloud()
             credentialFailure = nil
@@ -475,7 +478,7 @@ final class SyncSettingsCoordinator: ObservableObject {
         }
     }
 
-    func refreshSnapshots() {
+    package func refreshSnapshots() {
         cloudState = cloud.currentState
         contentSummary = content.currentSummary
         acceptCloudSuccessDate(cloudState.lastSuccessfulSyncDate)

@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct SyncSettingsDetailsSections: View {
     let summary: SyncSettingsContentSummary
     let contentSyncState: SyncSettingsContentSyncState

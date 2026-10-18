@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class StatsPreferencesResolutionChannel:
+final package class StatsPreferencesResolutionChannel:
     StatsPreferencesResolutionSource,
     StatsPreferencesResolutionPublishing {
     typealias Observer = (StatsPreferences) -> Void

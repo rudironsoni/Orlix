@@ -1,6 +1,9 @@
 import Foundation
 import Darwin
 import os.log
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - SSH Session using libssh2
 

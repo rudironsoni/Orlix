@@ -1,9 +1,12 @@
 import Foundation
 
-extension SSHClient {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension SSHClient {
     // MARK: - Command Execution
 
-    func execute(
+    package func execute(
         _ command: String,
         timeout: Duration? = nil,
         maxOutputBytes: Int = SSHExecOutputBudget.defaultMaximumBytes

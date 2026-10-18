@@ -9,47 +9,47 @@
 import Combine
 import SwiftUI
 
-enum MacToolbarCommandID: Equatable {
-    case selectView(String)
-    case filesParent
-    case filesRefresh
-    case filesUpload
-    case filesNewFolder
-    case filesToggleHidden
-    case filesCopyPath
-    case openSettings
-    case editServer
-    case duplicateServer
-    case disconnect
-    case enterZen
+package enum MacToolbarCommandID: Equatable {
+    package case selectView(String)
+    package case filesParent
+    package case filesRefresh
+    package case filesUpload
+    package case filesNewFolder
+    package case filesToggleHidden
+    package case filesCopyPath
+    package case openSettings
+    package case editServer
+    package case duplicateServer
+    package case disconnect
+    package case enterZen
 }
 
-struct ToolbarMenuEntry: Equatable {
-    let command: MacToolbarCommandID?
-    var title: String
-    var systemImage: String?
-    var isEnabled: Bool = true
-    var isDestructive: Bool = false
+package struct ToolbarMenuEntry: Equatable {
+    package let command: MacToolbarCommandID?
+    package var title: String
+    package var systemImage: String?
+    package var isEnabled: Bool = true
+    package var isDestructive: Bool = false
 
-    static let separator = ToolbarMenuEntry(
+    static package let separator = ToolbarMenuEntry(
         command: nil,
         title: "-",
         systemImage: nil,
         isEnabled: false
     )
 
-    var isSeparator: Bool { command == nil }
+    package var isSeparator: Bool { command == nil }
 }
 
-struct ToolbarViewPickerData: Equatable {
-    struct Segment: Equatable {
+package struct ToolbarViewPickerData: Equatable {
+    package struct Segment: Equatable {
         let id: String
         let systemImage: String
         let help: String
     }
 
-    var segments: [Segment]
-    var selectedId: String
+    package var segments: [Segment]
+    package var selectedId: String
 }
 
 struct MacToolbarSnapshot: Equatable {
@@ -91,11 +91,11 @@ final class MacToolbarCommandDispatcher {
 }
 
 @MainActor
-final class MacToolbarBridge: ObservableObject {
-    static let shared = MacToolbarBridge()
+final package class MacToolbarBridge: ObservableObject {
+    static package let shared = MacToolbarBridge()
 
     @Published private(set) var snapshot: MacToolbarSnapshot = .inactive
-    let dispatcher = MacToolbarCommandDispatcher()
+    package let dispatcher = MacToolbarCommandDispatcher()
 
     // Type erasure is limited to the dynamic SwiftUI content hosted by AppKit.
     private var tabStripProvider: () -> AnyView = { AnyView(EmptyView()) }
@@ -103,7 +103,7 @@ final class MacToolbarBridge: ObservableObject {
 
     private init() {}
 
-    func activate<TabStrip: View, ZenPanel: View>(
+    package func activate<TabStrip: View, ZenPanel: View>(
         snapshot: MacToolbarSnapshot,
         dispatch: @escaping (MacToolbarCommandID) -> Void,
         @ViewBuilder tabStrip: @escaping () -> TabStrip,
@@ -116,7 +116,7 @@ final class MacToolbarBridge: ObservableObject {
         self.snapshot = snapshot
     }
 
-    func deactivate(ownerId: String) {
+    package func deactivate(ownerId: String) {
         guard snapshot.ownerId == ownerId else { return }
         dispatcher.clear(ownerId: ownerId)
         tabStripProvider = { AnyView(EmptyView()) }
@@ -124,11 +124,11 @@ final class MacToolbarBridge: ObservableObject {
         snapshot = .inactive
     }
 
-    func makeTabStripView() -> AnyView {
+    package func makeTabStripView() -> AnyView {
         tabStripProvider()
     }
 
-    func makeZenPanelView() -> AnyView {
+    package func makeZenPanelView() -> AnyView {
         zenPanelProvider()
     }
 }

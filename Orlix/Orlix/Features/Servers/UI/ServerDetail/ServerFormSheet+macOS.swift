@@ -1,8 +1,11 @@
 #if os(macOS)
 import SwiftUI
 
-extension ServerFormSheet {
-    var platformBody: some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension ServerFormSheet {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(
                 title: isEditing ? "Edit Server" : "Add Server",
@@ -51,8 +54,8 @@ extension ServerFormSheet {
     }
 }
 
-extension MoveServerSheet {
-    var platformBody: some View {
+package extension MoveServerSheet {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(
                 title: "Move Server",

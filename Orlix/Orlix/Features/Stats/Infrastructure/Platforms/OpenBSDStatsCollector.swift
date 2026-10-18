@@ -1,4 +1,8 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - OpenBSD Stats Collector
 

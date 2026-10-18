@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol ServerFormCredentialLoading: AnyObject {
     func loadFormCredentials(for server: Server?) async throws -> ServerFormCredentialLoad

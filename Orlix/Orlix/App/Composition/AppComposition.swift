@@ -1,46 +1,54 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 
 /// The single production dependency graph for the application.
 @MainActor
-struct AppComposition {
-    let networkMonitor: NetworkMonitor
-    let analyticsTracker: AnalyticsTracker
-    let ghosttyApp: GhosttyRuntime
-    let storeManager: StoreManager
-    let appLockManager: AppLockManager
-    let serverManager: ServerManager
-    let serverWakeCoordinator: ServerWakeCoordinator
-    let engagementTracker: EngagementTracker
-    let tabManager: TerminalTabManager
-    let remoteFileBrowserStore: RemoteFileBrowserStore
-    let terminalFontStore: TerminalFontStore
-    let terminalThemeManager: TerminalThemeManager
-    let terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
-    let statsPreferencesStore: PreferencesStore
-    let serverVolumeVisibilityStore: ServerVolumeVisibilityStore
+package struct AppComposition {
+    package let networkMonitor: NetworkMonitor
+    package let analyticsTracker: AnalyticsTracker
+    package let ghosttyApp: GhosttyRuntime
+    package let storeManager: StoreManager
+    package let appLockManager: AppLockManager
+    package let serverManager: ServerManager
+    package let serverWakeCoordinator: ServerWakeCoordinator
+    package let engagementTracker: EngagementTracker
+    package let tabManager: TerminalTabManager
+    package let remoteFileBrowserStore: RemoteFileBrowserStore
+    package let terminalFontStore: TerminalFontStore
+    package let terminalThemeManager: TerminalThemeManager
+    package let terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
+    package let statsPreferencesStore: PreferencesStore
+    package let serverVolumeVisibilityStore: ServerVolumeVisibilityStore
     #if os(macOS)
-    let workspaceSelectionStore: WorkspaceSelectionStore
+    package let workspaceSelectionStore: WorkspaceSelectionStore
     #endif
-    let voiceInputRuntimeStore: VoiceInputRuntimeStore
-    let viewTabConfigurationManager: ViewTabConfigurationManager
-    let syncSettingsCoordinator: SyncSettingsCoordinator
-    let sshKeySettingsCoordinator: SSHKeySettingsCoordinator
-    let knownHostSettingsCoordinator: KnownHostSettingsCoordinator
-    let onWelcomeCompleted: @MainActor () -> Void
-    let statsRuntimeStore: ServerStatsRuntimeStore
-    let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
-    let serverFormDependencies: ServerFormDependencies
-    let voiceModelManagers: VoiceSettingsModelManagerOwner
-    let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
-    let terminalSecurityActions: TerminalSecurityActions
-    let analyticsOptOutAction: AnalyticsOptOutAction
-    let appLifecycleDependencies: AppLifecycleDependencies
+    package let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    package let viewTabConfigurationManager: ViewTabConfigurationManager
+    package let syncSettingsCoordinator: SyncSettingsCoordinator
+    package let sshKeySettingsCoordinator: SSHKeySettingsCoordinator
+    package let knownHostSettingsCoordinator: KnownHostSettingsCoordinator
+    package let onWelcomeCompleted: @MainActor () -> Void
+    package let statsRuntimeStore: ServerStatsRuntimeStore
+    package let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    package let serverFormDependencies: ServerFormDependencies
+    package let voiceModelManagers: VoiceSettingsModelManagerOwner
+    package let statsSecurityApprovalActions: ServerStatsSecurityApprovalActions
+    package let terminalSecurityActions: TerminalSecurityActions
+    package let analyticsOptOutAction: AnalyticsOptOutAction
+    package let appLifecycleDependencies: AppLifecycleDependencies
     #if os(macOS)
-    let aboutWindowPresenter: AboutWindowPresenter
-    let settingsWindowPresenter: SettingsWindowPresenter
+    package let aboutWindowPresenter: AboutWindowPresenter
+    package let settingsWindowPresenter: SettingsWindowPresenter
     #endif
 
-    static func live() -> Self {
+    static package func live() -> Self {
         Self.init()
     }
 

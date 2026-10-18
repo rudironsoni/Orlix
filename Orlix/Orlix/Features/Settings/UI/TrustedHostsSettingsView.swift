@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct TrustedHostsSettingsView: View {
+package struct TrustedHostsSettingsView: View {
     @EnvironmentObject private var coordinator: KnownHostSettingsCoordinator
     @State private var resetTarget: TrustedHostResetTarget?
 
-    var body: some View {
+    package var body: some View {
         Group {
             if coordinator.knownHosts.isEmpty {
                 TrustedHostsEmptyView()
@@ -58,7 +58,7 @@ struct TrustedHostsSettingsView: View {
     }
 
     @ViewBuilder
-    func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
+    package func resetAction(for knownHost: KnownHostSettingsItem) -> some View {
         Button(role: .destructive) {
             resetTarget = .host(knownHost)
         } label: {

@@ -1,9 +1,9 @@
-struct TerminalContextMenuActions {
-    let focus: () -> Void
-    let splitRight: () -> Void
-    let splitLeft: () -> Void
-    let splitDown: () -> Void
-    let splitUp: () -> Void
-    let currentTitle: () -> String
-    let setTitle: (String?) -> Void
+package struct TerminalContextMenuActions {
+    package let focus: () -> Void
+    package let splitRight: () -> Void
+    package let splitLeft: () -> Void
+    package let splitDown: () -> Void
+    package let splitUp: () -> Void
+    package let currentTitle: () -> String
+    package let setTitle: (String?) -> Void
 }

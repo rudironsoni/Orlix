@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 @MainActor
 protocol TerminalMoshRecoveryServicing: Sendable {
     func hasCheckpoint(for paneId: UUID) -> Bool

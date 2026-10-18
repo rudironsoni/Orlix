@@ -1,9 +1,9 @@
 import Foundation
 
-typealias PendingCloudKitMutationPayload = PendingCloudKitPayloadEnvelope
+package typealias PendingCloudKitMutationPayload = PendingCloudKitPayloadEnvelope
 
-nonisolated protocol PendingCloudKitLegacyMutationMigrating {
-    func migrate(
+nonisolated package protocol PendingCloudKitLegacyMutationMigrating {
+    package func migrate(
         recordData: Data
     ) -> Result<PendingCloudKitMutation, PendingCloudKitMutationQuarantineReason>?
 }

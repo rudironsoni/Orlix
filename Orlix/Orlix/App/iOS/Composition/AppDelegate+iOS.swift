@@ -1,6 +1,11 @@
 #if os(iOS)
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
 nonisolated enum AppSceneLifecyclePolicy {
     static func shouldHandleBackgroundTransition(
         connectedSceneStates: [UIScene.ActivationState]
@@ -18,7 +23,7 @@ nonisolated enum AppSceneLifecyclePolicy {
     }
 }
 
-class AppDelegate: NSObject, UIApplicationDelegate {
+package class AppDelegate: NSObject, UIApplicationDelegate {
     private var lastForegroundSyncAt: Date = .distantPast
     private let foregroundSyncMinimumInterval: TimeInterval = 20
     private var resumableTerminalLifecycleTask: Task<Void, Never>?
@@ -27,7 +32,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private weak var appLockManager: AppLockManager?
     private var lifecycleDependencies: AppLifecycleDependencies?
 
-    func configure(
+    package func configure(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         appLockManager: AppLockManager,
@@ -76,7 +81,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return lifecycleDependencies
     }
 
-    func application(
+    package func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
@@ -127,7 +132,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    func handleSceneDidBecomeActive(
+    package func handleSceneDidBecomeActive(
         refreshNetwork: () -> Void,
         resume: () -> Void
     ) {
@@ -135,7 +140,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         resume()
     }
 
-    func application(
+    package func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
@@ -151,12 +156,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {
+    package func applicationWillTerminate(_ application: UIApplication) {
         handleApplicationWillTerminate()
     }
 
     @discardableResult
-    func handleApplicationWillTerminate() -> Bool {
+    package func handleApplicationWillTerminate() -> Bool {
         configuredTabManager.beginApplicationTermination()
         return configuredLifecycleDependencies.endLiveActivitiesForApplicationTermination()
     }
@@ -173,7 +178,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    func handleSceneWillDeactivate(
+    package func handleSceneWillDeactivate(
         connectedOtherSceneStates: [UIScene.ActivationState],
         prepare: () -> Void
     ) {
@@ -205,7 +210,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    func handleSceneDidEnterBackground(
+    package func handleSceneDidEnterBackground(
         connectedSceneStates: [UIScene.ActivationState],
         lock: () -> Void
     ) {

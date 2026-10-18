@@ -8,8 +8,8 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func showPointerContextMenu(at location: CGPoint) {
+package extension GhosttyTerminalView {
+    package func showPointerContextMenu(at location: CGPoint) {
         guard !isShuttingDown else { return }
         dismissEditMenuIfNeeded()
         editMenuPresentation = .pointerContext
@@ -32,7 +32,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func pointerContextMenuElements() -> [UIMenuElement] {
+    package func pointerContextMenuElements() -> [UIMenuElement] {
         guard !isShuttingDown else { return [] }
         var actions: [UIMenuElement] = []
 

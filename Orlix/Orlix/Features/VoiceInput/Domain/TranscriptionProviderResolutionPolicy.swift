@@ -1,5 +1,5 @@
-nonisolated enum TranscriptionProviderResolutionPolicy {
-    static func resolve(
+nonisolated package enum TranscriptionProviderResolutionPolicy {
+    static package func resolve(
         requested: TranscriptionProvider,
         mlxSupported: Bool,
         requestedModelAvailable: Bool

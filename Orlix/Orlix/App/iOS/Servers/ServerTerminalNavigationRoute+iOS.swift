@@ -1,6 +1,9 @@
 import Foundation
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerTerminalNavigationRoute: Equatable, Sendable {
     nonisolated enum ConnectionResolution: Sendable {
         case succeeded

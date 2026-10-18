@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct TerminalAccessoryObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
@@ -58,7 +61,7 @@ private final class TerminalAccessoryObserverCleanup {
 }
 
 @MainActor
-final class TerminalAccessoryPreferencesManager: ObservableObject {
+final package class TerminalAccessoryPreferencesManager: ObservableObject {
     @Published private(set) var profile: TerminalAccessoryProfile
 
     private let dependencies: TerminalAccessoryPreferencesDependencies
@@ -72,7 +75,7 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     private var startupSyncTask: Task<Void, Never>?
     private var lifecycleSyncTask: Task<Void, Never>?
 
-    init(dependencies: TerminalAccessoryPreferencesDependencies) {
+    package init(dependencies: TerminalAccessoryPreferencesDependencies) {
         self.dependencies = dependencies
         let observerCleanup = TerminalAccessoryObserverCleanup(
             syncLifecycle: dependencies.syncLifecycle,
@@ -95,11 +98,11 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         observerCleanupRequest.perform()
     }
 
-    var activeItems: [TerminalAccessoryItemRef] {
+    package var activeItems: [TerminalAccessoryItemRef] {
         profile.layout.activeItems
     }
 
-    var customActions: [TerminalAccessoryCustomAction] {
+    package var customActions: [TerminalAccessoryCustomAction] {
         profile.customActions
             .filter { !$0.isDeleted }
             .sorted { lhs, rhs in
@@ -110,29 +113,29 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
             }
     }
 
-    var deletedCustomActions: [TerminalAccessoryCustomAction] {
+    package var deletedCustomActions: [TerminalAccessoryCustomAction] {
         profile.customActions.filter(\.isDeleted)
     }
 
-    var canCreateCustomAction: Bool {
+    package var canCreateCustomAction: Bool {
         customActions.count < TerminalAccessoryProfile.maxCustomActions
     }
 
     /// Free tier is limited to `FreeTierLimits.maxCustomActions` created actions.
     /// Existing actions beyond the limit keep working; only creation is gated.
-    func isCustomActionCreationProGated(hasProAccess: Bool) -> Bool {
+    package func isCustomActionCreationProGated(hasProAccess: Bool) -> Bool {
         !hasProAccess && customActions.count >= FreeTierLimits.maxCustomActions
     }
 
-    func customActionLimit(hasProAccess: Bool) -> Int {
+    package func customActionLimit(hasProAccess: Bool) -> Int {
         hasProAccess ? TerminalAccessoryProfile.maxCustomActions : FreeTierLimits.maxCustomActions
     }
 
-    func customAction(for id: UUID) -> TerminalAccessoryCustomAction? {
+    package func customAction(for id: UUID) -> TerminalAccessoryCustomAction? {
         customActions.first { $0.id == id }
     }
 
-    func createCustomAction(
+    package func createCustomAction(
         title: String,
         kind: TerminalAccessoryCustomActionKind,
         commandContent: String,
@@ -180,7 +183,7 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
     }
 
     @discardableResult
-    func updateCustomAction(
+    package func updateCustomAction(
         id: UUID,
         title: String,
         kind: TerminalAccessoryCustomActionKind,
@@ -219,7 +222,7 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         return nextProfile.customActions[index]
     }
 
-    func deleteCustomAction(id: UUID) {
+    package func deleteCustomAction(id: UUID) {
         guard let index = profile.customActions.firstIndex(where: { $0.id == id && !$0.isDeleted }) else {
             return
         }
@@ -232,36 +235,36 @@ final class TerminalAccessoryPreferencesManager: ObservableObject {
         }
     }
 
-    func moveActiveItems(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+    package func moveActiveItems(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         let nextItems = moveItems(profile.layout.activeItems, fromOffsets: offsets, toOffset: destination)
         updateLayoutItems(nextItems)
     }
 
-    func removeActiveItems(atOffsets offsets: IndexSet) {
+    package func removeActiveItems(atOffsets offsets: IndexSet) {
         let nextItems = removeItems(profile.layout.activeItems, atOffsets: offsets)
         updateLayoutItems(nextItems)
     }
 
-    func removeActiveItem(_ item: TerminalAccessoryItemRef) {
+    package func removeActiveItem(_ item: TerminalAccessoryItemRef) {
         var nextItems = profile.layout.activeItems
         nextItems.removeAll { $0 == item }
         updateLayoutItems(nextItems)
     }
 
-    func addActiveItem(_ item: TerminalAccessoryItemRef) {
+    package func addActiveItem(_ item: TerminalAccessoryItemRef) {
         guard !profile.layout.activeItems.contains(item) else { return }
         var nextItems = profile.layout.activeItems
         nextItems.append(item)
         updateLayoutItems(nextItems)
     }
 
-    func resetToDefaultLayout() {
+    package func resetToDefaultLayout() {
         updateLayout { layout in
             layout.activeItems = TerminalAccessoryProfile.defaultActiveItems
         }
     }
 
-    func refreshFromCloud() async throws {
+    package func refreshFromCloud() async throws {
         startupSyncTask?.cancel()
         startupSyncTask = nil
         lifecycleSyncTask?.cancel()

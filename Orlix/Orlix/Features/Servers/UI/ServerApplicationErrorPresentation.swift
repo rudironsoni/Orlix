@@ -1,7 +1,10 @@
 import Foundation
 
-extension ServerConnectionTestFailure {
-    nonisolated var message: String {
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
+package extension ServerConnectionTestFailure {
+    nonisolated package var message: String {
         switch reason {
         case .message(let message):
             return message
@@ -22,8 +25,8 @@ extension ServerConnectionTestFailure {
     }
 }
 
-extension OrlixError: LocalizedError {
-    nonisolated var errorDescription: String? {
+package extension OrlixError: LocalizedError {
+    nonisolated package var errorDescription: String? {
         switch self {
         case .proRequired(let requirement):
             switch requirement {

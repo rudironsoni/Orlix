@@ -3,6 +3,9 @@ import Combine
 import Speech
 import AVFoundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum SpeechRecognitionOperationState: Equatable, Sendable {
     case idle
     case running(UUID)

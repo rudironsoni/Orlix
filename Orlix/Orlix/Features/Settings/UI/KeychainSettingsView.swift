@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 enum SSHKeySettingsFailurePresentation {
     static func message(
         for operation: SSHKeySettingsCoordinator.Operation,
@@ -47,14 +50,14 @@ enum SSHKeySettingsFailurePresentation {
 
 // MARK: - Keychain Settings View
 
-struct KeychainSettingsView: View {
+package struct KeychainSettingsView: View {
     @EnvironmentObject private var coordinator: SSHKeySettingsCoordinator
     @State private var showingAddKey = false
     @State private var showingGenerateKey = false
     @State private var keyToDelete: SSHKeyEntry?
-    @State var keyToShowDetails: SSHKeyEntry?
+    @State package var keyToShowDetails: SSHKeyEntry?
 
-    var body: some View {
+    package var body: some View {
         Group {
             if coordinator.keys.isEmpty {
                 emptyKeysView
@@ -187,7 +190,7 @@ struct KeychainSettingsView: View {
     }
 
     @ViewBuilder
-    func keyActions(for key: SSHKeyEntry) -> some View {
+    package func keyActions(for key: SSHKeyEntry) -> some View {
         Button {
             keyToShowDetails = key
         } label: {

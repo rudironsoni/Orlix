@@ -2,8 +2,11 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationClient {
+final package class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationClient {
     private static let desiredKeys = (
         ServerCloudKitRecordCodec.recordKeys + WorkspaceCloudKitRecordCodec.recordKeys
     ).reduce(into: [String]()) { keys, key in
@@ -19,7 +22,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         category: "Server.CloudKit"
     )
 
-    init(
+    package init(
         transport: any CloudKitRecordChangeTransport,
         now: @escaping () -> Date
     ) {
@@ -27,11 +30,11 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         self.now = now
     }
 
-    var isAvailable: Bool {
+    package var isAvailable: Bool {
         transport.isCloudKitAvailable
     }
 
-    func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges {
+    package func fetchServerChanges(forceFullFetch: Bool) async throws -> ServerRemoteChanges {
         let rawChanges = try await transport.fetchCloudKitRecordChanges(
             forceFullFetch: forceFullFetch,
             desiredKeys: Self.desiredKeys
@@ -39,13 +42,13 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         return try decode(rawChanges, fallbackDate: now())
     }
 
-    func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
+    package func acceptServerChanges(_ checkpoint: ServerRemoteChangeCheckpoint) throws {
         try transport.commitCloudKitRecordChanges(
             CloudKitRecordChangeCheckpoint(id: checkpoint.id)
         )
     }
 
-    func saveServer(_ server: Server) async throws {
+    package func saveServer(_ server: Server) async throws {
         let record = ServerCloudKitRecordCodec.record(
             for: server,
             in: transport.cloudKitRecordZoneID,
@@ -58,7 +61,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         )
     }
 
-    func deleteServer(_ server: Server) async throws {
+    package func deleteServer(_ server: Server) async throws {
         try await deleteRecord(
             named: server.id.uuidString,
             successMessage: "Deleted server \(server.name) from CloudKit",
@@ -66,7 +69,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         )
     }
 
-    func saveWorkspace(_ workspace: Workspace) async throws {
+    package func saveWorkspace(_ workspace: Workspace) async throws {
         let record = WorkspaceCloudKitRecordCodec.record(
             for: workspace,
             in: transport.cloudKitRecordZoneID,
@@ -79,7 +82,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         )
     }
 
-    func deleteWorkspace(_ workspace: Workspace) async throws {
+    package func deleteWorkspace(_ workspace: Workspace) async throws {
         try await deleteRecord(
             named: workspace.id.uuidString,
             successMessage: "Deleted workspace \(workspace.name) from CloudKit",
@@ -87,7 +90,7 @@ final class ServerCloudKitClient: ServerRemoteRepository, ServerRemoteMutationCl
         )
     }
 
-    static func isSchemaError(_ error: Error) -> Bool {
+    static package func isSchemaError(_ error: Error) -> Bool {
         if let cloudKitError = error as? CKError {
             switch cloudKitError.code {
             case .unknownItem, .invalidArguments:

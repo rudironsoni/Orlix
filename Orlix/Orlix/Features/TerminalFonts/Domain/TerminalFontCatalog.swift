@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated struct TerminalFontCatalog: Equatable, Sendable {
-    static let empty = TerminalFontCatalog(families: [])
+nonisolated package struct TerminalFontCatalog: Equatable, Sendable {
+    static package let empty = TerminalFontCatalog(families: [])
 
-    let families: [TerminalFontFamily]
+    package let families: [TerminalFontFamily]
 
-    init(families: [TerminalFontFamily]) {
+    package init(families: [TerminalFontFamily]) {
         var familiesByName: [String: TerminalFontFamily] = [:]
 
         for family in families {
@@ -32,12 +32,12 @@ nonisolated struct TerminalFontCatalog: Equatable, Sendable {
         }
     }
 
-    func family(named name: String) -> TerminalFontFamily? {
+    package func family(named name: String) -> TerminalFontFamily? {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return families.first { $0.name == normalizedName }
     }
 
-    func availableFamilies(ensuring currentName: String) -> [TerminalFontFamily] {
+    package func availableFamilies(ensuring currentName: String) -> [TerminalFontFamily] {
         let normalizedName = currentName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty else { return families }
         guard !families.contains(where: { $0.name == normalizedName }) else {

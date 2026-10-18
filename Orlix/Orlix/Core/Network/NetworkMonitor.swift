@@ -5,11 +5,11 @@ import os.log
 
 // MARK: - Network Monitor
 
-nonisolated final class ReachabilityCompletionState: @unchecked Sendable {
+nonisolated final package class ReachabilityCompletionState: @unchecked Sendable {
     private let lock = NSLock()
     private var didComplete = false
 
-    func completeOnce() -> Bool {
+    package func completeOnce() -> Bool {
         lock.lock()
         defer { lock.unlock() }
         guard !didComplete else { return false }
@@ -19,16 +19,16 @@ nonisolated final class ReachabilityCompletionState: @unchecked Sendable {
 }
 
 @MainActor
-final class NetworkMonitor: ObservableObject {
-    static let shared = NetworkMonitor()
+final package class NetworkMonitor: ObservableObject {
+    static package let shared = NetworkMonitor()
 
-    nonisolated enum Readiness: String, Hashable, Sendable {
+    nonisolated package enum Readiness: String, Hashable, Sendable {
         case unknown
         case ready
         case unavailable
     }
 
-    nonisolated enum ConnectionType: String, Hashable, Sendable {
+    nonisolated package enum ConnectionType: String, Hashable, Sendable {
         case wifi = "WiFi"
         case cellular = "Cellular"
         case ethernet = "Ethernet"
@@ -53,7 +53,7 @@ final class NetworkMonitor: ObservableObject {
         }
     }
 
-    nonisolated struct Snapshot: Hashable, Sendable {
+    nonisolated package struct Snapshot: Hashable, Sendable {
         let readiness: Readiness
         let connectionType: ConnectionType
         let isExpensive: Bool
@@ -69,12 +69,12 @@ final class NetworkMonitor: ObservableObject {
 
     @Published private(set) var snapshot: Snapshot = .unknown
 
-    var readiness: Readiness { snapshot.readiness }
-    var isConnected: Bool { readiness == .ready }
-    var isOffline: Bool { readiness == .unavailable }
-    var connectionType: ConnectionType { snapshot.connectionType }
-    var isExpensive: Bool { snapshot.isExpensive }
-    var isConstrained: Bool { snapshot.isConstrained }
+    package var readiness: Readiness { snapshot.readiness }
+    package var isConnected: Bool { readiness == .ready }
+    package var isOffline: Bool { readiness == .unavailable }
+    package var connectionType: ConnectionType { snapshot.connectionType }
+    package var isExpensive: Bool { snapshot.isExpensive }
+    package var isConstrained: Bool { snapshot.isConstrained }
 
     private let monitor: NWPathMonitor
     private let queue = DispatchQueue(label: "com.rudironsoni.orlix.networkmonitor")
@@ -104,7 +104,7 @@ final class NetworkMonitor: ObservableObject {
 
     /// Reconciles state from the monitor's latest path after foregrounding.
     /// Background delivery can be suspended even though `currentPath` advanced.
-    func refreshCurrentPath() {
+    package func refreshCurrentPath() {
         apply(Self.snapshot(for: monitor.currentPath))
     }
 
@@ -142,7 +142,7 @@ final class NetworkMonitor: ObservableObject {
     }
 
     /// Check if a specific host is reachable
-    func checkHostReachability(_ host: String, port: UInt16 = 22) async -> Bool {
+    package func checkHostReachability(_ host: String, port: UInt16 = 22) async -> Bool {
         return await withCheckedContinuation { continuation in
             let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
             let connection = NWConnection(to: endpoint, using: .tcp)
@@ -178,8 +178,8 @@ final class NetworkMonitor: ObservableObject {
 
 // MARK: - Network Status Extension
 
-extension NetworkMonitor {
-    var statusDescription: String {
+package extension NetworkMonitor {
+    package var statusDescription: String {
         if isOffline {
             return String(localized: "No Connection")
         }

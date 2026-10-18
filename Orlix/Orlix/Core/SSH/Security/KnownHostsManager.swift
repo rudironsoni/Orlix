@@ -1,10 +1,10 @@
 import Foundation
 import os.log
 
-nonisolated final class KnownHostsManager: @unchecked Sendable {
-    static let shared = KnownHostsManager()
+nonisolated final package class KnownHostsManager: @unchecked Sendable {
+    static package let shared = KnownHostsManager()
 
-    struct Entry: Codable, Sendable {
+    package struct Entry: Codable, Sendable {
         let host: String
         let port: Int
         let fingerprint: String
@@ -15,7 +15,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         var id: String { "\(host):\(port)" }
     }
 
-    struct Challenge: Identifiable, Equatable, Sendable {
+    package struct Challenge: Identifiable, Equatable, Sendable {
         enum Kind: Equatable, Sendable {
             case firstUse
             case changed(previousFingerprint: String)
@@ -31,7 +31,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         let createdAt: Date
     }
 
-    enum VerificationResult: Equatable, Sendable {
+    package enum VerificationResult: Equatable, Sendable {
         case trusted
         case approvalRequired(Challenge)
     }
@@ -47,7 +47,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
     private let lock = NSLock()
     private var pendingChallenges: [String: Challenge] = [:]
 
-    init(
+    package init(
         defaults: UserDefaults = .standard,
         storageKey: String = "orlix.knownHosts"
     ) {
@@ -55,13 +55,13 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         self.storageKey = storageKey
     }
 
-    func entry(for host: String, port: Int) -> Entry? {
+    package func entry(for host: String, port: Int) -> Entry? {
         lock.lock()
         defer { lock.unlock() }
         return loadAll()[hostKey(host: host, port: port)]
     }
 
-    func evaluate(
+    package func evaluate(
         host: String,
         port: Int,
         fingerprint: String,
@@ -113,7 +113,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         return .approvalRequired(challenge)
     }
 
-    func pendingChallenge(for host: String, port: Int, now: Date = Date()) -> Challenge? {
+    package func pendingChallenge(for host: String, port: Int, now: Date = Date()) -> Challenge? {
         lock.lock()
         defer { lock.unlock() }
         purgeExpiredChallenges(now: now)
@@ -121,7 +121,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
     }
 
     @discardableResult
-    func approve(_ challenge: Challenge, now: Date = Date()) -> Bool {
+    package func approve(_ challenge: Challenge, now: Date = Date()) -> Bool {
         lock.lock()
         defer { lock.unlock() }
 
@@ -161,7 +161,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         return true
     }
 
-    func reject(_ challenge: Challenge) {
+    package func reject(_ challenge: Challenge) {
         lock.lock()
         defer { lock.unlock() }
         let key = hostKey(host: challenge.host, port: challenge.port)
@@ -169,7 +169,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         pendingChallenges.removeValue(forKey: key)
     }
 
-    func save(entry: Entry) {
+    package func save(entry: Entry) {
         lock.lock()
         defer { lock.unlock() }
         var entries = loadAll()
@@ -185,7 +185,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         saveAll(entries)
     }
 
-    func remove(host: String, port: Int) {
+    package func remove(host: String, port: Int) {
         lock.lock()
         defer { lock.unlock() }
         var entries = loadAll()
@@ -196,7 +196,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         logger.info("Removed known host entry for port \(port)")
     }
 
-    func removeAll() {
+    package func removeAll() {
         lock.lock()
         defer { lock.unlock() }
         pendingChallenges.removeAll()
@@ -204,7 +204,7 @@ nonisolated final class KnownHostsManager: @unchecked Sendable {
         logger.info("Removed all known host entries")
     }
 
-    func entries() -> [Entry] {
+    package func entries() -> [Entry] {
         lock.lock()
         defer { lock.unlock() }
         return loadAll().values.sorted { lhs, rhs in

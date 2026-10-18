@@ -1,8 +1,11 @@
 import SwiftUI
 
-struct ZenModeFloatingOverlay<Panel: View>: View {
-    @Binding var isPanelPresented: Bool
-    let panel: (CGFloat) -> Panel
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ZenModeFloatingOverlay<Panel: View>: View {
+    @Binding package var isPanelPresented: Bool
+    package let panel: (CGFloat) -> Panel
 
     #if os(macOS)
     private let chromeTopPadding: CGFloat = 6
@@ -20,7 +23,7 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
     private let launcherSize: CGFloat = 40
     #endif
 
-    init(
+    package init(
         isPanelPresented: Binding<Bool>,
         indicatorColor: Color? = nil,
         @ViewBuilder panel: @escaping (CGFloat) -> Panel
@@ -29,7 +32,7 @@ struct ZenModeFloatingOverlay<Panel: View>: View {
         self.panel = panel
     }
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let panelWidth = max(250, min(proxy.size.width - 24, panelMaximumWidth))
 
@@ -303,8 +306,8 @@ struct ZenModeStatusLine: View {
 }
 
 
-extension ConnectionState {
-    var statusTintColor: Color {
+package extension ConnectionState {
+    package var statusTintColor: Color {
         switch self {
         case .connected:
             return .green

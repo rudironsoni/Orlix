@@ -9,8 +9,11 @@
 import OSLog
 import UIKit
 
-extension GhosttyTerminalView {
-    func requestRender() {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package func requestRender() {
         if isShuttingDown { return }
         if isPaused { return }
         guard surface?.unsafeCValue != nil else { return }
@@ -42,7 +45,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func cleanup() {
+    package func cleanup() {
         guard !isShuttingDown else { return }
         isShuttingDown = true
         cancelClipboardConfirmations()
@@ -139,11 +142,11 @@ extension GhosttyTerminalView {
     }
 
     /// Pause rendering and input without destroying the surface.
-    var isRenderingPaused: Bool {
+    package var isRenderingPaused: Bool {
         isPaused
     }
 
-    func pauseRendering(preservingForegroundKeyboardGrid: Bool = false) {
+    package func pauseRendering(preservingForegroundKeyboardGrid: Bool = false) {
         guard !isShuttingDown else { return }
         cancelTrackedHardwareInput()
         if preservingForegroundKeyboardGrid {
@@ -158,7 +161,7 @@ extension GhosttyTerminalView {
     }
 
     /// Resume rendering/input after a pause.
-    func resumeRendering() {
+    package func resumeRendering() {
         guard !isShuttingDown else { return }
         isPaused = false
 
@@ -201,7 +204,7 @@ extension GhosttyTerminalView {
         requestRender()
     }
 
-    func setSurfaceFocus(_ isFocused: Bool) {
+    package func setSurfaceFocus(_ isFocused: Bool) {
         guard let surface = surface?.unsafeCValue else { return }
         ghostty_surface_set_focus(surface, isFocused)
         #if DEBUG
@@ -212,7 +215,7 @@ extension GhosttyTerminalView {
     // MARK: - Setup
 
     /// Create and configure the Ghostty surface
-    func setupConfigReloadObservation() {
+    package func setupConfigReloadObservation() {
         configReloadObserver = NotificationCenter.default.addObserver(
             forName: Ghostty.configDidReloadNotification,
             object: nil,
@@ -225,7 +228,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func setupSurface() {
+    package func setupSurface() {
         guard let app = ghosttyApp else {
             Self.logger.error("Cannot create surface: ghostty_app_t is nil")
             return
@@ -273,7 +276,7 @@ extension GhosttyTerminalView {
     /// NOTE: On iOS, we must also configure the IOSurfaceLayer's frame/contentsScale in layoutSubviews
     /// and didMoveToWindow because Ghostty adds it as a sublayer that doesn't auto-resize.
     /// Without proper sublayer configuration, Ghostty's setSurfaceCallback will discard all frames.
-    func sizeDidChange(_ size: CGSize) {
+    package func sizeDidChange(_ size: CGSize) {
         if isShuttingDown { return }
         let currentSurfaceSize = renderedSurfaceSize
         guard TerminalSurfaceGeometryPolicy.update(
@@ -335,7 +338,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func applyPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides) {
+    package func applyPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides) {
         surfacePresentationOverrides = presentationOverrides
 
         guard let surface = surface?.unsafeCValue else { return }
@@ -360,25 +363,25 @@ extension GhosttyTerminalView {
     // MARK: - Process Lifecycle
 
     /// Check if the terminal process has exited
-    var processExited: Bool {
+    package var processExited: Bool {
         guard let surface = surface?.unsafeCValue else { return true }
         return ghostty_surface_process_exited(surface)
     }
 
     /// Check if closing this terminal needs confirmation
-    var needsConfirmQuit: Bool {
+    package var needsConfirmQuit: Bool {
         guard let surface = surface else { return false }
         return surface.needsConfirmQuit
     }
 
     /// Get current terminal grid size
-    func terminalSize() -> Ghostty.Surface.TerminalSize? {
+    package func terminalSize() -> Ghostty.Surface.TerminalSize? {
         guard let surface = surface else { return nil }
         return surface.terminalSize()
     }
 
     /// Force the terminal surface to refresh/redraw
-    func forceRefresh() {
+    package func forceRefresh() {
         if isShuttingDown { return }
         if isPaused { return }
         guard let surface = surface?.unsafeCValue else { return }
@@ -413,13 +416,13 @@ extension GhosttyTerminalView {
     }
 
     /// Reset Ghostty's terminal state before binding a fresh remote shell to a reused surface.
-    func resetTerminalForReconnect() {
+    package func resetTerminalForReconnect() {
         guard !isShuttingDown else { return }
         _ = surface?.perform(action: "reset")
         forceRefresh()
     }
 
-    func updateReadonlyState(_ isReadonly: Bool) {
+    package func updateReadonlyState(_ isReadonly: Bool) {
         readonly = isReadonly
     }
 
@@ -465,7 +468,7 @@ extension GhosttyTerminalView {
     // MARK: - Custom I/O API (for SSH clients)
 
     /// Feed data from SSH channel to the terminal for rendering.
-    func feedData(_ data: Data) {
+    package func feedData(_ data: Data) {
         guard let surface = surface?.unsafeCValue else { return }
 
         // Feed data to terminal
@@ -476,7 +479,7 @@ extension GhosttyTerminalView {
     }
 
     /// Setup the write callback to capture keyboard input
-    func setupWriteCallback() {
+    package func setupWriteCallback() {
         guard let surface = surface?.unsafeCValue else { return }
         guard let userdata = ghostty_surface_userdata(surface) else { return }
 

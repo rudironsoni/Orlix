@@ -1,10 +1,13 @@
 import SwiftUI
 
-struct NoticeAppHost<Content: View>: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct NoticeAppHost<Content: View>: View {
     @ObservedObject private var networkMonitor: NetworkMonitor
-    let content: Content
+    package let content: Content
 
-    init(networkMonitor: NetworkMonitor, @ViewBuilder content: () -> Content) {
+    package init(networkMonitor: NetworkMonitor, @ViewBuilder content: () -> Content) {
         self.networkMonitor = networkMonitor
         self.content = content()
     }
@@ -22,7 +25,7 @@ struct NoticeAppHost<Content: View>: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         NoticeHost(topBanner: topBannerNotice, topInsetBehavior: .safeAreaTop) {
             content
         }

@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
-    case deny
-    case ask
-    case allow
+nonisolated package enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
+    package case deny
+    package case ask
+    package case allow
 
-    static let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
-    static let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
+    static package let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
+    static package let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var settingsTitle: String {
+    package var settingsTitle: String {
         switch self {
         case .deny: return String(localized: "Deny")
         case .ask: return String(localized: "Ask Every Time")
@@ -18,7 +18,7 @@ nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identi
         }
     }
 
-    var settingsDescription: String {
+    package var settingsDescription: String {
         switch self {
         case .deny:
             return String(localized: "Remote programs cannot read your clipboard.")
@@ -29,7 +29,7 @@ nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identi
         }
     }
 
-    static func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardReadPolicy {
+    static package func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardReadPolicy {
         guard let rawValue = defaults.string(forKey: userDefaultsKey),
               let policy = TerminalRemoteClipboardReadPolicy(rawValue: rawValue) else {
             return defaultValue
@@ -38,23 +38,23 @@ nonisolated enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identi
     }
 }
 
-nonisolated enum TerminalClipboardWriteAction: Equatable, Sendable {
-    case writeImmediately
-    case requestConfirmation
+nonisolated package enum TerminalClipboardWriteAction: Equatable, Sendable {
+    package case writeImmediately
+    package case requestConfirmation
 }
 
-nonisolated enum TerminalClipboardWritePolicy {
-    static func action(requiresConfirmation: Bool) -> TerminalClipboardWriteAction {
+nonisolated package enum TerminalClipboardWritePolicy {
+    static package func action(requiresConfirmation: Bool) -> TerminalClipboardWriteAction {
         requiresConfirmation ? .requestConfirmation : .writeImmediately
     }
 }
 
-nonisolated enum TerminalClipboardConfirmationKind: Equatable, Sendable {
-    case remoteRead
-    case remoteWrite
-    case unsafePaste
+nonisolated package enum TerminalClipboardConfirmationKind: Equatable, Sendable {
+    package case remoteRead
+    package case remoteWrite
+    package case unsafePaste
 
-    var title: String {
+    package var title: String {
         switch self {
         case .remoteRead: return String(localized: "Allow Clipboard Read?")
         case .remoteWrite: return String(localized: "Allow Clipboard Change?")
@@ -62,7 +62,7 @@ nonisolated enum TerminalClipboardConfirmationKind: Equatable, Sendable {
         }
     }
 
-    var message: String {
+    package var message: String {
         switch self {
         case .remoteRead:
             return String(localized: "The remote terminal wants to read your clipboard.")
@@ -74,9 +74,9 @@ nonisolated enum TerminalClipboardConfirmationKind: Equatable, Sendable {
     }
 }
 
-nonisolated enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
-    case cancel
-    case allow
+nonisolated package enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
+    package case cancel
+    package case allow
 }
 
 nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
@@ -84,20 +84,20 @@ nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
     case cancel
 }
 
-nonisolated enum TerminalClipboardPresentationRetryPolicy {
-    static let maximumAttempts = 480
+nonisolated package enum TerminalClipboardPresentationRetryPolicy {
+    static package let maximumAttempts = 480
 
-    static func action(after attemptCount: Int) -> TerminalClipboardPresentationRetryAction {
+    static package func action(after attemptCount: Int) -> TerminalClipboardPresentationRetryAction {
         guard attemptCount < maximumAttempts else { return .cancel }
         return .retry(nextAttempt: attemptCount + 1)
     }
 }
 
 @MainActor
-final class TerminalClipboardConfirmationQueue {
-    static let maximumRequestCount = 8
+final package class TerminalClipboardConfirmationQueue {
+    static package let maximumRequestCount = 8
 
-    struct Request: Identifiable {
+    package struct Request: Identifiable {
         let id: UUID
         let kind: TerminalClipboardConfirmationKind
         fileprivate let completion: (TerminalClipboardConfirmationDecision) -> Void
@@ -106,7 +106,7 @@ final class TerminalClipboardConfirmationQueue {
     private var pending: [Request] = []
     private(set) var current: Request?
 
-    var requestToPresent: Request? {
+    package var requestToPresent: Request? {
         if current == nil, !pending.isEmpty {
             current = pending.removeFirst()
         }
@@ -114,7 +114,7 @@ final class TerminalClipboardConfirmationQueue {
     }
 
     @discardableResult
-    func enqueue(
+    package func enqueue(
         kind: TerminalClipboardConfirmationKind,
         completion: @escaping (TerminalClipboardConfirmationDecision) -> Void
     ) -> UUID {
@@ -134,7 +134,7 @@ final class TerminalClipboardConfirmationQueue {
     }
 
     @discardableResult
-    func resolve(
+    package func resolve(
         id: UUID,
         decision: TerminalClipboardConfirmationDecision
     ) -> Bool {
@@ -144,7 +144,7 @@ final class TerminalClipboardConfirmationQueue {
         return true
     }
 
-    func cancelAll() {
+    package func cancelAll() {
         var requests = pending
         if let current {
             requests.insert(current, at: 0)

@@ -2,14 +2,14 @@ import CloudKit
 import os.log
 
 @MainActor
-extension CloudKitManager {
+package extension CloudKitManager {
     // MARK: - Subscriptions
 
-    func subscribeToChanges() async {
+    package func subscribeToChanges() async {
         await subscribeToChanges(generation: cloudKitSyncGeneration)
     }
 
-    func subscribeToChanges(generation: UUID) async {
+    package func subscribeToChanges(generation: UUID) async {
         do {
             try await ensureAccountStatusChecked(for: generation)
         } catch {

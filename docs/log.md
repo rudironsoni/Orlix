@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Split the app into Swift modules
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) compiles the Orlix app as separate Swift modules: shared models, SSH and remote transport, files and SFTP, statistics and telemetry, settings, terminal presentation, app composition, and a one-file entry. Cross-module declarations use `package` access. Files, models, SSH, settings, and statistics do not depend on terminal presentation, so a terminal UI edit does not recompile those features. The Xcode target stays one module and passes `-package-name Orlix`. GhosttyKit stays the pinned XCFramework. Kernel, Coreutils, Bash, and Autotools keep `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Split native SSH archives by slice
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds OpenSSL and libssh2 as separate actions for each Apple destination and architecture. libssh2 consumes that slice's OpenSSL archives and headers. A libssh2-only change does not rebuild OpenSSL. A device slice input does not rebuild the simulator archive, and the reverse. GhosttyKit stays the pinned XCFramework. Kernel and Autotools keep `no-remote-cache`. Homebrew's bin directory stays off `PATH`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

@@ -1,6 +1,10 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum EternalTerminalStatePolicy {
     static func connectionState(
         for state: EternalTerminalSessionState,

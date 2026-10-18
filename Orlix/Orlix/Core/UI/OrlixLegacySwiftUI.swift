@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct OrlixLabeledContent<Label: View, Content: View>: View {
+package struct OrlixLabeledContent<Label: View, Content: View>: View {
     private let label: Label
     private let content: Content
 
-    init(
+    package init(
         @ViewBuilder content: () -> Content,
         @ViewBuilder label: () -> Label
     ) {
@@ -12,7 +12,7 @@ struct OrlixLabeledContent<Label: View, Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         HStack {
             label
             Spacer()
@@ -21,22 +21,22 @@ struct OrlixLabeledContent<Label: View, Content: View>: View {
     }
 }
 
-extension OrlixLabeledContent where Label == Text {
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+package extension OrlixLabeledContent where Label == Text {
+    package init(_ title: String, @ViewBuilder content: () -> Content) {
         self.init(content: content) {
             Text(title)
         }
     }
 
-    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+    package init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.init(content: content) {
             Text(title)
         }
     }
 }
 
-extension OrlixLabeledContent where Label == Text, Content == Text {
-    init(_ title: String, value: String) {
+package extension OrlixLabeledContent where Label == Text, Content == Text {
+    package init(_ title: String, value: String) {
         self.init {
             Text(value)
         } label: {

@@ -1,6 +1,9 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class TerminalConnectionWatchdog: ObservableObject {
     typealias Sleep = @Sendable (_ duration: Duration) async throws -> Void

@@ -1,21 +1,21 @@
 import Foundation
 
-nonisolated struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
-    let name: String
-    let path: String
-    let type: RemoteFileType
-    let size: UInt64?
-    let modifiedAt: Date?
-    let permissions: UInt32?
-    let symlinkTarget: String?
+nonisolated package struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
+    package let name: String
+    package let path: String
+    package let type: RemoteFileType
+    package let size: UInt64?
+    package let modifiedAt: Date?
+    package let permissions: UInt32?
+    package let symlinkTarget: String?
 
-    var id: String { path }
+    package var id: String { path }
 
-    var isHidden: Bool {
+    package var isHidden: Bool {
         name.hasPrefix(".") && name != "." && name != ".."
     }
 
-    var iconName: String {
+    package var iconName: String {
         switch type {
         case .directory:
             return "folder.fill"
@@ -40,34 +40,34 @@ nonisolated struct RemoteFileEntry: Identifiable, Hashable, Codable, Sendable {
         }
     }
 
-    var metadataTypeLabel: String {
+    package var metadataTypeLabel: String {
         type.displayName
     }
 
-    var supportsPreview: Bool {
+    package var supportsPreview: Bool {
         type != .directory
     }
 
-    var sortableModifiedAt: Date {
+    package var sortableModifiedAt: Date {
         modifiedAt ?? .distantPast
     }
 
-    var sortableSize: UInt64 {
+    package var sortableSize: UInt64 {
         size ?? 0
     }
 
-    var formattedPermissions: String? {
+    package var formattedPermissions: String? {
         guard let permissions else { return nil }
         let octal = String(permissions & 0o7777, radix: 8)
         let padded = String(repeating: "0", count: max(0, 4 - octal.count)) + octal
         return "\(padded) (\(Self.symbolicPermissions(for: permissions)))"
     }
 
-    var specialPermissionBits: UInt32 {
+    package var specialPermissionBits: UInt32 {
         (permissions ?? 0) & 0o7000
     }
 
-    static func symbolicPermissions(for permissions: UInt32) -> String {
+    static package func symbolicPermissions(for permissions: UInt32) -> String {
         func bits(_ read: UInt32, _ write: UInt32, _ execute: UInt32) -> String {
             [
                 permissions & read != 0 ? "r" : "-",

@@ -1,4 +1,7 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// A deterministic app-shell preview with no live external dependencies.
 @MainActor

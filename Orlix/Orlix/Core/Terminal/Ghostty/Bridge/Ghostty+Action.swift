@@ -9,8 +9,8 @@ import Foundation
 
 // MARK: - Ghostty.Action
 
-extension Ghostty {
-    enum Action {}
+package extension Ghostty {
+    package enum Action {}
 }
 
 // MARK: - Scrollbar

@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-10-17
+updated: 2026-10-18
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -27,14 +27,19 @@ owned_paths:
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"
   - "OrlixKernel/Sources/ports/orlix/kbuild/source_state.py"
+  - "Orlix/BUILD.bazel"
+  - "Orlix/app_modules.bzl"
+  - "Orlix/Orlix/**/*.swift"
+  - "Orlix/OrlixShared/*.swift"
+  - "project.yml"
+  - "bazel/product/test_app_modules.py"
 read_only_paths:
   - "artifacts.lock.json"
-  - "project.yml"
   - ".github/workflows/bazel-nightly.yml"
   - ".github/workflows/bazel-promote.yml"
   - ".github/workflows/testflight-beta.yml"
 forbidden_paths:
-  - "Orlix/**"
+  - "Orlix/Vendor/**"
 required_skills:
   - "orlix-bazel"
   - "orlix-implementation-boundaries"
@@ -90,3 +95,5 @@ cannot justify removing those directories from the full-tree comparison.
 Rootfs uses its existing filesystem images as the cacheable product outputs.
 The producing action owns temporary assembly trees and validates their
 contents in the images. The provider and app consumers share this image boundary.
+
+The Orlix application compiles as separate Swift modules that follow the source dependency graph: shared models, SSH and remote transport, files and SFTP, statistics and telemetry, settings, terminal presentation, app composition, and a one-file app entry. Cross-module declarations use `package` access under the shared package name `Orlix`. Access control and concurrency checking stay in place. `OrlixFiles`, `OrlixModels`, `OrlixSSH`, `OrlixSettings`, and `OrlixStats` do not depend on `OrlixTerminal`, so a terminal presentation edit does not recompile those features. The pre-cutover Xcode target remains one module and passes `-package-name Orlix`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. GhosttyKit stays the pinned XCFramework. Kernel, Coreutils, Bash, and Autotools keep `no-remote-cache`.

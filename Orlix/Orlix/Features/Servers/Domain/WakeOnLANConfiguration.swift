@@ -5,29 +5,29 @@ nonisolated enum WakeOnLANConfigurationError: Error, Equatable, Sendable {
     case invalidIPv4Address
 }
 
-nonisolated struct WakeOnLANMACAddress: Codable, Hashable, Sendable {
+nonisolated package struct WakeOnLANMACAddress: Codable, Hashable, Sendable {
     private let octets: [UInt8]
 
-    init(_ value: String) throws {
+    package init(_ value: String) throws {
         octets = try Self.parse(value)
     }
 
-    var bytes: [UInt8] {
+    package var bytes: [UInt8] {
         octets
     }
 
-    var canonicalValue: String {
+    package var canonicalValue: String {
         octets
             .map { String(format: "%02X", $0) }
             .joined(separator: ":")
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         try self.init(container.decode(String.self))
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(canonicalValue)
     }
@@ -85,10 +85,10 @@ nonisolated struct WakeOnLANMACAddress: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct WakeOnLANIPv4Address: Codable, Hashable, Sendable {
-    let hostOrderValue: UInt32
+nonisolated package struct WakeOnLANIPv4Address: Codable, Hashable, Sendable {
+    package let hostOrderValue: UInt32
 
-    init(_ value: String) throws {
+    package init(_ value: String) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let components = trimmed.split(separator: ".", omittingEmptySubsequences: false)
         guard components.count == 4 else {
@@ -107,31 +107,31 @@ nonisolated struct WakeOnLANIPv4Address: Codable, Hashable, Sendable {
         hostOrderValue = result
     }
 
-    init(hostOrderValue: UInt32) {
+    package init(hostOrderValue: UInt32) {
         self.hostOrderValue = hostOrderValue
     }
 
-    var canonicalValue: String {
+    package var canonicalValue: String {
         [24, 16, 8, 0]
             .map { String((hostOrderValue >> UInt32($0)) & 0xFF) }
             .joined(separator: ".")
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         try self.init(container.decode(String.self))
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(canonicalValue)
     }
 }
 
-nonisolated struct WakeOnLANConfiguration: Codable, Hashable, Sendable {
-    let macAddress: WakeOnLANMACAddress
+nonisolated package struct WakeOnLANConfiguration: Codable, Hashable, Sendable {
+    package let macAddress: WakeOnLANMACAddress
 
-    init(macAddress: WakeOnLANMACAddress) {
+    package init(macAddress: WakeOnLANMACAddress) {
         self.macAddress = macAddress
     }
 }

@@ -1,6 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct CustomThemeManagerRow: View {
     let theme: TerminalTheme
     let assignment: String?

@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalAutoReconnectPolicy {
     static func shouldScheduleRetry(
         automaticReconnectAllowed: Bool,

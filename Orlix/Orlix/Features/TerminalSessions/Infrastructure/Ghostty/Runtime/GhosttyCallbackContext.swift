@@ -1,8 +1,8 @@
 import Foundation
 
-extension Ghostty {
+package extension Ghostty {
     /// Stable userdata for C callbacks without extending the owner's lifetime.
-    nonisolated final class CallbackContext<Owner: AnyObject>: @unchecked Sendable {
+    nonisolated final package class CallbackContext<Owner: AnyObject>: @unchecked Sendable {
         private let lock = NSLock()
         private weak var owner: Owner?
 

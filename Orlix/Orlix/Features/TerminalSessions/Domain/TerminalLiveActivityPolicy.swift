@@ -1,16 +1,16 @@
-nonisolated struct TerminalLiveActivitySnapshot: Equatable, Sendable {
-    nonisolated enum Status: Equatable, Sendable {
+nonisolated package struct TerminalLiveActivitySnapshot: Equatable, Sendable {
+    nonisolated package enum Status: Equatable, Sendable {
         case connected
         case connecting
         case reconnecting
     }
 
-    let status: Status
-    let activeCount: Int
+    package let status: Status
+    package let activeCount: Int
 }
 
-nonisolated enum TerminalLiveActivityPolicy {
-    static func snapshot(for connectionStates: [ConnectionState]) -> TerminalLiveActivitySnapshot? {
+nonisolated package enum TerminalLiveActivityPolicy {
+    static package func snapshot(for connectionStates: [ConnectionState]) -> TerminalLiveActivitySnapshot? {
         let activeStates = connectionStates.filter { $0.isConnected || $0.isConnecting }
         guard !activeStates.isEmpty else { return nil }
 

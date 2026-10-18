@@ -2,6 +2,9 @@ import Foundation
 import MoshCore
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 @MainActor
 struct TerminalMoshClientOperations {
     let restoreShell: @MainActor @Sendable (

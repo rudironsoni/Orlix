@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ProSettingsUserState: Equatable, Sendable {
     case checking
     case free

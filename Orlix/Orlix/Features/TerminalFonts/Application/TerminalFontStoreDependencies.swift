@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol TerminalFontCloudClient: AnyObject {
     func fetchTerminalFonts() async throws -> [TerminalFont]
@@ -7,9 +10,9 @@ protocol TerminalFontCloudClient: AnyObject {
 }
 
 @MainActor
-protocol TerminalFontCloudMutationClient: AnyObject {
-    func saveTerminalFont(_ font: TerminalFont) async throws
-    func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws
+package protocol TerminalFontCloudMutationClient: AnyObject {
+    package func saveTerminalFont(_ font: TerminalFont) async throws
+    package func saveTerminalFontPreference(_ preference: TerminalFontPreference) async throws
 }
 
 @MainActor

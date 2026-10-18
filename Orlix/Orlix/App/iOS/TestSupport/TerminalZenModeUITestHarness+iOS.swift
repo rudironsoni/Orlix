@@ -1,7 +1,11 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-struct TerminalZenModeUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixTerminal
+#endif
+package struct TerminalZenModeUITestHarness: View {
     private static let paneId = UUID(uuidString: "5E798DA7-3488-4D78-BEE0-7E01E241A31E")!
 
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
@@ -14,11 +18,11 @@ struct TerminalZenModeUITestHarness: View {
     @State private var terminalView: GhosttyTerminalView?
     @State private var terminalReady = false
 
-    init(tabManager: TerminalTabManager) {
+    package init(tabManager: TerminalTabManager) {
         self.tabManager = tabManager
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             TerminalKeyboardHarnessRepresentable(
                 tabManager: tabManager,

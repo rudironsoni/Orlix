@@ -1,31 +1,10 @@
 import Foundation
 
-extension RemoteSessionStartupBehavior {
-    var displayName: String {
-        switch self {
-        case .createManaged:
-            return String(localized: "Create Orlix session")
-        case .ask:
-            return String(localized: "Ask every time")
-        case .plainShell:
-            return String(localized: "Use a normal shell")
-        }
-    }
-
-    var descriptionText: String {
-        switch self {
-        case .createManaged:
-            return String(localized: "Create or reconnect to a Orlix-managed session.")
-        case .ask:
-            return String(localized: "Ask which session to use for each new tab or split.")
-        case .plainShell:
-            return String(localized: "Start a normal shell without remote session persistence.")
-        }
-    }
-}
-
-extension RemoteSessionStatus {
-    func shortLabel(backendName: String) -> String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension RemoteSessionStatus {
+    package func shortLabel(backendName: String) -> String {
         switch self {
         case .foreground: return backendName
         case .background: return backendName
@@ -36,7 +15,7 @@ extension RemoteSessionStatus {
         }
     }
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .foreground: return "Foreground"
         case .background: return "Background"

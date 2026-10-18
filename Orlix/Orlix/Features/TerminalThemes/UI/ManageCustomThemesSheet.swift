@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private struct PendingCustomThemeSource: Identifiable {
     let id = UUID()
     var suggestedName: String

@@ -2,9 +2,12 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
-    static let maximumConflictAttempts = 4
+final package class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
+    static package let maximumConflictAttempts = 4
 
     private let transport: any CloudKitRecordTransport
     private let logger = Logger(
@@ -12,11 +15,11 @@ final class StatsPreferencesCloudKitClient: StatsPreferencesCloudClient {
         category: "StatsPreferencesCloudKit"
     )
 
-    init(transport: any CloudKitRecordTransport) {
+    package init(transport: any CloudKitRecordTransport) {
         self.transport = transport
     }
 
-    func syncStatsPreferences(
+    package func syncStatsPreferences(
         _ localPreferences: StatsPreferences
     ) async throws -> StatsPreferences {
         try await transport.performCloudKitRecordMutation { [self] in

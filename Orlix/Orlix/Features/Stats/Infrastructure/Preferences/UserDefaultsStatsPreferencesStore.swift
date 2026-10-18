@@ -1,6 +1,9 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class UserDefaultsStatsPreferencesStore: StatsPreferencesPersisting {
     static let storageKey = "statsPreferencesV1"

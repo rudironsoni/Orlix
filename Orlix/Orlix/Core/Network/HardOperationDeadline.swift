@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum HardOperationDeadlineError: Error {
-    case exceeded
+nonisolated package enum HardOperationDeadlineError: Error {
+    package case exceeded
 }
 
 private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unchecked Sendable {
@@ -56,8 +56,8 @@ private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unc
 
 /// Returns at the deadline even when the operation ignores cooperative task
 /// cancellation. The losing operation is cancelled but deliberately not awaited.
-nonisolated enum HardOperationDeadline {
-    static func run<Value: Sendable>(
+nonisolated package enum HardOperationDeadline {
+    static package func run<Value: Sendable>(
         timeout: Duration,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { duration in
             try await Task.sleep(for: duration)

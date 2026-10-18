@@ -8,8 +8,8 @@
 #if os(macOS)
 import AppKit
 
-extension GhosttyTerminalView {
-    override func keyDown(with event: NSEvent) {
+package extension GhosttyTerminalView {
+    override package func keyDown(with event: NSEvent) {
         if handleRichPasteShortcut(event) {
             return
         }
@@ -18,7 +18,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    override package func performKeyEquivalent(with event: NSEvent) -> Bool {
         let isFirstResponder = window?.firstResponder === self
 
         if let action = MacTerminalShortcutRouting.zoomAction(
@@ -64,15 +64,15 @@ extension GhosttyTerminalView {
         MacTerminalShortcut.richPaste.matches(event)
     }
 
-    override func keyUp(with event: NSEvent) {
+    override package func keyUp(with event: NSEvent) {
         inputHandler.handleKeyUp(with: event)
     }
 
-    override func flagsChanged(with event: NSEvent) {
+    override package func flagsChanged(with event: NSEvent) {
         inputHandler.handleFlagsChanged(with: event)
     }
 
-    override func doCommand(by selector: Selector) {
+    override package func doCommand(by selector: Selector) {
         // Override to suppress NSBeep when interpretKeyEvents encounters unhandled commands
         // Without this, keys like delete at beginning of line, cmd+c with no selection, etc. cause beeps
         // Terminal handles all input via Ghostty, so we silently ignore unhandled commands

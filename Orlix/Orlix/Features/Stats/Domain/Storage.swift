@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum VolumeIdentity: Codable, Hashable, Sendable {
-    enum Platform: String, Codable, CaseIterable, Sendable {
+nonisolated package enum VolumeIdentity: Codable, Hashable, Sendable {
+    package enum Platform: String, Codable, CaseIterable, Sendable {
         case linux
         case darwin
         case windows
@@ -11,15 +11,15 @@ nonisolated enum VolumeIdentity: Codable, Hashable, Sendable {
         case unknown
     }
 
-    case stable(platform: Platform, fileSystemID: String, mountPoint: String)
-    case fallback(
+    package case stable(platform: Platform, fileSystemID: String, mountPoint: String)
+    package case fallback(
         platform: Platform,
         source: String,
         mountPoint: String,
         fileSystem: String
     )
 
-    init(
+    package init(
         platform: Platform,
         stableIdentifier: String?,
         source: String,
@@ -44,7 +44,7 @@ nonisolated enum VolumeIdentity: Codable, Hashable, Sendable {
         }
     }
 
-    var isStable: Bool {
+    package var isStable: Bool {
         if case .stable = self { return true }
         return false
     }
@@ -58,21 +58,21 @@ nonisolated enum VolumeIdentity: Codable, Hashable, Sendable {
         }
     }
 
-    static func normalizedMountPoint(_ mountPoint: String, platform: Platform) -> String {
+    static package func normalizedMountPoint(_ mountPoint: String, platform: Platform) -> String {
         let trimmed = mountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
         guard platform == .windows else { return trimmed }
         return trimmed.replacingOccurrences(of: "/", with: "\\").uppercased()
     }
 }
 
-nonisolated enum VolumeKind: String, Codable, CaseIterable, Sendable {
-    case physical
-    case container
-    case network
-    case virtual
-    case unknown
+nonisolated package enum VolumeKind: String, Codable, CaseIterable, Sendable {
+    package case physical
+    package case container
+    package case network
+    package case virtual
+    package case unknown
 
-    static func classify(source: String, mountPoint: String, fileSystem: String) -> VolumeKind {
+    static package func classify(source: String, mountPoint: String, fileSystem: String) -> VolumeKind {
         let source = source.lowercased()
         let mountPoint = mountPoint.lowercased()
         let fileSystem = fileSystem.lowercased()
@@ -122,8 +122,8 @@ nonisolated enum VolumeKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
-nonisolated enum VolumeVisibilityPolicy {
-    static func normalized(_ volumes: [VolumeInfo]) -> [VolumeInfo] {
+nonisolated package enum VolumeVisibilityPolicy {
+    static package func normalized(_ volumes: [VolumeInfo]) -> [VolumeInfo] {
         var result: [VolumeInfo] = []
         var indexByMountKey: [String: Int] = [:]
 
@@ -143,18 +143,18 @@ nonisolated enum VolumeVisibilityPolicy {
         return result
     }
 
-    static func visibleVolumes(
+    static package func visibleVolumes(
         from volumes: [VolumeInfo],
         hiddenVolumeIDs: Set<VolumeIdentity>
     ) -> [VolumeInfo] {
         normalized(volumes).filter { !hiddenVolumeIDs.contains($0.identity) }
     }
 
-    static func isVisibleByDefault(_ volume: VolumeInfo) -> Bool {
+    static package func isVisibleByDefault(_ volume: VolumeInfo) -> Bool {
         volume.mountPoint == "/" || volume.kind != .container
     }
 
-    static func hiddenVolumeIDs(
+    static package func hiddenVolumeIDs(
         in volumes: [VolumeInfo],
         visibilityOverrides: [VolumeIdentity: Bool]
     ) -> Set<VolumeIdentity> {
@@ -164,7 +164,7 @@ nonisolated enum VolumeVisibilityPolicy {
         })
     }
 
-    static func containerVolumeIDs(in volumes: [VolumeInfo]) -> Set<VolumeIdentity> {
+    static package func containerVolumeIDs(in volumes: [VolumeInfo]) -> Set<VolumeIdentity> {
         Set(normalized(volumes).filter {
             $0.kind == .container && $0.mountPoint != "/"
         }.map(\.identity))
@@ -181,8 +181,8 @@ nonisolated enum VolumeVisibilityPolicy {
     }
 }
 
-nonisolated struct ServerVolumeVisibilityPreferences: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 2
+nonisolated package struct ServerVolumeVisibilityPreferences: Codable, Equatable, Sendable {
+    static package let currentSchemaVersion = 2
 
     private var schemaVersion: Int
     private(set) var visibilityOverridesByServer: [String: [VolumeIdentity: Bool]] = [:]
@@ -193,19 +193,19 @@ nonisolated struct ServerVolumeVisibilityPreferences: Codable, Equatable, Sendab
         case visibilityOverridesByServer
     }
 
-    var requiresSchemaMigration: Bool {
+    package var requiresSchemaMigration: Bool {
         schemaVersion < Self.currentSchemaVersion
     }
 
-    mutating func markSchemaMigrationComplete() {
+    mutating package func markSchemaMigrationComplete() {
         schemaVersion = Self.currentSchemaVersion
     }
 
-    init() {
+    package init() {
         schemaVersion = Self.currentSchemaVersion
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         self.schemaVersion = schemaVersion
@@ -233,17 +233,17 @@ nonisolated struct ServerVolumeVisibilityPreferences: Codable, Equatable, Sendab
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
         try container.encode(visibilityOverridesByServer, forKey: .visibilityOverridesByServer)
     }
 
-    func visibilityOverrides(for serverID: UUID) -> [VolumeIdentity: Bool] {
+    package func visibilityOverrides(for serverID: UUID) -> [VolumeIdentity: Bool] {
         visibilityOverridesByServer[serverID.uuidString] ?? [:]
     }
 
-    mutating func setVisibilityOverrides(
+    mutating package func setVisibilityOverrides(
         _ overrides: [VolumeIdentity: Bool],
         for serverID: UUID
     ) {

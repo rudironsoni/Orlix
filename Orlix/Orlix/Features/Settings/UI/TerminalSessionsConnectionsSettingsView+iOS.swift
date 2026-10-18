@@ -1,19 +1,22 @@
 #if os(iOS)
 import SwiftUI
 
-struct TerminalSessionPlatformSettingsSection: View {
-    var body: some View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct TerminalSessionPlatformSettingsSection: View {
+    package var body: some View {
         Section("Terminal Session") {
             TerminalScreenAwakeSettingRow()
         }
     }
 }
 
-struct TerminalScreenAwakeSettingRow: View {
+package struct TerminalScreenAwakeSettingRow: View {
     @AppStorage(TerminalDefaults.keepScreenAwakeKey)
     private var keepScreenAwake = TerminalDefaults.defaultKeepScreenAwake
 
-    var body: some View {
+    package var body: some View {
         Toggle("Keep screen awake", isOn: $keepScreenAwake)
             .accessibilityIdentifier("orlix.settings.terminal.keepScreenAwake")
     }

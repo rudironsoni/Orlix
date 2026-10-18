@@ -3,6 +3,9 @@ import Foundation
 import SwiftUI
 import AppKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension View {
     func terminalCommandFocusValues(
         activeServerId: UUID?,

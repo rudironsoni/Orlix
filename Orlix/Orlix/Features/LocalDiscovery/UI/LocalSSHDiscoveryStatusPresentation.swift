@@ -36,8 +36,8 @@ enum LocalSSHDiscoveryStatusText {
 }
 
 @MainActor
-extension LocalSSHDiscoveryManager {
-    var statusText: String {
+package extension LocalSSHDiscoveryManager {
+    package var statusText: String {
         LocalSSHDiscoveryStatusText.text(
             for: state.phase,
             hostCount: hosts.count

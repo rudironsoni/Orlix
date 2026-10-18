@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct TerminalCustomActionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager

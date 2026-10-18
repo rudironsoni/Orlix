@@ -9,10 +9,10 @@
 import AppKit
 import CoreVideo
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
     /// Setup CVDisplayLink for display-synchronized rendering (SSH mode only)
     /// Event-driven: starts on activity, stops after idle timeout to save CPU
-    func setupDisplayLink() {
+    package func setupDisplayLink() {
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let displayLink = link else { return }
@@ -86,7 +86,7 @@ extension GhosttyTerminalView {
     }
 
     /// Request a render - starts display link if needed
-    func requestRender() {
+    package func requestRender() {
         guard !isShuttingDown else { return }
         lastActivityTime = CFAbsoluteTimeGetCurrent()
         needsRender = true
@@ -98,7 +98,7 @@ extension GhosttyTerminalView {
     }
 
     /// Stop and release the display link, including the weak reference
-    func stopDisplayLink() {
+    package func stopDisplayLink() {
         // Cancel idle check timer
         idleCheckTimer?.cancel()
         idleCheckTimer = nil

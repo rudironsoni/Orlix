@@ -8,12 +8,15 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    override var keyCommands: [UIKeyCommand]? {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    override package var keyCommands: [UIKeyCommand]? {
         terminalSplitCommands + terminalZoomCommands + [mouseCaptureCommand] + (super.keyCommands ?? [])
     }
 
-    func handleIMEProxyNavigationCommand(_ command: UIKeyCommand) {
+    package func handleIMEProxyNavigationCommand(_ command: UIKeyCommand) {
         guard canRouteTerminalInput else { return }
         guard let input = command.input,
               let key = terminalKey(forKeyCommandInput: input) else { return }
@@ -22,7 +25,7 @@ extension GhosttyTerminalView {
     }
 
     @objc
-    func handleTerminalZoomCommand(_ command: UIKeyCommand) {
+    package func handleTerminalZoomCommand(_ command: UIKeyCommand) {
         guard canRouteTerminalInput,
               let input = command.input,
               let key = TerminalZoomShortcutRouting.key(forCommandInput: input),
@@ -39,7 +42,7 @@ extension GhosttyTerminalView {
     }
 
     @objc
-    func handleTerminalSplitCommand(_ command: UIKeyCommand) {
+    package func handleTerminalSplitCommand(_ command: UIKeyCommand) {
         guard canRouteTerminalInput,
               let input = command.input else {
             return
@@ -51,7 +54,7 @@ extension GhosttyTerminalView {
     }
 
     @objc
-    func handleMouseCaptureCommand(_ command: UIKeyCommand) {
+    package func handleMouseCaptureCommand(_ command: UIKeyCommand) {
         guard canRouteTerminalInput,
               command.input?.lowercased() == "m",
               command.modifierFlags.intersection([.command, .alternate, .control, .shift]) == [.command, .alternate] else {
@@ -60,7 +63,7 @@ extension GhosttyTerminalView {
         toggleMouseReportingSuppression()
     }
 
-    func handlePasteShortcut(_ key: UIKey) -> Bool {
+    package func handlePasteShortcut(_ key: UIKey) -> Bool {
         let input = key.charactersIgnoringModifiers.lowercased()
         guard input == "v" else { return false }
 
@@ -77,11 +80,11 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func interceptRichPasteIfNeeded() -> Bool {
+    package func interceptRichPasteIfNeeded() -> Bool {
         richPasteInterceptor?(self) == true
     }
 
-    func performPasteAction(requestRenderAfterward: Bool = false) {
+    package func performPasteAction(requestRenderAfterward: Bool = false) {
         invalidateLocalTextInputSession()
         if interceptRichPasteIfNeeded() {
             clearSelectionAfterPaste()
@@ -98,7 +101,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func handleCommandShortcut(_ key: UIKey) -> Bool {
+    package func handleCommandShortcut(_ key: UIKey) -> Bool {
         guard key.modifierFlags.contains(.command) else { return false }
         let significantModifiers = key.modifierFlags.intersection([.command, .alternate, .control, .shift])
         if key.charactersIgnoringModifiers.lowercased() == "m",
@@ -173,7 +176,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func performTerminalSplitShortcut(
+    package func performTerminalSplitShortcut(
         input: String,
         modifiers: TerminalSplitShortcutModifiers
     ) -> Bool {
@@ -183,7 +186,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func performTerminalSplitShortcut(
+    package func performTerminalSplitShortcut(
         key: TerminalSplitShortcutKey,
         modifiers: TerminalSplitShortcutModifiers
     ) -> Bool {
@@ -238,7 +241,7 @@ extension GhosttyTerminalView {
         )
     }
 
-    func terminalKey(forKeyCommandInput input: String) -> TerminalKey? {
+    package func terminalKey(forKeyCommandInput input: String) -> TerminalKey? {
         switch input {
         case UIKeyCommand.inputEscape:
             return .escape

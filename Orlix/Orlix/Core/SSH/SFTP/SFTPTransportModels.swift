@@ -2,23 +2,23 @@ import Foundation
 
 /// Neutral SFTP values returned by the SSH transport. Feature adapters map
 /// these values into product-owned models and errors.
-nonisolated enum SFTPFileType: Hashable, Sendable {
-    case file
-    case directory
-    case symlink
-    case other
+nonisolated package enum SFTPFileType: Hashable, Sendable {
+    package case file
+    package case directory
+    package case symlink
+    package case other
 }
 
-nonisolated struct SFTPFileEntry: Hashable, Sendable {
-    let name: String
-    let path: String
-    let type: SFTPFileType
-    let size: UInt64?
-    let modifiedAt: Date?
-    let permissions: UInt32?
-    let symlinkTarget: String?
+nonisolated package struct SFTPFileEntry: Hashable, Sendable {
+    package let name: String
+    package let path: String
+    package let type: SFTPFileType
+    package let size: UInt64?
+    package let modifiedAt: Date?
+    package let permissions: UInt32?
+    package let symlinkTarget: String?
 
-    static func from(
+    static package func from(
         name: String,
         path: String,
         attributes: LIBSSH2_SFTP_ATTRIBUTES,
@@ -73,15 +73,15 @@ nonisolated enum SFTPFilesystemCapacity: Hashable, Sendable {
     case unavailable
 }
 
-nonisolated enum SFTPTransportError: LocalizedError, Equatable, Sendable {
-    case permissionDenied
-    case pathNotFound
-    case disconnected
-    case invalidEntryName
-    case resourceLimitExceeded
-    case failed(String)
+nonisolated package enum SFTPTransportError: LocalizedError, Equatable, Sendable {
+    package case permissionDenied
+    package case pathNotFound
+    package case disconnected
+    package case invalidEntryName
+    package case resourceLimitExceeded
+    package case failed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .permissionDenied: return String(localized: "Permission denied.")
         case .pathNotFound: return String(localized: "The remote path could not be found.")

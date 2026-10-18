@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated struct RemoteFileLeaf: Hashable, Sendable {
-    let value: String
+nonisolated package struct RemoteFileLeaf: Hashable, Sendable {
+    package let value: String
 
-    init(validating value: String) throws {
+    package init(validating value: String) throws {
         guard !value.isEmpty,
               value != ".",
               value != "..",

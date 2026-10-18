@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerTransportSelection: String, CaseIterable, Identifiable, Equatable, Sendable {
     case standard
     case tailscale

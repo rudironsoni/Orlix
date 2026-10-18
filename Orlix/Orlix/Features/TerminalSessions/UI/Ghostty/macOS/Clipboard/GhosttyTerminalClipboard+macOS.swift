@@ -8,9 +8,9 @@
 #if os(macOS)
 import AppKit
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
     @discardableResult
-    func interceptRichPasteIfNeeded() -> Bool {
+    package func interceptRichPasteIfNeeded() -> Bool {
         richPasteInterceptor?(self) == true
     }
 
@@ -21,7 +21,7 @@ extension GhosttyTerminalView {
         pasteTextFromClipboard()
     }
 
-    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+    package func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
         switch item.action {
         case #selector(copy(_:)):
             guard let cSurface = surface?.unsafeCValue else { return false }
@@ -38,11 +38,11 @@ extension GhosttyTerminalView {
         }
     }
 
-    @objc func copy(_ sender: Any?) {
+    @objc package func copy(_ sender: Any?) {
         _ = surface?.perform(action: "copy_to_clipboard")
     }
 
-    @objc func paste(_ sender: Any?) {
+    @objc package func paste(_ sender: Any?) {
         focusContextMenuTarget()
         performPasteAction()
     }

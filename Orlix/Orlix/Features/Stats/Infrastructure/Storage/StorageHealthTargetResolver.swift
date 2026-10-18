@@ -1,4 +1,8 @@
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 /// The result of mapping a mounted volume to its physical storage topology.
 ///

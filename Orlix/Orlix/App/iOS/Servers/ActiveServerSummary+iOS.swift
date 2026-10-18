@@ -6,6 +6,12 @@
 import Foundation
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
 nonisolated enum ActiveConnectionPresentationStatus: Equatable, Sendable {
     case disconnected
     case connecting

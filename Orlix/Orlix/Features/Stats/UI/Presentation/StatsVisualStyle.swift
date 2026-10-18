@@ -5,6 +5,9 @@ import UIKit
 import AppKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct ClassicStatsCardSurfaceStyle: Equatable {
     let fill: Color
     let stroke: Color

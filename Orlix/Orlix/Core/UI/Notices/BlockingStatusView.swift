@@ -1,14 +1,14 @@
 import SwiftUI
 
-struct BlockingStatusView<Content: View>: View {
-    var maxWidth: CGFloat = NoticeMetrics.blockingMaxWidth
-    var showsScrim: Bool = true
-    var cornerRadius: CGFloat = NoticeMetrics.cornerRadius
-    var surfaceStyle: NoticeSurfaceStyle = .standard
-    let content: Content
+package struct BlockingStatusView<Content: View>: View {
+    package var maxWidth: CGFloat = NoticeMetrics.blockingMaxWidth
+    package var showsScrim: Bool = true
+    package var cornerRadius: CGFloat = NoticeMetrics.cornerRadius
+    package var surfaceStyle: NoticeSurfaceStyle = .standard
+    package let content: Content
 
     @Environment(\.colorScheme) private var colorScheme
-    init(
+    package init(
         maxWidth: CGFloat = NoticeMetrics.blockingMaxWidth,
         showsScrim: Bool = true,
         cornerRadius: CGFloat = NoticeMetrics.cornerRadius,
@@ -22,7 +22,7 @@ struct BlockingStatusView<Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             if showsScrim {
                 Color.black

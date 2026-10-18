@@ -2,6 +2,9 @@ import Combine
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerStatsCollectionFailure: Equatable, Sendable {
     case securityApprovalCancelled
     case securityApprovalExpired
@@ -152,15 +155,15 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
 /// Coordinates one stats collection attempt without owning transport details.
 @MainActor
-final class ServerStatsCollector: ObservableObject {
-    @Published var stats = ServerStats()
-    @Published var cpuHistory: [StatsPoint] = []
-    @Published var memoryHistory: [StatsPoint] = []
-    @Published var networkRxHistory: [StatsPoint] = []
-    @Published var networkTxHistory: [StatsPoint] = []
-    @Published var gpuUtilizationHistoryByDeviceID: [String: [StatsPoint]] = [:]
-    @Published var dockerCPUHistory: [StatsPoint] = []
-    @Published var dockerMemoryHistory: [StatsPoint] = []
+final package class ServerStatsCollector: ObservableObject {
+    @Published package var stats = ServerStats()
+    @Published package var cpuHistory: [StatsPoint] = []
+    @Published package var memoryHistory: [StatsPoint] = []
+    @Published package var networkRxHistory: [StatsPoint] = []
+    @Published package var networkTxHistory: [StatsPoint] = []
+    @Published package var gpuUtilizationHistoryByDeviceID: [String: [StatsPoint]] = [:]
+    @Published package var dockerCPUHistory: [StatsPoint] = []
+    @Published package var dockerMemoryHistory: [StatsPoint] = []
     @Published private(set) var collectionState = ServerStatsCollectionState()
 
     private let logger = Logger(subsystem: "com.rudironsoni.orlix", category: "Stats")
@@ -227,10 +230,10 @@ final class ServerStatsCollector: ObservableObject {
     private var pendingApprovalReference: (any ServerStatsApprovalReference)?
     private var cleanupTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
-    var isCollecting: Bool { collectionState.isCollecting }
-    var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
+    package var isCollecting: Bool { collectionState.isCollecting }
+    package var isDockerCollectionEnabled: Bool { activeAttempt?.collectDocker ?? false }
 
-    var presentationSnapshot: ServerStatsPresentationSnapshot {
+    package var presentationSnapshot: ServerStatsPresentationSnapshot {
         ServerStatsPresentationSnapshot(
             stats: stats,
             cpuHistory: cpuHistory,
@@ -243,11 +246,11 @@ final class ServerStatsCollector: ObservableObject {
         )
     }
 
-    var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
+    package var approvalReferenceForPresentation: (any ServerStatsApprovalReference)? {
         pendingApprovalReference
     }
 
-    init(dependencies: ServerStatsCollectorDependencies) {
+    package init(dependencies: ServerStatsCollectorDependencies) {
         self.dependencies = dependencies
     }
 
@@ -259,7 +262,7 @@ final class ServerStatsCollector: ObservableObject {
 
     // MARK: - Collection Control
 
-    func startCollecting(
+    package func startCollecting(
         for target: any ServerStatsCollectionTarget,
         using sharedConnection: (any ServerStatsConnectionReference)? = nil,
         collectDocker: Bool = false
@@ -359,12 +362,12 @@ final class ServerStatsCollector: ObservableObject {
         attempt.primaryTask = task
     }
 
-    func pauseCollecting() {
+    package func pauseCollecting() {
         guard let activeAttempt else { return }
         _ = collectionState.pause(attemptID: activeAttempt.id)
     }
 
-    func stopCollecting() {
+    package func stopCollecting() {
         pendingApprovalReference = nil
         guard let attempt = activeAttempt else {
             collectionState.stop()
@@ -376,7 +379,7 @@ final class ServerStatsCollector: ObservableObject {
         cancel(attempt)
     }
 
-    func resolveSecurityApproval(
+    package func resolveSecurityApproval(
         _ request: ServerStatsApprovalRequest,
         failure: ServerStatsCollectionFailure? = nil
     ) {
@@ -386,7 +389,7 @@ final class ServerStatsCollector: ObservableObject {
 
     // MARK: - User-Initiated Operations
 
-    func terminateProcess(_ process: ProcessInfo) async throws {
+    package func terminateProcess(_ process: ProcessInfo) async throws {
         guard process.pid > 1 else {
             throw ProcessControlError.protectedProcess
         }
@@ -418,7 +421,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    func loadProcesses() async throws -> [ProcessInfo] {
+    package func loadProcesses() async throws -> [ProcessInfo] {
         let attempt = try requireActiveAttempt()
         let fallback = stats.topProcesses
         return try await performTrackedOperation(for: attempt) { session in
@@ -426,7 +429,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    func loadDockerStats() async throws -> DockerStats {
+    package func loadDockerStats() async throws -> DockerStats {
         let attempt = try requireActiveAttempt()
         let fallback = stats.docker
         let dockerStats = try await performTrackedOperation(for: attempt) { session in
@@ -436,7 +439,7 @@ final class ServerStatsCollector: ObservableObject {
         return dockerStats
     }
 
-    func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
+    package func loadStorageHealth(for volume: VolumeInfo) async throws -> StorageHealthResult {
         let attempt = try requireActiveAttempt()
         guard let currentVolume = VolumeVisibilityPolicy.normalized(stats.volumes)
             .first(where: { $0.identity == volume.identity }) else {
@@ -447,7 +450,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    func performDockerAction(
+    package func performDockerAction(
         _ action: DockerContainerAction,
         on container: DockerContainer
     ) async throws -> DockerStats {
@@ -675,7 +678,7 @@ final class ServerStatsCollector: ObservableObject {
         }
     }
 
-    nonisolated static func resolvedCPUCoreCount(existing: Int, collected: Int) -> Int {
+    nonisolated static package func resolvedCPUCoreCount(existing: Int, collected: Int) -> Int {
         if existing > 0, collected > 0 {
             return max(existing, collected)
         }

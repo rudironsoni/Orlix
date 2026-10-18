@@ -29,8 +29,8 @@ nonisolated extension ServerStatsCollectionFailure {
 }
 
 @MainActor
-extension ServerStatsCollector {
-    var connectionError: String? {
+package extension ServerStatsCollector {
+    package var connectionError: String? {
         collectionState.errorMessage
     }
 }

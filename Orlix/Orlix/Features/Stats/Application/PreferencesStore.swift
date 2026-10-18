@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct StatsPreferencesObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
@@ -58,7 +61,7 @@ private final class StatsPreferencesObserverCleanup {
 }
 
 @MainActor
-final class PreferencesStore: ObservableObject {
+final package class PreferencesStore: ObservableObject {
     @Published private(set) var preferences: StatsPreferences
 
     private let dependencies: PreferencesStoreDependencies
@@ -72,7 +75,7 @@ final class PreferencesStore: ObservableObject {
     private var startupSyncTask: Task<Void, Never>?
     private var lifecycleSyncTask: Task<Void, Never>?
 
-    init(dependencies: PreferencesStoreDependencies) {
+    package init(dependencies: PreferencesStoreDependencies) {
         self.dependencies = dependencies
         let observerCleanup = StatsPreferencesObserverCleanup(
             syncLifecycle: dependencies.syncLifecycle,
@@ -95,7 +98,7 @@ final class PreferencesStore: ObservableObject {
         observerCleanupRequest.perform()
     }
 
-    func refreshFromCloud() async throws {
+    package func refreshFromCloud() async throws {
         startupSyncTask?.cancel()
         startupSyncTask = nil
         lifecycleSyncTask?.cancel()
@@ -103,7 +106,7 @@ final class PreferencesStore: ObservableObject {
         try await synchronizeWithCloud()
     }
 
-    func setStyle(_ style: StatsPreferences.Style) {
+    package func setStyle(_ style: StatsPreferences.Style) {
         applyMutation { preferences, now in
             preferences.style = style
             preferences.updatedAt = now
@@ -111,7 +114,7 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
-    func setBlockVisibility(_ id: StatsPreferences.BlockID, isVisible: Bool) {
+    package func setBlockVisibility(_ id: StatsPreferences.BlockID, isVisible: Bool) {
         guard id != .system || isVisible else { return }
 
         applyMutation { preferences, now in
@@ -132,7 +135,7 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
-    func moveBlocks(fromOffsets source: IndexSet, toOffset destination: Int) {
+    package func moveBlocks(fromOffsets source: IndexSet, toOffset destination: Int) {
         applyMutation { preferences, now in
             var normalized = preferences.normalized()
             var blocks = normalized.orderedBlocks
@@ -151,7 +154,7 @@ final class PreferencesStore: ObservableObject {
         }
     }
 
-    func setBlockOrder(_ orderedIDs: [StatsPreferences.BlockID]) {
+    package func setBlockOrder(_ orderedIDs: [StatsPreferences.BlockID]) {
         applyMutation { preferences, now in
             var normalized = preferences.normalized()
             let currentBlocksByID = Dictionary(uniqueKeysWithValues: normalized.blocks.map { ($0.id, $0) })

@@ -1,17 +1,17 @@
 import Foundation
 
-nonisolated struct ServerCredentialBinding: Codable, Equatable, Sendable {
-    let host: String
-    let port: Int
-    let eternalTerminalPort: Int?
-    let username: String
-    let connectionMode: SSHConnectionMode
-    let authMethod: AuthMethod
-    let cloudflareAccessMode: CloudflareAccessMode?
-    let cloudflareTeamDomain: String?
-    let cloudflareAppDomain: String?
+nonisolated package struct ServerCredentialBinding: Codable, Equatable, Sendable {
+    package let host: String
+    package let port: Int
+    package let eternalTerminalPort: Int?
+    package let username: String
+    package let connectionMode: SSHConnectionMode
+    package let authMethod: AuthMethod
+    package let cloudflareAccessMode: CloudflareAccessMode?
+    package let cloudflareTeamDomain: String?
+    package let cloudflareAppDomain: String?
 
-    init(server: Server) {
+    package init(server: Server) {
         host = Self.normalizedNetworkName(server.host)
         port = server.port
         eternalTerminalPort = server.connectionMode == .eternalTerminal
@@ -53,8 +53,8 @@ nonisolated struct ServerCredentialBinding: Codable, Equatable, Sendable {
     }
 }
 
-extension ServerCredentials {
-    nonisolated func isAuthorized(for server: Server) -> Bool {
+package extension ServerCredentials {
+    nonisolated package func isAuthorized(for server: Server) -> Bool {
         serverId == server.id
             && credentialBinding == ServerCredentialBinding(server: server)
     }

@@ -8,13 +8,16 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    var isMouseCapturedForHostInteraction: Bool {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package var isMouseCapturedForHostInteraction: Bool {
         surface?.mouseCaptured == true && !isMouseReportingSuppressed
     }
 
     @discardableResult
-    func setMouseReportingSuppressed(
+    package func setMouseReportingSuppressed(
         _ isSuppressed: Bool,
         showFeedback: Bool = false
     ) -> Bool {
@@ -35,7 +38,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func toggleMouseReportingSuppression() {
+    package func toggleMouseReportingSuppression() {
         _ = setMouseReportingSuppressed(
             !isMouseReportingSuppressed,
             showFeedback: true

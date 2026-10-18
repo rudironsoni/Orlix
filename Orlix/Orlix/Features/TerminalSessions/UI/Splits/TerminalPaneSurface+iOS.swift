@@ -2,6 +2,9 @@
 import SwiftUI
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
     let paneId: String
     let size: CGSize
@@ -106,18 +109,18 @@ struct TerminalPaneSurface<Backend: AnyObject>: UIViewRepresentable {
     }
 }
 
-struct TerminalFloatingControlButton: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-    let accessibilityLabel: LocalizedStringKey
-    let accessibilityIdentifier: String
-    let showsTitle: Bool
-    var isPrimary: Bool = false
-    let action: () -> Void
+package struct TerminalFloatingControlButton: View {
+    package let title: LocalizedStringKey
+    package let systemImage: String
+    package let accessibilityLabel: LocalizedStringKey
+    package let accessibilityIdentifier: String
+    package let showsTitle: Bool
+    package var isPrimary: Bool = false
+    package let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
-    static func keyboard(showsTitle: Bool, action: @escaping () -> Void) -> Self {
+    static package func keyboard(showsTitle: Bool, action: @escaping () -> Void) -> Self {
         Self(
             title: "Keyboard",
             systemImage: "keyboard",
@@ -128,7 +131,7 @@ struct TerminalFloatingControlButton: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: showsTitle ? 6 : 0) {
                 Image(systemName: systemImage)

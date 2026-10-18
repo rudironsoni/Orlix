@@ -1,20 +1,23 @@
 import Foundation
 
-nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
-    static let minimumVersion = RemoteSessionSemanticVersion(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct ZmxRemoteSessionBackend: RemoteSessionBackend {
+    static package let minimumVersion = RemoteSessionSemanticVersion(
         major: 0,
         minor: 7,
         patch: 0
     )
 
-    let metadata = RemoteSessionBackendMetadata(
+    package let metadata = RemoteSessionBackendMetadata(
         identifier: .zmx,
         displayName: "zmx",
         installation: .documentation(URL(string: "https://zmx.sh")!),
         managedStartupCommandSupport: .supported
     )
 
-    func availability(using client: SSHClient) async -> RemoteSessionAvailability {
+    package func availability(using client: SSHClient) async -> RemoteSessionAvailability {
         let environment = await client.remoteEnvironment()
         guard environment.platform != .windows,
               environment.shellProfile.family == .posix else {
@@ -51,7 +54,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func listSessions(
+    package func listSessions(
         scope: RemoteSessionListScope,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -74,7 +77,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
-    func prepareManagedSession(
+    package func prepareManagedSession(
         using client: SSHClient,
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
@@ -83,7 +86,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         // zmx does not use a Orlix-generated configuration file.
     }
 
-    func launchPlan(
+    package func launchPlan(
         for request: RemoteSessionLaunchRequest,
         runtime: RemoteSessionRuntime
     ) throws -> RemoteSessionBackendLaunchPlan {
@@ -103,7 +106,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func installScript(
+    package func installScript(
         attachment: RemoteSessionAttachment,
         workingDirectory: String,
         terminalType: RemoteTerminalType,
@@ -114,7 +117,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         nil
     }
 
-    func killSession(
+    package func killSession(
         _ identifier: RemoteSessionIdentifier,
         using client: SSHClient,
         runtime: RemoteSessionRuntime
@@ -137,7 +140,7 @@ nonisolated struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         )
     }
 
-    func currentWorkingDirectory(
+    package func currentWorkingDirectory(
         for attachment: RemoteSessionAttachment,
         using client: SSHClient,
         runtime: RemoteSessionRuntime

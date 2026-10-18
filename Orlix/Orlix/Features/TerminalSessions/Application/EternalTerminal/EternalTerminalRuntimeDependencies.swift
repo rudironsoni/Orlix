@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 nonisolated enum EternalTerminalRuntimeEvent: Equatable, Sendable {
     case connectionAttempted
     case connectionReconnecting

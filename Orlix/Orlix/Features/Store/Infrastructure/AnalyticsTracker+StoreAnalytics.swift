@@ -1,5 +1,8 @@
-extension AnalyticsTracker: StoreAnalyticsRecording {
-    func record(_ event: StoreAnalyticsEvent) {
+#if ORLIX_MODULAR_APP
+import OrlixStats
+#endif
+package extension AnalyticsTracker: StoreAnalyticsRecording {
+    package func record(_ event: StoreAnalyticsEvent) {
         switch event {
         case .paywallPresented(let source):
             trackPaywallViewed(source: source.rawValue)

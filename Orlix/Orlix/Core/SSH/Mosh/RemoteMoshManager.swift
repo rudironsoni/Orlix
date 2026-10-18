@@ -2,33 +2,36 @@ import Foundation
 import MoshBootstrap
 import os
 
-actor RemoteMoshManager {
-    typealias CommandExecutor = SSHMoshCommandExecutor
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package actor RemoteMoshManager {
+    package typealias CommandExecutor = SSHMoshCommandExecutor
 
-    enum PortClass: String, Equatable, Sendable {
+    package enum PortClass: String, Equatable, Sendable {
         case privileged
         case standardMoshRange
         case otherUnprivileged
     }
 
-    static let shared = RemoteMoshManager()
+    static package let shared = RemoteMoshManager()
     private let logger = Logger(subsystem: "com.rudironsoni.orlix", category: "mosh-bootstrap")
     private static let installSuccessMarker = "__VVTERM_MOSH_INSTALLED__"
     private let availabilityTimeout: Duration = .seconds(8)
     private let bootstrapTimeout: Duration = .seconds(25)
     private let installTimeout: Duration = .seconds(180)
-    static let terminationTimeout: Duration = .seconds(5)
-    static let disconnectCleanupTimeout: Duration = .seconds(7)
+    static package let terminationTimeout: Duration = .seconds(5)
+    static package let disconnectCleanupTimeout: Duration = .seconds(7)
 
     private init() {}
 
-    nonisolated static func portClass(_ port: Int) -> PortClass {
+    nonisolated static package func portClass(_ port: Int) -> PortClass {
         if port < 1_024 { return .privileged }
         if (60_001...61_000).contains(port) { return .standardMoshRange }
         return .otherUnprivileged
     }
 
-    func isMoshServerAvailable(using client: SSHClient) async -> Bool {
+    package func isMoshServerAvailable(using client: SSHClient) async -> Bool {
         let okMarker = "__VVTERM_MOSH_OK__"
         let body = "\(RemoteTerminalBootstrap.shellPathExport()); if command -v mosh-server >/dev/null 2>&1 && mosh-server --version >/dev/null 2>&1; then printf '\(okMarker)'; else printf '__VVTERM_MOSH_NO__'; fi"
         let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
@@ -36,7 +39,7 @@ actor RemoteMoshManager {
         return output?.contains(okMarker) == true
     }
 
-    func bootstrapConnectInfo(
+    package func bootstrapConnectInfo(
         using client: SSHClient,
         startCommand: String?,
         portRange: ClosedRange<Int> = 60001...61000
@@ -52,7 +55,7 @@ actor RemoteMoshManager {
         )
     }
 
-    func bootstrapConnectInfo(
+    package func bootstrapConnectInfo(
         terminalType: RemoteTerminalType,
         startCommand: String?,
         portRange: ClosedRange<Int> = 60001...61000,
@@ -83,7 +86,7 @@ actor RemoteMoshManager {
         }
     }
 
-    nonisolated func bootstrapCommand(
+    nonisolated package func bootstrapCommand(
         terminalType: RemoteTerminalType,
         startCommand: String?,
         portRange: ClosedRange<Int> = 60001...61000
@@ -107,7 +110,7 @@ actor RemoteMoshManager {
         return "printf %s \(encodedBody) | base64 -d | /bin/sh"
     }
 
-    nonisolated static func terminateBootstrappedServer(
+    nonisolated static package func terminateBootstrappedServer(
         pid: Int32?,
         terminate: @escaping @Sendable (Int32) async -> Void
     ) async {
@@ -117,13 +120,13 @@ actor RemoteMoshManager {
         }.value
     }
 
-    nonisolated static func terminationCommand(pid: Int32) -> String? {
+    nonisolated static package func terminationCommand(pid: Int32) -> String? {
         guard pid > 1 else { return nil }
         let body = "kill -TERM \(pid) 2>/dev/null || true"
         return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
     }
 
-    func terminateMoshServer(
+    package func terminateMoshServer(
         pid: Int32,
         execute: CommandExecutor
     ) async {
@@ -139,7 +142,7 @@ actor RemoteMoshManager {
         }
     }
 
-    func installMoshServer(using client: SSHClient) async throws {
+    package func installMoshServer(using client: SSHClient) async throws {
         let command = "sh -lc \(RemoteTerminalBootstrap.shellQuoted(installScript()))"
         let output = try await client.execute(command, timeout: installTimeout)
         guard output.contains(Self.installSuccessMarker) else {
@@ -154,7 +157,7 @@ actor RemoteMoshManager {
         }
     }
 
-    nonisolated func parseConnectInfo(from output: String) throws -> MoshServerConnectInfo {
+    nonisolated package func parseConnectInfo(from output: String) throws -> MoshServerConnectInfo {
         do {
             let parsed = try MoshServerOutputParser.parse(output)
             return MoshServerConnectInfo(
@@ -191,7 +194,7 @@ actor RemoteMoshManager {
         return nil
     }
 
-    nonisolated func mapBootstrapError(_ error: MoshBootstrapError, output: String? = nil) -> SSHError {
+    nonisolated package func mapBootstrapError(_ error: MoshBootstrapError, output: String? = nil) -> SSHError {
         switch error {
         case .missingServer:
             return .moshServerMissing
@@ -218,7 +221,7 @@ actor RemoteMoshManager {
         }
     }
 
-    nonisolated func installScript() -> String {
+    nonisolated package func installScript() -> String {
         """
         \(RemoteTerminalBootstrap.shellPathExport());
         orlix_mosh_server_works() {
@@ -267,7 +270,7 @@ actor RemoteMoshManager {
         """
     }
 
-    nonisolated func moshChildStartupScript(
+    nonisolated package func moshChildStartupScript(
         startCommand: String?,
         terminalType: RemoteTerminalType = RemoteTerminalBootstrap.defaultTerminalType
     ) -> String {
@@ -277,7 +280,7 @@ actor RemoteMoshManager {
         """
     }
 
-    nonisolated func utf8LocaleExportScript() -> String {
+    nonisolated package func utf8LocaleExportScript() -> String {
         """
         orlix_validate_utf8_locale() {
           [ -n "$1" ] || return 1;
@@ -319,7 +322,7 @@ actor RemoteMoshManager {
         """
     }
 
-    nonisolated func mapInvalidConnectLine(output: String?) -> SSHError {
+    nonisolated package func mapInvalidConnectLine(output: String?) -> SSHError {
         guard let output else {
             return .moshBootstrapFailed("Invalid mosh-server response")
         }
@@ -329,7 +332,7 @@ actor RemoteMoshManager {
         return .moshBootstrapFailed(bootstrapMessage(for: output))
     }
 
-    nonisolated func isBrokenServerRuntimeOutput(_ output: String) -> Bool {
+    nonisolated package func isBrokenServerRuntimeOutput(_ output: String) -> Bool {
         let normalized = output.lowercased()
         return (normalized.contains("dyld[") && normalized.contains("library not loaded"))
             || normalized.contains("error while loading shared libraries")
@@ -337,7 +340,7 @@ actor RemoteMoshManager {
             || normalized.contains("exec format error")
     }
 
-    nonisolated func bootstrapMessage(for output: String) -> String {
+    nonisolated package func bootstrapMessage(for output: String) -> String {
         let sanitized = sanitizedBootstrapOutput(output)
         guard !sanitized.isEmpty else {
             return "Invalid mosh-server response"
@@ -349,7 +352,7 @@ actor RemoteMoshManager {
         return "Invalid mosh-server response: \(sanitized)"
     }
 
-    nonisolated func sanitizedBootstrapOutput(_ output: String) -> String {
+    nonisolated package func sanitizedBootstrapOutput(_ output: String) -> String {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
         let redacted = trimmed.split(whereSeparator: { $0.isNewline }).map { line in

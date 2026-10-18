@@ -1,8 +1,8 @@
 #if os(macOS)
 import Foundation
 
-extension TerminalReconnectCoordinator {
-    func receiveMacRecoverySignal(_ signal: MacTerminalRecoveryGate.Signal) {
+package extension TerminalReconnectCoordinator {
+    package func receiveMacRecoverySignal(_ signal: MacTerminalRecoveryGate.Signal) {
         if case .applicationActivated = signal {
             receiveApplicationActivity(true)
         }
@@ -35,13 +35,13 @@ extension TerminalReconnectCoordinator {
         }
     }
 
-    func pauseMacReconciliation() {
+    package func pauseMacReconciliation() {
         macRecoveryTask?.cancel()
         macRecoveryTask = nil
         macReconciliationID = nil
     }
 
-    func startMacReconciliationIfEligible() {
+    package func startMacReconciliationIfEligible() {
         guard applicationIsActive,
               !appIsLocked,
               currentNetworkReadiness == .ready,

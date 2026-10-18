@@ -15,15 +15,15 @@ extension NSWindow: AboutWindowHandling {
 
 /// Owns the macOS About window and reuses it after it is closed.
 @MainActor
-final class AboutWindowPresenter {
-    typealias MakeWindow = @MainActor () -> any AboutWindowHandling
-    typealias ActivateApplication = @MainActor () -> Void
+final package class AboutWindowPresenter {
+    package typealias MakeWindow = @MainActor () -> any AboutWindowHandling
+    package typealias ActivateApplication = @MainActor () -> Void
 
     private let makeWindow: MakeWindow
     private let activateApplication: ActivateApplication
     private var aboutWindow: (any AboutWindowHandling)?
 
-    init() {
+    package init() {
         makeWindow = {
             Self.makeAboutWindow()
         }
@@ -32,7 +32,7 @@ final class AboutWindowPresenter {
         }
     }
 
-    init(
+    package init(
         makeWindow: @escaping MakeWindow,
         activateApplication: @escaping ActivateApplication
     ) {
@@ -40,7 +40,7 @@ final class AboutWindowPresenter {
         self.activateApplication = activateApplication
     }
 
-    func show() {
+    package func show() {
         let window: any AboutWindowHandling
         if let aboutWindow {
             window = aboutWindow

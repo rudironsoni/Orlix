@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteShellStartupActionSection: View {
     @Binding var model: RemoteShellStartupActionFormModel
     let remoteSessionEnabled: Bool

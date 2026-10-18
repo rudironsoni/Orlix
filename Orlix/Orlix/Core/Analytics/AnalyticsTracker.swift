@@ -7,10 +7,10 @@ import UIKit
 /// Events contain feature names, bounded values, and app context only — never commands,
 /// server addresses, usernames, or other identifying content.
 @MainActor
-final class AnalyticsTracker {
-    static let shared = AnalyticsTracker()
+final package class AnalyticsTracker {
+    static package let shared = AnalyticsTracker()
 
-    nonisolated static let enabledKey = "Orlix.analytics.enabled"
+    nonisolated static package let enabledKey = "Orlix.analytics.enabled"
 
     private static let lastLaunchKey = "analytics.lastTrackedLaunch"
     private static let minimumLaunchInterval: TimeInterval = 5 * 60
@@ -53,7 +53,7 @@ final class AnalyticsTracker {
     }
 
     #if os(iOS)
-    init(
+    package init(
         defaults: UserDefaults,
         appleAdsAttribution: AppleAdsAttributionService,
         modeProvider: @escaping AnalyticsModeResolver.Provider = { .production },
@@ -67,11 +67,11 @@ final class AnalyticsTracker {
     }
     #endif
 
-    var isEnabled: Bool {
+    package var isEnabled: Bool {
         defaults.bool(forKey: Self.enabledKey)
     }
 
-    func prepareAppleAdsAttribution() {
+    package func prepareAppleAdsAttribution() {
         #if os(iOS)
         guard isEnabled else { return }
         Task(priority: .utility) { [modeResolver, appleAdsAttribution] in
@@ -85,61 +85,61 @@ final class AnalyticsTracker {
 
     /// Fired after the first entitlement check. A persistent five-minute guard also
     /// bounds crash/relaunch loops that the once-per-process guard cannot catch.
-    func trackAppLaunched(isPro: Bool) {
+    package func trackAppLaunched(isPro: Bool) {
         guard !hasTrackedLaunch else { return }
         hasTrackedLaunch = true
         send(.appLaunched(isPro: isPro), minimumPersistentInterval: Self.minimumLaunchInterval)
     }
 
-    func trackConnectionSucceeded(transport: String) {
+    package func trackConnectionSucceeded(transport: String) {
         send(.connectionSucceeded(transport: transport))
     }
 
-    func trackConnectionAttempted(transport: String) {
+    package func trackConnectionAttempted(transport: String) {
         send(.connectionAttempted(transport: transport))
     }
 
-    func trackConnectionReconnecting(transport: String) {
+    package func trackConnectionReconnecting(transport: String) {
         send(.connectionReconnecting(transport: transport))
     }
 
-    func trackConnectionFailed(transport: String, reason: String) {
+    package func trackConnectionFailed(transport: String, reason: String) {
         send(.connectionFailed(transport: transport, reason: reason))
     }
 
-    func trackPaywallViewed(source: String) {
+    package func trackPaywallViewed(source: String) {
         send(.paywallViewed(source: source))
     }
 
-    func trackPaywallCTATapped(source: String, productId: String) {
+    package func trackPaywallCTATapped(source: String, productId: String) {
         send(.paywallCTATapped(source: source, productID: productId))
     }
 
-    func trackPurchaseStarted(source: String, productId: String) {
+    package func trackPurchaseStarted(source: String, productId: String) {
         send(.purchaseStarted(source: source, productID: productId))
     }
 
-    func trackPurchaseSucceeded(source: String, productId: String) {
+    package func trackPurchaseSucceeded(source: String, productId: String) {
         send(.purchaseSucceeded(source: source, productID: productId))
     }
 
-    func trackPurchaseCancelled(source: String, productId: String) {
+    package func trackPurchaseCancelled(source: String, productId: String) {
         send(.purchaseCancelled(source: source, productID: productId))
     }
 
-    func trackPurchasePending(source: String, productId: String) {
+    package func trackPurchasePending(source: String, productId: String) {
         send(.purchasePending(source: source, productID: productId))
     }
 
-    func trackPurchaseFailed(source: String, productId: String, reason: String) {
+    package func trackPurchaseFailed(source: String, productId: String, reason: String) {
         send(.purchaseFailed(source: source, productID: productId, reason: reason))
     }
 
-    func trackLimitHit(source: String, generation: String, current: Int, limit: Int) {
+    package func trackLimitHit(source: String, generation: String, current: Int, limit: Int) {
         send(.limitHit(source: source, generation: generation, current: current, limit: limit))
     }
 
-    func trackFreePlanGenerationAssigned(generation: String, serverCount: Int, reason: String) {
+    package func trackFreePlanGenerationAssigned(generation: String, serverCount: Int, reason: String) {
         send(.freePlanGenerationAssigned(
             generation: generation,
             serverCount: serverCount,
@@ -147,23 +147,23 @@ final class AnalyticsTracker {
         ))
     }
 
-    func trackWelcomeCompleted() {
+    package func trackWelcomeCompleted() {
         send(.welcomeCompleted)
     }
 
-    func trackCustomActionCreated(kind: String) {
+    package func trackCustomActionCreated(kind: String) {
         send(.customActionCreated(kind: kind))
     }
 
-    func trackSplitPaneCreated() {
+    package func trackSplitPaneCreated() {
         send(.splitPaneCreated)
     }
 
-    func trackReviewPromptRequested() {
+    package func trackReviewPromptRequested() {
         send(.reviewPromptRequested)
     }
 
-    func trackAnalyticsDisabled() {
+    package func trackAnalyticsDisabled() {
         send(.analyticsDisabled)
     }
 
@@ -210,7 +210,7 @@ final class AnalyticsTracker {
         return true
     }
 
-    func preparedEvent(_ event: AnalyticsEvent) async -> TrackEventRequest? {
+    package func preparedEvent(_ event: AnalyticsEvent) async -> TrackEventRequest? {
         guard isEnabled, await modeResolver.mode() == .production else { return nil }
         return await makeEvent(event)
     }
@@ -234,7 +234,7 @@ final class AnalyticsTracker {
         )
     }
 
-    static func enrichedPayload(
+    static package func enrichedPayload(
         _ data: [String: JSONValue],
         attribution: [String: JSONValue]
     ) -> [String: JSONValue] {

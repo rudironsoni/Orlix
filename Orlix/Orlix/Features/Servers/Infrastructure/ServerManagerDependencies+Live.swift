@@ -1,58 +1,63 @@
 import Foundation
 
-extension CloudKitSyncCoordinator: ServerSyncRepository {
-    func clearPendingServerAndWorkspaceMutations() throws {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixStats
+#endif
+package extension CloudKitSyncCoordinator: ServerSyncRepository {
+    package func clearPendingServerAndWorkspaceMutations() throws {
         try removeAll { ServerPendingCloudKitPayloadCodec.contains($0.payload) }
     }
 
-    func enqueueServerUpsert(_ server: Server) throws {
+    package func enqueueServerUpsert(_ server: Server) throws {
         try enqueue(.serverUpsert(server))
     }
 
-    func enqueueServerDelete(_ server: Server) throws {
+    package func enqueueServerDelete(_ server: Server) throws {
         try enqueue(.serverDelete(server))
     }
 
-    func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
+    package func enqueueServerDataMutations(_ mutations: [ServerPendingMutation]) throws {
         try enqueueAtomically(try mutations.map(PendingCloudKitMutation.init))
     }
 
-    func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
+    package func enqueueWorkspaceUpsert(_ workspace: Workspace) throws {
         try enqueue(.workspaceUpsert(workspace))
     }
 
-    func enqueueWorkspaceDelete(_ workspace: Workspace) throws {
+    package func enqueueWorkspaceDelete(_ workspace: Workspace) throws {
         try enqueue(.workspaceDelete(workspace))
     }
 
-    func pendingServerMutations() throws -> [ServerPendingMutation] {
+    package func pendingServerMutations() throws -> [ServerPendingMutation] {
         try readySnapshot().compactMap(ServerPendingMutation.init)
     }
 
-    func removePendingServerMutation(_ mutationID: UUID) throws {
+    package func removePendingServerMutation(_ mutationID: UUID) throws {
         try remove(mutationID)
     }
 
 }
 
-extension KeychainManager: ServerManagerCredentialRepository {
-    func cleanupCredentials(for server: Server) throws {
+package extension KeychainManager: ServerManagerCredentialRepository {
+    package func cleanupCredentials(for server: Server) throws {
         try deleteCredentials(for: server.id)
         guard try !hasCredentials(for: server) else {
             throw ServerCredentialCleanupError.incomplete
         }
     }
 }
-extension AppLockManager: ProtectedServerActionAuthorizing {
-    func authorize(_ server: Server, for action: ServerProtectedAction) async -> Bool {
+package extension AppLockManager: ProtectedServerActionAuthorizing {
+    package func authorize(_ server: Server, for action: ServerProtectedAction) async -> Bool {
         switch action {
         case .delete:
             return await authorizeProtectedServerAction(server, action: .delete)
         }
     }
 }
-extension KnownHostsManager: ServerKnownHostRepository {}
-extension AnalyticsTracker: FreePlanAssignmentTracking {}
+package extension KnownHostsManager: ServerKnownHostRepository {}
+package extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
 extension ServerManagerDependencies {
     static func live(
@@ -106,7 +111,7 @@ private extension ServerPendingMutation {
 }
 
 private extension PendingCloudKitMutation {
-    init(_ mutation: ServerPendingMutation) throws {
+    package init(_ mutation: ServerPendingMutation) throws {
         self.init(
             id: mutation.id,
             payload: try ServerPendingCloudKitPayloadCodec.encode(mutation.payload),

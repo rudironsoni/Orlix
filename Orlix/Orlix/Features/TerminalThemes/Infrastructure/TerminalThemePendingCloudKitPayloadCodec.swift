@@ -1,10 +1,13 @@
 import Foundation
 
-nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
-    static let themeEntityType = "terminalTheme"
-    static let preferenceEntityType = "terminalThemePreference"
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum TerminalThemePendingCloudKitPayloadCodec {
+    static package let themeEntityType = "terminalTheme"
+    static package let preferenceEntityType = "terminalThemePreference"
 
-    static func encodeTheme(_ theme: TerminalTheme) throws -> PendingCloudKitPayloadEnvelope {
+    static package func encodeTheme(_ theme: TerminalTheme) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
             entityType: themeEntityType,
             entityKey: theme.id.uuidString,
@@ -14,7 +17,7 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
         )
     }
 
-    static func encodePreference(
+    static package func encodePreference(
         _ preference: TerminalThemePreference
     ) throws -> PendingCloudKitPayloadEnvelope {
         try PendingCloudKitPayloadEnvelope(
@@ -26,7 +29,7 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
         )
     }
 
-    static func decodeTheme(_ payload: PendingCloudKitPayloadEnvelope) throws -> TerminalTheme? {
+    static package func decodeTheme(_ payload: PendingCloudKitPayloadEnvelope) throws -> TerminalTheme? {
         guard let theme = try payload.decode(
             TerminalTheme.self,
             entityType: themeEntityType,
@@ -38,7 +41,7 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
         return theme
     }
 
-    static func decodePreference(
+    static package func decodePreference(
         _ payload: PendingCloudKitPayloadEnvelope
     ) throws -> TerminalThemePreference? {
         guard let preference = try payload.decode(
@@ -55,7 +58,7 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
         return preference
     }
 
-    static func migrateLegacy(
+    static package func migrateLegacy(
         kind: String,
         encodedValue: Data
     ) throws -> PendingCloudKitPayloadEnvelope? {
@@ -72,12 +75,12 @@ nonisolated enum TerminalThemePendingCloudKitPayloadCodec {
     }
 }
 
-nonisolated extension PendingCloudKitPayloadEnvelope {
-    static func terminalThemeUpsert(_ theme: TerminalTheme) throws -> Self {
+nonisolated package extension PendingCloudKitPayloadEnvelope {
+    static package func terminalThemeUpsert(_ theme: TerminalTheme) throws -> Self {
         try TerminalThemePendingCloudKitPayloadCodec.encodeTheme(theme)
     }
 
-    static func terminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws -> Self {
+    static package func terminalThemePreferenceUpsert(_ preference: TerminalThemePreference) throws -> Self {
         try TerminalThemePendingCloudKitPayloadCodec.encodePreference(preference)
     }
 }

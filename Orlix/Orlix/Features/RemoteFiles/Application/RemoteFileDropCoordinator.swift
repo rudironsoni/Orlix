@@ -1,7 +1,10 @@
 import Foundation
 
-extension RemoteFileBrowserStore {
-    func transferDroppedRemoteItems(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension RemoteFileBrowserStore {
+    package func transferDroppedRemoteItems(
         _ payloads: [RemoteFileDragPayload],
         to destinationDirectoryPath: String,
         destinationTab: RemoteFileTab,

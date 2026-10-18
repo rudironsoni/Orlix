@@ -1,6 +1,9 @@
 import Foundation
 import StoreKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum AnalyticsMode: Equatable, Sendable {
     case disabled
     case production

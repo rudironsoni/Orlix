@@ -1,7 +1,10 @@
 import Foundation
 
-extension Ghostty {
-    nonisolated enum ConfigBuilder {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension Ghostty {
+    nonisolated package enum ConfigBuilder {
         private static let cjkCodepointRanges = [
             "U+1100-U+11FF",
             "U+2E80-U+4DBF",

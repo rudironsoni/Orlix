@@ -8,8 +8,8 @@ private final class UIApplicationIdleTimerController: TerminalIdleTimerControlli
     }
 }
 
-extension TerminalScreenAwakeCoordinator {
-    convenience init() {
+package extension TerminalScreenAwakeCoordinator {
+    convenience package init() {
         self.init(idleTimer: UIApplicationIdleTimerController())
     }
 }

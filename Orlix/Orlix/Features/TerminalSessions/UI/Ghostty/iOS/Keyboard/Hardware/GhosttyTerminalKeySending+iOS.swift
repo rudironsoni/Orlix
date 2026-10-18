@@ -8,8 +8,8 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func sendKeyPress(_ key: Ghostty.Input.Key) {
+package extension GhosttyTerminalView {
+    package func sendKeyPress(_ key: Ghostty.Input.Key) {
         guard canRouteTerminalInput else { return }
         guard let surface = surface else { return }
         surface.sendKeyEvent(.init(key: key, action: .press))
@@ -24,14 +24,14 @@ extension GhosttyTerminalView {
         sendText(String(Character(scalar)))
     }
 
-    func sendAnsiSequence(_ data: Data) {
+    package func sendAnsiSequence(_ data: Data) {
         guard canRouteTerminalInput else { return }
         invalidateLocalTextInputSession()
         let text = String(decoding: data, as: UTF8.self)
         sendText(text)
     }
 
-    func sendModifiedKey(
+    package func sendModifiedKey(
         _ key: Ghostty.Input.Key,
         mods: Ghostty.Input.Mods,
         text: String? = nil,
@@ -80,7 +80,7 @@ extension GhosttyTerminalView {
     }
 
     /// Send a special key to the terminal
-    func sendSpecialKey(_ key: TerminalSpecialKey) {
+    package func sendSpecialKey(_ key: TerminalSpecialKey) {
         guard surface != nil else { return }
         let shouldInvalidateSession: Bool = switch key {
         case .arrowLeft, .arrowRight, .home, .end, .escape:
@@ -109,7 +109,7 @@ extension GhosttyTerminalView {
     }
 
     /// Send control key combination (e.g., Ctrl+C)
-    func sendControlKey(_ char: Character) {
+    package func sendControlKey(_ char: Character) {
         guard surface != nil else { return }
         if let controlChar = TerminalControlKey.controlCharacter(for: char) {
             sendText(String(controlChar))

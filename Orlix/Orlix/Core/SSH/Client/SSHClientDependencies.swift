@@ -1,6 +1,9 @@
 import Foundation
 import MoshBootstrap
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct SSHHostKeyCandidate: Equatable, Sendable {
     let host: String
     let port: Int
@@ -37,12 +40,12 @@ nonisolated protocol SSHMoshBootstrapping: Sendable {
     ) async
 }
 
-nonisolated struct SSHClientFactory: Sendable {
+nonisolated package struct SSHClientFactory: Sendable {
     private let runtimeSettings: @Sendable () -> SSHRuntimeSettings
     private let hostKeyVerifier: any SSHHostKeyVerifying
     private let moshBootstrap: any SSHMoshBootstrapping
 
-    init(
+    package init(
         runtimeSettings: @escaping @Sendable () -> SSHRuntimeSettings,
         hostKeyVerifier: any SSHHostKeyVerifying,
         moshBootstrap: any SSHMoshBootstrapping
@@ -52,7 +55,7 @@ nonisolated struct SSHClientFactory: Sendable {
         self.moshBootstrap = moshBootstrap
     }
 
-    func makeClient(connectTimeout: Duration = .seconds(30)) -> SSHClient {
+    package func makeClient(connectTimeout: Duration = .seconds(30)) -> SSHClient {
         SSHClient(
             connectTimeout: connectTimeout,
             runtimeSettings: runtimeSettings(),
@@ -76,8 +79,8 @@ private nonisolated final class SSHRuntimeSettingsSource: @unchecked Sendable {
     }
 }
 
-nonisolated enum SSHClientLiveComposition {
-    static func makeFactory(
+nonisolated package enum SSHClientLiveComposition {
+    static package func makeFactory(
         defaults: UserDefaults,
         knownHostsManager: KnownHostsManager,
         remoteMoshManager: RemoteMoshManager
@@ -93,8 +96,8 @@ nonisolated enum SSHClientLiveComposition {
     }
 }
 
-extension KnownHostsManager: SSHHostKeyVerifying {
-    nonisolated func verify(
+package extension KnownHostsManager: SSHHostKeyVerifying {
+    nonisolated package func verify(
         _ candidate: SSHHostKeyCandidate
     ) -> SSHHostKeyVerificationDecision {
         switch evaluate(
@@ -112,11 +115,11 @@ extension KnownHostsManager: SSHHostKeyVerifying {
     }
 }
 
-extension RemoteMoshManager: SSHMoshBootstrapping {}
+package extension RemoteMoshManager: SSHMoshBootstrapping {}
 
 #if DEBUG
-extension SSHClientFactory {
-    static func testing(
+package extension SSHClientFactory {
+    static package func testing(
         runtimeSettings: SSHRuntimeSettings = SSHRuntimeSettings(
             keepAliveEnabled: true,
             keepAliveIntervalSeconds: SSHRuntimeSettings.defaultKeepAliveIntervalSeconds
@@ -132,8 +135,8 @@ extension SSHClientFactory {
     }
 }
 
-extension SSHClient {
-    static func testing(
+package extension SSHClient {
+    static package func testing(
         connectTimeout: Duration = .seconds(30),
         runtimeSettings: SSHRuntimeSettings = SSHRuntimeSettings(
             keepAliveEnabled: true,

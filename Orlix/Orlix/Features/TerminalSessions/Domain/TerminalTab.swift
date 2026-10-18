@@ -7,27 +7,31 @@
 //
 
 import Foundation
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Terminal Tab
 
 /// Represents a single tab in the terminal toolbar.
 /// Each tab can contain multiple panes via splits.
-struct TerminalTab: Identifiable, Equatable, Codable {
-    let id: UUID
-    let serverId: UUID
-    var title: String
-    var createdAt: Date
+package struct TerminalTab: Identifiable, Equatable, Codable {
+    package let id: UUID
+    package let serverId: UUID
+    package var title: String
+    package var createdAt: Date
 
     /// The split layout for this tab. Nil means single pane (the root pane).
-    var layout: TerminalSplitNode?
+    package var layout: TerminalSplitNode?
 
     /// The currently focused pane ID within this tab
-    var focusedPaneId: UUID
+    package var focusedPaneId: UUID
 
     /// Root pane ID - the original pane created with this tab
-    let rootPaneId: UUID
+    package let rootPaneId: UUID
 
-    init(
+    package init(
         id: UUID = UUID(),
         serverId: UUID,
         title: String,
@@ -46,17 +50,17 @@ struct TerminalTab: Identifiable, Equatable, Codable {
     }
 
     /// All pane IDs in this tab (from layout or just root)
-    var allPaneIds: [UUID] {
+    package var allPaneIds: [UUID] {
         layout?.allPaneIds() ?? [rootPaneId]
     }
 
     /// Number of panes in this tab
-    var paneCount: Int {
+    package var paneCount: Int {
         layout?.leafCount ?? 1
     }
 
     /// Whether this tab has splits
-    var hasSplits: Bool {
+    package var hasSplits: Bool {
         layout != nil && (layout?.leafCount ?? 1) > 1
     }
 }
@@ -64,28 +68,28 @@ struct TerminalTab: Identifiable, Equatable, Codable {
 // MARK: - Terminal Pane State
 
 /// State for a single terminal pane (leaf in split tree)
-struct TerminalPaneState: Equatable {
-    let paneId: UUID
-    let tabId: UUID
-    let serverId: UUID
-    var connectionState: ConnectionState
-    var disconnectReason: TerminalDisconnectReason?
+package struct TerminalPaneState: Equatable {
+    package let paneId: UUID
+    package let tabId: UUID
+    package let serverId: UUID
+    package var connectionState: ConnectionState
+    package var disconnectReason: TerminalDisconnectReason?
     private(set) var hasEstablishedConnection: Bool
-    var lastActivity: Date
-    var remoteSessionStatus: RemoteSessionStatus
-    var workingDirectory: String?
-    var presentationOverrides: TerminalPresentationOverrides
-    var seedPaneId: UUID?
+    package var lastActivity: Date
+    package var remoteSessionStatus: RemoteSessionStatus
+    package var workingDirectory: String?
+    package var presentationOverrides: TerminalPresentationOverrides
+    package var seedPaneId: UUID?
     /// Runtime transport and any valid Mosh fallback data for this pane (never persisted).
-    var transportState: ShellTransportState
+    package var transportState: ShellTransportState
     /// Minimal non-secret context needed to recognize remote-session lifecycle markers
     /// when an existing Mosh or ET session resumes after process relaunch.
-    var remoteSessionResumeContext: RemoteSessionLifecycleContext?
+    package var remoteSessionResumeContext: RemoteSessionLifecycleContext?
     /// True after a startup action may have been dispatched. Automatic recovery
     /// must not dispatch it again until normal completion clears this guard.
-    var startupActionReplayPending: Bool
+    package var startupActionReplayPending: Bool
 
-    init(paneId: UUID, tabId: UUID, serverId: UUID) {
+    package init(paneId: UUID, tabId: UUID, serverId: UUID) {
         self.paneId = paneId
         self.tabId = tabId
         self.serverId = serverId
@@ -102,11 +106,11 @@ struct TerminalPaneState: Equatable {
         self.startupActionReplayPending = false
     }
 
-    mutating func markConnectionEstablished() {
+    mutating package func markConnectionEstablished() {
         hasEstablishedConnection = true
     }
 
-    var activeTransport: ShellTransport { transportState.transport }
-    var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
-    var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
+    package var activeTransport: ShellTransport { transportState.transport }
+    package var moshFallbackReason: MoshFallbackReason? { transportState.fallbackReason }
+    package var moshFallbackDiagnostics: MoshFallbackDiagnostics? { transportState.fallbackDiagnostics }
 }

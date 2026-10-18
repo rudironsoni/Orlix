@@ -11,16 +11,23 @@ import AppKit
 import UIKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @available(iOS 16.0, *)
-struct ContentView: View {
-    let fileTabs: RemoteFileTabManager
-    let fileBrowser: RemoteFileBrowserStore
-    let statsDependencies: ServerStatsScreenDependencies
-    let terminalSecurityActions: TerminalSecurityActions
-    let serverFormDependencies: ServerFormDependencies
-    let workspaceSelectionStore: WorkspaceSelectionStore
-    let voiceInputRuntimeStore: VoiceInputRuntimeStore
-    let onOpenSettings: () -> Void
+package struct ContentView: View {
+    package let fileTabs: RemoteFileTabManager
+    package let fileBrowser: RemoteFileBrowserStore
+    package let statsDependencies: ServerStatsScreenDependencies
+    package let terminalSecurityActions: TerminalSecurityActions
+    package let serverFormDependencies: ServerFormDependencies
+    package let workspaceSelectionStore: WorkspaceSelectionStore
+    package let voiceInputRuntimeStore: VoiceInputRuntimeStore
+    package let onOpenSettings: () -> Void
     private let makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
     @ObservedObject private var serverManager: ServerManager
     private let serverWakeCoordinator: ServerWakeCoordinator
@@ -54,7 +61,7 @@ struct ContentView: View {
     @State private var restoredColumnVisibility: NavigationSplitViewVisibility = .all
     @SceneStorage("orlix.zenMode.macos") private var isZenModeEnabled = false
 
-    init(
+    package init(
         serverManager: ServerManager,
         serverWakeCoordinator: ServerWakeCoordinator,
         engagementTracker: EngagementTracker,
@@ -427,7 +434,7 @@ struct ContentView: View {
         #endif
     }
 
-    var body: some View {
+    package var body: some View {
         ServerWakeNoticeHost(coordinator: serverWakeCoordinator) {
             platformContent
         }

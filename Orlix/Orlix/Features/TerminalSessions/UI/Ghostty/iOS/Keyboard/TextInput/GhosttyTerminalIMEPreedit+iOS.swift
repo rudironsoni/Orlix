@@ -8,7 +8,7 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
     private func shouldDisplayVisiblePreedit(for text: String) -> Bool {
         TerminalVisiblePreeditPolicy.shouldDisplay(
             text,
@@ -16,11 +16,11 @@ extension GhosttyTerminalView {
         )
     }
 
-    var currentIMEPrimaryLanguage: String? {
+    package var currentIMEPrimaryLanguage: String? {
         imeProxyTextView.textInputMode?.primaryLanguage ?? textInputMode?.primaryLanguage
     }
 
-    func syncIMEPreedit(_ text: String?) {
+    package func syncIMEPreedit(_ text: String?) {
         let visibleText: String?
         if let text, !text.isEmpty {
             let normalized = text.precomposedStringWithCanonicalMapping

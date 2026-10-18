@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum HerdrRemoteSessionParser {
     static let maximumOutputBytes = 64 * 1_024
     static let maximumProbeOutputBytes = 8 * 1_024

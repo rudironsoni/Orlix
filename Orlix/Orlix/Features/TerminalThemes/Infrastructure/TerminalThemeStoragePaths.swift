@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalThemeStoragePaths {
     nonisolated static func customThemesDirectoryURL() -> URL {
         let fm = FileManager.default
@@ -33,14 +36,14 @@ nonisolated enum TerminalThemeStoragePaths {
     }
 }
 
-nonisolated struct TerminalThemeFileStore: Sendable {
-    let directoryURL: URL
+nonisolated package struct TerminalThemeFileStore: Sendable {
+    package let directoryURL: URL
 
-    static var appStorage: TerminalThemeFileStore {
+    static package var appStorage: TerminalThemeFileStore {
         TerminalThemeFileStore(directoryURL: TerminalThemeStoragePaths.customThemesDirectoryURL())
     }
 
-    func synchronize(_ themes: [TerminalTheme], fileManager: FileManager = .default) throws {
+    package func synchronize(_ themes: [TerminalTheme], fileManager: FileManager = .default) throws {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         for theme in themes {
@@ -60,7 +63,7 @@ nonisolated struct TerminalThemeFileStore: Sendable {
         }
     }
 
-    func fileURL(for themeName: String) -> URL? {
+    package func fileURL(for themeName: String) -> URL? {
         guard let name = try? TerminalThemeValidator.validateAndNormalizeThemeName(themeName) else {
             return nil
         }
@@ -74,15 +77,15 @@ nonisolated struct TerminalThemeFileStore: Sendable {
     }
 }
 
-extension TerminalThemeFileStore: TerminalThemeFileSynchronizing {
-    func synchronize(_ themes: [TerminalTheme]) throws {
+package extension TerminalThemeFileStore: TerminalThemeFileSynchronizing {
+    package func synchronize(_ themes: [TerminalTheme]) throws {
         try synchronize(themes, fileManager: .default)
     }
 }
 
 @MainActor
-struct BundleTerminalThemeCatalog: BuiltInTerminalThemeCatalog {
-    func themeNames() -> [String] {
+package struct BundleTerminalThemeCatalog: BuiltInTerminalThemeCatalog {
+    package func themeNames() -> [String] {
         guard let resourcePath = Bundle.main.resourcePath else { return [] }
         let fileManager = FileManager.default
 

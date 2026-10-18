@@ -2,6 +2,9 @@
 import SwiftUI
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension ProUpgradeSheet {
     func platformBody<Content: View>(
         sheetContent: Content,

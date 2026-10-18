@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct LocalSSHDiscoveryState: Equatable {
     enum Permission: Equatable {
         case unknown
@@ -104,7 +107,7 @@ struct LocalSSHDiscoveryState: Equatable {
 }
 
 @MainActor
-final class LocalSSHDiscoveryManager: ObservableObject {
+final package class LocalSSHDiscoveryManager: ObservableObject {
     @Published private(set) var hosts: [DiscoveredSSHHost] = []
     @Published private(set) var state = LocalSSHDiscoveryState()
 
@@ -113,7 +116,7 @@ final class LocalSSHDiscoveryManager: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private let maxHosts = 200
 
-    init(dependencies: LocalSSHDiscoveryDependencies) {
+    package init(dependencies: LocalSSHDiscoveryDependencies) {
         self.dependencies = dependencies
         self.ownerReleaseStopRequest = dependencies.service.ownerReleaseStopRequest
     }
@@ -123,12 +126,12 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         ownerReleaseStopRequest.perform()
     }
 
-    var isScanning: Bool { state.isScanning }
-    var permissionState: LocalSSHDiscoveryState.Permission { state.permission }
-    var bonjourActive: Bool { state.isSourceActive(.bonjour) }
-    var probeActive: Bool { state.isSourceActive(.probe) }
+    package var isScanning: Bool { state.isScanning }
+    package var permissionState: LocalSSHDiscoveryState.Permission { state.permission }
+    package var bonjourActive: Bool { state.isSourceActive(.bonjour) }
+    package var probeActive: Bool { state.isSourceActive(.probe) }
 
-    func startScan() {
+    package func startScan() {
         stopScan(clearResults: false)
 
         guard dependencies.networkAvailability() == .supported else {
@@ -151,11 +154,11 @@ final class LocalSSHDiscoveryManager: ObservableObject {
         }
     }
 
-    func rescan() {
+    package func rescan() {
         startScan()
     }
 
-    func stopScan(clearResults: Bool = false) {
+    package func stopScan(clearResults: Bool = false) {
         streamTask?.cancel()
         streamTask = nil
         dependencies.service.stopScan()
