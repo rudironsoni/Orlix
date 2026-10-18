@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Skip a listed runtime and retry one XCTest
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `xcodes runtimes install` when `simctl list runtimes` or `simctl runtime list` already lists the runtime. iOS 26.5 on the runner image is that skip. iOS 15.5 is not installed when simctl does not list it. A restored download archive is not an installed runtime and is not copied into a protected directory. `__bazel-xctest-runtime-proof` retries `xcodebuild test-without-building` once, on the same simulator and the same test, when the first attempt fails. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Stage the headers_install host compiler
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) sets `OrlixLinuxHeadersInstall` `HOSTCC` to the staged `tools/bin/clang`. The action reads that binary next to the toolchain identity and does not call `xcrun`. The staged SDK supplies `SDKROOT`. This is not a BuildBuddy remote-cache hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
