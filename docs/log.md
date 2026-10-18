@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Do not install a runtime simctl already lists
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `xcodes runtimes install` when simctl already lists the runtime. iOS 26.5 on the runner image is that skip. iOS 15.5 was not listed, so that runtime is not installed. A restored download archive is not an installed runtime and is not copied into a protected directory. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Cache the ISA table restore from staged tools
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `OrlixTctiIsaRestore` with staged `gmake`, `awk`, and Python. The action inputs include those binaries, `tools/lib`, and the staged Python home. `resume()` hashes those files. The action drops `no-remote-cache` and keeps `no-remote-exec`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
