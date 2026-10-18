@@ -14,14 +14,14 @@ nonisolated package struct StorageDeviceIdentity: Hashable, Sendable {
     }
 }
 
-nonisolated package enum StorageHealthUnavailableReason: String, Hashable, Sendable {
-    package case unsupported
-    package case toolMissing
-    package case permissionDenied
-    package case unmapped
-    package case virtualDevice
-    package case networkVolume
-    package case invalidResponse
+nonisolated public enum StorageHealthUnavailableReason: String, Hashable, Sendable {
+    public case unsupported
+    public case toolMissing
+    public case permissionDenied
+    public case unmapped
+    public case virtualDevice
+    public case networkVolume
+    public case invalidResponse
 }
 
 nonisolated enum StorageHealthCapability: Hashable, Sendable {
@@ -29,27 +29,27 @@ nonisolated enum StorageHealthCapability: Hashable, Sendable {
     case unavailable(StorageHealthUnavailableReason)
 }
 
-nonisolated package enum StorageHealthState: Int, Hashable, Sendable {
-    package case unknown = 0
-    package case healthy = 1
-    package case warning = 2
-    package case failing = 3
+nonisolated public enum StorageHealthState: Int, Hashable, Sendable {
+    public case unknown = 0
+    public case healthy = 1
+    public case warning = 2
+    public case failing = 3
 }
 
-nonisolated package enum StorageHealthSource: String, Hashable, Sendable {
-    package case smartctl
-    package case emmc
-    package case btrfs
-    package case zfs
-    package case darwinDiskUtility
-    package case windowsStorage
-    package case bsdNative
+nonisolated public enum StorageHealthSource: String, Hashable, Sendable {
+    public case smartctl
+    public case emmc
+    public case btrfs
+    public case zfs
+    public case darwinDiskUtility
+    public case windowsStorage
+    public case bsdNative
 }
 
-nonisolated package enum StorageHealthFindingSeverity: Int, Hashable, Sendable {
-    package case information = 0
-    package case warning = 1
-    package case critical = 2
+nonisolated public enum StorageHealthFindingSeverity: Int, Hashable, Sendable {
+    public case information = 0
+    public case warning = 1
+    public case critical = 2
 }
 
 nonisolated enum StorageHealthFindingTiming: Hashable, Sendable {
@@ -122,11 +122,11 @@ nonisolated package struct StorageHealthFinding: Hashable, Sendable, Identifiabl
     }
 }
 
-nonisolated package enum StorageHealthAttributeValue: Hashable, Sendable {
-    package case integer(UInt64)
-    package case decimal(Double)
-    package case text(String)
-    package case boolean(Bool)
+nonisolated public enum StorageHealthAttributeValue: Hashable, Sendable {
+    public case integer(UInt64)
+    public case decimal(Double)
+    public case text(String)
+    public case boolean(Bool)
 }
 
 /// A whitelisted platform-specific value that is safe to display.
@@ -150,11 +150,11 @@ nonisolated package struct StorageHealthAttribute: Hashable, Sendable {
     }
 }
 
-nonisolated package enum EMMCPreEOLStatus: UInt8, Hashable, Sendable {
-    package case unknown = 0
-    package case normal = 1
-    package case warning = 2
-    package case urgent = 3
+nonisolated public enum EMMCPreEOLStatus: UInt8, Hashable, Sendable {
+    public case unknown = 0
+    public case normal = 1
+    public case warning = 2
+    public case urgent = 3
 }
 
 /// JEDEC reports lifetime consumption as a coarse bucket, not an exact
@@ -253,11 +253,11 @@ nonisolated package struct StorageHealthReport: Hashable, Sendable {
     }
 }
 
-nonisolated package enum StorageDeviceHealthResult: Hashable, Sendable {
-    package case report(StorageHealthReport)
-    package case unavailable(StorageHealthUnavailableReason)
+nonisolated public enum StorageDeviceHealthResult: Hashable, Sendable {
+    public case report(StorageHealthReport)
+    public case unavailable(StorageHealthUnavailableReason)
 
-    package var capability: StorageHealthCapability {
+    public var capability: StorageHealthCapability {
         switch self {
         case .report:
             return .supported
@@ -267,23 +267,23 @@ nonisolated package enum StorageDeviceHealthResult: Hashable, Sendable {
     }
 }
 
-nonisolated package enum StorageTopologyKind: Hashable, Sendable {
-    package case physicalDevice
-    package case btrfs
-    package case zfs
+nonisolated public enum StorageTopologyKind: Hashable, Sendable {
+    public case physicalDevice
+    public case btrfs
+    public case zfs
 }
 
-nonisolated package enum StorageHealthMemberRole: Hashable, Sendable {
-    package case data
-    package case cache
-    package case log
-    package case spare
-    package case special
+nonisolated public enum StorageHealthMemberRole: Hashable, Sendable {
+    public case data
+    public case cache
+    public case log
+    public case spare
+    public case special
 }
 
-nonisolated package enum StorageHealthCoverage: Hashable, Sendable {
-    package case complete
-    package case partial
+nonisolated public enum StorageHealthCoverage: Hashable, Sendable {
+    public case complete
+    public case partial
 }
 
 nonisolated package struct StorageHealthMemberReport: Hashable, Sendable, Identifiable {
@@ -348,11 +348,11 @@ nonisolated package struct StorageHealthVolumeReport: Hashable, Sendable {
     }
 }
 
-nonisolated package enum StorageHealthResult: Hashable, Sendable {
-    package case report(StorageHealthVolumeReport)
-    package case unavailable(StorageHealthUnavailableReason)
+nonisolated public enum StorageHealthResult: Hashable, Sendable {
+    public case report(StorageHealthVolumeReport)
+    public case unavailable(StorageHealthUnavailableReason)
 
-    package var capability: StorageHealthCapability {
+    public var capability: StorageHealthCapability {
         switch self {
         case .report:
             return .supported

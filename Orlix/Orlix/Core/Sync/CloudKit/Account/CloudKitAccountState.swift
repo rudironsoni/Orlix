@@ -1,11 +1,11 @@
-nonisolated package enum CloudKitAccountState: Equatable, Sendable {
-    package case checking
-    package case available
-    package case noAccount
-    package case restricted
-    package case couldNotDetermine
-    package case temporarilyUnavailable
-    package case unknown(rawValue: Int)
-    package case failed(detail: String)
-    package case disabled
+nonisolated public enum CloudKitAccountState: Equatable, Sendable {
+    public case checking
+    public case available
+    public case noAccount
+    public case restricted
+    public case couldNotDetermine
+    public case temporarilyUnavailable
+    public case unknown(rawValue: Int)
+    public case failed(detail: String)
+    public case disabled
 }

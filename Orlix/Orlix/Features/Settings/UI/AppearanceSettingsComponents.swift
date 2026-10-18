@@ -12,12 +12,12 @@ import AppKit
 import UIKit
 #endif
 
-package enum AppearanceMode: String, CaseIterable {
-    package case system = "system"
-    package case light = "light"
-    package case dark = "dark"
+public enum AppearanceMode: String, CaseIterable {
+    public case system = "system"
+    public case light = "light"
+    public case dark = "dark"
 
-    package var label: String {
+    public var label: String {
         switch self {
         case .system: return String(localized: "System")
         case .light: return String(localized: "Light")
@@ -25,7 +25,7 @@ package enum AppearanceMode: String, CaseIterable {
         }
     }
 
-    package var colorScheme: ColorScheme? {
+    public var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
         case .light: return .light
