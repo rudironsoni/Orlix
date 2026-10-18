@@ -369,7 +369,7 @@ package enum NPZLoader {
     }
 }
 
-package extension NPZLoader.NPZError: LocalizedError {
+extension NPZLoader.NPZError: LocalizedError {
     package var errorDescription: String? {
         switch self {
         case .invalidArchive:

@@ -82,6 +82,30 @@ package struct ServerFormDependencies {
     package let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
     package let now: @Sendable () -> Date
     package let makeID: @Sendable () -> UUID
+
+    package init(
+        credentials: any ServerCredentialRepository,
+        connectionTester: any ServerConnectionTesting,
+        wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving,
+        hostKeys: any ServerHostKeyRepository,
+        remoteSessionBackends: [RemoteSessionBackendMetadata],
+        defaultRemoteSessionEnabled: @escaping @MainActor () -> Bool,
+        defaultRemoteSessionBackendIdentifier: @escaping @MainActor () -> RemoteSessionBackendIdentifier,
+        defaultRemoteSessionStartupBehavior: @escaping @MainActor () -> RemoteSessionStartupBehavior,
+        now: @escaping @Sendable () -> Date,
+        makeID: @escaping @Sendable () -> UUID
+    ) {
+        self.credentials = credentials
+        self.connectionTester = connectionTester
+        self.wakeOnLANMACAddressResolver = wakeOnLANMACAddressResolver
+        self.hostKeys = hostKeys
+        self.remoteSessionBackends = remoteSessionBackends
+        self.defaultRemoteSessionEnabled = defaultRemoteSessionEnabled
+        self.defaultRemoteSessionBackendIdentifier = defaultRemoteSessionBackendIdentifier
+        self.defaultRemoteSessionStartupBehavior = defaultRemoteSessionStartupBehavior
+        self.now = now
+        self.makeID = makeID
+    }
 }
 
 nonisolated package enum ServerFormOperationFailure: Equatable, Sendable {
