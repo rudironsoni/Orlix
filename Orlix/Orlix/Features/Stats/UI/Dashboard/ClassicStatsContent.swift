@@ -198,7 +198,7 @@ private struct ClassicCPUStatsCard: View, Equatable {
     package let loadAverage: (Double, Double, Double)
     package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    static func == (lhs: ClassicCPUStatsCard, rhs: ClassicCPUStatsCard) -> Bool {
+    package static func == (lhs: ClassicCPUStatsCard, rhs: ClassicCPUStatsCard) -> Bool {
         lhs.usage == rhs.usage && lhs.user == rhs.user && lhs.system == rhs.system &&
         lhs.iowait == rhs.iowait && lhs.steal == rhs.steal && lhs.idle == rhs.idle &&
         lhs.cores == rhs.cores && lhs.uptime == rhs.uptime &&
@@ -701,7 +701,7 @@ private struct ClassicCircularGauge: View, Equatable {
     package let color: Color
     package var lineWidth: CGFloat = 6
 
-    static func == (lhs: ClassicCircularGauge, rhs: ClassicCircularGauge) -> Bool {
+    package static func == (lhs: ClassicCircularGauge, rhs: ClassicCircularGauge) -> Bool {
         lhs.value == rhs.value && lhs.lineWidth == rhs.lineWidth
     }
 

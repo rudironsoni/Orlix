@@ -32,6 +32,10 @@ package enum TerminalSplitCommandOutcome: Equatable {
 nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
     package let rawValue: UInt8
 
+    package init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+
     static package let command = Self(rawValue: 1 << 0)
     static package let shift = Self(rawValue: 1 << 1)
     static package let control = Self(rawValue: 1 << 2)
