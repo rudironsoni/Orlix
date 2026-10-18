@@ -794,8 +794,10 @@ package extension ConnectionTerminalContainer {
                 backgroundColor: backgroundColor,
                 sharedClientProvider: { tabManager.transportCoordinator.sharedStatsClient(for: server.id) },
                 dependencies: statsDependencies,
-                isDockerUnlocked: storeManager.allowsProFeatures
+                isDockerUnlocked: storeManager.allowsProFeatures,
+                presentDockerUpgrade: { isShowingDockerUpgrade = true }
             )
+            .proUpgradePresentation(isPresented: $isShowingDockerUpgrade, source: .dockerStats)
             .zIndex(1)
         }
     }

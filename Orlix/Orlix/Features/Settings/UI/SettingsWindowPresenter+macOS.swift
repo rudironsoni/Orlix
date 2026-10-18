@@ -14,7 +14,7 @@ package protocol SettingsWindowHandling: AnyObject {
     func presentSettingsWindow()
 }
 
-package extension NSWindow: SettingsWindowHandling {
+extension NSWindow: SettingsWindowHandling {
     package func presentSettingsWindow() {
         makeKeyAndOrderFront(nil)
     }

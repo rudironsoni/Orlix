@@ -356,7 +356,7 @@ final package class LocalSSHDiscoveryService: NSObject {
 
 // MARK: - NetServiceBrowserDelegate
 
-package extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
+extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
     package func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {}
 
     package func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
@@ -392,7 +392,7 @@ package extension LocalSSHDiscoveryService: NetServiceBrowserDelegate {
 
 // MARK: - NetServiceDelegate
 
-package extension LocalSSHDiscoveryService: NetServiceDelegate {
+extension LocalSSHDiscoveryService: NetServiceDelegate {
     package func netServiceDidResolveAddress(_ sender: NetService) {
         guard let runID = serviceRunIDs[ObjectIdentifier(sender)],
               runOwnership.owns(runID: runID) else {
