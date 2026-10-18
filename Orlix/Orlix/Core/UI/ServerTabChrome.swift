@@ -207,6 +207,28 @@ package struct ServerToolbarTabCell: View {
     }
 
     private static let selectedGlassID = "orlix.selectedTab"
+
+    package init(
+        title: String,
+        isSelected: Bool,
+        statusColor: Color,
+        width: CGFloat,
+        accessibilityLabel: String? = nil,
+        glassNamespace: Namespace.ID? = nil,
+        shortcutNumber: Int? = nil,
+        onSelect: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        self.title = title
+        self.isSelected = isSelected
+        self.statusColor = statusColor
+        self.width = width
+        self.accessibilityLabel = accessibilityLabel
+        self.glassNamespace = glassNamespace
+        self.shortcutNumber = shortcutNumber
+        self.onSelect = onSelect
+        self.onClose = onClose
+    }
 }
 
 package struct AdaptiveServerTabSizing: Equatable {
@@ -386,6 +408,49 @@ package struct ServerToolbarTabStrip<Item: Identifiable, TabContent: View>: View
             .padding(.trailing, 8)
         }
         .frame(maxWidth: .infinity)
+    }
+
+
+    package init(
+
+        items: [Item],
+
+        selectedId: Item.ID? = nil,
+
+        previousHelp: String,
+
+        nextHelp: String,
+
+        newHelp: String,
+
+        onPrevious: @escaping () -> Void,
+
+        onNext: @escaping () -> Void,
+
+        onNew: @escaping () -> Void,
+
+        tabContent: @escaping (Item, CGFloat, Namespace.ID) -> TabContent
+
+    ) {
+
+        self.items = items
+
+        self.selectedId = selectedId
+
+        self.previousHelp = previousHelp
+
+        self.nextHelp = nextHelp
+
+        self.newHelp = newHelp
+
+        self.onPrevious = onPrevious
+
+        self.onNext = onNext
+
+        self.onNew = onNew
+
+        self.tabContent = tabContent
+
     }
 }
 

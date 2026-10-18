@@ -300,6 +300,45 @@ nonisolated package struct ServerCredentials: Sendable {
         get { passphrase }
         set { passphrase = newValue }
     }
+
+
+    package init(
+
+        serverId: UUID,
+
+        credentialBinding: ServerCredentialBinding? = nil,
+
+        password: String? = nil,
+
+        privateKey: Data? = nil,
+
+        publicKey: Data? = nil,
+
+        passphrase: String? = nil,
+
+        cloudflareClientID: String? = nil,
+
+        cloudflareClientSecret: String? = nil
+
+    ) {
+
+        self.serverId = serverId
+
+        self.credentialBinding = credentialBinding
+
+        self.password = password
+
+        self.privateKey = privateKey
+
+        self.publicKey = publicKey
+
+        self.passphrase = passphrase
+
+        self.cloudflareClientID = cloudflareClientID
+
+        self.cloudflareClientSecret = cloudflareClientSecret
+
+    }
 }
 
 // MARK: - Stored SSH Key Entry (reusable keys in Keychain)

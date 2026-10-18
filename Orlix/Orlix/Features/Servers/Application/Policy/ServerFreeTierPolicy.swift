@@ -54,4 +54,11 @@ nonisolated package struct ServerFreeTierPolicy: Equatable, Sendable {
     package func lockedWorkspaceCount(workspaceCount: Int, hasProAccess: Bool) -> Int {
         hasProAccess ? 0 : max(0, workspaceCount - FreeTierLimits.maxWorkspaces)
     }
+
+
+    package init(generation: FreePlanGeneration) {
+
+        self.generation = generation
+
+    }
 }

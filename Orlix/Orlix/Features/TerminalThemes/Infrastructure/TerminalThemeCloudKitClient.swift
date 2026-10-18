@@ -13,7 +13,7 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
         category: "TerminalThemeCloudKit"
     )
 
-    init(transport: any CloudKitRecordTransport) {
+    package init(transport: any CloudKitRecordTransport) {
         self.transport = transport
     }
 
@@ -86,4 +86,5 @@ final package class TerminalThemeCloudKitClient: TerminalThemeCloudClient,
             throw error
         }
     }
+
 }

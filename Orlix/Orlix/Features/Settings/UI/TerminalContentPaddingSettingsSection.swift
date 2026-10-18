@@ -83,4 +83,6 @@ package struct TerminalContentPaddingSettingsSection: View {
             Int64(TerminalDefaults.clampedContentPadding(value))
         )
     }
+
+    package init() {}
 }

@@ -98,4 +98,6 @@ package struct TerminalClipboardPasteSettingsView: View {
             String(localized: "Images upload right away without showing the confirmation sheet.")
         }
     }
+
+    package init() {}
 }

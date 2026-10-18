@@ -184,6 +184,8 @@ package struct ProSettingsView: View {
             openURL(url)
         }
     }
+
+    package init() {}
 }
 
 private struct ProSettingsFeatureRow: View {

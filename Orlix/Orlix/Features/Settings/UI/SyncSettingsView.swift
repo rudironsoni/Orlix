@@ -142,4 +142,6 @@ package struct SyncSettingsView: View {
             Task { await coordinator.syncNow() }
         }
     }
+
+    package init() {}
 }

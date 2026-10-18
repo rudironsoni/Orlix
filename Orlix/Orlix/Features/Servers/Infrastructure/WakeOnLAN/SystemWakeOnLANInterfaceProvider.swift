@@ -51,4 +51,6 @@ nonisolated package struct SystemWakeOnLANInterfaceProvider: WakeOnLANInterfaceP
         }
         return result
     }
+
+    package init() {}
 }

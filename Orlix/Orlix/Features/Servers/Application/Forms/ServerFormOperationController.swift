@@ -20,6 +20,38 @@ nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
     package let reason: ServerConnectionTestFailureReason
     package let requiresCloudflareOverrides: Bool
     package let hostKeyChallenge: KnownHostsManager.Challenge?
+
+    package var message: String {
+        switch reason {
+        case .message(let message):
+            return message
+        case .tailscale(let message):
+            let reminder = String(localized: "This app currently supports direct tailnet connections only (no userspace proxy fallback).")
+            return message.contains(reminder) ? message : "\(message)\n\(reminder)"
+        case .eternalTerminal(let failure, let host, let port):
+            return failure.userFacingMessage(host: host, port: port)
+        case .hostKeyApprovalExpired:
+            return String(localized: "SSH host key approval expired. Try again.")
+        }
+    }
+
+    package init(
+
+        reason: ServerConnectionTestFailureReason,
+
+        requiresCloudflareOverrides: Bool,
+
+        hostKeyChallenge: KnownHostsManager.Challenge? = nil
+
+    ) {
+
+        self.reason = reason
+
+        self.requiresCloudflareOverrides = requiresCloudflareOverrides
+
+        self.hostKeyChallenge = hostKeyChallenge
+
+    }
 }
 
 nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {

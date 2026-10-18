@@ -31,6 +31,21 @@ package struct NoticeProgress: Equatable {
         guard let totalUnitCount, totalUnitCount > 0 else { return false }
         return completedUnitCount != nil
     }
+
+
+    package init(
+
+        completedUnitCount: Int? = nil,
+
+        totalUnitCount: Int? = nil
+
+    ) {
+
+        self.completedUnitCount = completedUnitCount
+
+        self.totalUnitCount = totalUnitCount
+
+    }
 }
 
 package struct NoticeAction: Identifiable {

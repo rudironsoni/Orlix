@@ -102,4 +102,8 @@ package struct PrivacyAppLockSettingsView: View {
             appLockManager.refreshBiometryAvailability()
         }
     }
+
+    package init(analyticsOptOutAction: AnalyticsOptOutAction) {
+        self.analyticsOptOutAction = analyticsOptOutAction
+    }
 }

@@ -81,5 +81,7 @@ package struct TerminalScreenAwakeUITestHarness: View {
             true
         }
     }
+
+    package init() {}
 }
 #endif

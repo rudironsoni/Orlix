@@ -232,4 +232,6 @@ nonisolated package struct HerdrRemoteSessionBackend: RemoteSessionBackend {
             throw SSHError.unknown("Unsupported Herdr runtime")
         }
     }
+
+    package init() {}
 }

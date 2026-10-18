@@ -123,6 +123,9 @@ package struct SupportSheet: View {
         .frame(width: 340)
         .adaptiveSoftScrollEdges()
     }
+
+
+    package init() {}
 }
 
 // MARK: - Preview

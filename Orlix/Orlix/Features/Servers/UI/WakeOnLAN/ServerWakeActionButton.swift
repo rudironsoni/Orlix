@@ -12,4 +12,19 @@ package struct ServerWakeActionButton: View {
             "orlix.serverList.wake.\(serverID.uuidString)"
         )
     }
+
+
+    package init(
+
+        serverID: UUID,
+
+        onAction: @escaping () -> Void
+
+    ) {
+
+        self.serverID = serverID
+
+        self.onAction = onAction
+
+    }
 }

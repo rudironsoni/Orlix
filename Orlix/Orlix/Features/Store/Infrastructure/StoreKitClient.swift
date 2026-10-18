@@ -121,6 +121,8 @@ final package class AppStoreKitClient: StoreClient {
     private func firstCachedProduct(for productIds: [String]) -> Product? {
         return productIds.lazy.compactMap { self.productsById[$0] }.first
     }
+
+    package init() {}
 }
 
 private extension StoreProduct {

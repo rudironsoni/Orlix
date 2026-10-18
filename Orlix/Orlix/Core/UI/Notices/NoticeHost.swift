@@ -127,6 +127,8 @@ final package class NoticeHostModel: ObservableObject {
             bottomOperations.remove(at: index)
         }
     }
+
+    package init() {}
 }
 
 package struct NoticeHost<Content: View>: View {

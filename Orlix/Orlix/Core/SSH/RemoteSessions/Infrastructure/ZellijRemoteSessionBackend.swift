@@ -204,4 +204,6 @@ nonisolated package struct ZellijRemoteSessionBackend: RemoteSessionBackend {
             throw SSHError.unknown("Unsupported Zellij runtime")
         }
     }
+
+    package init() {}
 }

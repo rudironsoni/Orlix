@@ -29,4 +29,6 @@ final package class StatsPreferencesResolutionChannel:
             observer(preferences)
         }
     }
+
+    package init() {}
 }

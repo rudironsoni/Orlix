@@ -75,4 +75,7 @@ nonisolated package struct TerminalKeyboardFocusPolicy: Sendable {
     mutating package func dismissForUser() {
         mode = .browse
     }
+
+
+    package init() {}
 }

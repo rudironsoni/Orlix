@@ -216,6 +216,9 @@ package struct SplitCommands: Commands {
     private func isEnabled(_ command: TerminalSplitCommand) -> Bool {
         splitActions?.isEnabled(command) == true
     }
+
+
+    package init() {}
 }
 
 #endif

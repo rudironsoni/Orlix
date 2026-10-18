@@ -177,4 +177,6 @@ nonisolated package struct ZmxRemoteSessionBackend: RemoteSessionBackend {
         }
     }
 
+
+    package init() {}
 }

@@ -12,6 +12,18 @@ package struct WelcomeView: View {
     package var body: some View {
         platformContent
     }
+
+
+    package init(
+
+        hasSeenWelcome: Binding<Bool>,
+        onCompleted: @escaping () -> Void
+    ) {
+        self._hasSeenWelcome = hasSeenWelcome
+
+        self.onCompleted = onCompleted
+
+    }
 }
 
 #Preview {

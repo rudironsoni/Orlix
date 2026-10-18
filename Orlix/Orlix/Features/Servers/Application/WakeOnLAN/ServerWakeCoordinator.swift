@@ -26,6 +26,20 @@ package struct ServerWakeDependencies {
     package let mutations: any ServerMutationRepository
     package let credentials: any ServerCredentialRepository
     package let makeID: @Sendable () -> UUID
+
+    package init(
+        sender: any WakeOnLANPacketSending,
+        macAddressResolver: any WakeOnLANMACAddressResolving,
+        mutations: any ServerMutationRepository,
+        credentials: any ServerCredentialRepository,
+        makeID: @escaping @Sendable () -> UUID
+    ) {
+        self.sender = sender
+        self.macAddressResolver = macAddressResolver
+        self.mutations = mutations
+        self.credentials = credentials
+        self.makeID = makeID
+    }
 }
 
 nonisolated package enum ServerWakeFailure: Equatable, Sendable {

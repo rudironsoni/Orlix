@@ -18,6 +18,13 @@ nonisolated package enum CloudKitRecordChangeStreamError: Error, Equatable, Send
 
 nonisolated package struct CloudKitRecordChangeCheckpoint: Equatable, Sendable {
     package let id: UUID
+
+
+    package init(id: UUID) {
+
+        self.id = id
+
+    }
 }
 
 nonisolated package enum CloudKitRecordChangeRequestDecision: Equatable, Sendable {

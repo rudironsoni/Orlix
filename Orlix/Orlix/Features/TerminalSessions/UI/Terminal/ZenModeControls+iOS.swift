@@ -254,5 +254,55 @@ package struct IOSZenModePanel: View {
         }
         return paneState(selectedTab)?.connectionState.statusTintColor ?? .secondary
     }
+
+    package init(
+        width: CGFloat,
+        serverName: String,
+        selectedView: ConnectionViewTabID,
+        selectedViewBinding: Binding<ConnectionViewTabID>,
+        viewTabs: [ConnectionViewTabID],
+        terminalTabs: [TerminalTab],
+        selectedTerminalTabId: Binding<UUID?>,
+        terminalTabTitle: @escaping (TerminalTab) -> String,
+        paneState: @escaping (TerminalTab) -> TerminalPaneState?,
+        onCloseTerminalTab: @escaping (TerminalTab) -> Void,
+        fileTabs: [RemoteFileTab],
+        selectedFileTabId: Binding<UUID?>,
+        fileTabTitle: @escaping (RemoteFileTab) -> String,
+        onSelectFileTab: @escaping (RemoteFileTab) -> Void,
+        onCloseFileTab: @escaping (RemoteFileTab) -> Void,
+        onNewTerminalTab: @escaping () -> Void,
+        onNewFileTab: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void,
+        onEditServer: @escaping () -> Void,
+        onDuplicateServer: @escaping () -> Void,
+        onDisconnect: @escaping () -> Void,
+        onBack: @escaping () -> Void,
+        onExitZen: @escaping () -> Void
+    ) {
+        self.width = width
+        self.serverName = serverName
+        self.selectedView = selectedView
+        self.selectedViewBinding = selectedViewBinding
+        self.viewTabs = viewTabs
+        self.terminalTabs = terminalTabs
+        self.selectedTerminalTabId = selectedTerminalTabId
+        self.terminalTabTitle = terminalTabTitle
+        self.paneState = paneState
+        self.onCloseTerminalTab = onCloseTerminalTab
+        self.fileTabs = fileTabs
+        self.selectedFileTabId = selectedFileTabId
+        self.fileTabTitle = fileTabTitle
+        self.onSelectFileTab = onSelectFileTab
+        self.onCloseFileTab = onCloseFileTab
+        self.onNewTerminalTab = onNewTerminalTab
+        self.onNewFileTab = onNewFileTab
+        self.onOpenSettings = onOpenSettings
+        self.onEditServer = onEditServer
+        self.onDuplicateServer = onDuplicateServer
+        self.onDisconnect = onDisconnect
+        self.onBack = onBack
+        self.onExitZen = onExitZen
+    }
 }
 #endif
