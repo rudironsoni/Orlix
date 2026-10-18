@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Give the kernel archive bison data and the SDK plist
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.plist` into the staged macOS SDK and copies Homebrew bison's `share/bison` tree beside the staged `bison` binary. `OrlixKernelMachOArchive` declares both as inputs and `resume()` hashes them. The archive stays remote-cacheable and keeps `no-remote-exec`. ISA restore and the guest packages keep `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Cache the Mach-O kernel archive from staged tools
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `OrlixKernelMachOArchive` with the staged `tools/bin` binaries. The action inputs include the dylibs those binaries open, the staged macOS SDK slice, and `make/tcti-proof-registry-provenance.mk`. `resume()` hashes those files, so a Kbuild identity miss cannot upload stale objects. The archive drops `no-remote-cache` and keeps `no-remote-exec`. ISA restore, Coreutils, Bash, and Autotools keep their cache tags. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
