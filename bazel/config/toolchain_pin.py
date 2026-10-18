@@ -204,7 +204,8 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     for name in ("python3", "nm", "otool"):
         tools.append(Path(subprocess.check_output(["/usr/bin/xcrun", "--find", name], env=environment, text=True).strip()))
     tools.append(sdk / "SDKSettings.json")
-    trees = [sdk / "usr/include", sdk / "usr/lib", Path("/opt/homebrew/opt/llvm/lib/clang"), xcode_tools / "lib/clang"]
+    tools.append(sdk / "SDKSettings.plist")
+    trees = [sdk / "usr/include", sdk / "usr/lib", Path("/opt/homebrew/opt/llvm/lib/clang"), xcode_tools / "lib/clang", Path("/opt/homebrew/opt/bison/share/bison")]
     tools += sorted(Path("/opt/homebrew/opt/llvm/lib").glob("*.dylib"))
     tools += sorted((xcode_tools / "lib").glob("*.dylib"))
     files = {}
@@ -566,6 +567,11 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
         Path("/opt/homebrew/bin/autopoint"),
     ):
         stage_binary(binary, bin_dir, lib_dir, seen)
+    bison_share = Path("/opt/homebrew/opt/bison/share/bison")
+    bison_m4 = bison_share / "m4sugar" / "m4sugar.m4"
+    if not bison_m4.is_file():
+        raise PinError(f"bison data is missing: {bison_m4}")
+    _copy_tree(bison_share, dest / "share" / "bison")
     for name in (
         "env", "sort", "tr", "cat", "cp", "mv", "mkdir", "rm", "install",
         "head", "uname", "expr", "basename", "wc", "touch", "chmod", "printf", "ln",
@@ -656,16 +662,19 @@ def _resolved_inside(path: Path, root: Path) -> Path | None:
 def copy_sdk_slice(sdk: Path, destination: Path) -> None:
     """Copy the host-compile slice of a macOS SDK as regular files.
 
-    The native compiler needs SDKSettings.json, usr/include, and usr/lib.
+    The native compiler needs SDKSettings.json, SDKSettings.plist, usr/include, and usr/lib.
     Framework trees such as Ruby.framework contain directory symlink cycles, so
     they are not copied and links that leave this slice or cycle are skipped.
     """
     if not (sdk / "SDKSettings.json").is_file():
         raise PinError(f"macOS SDK is missing SDKSettings.json: {sdk}")
+    if not (sdk / "SDKSettings.plist").is_file():
+        raise PinError(f"macOS SDK is missing SDKSettings.plist: {sdk}")
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
     _copy_file(sdk / "SDKSettings.json", destination / "SDKSettings.json")
+    _copy_file(sdk / "SDKSettings.plist", destination / "SDKSettings.plist")
     for relative in ("usr/include", "usr/lib"):
         source = sdk / relative
         if not source.is_dir():

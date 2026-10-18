@@ -12,7 +12,7 @@ def _pinned_env(ctx):
     env = {
         "DEVELOPER_DIR": developer_dir,
         "HOME": "/var/empty",
-        "PATH": "/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/bin:/usr/bin:/bin",
+        "PATH": "/usr/bin:/bin",
         "ORLIX_KERNEL_PORT_PREPARED": "1",
         "ORLIX_KERNEL_KUNIT": "0",
         "ORLIX_OS_LINUX_PAGE_SIZE": "16384",
@@ -113,6 +113,14 @@ def _kernel_macho_impl(ctx):
     isa_tree = ctx.file.isa_tree
     if not isa_tree.is_directory:
         fail("kernel Mach-O requires a prepared ISA tree artifact")
+    sdk_marker = [f for f in ctx.files.macos_sdk if f.basename == "SDKSettings.json"]
+    if len(sdk_marker) != 1:
+        fail("kernel Mach-O archive requires the staged macOS SDK")
+    if not ctx.files.tool_libs:
+        fail("kernel Mach-O archive requires staged tool dylibs")
+    if not ctx.files.guest_clang_support:
+        fail("kernel Mach-O archive requires staged guest clang libraries")
+    sdkroot = sdk_marker[0].dirname
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(script, r"""
 set -euo pipefail
@@ -171,57 +179,48 @@ ccache_staged="$exec_root/$7"
 readlink_staged="$exec_root/$8"
 find_staged="$exec_root/$9"
 shift 9
-require_declared() {
-  staged="$1"
-  executed="$2"
+host_clang="$exec_root/$1"
+sdkroot="$exec_root/$2"
+shift 2
+tool_bin="$(/usr/bin/dirname "$gmake_staged")"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
+tool_lib="$tool_root/lib"
+guest_lib="$(/usr/bin/dirname "$(/usr/bin/dirname "$guest_clang_staged")")/lib"
+export PATH="$tool_bin:/usr/bin:/bin"
+export DYLD_LIBRARY_PATH="$tool_lib:$guest_lib"
+for staged in "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$host_clang"; do
   test -s "$staged"
-  test -x "$executed"
-  /usr/bin/cmp -s "$staged" "$executed" || {
-    echo "host tool bytes are not the declared input: $executed" >&2
-    exit 1
-  }
-}
-require_declared "$gmake_staged" /opt/homebrew/bin/gmake
-require_declared "$sed_staged" /opt/homebrew/opt/gnu-sed/libexec/gnubin/sed
-require_declared "$llvm_ar_staged" /opt/homebrew/opt/llvm/bin/llvm-ar
-require_declared "$lld_staged" /opt/homebrew/opt/lld/bin/ld.lld
-require_declared "$llvm_nm_staged" /opt/homebrew/opt/llvm/bin/llvm-nm
-require_declared "$guest_clang_staged" /opt/homebrew/opt/llvm/bin/clang
-require_declared "$ccache_staged" /opt/homebrew/bin/ccache
-require_declared "$readlink_staged" /opt/homebrew/opt/coreutils/libexec/gnubin/readlink
-require_declared "$find_staged" /opt/homebrew/opt/findutils/libexec/gnubin/find
-test -n "${DEVELOPER_DIR:-}"
-xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
-xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
-xcode_build="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '2p')"
-case "$xcode_name|$xcode_build" in
-  "Xcode 27.0|Build version 27A266a"|"Xcode 26.6|Build version 17F113") ;;
-  *) echo "unsupported Xcode: $xcode_ver" >&2; exit 1 ;;
-esac
+  test -x "$staged"
+done
+test -d "$tool_lib"
+test -d "$guest_lib"
+test -s "$sdkroot/SDKSettings.json"
+test -s "$sdkroot/SDKSettings.plist"
+bison_share="$tool_root/share/bison"
+test -s "$bison_share/m4sugar/m4sugar.m4"
 case "$linux_makefile" in
   *orlix_linux_source*/Makefile) ;;
   *) echo "kernel Mach-O must consume upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
 esac
-gmake="$(/usr/bin/command -v gmake)"
-test -n "$gmake"
-xcode_clang="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-test -x "$xcode_clang"
-clang="/opt/homebrew/opt/llvm/bin/clang"
-test -x "$clang"
-sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
-test -n "$sdkroot"
+gmake="$gmake_staged"
+clang="$guest_clang_staged"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
 if [ -z "${CCACHE_DIR:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER=
 else
-  export ORLIX_COMPILER_LAUNCHER="${ORLIX_COMPILER_LAUNCHER-/opt/homebrew/bin/ccache}"
+  export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
 fi
+export LINUX_MAKE="$gmake_staged"
+export LINUX_SED="$sed_staged"
+export LINUX_LLVM_BIN="$tool_bin"
+export ORLIX_KERNEL_AR="$llvm_ar_staged"
+export ORLIX_KERNEL_NM="$llvm_nm_staged"
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
 export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
 provenance="$exec_root/make/tcti-proof-registry-provenance.mk"
-/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$provenance"
+/usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$host_clang" "$provenance" "$tool_lib" "$guest_lib" "$sdkroot" "$bison_share"
 port="$work/OrlixKernel/src/linux-6.12.105-port"
 profile_config=""
 for rel in "${config_paths[@]}"; do
@@ -234,7 +233,7 @@ test -n "$profile_config" && test -s "$profile_config"
 isa_dest="$work/OrlixKernel/orlix-tcti-isa"
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.sync(source_state._files(Path(sys.argv[1])), Path(sys.argv[2]), Path(sys.argv[2]).parents[1])' "$isa_tree" "$isa_dest"
 hostcc="$(/usr/bin/mktemp "$work/.hostcc.XXXXXX")"
-/usr/bin/printf '%s\n' '#!/bin/bash' "exec \"$xcode_clang\" -isysroot \"$sdkroot\" \"\$@\"" > "$hostcc"
+/usr/bin/printf '%s\n' '#!/bin/bash' "exec \"$host_clang\" -isysroot \"$sdkroot\" \"\$@\"" > "$hostcc"
 /bin/chmod +x "$hostcc"
 /bin/mv -f "$hostcc" "$work/hostcc"
 hostcc="$work/hostcc"
@@ -294,9 +293,8 @@ for dtb in release development; do
     /bin/cp "$source_dtb" "$development_dtb"
   fi
 done
-nm_cmd="$(/usr/bin/command -v llvm-nm)"
-if [ -z "$nm_cmd" ]; then nm_cmd="$(/usr/bin/command -v nm)"; fi
-test -n "$nm_cmd"
+nm_cmd="$llvm_nm_staged"
+test -x "$nm_cmd"
 "$nm_cmd" -gU "$built" > "$symbols_out"
 /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' "$symbols_out" >/dev/null || {
   echo "Mach-O OrlixKernel.a missing defined _arch_boot_entry" >&2
@@ -350,6 +348,8 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
             ctx.file.ccache.path,
             ctx.file.gnu_readlink.path,
             ctx.file.gnu_find.path,
+            ctx.file.host_clang.path,
+            sdkroot,
         ],
         inputs = depset(
             direct = [
@@ -368,16 +368,17 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
                 ctx.file.ccache,
                 ctx.file.gnu_readlink,
                 ctx.file.gnu_find,
-            ] + overlay_files + patch_files + config_files + engine_files,
+                ctx.file.host_clang,
+            ] + overlay_files + patch_files + config_files + engine_files + ctx.files.tool_libs + ctx.files.guest_clang_support + ctx.files.clang_resources + ctx.files.macos_sdk + ctx.files.bison_share + [ctx.file.sdk_settings_plist],
             transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        # The recipe still executes host gmake, Homebrew clang, Xcode HOSTCC, and
-        # xcrun. Dylibs and the SDK are not file inputs, so this result stays
-        # out of the remote cache. Output-base Kbuild state is not an output.
-        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        # Staged tools, their dylibs, the macOS SDK slice, and the provenance
+        # makefile are action inputs. Output-base Kbuild state is not an output.
+        # The action still runs on the Mac, outside remote execution.
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -448,6 +449,13 @@ orlix_kernel_macho_archive = rule(
         "ccache": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ccache")),
         "gnu_readlink": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/readlink")),
         "gnu_find": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/find")),
+        "host_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
+        "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
+        "guest_clang_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:guest_clang_support")),
+        "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
+        "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
+        "sdk_settings_plist": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/sdk/SDKSettings.plist")),
+        "bison_share": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:bison_share")),
         "provenance_makefile": attr.label(
             allow_single_file = True,
             default = Label("//:make/tcti-proof-registry-provenance.mk"),
