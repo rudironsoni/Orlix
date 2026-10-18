@@ -170,16 +170,12 @@ package struct NoServersEmptyState: View {
 
 
     package init(
-
         onAddServer: @escaping () -> Void,
-
-        onAddWorkspace: (() -> Void)? = nil
-
+        onAddWorkspace: (() -> Void)? = nil,
+        requiresWorkspace: Bool = false
     ) {
-
         self.onAddServer = onAddServer
-
         self.onAddWorkspace = onAddWorkspace
-
+        self.requiresWorkspace = requiresWorkspace
     }
 }
