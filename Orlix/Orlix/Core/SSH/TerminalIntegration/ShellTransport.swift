@@ -1,23 +1,23 @@
 import Foundation
 
-nonisolated package enum ShellTransport: String, Codable, Hashable, Sendable {
-    package case ssh
-    package case mosh
-    package case eternalTerminal
-    package case sshFallback
+nonisolated public enum ShellTransport: String, Codable, Hashable, Sendable {
+    public case ssh
+    public case mosh
+    public case eternalTerminal
+    public case sshFallback
 }
 
-nonisolated package enum MoshFallbackReason: String, Codable, CaseIterable, Hashable, Sendable {
-    package case serverMissing
-    package case serverRuntimeBroken
-    package case bootstrapFailed
-    package case sessionFailed
-    package case unsupportedRemoteCapabilities
-    package case invalidEndpoint
-    package case udpTimeout
-    package case clientSessionFailed
+nonisolated public enum MoshFallbackReason: String, Codable, CaseIterable, Hashable, Sendable {
+    public case serverMissing
+    public case serverRuntimeBroken
+    public case bootstrapFailed
+    public case sessionFailed
+    public case unsupportedRemoteCapabilities
+    public case invalidEndpoint
+    public case udpTimeout
+    public case clientSessionFailed
 
-    package var bannerMessage: String {
+    public var bannerMessage: String {
         switch self {
         case .serverMissing:
             return String(localized: "Using SSH fallback for this session (mosh-server is missing).")
@@ -39,18 +39,18 @@ nonisolated package enum MoshFallbackReason: String, Codable, CaseIterable, Hash
     }
 }
 
-nonisolated package enum MoshServerMaintenanceAction: Equatable, Sendable {
-    package case install
-    package case repair
+nonisolated public enum MoshServerMaintenanceAction: Equatable, Sendable {
+    public case install
+    public case repair
 }
 
-nonisolated package enum ShellTransportState: Equatable, Sendable {
-    package case ssh
-    package case mosh
-    package case eternalTerminal
-    package case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
+nonisolated public enum ShellTransportState: Equatable, Sendable {
+    public case ssh
+    public case mosh
+    public case eternalTerminal
+    public case sshFallback(reason: MoshFallbackReason, diagnostics: MoshFallbackDiagnostics?)
 
-    package var transport: ShellTransport {
+    public var transport: ShellTransport {
         switch self {
         case .ssh:
             return .ssh
@@ -63,17 +63,17 @@ nonisolated package enum ShellTransportState: Equatable, Sendable {
         }
     }
 
-    package var fallbackReason: MoshFallbackReason? {
+    public var fallbackReason: MoshFallbackReason? {
         guard case .sshFallback(let reason, _) = self else { return nil }
         return reason
     }
 
-    package var fallbackDiagnostics: MoshFallbackDiagnostics? {
+    public var fallbackDiagnostics: MoshFallbackDiagnostics? {
         guard case .sshFallback(_, let diagnostics) = self else { return nil }
         return diagnostics
     }
 
-    package var moshServerMaintenanceAction: MoshServerMaintenanceAction? {
+    public var moshServerMaintenanceAction: MoshServerMaintenanceAction? {
         guard case .sshFallback(let reason, _) = self else { return nil }
         switch reason {
         case .serverMissing:
@@ -86,7 +86,7 @@ nonisolated package enum ShellTransportState: Equatable, Sendable {
         }
     }
 
-    mutating package func clearFallbackDiagnostics() {
+    mutating public func clearFallbackDiagnostics() {
         guard case .sshFallback(let reason, _) = self else { return }
         self = .sshFallback(reason: reason, diagnostics: nil)
     }

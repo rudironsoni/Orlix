@@ -19,28 +19,28 @@ nonisolated package struct RemoteFileFilesystemStatus: Hashable, Sendable {
     }
 }
 
-nonisolated package enum RemoteFileFilesystemCapacity: Hashable, Sendable {
-    package case known(RemoteFileFilesystemStatus)
-    package case unavailable
+nonisolated public enum RemoteFileFilesystemCapacity: Hashable, Sendable {
+    public case known(RemoteFileFilesystemStatus)
+    public case unavailable
 
-    package var status: RemoteFileFilesystemStatus? {
+    public var status: RemoteFileFilesystemStatus? {
         guard case .known(let status) = self else { return nil }
         return status
     }
 }
 
-nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
-    package case notLoaded
-    package case loading(requestID: UUID, hasLoadedDirectory: Bool)
-    package case loaded
-    package case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
+nonisolated public enum RemoteFileDirectoryPhase: Equatable, Sendable {
+    public case notLoaded
+    public case loading(requestID: UUID, hasLoadedDirectory: Bool)
+    public case loaded
+    public case failed(RemoteFileBrowserError, hasLoadedDirectory: Bool)
 
-    package var isLoading: Bool {
+    public var isLoading: Bool {
         if case .loading = self { return true }
         return false
     }
 
-    package var hasLoadedDirectory: Bool {
+    public var hasLoadedDirectory: Bool {
         switch self {
         case .notLoaded:
             return false
@@ -51,17 +51,17 @@ nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
         }
     }
 
-    package var error: RemoteFileBrowserError? {
+    public var error: RemoteFileBrowserError? {
         guard case .failed(let error, _) = self else { return nil }
         return error
     }
 
-    mutating package func begin(requestID: UUID) {
+    mutating public func begin(requestID: UUID) {
         self = .loading(requestID: requestID, hasLoadedDirectory: hasLoadedDirectory)
     }
 
     @discardableResult
-    mutating package func complete(requestID: UUID) -> Bool {
+    mutating public func complete(requestID: UUID) -> Bool {
         guard case .loading(let currentRequestID, _) = self,
               currentRequestID == requestID else { return false }
         self = .loaded
@@ -69,7 +69,7 @@ nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating package func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
+    mutating public func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
         guard case .loading(let currentRequestID, let hasLoadedDirectory) = self,
               currentRequestID == requestID else { return false }
         self = .failed(error, hasLoadedDirectory: hasLoadedDirectory)
@@ -77,14 +77,14 @@ nonisolated package enum RemoteFileDirectoryPhase: Equatable, Sendable {
     }
 }
 
-nonisolated package enum RemoteFileViewerPhase: Equatable, Sendable {
-    package case idle
-    package case selected(path: String)
-    package case loading(path: String, requestID: UUID)
-    package case loaded(RemoteFileViewerPayload)
-    package case failed(path: String, RemoteFileBrowserError)
+nonisolated public enum RemoteFileViewerPhase: Equatable, Sendable {
+    public case idle
+    public case selected(path: String)
+    public case loading(path: String, requestID: UUID)
+    public case loaded(RemoteFileViewerPayload)
+    public case failed(path: String, RemoteFileBrowserError)
 
-    package var selectedEntryPath: String? {
+    public var selectedEntryPath: String? {
         switch self {
         case .idle:
             return nil
@@ -95,36 +95,36 @@ nonisolated package enum RemoteFileViewerPhase: Equatable, Sendable {
         }
     }
 
-    package var isLoading: Bool {
+    public var isLoading: Bool {
         if case .loading = self { return true }
         return false
     }
 
-    package var payload: RemoteFileViewerPayload? {
+    public var payload: RemoteFileViewerPayload? {
         guard case .loaded(let payload) = self else { return nil }
         return payload
     }
 
-    package var error: RemoteFileBrowserError? {
+    public var error: RemoteFileBrowserError? {
         guard case .failed(_, let error) = self else { return nil }
         return error
     }
 
-    package func isLoading(requestID: UUID) -> Bool {
+    public func isLoading(requestID: UUID) -> Bool {
         guard case .loading(_, let currentRequestID) = self else { return false }
         return currentRequestID == requestID
     }
 
-    mutating package func select(path: String) {
+    mutating public func select(path: String) {
         self = .selected(path: path)
     }
 
-    mutating package func beginLoading(path: String, requestID: UUID) {
+    mutating public func beginLoading(path: String, requestID: UUID) {
         self = .loading(path: path, requestID: requestID)
     }
 
     @discardableResult
-    mutating package func complete(requestID: UUID, payload: RemoteFileViewerPayload) -> Bool {
+    mutating public func complete(requestID: UUID, payload: RemoteFileViewerPayload) -> Bool {
         guard case .loading(let path, let currentRequestID) = self,
               path == payload.entry.path,
               currentRequestID == requestID else { return false }
@@ -133,7 +133,7 @@ nonisolated package enum RemoteFileViewerPhase: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating package func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
+    mutating public func fail(requestID: UUID, error: RemoteFileBrowserError) -> Bool {
         guard case .loading(let path, let currentRequestID) = self,
               currentRequestID == requestID else { return false }
         self = .failed(path: path, error)

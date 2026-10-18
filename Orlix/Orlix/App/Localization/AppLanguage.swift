@@ -1,27 +1,27 @@
 import Foundation
 
-package enum AppLanguage: String, CaseIterable, Identifiable {
-    static package let storageKey = "appLanguage"
+public enum AppLanguage: String, CaseIterable, Identifiable {
+    static public let storageKey = "appLanguage"
 
-    package case system = "system"
-    package case en = "en"
-    package case zhHans = "zh-Hans"
-    package case ja = "ja"
-    package case th = "th"
-    package case vi = "vi"
-    package case es = "es"
-    package case ru = "ru"
-    package case fr = "fr"
-    package case de = "de"
-    package case be = "be"
-    package case uk = "uk"
-    package case pl = "pl"
-    package case cs = "cs"
-    package case ko = "ko"
+    public case system = "system"
+    public case en = "en"
+    public case zhHans = "zh-Hans"
+    public case ja = "ja"
+    public case th = "th"
+    public case vi = "vi"
+    public case es = "es"
+    public case ru = "ru"
+    public case fr = "fr"
+    public case de = "de"
+    public case be = "be"
+    public case uk = "uk"
+    public case pl = "pl"
+    public case cs = "cs"
+    public case ko = "ko"
 
-    package var id: String { rawValue }
+    public var id: String { rawValue }
 
-    package var displayName: String {
+    public var displayName: String {
         switch self {
         case .system: return String(localized: "System (Default)")
         case .en: return "English"
@@ -41,14 +41,14 @@ package enum AppLanguage: String, CaseIterable, Identifiable {
         }
     }
 
-    package var locale: Locale {
+    public var locale: Locale {
         if self == .system {
             return Locale.current
         }
         return Locale(identifier: rawValue)
     }
 
-    static package func applySelection(_ rawValue: String) {
+    static public func applySelection(_ rawValue: String) {
         if rawValue == AppLanguage.system.rawValue {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         } else {
@@ -57,11 +57,11 @@ package enum AppLanguage: String, CaseIterable, Identifiable {
         UserDefaults.standard.synchronize()
     }
 
-    static package func localizedString(_ key: String, rawValue: String? = UserDefaults.standard.string(forKey: storageKey)) -> String {
+    static public func localizedString(_ key: String, rawValue: String? = UserDefaults.standard.string(forKey: storageKey)) -> String {
         localizationBundle(for: rawValue).localizedString(forKey: key, value: nil, table: nil)
     }
 
-    static package func localizedValues(for key: String) -> Set<String> {
+    static public func localizedValues(for key: String) -> Set<String> {
         var values = Set(allCases.map { localizedString(key, rawValue: $0.rawValue) })
         values.insert(Bundle.main.localizedString(forKey: key, value: nil, table: nil))
         return values
