@@ -12,12 +12,12 @@ import AppKit
 import UIKit
 #endif
 
-enum AppearanceMode: String, CaseIterable {
-    case system = "system"
-    case light = "light"
-    case dark = "dark"
+package enum AppearanceMode: String, CaseIterable {
+    package case system = "system"
+    package case light = "light"
+    package case dark = "dark"
 
-    var label: String {
+    package var label: String {
         switch self {
         case .system: return String(localized: "System")
         case .light: return String(localized: "Light")
@@ -25,7 +25,7 @@ enum AppearanceMode: String, CaseIterable {
         }
     }
 
-    var colorScheme: ColorScheme? {
+    package var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
         case .light: return .light
@@ -35,7 +35,7 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 /// View modifier that applies the app-wide appearance setting
-struct AppearanceModifier: ViewModifier {
+package struct AppearanceModifier: ViewModifier {
     @AppStorage("appearanceMode") private var appearanceMode: String = AppearanceMode.system.rawValue
 
     private var colorScheme: ColorScheme? {
@@ -46,7 +46,7 @@ struct AppearanceModifier: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         let mode = AppearanceMode(rawValue: appearanceMode) ?? .system
         #if os(iOS)
         content

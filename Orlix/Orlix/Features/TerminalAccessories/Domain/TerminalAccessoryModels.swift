@@ -1,24 +1,24 @@
 import Foundation
 
-nonisolated enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    case insert
-    case insertAndEnter
+nonisolated package enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case insert
+    package case insertAndEnter
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
-nonisolated enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case command
-    case shortcut
+nonisolated package enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case command
+    package case shortcut
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
-nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable, Sendable {
-    var control: Bool = false
-    var alternate: Bool = false
-    var command: Bool = false
-    var shift: Bool = false
+nonisolated package struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable, Sendable {
+    package var control: Bool = false
+    package var alternate: Bool = false
+    package var command: Bool = false
+    package var shift: Bool = false
 
     private enum CodingKeys: String, CodingKey {
         case control
@@ -27,9 +27,9 @@ nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hasha
         case shift
     }
 
-    static let none = TerminalAccessoryShortcutModifiers()
+    static package let none = TerminalAccessoryShortcutModifiers()
 
-    init(
+    package init(
         control: Bool = false,
         alternate: Bool = false,
         command: Bool = false,
@@ -41,7 +41,7 @@ nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hasha
         self.shift = shift
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         control = try container.decodeIfPresent(Bool.self, forKey: .control) ?? false
         alternate = try container.decodeIfPresent(Bool.self, forKey: .alternate) ?? false
@@ -49,7 +49,7 @@ nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hasha
         shift = try container.decodeIfPresent(Bool.self, forKey: .shift) ?? false
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(control, forKey: .control)
         try container.encode(alternate, forKey: .alternate)
@@ -59,85 +59,85 @@ nonisolated struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hasha
 
 }
 
-nonisolated enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable, Sendable {
-    case a
-    case b
-    case c
-    case d
-    case e
-    case f
-    case g
-    case h
-    case i
-    case j
-    case k
-    case l
-    case m
-    case n
-    case o
-    case p
-    case q
-    case r
-    case s
-    case t
-    case u
-    case v
-    case w
-    case x
-    case y
-    case z
-    case digit0
-    case digit1
-    case digit2
-    case digit3
-    case digit4
-    case digit5
-    case digit6
-    case digit7
-    case digit8
-    case digit9
-    case backquote
-    case minus
-    case equal
-    case bracketLeft
-    case bracketRight
-    case backslash
-    case semicolon
-    case quote
-    case comma
-    case period
-    case slash
-    case space
-    case escape
-    case tab
-    case enter
-    case backspace
-    case delete
-    case insert
-    case home
-    case end
-    case pageUp
-    case pageDown
-    case arrowUp
-    case arrowDown
-    case arrowLeft
-    case arrowRight
-    case f1
-    case f2
-    case f3
-    case f4
-    case f5
-    case f6
-    case f7
-    case f8
-    case f9
-    case f10
-    case f11
-    case f12
+nonisolated package enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case a
+    package case b
+    package case c
+    package case d
+    package case e
+    package case f
+    package case g
+    package case h
+    package case i
+    package case j
+    package case k
+    package case l
+    package case m
+    package case n
+    package case o
+    package case p
+    package case q
+    package case r
+    package case s
+    package case t
+    package case u
+    package case v
+    package case w
+    package case x
+    package case y
+    package case z
+    package case digit0
+    package case digit1
+    package case digit2
+    package case digit3
+    package case digit4
+    package case digit5
+    package case digit6
+    package case digit7
+    package case digit8
+    package case digit9
+    package case backquote
+    package case minus
+    package case equal
+    package case bracketLeft
+    package case bracketRight
+    package case backslash
+    package case semicolon
+    package case quote
+    package case comma
+    package case period
+    package case slash
+    package case space
+    package case escape
+    package case tab
+    package case enter
+    package case backspace
+    package case delete
+    package case insert
+    package case home
+    package case end
+    package case pageUp
+    package case pageDown
+    package case arrowUp
+    package case arrowDown
+    package case arrowLeft
+    package case arrowRight
+    package case f1
+    package case f2
+    package case f3
+    package case f4
+    package case f5
+    package case f6
+    package case f7
+    package case f8
+    package case f9
+    package case f10
+    package case f11
+    package case f12
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var unshiftedText: String? {
+    package var unshiftedText: String? {
         switch self {
         case .a: return "a"
         case .b: return "b"
@@ -191,7 +191,7 @@ nonisolated enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Id
         }
     }
 
-    var shiftedText: String? {
+    package var shiftedText: String? {
         switch self {
         case .a: return "A"
         case .b: return "B"
@@ -246,60 +246,60 @@ nonisolated enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Id
     }
 }
 
-nonisolated enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
-    case commandModifier
-    case escape
-    case tab
-    case shiftTab
-    case enter
-    case backspace
-    case delete
-    case insert
-    case home
-    case end
-    case pageUp
-    case pageDown
-    case arrowUp
-    case arrowDown
-    case arrowLeft
-    case arrowRight
-    case f1
-    case f2
-    case f3
-    case f4
-    case f5
-    case f6
-    case f7
-    case f8
-    case f9
-    case f10
-    case f11
-    case f12
-    case ctrlC
-    case ctrlD
-    case ctrlZ
-    case ctrlL
-    case ctrlA
-    case ctrlE
-    case ctrlK
-    case ctrlU
-    case mouseCapture
-    case unknown
+nonisolated package enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
+    package case commandModifier
+    package case escape
+    package case tab
+    package case shiftTab
+    package case enter
+    package case backspace
+    package case delete
+    package case insert
+    package case home
+    package case end
+    package case pageUp
+    package case pageDown
+    package case arrowUp
+    package case arrowDown
+    package case arrowLeft
+    package case arrowRight
+    package case f1
+    package case f2
+    package case f3
+    package case f4
+    package case f5
+    package case f6
+    package case f7
+    package case f8
+    package case f9
+    package case f10
+    package case f11
+    package case f12
+    package case ctrlC
+    package case ctrlD
+    package case ctrlZ
+    package case ctrlL
+    package case ctrlA
+    package case ctrlE
+    package case ctrlK
+    package case ctrlU
+    package case mouseCapture
+    package case unknown
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
         self = Self(rawValue: rawValue) ?? .unknown
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
 
-    var isRepeatable: Bool {
+    package var isRepeatable: Bool {
         switch self {
         case .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .backspace, .home, .end, .pageUp, .pageDown:
             return true
@@ -309,9 +309,9 @@ nonisolated enum TerminalAccessorySystemActionID: String, Codable, CaseIterable,
     }
 }
 
-nonisolated enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
-    case system(TerminalAccessorySystemActionID)
-    case custom(UUID)
+nonisolated package enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
+    package case system(TerminalAccessorySystemActionID)
+    package case custom(UUID)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -326,7 +326,7 @@ nonisolated enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
         case snippet
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .kind)
 
@@ -343,7 +343,7 @@ nonisolated enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
@@ -357,18 +357,18 @@ nonisolated enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var title: String
-    var kind: TerminalAccessoryCustomActionKind
-    var commandContent: String
-    var commandSendMode: TerminalSnippetSendMode
-    var shortcutKey: TerminalAccessoryShortcutKey
-    var shortcutModifiers: TerminalAccessoryShortcutModifiers
-    var updatedAt: Date
-    var deletedAt: Date?
+nonisolated package struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatable, Sendable {
+    package let id: UUID
+    package var title: String
+    package var kind: TerminalAccessoryCustomActionKind
+    package var commandContent: String
+    package var commandSendMode: TerminalSnippetSendMode
+    package var shortcutKey: TerminalAccessoryShortcutKey
+    package var shortcutModifiers: TerminalAccessoryShortcutModifiers
+    package var updatedAt: Date
+    package var deletedAt: Date?
 
-    init(
+    package init(
         id: UUID = UUID(),
         title: String,
         kind: TerminalAccessoryCustomActionKind,
@@ -390,7 +390,7 @@ nonisolated struct TerminalAccessoryCustomAction: Identifiable, Codable, Equatab
         self.deletedAt = deletedAt
     }
 
-    var isDeleted: Bool {
+    package var isDeleted: Bool {
         deletedAt != nil
     }
 
@@ -425,18 +425,18 @@ nonisolated struct TerminalSnippet: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct TerminalAccessoryLayout: Codable, Equatable, Sendable {
-    var version: Int
-    var activeItems: [TerminalAccessoryItemRef]
-    var updatedAt: Date
+nonisolated package struct TerminalAccessoryLayout: Codable, Equatable, Sendable {
+    package var version: Int
+    package var activeItems: [TerminalAccessoryItemRef]
+    package var updatedAt: Date
 }
 
-nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
-    var schemaVersion: Int
-    var layout: TerminalAccessoryLayout
-    var customActions: [TerminalAccessoryCustomAction]
-    var updatedAt: Date
-    var lastWriterDeviceId: String
+nonisolated package struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
+    package var schemaVersion: Int
+    package var layout: TerminalAccessoryLayout
+    package var customActions: [TerminalAccessoryCustomAction]
+    package var updatedAt: Date
+    package var lastWriterDeviceId: String
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -447,7 +447,7 @@ nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
         case lastWriterDeviceId
     }
 
-    init(
+    package init(
         schemaVersion: Int,
         layout: TerminalAccessoryLayout,
         customActions: [TerminalAccessoryCustomAction],
@@ -461,7 +461,7 @@ nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
         self.lastWriterDeviceId = lastWriterDeviceId
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         layout = try container.decodeIfPresent(TerminalAccessoryLayout.self, forKey: .layout)
@@ -477,7 +477,7 @@ nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(layout, forKey: .layout)
@@ -487,18 +487,18 @@ nonisolated struct TerminalAccessoryProfile: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated extension TerminalAccessoryProfile {
-    static let schemaVersion = 3
-    static let recordType = "UserPreference"
-    static let recordName = "terminalAccessory.v1"
+nonisolated package extension TerminalAccessoryProfile {
+    static package let schemaVersion = 3
+    static package let recordType = "UserPreference"
+    static package let recordName = "terminalAccessory.v1"
 
-    static let minActiveItems = 4
-    static let maxActiveItems = 28
-    static let maxCustomActions = 100
-    static let maxCustomActionTitleLength = 24
-    static let maxCommandContentLength = 2048
+    static package let minActiveItems = 4
+    static package let maxActiveItems = 28
+    static package let maxCustomActions = 100
+    static package let maxCustomActionTitleLength = 24
+    static package let maxCommandContentLength = 2048
 
-    static let legacyDefaultActiveItemsV2: [TerminalAccessoryItemRef] = [
+    static package let legacyDefaultActiveItemsV2: [TerminalAccessoryItemRef] = [
         .system(.escape),
         .system(.tab),
         .system(.arrowUp),
@@ -516,7 +516,7 @@ nonisolated extension TerminalAccessoryProfile {
         .system(.pageDown)
     ]
 
-    static let defaultActiveItems: [TerminalAccessoryItemRef] = [
+    static package let defaultActiveItems: [TerminalAccessoryItemRef] = [
         .system(.escape),
         .system(.tab),
         .system(.mouseCapture),
@@ -535,7 +535,7 @@ nonisolated extension TerminalAccessoryProfile {
         .system(.pageDown)
     ]
 
-    static func defaultValue(lastWriterDeviceId: String) -> TerminalAccessoryProfile {
+    static package func defaultValue(lastWriterDeviceId: String) -> TerminalAccessoryProfile {
         TerminalAccessoryProfile(
             schemaVersion: schemaVersion,
             layout: TerminalAccessoryLayout(
@@ -549,11 +549,11 @@ nonisolated extension TerminalAccessoryProfile {
         )
     }
 
-    static var availableSystemActions: [TerminalAccessorySystemActionID] {
+    static package var availableSystemActions: [TerminalAccessorySystemActionID] {
         TerminalAccessorySystemActionID.allCases.filter { $0 != .unknown }
     }
 
-    func normalized() -> TerminalAccessoryProfile {
+    package func normalized() -> TerminalAccessoryProfile {
         let shouldMigrateUntouchedDefaultLayout = schemaVersion < Self.schemaVersion
             && layout.activeItems == Self.legacyDefaultActiveItemsV2
         var customActionsByID: [UUID: TerminalAccessoryCustomAction] = [:]
@@ -628,7 +628,7 @@ nonisolated extension TerminalAccessoryProfile {
         )
     }
 
-    static func merged(local: TerminalAccessoryProfile, remote: TerminalAccessoryProfile) -> TerminalAccessoryProfile {
+    static package func merged(local: TerminalAccessoryProfile, remote: TerminalAccessoryProfile) -> TerminalAccessoryProfile {
         let normalizedLocal = local.normalized()
         let normalizedRemote = remote.normalized()
 
@@ -691,7 +691,7 @@ nonisolated extension TerminalAccessoryProfile {
 }
 
 private nonisolated extension TerminalAccessoryCustomAction {
-    func normalized() -> TerminalAccessoryCustomAction {
+    package func normalized() -> TerminalAccessoryCustomAction {
         let sanitizedTitle: String
         let sanitizedCommandContent: String
 

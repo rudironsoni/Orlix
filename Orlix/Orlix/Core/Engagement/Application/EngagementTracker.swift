@@ -3,7 +3,7 @@ import Foundation
 
 /// Tracks lightweight usage signals and decides when to request an App Store review.
 @MainActor
-final class EngagementTracker: ObservableObject {
+final package class EngagementTracker: ObservableObject {
     /// Incremented when a root view should call the system review request action.
     @Published private(set) var reviewRequestToken = 0
 
@@ -15,16 +15,16 @@ final class EngagementTracker: ObservableObject {
     private var connectionsCountedThisLaunch: Set<UUID> = []
     private var paywallPresentedThisLaunch = false
 
-    init(dependencies: EngagementTrackerDependencies) {
+    package init(dependencies: EngagementTrackerDependencies) {
         self.dependencies = dependencies
     }
 
-    var successfulConnectionCount: Int {
+    package var successfulConnectionCount: Int {
         dependencies.persistence.loadHistory().successfulConnectionCount
     }
 
     /// Counts a session or pane that reached a connected state, once per launch per id.
-    func recordSuccessfulConnection(id: UUID, transport: String) {
+    package func recordSuccessfulConnection(id: UUID, transport: String) {
         guard connectionsCountedThisLaunch.insert(id).inserted else { return }
 
         dependencies.analytics.trackConnectionSucceeded(transport: transport)
@@ -44,7 +44,7 @@ final class EngagementTracker: ObservableObject {
     }
 
     /// Called when the user leaves a terminal context. Never called over a live terminal.
-    func noteTerminalSessionEnded(otherTerminalsActive: Bool) {
+    package func noteTerminalSessionEnded(otherTerminalsActive: Bool) {
         guard dependencies.applicationIsActive() else { return }
         guard !otherTerminalsActive else { return }
         guard !connectionsCountedThisLaunch.isEmpty else { return }
@@ -53,11 +53,11 @@ final class EngagementTracker: ObservableObject {
     }
 
     /// Review requests stay quiet for the rest of a launch where any paywall appeared.
-    func notePaywallPresented() {
+    package func notePaywallPresented() {
         paywallPresentedThisLaunch = true
     }
 
-    func requestReviewAfterPurchase() {
+    package func requestReviewAfterPurchase() {
         fireReviewRequestIfOutsideCooldown()
     }
 

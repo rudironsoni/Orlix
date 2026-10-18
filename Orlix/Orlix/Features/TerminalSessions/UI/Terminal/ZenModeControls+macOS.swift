@@ -2,6 +2,10 @@
 import SwiftUI
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct ZenModePanel: View {
     let width: CGFloat
     let serverName: String

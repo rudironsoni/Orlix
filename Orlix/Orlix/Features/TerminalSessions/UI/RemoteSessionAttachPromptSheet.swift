@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 struct RemoteSessionAttachPromptSheet: View {
     let prompt: RemoteSessionAttachPrompt
     let onConfirm: (RemoteSessionAttachSelection) -> Void

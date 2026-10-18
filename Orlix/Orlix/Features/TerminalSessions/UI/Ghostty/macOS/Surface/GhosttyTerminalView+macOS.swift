@@ -9,6 +9,9 @@
 import AppKit
 import CoreVideo
 import OSLog
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// NSView that embeds a Ghostty terminal surface with Metal rendering
 ///
@@ -18,92 +21,92 @@ import OSLog
 /// - Focus management
 /// - Surface lifecycle management
 @MainActor
-class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
+package class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     // MARK: - Properties
 
-    var ghosttyApp: ghostty_app_t?
-    weak var ghosttyAppWrapper: GhosttyRuntime?
-    internal var surface: Ghostty.Surface?
-    var surfaceReference: Ghostty.SurfaceReference?
-    let worktreePath: String
-    let paneId: String?
-    let initialCommand: String?
-    let useCustomIO: Bool
+    package var ghosttyApp: ghostty_app_t?
+    weak package var ghosttyAppWrapper: GhosttyRuntime?
+    package var surface: Ghostty.Surface?
+    package var surfaceReference: Ghostty.SurfaceReference?
+    package let worktreePath: String
+    package let paneId: String?
+    package let initialCommand: String?
+    package let useCustomIO: Bool
 
     /// Callback invoked when the terminal process exits
-    var onProcessExit: (() -> Void)?
+    package var onProcessExit: (() -> Void)?
 
     /// Callback invoked when the terminal title changes
-    var onTitleChange: ((String) -> Void)?
+    package var onTitleChange: ((String) -> Void)?
 
     /// Callback invoked when the terminal reports working directory changes (OSC 7)
-    var onPwdChange: ((String) -> Void)?
+    package var onPwdChange: ((String) -> Void)?
 
     /// Callback when the surface has produced its first layout/draw (used to hide loading UI)
-    var onReady: (() -> Void)?
+    package var onReady: (() -> Void)?
 
     /// Callback for OSC 9;4 progress reports
-    var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
+    package var onProgressReport: ((GhosttyProgressState, Int?) -> Void)?
 
     /// Callback when terminal size changes (cols, rows) - used for SSH PTY resize
-    var onResize: ((Int, Int) -> Void)?
+    package var onResize: ((Int, Int) -> Void)?
 
     /// Callback invoked when a magnification gesture requests terminal pane zoom.
-    var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
+    package var onZoomAction: ((TerminalZoomAction) -> TerminalZoomResult?)?
 
     /// Per-surface presentation overrides used to preserve pane zoom across global config reloads.
-    var surfacePresentationOverrides: TerminalPresentationOverrides = .empty
+    package var surfacePresentationOverrides: TerminalPresentationOverrides = .empty
 
     /// Optional app-level paste interceptor used for rich clipboard routing.
-    var richPasteInterceptor: ((GhosttyTerminalView) -> Bool)?
+    package var richPasteInterceptor: ((GhosttyTerminalView) -> Bool)?
 
     /// Optional pane/session actions exposed in the macOS contextual menu.
-    var terminalContextMenuActions: TerminalContextMenuActions?
+    package var terminalContextMenuActions: TerminalContextMenuActions?
 
-    var didSignalReady = false
-    var readonly = false
-    let clipboardConfirmationQueue = TerminalClipboardConfirmationQueue()
-    var presentedClipboardConfirmation: NSAlert?
-    var clipboardConfirmationRetryWorkItem: DispatchWorkItem?
-    var clipboardConfirmationRetryCount = 0
+    package var didSignalReady = false
+    package var readonly = false
+    package let clipboardConfirmationQueue = TerminalClipboardConfirmationQueue()
+    package var presentedClipboardConfirmation: NSAlert?
+    package var clipboardConfirmationRetryWorkItem: DispatchWorkItem?
+    package var clipboardConfirmationRetryCount = 0
 
     /// Cell size in points for row-to-pixel conversion (used by scroll view)
-    var cellSize: NSSize = .zero
+    package var cellSize: NSSize = .zero
 
     /// Current scrollbar state from Ghostty core (used by scroll view)
-    var scrollbar: Ghostty.Action.Scrollbar?
+    package var scrollbar: Ghostty.Action.Scrollbar?
 
-    static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "GhosttyTerminal")
+    static package let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "GhosttyTerminal")
 
     // MARK: - Display Link Rendering (event-driven for SSH)
 
-    var displayLink: CVDisplayLink?
-    var needsRender = false
-    var accumulatedMagnification: CGFloat = 0
-    let zoomIndicatorView = TerminalZoomIndicatorView()
-    var zoomIndicatorHideWorkItem: DispatchWorkItem?
+    package var displayLink: CVDisplayLink?
+    package var needsRender = false
+    package var accumulatedMagnification: CGFloat = 0
+    package let zoomIndicatorView = TerminalZoomIndicatorView()
+    package var zoomIndicatorHideWorkItem: DispatchWorkItem?
 
     /// Idle detection for display link - stops after timeout to save CPU
-    var lastActivityTime: CFAbsoluteTime = 0
-    var idleCheckTimer: DispatchSourceTimer?
-    static let idleTimeout: CFTimeInterval = 0.1  // 100ms idle before stopping display link
+    package var lastActivityTime: CFAbsoluteTime = 0
+    package var idleCheckTimer: DispatchSourceTimer?
+    static package let idleTimeout: CFTimeInterval = 0.1  // 100ms idle before stopping display link
 
     // MARK: - Handler Components
 
-    var imeHandler: GhosttyIMEHandler!
-    var inputHandler: GhosttyInputHandler!
-    let renderingSetup = GhosttyRenderingSetup()
+    package var imeHandler: GhosttyIMEHandler!
+    package var inputHandler: GhosttyInputHandler!
+    package let renderingSetup = GhosttyRenderingSetup()
 
     /// Observation for appearance changes
-    var appearanceObservation: NSKeyValueObservation?
+    package var appearanceObservation: NSKeyValueObservation?
 
     /// Observer for config reload notifications
-    var configReloadObserver: NSObjectProtocol?
+    package var configReloadObserver: NSObjectProtocol?
 
     // MARK: - Rendering Control
 
     /// Flag to prevent operations during cleanup
-    var isShuttingDown = false
+    package var isShuttingDown = false
 
     // MARK: - Initialization
 
@@ -117,7 +120,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     ///   - paneId: Unique identifier for this pane (used for tmux session persistence)
     ///   - command: Optional command to run instead of default shell
     ///   - useCustomIO: If true, uses callback backend for custom I/O (SSH clients)
-    init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: GhosttyRuntime? = nil, paneId: String? = nil, command: String? = nil, useCustomIO: Bool = false) {
+    package init(frame: NSRect, worktreePath: String, ghosttyApp: ghostty_app_t, appWrapper: GhosttyRuntime? = nil, paneId: String? = nil, command: String? = nil, useCustomIO: Bool = false) {
         self.worktreePath = worktreePath
         self.ghosttyApp = ghosttyApp
         self.ghosttyAppWrapper = appWrapper
@@ -147,7 +150,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         }
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) not supported")
     }
 
@@ -176,15 +179,15 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     /// Callback context retained by display link - must be released when display link stops
-    var displayLinkCallbackContext: Unmanaged<DisplayLinkCallbackContext>?
+    package var displayLinkCallbackContext: Unmanaged<DisplayLinkCallbackContext>?
 
     // MARK: - NSView Overrides
 
-    override var acceptsFirstResponder: Bool {
+    override package var acceptsFirstResponder: Bool {
         return true
     }
 
-    override func becomeFirstResponder() -> Bool {
+    override package func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result, let surface = surface?.unsafeCValue {
             ghostty_surface_set_focus(surface, true)
@@ -192,7 +195,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         return result
     }
 
-    override func resignFirstResponder() -> Bool {
+    override package func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
         if result, let surface = surface?.unsafeCValue {
             ghostty_surface_set_focus(surface, false)
@@ -200,7 +203,7 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
         return result
     }
 
-    override func updateTrackingAreas() {
+    override package func updateTrackingAreas() {
         super.updateTrackingAreas()
 
         // Remove old tracking areas
@@ -211,12 +214,12 @@ class GhosttyTerminalView: NSView, NSUserInterfaceValidations {
     }
 
     // Track last size sent to Ghostty to avoid redundant updates
-    var lastSurfaceSize: CGSize = .zero
+    package var lastSurfaceSize: CGSize = .zero
 
     // MARK: - Custom I/O API (for SSH clients)
 
     /// Callback invoked when user types in the terminal (keyboard input to send to SSH)
-    var writeCallback: ((Data) -> Void)?
+    package var writeCallback: ((Data) -> Void)?
 }
 
 #endif

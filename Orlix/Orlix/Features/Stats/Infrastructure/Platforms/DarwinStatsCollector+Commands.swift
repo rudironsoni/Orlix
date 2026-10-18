@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 nonisolated extension DarwinStatsCollector {
     static var statsBatchCommand: String {
         RemoteTerminalBootstrap.wrapPOSIXShellCommand("""

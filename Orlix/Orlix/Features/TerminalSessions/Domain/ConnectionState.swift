@@ -7,25 +7,25 @@ nonisolated enum TerminalConnectionRetryDisposition: Hashable, Sendable {
     case manual
 }
 
-nonisolated enum TerminalConnectionRequiredAction: Hashable, Sendable {
-    case approveHostKey
+nonisolated package enum TerminalConnectionRequiredAction: Hashable, Sendable {
+    package case approveHostKey
 }
 
-nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
-    case reconnectTimedOut
-    case remoteSessionStartupFailed
-    case eternalTerminal(
+nonisolated package enum TerminalConnectionFailure: Hashable, Sendable {
+    package case reconnectTimedOut
+    package case remoteSessionStartupFailed
+    package case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
         port: Int
     )
-    case external(
+    package case external(
         message: String,
         retryDisposition: TerminalConnectionRetryDisposition,
         requiredAction: TerminalConnectionRequiredAction?
     )
 
-    var allowsAutomaticReconnectRetry: Bool {
+    package var allowsAutomaticReconnectRetry: Bool {
         switch self {
         case .external(_, let retryDisposition, _):
             return retryDisposition == .automatic
@@ -34,7 +34,7 @@ nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
         }
     }
 
-    var requiredAction: TerminalConnectionRequiredAction? {
+    package var requiredAction: TerminalConnectionRequiredAction? {
         switch self {
         case .external(_, _, let requiredAction):
             return requiredAction
@@ -44,24 +44,24 @@ nonisolated enum TerminalConnectionFailure: Hashable, Sendable {
     }
 }
 
-nonisolated enum TerminalTabOpeningError: Error, Equatable, Sendable {
-    case alreadyOpening
+nonisolated package enum TerminalTabOpeningError: Error, Equatable, Sendable {
+    package case alreadyOpening
 }
 
-nonisolated enum ConnectionState: Hashable, Sendable {
-    case disconnected
-    case connecting
-    case connected
-    case reconnecting(attempt: Int)
-    case failed(TerminalConnectionFailure)
-    case idle
+nonisolated package enum ConnectionState: Hashable, Sendable {
+    package case disconnected
+    package case connecting
+    package case connected
+    package case reconnecting(attempt: Int)
+    package case failed(TerminalConnectionFailure)
+    package case idle
 
-    var isConnected: Bool {
+    package var isConnected: Bool {
         if case .connected = self { return true }
         return false
     }
 
-    var isConnecting: Bool {
+    package var isConnecting: Bool {
         switch self {
         case .connecting, .reconnecting:
             return true
@@ -70,15 +70,15 @@ nonisolated enum ConnectionState: Hashable, Sendable {
         }
     }
 
-    var isIdle: Bool {
+    package var isIdle: Bool {
         if case .idle = self { return true }
         return false
     }
 
 }
 
-nonisolated enum TerminalConnectionAttemptPolicy {
-    static func state(attempt: Int, hasEstablishedConnection: Bool) -> ConnectionState {
+nonisolated package enum TerminalConnectionAttemptPolicy {
+    static package func state(attempt: Int, hasEstablishedConnection: Bool) -> ConnectionState {
         if hasEstablishedConnection || attempt > 1 {
             return .reconnecting(attempt: attempt)
         }

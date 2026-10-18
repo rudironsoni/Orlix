@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct MoshFallbackDiagnostics: Equatable, Sendable {
-    struct AppContext: Equatable, Sendable {
+nonisolated package struct MoshFallbackDiagnostics: Equatable, Sendable {
+    package struct AppContext: Equatable, Sendable {
         let version: String
         let platform: String
 
@@ -27,22 +27,22 @@ nonisolated struct MoshFallbackDiagnostics: Equatable, Sendable {
         }
     }
 
-    struct StageDuration: Equatable, Sendable {
+    package struct StageDuration: Equatable, Sendable {
         let stage: SSHStartupStage
         let milliseconds: Int
     }
 
-    let appContext: AppContext
-    let selectedTransport: ShellTransport
-    let actualTransport: ShellTransport
-    let failureCategory: MoshFallbackReason
-    let failureStage: SSHStartupStage
-    let endpointClass: String
-    let portClass: String
-    let stageDurations: [StageDuration]
-    let fallbackResult: String
+    package let appContext: AppContext
+    package let selectedTransport: ShellTransport
+    package let actualTransport: ShellTransport
+    package let failureCategory: MoshFallbackReason
+    package let failureStage: SSHStartupStage
+    package let endpointClass: String
+    package let portClass: String
+    package let stageDurations: [StageDuration]
+    package let fallbackResult: String
 
-    static func make(
+    static package func make(
         reason: MoshFallbackReason,
         events: [SSHStartupTrace.Event],
         appContext: AppContext = .current
@@ -70,7 +70,7 @@ nonisolated struct MoshFallbackDiagnostics: Equatable, Sendable {
         )
     }
 
-    var copyText: String {
+    package var copyText: String {
         var lines = [
             "Orlix Mosh Fallback Diagnostics",
             "app_version=\(appContext.version)",

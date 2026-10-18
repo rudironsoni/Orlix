@@ -83,8 +83,8 @@ extension SyncSettingsUserState {
     }
 }
 
-extension SyncSettingsCredentialState {
-    var statusTitle: String {
+package extension SyncSettingsCredentialState {
+    package var statusTitle: String {
         switch self {
         case .storedInICloudKeychain: String(localized: "iCloud Keychain")
         case .storedOnThisDevice: String(localized: "On This Device")

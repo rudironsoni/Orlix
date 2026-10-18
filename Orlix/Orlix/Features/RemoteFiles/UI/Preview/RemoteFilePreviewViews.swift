@@ -7,6 +7,9 @@ import AppKit
 import UIKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteFileInspectorView: View {
     enum Chrome {
         case sidebar

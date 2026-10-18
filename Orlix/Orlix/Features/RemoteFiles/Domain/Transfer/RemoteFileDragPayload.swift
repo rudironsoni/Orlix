@@ -1,14 +1,14 @@
 import Foundation
 
-nonisolated struct RemoteFileDragPayload: Codable, Equatable, Sendable {
-    let serverId: UUID
-    let entries: [RemoteFileEntry]
+nonisolated package struct RemoteFileDragPayload: Codable, Equatable, Sendable {
+    package let serverId: UUID
+    package let entries: [RemoteFileEntry]
 
-    init(serverId: UUID, entry: RemoteFileEntry) {
+    package init(serverId: UUID, entry: RemoteFileEntry) {
         self.init(serverId: serverId, entries: [entry])
     }
 
-    init(serverId: UUID, entries: [RemoteFileEntry]) {
+    package init(serverId: UUID, entries: [RemoteFileEntry]) {
         self.serverId = serverId
         self.entries = entries
     }

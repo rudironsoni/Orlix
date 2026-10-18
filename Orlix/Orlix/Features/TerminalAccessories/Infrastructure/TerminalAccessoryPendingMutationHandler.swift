@@ -1,9 +1,12 @@
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalAccessoryPendingMutationHandler {
+final package class TerminalAccessoryPendingMutationHandler {
     private let cloud: any TerminalAccessoryCloudClient
     private let resolutionPublisher: any TerminalAccessoryResolutionPublishing
 
-    init(
+    package init(
         cloud: any TerminalAccessoryCloudClient,
         resolutionPublisher: any TerminalAccessoryResolutionPublishing
     ) {
@@ -11,7 +14,7 @@ final class TerminalAccessoryPendingMutationHandler {
         self.resolutionPublisher = resolutionPublisher
     }
 
-    func handle(_ profile: TerminalAccessoryProfile) async throws {
+    package func handle(_ profile: TerminalAccessoryProfile) async throws {
         let resolvedProfile = try await cloud.syncTerminalAccessoryProfile(profile)
         resolutionPublisher.publishTerminalAccessoryProfile(resolvedProfile)
     }

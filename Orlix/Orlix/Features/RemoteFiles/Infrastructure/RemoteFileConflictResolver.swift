@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteFileConflictResolver {
     nonisolated init() {}
 

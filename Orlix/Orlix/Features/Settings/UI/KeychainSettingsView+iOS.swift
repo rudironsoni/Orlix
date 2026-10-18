@@ -1,9 +1,12 @@
 #if os(iOS)
 import SwiftUI
 
-extension KeychainSettingsView {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension KeychainSettingsView {
     @ViewBuilder
-    func platformKeyRow(for key: SSHKeyEntry) -> some View {
+    package func platformKeyRow(for key: SSHKeyEntry) -> some View {
         HStack(spacing: 8) {
             Button {
                 keyToShowDetails = key

@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct TerminalFontPreference: Codable, Equatable, Sendable {
-    static var defaultValue: Self {
+nonisolated package struct TerminalFontPreference: Codable, Equatable, Sendable {
+    static package var defaultValue: Self {
         Self(
             primaryFamily: TerminalDefaults.defaultFontName,
             cjkFamily: nil,
@@ -9,11 +9,11 @@ nonisolated struct TerminalFontPreference: Codable, Equatable, Sendable {
         )
     }
 
-    let primaryFamily: String
-    let cjkFamily: String?
-    let updatedAt: Date
+    package let primaryFamily: String
+    package let cjkFamily: String?
+    package let updatedAt: Date
 
-    init(
+    package init(
         primaryFamily: String,
         cjkFamily: String?,
         updatedAt: Date

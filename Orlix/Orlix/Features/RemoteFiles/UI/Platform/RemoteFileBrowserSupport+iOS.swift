@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteFileRow: View {
     let entry: RemoteFileEntry
 

@@ -2,10 +2,10 @@
 import SwiftUI
 import UIKit
 
-enum TerminalRouteModalPresentationPreferenceKey: PreferenceKey {
-    static let defaultValue = false
+package enum TerminalRouteModalPresentationPreferenceKey: PreferenceKey {
+    static package let defaultValue = false
 
-    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+    static package func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = value || nextValue()
     }
 }

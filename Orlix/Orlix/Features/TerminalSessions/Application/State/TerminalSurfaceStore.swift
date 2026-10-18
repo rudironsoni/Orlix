@@ -1,6 +1,9 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalSurfaceStoreChange: Equatable, Sendable {
     case registered(paneId: UUID, surfaceIdentity: ObjectIdentifier)
     case replaced(paneId: UUID, surfaceIdentity: ObjectIdentifier)

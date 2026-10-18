@@ -1,4 +1,8 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 
 // MARK: - Server Row
 

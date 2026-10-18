@@ -1,10 +1,10 @@
 import Foundation
 
-struct AudioCaptureLifecycleState: Equatable, Sendable {
-    let applicationIsActive: Bool
-    let sceneIsActive: Bool
+package struct AudioCaptureLifecycleState: Equatable, Sendable {
+    package let applicationIsActive: Bool
+    package let sceneIsActive: Bool
 
-    var allowsCapture: Bool {
+    package var allowsCapture: Bool {
         applicationIsActive && sceneIsActive
     }
 }
@@ -14,8 +14,8 @@ enum AudioCaptureStartupRejection: Equatable {
     case unavailableInputFormat
 }
 
-enum AudioCaptureStartupPolicy {
-    static func rejection(
+package enum AudioCaptureStartupPolicy {
+    static package func rejection(
         lifecycle: AudioCaptureLifecycleState,
         sampleRate: Double,
         channelCount: Int
@@ -27,7 +27,7 @@ enum AudioCaptureStartupPolicy {
         return nil
     }
 
-    static func outputFrameCapacity(
+    static package func outputFrameCapacity(
         inputFrameCount: UInt32,
         inputSampleRate: Double,
         targetSampleRate: Double

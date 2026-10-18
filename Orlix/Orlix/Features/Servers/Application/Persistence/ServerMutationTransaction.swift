@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct ServerDataMutationPlan: Codable, Equatable, Identifiable, Sendable {
     enum Kind: Codable, Equatable, Sendable {
         case serverSave(UUID)

@@ -1,7 +1,10 @@
 import Foundation
 
-extension DiscoverySource {
-    var label: String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension DiscoverySource {
+    package var label: String {
         switch self {
         case .bonjour:
             return String(localized: "Bonjour")

@@ -2,7 +2,12 @@
 import SwiftUI
 import UIKit
 
-struct TerminalScreenAwakeUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
+package struct TerminalScreenAwakeUITestHarness: View {
     private static let routeID = UUID(uuidString: "B166D8E5-E32E-44B8-BB0D-91145D4F7200")!
 
     @EnvironmentObject private var screenAwakeCoordinator: TerminalScreenAwakeCoordinator
@@ -11,7 +16,7 @@ struct TerminalScreenAwakeUITestHarness: View {
     @State private var idleTimerDisabled = false
     @State private var backgroundReleaseObserved = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
                 Section {

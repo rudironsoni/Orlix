@@ -1,11 +1,11 @@
 import SwiftUI
 
-nonisolated enum PrivacyModeSettings {
-    static let enabledKey = "security.privacyModeEnabled"
+nonisolated package enum PrivacyModeSettings {
+    static package let enabledKey = "security.privacyModeEnabled"
 }
 
-nonisolated enum AppContentProtectionPolicy {
-    static func shouldPrepareForSceneDeactivation(
+nonisolated package enum AppContentProtectionPolicy {
+    static package func shouldPrepareForSceneDeactivation(
         fullAppLockEnabled: Bool,
         privacyModeEnabled: Bool,
         isAppLocked: Bool
@@ -18,7 +18,7 @@ nonisolated enum AppContentProtectionPolicy {
         )
     }
 
-    static func shouldObscureContent(
+    static package func shouldObscureContent(
         sceneIsActive: Bool,
         fullAppLockEnabled: Bool,
         privacyModeEnabled: Bool,
@@ -48,30 +48,30 @@ extension EnvironmentValues {
     }
 }
 
-nonisolated extension Server {
-    var displayAddressWithPort: String {
+nonisolated package extension Server {
+    package var displayAddressWithPort: String {
         "\(username)@\(host):\(port)"
     }
 
-    func visibleHost(privacyModeEnabled: Bool) -> String {
+    package func visibleHost(privacyModeEnabled: Bool) -> String {
         SensitiveContentMask.value(host, privacyModeEnabled: privacyModeEnabled)
     }
 
-    func visibleAddress(privacyModeEnabled: Bool) -> String {
+    package func visibleAddress(privacyModeEnabled: Bool) -> String {
         privacyModeEnabled ? SensitiveContentMask.placeholder : displayAddressWithPort
     }
 }
 
-nonisolated extension DiscoveredSSHHost {
-    var displayEndpoint: String {
+nonisolated package extension DiscoveredSSHHost {
+    package var displayEndpoint: String {
         "\(host):\(port)"
     }
 
-    func visibleDisplayName(privacyModeEnabled: Bool) -> String {
+    package func visibleDisplayName(privacyModeEnabled: Bool) -> String {
         SensitiveContentMask.value(displayName, privacyModeEnabled: privacyModeEnabled)
     }
 
-    func visibleEndpoint(privacyModeEnabled: Bool) -> String {
+    package func visibleEndpoint(privacyModeEnabled: Bool) -> String {
         SensitiveContentMask.value(displayEndpoint, privacyModeEnabled: privacyModeEnabled)
     }
 }

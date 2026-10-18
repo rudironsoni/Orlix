@@ -2,6 +2,9 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerCloudKitRecordCodec {
     static let recordType = "Server"
     static let recordKeys = [

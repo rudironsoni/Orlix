@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class UserDefaultsServerVolumeVisibilityPersistence:
     ServerVolumeVisibilityPreferencesPersisting {
@@ -39,8 +42,8 @@ final class UserDefaultsServerVolumeVisibilityPersistence:
 }
 
 @MainActor
-extension ServerVolumeVisibilityStore {
-    static var live: ServerVolumeVisibilityStore {
+package extension ServerVolumeVisibilityStore {
+    static package var live: ServerVolumeVisibilityStore {
         ServerVolumeVisibilityStore(
             persistence: UserDefaultsServerVolumeVisibilityPersistence(defaults: .standard)
         )

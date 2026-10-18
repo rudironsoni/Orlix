@@ -6,6 +6,9 @@ import ActivityKit
 import Dispatch
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 private final class DisabledTerminalLiveActivityController: TerminalLiveActivityControlling {
     func reconcile(toward target: TerminalLiveActivityTarget) async {}
@@ -119,8 +122,8 @@ private enum TerminalLiveActivityLiveComposition {
     }()
 }
 
-extension LiveActivityManager {
-    static var shared: LiveActivityManager {
+package extension LiveActivityManager {
+    static package var shared: LiveActivityManager {
         TerminalLiveActivityLiveComposition.shared
     }
 }

@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated enum RemoteMediaPreviewPolicy {
-    static let maxDimension = 16_384.0
-    static let maxPixelCount = 64_000_000.0
-    static let maxFrameCount = 600
-    static let maxVideoDurationSeconds = 6 * 60 * 60.0
+nonisolated package enum RemoteMediaPreviewPolicy {
+    static package let maxDimension = 16_384.0
+    static package let maxPixelCount = 64_000_000.0
+    static package let maxFrameCount = 600
+    static package let maxVideoDurationSeconds = 6 * 60 * 60.0
 
-    static func permits(
+    static package func permits(
         width: Double,
         height: Double,
         frameCount: Int,

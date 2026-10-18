@@ -2,6 +2,9 @@
 import Foundation
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+#endif
 @MainActor
 private final class TrustedHostsSettingsUITestRepository: KnownHostSettingsRepository {
     private var knownHosts = [
@@ -30,12 +33,12 @@ private final class TrustedHostsSettingsUITestRepository: KnownHostSettingsRepos
     }
 }
 
-struct TrustedHostsSettingsUITestHarness: View {
+package struct TrustedHostsSettingsUITestHarness: View {
     @StateObject private var coordinator = KnownHostSettingsCoordinator(
         repository: TrustedHostsSettingsUITestRepository()
     )
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             TrustedHostsSettingsView()
                 .navigationTitle("Trusted Hosts")

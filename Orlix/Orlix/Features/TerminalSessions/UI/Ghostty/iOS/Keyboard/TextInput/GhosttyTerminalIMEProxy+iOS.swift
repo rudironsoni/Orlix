@@ -2,6 +2,9 @@
 import OSLog
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class TerminalIMEProxyTextView: UIView, UITextInput {
     enum DocumentMode: Equatable {

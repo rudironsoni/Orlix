@@ -1,51 +1,55 @@
 import Combine
 import Foundation
 
-nonisolated enum ServerConnectionTestFailureReason: Equatable, Sendable {
-    case message(String)
-    case tailscale(String)
-    case eternalTerminal(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+nonisolated package enum ServerConnectionTestFailureReason: Equatable, Sendable {
+    package case message(String)
+    package case tailscale(String)
+    package case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
         port: Int
     )
-    case hostKeyApprovalExpired
+    package case hostKeyApprovalExpired
 }
 
-nonisolated struct ServerConnectionTestFailure: Equatable, Sendable {
-    let reason: ServerConnectionTestFailureReason
-    let requiresCloudflareOverrides: Bool
-    let hostKeyChallenge: KnownHostsManager.Challenge?
+nonisolated package struct ServerConnectionTestFailure: Equatable, Sendable {
+    package let reason: ServerConnectionTestFailureReason
+    package let requiresCloudflareOverrides: Bool
+    package let hostKeyChallenge: KnownHostsManager.Challenge?
 }
 
-nonisolated enum ServerConnectionTestResult: Equatable, Sendable {
-    case success
-    case failure(ServerConnectionTestFailure)
-    case cancelled
+nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {
+    package case success
+    package case failure(ServerConnectionTestFailure)
+    package case cancelled
 }
 
-nonisolated protocol ServerConnectionTesting: Sendable {
-    func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult
+nonisolated package protocol ServerConnectionTesting: Sendable {
+    package func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult
 }
 
-nonisolated protocol ServerHostKeyRepository: Sendable {
-    func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge?
-    func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool
-    func reject(_ challenge: KnownHostsManager.Challenge)
+nonisolated package protocol ServerHostKeyRepository: Sendable {
+    package func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge?
+    package func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool
+    package func reject(_ challenge: KnownHostsManager.Challenge)
 }
 
 @MainActor
-struct ServerFormDependencies {
-    let credentials: any ServerCredentialRepository
-    let connectionTester: any ServerConnectionTesting
-    let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
-    let hostKeys: any ServerHostKeyRepository
-    let remoteSessionBackends: [RemoteSessionBackendMetadata]
-    let defaultRemoteSessionEnabled: @MainActor () -> Bool
-    let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier
-    let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
-    let now: @Sendable () -> Date
-    let makeID: @Sendable () -> UUID
+package struct ServerFormDependencies {
+    package let credentials: any ServerCredentialRepository
+    package let connectionTester: any ServerConnectionTesting
+    package let wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving
+    package let hostKeys: any ServerHostKeyRepository
+    package let remoteSessionBackends: [RemoteSessionBackendMetadata]
+    package let defaultRemoteSessionEnabled: @MainActor () -> Bool
+    package let defaultRemoteSessionBackendIdentifier: @MainActor () -> RemoteSessionBackendIdentifier
+    package let defaultRemoteSessionStartupBehavior: @MainActor () -> RemoteSessionStartupBehavior
+    package let now: @Sendable () -> Date
+    package let makeID: @Sendable () -> UUID
 }
 
 nonisolated enum ServerFormOperationFailure: Equatable, Sendable {

@@ -1,7 +1,11 @@
 import Foundation
 
-extension TerminalTabOpeningError: LocalizedError {
-    nonisolated var errorDescription: String? {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
+package extension TerminalTabOpeningError: LocalizedError {
+    nonisolated package var errorDescription: String? {
         switch self {
         case .alreadyOpening:
             return String(
@@ -12,8 +16,8 @@ extension TerminalTabOpeningError: LocalizedError {
     }
 }
 
-nonisolated enum TerminalConnectionFailurePresentation {
-    static func message(for failure: TerminalConnectionFailure) -> String {
+nonisolated package enum TerminalConnectionFailurePresentation {
+    static package func message(for failure: TerminalConnectionFailure) -> String {
         switch failure {
         case .reconnectTimedOut:
             return String(localized: "Connection timed out. Please retry.")
@@ -26,7 +30,7 @@ nonisolated enum TerminalConnectionFailurePresentation {
         }
     }
 
-    static func ansiSSHErrorData(for failure: TerminalConnectionFailure) -> Data? {
+    static package func ansiSSHErrorData(for failure: TerminalConnectionFailure) -> Data? {
         let line = "\r\n\u{001B}[31mSSH Error: \(message(for: failure))\u{001B}[0m\r\n"
         return line.data(using: .utf8)
     }
@@ -90,8 +94,8 @@ nonisolated enum TerminalConnectionFailurePresentation {
     }
 }
 
-extension TerminalDisconnectReason {
-    var statusMessage: String? {
+package extension TerminalDisconnectReason {
+    package var statusMessage: String? {
         switch self {
         case .transportInterrupted, .startupActionCompleted:
             return nil
@@ -103,13 +107,13 @@ extension TerminalDisconnectReason {
     }
 }
 
-enum TerminalConnectionStatusPresentation: Hashable {
-    case hidden
-    case connecting(serverName: String)
-    case disconnected(message: String?)
-    case failed(message: String, allowsHostKeyReplacement: Bool)
+package enum TerminalConnectionStatusPresentation: Hashable {
+    package case hidden
+    package case connecting(serverName: String)
+    package case disconnected(message: String?)
+    package case failed(message: String, allowsHostKeyReplacement: Bool)
 
-    static func resolve(
+    static package func resolve(
         credentialLoadErrorMessage: String?,
         connectionState: ConnectionState,
         serverName: String,

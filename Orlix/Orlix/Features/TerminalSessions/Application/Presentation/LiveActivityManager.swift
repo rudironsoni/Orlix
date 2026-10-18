@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalLiveActivityTarget: Equatable, Sendable {
     case end
     case active(TerminalLiveActivitySnapshot)
@@ -12,16 +15,16 @@ protocol TerminalLiveActivityControlling: AnyObject {
 }
 
 @MainActor
-final class LiveActivityManager {
+final package class LiveActivityManager {
     private let controller: any TerminalLiveActivityControlling
     private var requestedTarget: TerminalLiveActivityTarget?
     private var reconciliationTask: Task<Void, Never>?
 
-    init(controller: any TerminalLiveActivityControlling) {
+    package init(controller: any TerminalLiveActivityControlling) {
         self.controller = controller
     }
 
-    func refresh(with connectionStates: [ConnectionState]) {
+    package func refresh(with connectionStates: [ConnectionState]) {
         requestedTarget = TerminalLiveActivityPolicy.snapshot(for: connectionStates)
             .map(TerminalLiveActivityTarget.active) ?? .end
         guard reconciliationTask == nil else { return }
@@ -32,7 +35,7 @@ final class LiveActivityManager {
     }
 
     @discardableResult
-    func endForApplicationTermination() -> Bool {
+    package func endForApplicationTermination() -> Bool {
         requestedTarget = .end
         return controller.endForApplicationTermination()
     }

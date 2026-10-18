@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct RemoteTmuxSession: Hashable, Sendable {
     let name: String
     let attachedClients: Int

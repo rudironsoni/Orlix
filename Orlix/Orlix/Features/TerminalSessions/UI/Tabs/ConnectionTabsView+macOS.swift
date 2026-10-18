@@ -2,6 +2,12 @@
 import SwiftUI
 import AppKit
 
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+#endif
 struct ZenWindowChromeBridge: NSViewRepresentable {
     @Binding var contentInsets: EdgeInsets
 
@@ -184,8 +190,8 @@ private struct TerminalZenChromeHost<Content: View>: View {
     }
 }
 
-extension ConnectionTerminalContainer {
-    var platformBody: some View {
+package extension ConnectionTerminalContainer {
+    package var platformBody: some View {
         TerminalCommandBridgeHost { commandBridge in
             sharedBody
                 .focusedValue(\.openTerminalTab, handleNewTabCommand)
@@ -762,7 +768,7 @@ extension ConnectionTerminalContainer {
         return String(localized: "All terminal tabs for this server will be closed.")
     }
 
-    func platformChrome(backgroundColor: Color) -> some View {
+    package func platformChrome(backgroundColor: Color) -> some View {
         TerminalZenChromeHost(
             isZenModeEnabled: isZenModeEnabled,
             appliesTerminalInsets: isZenModeEnabled && selectedView == .terminal,
@@ -825,9 +831,9 @@ extension ConnectionTerminalContainer {
         }
     }
 
-    func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {}
+    package func platformHandleSelectedViewChange(_ selectedView: ConnectionViewTabID) {}
 
-    func platformPrepareForPaneClose() {}
+    package func platformPrepareForPaneClose() {}
 }
 
 private extension View {

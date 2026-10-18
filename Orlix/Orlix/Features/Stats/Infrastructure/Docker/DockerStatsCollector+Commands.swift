@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated extension DockerStatsCollector {
     func psCommands(platform: RemotePlatform, environment: RemoteEnvironment, limit: Int?) -> [String] {
         if let limit {

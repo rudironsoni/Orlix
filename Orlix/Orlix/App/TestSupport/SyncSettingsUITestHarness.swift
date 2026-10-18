@@ -2,6 +2,10 @@
 import Combine
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 @MainActor
 private final class SyncSettingsUITestCloud: SyncSettingsCloudSyncing {
     private let states: CurrentValueSubject<SyncSettingsCloudState, Never>
@@ -84,10 +88,10 @@ private final class SyncSettingsUITestHistory: SyncSettingsHistoryStoring {
     }
 }
 
-struct SyncSettingsUITestHarness: View {
+package struct SyncSettingsUITestHarness: View {
     @StateObject private var coordinator: SyncSettingsCoordinator
 
-    init() {
+    package init() {
         let isEnabled = !Foundation.ProcessInfo.processInfo.arguments.contains(
             "--orlix-ui-test-sync-settings-disabled"
         )
@@ -108,7 +112,7 @@ struct SyncSettingsUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             SyncSettingsView()
                 .navigationTitle("iCloud Sync")

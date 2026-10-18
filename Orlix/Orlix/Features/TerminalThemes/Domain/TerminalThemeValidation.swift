@@ -1,20 +1,20 @@
 import Foundation
 
-nonisolated enum TerminalThemeValidationError: Error {
-    case emptyContent
-    case invalidLine(line: Int)
-    case invalidHex(line: Int)
-    case invalidPalette(line: Int)
-    case invalidValue(line: Int, key: String)
-    case unsupportedKey(line: Int, key: String)
-    case missingRequiredKey(String)
-    case invalidName
-    case themeNotFound
+nonisolated package enum TerminalThemeValidationError: Error {
+    package case emptyContent
+    package case invalidLine(line: Int)
+    package case invalidHex(line: Int)
+    package case invalidPalette(line: Int)
+    package case invalidValue(line: Int, key: String)
+    package case unsupportedKey(line: Int, key: String)
+    package case missingRequiredKey(String)
+    package case invalidName
+    package case themeNotFound
 
 }
 
-nonisolated enum TerminalThemeValidator {
-    static let maximumNameLength = 80
+nonisolated package enum TerminalThemeValidator {
+    static package let maximumNameLength = 80
 
     /// The visual-only subset of Ghostty's theme configuration contract.
     /// Theme files are full Ghostty config files, so every allowed key must be
@@ -66,7 +66,7 @@ nonisolated enum TerminalThemeValidator {
         case number(ClosedRange<Double>)
     }
 
-    nonisolated static func validateAndNormalizeThemeName(_ rawName: String) throws -> String {
+    nonisolated static package func validateAndNormalizeThemeName(_ rawName: String) throws -> String {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty,
               name == rawName,
@@ -82,7 +82,7 @@ nonisolated enum TerminalThemeValidator {
         return name
     }
 
-    nonisolated static func validateAndNormalizeTheme(_ theme: TerminalTheme) throws -> TerminalTheme {
+    nonisolated static package func validateAndNormalizeTheme(_ theme: TerminalTheme) throws -> TerminalTheme {
         TerminalTheme(
             id: theme.id,
             name: try validateAndNormalizeThemeName(theme.name),
@@ -93,7 +93,7 @@ nonisolated enum TerminalThemeValidator {
     }
 
     /// Validates a stored record without rewriting its original content.
-    nonisolated static func validateStoredTheme(_ theme: TerminalTheme) throws -> TerminalTheme {
+    nonisolated static package func validateStoredTheme(_ theme: TerminalTheme) throws -> TerminalTheme {
         _ = try validateAndNormalizeThemeName(theme.name)
         if !theme.isDeleted {
             _ = try validateAndNormalizeThemeContent(theme.content)
@@ -101,7 +101,7 @@ nonisolated enum TerminalThemeValidator {
         return theme
     }
 
-    nonisolated static func isValidHexColor(_ value: String) -> Bool {
+    nonisolated static package func isValidHexColor(_ value: String) -> Bool {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let hex = normalized.hasPrefix("#") ? String(normalized.dropFirst()) : normalized
         guard hex.count == 6 else { return false }
@@ -110,7 +110,7 @@ nonisolated enum TerminalThemeValidator {
         }
     }
 
-    nonisolated static func normalizeHexColor(_ value: String) -> String? {
+    nonisolated static package func normalizeHexColor(_ value: String) -> String? {
         guard isValidHexColor(value) else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let hex = normalized.hasPrefix("#") ? String(normalized.dropFirst()) : normalized
@@ -155,7 +155,7 @@ nonisolated enum TerminalThemeValidator {
         return trimmed
     }
 
-    nonisolated static func validateAndNormalizeThemeContent(_ rawContent: String) throws -> String {
+    nonisolated static package func validateAndNormalizeThemeContent(_ rawContent: String) throws -> String {
         let lines = rawContent.components(separatedBy: .newlines)
         guard lines.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw TerminalThemeValidationError.emptyContent

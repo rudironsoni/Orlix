@@ -2,6 +2,11 @@ import Combine
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
 struct TerminalRemoteSessionShellRegistration {
     let client: SSHClient

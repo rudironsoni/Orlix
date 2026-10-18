@@ -1,9 +1,9 @@
 import SwiftUI
 
-struct RemoteSessionBackendLabel: View {
-    let backend: RemoteSessionBackendMetadata
+package struct RemoteSessionBackendLabel: View {
+    package let backend: RemoteSessionBackendMetadata
 
-    var body: some View {
+    package var body: some View {
         Label {
             Text(backend.displayName)
         } icon: {

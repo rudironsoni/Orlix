@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated enum RemoteFileType: String, Codable, CaseIterable, Sendable {
-    case file
-    case directory
-    case symlink
-    case other
+nonisolated package enum RemoteFileType: String, Codable, CaseIterable, Sendable {
+    package case file
+    package case directory
+    package case symlink
+    package case other
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .file:
             return String(localized: "File")

@@ -11,6 +11,14 @@ import WidgetKit
 import AppKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixComposition
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @main
 struct Orlix: App {
     init() {

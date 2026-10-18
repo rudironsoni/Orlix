@@ -1,7 +1,7 @@
 import Foundation
 
-extension GhosttyTerminalView: TerminalOutputSink {
-    func receiveTerminalOutput(_ data: Data) {
+package extension GhosttyTerminalView: TerminalOutputSink {
+    package func receiveTerminalOutput(_ data: Data) {
         feedData(data)
     }
 }

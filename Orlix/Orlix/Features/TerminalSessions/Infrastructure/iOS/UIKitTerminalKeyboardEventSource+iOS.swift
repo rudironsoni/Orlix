@@ -2,6 +2,9 @@
 import Foundation
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
     private let center: NotificationCenter
@@ -139,8 +142,8 @@ final class UIKitTerminalKeyboardEventSource: TerminalKeyboardEventSource {
     }
 }
 
-extension TerminalKeyboardCoordinator {
-    convenience init(
+package extension TerminalKeyboardCoordinator {
+    convenience package init(
         lifecycleLoggingEnabled: Bool = DebugLogConfiguration.isEnabled("keyboard")
     ) {
         self.init(

@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
     private let keychain: KeychainManager
@@ -74,8 +77,8 @@ private final class KeychainSSHKeySettingsRepository: SSHKeySettingsRepository {
 }
 
 @MainActor
-enum SSHKeySettingsLiveComposition {
-    static func makeCoordinator(keychain: KeychainManager) -> SSHKeySettingsCoordinator {
+package enum SSHKeySettingsLiveComposition {
+    static package func makeCoordinator(keychain: KeychainManager) -> SSHKeySettingsCoordinator {
         SSHKeySettingsCoordinator(
             repository: KeychainSSHKeySettingsRepository(keychain: keychain)
         )
@@ -100,8 +103,8 @@ private final class PreviewSSHKeySettingsRepository: SSHKeySettingsRepository {
     }
 }
 
-extension SSHKeySettingsCoordinator {
-    static var preview: SSHKeySettingsCoordinator {
+package extension SSHKeySettingsCoordinator {
+    static package var preview: SSHKeySettingsCoordinator {
         SSHKeySettingsCoordinator(repository: PreviewSSHKeySettingsRepository())
     }
 }

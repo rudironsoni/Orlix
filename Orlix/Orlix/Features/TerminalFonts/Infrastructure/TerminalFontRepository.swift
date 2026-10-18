@@ -2,10 +2,13 @@ import CoreText
 import CryptoKit
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-protocol TerminalFontAssetRepository: AnyObject {
-    func installRemoteAsset(from sourceURL: URL, for font: TerminalFont) throws
-    func existingFileURL(for font: TerminalFont) -> URL?
+package protocol TerminalFontAssetRepository: AnyObject {
+    package func installRemoteAsset(from sourceURL: URL, for font: TerminalFont) throws
+    package func existingFileURL(for font: TerminalFont) -> URL?
 }
 
 @MainActor
@@ -22,12 +25,12 @@ protocol TerminalFontRepository: TerminalFontAssetRepository {
 }
 
 @MainActor
-final class LocalTerminalFontRepository: TerminalFontRepository {
+final package class LocalTerminalFontRepository: TerminalFontRepository {
     private let rootDirectoryURL: URL
     private let fileManager: FileManager
     private let defaults: UserDefaults
 
-    init(
+    package init(
         rootDirectoryURL: URL,
         fileManager: FileManager = .default,
         defaults: UserDefaults = .standard
@@ -37,7 +40,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         self.defaults = defaults
     }
 
-    static func applicationSupport(
+    static package func applicationSupport(
         defaults: UserDefaults = .standard
     ) -> LocalTerminalFontRepository {
         LocalTerminalFontRepository(
@@ -46,16 +49,16 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         )
     }
 
-    func loadFonts() throws -> [TerminalFont] {
+    package func loadFonts() throws -> [TerminalFont] {
         guard let data = defaults.data(forKey: StorageKey.fonts) else { return [] }
         return try JSONDecoder().decode([TerminalFont].self, from: data)
     }
 
-    func saveFonts(_ fonts: [TerminalFont]) throws {
+    package func saveFonts(_ fonts: [TerminalFont]) throws {
         defaults.set(try JSONEncoder().encode(fonts), forKey: StorageKey.fonts)
     }
 
-    func loadPreference() -> TerminalFontPreference {
+    package func loadPreference() -> TerminalFontPreference {
         let timestamp = defaults.double(forKey: StorageKey.preferenceUpdatedAt)
         return TerminalFontPreference(
             primaryFamily: defaults.string(forKey: TerminalDefaults.fontNameKey)
@@ -67,7 +70,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         )
     }
 
-    func savePreference(_ preference: TerminalFontPreference) {
+    package func savePreference(_ preference: TerminalFontPreference) {
         defaults.set(preference.primaryFamily, forKey: TerminalDefaults.fontNameKey)
         if let cjkFamily = preference.cjkFamily {
             defaults.set(cjkFamily, forKey: TerminalDefaults.cjkFontNameKey)
@@ -84,7 +87,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         }
     }
 
-    func importFont(
+    package func importFont(
         from sourceURL: URL,
         now: Date
     ) throws -> TerminalFont {
@@ -117,7 +120,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         }
     }
 
-    func installRemoteAsset(from sourceURL: URL, for untrustedFont: TerminalFont) throws {
+    package func installRemoteAsset(from sourceURL: URL, for untrustedFont: TerminalFont) throws {
         let font = try TerminalFontValidator.validateStoredFont(untrustedFont)
         guard !font.isDeleted else { return }
         let destination = TerminalFontFilePaths.fontFileURL(
@@ -127,7 +130,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         try installVerifiedFile(from: sourceURL, to: destination, matching: font)
     }
 
-    func registerAvailableFonts(
+    package func registerAvailableFonts(
         _ fonts: [TerminalFont]
     ) -> [TerminalFont.ID: [TerminalFontFamily]] {
         var available: [TerminalFont.ID: [TerminalFontFamily]] = [:]
@@ -164,7 +167,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         return available
     }
 
-    func removeFile(for font: TerminalFont) {
+    package func removeFile(for font: TerminalFont) {
         let fileURL = TerminalFontFilePaths.fontFileURL(
             for: font,
             root: rootDirectoryURL
@@ -179,7 +182,7 @@ final class LocalTerminalFontRepository: TerminalFontRepository {
         try? fileManager.removeItem(at: directory)
     }
 
-    func existingFileURL(for font: TerminalFont) -> URL? {
+    package func existingFileURL(for font: TerminalFont) -> URL? {
         let url = TerminalFontFilePaths.fontFileURL(
             for: font,
             root: rootDirectoryURL

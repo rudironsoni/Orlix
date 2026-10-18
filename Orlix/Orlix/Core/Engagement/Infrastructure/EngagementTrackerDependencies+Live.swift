@@ -1,6 +1,6 @@
 import Foundation
 
-extension AnalyticsTracker: EngagementAnalytics {}
+package extension AnalyticsTracker: EngagementAnalytics {}
 
 extension EngagementTrackerDependencies {
     static func live(

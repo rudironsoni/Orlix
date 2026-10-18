@@ -8,6 +8,10 @@ import UIKit
 import AppKit
 #endif
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 final class TerminalRichPasteUIModel: ObservableObject {
     struct Prompt: Identifiable {

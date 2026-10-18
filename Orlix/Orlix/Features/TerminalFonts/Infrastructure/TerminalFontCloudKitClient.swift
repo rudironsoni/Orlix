@@ -2,8 +2,11 @@ import CloudKit
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalFontCloudKitClient: TerminalFontCloudClient,
+final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
     TerminalFontCloudMutationClient {
     private let transport: any CloudKitRecordTransport
     private let repository: any TerminalFontAssetRepository

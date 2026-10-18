@@ -8,8 +8,11 @@
 #if os(macOS)
 import AppKit
 
-extension GhosttyTerminalView {
-    override func magnify(with event: NSEvent) {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    override package func magnify(with event: NSEvent) {
         accumulatedMagnification += event.magnification
 
         if accumulatedMagnification >= CGFloat(TerminalZoomPresentation.magnificationStepThreshold) {
@@ -34,7 +37,7 @@ extension GhosttyTerminalView {
         showZoomIndicator(fontSize: surfacePresentationOverrides.resolvedFontSize())
     }
 
-    func showZoomIndicator(fontSize: Double) {
+    package func showZoomIndicator(fontSize: Double) {
         zoomIndicatorView.update(fontSize: fontSize)
         updateZoomIndicatorLayout()
         addSubview(zoomIndicatorView, positioned: .above, relativeTo: nil)
@@ -65,7 +68,7 @@ extension GhosttyTerminalView {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    func updateZoomIndicatorLayout() {
+    package func updateZoomIndicatorLayout() {
         let fittingSize = zoomIndicatorView.fittingSize
         let width = max(fittingSize.width, CGFloat(TerminalZoomPresentation.indicatorMinimumWidth))
         let height = max(fittingSize.height, CGFloat(TerminalZoomPresentation.indicatorMinimumHeight))

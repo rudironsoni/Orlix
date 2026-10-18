@@ -2,6 +2,10 @@ import ETBootstrap
 import ETSession
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
     private let resumeStore: any EternalTerminalResumeStoring

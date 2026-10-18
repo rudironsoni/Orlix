@@ -1,6 +1,9 @@
 import Foundation
 import Metal
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 enum MLXAudioSupport {
     static var isSupported: Bool {
         #if arch(arm64)

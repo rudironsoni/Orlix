@@ -1,8 +1,11 @@
 import Combine
 import Foundation
 
-extension RemoteFileBrowserStore {
-    func requestUploadPicker(for tab: RemoteFileTab, destinationPath: String) {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension RemoteFileBrowserStore {
+    package func requestUploadPicker(for tab: RemoteFileTab, destinationPath: String) {
         setPendingToolbarCommand(
             ToolbarCommand(
                 serverId: tab.serverId,
@@ -12,7 +15,7 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    func requestCreateFolder(for tab: RemoteFileTab, destinationPath: String) {
+    package func requestCreateFolder(for tab: RemoteFileTab, destinationPath: String) {
         setPendingToolbarCommand(
             ToolbarCommand(
                 serverId: tab.serverId,
@@ -22,7 +25,7 @@ extension RemoteFileBrowserStore {
         )
     }
 
-    func consumeToolbarCommand(_ command: ToolbarCommand) {
+    package func consumeToolbarCommand(_ command: ToolbarCommand) {
         guard pendingToolbarCommand?.id == command.id else { return }
         setPendingToolbarCommand(nil)
     }

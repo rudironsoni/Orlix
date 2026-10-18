@@ -10,18 +10,21 @@ import AppKit
 import OSLog
 import QuartzCore
 
-extension GhosttyTerminalView {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
     /// iOS pauses rendering when views are offscreen. On macOS rendering is
     /// event-driven, so these are intentionally no-ops for API parity.
-    func pauseRendering() {
+    package func pauseRendering() {
     }
 
-    func resumeRendering() {
+    package func resumeRendering() {
     }
 
     /// Explicitly cleanup the terminal before removal from view hierarchy.
     /// Call this when closing a session to ensure proper cleanup.
-    func cleanup() {
+    package func cleanup() {
         guard !isShuttingDown else { return }
         isShuttingDown = true
         cancelClipboardConfirmations()
@@ -72,12 +75,12 @@ extension GhosttyTerminalView {
     }
 
     /// Configure the Metal-backed layer for terminal rendering
-    func setupLayer() {
+    package func setupLayer() {
         renderingSetup.setupLayer(for: self)
     }
 
     /// Create and configure the Ghostty surface
-    func setupSurface() {
+    package func setupSurface() {
         guard let app = ghosttyApp else {
             Self.logger.error("Cannot create surface: ghostty_app_t is nil")
             return
@@ -116,16 +119,16 @@ extension GhosttyTerminalView {
     }
 
     /// Setup observation for system appearance changes (light/dark mode)
-    func setupAppearanceObservation() {
+    package func setupAppearanceObservation() {
         appearanceObservation = renderingSetup.setupAppearanceObservation(for: self, surface: surface)
     }
 
-    func setupFrameObservation() {
+    package func setupFrameObservation() {
         // We rely on layout() + updateLayout to resize the surface.
         self.postsFrameChangedNotifications = false
     }
 
-    func setupConfigReloadObservation() {
+    package func setupConfigReloadObservation() {
         configReloadObserver = NotificationCenter.default.addObserver(
             forName: Ghostty.configDidReloadNotification,
             object: nil,
@@ -137,12 +140,12 @@ extension GhosttyTerminalView {
         }
     }
 
-    override func viewDidChangeBackingProperties() {
+    override package func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         renderingSetup.updateBackingProperties(view: self, surface: surface?.unsafeCValue, window: window)
     }
 
-    override func viewDidMoveToWindow() {
+    override package func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         // Manage display link based on window attachment
         if window != nil {
@@ -160,7 +163,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    var currentTerminalGridSize: (cols: Int, rows: Int)? {
+    package var currentTerminalGridSize: (cols: Int, rows: Int)? {
         guard let size = terminalSize() else { return nil }
         let cols = Int(size.columns)
         let rows = Int(size.rows)
@@ -168,17 +171,17 @@ extension GhosttyTerminalView {
         return (cols, rows)
     }
 
-    var currentTerminalPixelSize: TerminalPixelSize? {
+    package var currentTerminalPixelSize: TerminalPixelSize? {
         TerminalPixelSize(size: lastSurfaceSize)
     }
 
     // Override safe area insets to use full available space, including rounded corners
     // This matches Ghostty's SurfaceScrollView implementation
-    override var safeAreaInsets: NSEdgeInsets {
+    override package var safeAreaInsets: NSEdgeInsets {
         return NSEdgeInsetsZero
     }
 
-    override func setFrameSize(_ newSize: NSSize) {
+    override package func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
 
         // Force layout to be called to fix up subviews
@@ -186,7 +189,7 @@ extension GhosttyTerminalView {
         needsLayout = true
     }
 
-    override func layout() {
+    override package func layout() {
         super.layout()
         let didUpdate = renderingSetup.updateLayout(
             view: self,
@@ -213,26 +216,26 @@ extension GhosttyTerminalView {
     // MARK: - Process Lifecycle
 
     /// Check if the terminal process has exited
-    var processExited: Bool {
+    package var processExited: Bool {
         guard let surface = surface?.unsafeCValue else { return true }
         return ghostty_surface_process_exited(surface)
     }
 
     /// Check if closing this terminal needs confirmation
-    var needsConfirmQuit: Bool {
+    package var needsConfirmQuit: Bool {
         guard let surface = surface else { return false }
         return surface.needsConfirmQuit
     }
 
     /// Get current terminal grid size
-    func terminalSize() -> Ghostty.Surface.TerminalSize? {
+    package func terminalSize() -> Ghostty.Surface.TerminalSize? {
         guard let surface = surface else { return nil }
         return surface.terminalSize()
     }
 
     /// Force the terminal surface to refresh/redraw
     /// Useful after tmux reattaches or when view becomes visible
-    func forceRefresh() {
+    package func forceRefresh() {
         guard let surface = surface?.unsafeCValue else { return }
 
         // Force a size update to trigger tmux redraw
@@ -260,7 +263,7 @@ extension GhosttyTerminalView {
         displayIfNeeded()
     }
 
-    func applyPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides) {
+    package func applyPresentationOverrides(_ presentationOverrides: TerminalPresentationOverrides) {
         surfacePresentationOverrides = presentationOverrides
 
         guard let surface = surface?.unsafeCValue else { return }
@@ -269,7 +272,7 @@ extension GhosttyTerminalView {
     }
 
     /// Reset Ghostty's terminal state before binding a fresh remote shell to a reused surface.
-    func resetTerminalForReconnect() {
+    package func resetTerminalForReconnect() {
         guard !isShuttingDown else { return }
         _ = surface?.perform(action: "reset")
         forceRefresh()

@@ -135,11 +135,11 @@ private struct AccessibleGlassModifier: ViewModifier {
 // MARK: - Glass Button Style
 
 /// Button style that applies glass effect
-struct GlassButtonStyle: ButtonStyle {
-    var tint: Color?
-    var cornerRadius: CGFloat = 20
+package struct GlassButtonStyle: ButtonStyle {
+    package var tint: Color?
+    package var cornerRadius: CGFloat = 20
 
-    func makeBody(configuration: Configuration) -> some View {
+    package func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 16)
             .padding(.vertical, 10)

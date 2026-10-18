@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct TerminalAccessoryCustomizationView: View {
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @EnvironmentObject private var storeManager: StoreManager

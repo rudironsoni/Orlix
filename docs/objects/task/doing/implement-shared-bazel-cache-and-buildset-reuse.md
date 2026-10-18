@@ -31,12 +31,17 @@ owned_paths:
   - "docs/objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md"
   - "docs/log.md"
   - "OrlixKernel/Sources/ports/orlix/kbuild/source_state.py"
+  - "Orlix/BUILD.bazel"
+  - "Orlix/app_modules.bzl"
+  - "Orlix/Orlix/**/*.swift"
+  - "Orlix/OrlixShared/*.swift"
+  - "project.yml"
+  - "bazel/product/test_app_modules.py"
 read_only_paths:
   - "artifacts.lock.json"
-  - "project.yml"
   - ".github/workflows/testflight-beta.yml"
 forbidden_paths:
-  - "Orlix/**"
+  - "Orlix/Vendor/**"
 required_skills:
   - "orlix-bazel"
   - "orlix-implementation-boundaries"
@@ -96,3 +101,5 @@ contents in the images. The provider and app consumers share this image boundary
 GitHub Actions caches the slow setup that is outside Bazel action results. `xcodes runtimes install` for iOS 15.5 is skipped when that runtime is already available from the runner image. A restored `~/Library/Caches/Orlix/ios15-runtime` archive is installed from that directory and is not downloaded again. The iOS 26.5 runtime uses the same archive cache only when a job has to download it. The `macos-26` image is used directly when it already has that runtime. The Xcode named by `.xcode-version` is selected when it is already on the runner. Its download is cached only when `maxim-lobanov/setup-xcode` would not find that version. Homebrew source bottles for the Brewfile are cached, and the xcodes assertion stays `2.1.0`. `~/Library/Caches/Orlix/ccache` is cached with the pinned compiler identity. That directory is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. Kernel and Autotools keep `no-remote-cache`.
 
 `OrlixCompilerRuntime` is its own rule. The mlibc sysroot depends on that archive and does not compile the builtin sources. The recipe executes the staged clang, llvm-ar, mkdir, rm, and sort, and it does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+The Orlix application compiles as separate Swift modules that follow the source dependency graph: shared models, SSH and remote transport, files and SFTP, statistics and telemetry, settings, terminal presentation, app composition, and a one-file app entry. Cross-module declarations use `package` access under the shared package name `Orlix`. Access control and concurrency checking stay in place. `OrlixFiles`, `OrlixModels`, `OrlixSSH`, `OrlixSettings`, and `OrlixStats` do not depend on `OrlixTerminal`, so a terminal presentation edit does not recompile those features. The pre-cutover Xcode target remains one module and passes `-package-name Orlix`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. GhosttyKit stays the pinned XCFramework. Kernel, Coreutils, Bash, and Autotools keep `no-remote-cache`.

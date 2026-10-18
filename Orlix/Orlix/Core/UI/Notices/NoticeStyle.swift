@@ -1,10 +1,10 @@
 import SwiftUI
 
-enum NoticeSurfaceStyle {
-    case standard
-    case terminal(backgroundColor: Color, foregroundColor: Color)
+package enum NoticeSurfaceStyle {
+    package case standard
+    package case terminal(backgroundColor: Color, foregroundColor: Color)
 
-    var primaryForegroundColor: Color {
+    package var primaryForegroundColor: Color {
         switch self {
         case .standard:
             return .primary
@@ -13,7 +13,7 @@ enum NoticeSurfaceStyle {
         }
     }
 
-    var secondaryForegroundColor: Color {
+    package var secondaryForegroundColor: Color {
         switch self {
         case .standard:
             return .secondary
@@ -31,8 +31,8 @@ struct NoticeMetrics {
     static let notificationCornerRadius: CGFloat = 30
 }
 
-extension NoticeLevel {
-    var tintColor: Color {
+package extension NoticeLevel {
+    package var tintColor: Color {
         switch self {
         case .info:
             return .accentColor
@@ -45,7 +45,7 @@ extension NoticeLevel {
         }
     }
 
-    var defaultIconSystemName: String {
+    package var defaultIconSystemName: String {
         switch self {
         case .info:
             return "info.circle.fill"

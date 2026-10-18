@@ -1,8 +1,8 @@
 #if os(iOS)
 import Foundation
 
-extension TerminalReconnectCoordinator {
-    func handleIOSNetworkReadinessChange(_ readiness: TerminalNetworkReadiness) {
+package extension TerminalReconnectCoordinator {
+    package func handleIOSNetworkReadinessChange(_ readiness: TerminalNetworkReadiness) {
         switch readiness {
         case .unknown:
             return
@@ -32,7 +32,7 @@ extension TerminalReconnectCoordinator {
     }
 
     @discardableResult
-    func queueIOSReconnectUntilNetworkReady(
+    package func queueIOSReconnectUntilNetworkReady(
         for paneId: UUID,
         replacingCurrent: Bool = true
     ) -> Bool {

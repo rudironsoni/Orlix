@@ -1,14 +1,17 @@
 import StoreKit
 import SwiftUI
 
-struct ProSettingsView: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ProSettingsView: View {
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var storeManager: StoreManager
     @EnvironmentObject private var serverManager: ServerManager
     @State private var showingPlans = false
     @State private var showingManageSubscription = false
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 ProSettingsStatusHero(

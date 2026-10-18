@@ -9,6 +9,9 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 enum MacShellCommandID: Equatable {
     case openNewTab
     case closeSelectedTab
@@ -87,13 +90,13 @@ final class MacShellCommandDispatcher {
 }
 
 @MainActor
-final class MacShellCommandBridge: ObservableObject {
+final package class MacShellCommandBridge: ObservableObject {
     @Published private(set) var snapshot: MacShellCommandSnapshot = .inactive
-    let dispatcher = MacShellCommandDispatcher()
+    package let dispatcher = MacShellCommandDispatcher()
 
-    init() {}
+    package init() {}
 
-    var serverViewTabActions: ServerViewTabActions? {
+    package var serverViewTabActions: ServerViewTabActions? {
         guard snapshot.hasTabActions else { return nil }
         return ServerViewTabActions(
             openNew: { [dispatcher] in dispatcher.dispatch(.openNewTab) },
@@ -104,7 +107,7 @@ final class MacShellCommandBridge: ObservableObject {
         )
     }
 
-    var splitActions: TerminalSplitActions? {
+    package var splitActions: TerminalSplitActions? {
         guard snapshot.hasSplitActions else { return nil }
         return TerminalSplitActions(
             perform: { [dispatcher] command in dispatcher.dispatch(.performSplit(command)) },
@@ -113,15 +116,15 @@ final class MacShellCommandBridge: ObservableObject {
         )
     }
 
-    var activeServerId: UUID? { snapshot.activeServerId }
-    var activePaneId: UUID? { snapshot.activePaneId }
+    package var activeServerId: UUID? { snapshot.activeServerId }
+    package var activePaneId: UUID? { snapshot.activePaneId }
 
-    var openLocalDiscovery: (() -> Void)? {
+    package var openLocalDiscovery: (() -> Void)? {
         guard snapshot.hasLocalDiscovery else { return nil }
         return { [dispatcher] in dispatcher.dispatch(.openLocalDiscovery) }
     }
 
-    func update(
+    package func update(
         ownerId: String,
         serverViewTabActions: ServerViewTabActions?,
         splitActions: TerminalSplitActions?,
@@ -140,7 +143,7 @@ final class MacShellCommandBridge: ObservableObject {
         snapshot.hasSplitActions = splitActions != nil
     }
 
-    func clear(ownerId: String) {
+    package func clear(ownerId: String) {
         guard snapshot.ownerId == ownerId else { return }
         dispatcher.clear(ownerId: ownerId)
         snapshot.ownerId = nil
@@ -150,7 +153,7 @@ final class MacShellCommandBridge: ObservableObject {
         snapshot.hasSplitActions = false
     }
 
-    func setLocalDiscovery(_ action: (() -> Void)?) {
+    package func setLocalDiscovery(_ action: (() -> Void)?) {
         dispatcher.setLocalDiscovery(action)
         snapshot.hasLocalDiscovery = action != nil
     }

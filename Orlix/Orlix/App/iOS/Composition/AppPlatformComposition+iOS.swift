@@ -1,6 +1,10 @@
 #if os(iOS)
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixTerminal
+#endif
 @MainActor
 struct AppPlatformComposition {
     let applicationIsActive: @MainActor @Sendable () -> Bool

@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated extension WindowsStatsCollector {
     func powerShellProcessScript(limit: Int?) -> String {
         let limitClause = limit.map { " | Select-Object -First \($0)" } ?? ""

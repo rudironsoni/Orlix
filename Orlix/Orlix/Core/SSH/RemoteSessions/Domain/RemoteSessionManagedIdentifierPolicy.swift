@@ -1,13 +1,16 @@
 import CryptoKit
 import Foundation
 
-nonisolated enum RemoteSessionManagedIdentifierPolicy {
-    enum ValidationError: Error, Equatable {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum RemoteSessionManagedIdentifierPolicy {
+    package enum ValidationError: Error, Equatable {
         case emptyDeviceID
         case generatedIdentifierTooLong
     }
 
-    static let maximumIdentifierLength = 32
+    static package let maximumIdentifierLength = 32
 
     private static let prefix = "orlix-"
     private static let maximumServerSlugLength = 4
@@ -15,7 +18,7 @@ nonisolated enum RemoteSessionManagedIdentifierPolicy {
     private static let sessionTokenLength = 7
     private static let tokenAlphabet = Array("0123456789abcdefghjkmnpqrstvwxyz".utf8)
 
-    static func identifier(
+    static package func identifier(
         backendIdentifier: RemoteSessionBackendIdentifier,
         serverName: String,
         deviceID: String,

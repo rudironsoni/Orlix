@@ -1,5 +1,8 @@
 /// Infrastructure-only addressing for a health probe. Locators are never
 /// persisted, rendered, or included in a health report.
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct StorageHealthProbeTarget: Hashable, Sendable {
     nonisolated enum Kind: Hashable, Sendable {
         case linux(devicePath: String, isEMMC: Bool)

@@ -1,32 +1,36 @@
 #if os(iOS)
 import SwiftUI
 
-struct IOSZenModePanel: View {
-    let width: CGFloat
-    let serverName: String
-    let selectedView: ConnectionViewTabID
-    let selectedViewBinding: Binding<ConnectionViewTabID>
-    let viewTabs: [ConnectionViewTabID]
-    let terminalTabs: [TerminalTab]
-    let selectedTerminalTabId: Binding<UUID?>
-    let terminalTabTitle: (TerminalTab) -> String
-    let paneState: (TerminalTab) -> TerminalPaneState?
-    let onCloseTerminalTab: (TerminalTab) -> Void
-    let fileTabs: [RemoteFileTab]
-    let selectedFileTabId: Binding<UUID?>
-    let fileTabTitle: (RemoteFileTab) -> String
-    let onSelectFileTab: (RemoteFileTab) -> Void
-    let onCloseFileTab: (RemoteFileTab) -> Void
-    let onNewTerminalTab: () -> Void
-    let onNewFileTab: () -> Void
-    let onOpenSettings: () -> Void
-    let onEditServer: () -> Void
-    let onDuplicateServer: () -> Void
-    let onDisconnect: () -> Void
-    let onBack: () -> Void
-    let onExitZen: () -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
+package struct IOSZenModePanel: View {
+    package let width: CGFloat
+    package let serverName: String
+    package let selectedView: ConnectionViewTabID
+    package let selectedViewBinding: Binding<ConnectionViewTabID>
+    package let viewTabs: [ConnectionViewTabID]
+    package let terminalTabs: [TerminalTab]
+    package let selectedTerminalTabId: Binding<UUID?>
+    package let terminalTabTitle: (TerminalTab) -> String
+    package let paneState: (TerminalTab) -> TerminalPaneState?
+    package let onCloseTerminalTab: (TerminalTab) -> Void
+    package let fileTabs: [RemoteFileTab]
+    package let selectedFileTabId: Binding<UUID?>
+    package let fileTabTitle: (RemoteFileTab) -> String
+    package let onSelectFileTab: (RemoteFileTab) -> Void
+    package let onCloseFileTab: (RemoteFileTab) -> Void
+    package let onNewTerminalTab: () -> Void
+    package let onNewFileTab: () -> Void
+    package let onOpenSettings: () -> Void
+    package let onEditServer: () -> Void
+    package let onDuplicateServer: () -> Void
+    package let onDisconnect: () -> Void
+    package let onBack: () -> Void
+    package let onExitZen: () -> Void
 
-    var body: some View {
+    package var body: some View {
         ZenModePanelCard(width: width) {
             ZenModeStatusLine(
                 title: serverName,

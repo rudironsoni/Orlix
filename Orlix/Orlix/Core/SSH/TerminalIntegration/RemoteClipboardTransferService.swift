@@ -1,6 +1,9 @@
 import Foundation
 import OSLog
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 actor RemoteClipboardTransferService {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "RemoteClipboardTransfer")
     private let sessionId: UUID

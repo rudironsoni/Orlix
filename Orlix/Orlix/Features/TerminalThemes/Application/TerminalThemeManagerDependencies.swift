@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol TerminalThemeCloudClient: AnyObject {
     func fetchTerminalThemes() async throws -> [TerminalTheme]
@@ -7,9 +10,9 @@ protocol TerminalThemeCloudClient: AnyObject {
 }
 
 @MainActor
-protocol TerminalThemeCloudMutationClient: AnyObject {
-    func saveTerminalTheme(_ theme: TerminalTheme) async throws
-    func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws
+package protocol TerminalThemeCloudMutationClient: AnyObject {
+    package func saveTerminalTheme(_ theme: TerminalTheme) async throws
+    package func saveTerminalThemePreference(_ preference: TerminalThemePreference) async throws
 }
 
 @MainActor

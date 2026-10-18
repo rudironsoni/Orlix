@@ -1,6 +1,9 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class TerminalPaneTitleStore: ObservableObject {
     @Published private(set) var runtimeTitles: [UUID: String] = [:]
@@ -59,11 +62,11 @@ final class TerminalPaneTitleStore: ObservableObject {
 }
 
 @MainActor
-final class TerminalSessionNavigationProjection: ObservableObject {
+final package class TerminalSessionNavigationProjection: ObservableObject {
     @Published private(set) var state: TerminalSessionNavigationState
     private var cancellable: AnyCancellable?
 
-    init(sessionState: TerminalSessionStateStore) {
+    package init(sessionState: TerminalSessionStateStore) {
         state = sessionState.navigationState
         cancellable = sessionState.navigationChanges
             .sink { [weak self] state in
@@ -116,10 +119,10 @@ struct TerminalServerFloatingControlState: Equatable {
 #endif
 
 @MainActor
-final class TerminalServerContentProjection: ObservableObject {
+final package class TerminalServerContentProjection: ObservableObject {
     @Published private(set) var state: TerminalServerContentState
 
-    init(state: TerminalServerContentState) {
+    package init(state: TerminalServerContentState) {
         self.state = state
     }
 
@@ -145,10 +148,10 @@ final class TerminalServerToolbarTabStripProjection: ObservableObject {
 
 #if os(iOS)
 @MainActor
-final class TerminalServerFloatingControlProjection: ObservableObject {
+final package class TerminalServerFloatingControlProjection: ObservableObject {
     @Published private(set) var state: TerminalServerFloatingControlState
 
-    init(state: TerminalServerFloatingControlState) {
+    package init(state: TerminalServerFloatingControlState) {
         self.state = state
     }
 
@@ -163,11 +166,11 @@ final class TerminalServerFloatingControlProjection: ObservableObject {
 /// Title and connection-status changes redraw only the tab strip. They do not
 /// invalidate route chrome or an open menu.
 @MainActor
-final class TerminalServerToolbarProjection: ObservableObject {
-    let content: TerminalServerContentProjection
-    let tabStrip: TerminalServerToolbarTabStripProjection
+final package class TerminalServerToolbarProjection: ObservableObject {
+    package let content: TerminalServerContentProjection
+    package let tabStrip: TerminalServerToolbarTabStripProjection
     #if os(iOS)
-    let floatingControls: TerminalServerFloatingControlProjection
+    package let floatingControls: TerminalServerFloatingControlProjection
     #endif
 
     private var sessionSnapshot: TerminalServerSessionSnapshot
@@ -181,7 +184,7 @@ final class TerminalServerToolbarProjection: ObservableObject {
     #endif
     private var cancellables: Set<AnyCancellable> = []
 
-    init(serverId: UUID, tabManager: TerminalTabManager) {
+    package init(serverId: UUID, tabManager: TerminalTabManager) {
         sessionSnapshot = tabManager.sessionState.snapshot(for: serverId)
         selectedView = tabManager.connectionViewSelections.selection(for: serverId)
         runtimeTitles = tabManager.titleStore.runtimeTitles

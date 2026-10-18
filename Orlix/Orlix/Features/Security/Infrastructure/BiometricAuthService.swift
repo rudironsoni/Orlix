@@ -1,6 +1,9 @@
 import Foundation
 import LocalAuthentication
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class BiometricAuthService: BiometricAuthServing {
     static let shared = BiometricAuthService()

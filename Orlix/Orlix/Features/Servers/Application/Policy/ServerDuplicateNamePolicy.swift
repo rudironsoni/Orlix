@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct ServerDuplicateNamePolicy: Sendable {
-    static func uniqueName(
+nonisolated package struct ServerDuplicateNamePolicy: Sendable {
+    static package func uniqueName(
         baseName: String,
         existingNames: [String]
     ) -> String {

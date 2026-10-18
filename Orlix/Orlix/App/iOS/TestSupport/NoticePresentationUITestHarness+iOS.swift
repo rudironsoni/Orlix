@@ -1,7 +1,12 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-struct NoticePresentationUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixTerminal
+#endif
+package struct NoticePresentationUITestHarness: View {
     private var connectionStatusScenario: NoticeConnectionStatusHarness.Scenario {
         let arguments = Foundation.ProcessInfo.processInfo.arguments
         if arguments.contains("--orlix-ui-test-notice-disconnected") {
@@ -42,7 +47,7 @@ struct NoticePresentationUITestHarness: View {
     }
 
     @ViewBuilder
-    var body: some View {
+    package var body: some View {
         if showsFilesPreviewScenario {
             NoticeFilesPreviewHarness()
         } else if showsDiagnosticDetailScenario {

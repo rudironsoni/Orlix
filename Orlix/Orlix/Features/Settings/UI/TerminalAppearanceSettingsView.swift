@@ -5,6 +5,10 @@
 
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 private struct CursorStyleOptionView: View {
     let style: TerminalCursorStyle
     let isSelected: Bool

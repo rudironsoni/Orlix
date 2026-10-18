@@ -1,31 +1,31 @@
 import Foundation
 
-nonisolated enum RemoteSessionEvent: String, Codable, CaseIterable, Hashable, Sendable {
-    case attached
-    case detached
-    case terminated
-    case creationFailed
-    case attachFailed
-    case transportInterrupted
-    case observationAmbiguous
+nonisolated package enum RemoteSessionEvent: String, Codable, CaseIterable, Hashable, Sendable {
+    package case attached
+    package case detached
+    package case terminated
+    package case creationFailed
+    package case attachFailed
+    package case transportInterrupted
+    package case observationAmbiguous
 }
 
-nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
-    enum ValidationError: Error, Equatable, Sendable {
+nonisolated package struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
+    package enum ValidationError: Error, Equatable, Sendable {
         case invalidToken
     }
 
-    static let maximumTokenLength = 128
+    static package let maximumTokenLength = 128
 
     private enum CodingKeys: String, CodingKey {
         case token
         case operationID
     }
 
-    let token: String
-    let operationID: UUID
+    package let token: String
+    package let operationID: UUID
 
-    init(token: String, operationID: UUID) throws {
+    package init(token: String, operationID: UUID) throws {
         guard Self.isValidToken(token) else {
             throw ValidationError.invalidToken
         }
@@ -33,18 +33,18 @@ nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
         self.operationID = operationID
     }
 
-    static func isValidToken(_ token: String) -> Bool {
+    static package func isValidToken(_ token: String) -> Bool {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
         return !token.isEmpty
             && token.utf8.count <= Self.maximumTokenLength
             && token.unicodeScalars.allSatisfy(allowed.contains)
     }
 
-    static func make() -> Self {
+    static package func make() -> Self {
         try! Self(token: UUID().uuidString, operationID: UUID())
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let token = try container.decode(String.self, forKey: .token)
         let operationID = try container.decode(UUID.self, forKey: .operationID)
@@ -59,7 +59,7 @@ nonisolated struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(token, forKey: .token)
         try container.encode(operationID, forKey: .operationID)
@@ -128,8 +128,8 @@ nonisolated enum RemoteSessionLifecycleMarker {
     }
 }
 
-nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
-    struct Result: Equatable, Sendable {
+nonisolated package struct RemoteSessionLifecycleStreamParser: Sendable {
+    package struct Result: Equatable, Sendable {
         let output: Data
         let events: [RemoteSessionEvent]
     }
@@ -137,7 +137,7 @@ nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
     private let markers: [(event: RemoteSessionEvent, data: Data)]
     private var pending = Data()
 
-    init(envelope: RemoteSessionLifecycleEnvelope) {
+    package init(envelope: RemoteSessionLifecycleEnvelope) {
         markers = RemoteSessionEvent.allCases
             .filter { event in
                 switch event {
@@ -169,7 +169,7 @@ nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
             }
     }
 
-    init(observation: RemoteSessionLifecycleObservation) {
+    package init(observation: RemoteSessionLifecycleObservation) {
         switch observation {
         case .current(let envelope, _):
             self.init(envelope: envelope)
@@ -187,7 +187,7 @@ nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
         self.markers = markers
     }
 
-    mutating func consume(_ data: Data) -> Result {
+    mutating package func consume(_ data: Data) -> Result {
         pending.append(data)
         var output = Data()
         var events: [RemoteSessionEvent] = []
@@ -206,7 +206,7 @@ nonisolated struct RemoteSessionLifecycleStreamParser: Sendable {
         return Result(output: output, events: events)
     }
 
-    mutating func finish() -> Data {
+    mutating package func finish() -> Data {
         defer { pending.removeAll(keepingCapacity: false) }
         return pending
     }

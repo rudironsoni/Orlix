@@ -1,13 +1,16 @@
 import Darwin
 import Foundation
 
-nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
     private static let wakePort: UInt16 = 9
 
     private let interfaceProvider: any WakeOnLANInterfaceProviding
     private let datagramSender: any WakeOnLANDatagramSending
 
-    init(
+    package init(
         interfaceProvider: any WakeOnLANInterfaceProviding,
         datagramSender: any WakeOnLANDatagramSending
     ) {
@@ -15,7 +18,7 @@ nonisolated struct BSDWakeOnLANPacketSender: WakeOnLANPacketSending {
         self.datagramSender = datagramSender
     }
 
-    func send(
+    package func send(
         configuration: WakeOnLANConfiguration
     ) async throws {
         try await Task.detached(priority: .userInitiated) {

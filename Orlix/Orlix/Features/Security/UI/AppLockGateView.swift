@@ -1,17 +1,20 @@
 import SwiftUI
 
-struct AppLockContainer<Content: View>: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct AppLockContainer<Content: View>: View {
     @EnvironmentObject private var appLockManager: AppLockManager
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
 
     private let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    package init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         let shouldBlockContent = AppContentProtectionPolicy.shouldObscureContent(
             sceneIsActive: scenePhase == .active,
             fullAppLockEnabled: appLockManager.fullAppLockEnabled,

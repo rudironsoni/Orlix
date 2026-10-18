@@ -6,6 +6,10 @@
 import SwiftUI
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 // MARK: - Environment Filter Menu
 
 struct EnvironmentFilterMenu: View {

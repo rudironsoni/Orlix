@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated enum FreeTierLimits {
-    static let maxWorkspaces = 1
-    static let currentMaxServers = 1
-    static let legacyMaxServers = 3
-    static let maxTabs = 1
-    static let maxCustomActions = 3
-    static let planGenerationStorageKey = "freePlanGeneration"
-    static let currentOneServerPlanCutoff: Date = {
+nonisolated package enum FreeTierLimits {
+    static package let maxWorkspaces = 1
+    static package let currentMaxServers = 1
+    static package let legacyMaxServers = 3
+    static package let maxTabs = 1
+    static package let maxCustomActions = 3
+    static package let planGenerationStorageKey = "freePlanGeneration"
+    static package let currentOneServerPlanCutoff: Date = {
         var components = DateComponents()
         components.calendar = Calendar(identifier: .gregorian)
         components.timeZone = TimeZone(secondsFromGMT: 0)

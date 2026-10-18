@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 protocol ServerRemoteRepository: AnyObject {
     var isAvailable: Bool { get }
@@ -10,11 +13,11 @@ protocol ServerRemoteRepository: AnyObject {
 }
 
 @MainActor
-protocol ServerRemoteMutationClient: AnyObject {
-    func saveServer(_ server: Server) async throws
-    func deleteServer(_ server: Server) async throws
-    func saveWorkspace(_ workspace: Workspace) async throws
-    func deleteWorkspace(_ workspace: Workspace) async throws
+package protocol ServerRemoteMutationClient: AnyObject {
+    package func saveServer(_ server: Server) async throws
+    package func deleteServer(_ server: Server) async throws
+    package func saveWorkspace(_ workspace: Workspace) async throws
+    package func deleteWorkspace(_ workspace: Workspace) async throws
 }
 
 @MainActor

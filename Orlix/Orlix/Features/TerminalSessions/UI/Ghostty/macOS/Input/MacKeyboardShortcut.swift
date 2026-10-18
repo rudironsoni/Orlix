@@ -1,6 +1,9 @@
 #if os(macOS)
 import AppKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct MacKeyboardShortcut: Sendable {
     let keyCode: UInt16
     let modifiers: NSEvent.ModifierFlags

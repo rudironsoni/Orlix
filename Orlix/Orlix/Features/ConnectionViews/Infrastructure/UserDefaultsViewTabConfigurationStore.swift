@@ -1,6 +1,9 @@
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfigurationPersisting {
     static let configurationKey = "connectionViewTabConfiguration"
@@ -101,8 +104,8 @@ final class UserDefaultsViewTabConfigurationStore: ConnectionViewTabConfiguratio
     }
 }
 
-extension ViewTabConfigurationManager {
-    convenience init(defaults: UserDefaults = .standard) {
+package extension ViewTabConfigurationManager {
+    convenience package init(defaults: UserDefaults = .standard) {
         self.init(
             persistence: UserDefaultsViewTabConfigurationStore(defaults: defaults)
         )

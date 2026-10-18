@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct RemoteFileTransferLimits: Sendable {
     let maxDepth: Int
     let maxEntries: Int

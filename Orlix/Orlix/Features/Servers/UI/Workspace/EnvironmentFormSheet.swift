@@ -1,13 +1,16 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Environment Form Sheet (Create/Edit)
 
-struct EnvironmentFormSheet: View {
-    let serverManager: ServerManager
+package struct EnvironmentFormSheet: View {
+    package let serverManager: ServerManager
     private let stateStore: ServerStateStore
-    let workspace: Workspace
-    let environment: ServerEnvironment?
-    let onSave: (Workspace, ServerEnvironment) -> Void
+    package let workspace: Workspace
+    package let environment: ServerEnvironment?
+    package let onSave: (Workspace, ServerEnvironment) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
@@ -20,7 +23,7 @@ struct EnvironmentFormSheet: View {
     private let colorOptions = Workspace.defaultColors
     private var isEditing: Bool { environment != nil }
 
-    init(
+    package init(
         serverManager: ServerManager,
         workspace: Workspace,
         environment: ServerEnvironment? = nil,
@@ -38,7 +41,7 @@ struct EnvironmentFormSheet: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             Form {
             Section("Name") {

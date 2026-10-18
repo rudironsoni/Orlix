@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated extension DockerStatsCollector {
     func parseContainers(psOutput: String, statsOutput: String, timestamp: Date = Date()) -> DockerStats {
         let psRows = parseJSONLines(psOutput, as: DockerPSRow.self)

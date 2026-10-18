@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+#endif
 @MainActor
 private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
     private let cloudKit: CloudKitManager
@@ -229,8 +234,8 @@ private enum SyncSettingsHistoryError: Error {
 }
 
 @MainActor
-enum SyncSettingsLiveComposition {
-    static func makeCoordinator(
+package enum SyncSettingsLiveComposition {
+    static package func makeCoordinator(
         cloudKit: CloudKitManager,
         keychain: KeychainManager,
         serverManager: ServerManager,

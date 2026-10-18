@@ -1,12 +1,15 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalAccessoryCloudClientError: Error, Equatable, Sendable {
     case conflictRetryLimitReached
 }
 
 @MainActor
-protocol TerminalAccessoryCloudClient: AnyObject {
-    func syncTerminalAccessoryProfile(
+package protocol TerminalAccessoryCloudClient: AnyObject {
+    package func syncTerminalAccessoryProfile(
         _ localProfile: TerminalAccessoryProfile
     ) async throws -> TerminalAccessoryProfile
 }

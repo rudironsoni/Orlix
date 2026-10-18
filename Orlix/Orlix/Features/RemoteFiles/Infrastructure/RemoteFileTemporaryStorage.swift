@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
     private struct DragExport {
         let rootURL: URL

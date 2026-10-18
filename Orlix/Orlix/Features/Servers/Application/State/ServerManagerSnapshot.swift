@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct ServerDataLoadState: Equatable, Sendable {
     nonisolated enum Phase: Equatable, Sendable {
         case idle

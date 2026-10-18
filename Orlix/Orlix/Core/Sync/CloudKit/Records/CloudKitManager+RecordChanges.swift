@@ -3,10 +3,10 @@ import Foundation
 import os.log
 
 @MainActor
-extension CloudKitManager {
+package extension CloudKitManager {
     // MARK: - Change Fetching (Incremental, No Queries)
 
-    func fetchCloudKitRecordChanges(
+    package func fetchCloudKitRecordChanges(
         forceFullFetch: Bool,
         desiredKeys: [String]
     ) async throws -> CloudKitRawRecordChanges {
@@ -100,7 +100,7 @@ extension CloudKitManager {
         )
     }
 
-    func awaitRecordChanges(
+    package func awaitRecordChanges(
         taskID: UUID,
         waiterID: UUID,
         waiter: CloudKitTaskContinuation<CloudKitRawRecordChanges>
@@ -122,7 +122,7 @@ extension CloudKitManager {
         }
     }
 
-    func releaseRecordChangesWaiter(
+    package func releaseRecordChangesWaiter(
         taskID: UUID,
         waiterID: UUID
     ) {
@@ -134,7 +134,7 @@ extension CloudKitManager {
         self.inFlightRecordChanges = inFlightRecordChanges
     }
 
-    func awaitRecordChangesTeardown(
+    package func awaitRecordChangesTeardown(
         taskID: UUID,
         waiterID: UUID,
         waiter: CloudKitTaskContinuation<Void>
@@ -155,7 +155,7 @@ extension CloudKitManager {
         }
     }
 
-    func releaseRecordChangesTeardownWaiter(
+    package func releaseRecordChangesTeardownWaiter(
         taskID: UUID,
         waiterID: UUID
     ) {
@@ -164,7 +164,7 @@ extension CloudKitManager {
         self.inFlightRecordChanges = inFlightRecordChanges
     }
 
-    func completeRecordChangesTask(
+    package func completeRecordChangesTask(
         _ taskID: UUID,
         with result: Result<CloudKitRawRecordChanges, Error>
     ) {
@@ -178,7 +178,7 @@ extension CloudKitManager {
         }
     }
 
-    func fetchRecordChangesFromCloudKit(
+    package func fetchRecordChangesFromCloudKit(
         forceFullFetch: Bool,
         desiredKeys: [String],
         identity: CloudKitRecordChangeFetchIdentity,
@@ -194,7 +194,7 @@ extension CloudKitManager {
         }
     }
 
-    func fetchTrackedRecordChangesFromCloudKit(
+    package func fetchTrackedRecordChangesFromCloudKit(
         forceFullFetch: Bool,
         desiredKeys: [String],
         identity: CloudKitRecordChangeFetchIdentity,
@@ -232,7 +232,7 @@ extension CloudKitManager {
         }
     }
 
-    func fetchRawRecordChangesFromCloudKit(
+    package func fetchRawRecordChangesFromCloudKit(
         previousToken: CKServerChangeToken?,
         isFullFetch: Bool,
         desiredKeys: [String]
@@ -282,7 +282,7 @@ extension CloudKitManager {
         )
     }
 
-    func makePendingRecordChanges(
+    package func makePendingRecordChanges(
         from fetched: FetchedRecordChanges,
         identity: CloudKitRecordChangeFetchIdentity
     ) -> CloudKitRawRecordChanges {
@@ -299,7 +299,7 @@ extension CloudKitManager {
         return changes
     }
 
-    func commitCloudKitRecordChanges(
+    package func commitCloudKitRecordChanges(
         _ checkpoint: CloudKitRecordChangeCheckpoint
     ) throws {
         try CloudKitRecordChangeCheckpointPolicy.validate(

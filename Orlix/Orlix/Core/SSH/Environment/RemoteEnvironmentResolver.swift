@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum RemoteShellFamily: String, Codable, Hashable, Sendable {
     case posix
     case powershell
@@ -102,13 +105,13 @@ nonisolated struct RemoteShellProfile: Hashable, Sendable {
     }
 }
 
-nonisolated struct RemoteEnvironment: Hashable, Sendable {
-    let platform: RemotePlatform
-    let shellProfile: RemoteShellProfile
-    let activeShellName: String?
-    let powerShellExecutable: String?
+nonisolated package struct RemoteEnvironment: Hashable, Sendable {
+    package let platform: RemotePlatform
+    package let shellProfile: RemoteShellProfile
+    package let activeShellName: String?
+    package let powerShellExecutable: String?
 
-    nonisolated var supportsTmuxRuntime: Bool {
+    nonisolated package var supportsTmuxRuntime: Bool {
         if platform != .windows {
             return shellProfile.family == .posix
         }
@@ -121,11 +124,11 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
         }
     }
 
-    nonisolated var supportsMoshRuntime: Bool {
+    nonisolated package var supportsMoshRuntime: Bool {
         platform != .windows && shellProfile.family == .posix
     }
 
-    nonisolated var supportsWorkingDirectoryRestore: Bool {
+    nonisolated package var supportsWorkingDirectoryRestore: Bool {
         switch shellProfile.family {
         case .posix, .powershell, .cmd:
             return true
@@ -134,7 +137,7 @@ nonisolated struct RemoteEnvironment: Hashable, Sendable {
         }
     }
 
-    nonisolated static let fallbackPOSIX = RemoteEnvironment(
+    nonisolated static package let fallbackPOSIX = RemoteEnvironment(
         platform: .linux,
         shellProfile: .posix(shellName: "sh"),
         activeShellName: "sh",

@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated enum EternalTerminalSessionFailure: Error, Hashable, Sendable {
-    case bootstrapSSH
-    case bootstrapResponse(String)
-    case malformedBootstrapCredentials
-    case resumeState(message: String, discardStoredState: Bool)
-    case transport
-    case invalidKey
-    case protocolMismatch
-    case disconnectedBufferFull
-    case connectionInProgress
-    case connectionClosed
-    case applicationSuspended
-    case sessionUnrecoverable
-    case client
-    case unknown
+nonisolated package enum EternalTerminalSessionFailure: Error, Hashable, Sendable {
+    package case bootstrapSSH
+    package case bootstrapResponse(String)
+    package case malformedBootstrapCredentials
+    package case resumeState(message: String, discardStoredState: Bool)
+    package case transport
+    package case invalidKey
+    package case protocolMismatch
+    package case disconnectedBufferFull
+    package case connectionInProgress
+    package case connectionClosed
+    package case applicationSuspended
+    package case sessionUnrecoverable
+    package case client
+    package case unknown
 }

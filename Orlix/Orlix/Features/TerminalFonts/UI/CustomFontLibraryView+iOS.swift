@@ -1,6 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension CustomFontLibraryView {
     var platformBody: some View {
         Group {

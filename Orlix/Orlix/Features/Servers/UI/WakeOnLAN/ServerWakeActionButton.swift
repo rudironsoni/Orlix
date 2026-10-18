@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct ServerWakeActionButton: View {
-    let serverID: UUID
-    let onAction: () -> Void
+package struct ServerWakeActionButton: View {
+    package let serverID: UUID
+    package let onAction: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: onAction) {
             Label("Wake Server", systemImage: "power")
         }

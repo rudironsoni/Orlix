@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable {
-    let id: UUID
-    var name: String
-    var shortName: String
-    var colorHex: String
-    var isBuiltIn: Bool
+nonisolated package struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable {
+    package let id: UUID
+    package var name: String
+    package var shortName: String
+    package var colorHex: String
+    package var isBuiltIn: Bool
 
-    init(
+    package init(
         id: UUID = UUID(),
         name: String,
         shortName: String,
@@ -21,7 +21,7 @@ nonisolated struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable 
         self.isBuiltIn = isBuiltIn
     }
 
-    static let production = ServerEnvironment(
+    static package let production = ServerEnvironment(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
         name: "Production",
         shortName: "Prod",
@@ -29,7 +29,7 @@ nonisolated struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable 
         isBuiltIn: true
     )
 
-    static let staging = ServerEnvironment(
+    static package let staging = ServerEnvironment(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
         name: "Staging",
         shortName: "Stag",
@@ -37,7 +37,7 @@ nonisolated struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable 
         isBuiltIn: true
     )
 
-    static let development = ServerEnvironment(
+    static package let development = ServerEnvironment(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
         name: "Development",
         shortName: "Dev",
@@ -45,5 +45,5 @@ nonisolated struct ServerEnvironment: Identifiable, Codable, Hashable, Sendable 
         isBuiltIn: true
     )
 
-    static let builtInEnvironments: [ServerEnvironment] = [.production, .staging, .development]
+    static package let builtInEnvironments: [ServerEnvironment] = [.production, .staging, .development]
 }

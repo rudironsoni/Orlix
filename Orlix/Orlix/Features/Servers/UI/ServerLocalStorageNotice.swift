@@ -1,17 +1,20 @@
 import SwiftUI
 
-struct ServerLocalStorageNotice: View {
-    let serverManager: ServerManager
-    @ObservedObject var stateStore: ServerStateStore
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct ServerLocalStorageNotice: View {
+    package let serverManager: ServerManager
+    @ObservedObject package var stateStore: ServerStateStore
     @State private var isShowingCloudRecovery = false
     @State private var recoveryFailure: String?
 
-    init(serverManager: ServerManager) {
+    package init(serverManager: ServerManager) {
         self.serverManager = serverManager
         _stateStore = ObservedObject(wrappedValue: serverManager.stateStore)
     }
 
-    var body: some View {
+    package var body: some View {
         if stateStore.ambiguousCloudRecovery != nil || !stateStore.localStorageIssues.isEmpty {
             Group {
                 if stateStore.ambiguousCloudRecovery != nil {

@@ -2,11 +2,11 @@ import CoreGraphics
 import Foundation
 
 /// Backing-pixel dimensions accepted by the SSH and ET wire protocols.
-nonisolated struct TerminalPixelSize: Equatable, Sendable {
-    let width: Int
-    let height: Int
+nonisolated package struct TerminalPixelSize: Equatable, Sendable {
+    package let width: Int
+    package let height: Int
 
-    init?(width: CGFloat, height: CGFloat) {
+    package init?(width: CGFloat, height: CGFloat) {
         guard width.isFinite, height.isFinite,
               width > 0, height > 0 else {
             return nil
@@ -24,7 +24,7 @@ nonisolated struct TerminalPixelSize: Equatable, Sendable {
         self.height = Int(wireHeight)
     }
 
-    init?(size: CGSize) {
+    package init?(size: CGSize) {
         self.init(width: size.width, height: size.height)
     }
 }

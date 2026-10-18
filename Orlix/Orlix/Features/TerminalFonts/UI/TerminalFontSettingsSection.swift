@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct TerminalFontSettingsSection: View {
     private enum PickerRole {
         case primary

@@ -1,6 +1,9 @@
 import Foundation
 import OSLog
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteClipboardUpload: Sendable {
     let remotePath: String
     let pastedPathToken: String
@@ -8,10 +11,10 @@ struct RemoteClipboardUpload: Sendable {
     let sizeBytes: Int
 }
 
-struct RichPasteUploadResult: Sendable, Equatable {
-    let remotePath: String
-    let pastedPathToken: String
-    let seededRemoteClipboard: Bool
+package struct RichPasteUploadResult: Sendable, Equatable {
+    package let remotePath: String
+    package let pastedPathToken: String
+    package let seededRemoteClipboard: Bool
 }
 
 enum TerminalRichPasteError: LocalizedError {
@@ -47,18 +50,18 @@ private enum RemoteClipboardSeedCapability: Sendable {
     case macOS
 }
 
-actor TerminalRichPasteCoordinator {
+package actor TerminalRichPasteCoordinator {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "TerminalRichPasteCoordinator")
     private let sessionId: UUID
     private let transferService: RemoteClipboardTransferService
     private var remoteClipboardCapabilities: [ObjectIdentifier: RemoteClipboardSeedCapability] = [:]
 
-    init(sessionId: UUID) {
+    package init(sessionId: UUID) {
         self.sessionId = sessionId
         self.transferService = RemoteClipboardTransferService(sessionId: sessionId)
     }
 
-    func performRichPaste(
+    package func performRichPaste(
         image: ClipboardImagePayload,
         settings: RichClipboardSettings,
         sshClient: SSHClient

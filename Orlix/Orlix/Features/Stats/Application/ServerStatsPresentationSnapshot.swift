@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct ServerStatsPresentationSnapshot: Sendable {
     let stats: ServerStats
     let cpuHistory: [StatsPoint]

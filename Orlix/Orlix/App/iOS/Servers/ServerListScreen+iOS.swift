@@ -7,6 +7,13 @@ import os
 import SwiftUI
 
 #if os(iOS)
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 struct ServerListScreen: View {
     @ObservedObject var serverManager: ServerManager
     let tabManager: TerminalTabManager

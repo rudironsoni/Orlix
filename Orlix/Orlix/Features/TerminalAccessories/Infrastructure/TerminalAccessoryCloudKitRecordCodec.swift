@@ -1,6 +1,9 @@
 import CloudKit
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalAccessoryCloudKitRecordCodecError: Error, Equatable, Sendable {
     case encodingFailed
 }

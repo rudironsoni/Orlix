@@ -3,7 +3,12 @@ import Combine
 import SwiftUI
 import UIKit
 
-struct TerminalKeyboardUITestHarness: View {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixTerminal
+#endif
+package struct TerminalKeyboardUITestHarness: View {
     private final class MetadataChurnCounter: ObservableObject {
         private(set) var value = 0
 
@@ -37,7 +42,7 @@ struct TerminalKeyboardUITestHarness: View {
         ).utf8
     )
 
-    init(tabManager: TerminalTabManager) {
+    package init(tabManager: TerminalTabManager) {
         self.tabManager = tabManager
         _keyboardCoordinator = ObservedObject(
             wrappedValue: tabManager.keyboardCoordinator
@@ -171,7 +176,7 @@ struct TerminalKeyboardUITestHarness: View {
 
     private let diagnosticTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .topLeading) {
             if showsTerminal {
                 TerminalKeyboardHarnessRepresentable(
@@ -1020,7 +1025,7 @@ struct TerminalKeyboardUITestHarness: View {
     }
 }
 
-struct TerminalSplitKeyboardUITestHarness: View {
+package struct TerminalSplitKeyboardUITestHarness: View {
     private static let firstPaneId = UUID(uuidString: "98B81AB0-ACF4-4555-A94D-399AE384C61E")!
     private static let secondPaneId = UUID(uuidString: "4405E542-FE33-4D06-9F8A-ABF93A0CFA8F")!
 
@@ -1040,7 +1045,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
 
     private let diagnosticTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
-    init(tabManager: TerminalTabManager) {
+    package init(tabManager: TerminalTabManager) {
         self.tabManager = tabManager
         _keyboardCoordinator = ObservedObject(
             wrappedValue: tabManager.keyboardCoordinator
@@ -1055,7 +1060,7 @@ struct TerminalSplitKeyboardUITestHarness: View {
         focusedPaneId == Self.firstPaneId ? firstTerminal : secondTerminal
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: 1) {
                 terminalSurface(
