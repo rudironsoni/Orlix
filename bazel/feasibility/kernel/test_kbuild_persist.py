@@ -169,6 +169,27 @@ class KernelStateTests(unittest.TestCase):
             self.assertEqual(list(redirected.iterdir()), [])
 
 
+    def test_resume_hashes_tool_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            libraries = root / "tools" / "lib"
+            libraries.mkdir(parents=True)
+            dylib = libraries / "libLLVM.dylib"
+            dylib.write_bytes(b"v1")
+            provenance = root / "tcti-proof-registry-provenance.mk"
+            provenance.write_text("proof=1\n", encoding="utf-8")
+            source_state.resume(root, [libraries, provenance])
+            output = root / "OrlixKernel/build/release/kernel.o"
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b"object\n")
+            source_state.record(root)
+            source_state.resume(root, [libraries, provenance])
+            self.assertTrue(output.exists())
+            dylib.write_bytes(b"v2")
+            source_state.resume(root, [libraries, provenance])
+            self.assertFalse(output.exists())
+
+
 class KbuildArchiveTests(unittest.TestCase):
     def test_archive_bytes_do_not_depend_on_source_timestamps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

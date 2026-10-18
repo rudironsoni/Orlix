@@ -19,12 +19,9 @@ POLICY = {
     "no_remote_exec": True,
 }
 # These stay uncached until the executed tools and their data are inputs:
-# OrlixKernelMachOArchive still runs host gmake, Homebrew clang, Xcode HOSTCC,
-# and xcrun. Dylibs and the SDK are not file inputs.
 # OrlixTctiIsaRestore does not input gmake's libraries or /usr/bin/python3.
 # Autotools OrlixGuestPackage still reads Homebrew share trees.
 REQUIRED_NO_REMOTE_CACHE = (
-    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
 )
@@ -40,6 +37,7 @@ FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/feasibility/packages/autotools.bzl", "OrlixPackageInterface"),
     ("bazel/feasibility/packages/package.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/local.bzl", "OrlixGuestPackage"),
+    ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
 )
 MNEMONIC = re.compile(r'mnemonic\s*=\s*"([^"]+)"')
 REQUIREMENTS = re.compile(r"execution_requirements\s*=\s*\{([^}]*)\}", re.DOTALL)
@@ -74,7 +72,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
             seen,
             {
                 "OrlixGuestPackage",
-                "OrlixKernelMachOArchive",
                 "OrlixTctiIsaRestore",
             },
         )
@@ -89,7 +86,7 @@ class RemoteCachePolicyTests(unittest.TestCase):
         requirements = _requirements("bazel/feasibility/kernel/kernel_macho.bzl")["OrlixKernelMachOArchive"]
         self.assertEqual(len(requirements), 1)
         self.assertEqual(requirements[0].get("no-sandbox"), "1")
-        self.assertEqual(requirements[0].get("no-remote-cache"), "1")
+        self.assertNotIn("no-remote-cache", requirements[0])
         self.assertEqual(requirements[0].get("no-remote-exec"), "1")
 
     def test_headers_payload_and_local_c_do_not_use_the_tag_as_cover(self) -> None:
