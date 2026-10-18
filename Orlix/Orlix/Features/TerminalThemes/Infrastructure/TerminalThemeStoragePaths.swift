@@ -122,4 +122,6 @@ package struct BundleTerminalThemeCatalog: BuiltInTerminalThemeCatalog {
             }
             .sorted()
     }
+
+    package init() {}
 }

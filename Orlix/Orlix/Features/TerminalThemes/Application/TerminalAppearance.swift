@@ -12,6 +12,25 @@ nonisolated package struct TerminalThemeSelection: Equatable, Sendable {
     package let darkThemeName: String
     package let lightThemeName: String
     package let usePerAppearanceTheme: Bool
+
+
+    package init(
+
+        darkThemeName: String,
+
+        lightThemeName: String,
+
+        usePerAppearanceTheme: Bool
+
+    ) {
+
+        self.darkThemeName = darkThemeName
+
+        self.lightThemeName = lightThemeName
+
+        self.usePerAppearanceTheme = usePerAppearanceTheme
+
+    }
 }
 
 nonisolated package struct TerminalThemePalette: Equatable, Sendable {
@@ -26,11 +45,49 @@ nonisolated package struct TerminalThemePalette: Equatable, Sendable {
         cursorHex: "#F8B26A",
         cursorTextHex: "#101418"
     )
+
+
+    package init(
+
+        backgroundHex: String,
+
+        foregroundHex: String,
+
+        cursorHex: String,
+
+        cursorTextHex: String
+
+    ) {
+
+        self.backgroundHex = backgroundHex
+
+        self.foregroundHex = foregroundHex
+
+        self.cursorHex = cursorHex
+
+        self.cursorTextHex = cursorTextHex
+
+    }
 }
 
 nonisolated package struct ResolvedTerminalTheme: Equatable, Sendable {
     package let name: String
     package let palette: TerminalThemePalette
+
+
+    package init(
+
+        name: String,
+
+        palette: TerminalThemePalette
+
+    ) {
+
+        self.name = name
+
+        self.palette = palette
+
+    }
 }
 
 nonisolated package struct TerminalAppearanceSnapshot: Equatable, Sendable {
@@ -62,4 +119,23 @@ nonisolated package struct TerminalAppearanceSnapshot: Equatable, Sendable {
             palette: .fallback
         )
     )
+
+
+    package init(
+
+        activeAppearance: TerminalColorAppearance,
+
+        lightTheme: ResolvedTerminalTheme,
+
+        darkTheme: ResolvedTerminalTheme
+
+    ) {
+
+        self.activeAppearance = activeAppearance
+
+        self.lightTheme = lightTheme
+
+        self.darkTheme = darkTheme
+
+    }
 }

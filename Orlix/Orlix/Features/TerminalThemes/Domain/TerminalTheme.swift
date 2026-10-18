@@ -79,4 +79,27 @@ nonisolated package struct TerminalThemePreference: Codable, Equatable, Sendable
     package var lightThemeName: String
     package var usePerAppearanceTheme: Bool
     package var updatedAt: Date
+
+
+    package init(
+
+        darkThemeName: String,
+
+        lightThemeName: String,
+
+        usePerAppearanceTheme: Bool,
+
+        updatedAt: Date
+
+    ) {
+
+        self.darkThemeName = darkThemeName
+
+        self.lightThemeName = lightThemeName
+
+        self.usePerAppearanceTheme = usePerAppearanceTheme
+
+        self.updatedAt = updatedAt
+
+    }
 }

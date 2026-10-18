@@ -99,6 +99,21 @@ package struct NoticeBannerView: View {
         }
     }
 
+
+
+    package init(
+
+        item: NoticeItem,
+
+        surfaceStyle: NoticeSurfaceStyle = .standard
+
+    ) {
+
+        self.item = item
+
+        self.surfaceStyle = surfaceStyle
+
+    }
 }
 
 private struct NoticeDetailView: View {

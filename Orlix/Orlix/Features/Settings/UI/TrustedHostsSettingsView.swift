@@ -78,6 +78,9 @@ package struct TrustedHostsSettingsView: View {
         }
         resetTarget = nil
     }
+
+
+    package init() {}
 }
 
 private struct TrustedHostsEmptyView: View {

@@ -79,4 +79,7 @@ nonisolated package struct BSDWakeOnLANDatagramSender: WakeOnLANDatagramSending 
             )
         }
     }
+
+
+    package init() {}
 }

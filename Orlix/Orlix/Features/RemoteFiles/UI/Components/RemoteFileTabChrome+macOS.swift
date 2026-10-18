@@ -89,5 +89,31 @@ package struct RemoteFileTabsScrollView: View {
         let target = tabs[currentIndex + 1]
         onSelect(target)
     }
+
+    package init(
+        tabs: [RemoteFileTab],
+        selectedTabId: Binding<UUID?>,
+        fileBrowser: RemoteFileBrowserStore,
+        titleForTab: @escaping (RemoteFileTab) -> String,
+        onSelect: @escaping (RemoteFileTab) -> Void,
+        onClose: @escaping (RemoteFileTab) -> Void,
+        onCloseOtherTabs: @escaping (RemoteFileTab) -> Void,
+        onCloseTabsToLeft: @escaping (RemoteFileTab) -> Void,
+        onCloseTabsToRight: @escaping (RemoteFileTab) -> Void,
+        onDuplicate: @escaping (RemoteFileTab) -> Void,
+        onNew: @escaping () -> Void
+    ) {
+        self.tabs = tabs
+        self._selectedTabId = selectedTabId
+        self.fileBrowser = fileBrowser
+        self.titleForTab = titleForTab
+        self.onSelect = onSelect
+        self.onClose = onClose
+        self.onCloseOtherTabs = onCloseOtherTabs
+        self.onCloseTabsToLeft = onCloseTabsToLeft
+        self.onCloseTabsToRight = onCloseTabsToRight
+        self.onDuplicate = onDuplicate
+        self.onNew = onNew
+    }
 }
 #endif

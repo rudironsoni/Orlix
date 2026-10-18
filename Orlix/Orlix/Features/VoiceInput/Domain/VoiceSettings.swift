@@ -14,4 +14,31 @@ nonisolated package struct VoiceSettings: Equatable, Sendable {
     package var parakeetModelID: String
     package var languageCode: String
     package var terminalVoiceButtonEnabled: Bool
+
+
+    package init(
+
+        provider: TranscriptionProvider,
+
+        whisperModelID: String,
+
+        parakeetModelID: String,
+
+        languageCode: String,
+
+        terminalVoiceButtonEnabled: Bool
+
+    ) {
+
+        self.provider = provider
+
+        self.whisperModelID = whisperModelID
+
+        self.parakeetModelID = parakeetModelID
+
+        self.languageCode = languageCode
+
+        self.terminalVoiceButtonEnabled = terminalVoiceButtonEnabled
+
+    }
 }

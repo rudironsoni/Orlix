@@ -11,4 +11,19 @@ nonisolated package struct TerminalFontFamily: Identifiable, Hashable, Sendable 
     package let source: Source
 
     package var id: String { name }
+
+
+    package init(
+
+        name: String,
+
+        source: Source
+
+    ) {
+
+        self.name = name
+
+        self.source = source
+
+    }
 }

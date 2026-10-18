@@ -44,4 +44,12 @@ package struct TerminalEmptyStateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    package init(
+        server: Server? = nil,
+        onNewTerminal: @escaping () -> Void
+    ) {
+        self.server = server
+        self.onNewTerminal = onNewTerminal
+    }
 }

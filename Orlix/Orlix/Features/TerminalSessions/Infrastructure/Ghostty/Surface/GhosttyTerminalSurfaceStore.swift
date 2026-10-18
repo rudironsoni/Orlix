@@ -102,6 +102,8 @@ final package class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
             surfaceIdentitiesByPane: drained.mapValues(ObjectIdentifier.init)
         )
     }
+
+    package init() {}
 }
 
 package extension TerminalSurfaceStoring {

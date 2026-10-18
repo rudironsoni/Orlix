@@ -13,7 +13,7 @@ nonisolated package struct ConnectionViewTabConfiguration: Codable, Equatable, S
     package var visibleTabs: Set<ConnectionViewTabID>
     package var defaultTab: ConnectionViewTabID
 
-    static let `default` = ConnectionViewTabConfiguration(
+    static package let `default` = ConnectionViewTabConfiguration(
         order: ConnectionViewTabID.allCases,
         visibleTabs: Set(ConnectionViewTabID.allCases),
         defaultTab: .stats

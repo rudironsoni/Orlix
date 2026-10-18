@@ -81,5 +81,13 @@ package struct OrlixCommands: Commands {
 
         SplitCommands()
     }
+
+    package init(
+        aboutWindowPresenter: AboutWindowPresenter,
+        settingsWindowPresenter: SettingsWindowPresenter
+    ) {
+        self.aboutWindowPresenter = aboutWindowPresenter
+        self.settingsWindowPresenter = settingsWindowPresenter
+    }
 }
 #endif

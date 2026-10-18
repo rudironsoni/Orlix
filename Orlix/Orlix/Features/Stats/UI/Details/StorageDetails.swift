@@ -264,6 +264,33 @@ package struct StorageDetailsSheet: View {
     private func isHidden(_ volume: VolumeInfo) -> Bool {
         hiddenVolumeIDs.contains(volume.identity)
     }
+
+
+    package init(
+
+        volumes: [VolumeInfo],
+
+        hiddenVolumeIDs: Set<VolumeIdentity>,
+
+        loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)? = nil,
+
+        setVolumeVisibility: @escaping (VolumeInfo, Bool) -> Void,
+
+        setVolumesVisibility: @escaping ([VolumeInfo], Bool) -> Void
+
+    ) {
+
+        self.volumes = volumes
+
+        self.hiddenVolumeIDs = hiddenVolumeIDs
+
+        self.loadStorageHealth = loadStorageHealth
+
+        self.setVolumeVisibility = setVolumeVisibility
+
+        self.setVolumesVisibility = setVolumesVisibility
+
+    }
 }
 
 private struct StorageVolumeSummaryRow: View {

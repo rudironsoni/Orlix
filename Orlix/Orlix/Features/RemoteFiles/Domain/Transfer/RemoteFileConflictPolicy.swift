@@ -13,4 +13,23 @@ nonisolated package struct RemoteFileConflictResolution: Equatable, Sendable {
     package var hasConflict: Bool {
         existingEntry != nil
     }
+
+
+    package init(
+
+        originalName: String,
+
+        resolvedName: String,
+
+        existingEntry: RemoteFileEntry? = nil
+
+    ) {
+
+        self.originalName = originalName
+
+        self.resolvedName = resolvedName
+
+        self.existingEntry = existingEntry
+
+    }
 }

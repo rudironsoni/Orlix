@@ -30,4 +30,14 @@ package struct DialogSheetHeader: View {
         .padding(.top, 14)
         .padding(.bottom, 10)
     }
+
+    package init(
+        title: LocalizedStringKey,
+        onClose: @escaping () -> Void,
+        isCloseDisabled: Bool = false
+    ) {
+        self.title = title
+        self.onClose = onClose
+        self.isCloseDisabled = isCloseDisabled
+    }
 }

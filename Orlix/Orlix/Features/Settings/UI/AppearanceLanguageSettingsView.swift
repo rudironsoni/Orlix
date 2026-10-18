@@ -36,4 +36,6 @@ package struct AppearanceLanguageSettingsView: View {
             AppLanguage.applySelection(newValue)
         }
     }
+
+    package init() {}
 }

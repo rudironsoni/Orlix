@@ -34,4 +34,11 @@ package struct RemoteSessionBackendLabel: View {
             nil
         }
     }
+
+
+    package init(backend: RemoteSessionBackendMetadata) {
+
+        self.backend = backend
+
+    }
 }

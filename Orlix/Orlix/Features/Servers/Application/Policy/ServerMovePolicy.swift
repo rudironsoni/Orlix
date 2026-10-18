@@ -60,4 +60,23 @@ nonisolated package struct ServerMovePolicy: Sendable {
             unlockedWorkspaceIds: unlockedWorkspaceIDs
         )
     }
+
+
+    package init(
+
+        workspaces: [Workspace],
+
+        unlockedWorkspaceIDs: Set<UUID>,
+
+        hasProAccess: Bool
+
+    ) {
+
+        self.workspaces = workspaces
+
+        self.unlockedWorkspaceIDs = unlockedWorkspaceIDs
+
+        self.hasProAccess = hasProAccess
+
+    }
 }

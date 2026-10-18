@@ -268,4 +268,6 @@ package struct ThemeColorParserPaletteResolver: TerminalThemePaletteResolving {
     package func invalidateCache() {
         ThemeColorParser.invalidateCache()
     }
+
+    package init() {}
 }

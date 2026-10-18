@@ -7,6 +7,21 @@ package struct AudioCaptureLifecycleState: Equatable, Sendable {
     package var allowsCapture: Bool {
         applicationIsActive && sceneIsActive
     }
+
+
+    package init(
+
+        applicationIsActive: Bool,
+
+        sceneIsActive: Bool
+
+    ) {
+
+        self.applicationIsActive = applicationIsActive
+
+        self.sceneIsActive = sceneIsActive
+
+    }
 }
 
 package enum AudioCaptureStartupRejection: Equatable {
