@@ -1,9 +1,9 @@
 import Foundation
 
-public enum TerminalAccessoryValidationError: Error {
-    public case customActionLimitReached
-    public case customActionProRequired
-    public case emptyTitle
-    public case emptyCommandContent
-    public case customActionNotFound
+package enum TerminalAccessoryValidationError: Error {
+    package case customActionLimitReached
+    package case customActionProRequired
+    package case emptyTitle
+    package case emptyCommandContent
+    package case customActionNotFound
 }

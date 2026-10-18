@@ -67,13 +67,13 @@ nonisolated package struct DockerStats: Equatable, Sendable {
     }
 }
 
-nonisolated public enum DockerAvailability: Equatable, Sendable {
-    public case unknown
-    public case available
-    public case commandMissing
-    public case daemonUnavailable(String)
-    public case permissionDenied(String)
-    public case unavailable(String)
+nonisolated package enum DockerAvailability: Equatable, Sendable {
+    package case unknown
+    package case available
+    package case commandMissing
+    package case daemonUnavailable(String)
+    package case permissionDenied(String)
+    package case unavailable(String)
 }
 
 nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
@@ -110,28 +110,28 @@ nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
     }
 }
 
-nonisolated public enum DockerContainerState: String, Equatable, Sendable {
-    public case running
-    public case exited
-    public case paused
-    public case restarting
-    public case created
-    public case dead
-    public case removing
-    public case unknown
+nonisolated package enum DockerContainerState: String, Equatable, Sendable {
+    package case running
+    package case exited
+    package case paused
+    package case restarting
+    package case created
+    package case dead
+    package case removing
+    package case unknown
 
-    public init(rawState: String) {
+    package init(rawState: String) {
         self = DockerContainerState(rawValue: rawState.lowercased()) ?? .unknown
     }
 }
 
-nonisolated public enum DockerHealthStatus: String, Equatable, Sendable {
-    public case healthy
-    public case unhealthy
-    public case starting
-    public case none
+nonisolated package enum DockerHealthStatus: String, Equatable, Sendable {
+    package case healthy
+    package case unhealthy
+    package case starting
+    package case none
 
-    public init(statusText: String) {
+    package init(statusText: String) {
         let lowercased = statusText.lowercased()
         if lowercased.contains("unhealthy") {
             self = .unhealthy
@@ -145,8 +145,8 @@ nonisolated public enum DockerHealthStatus: String, Equatable, Sendable {
     }
 }
 
-nonisolated public enum DockerContainerAction: String, Equatable, Sendable {
-    public case start
-    public case stop
-    public case restart
+nonisolated package enum DockerContainerAction: String, Equatable, Sendable {
+    package case start
+    package case stop
+    package case restart
 }

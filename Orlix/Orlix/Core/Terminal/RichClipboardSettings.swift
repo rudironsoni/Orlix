@@ -1,15 +1,15 @@
 import Foundation
 
-nonisolated public enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendable {
-    public case disabled
-    public case askOnce
-    public case automatic
+nonisolated package enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendable {
+    package case disabled
+    package case askOnce
+    package case automatic
 
-    static public let userDefaultsKey = "terminalImagePasteBehavior"
+    static package let userDefaultsKey = "terminalImagePasteBehavior"
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var settingsTitle: String {
+    package var settingsTitle: String {
         switch self {
         case .automatic:
             return String(localized: "Automatically")

@@ -11,15 +11,15 @@ import UIKit
 import AppKit
 #endif
 
-nonisolated public enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable, Sendable {
-    public case block
-    public case bar
-    public case underline
-    public case blockHollow = "block_hollow"
+nonisolated package enum TerminalCursorStyle: String, CaseIterable, Codable, Identifiable, Sendable {
+    package case block
+    package case bar
+    package case underline
+    package case blockHollow = "block_hollow"
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var displayName: String {
+    package var displayName: String {
         switch self {
         case .block: return String(localized: "Block")
         case .bar: return String(localized: "Bar")
@@ -29,20 +29,20 @@ nonisolated public enum TerminalCursorStyle: String, CaseIterable, Codable, Iden
     }
 }
 
-nonisolated public enum TerminalZoomAction: Equatable, Sendable {
-    public case zoomIn
-    public case zoomOut
-    public case reset
+nonisolated package enum TerminalZoomAction: Equatable, Sendable {
+    package case zoomIn
+    package case zoomOut
+    package case reset
 }
 
-nonisolated public enum TerminalZoomShortcutKey: Sendable {
-    public case equal
-    public case literalPlus
-    public case minus
-    public case zero
-    public case keypadPlus
-    public case keypadMinus
-    public case keypadZero
+nonisolated package enum TerminalZoomShortcutKey: Sendable {
+    package case equal
+    package case literalPlus
+    package case minus
+    package case zero
+    package case keypadPlus
+    package case keypadMinus
+    package case keypadZero
 }
 
 nonisolated package enum TerminalZoomShortcutRouting {
@@ -92,15 +92,15 @@ nonisolated package enum TerminalZoomShortcutRouting {
     }
 }
 
-nonisolated public enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable, Sendable {
-    public case none
-    public case left
-    public case right
-    public case both
+nonisolated package enum TerminalOptionAsAltMode: String, CaseIterable, Identifiable, Sendable {
+    package case none
+    package case left
+    package case right
+    package case both
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var displayName: String {
+    package var displayName: String {
         switch self {
         case .none: return String(localized: "Neither Option Key")
         case .left: return String(localized: "Left Option Key")
@@ -109,7 +109,7 @@ nonisolated public enum TerminalOptionAsAltMode: String, CaseIterable, Identifia
         }
     }
 
-    public func usesOptionKeyAsAlt(_ side: TerminalOptionKeySide) -> Bool {
+    package func usesOptionKeyAsAlt(_ side: TerminalOptionKeySide) -> Bool {
         switch (self, side) {
         case (.none, _): false
         case (.left, .left), (.right, .right), (.both, _): true
@@ -118,9 +118,9 @@ nonisolated public enum TerminalOptionAsAltMode: String, CaseIterable, Identifia
     }
 }
 
-nonisolated public enum TerminalOptionKeySide: Sendable {
-    public case left
-    public case right
+nonisolated package enum TerminalOptionKeySide: Sendable {
+    package case left
+    package case right
 }
 
 nonisolated package struct TerminalZoomResult: Hashable, Sendable {

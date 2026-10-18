@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated public enum TranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
-    public case system
-    public case mlxWhisper
-    public case mlxParakeet
+nonisolated package enum TranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
+    package case system
+    package case mlxWhisper
+    package case mlxParakeet
 
-    nonisolated public var id: String { rawValue }
+    nonisolated package var id: String { rawValue }
 }
 
 nonisolated package struct VoiceSettings: Equatable, Sendable {

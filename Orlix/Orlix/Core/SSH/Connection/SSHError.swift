@@ -1,37 +1,37 @@
 import Foundation
 
-public enum SSHError: LocalizedError, Sendable {
-    public case notConnected
-    public case connectionFailed(String)
-    public case authenticationFailed
-    public case tailscaleAuthenticationNotAccepted
-    public case cloudflareConfigurationRequired(String)
-    public case cloudflareAuthenticationFailed(String)
-    public case cloudflareTunnelFailed(String)
-    public case moshServerMissing
-    public case moshServerRuntimeBroken
-    public case moshBootstrapFailed(String)
-    public case moshSessionFailed(String)
-    public case moshInvalidEndpoint
-    public case moshUDPTimeout
-    public case moshClientSessionFailed(String)
-    public case disconnectedBeforeShellRequest
-    public case startupCommandMayHaveRun
-    public case timeout
-    public case channelOpenFailed
-    public case ptyRequestFailed
-    public case processRequestDenied
-    public case processRequestOutcomeUnknown
-    public case shellRequestFailed
-    public case managedStartupCommandUnsupported(String)
-    public case unsupportedRemoteShellForStartupCommand
-    public case outputLimitExceeded
-    public case hostKeyApprovalRequired
-    public case hostKeyVerificationFailed
-    public case socketError(String)
-    public case unknown(String)
+package enum SSHError: LocalizedError, Sendable {
+    package case notConnected
+    package case connectionFailed(String)
+    package case authenticationFailed
+    package case tailscaleAuthenticationNotAccepted
+    package case cloudflareConfigurationRequired(String)
+    package case cloudflareAuthenticationFailed(String)
+    package case cloudflareTunnelFailed(String)
+    package case moshServerMissing
+    package case moshServerRuntimeBroken
+    package case moshBootstrapFailed(String)
+    package case moshSessionFailed(String)
+    package case moshInvalidEndpoint
+    package case moshUDPTimeout
+    package case moshClientSessionFailed(String)
+    package case disconnectedBeforeShellRequest
+    package case startupCommandMayHaveRun
+    package case timeout
+    package case channelOpenFailed
+    package case ptyRequestFailed
+    package case processRequestDenied
+    package case processRequestOutcomeUnknown
+    package case shellRequestFailed
+    package case managedStartupCommandUnsupported(String)
+    package case unsupportedRemoteShellForStartupCommand
+    package case outputLimitExceeded
+    package case hostKeyApprovalRequired
+    package case hostKeyVerificationFailed
+    package case socketError(String)
+    package case unknown(String)
 
-    public var provesStartupCommandWasNotDispatched: Bool {
+    package var provesStartupCommandWasNotDispatched: Bool {
         switch self {
         case .channelOpenFailed,
              .disconnectedBeforeShellRequest,
@@ -44,7 +44,7 @@ public enum SSHError: LocalizedError, Sendable {
         }
     }
 
-    public var allowsAutomaticReconnectRetry: Bool {
+    package var allowsAutomaticReconnectRetry: Bool {
         switch self {
         case .notConnected,
              .connectionFailed,
@@ -80,7 +80,7 @@ public enum SSHError: LocalizedError, Sendable {
         }
     }
 
-    public var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .notConnected: return "Not connected to server"
         case .connectionFailed(let msg): return "Connection failed: \(msg)"

@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated public enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
-    public case deny
-    public case ask
-    public case allow
+nonisolated package enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
+    package case deny
+    package case ask
+    package case allow
 
-    static public let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
-    static public let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
+    static package let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
+    static package let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var settingsTitle: String {
+    package var settingsTitle: String {
         switch self {
         case .deny: return String(localized: "Deny")
         case .ask: return String(localized: "Ask Every Time")
@@ -18,7 +18,7 @@ nonisolated public enum TerminalRemoteClipboardReadPolicy: String, CaseIterable,
         }
     }
 
-    public var settingsDescription: String {
+    package var settingsDescription: String {
         switch self {
         case .deny:
             return String(localized: "Remote programs cannot read your clipboard.")
@@ -29,7 +29,7 @@ nonisolated public enum TerminalRemoteClipboardReadPolicy: String, CaseIterable,
         }
     }
 
-    static public func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardReadPolicy {
+    static package func resolved(defaults: UserDefaults = .standard) -> TerminalRemoteClipboardReadPolicy {
         guard let rawValue = defaults.string(forKey: userDefaultsKey),
               let policy = TerminalRemoteClipboardReadPolicy(rawValue: rawValue) else {
             return defaultValue
@@ -38,9 +38,9 @@ nonisolated public enum TerminalRemoteClipboardReadPolicy: String, CaseIterable,
     }
 }
 
-nonisolated public enum TerminalClipboardWriteAction: Equatable, Sendable {
-    public case writeImmediately
-    public case requestConfirmation
+nonisolated package enum TerminalClipboardWriteAction: Equatable, Sendable {
+    package case writeImmediately
+    package case requestConfirmation
 }
 
 nonisolated package enum TerminalClipboardWritePolicy {
@@ -49,12 +49,12 @@ nonisolated package enum TerminalClipboardWritePolicy {
     }
 }
 
-nonisolated public enum TerminalClipboardConfirmationKind: Equatable, Sendable {
-    public case remoteRead
-    public case remoteWrite
-    public case unsafePaste
+nonisolated package enum TerminalClipboardConfirmationKind: Equatable, Sendable {
+    package case remoteRead
+    package case remoteWrite
+    package case unsafePaste
 
-    public var title: String {
+    package var title: String {
         switch self {
         case .remoteRead: return String(localized: "Allow Clipboard Read?")
         case .remoteWrite: return String(localized: "Allow Clipboard Change?")
@@ -62,7 +62,7 @@ nonisolated public enum TerminalClipboardConfirmationKind: Equatable, Sendable {
         }
     }
 
-    public var message: String {
+    package var message: String {
         switch self {
         case .remoteRead:
             return String(localized: "The remote terminal wants to read your clipboard.")
@@ -74,9 +74,9 @@ nonisolated public enum TerminalClipboardConfirmationKind: Equatable, Sendable {
     }
 }
 
-nonisolated public enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
-    public case cancel
-    public case allow
+nonisolated package enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
+    package case cancel
+    package case allow
 }
 
 nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {

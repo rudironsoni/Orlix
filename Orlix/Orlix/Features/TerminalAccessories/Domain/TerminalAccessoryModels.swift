@@ -1,17 +1,17 @@
 import Foundation
 
-nonisolated public enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    public case insert
-    public case insertAndEnter
+nonisolated package enum TerminalSnippetSendMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case insert
+    package case insertAndEnter
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
-nonisolated public enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    public case command
-    public case shortcut
+nonisolated package enum TerminalAccessoryCustomActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case command
+    package case shortcut
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
 nonisolated package struct TerminalAccessoryShortcutModifiers: Codable, Equatable, Hashable, Sendable {
@@ -59,85 +59,85 @@ nonisolated package struct TerminalAccessoryShortcutModifiers: Codable, Equatabl
 
 }
 
-nonisolated public enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable, Sendable {
-    public case a
-    public case b
-    public case c
-    public case d
-    public case e
-    public case f
-    public case g
-    public case h
-    public case i
-    public case j
-    public case k
-    public case l
-    public case m
-    public case n
-    public case o
-    public case p
-    public case q
-    public case r
-    public case s
-    public case t
-    public case u
-    public case v
-    public case w
-    public case x
-    public case y
-    public case z
-    public case digit0
-    public case digit1
-    public case digit2
-    public case digit3
-    public case digit4
-    public case digit5
-    public case digit6
-    public case digit7
-    public case digit8
-    public case digit9
-    public case backquote
-    public case minus
-    public case equal
-    public case bracketLeft
-    public case bracketRight
-    public case backslash
-    public case semicolon
-    public case quote
-    public case comma
-    public case period
-    public case slash
-    public case space
-    public case escape
-    public case tab
-    public case enter
-    public case backspace
-    public case delete
-    public case insert
-    public case home
-    public case end
-    public case pageUp
-    public case pageDown
-    public case arrowUp
-    public case arrowDown
-    public case arrowLeft
-    public case arrowRight
-    public case f1
-    public case f2
-    public case f3
-    public case f4
-    public case f5
-    public case f6
-    public case f7
-    public case f8
-    public case f9
-    public case f10
-    public case f11
-    public case f12
+nonisolated package enum TerminalAccessoryShortcutKey: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case a
+    package case b
+    package case c
+    package case d
+    package case e
+    package case f
+    package case g
+    package case h
+    package case i
+    package case j
+    package case k
+    package case l
+    package case m
+    package case n
+    package case o
+    package case p
+    package case q
+    package case r
+    package case s
+    package case t
+    package case u
+    package case v
+    package case w
+    package case x
+    package case y
+    package case z
+    package case digit0
+    package case digit1
+    package case digit2
+    package case digit3
+    package case digit4
+    package case digit5
+    package case digit6
+    package case digit7
+    package case digit8
+    package case digit9
+    package case backquote
+    package case minus
+    package case equal
+    package case bracketLeft
+    package case bracketRight
+    package case backslash
+    package case semicolon
+    package case quote
+    package case comma
+    package case period
+    package case slash
+    package case space
+    package case escape
+    package case tab
+    package case enter
+    package case backspace
+    package case delete
+    package case insert
+    package case home
+    package case end
+    package case pageUp
+    package case pageDown
+    package case arrowUp
+    package case arrowDown
+    package case arrowLeft
+    package case arrowRight
+    package case f1
+    package case f2
+    package case f3
+    package case f4
+    package case f5
+    package case f6
+    package case f7
+    package case f8
+    package case f9
+    package case f10
+    package case f11
+    package case f12
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var unshiftedText: String? {
+    package var unshiftedText: String? {
         switch self {
         case .a: return "a"
         case .b: return "b"
@@ -191,7 +191,7 @@ nonisolated public enum TerminalAccessoryShortcutKey: String, Codable, CaseItera
         }
     }
 
-    public var shiftedText: String? {
+    package var shiftedText: String? {
         switch self {
         case .a: return "A"
         case .b: return "B"
@@ -246,60 +246,60 @@ nonisolated public enum TerminalAccessoryShortcutKey: String, Codable, CaseItera
     }
 }
 
-nonisolated public enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
-    public case commandModifier
-    public case escape
-    public case tab
-    public case shiftTab
-    public case enter
-    public case backspace
-    public case delete
-    public case insert
-    public case home
-    public case end
-    public case pageUp
-    public case pageDown
-    public case arrowUp
-    public case arrowDown
-    public case arrowLeft
-    public case arrowRight
-    public case f1
-    public case f2
-    public case f3
-    public case f4
-    public case f5
-    public case f6
-    public case f7
-    public case f8
-    public case f9
-    public case f10
-    public case f11
-    public case f12
-    public case ctrlC
-    public case ctrlD
-    public case ctrlZ
-    public case ctrlL
-    public case ctrlA
-    public case ctrlE
-    public case ctrlK
-    public case ctrlU
-    public case mouseCapture
-    public case unknown
+nonisolated package enum TerminalAccessorySystemActionID: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
+    package case commandModifier
+    package case escape
+    package case tab
+    package case shiftTab
+    package case enter
+    package case backspace
+    package case delete
+    package case insert
+    package case home
+    package case end
+    package case pageUp
+    package case pageDown
+    package case arrowUp
+    package case arrowDown
+    package case arrowLeft
+    package case arrowRight
+    package case f1
+    package case f2
+    package case f3
+    package case f4
+    package case f5
+    package case f6
+    package case f7
+    package case f8
+    package case f9
+    package case f10
+    package case f11
+    package case f12
+    package case ctrlC
+    package case ctrlD
+    package case ctrlZ
+    package case ctrlL
+    package case ctrlA
+    package case ctrlE
+    package case ctrlK
+    package case ctrlU
+    package case mouseCapture
+    package case unknown
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
         self = Self(rawValue: rawValue) ?? .unknown
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
 
-    public var isRepeatable: Bool {
+    package var isRepeatable: Bool {
         switch self {
         case .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .backspace, .home, .end, .pageUp, .pageDown:
             return true
@@ -309,9 +309,9 @@ nonisolated public enum TerminalAccessorySystemActionID: String, Codable, CaseIt
     }
 }
 
-nonisolated public enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
-    public case system(TerminalAccessorySystemActionID)
-    public case custom(UUID)
+nonisolated package enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
+    package case system(TerminalAccessorySystemActionID)
+    package case custom(UUID)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -326,7 +326,7 @@ nonisolated public enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
         case snippet
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .kind)
 
@@ -343,7 +343,7 @@ nonisolated public enum TerminalAccessoryItemRef: Codable, Hashable, Sendable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {

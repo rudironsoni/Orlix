@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated public enum VolumeIdentity: Codable, Hashable, Sendable {
+nonisolated package enum VolumeIdentity: Codable, Hashable, Sendable {
     package enum Platform: String, Codable, CaseIterable, Sendable {
         case linux
         case darwin
@@ -11,15 +11,15 @@ nonisolated public enum VolumeIdentity: Codable, Hashable, Sendable {
         case unknown
     }
 
-    public case stable(platform: Platform, fileSystemID: String, mountPoint: String)
-    public case fallback(
+    package case stable(platform: Platform, fileSystemID: String, mountPoint: String)
+    package case fallback(
         platform: Platform,
         source: String,
         mountPoint: String,
         fileSystem: String
     )
 
-    public init(
+    package init(
         platform: Platform,
         stableIdentifier: String?,
         source: String,
@@ -44,7 +44,7 @@ nonisolated public enum VolumeIdentity: Codable, Hashable, Sendable {
         }
     }
 
-    public var isStable: Bool {
+    package var isStable: Bool {
         if case .stable = self { return true }
         return false
     }
@@ -58,21 +58,21 @@ nonisolated public enum VolumeIdentity: Codable, Hashable, Sendable {
         }
     }
 
-    static public func normalizedMountPoint(_ mountPoint: String, platform: Platform) -> String {
+    static package func normalizedMountPoint(_ mountPoint: String, platform: Platform) -> String {
         let trimmed = mountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
         guard platform == .windows else { return trimmed }
         return trimmed.replacingOccurrences(of: "/", with: "\\").uppercased()
     }
 }
 
-nonisolated public enum VolumeKind: String, Codable, CaseIterable, Sendable {
-    public case physical
-    public case container
-    public case network
-    public case virtual
-    public case unknown
+nonisolated package enum VolumeKind: String, Codable, CaseIterable, Sendable {
+    package case physical
+    package case container
+    package case network
+    package case virtual
+    package case unknown
 
-    static public func classify(source: String, mountPoint: String, fileSystem: String) -> VolumeKind {
+    static package func classify(source: String, mountPoint: String, fileSystem: String) -> VolumeKind {
         let source = source.lowercased()
         let mountPoint = mountPoint.lowercased()
         let fileSystem = fileSystem.lowercased()

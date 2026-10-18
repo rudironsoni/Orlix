@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated public enum FreePlanGeneration: String, Equatable, Sendable {
-    public case legacyThreeServers = "legacy_three_servers"
-    public case currentOneServer = "current_one_server"
+nonisolated package enum FreePlanGeneration: String, Equatable, Sendable {
+    package case legacyThreeServers = "legacy_three_servers"
+    package case currentOneServer = "current_one_server"
 
-    public var serverLimit: Int {
+    package var serverLimit: Int {
         switch self {
         case .legacyThreeServers: return FreeTierLimits.legacyMaxServers
         case .currentOneServer: return FreeTierLimits.currentMaxServers

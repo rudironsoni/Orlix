@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated public enum TerminalFontValidationError: LocalizedError, Equatable, Sendable {
-    public case unsupportedFormat
-    public case fileTooLarge
-    public case invalidFont
-    public case invalidMetadata
-    public case checksumMismatch
-    public case fileUnavailable
-    public case registrationFailed(String)
-    public case requiresPro
+nonisolated package enum TerminalFontValidationError: LocalizedError, Equatable, Sendable {
+    package case unsupportedFormat
+    package case fileTooLarge
+    package case invalidFont
+    package case invalidMetadata
+    package case checksumMismatch
+    package case fileUnavailable
+    package case registrationFailed(String)
+    package case requiresPro
 
-    public var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .unsupportedFormat:
             return String(localized: "Choose a TTF, OTF, TTC, or OTC font file.")

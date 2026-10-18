@@ -13,13 +13,13 @@ nonisolated package struct RemoteSessionBackendIdentifier: RawRepresentable, Cod
     }
 }
 
-nonisolated public enum RemoteSessionStartupBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
-    public case createManaged
-    public case ask
-    public case plainShell
+nonisolated package enum RemoteSessionStartupBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case createManaged
+    package case ask
+    package case plainShell
 
-    public var id: String { rawValue }
-    public init?(persistedRawValue: String) {
+    package var id: String { rawValue }
+    package init?(persistedRawValue: String) {
         switch persistedRawValue {
         case Self.createManaged.rawValue, "orlixManaged":
             self = .createManaged
@@ -32,7 +32,7 @@ nonisolated public enum RemoteSessionStartupBehavior: String, Codable, CaseItera
         }
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
         guard let value = Self(persistedRawValue: rawValue) else {
@@ -44,7 +44,7 @@ nonisolated public enum RemoteSessionStartupBehavior: String, Codable, CaseItera
         self = value
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }

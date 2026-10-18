@@ -3,9 +3,9 @@
 //  Orlix
 //
 
-nonisolated public enum TerminalColorAppearance: Equatable, Sendable {
-    public case light
-    public case dark
+nonisolated package enum TerminalColorAppearance: Equatable, Sendable {
+    package case light
+    package case dark
 }
 
 nonisolated package struct TerminalThemeSelection: Equatable, Sendable {
