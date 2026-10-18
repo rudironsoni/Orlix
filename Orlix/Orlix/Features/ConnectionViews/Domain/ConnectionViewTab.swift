@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated public enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
-    public case stats
-    public case terminal
-    public case files
+nonisolated package enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
+    package case stats
+    package case terminal
+    package case files
 
-    public var id: Self { self }
+    package var id: Self { self }
 }
 
 nonisolated package struct ConnectionViewTabConfiguration: Codable, Equatable, Sendable {

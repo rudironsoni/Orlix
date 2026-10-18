@@ -1,21 +1,21 @@
 import Foundation
 
-nonisolated public enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
-    public case owner
-    public case group
-    public case everyone
+nonisolated package enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
+    package case owner
+    package case group
+    package case everyone
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 }
 
-nonisolated public enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
-    public case read
-    public case write
-    public case execute
+nonisolated package enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
+    package case read
+    package case write
+    package case execute
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public func bit(for audience: RemoteFilePermissionAudience) -> UInt32 {
+    package func bit(for audience: RemoteFilePermissionAudience) -> UInt32 {
         switch (audience, self) {
         case (.owner, .read):
             return UInt32(LIBSSH2_SFTP_S_IRUSR)

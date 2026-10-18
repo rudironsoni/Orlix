@@ -1,8 +1,8 @@
 import Foundation
 
-nonisolated public enum ServerMoveRestriction: Equatable, Sendable {
-    public case lockedWorkspace
-    public case unavailable
+nonisolated package enum ServerMoveRestriction: Equatable, Sendable {
+    package case lockedWorkspace
+    package case unavailable
 }
 
 nonisolated package struct ServerMovePolicy: Sendable {

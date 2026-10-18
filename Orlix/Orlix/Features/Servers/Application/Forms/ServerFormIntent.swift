@@ -3,12 +3,12 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated public enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
-    public case create(prefill: ServerFormPrefill?)
-    public case edit(Server)
-    public case duplicate(Server)
+nonisolated package enum ServerFormIntent: Equatable, Hashable, Identifiable, Sendable {
+    package case create(prefill: ServerFormPrefill?)
+    package case edit(Server)
+    package case duplicate(Server)
 
-    public var id: String {
+    package var id: String {
         switch self {
         case .create:
             return "create"
@@ -19,7 +19,7 @@ nonisolated public enum ServerFormIntent: Equatable, Hashable, Identifiable, Sen
         }
     }
 
-    public var sourceServer: Server? {
+    package var sourceServer: Server? {
         switch self {
         case .create:
             return nil
@@ -28,33 +28,33 @@ nonisolated public enum ServerFormIntent: Equatable, Hashable, Identifiable, Sen
         }
     }
 
-    public var editedServer: Server? {
+    package var editedServer: Server? {
         guard case .edit(let server) = self else { return nil }
         return server
     }
 
-    public var prefill: ServerFormPrefill? {
+    package var prefill: ServerFormPrefill? {
         guard case .create(let prefill) = self else { return nil }
         return prefill
     }
 
-    public var isEditing: Bool {
+    package var isEditing: Bool {
         editedServer != nil
     }
 
-    public func serverID(makeID: () -> UUID) -> UUID {
+    package func serverID(makeID: () -> UUID) -> UUID {
         editedServer?.id ?? makeID()
     }
 
-    public func createdAt(now: () -> Date) -> Date {
+    package func createdAt(now: () -> Date) -> Date {
         editedServer?.createdAt ?? now()
     }
 
-    public func mutation(for server: Server) -> ServerMutation {
+    package func mutation(for server: Server) -> ServerMutation {
         isEditing ? .update(server) : .create(server)
     }
 
-    public func preservingSourceMetadata(in server: Server) -> Server {
+    package func preservingSourceMetadata(in server: Server) -> Server {
         guard let sourceServer else { return server }
 
         var result = server

@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated public enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
-    public case name
-    public case modifiedAt
-    public case size
+nonisolated package enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
+    package case name
+    package case modifiedAt
+    package case size
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var displayName: String {
+    package var displayName: String {
         switch self {
         case .name:
             return String(localized: "Name")
@@ -18,7 +18,7 @@ nonisolated public enum RemoteFileSort: String, Codable, CaseIterable, Identifia
         }
     }
 
-    public var defaultDirection: RemoteFileSortDirection {
+    package var defaultDirection: RemoteFileSortDirection {
         switch self {
         case .name:
             return .ascending
@@ -28,11 +28,11 @@ nonisolated public enum RemoteFileSort: String, Codable, CaseIterable, Identifia
     }
 }
 
-nonisolated public enum RemoteFileSortDirection: String, Codable, Sendable {
-    public case ascending
-    public case descending
+nonisolated package enum RemoteFileSortDirection: String, Codable, Sendable {
+    package case ascending
+    package case descending
 
-    public init(sortOrder: SortOrder) {
+    package init(sortOrder: SortOrder) {
         switch sortOrder {
         case .forward:
             self = .ascending
@@ -41,7 +41,7 @@ nonisolated public enum RemoteFileSortDirection: String, Codable, Sendable {
         }
     }
 
-    public var sortOrder: SortOrder {
+    package var sortOrder: SortOrder {
         switch self {
         case .ascending:
             return .forward

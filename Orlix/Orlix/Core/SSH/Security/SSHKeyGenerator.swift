@@ -4,27 +4,27 @@ import Security
 
 // MARK: - SSH Key Type
 
-public enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
-    public case ed25519
-    public case rsa4096
+package enum SSHKeyType: String, CaseIterable, Identifiable, Codable {
+    package case ed25519
+    package case rsa4096
 
-    public var id: String { rawValue }
+    package var id: String { rawValue }
 
-    public var displayName: String {
+    package var displayName: String {
         switch self {
         case .ed25519: return String(localized: "Ed25519")
         case .rsa4096: return String(localized: "RSA 4096")
         }
     }
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .ed25519: return String(localized: "Modern, fast, and secure. Recommended for most uses.")
         case .rsa4096: return String(localized: "Wide compatibility with older systems.")
         }
     }
 
-    public var algorithmName: String {
+    package var algorithmName: String {
         switch self {
         case .ed25519: return "ssh-ed25519"
         case .rsa4096: return "ssh-rsa"
@@ -43,13 +43,13 @@ struct GeneratedSSHKey {
 
 // MARK: - SSH Key Generator
 
-public enum SSHKeyGeneratorError: LocalizedError {
-    public case keyGenerationFailed
-    public case encodingFailed
-    public case rsaExportFailed
-    public case invalidKeyData
+package enum SSHKeyGeneratorError: LocalizedError {
+    package case keyGenerationFailed
+    package case encodingFailed
+    package case rsaExportFailed
+    package case invalidKeyData
 
-    public var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .keyGenerationFailed: return String(localized: "Failed to generate SSH key")
         case .encodingFailed: return String(localized: "Failed to encode key data")
