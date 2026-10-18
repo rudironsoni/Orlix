@@ -1,14 +1,14 @@
 import Foundation
 
 nonisolated package enum TerminalFontValidationError: LocalizedError, Equatable, Sendable {
-    package case unsupportedFormat
-    package case fileTooLarge
-    package case invalidFont
-    package case invalidMetadata
-    package case checksumMismatch
-    package case fileUnavailable
-    package case registrationFailed(String)
-    package case requiresPro
+    case unsupportedFormat
+    case fileTooLarge
+    case invalidFont
+    case invalidMetadata
+    case checksumMismatch
+    case fileUnavailable
+    case registrationFailed(String)
+    case requiresPro
 
     package var errorDescription: String? {
         switch self {

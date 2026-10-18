@@ -14,9 +14,9 @@ nonisolated package struct RemoteSessionBackendIdentifier: RawRepresentable, Cod
 }
 
 nonisolated package enum RemoteSessionStartupBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case createManaged
-    package case ask
-    package case plainShell
+    case createManaged
+    case ask
+    case plainShell
 
     package var id: String { rawValue }
     package init?(persistedRawValue: String) {

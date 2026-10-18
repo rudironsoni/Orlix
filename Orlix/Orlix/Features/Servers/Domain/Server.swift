@@ -240,11 +240,11 @@ nonisolated package struct Server: Identifiable, Codable, Hashable, Sendable {
 }
 
 nonisolated package enum SSHConnectionMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case standard
-    package case tailscale
-    package case mosh
-    package case eternalTerminal
-    package case cloudflare
+    case standard
+    case tailscale
+    case mosh
+    case eternalTerminal
+    case cloudflare
 
     package var id: String { rawValue }
 
@@ -261,8 +261,8 @@ nonisolated package enum SSHConnectionMode: String, Codable, CaseIterable, Ident
 }
 
 nonisolated package enum CloudflareAccessMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case oauth
-    package case serviceToken
+    case oauth
+    case serviceToken
 
     package var id: String { rawValue }
 
@@ -271,9 +271,9 @@ nonisolated package enum CloudflareAccessMode: String, Codable, CaseIterable, Id
 // MARK: - Authentication Method
 
 nonisolated package enum AuthMethod: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case password
-    package case sshKey
-    package case sshKeyWithPassphrase
+    case password
+    case sshKey
+    case sshKeyWithPassphrase
 
     package var id: String { rawValue }
 

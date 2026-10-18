@@ -1,7 +1,7 @@
 nonisolated package enum MLXAudioPlatform: Sendable {
-    package case appleMobile
-    package case macOS
-    package case unsupported
+    case appleMobile
+    case macOS
+    case unsupported
 }
 
 nonisolated package enum MLXAudioCapabilityPolicy {

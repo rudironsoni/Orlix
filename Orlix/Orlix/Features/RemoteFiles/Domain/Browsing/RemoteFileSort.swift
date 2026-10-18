@@ -1,9 +1,9 @@
 import Foundation
 
 nonisolated package enum RemoteFileSort: String, Codable, CaseIterable, Identifiable, Sendable {
-    package case name
-    package case modifiedAt
-    package case size
+    case name
+    case modifiedAt
+    case size
 
     package var id: String { rawValue }
 
@@ -29,8 +29,8 @@ nonisolated package enum RemoteFileSort: String, Codable, CaseIterable, Identifi
 }
 
 nonisolated package enum RemoteFileSortDirection: String, Codable, Sendable {
-    package case ascending
-    package case descending
+    case ascending
+    case descending
 
     package init(sortOrder: SortOrder) {
         switch sortOrder {

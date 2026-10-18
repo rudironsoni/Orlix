@@ -196,11 +196,11 @@ nonisolated enum RemoteSessionProbeFailure: Hashable, Sendable {
 }
 
 nonisolated package enum RemoteSessionAvailability: Hashable, Sendable {
-    package case unsupportedEnvironment
-    package case available(RemoteSessionProbe)
-    package case confirmedMissing
-    package case incompatible(RemoteSessionProbe)
-    package case indeterminate(RemoteSessionProbeFailure)
+    case unsupportedEnvironment
+    case available(RemoteSessionProbe)
+    case confirmedMissing
+    case incompatible(RemoteSessionProbe)
+    case indeterminate(RemoteSessionProbeFailure)
 }
 
 nonisolated package struct RemoteSessionRuntime: Codable, Hashable, Sendable {
@@ -269,8 +269,8 @@ nonisolated package struct RemoteSessionIdentifier: Codable, Hashable, Sendable 
 }
 
 nonisolated package enum RemoteSessionOwnership: String, Codable, Hashable, Sendable {
-    package case managed
-    package case external
+    case managed
+    case external
 }
 
 nonisolated package struct RemoteSessionAttachment: Codable, Hashable, Sendable {
@@ -288,13 +288,13 @@ nonisolated package struct RemoteSessionDescriptor: Codable, Hashable, Identifia
 }
 
 nonisolated package enum RemoteSessionListScope: Hashable, Sendable {
-    package case userVisible
-    package case managedCleanup
+    case userVisible
+    case managedCleanup
 }
 
 nonisolated package enum RemoteSessionLaunchIntent: Hashable, Sendable {
-    package case attach(RemoteSessionAttachment)
-    package case ensureManaged(
+    case attach(RemoteSessionAttachment)
+    case ensureManaged(
         identifier: RemoteSessionIdentifier,
         initialCommand: String?
     )

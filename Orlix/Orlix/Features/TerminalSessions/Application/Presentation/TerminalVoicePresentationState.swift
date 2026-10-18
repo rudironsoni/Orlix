@@ -6,9 +6,9 @@ nonisolated package enum TerminalVoicePresentationState: Equatable, Sendable {
         case pendingReturnDismissed
     }
 
-    package case idle
-    package case recording
-    package case pendingReturn
+    case idle
+    case recording
+    case pendingReturn
 
     package var isRecording: Bool { self == .recording }
     package var isPendingReturn: Bool { self == .pendingReturn }

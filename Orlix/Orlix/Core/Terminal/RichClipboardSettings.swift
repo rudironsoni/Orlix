@@ -1,9 +1,9 @@
 import Foundation
 
 nonisolated package enum ImagePasteBehavior: String, CaseIterable, Identifiable, Sendable {
-    package case disabled
-    package case askOnce
-    package case automatic
+    case disabled
+    case askOnce
+    case automatic
 
     static package let userDefaultsKey = "terminalImagePasteBehavior"
 

@@ -1,15 +1,15 @@
 import Foundation
 
 nonisolated package enum RemoteFileBrowserError: LocalizedError, Identifiable, Equatable, Sendable {
-    package case permissionDenied
-    package case pathNotFound
-    package case disconnected
-    package case hostKeyApprovalRequired
-    package case unsupportedEncoding
-    package case invalidEntryName
-    package case destinationEscapedRoot
-    package case resourceLimitExceeded
-    package case failed(String)
+    case permissionDenied
+    case pathNotFound
+    case disconnected
+    case hostKeyApprovalRequired
+    case unsupportedEncoding
+    case invalidEntryName
+    case destinationEscapedRoot
+    case resourceLimitExceeded
+    case failed(String)
 
     package var id: String {
         switch self {

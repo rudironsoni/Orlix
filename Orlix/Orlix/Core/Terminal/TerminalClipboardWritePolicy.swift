@@ -1,9 +1,9 @@
 import Foundation
 
 nonisolated package enum TerminalRemoteClipboardReadPolicy: String, CaseIterable, Identifiable, Sendable {
-    package case deny
-    package case ask
-    package case allow
+    case deny
+    case ask
+    case allow
 
     static package let userDefaultsKey = "terminalRemoteClipboardReadPolicy"
     static package let defaultValue: TerminalRemoteClipboardReadPolicy = .ask
@@ -39,8 +39,8 @@ nonisolated package enum TerminalRemoteClipboardReadPolicy: String, CaseIterable
 }
 
 nonisolated package enum TerminalClipboardWriteAction: Equatable, Sendable {
-    package case writeImmediately
-    package case requestConfirmation
+    case writeImmediately
+    case requestConfirmation
 }
 
 nonisolated package enum TerminalClipboardWritePolicy {
@@ -50,9 +50,9 @@ nonisolated package enum TerminalClipboardWritePolicy {
 }
 
 nonisolated package enum TerminalClipboardConfirmationKind: Equatable, Sendable {
-    package case remoteRead
-    package case remoteWrite
-    package case unsafePaste
+    case remoteRead
+    case remoteWrite
+    case unsafePaste
 
     package var title: String {
         switch self {
@@ -75,8 +75,8 @@ nonisolated package enum TerminalClipboardConfirmationKind: Equatable, Sendable 
 }
 
 nonisolated package enum TerminalClipboardConfirmationDecision: Equatable, Sendable {
-    package case cancel
-    package case allow
+    case cancel
+    case allow
 }
 
 nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {

@@ -10,18 +10,18 @@ import Combine
 import SwiftUI
 
 package enum MacToolbarCommandID: Equatable {
-    package case selectView(String)
-    package case filesParent
-    package case filesRefresh
-    package case filesUpload
-    package case filesNewFolder
-    package case filesToggleHidden
-    package case filesCopyPath
-    package case openSettings
-    package case editServer
-    package case duplicateServer
-    package case disconnect
-    package case enterZen
+    case selectView(String)
+    case filesParent
+    case filesRefresh
+    case filesUpload
+    case filesNewFolder
+    case filesToggleHidden
+    case filesCopyPath
+    case openSettings
+    case editServer
+    case duplicateServer
+    case disconnect
+    case enterZen
 }
 
 package struct ToolbarMenuEntry: Equatable {

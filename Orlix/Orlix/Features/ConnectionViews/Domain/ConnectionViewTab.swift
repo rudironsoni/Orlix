@@ -1,9 +1,9 @@
 import Foundation
 
 nonisolated package enum ConnectionViewTabID: String, CaseIterable, Codable, Identifiable, Sendable {
-    package case stats
-    package case terminal
-    package case files
+    case stats
+    case terminal
+    case files
 
     package var id: Self { self }
 }

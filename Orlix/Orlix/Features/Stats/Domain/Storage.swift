@@ -11,8 +11,8 @@ nonisolated package enum VolumeIdentity: Codable, Hashable, Sendable {
         case unknown
     }
 
-    package case stable(platform: Platform, fileSystemID: String, mountPoint: String)
-    package case fallback(
+    case stable(platform: Platform, fileSystemID: String, mountPoint: String)
+    case fallback(
         platform: Platform,
         source: String,
         mountPoint: String,
@@ -66,11 +66,11 @@ nonisolated package enum VolumeIdentity: Codable, Hashable, Sendable {
 }
 
 nonisolated package enum VolumeKind: String, Codable, CaseIterable, Sendable {
-    package case physical
-    package case container
-    package case network
-    package case virtual
-    package case unknown
+    case physical
+    case container
+    case network
+    case virtual
+    case unknown
 
     static package func classify(source: String, mountPoint: String, fileSystem: String) -> VolumeKind {
         let source = source.lowercased()

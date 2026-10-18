@@ -88,13 +88,13 @@ nonisolated package struct TerminalShellStartupPlan: Sendable {
 }
 
 nonisolated package enum TerminalShellEndReason: Hashable, Sendable {
-    package case transportInterrupted
-    package case standaloneStartupActionCompleted
-    package case remoteSessionDetached(RemoteSessionOwnership)
-    package case remoteSessionTerminated(RemoteSessionOwnership)
-    package case remoteSessionCreationFailed
-    package case remoteSessionAttachFailed
-    package case observationAmbiguous
+    case transportInterrupted
+    case standaloneStartupActionCompleted
+    case remoteSessionDetached(RemoteSessionOwnership)
+    case remoteSessionTerminated(RemoteSessionOwnership)
+    case remoteSessionCreationFailed
+    case remoteSessionAttachFailed
+    case observationAmbiguous
 
     nonisolated static package func resolve(
         lifecycle: RemoteSessionLifecycleContext?,
@@ -133,10 +133,10 @@ nonisolated package enum TerminalShellEndReason: Hashable, Sendable {
 
 nonisolated package enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
     // Keep raw values stable for local snapshot migration.
-    package case transportInterrupted = "transportEnded"
-    package case startupActionCompleted
-    package case remoteSessionDetached = "tmuxDetached"
-    package case externalRemoteSessionTerminated = "externalTmuxEnded"
+    case transportInterrupted = "transportEnded"
+    case startupActionCompleted
+    case remoteSessionDetached = "tmuxDetached"
+    case externalRemoteSessionTerminated = "externalTmuxEnded"
 
     package var allowsAutomaticReconnect: Bool {
         self == .transportInterrupted
@@ -144,10 +144,10 @@ nonisolated package enum TerminalDisconnectReason: String, Codable, Hashable, Se
 }
 
 nonisolated package enum TerminalTeardownIntent: CaseIterable, Sendable {
-    package case explicitClose
-    package case explicitServerDisconnect
-    package case remoteSessionEnded
-    package case applicationTermination
+    case explicitClose
+    case explicitServerDisconnect
+    case remoteSessionEnded
+    case applicationTermination
 
     package var removesPersistedDescriptor: Bool {
         self != .applicationTermination

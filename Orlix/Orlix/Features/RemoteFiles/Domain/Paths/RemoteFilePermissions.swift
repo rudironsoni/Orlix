@@ -1,17 +1,17 @@
 import Foundation
 
 nonisolated package enum RemoteFilePermissionAudience: String, CaseIterable, Identifiable, Sendable {
-    package case owner
-    package case group
-    package case everyone
+    case owner
+    case group
+    case everyone
 
     package var id: String { rawValue }
 }
 
 nonisolated package enum RemoteFilePermissionCapability: String, CaseIterable, Identifiable, Sendable {
-    package case read
-    package case write
-    package case execute
+    case read
+    case write
+    case execute
 
     package var id: String { rawValue }
 

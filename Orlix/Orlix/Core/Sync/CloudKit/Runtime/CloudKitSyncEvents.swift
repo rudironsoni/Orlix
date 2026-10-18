@@ -6,9 +6,9 @@ import AppKit
 #endif
 
 nonisolated package enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
-    package case foreground
-    package case syncEnabled
-    package case syncDisabled
+    case foreground
+    case syncEnabled
+    case syncDisabled
 }
 
 @MainActor

@@ -6,16 +6,16 @@ enum NoticeLane {
 }
 
 package enum NoticeLevel {
-    package case info
-    package case success
-    package case warning
-    package case error
+    case info
+    case success
+    case warning
+    case error
 }
 
 package enum NoticeLeading {
-    package case none
-    package case icon(String)
-    package case activity
+    case none
+    case icon(String)
+    case activity
 }
 
 enum NoticeLifetime {

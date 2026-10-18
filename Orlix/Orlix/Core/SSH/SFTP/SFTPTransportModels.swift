@@ -3,10 +3,10 @@ import Foundation
 /// Neutral SFTP values returned by the SSH transport. Feature adapters map
 /// these values into product-owned models and errors.
 nonisolated package enum SFTPFileType: Hashable, Sendable {
-    package case file
-    package case directory
-    package case symlink
-    package case other
+    case file
+    case directory
+    case symlink
+    case other
 }
 
 nonisolated package struct SFTPFileEntry: Hashable, Sendable {
@@ -74,12 +74,12 @@ nonisolated enum SFTPFilesystemCapacity: Hashable, Sendable {
 }
 
 nonisolated package enum SFTPTransportError: LocalizedError, Equatable, Sendable {
-    package case permissionDenied
-    package case pathNotFound
-    package case disconnected
-    package case invalidEntryName
-    package case resourceLimitExceeded
-    package case failed(String)
+    case permissionDenied
+    case pathNotFound
+    case disconnected
+    case invalidEntryName
+    case resourceLimitExceeded
+    case failed(String)
 
     package var errorDescription: String? {
         switch self {
