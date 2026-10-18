@@ -38,7 +38,7 @@ final package class AppearanceController: UIViewController {
         package let isTranslucent: Bool
         package let shadowColor: UIColor?
 
-        static func == (lhs: AppearanceConfig, rhs: AppearanceConfig) -> Bool {
+        package static func == (lhs: AppearanceConfig, rhs: AppearanceConfig) -> Bool {
             lhs.isTranslucent == rhs.isTranslucent &&
             lhs.backgroundColor.isEqual(rhs.backgroundColor) &&
             ((lhs.shadowColor == nil && rhs.shadowColor == nil) ||
