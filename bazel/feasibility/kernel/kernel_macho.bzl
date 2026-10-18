@@ -39,6 +39,12 @@ def _tcti_isa_prepare_impl(ctx):
     members_def = ctx.file.members_def
     serializer = ctx.file.serializer
     tree = ctx.actions.declare_directory(ctx.label.name + "/tree")
+    members = ctx.actions.declare_file(ctx.label.name + "/members.txt")
+    identity = ctx.actions.declare_directory(ctx.label.name + "/tool-identity")
+    if not ctx.files.tool_libs:
+        fail("ISA restore requires staged tool libraries")
+    if not ctx.files.python_home:
+        fail("ISA restore requires the staged Python home")
     ctx.actions.run_shell(
         mnemonic = "OrlixTctiIsaRestore",
         progress_message = "Verifying and extracting pinned OrlixTCTI ISA tables",
@@ -53,18 +59,31 @@ serializer="$exec_root/$5"
 tree="$exec_root/$6"
 gmake="$exec_root/$7"
 awk_bin="$exec_root/$8"
-temporary="$(/usr/bin/mktemp -d "/tmp/orlix-tcti-isa-prepare.XXXXXX")"
-trap '/bin/rm -rf "$temporary"' EXIT
+python_bin="$exec_root/$9"
+members="$exec_root/${10}"
+identity="$exec_root/${11}"
+tool_bin="${gmake%/*}"
+tool_root="${tool_bin%/*}"
+tool_lib="$tool_root/lib"
+python_home="$tool_root/python-home"
+export PATH="$tool_bin"
+export DYLD_LIBRARY_PATH="$tool_lib"
+export PYTHONHOME="$python_home"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
 test -s "$members_make"
 test -s "$members_def"
 test -s "$serializer"
 test -x "$gmake"
 test -x "$awk_bin"
-export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"
+test -x "$python_bin"
+test -d "$tool_lib"
+test -d "$python_home"
+"$python_bin" -B -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$identity" "$gmake" "$awk_bin" "$python_bin" "$tool_lib" "$python_home" "$members_make" "$members_def" "$serializer"
 "$gmake" --no-print-directory --no-builtin-rules \
   -f "$members_make" ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$members_def" \
-  __orlix-tcti-isa-archive-members > "$temporary/members"
-/usr/bin/python3 "$serializer" extract "$archive" "$pin" "$tree" "$temporary/members"
+  __orlix-tcti-isa-archive-members > "$members"
+"$python_bin" -B "$serializer" extract "$archive" "$pin" "$tree" "$members"
 """,
         arguments = [
             archive.path,
@@ -75,13 +94,28 @@ export PATH="$(/usr/bin/dirname "$awk_bin"):/usr/bin:/bin"
             tree.path,
             ctx.file.gmake.path,
             ctx.file.awk.path,
+            ctx.file.python_bin.path,
+            members.path,
+            identity.path,
         ],
-        inputs = [archive, pin, members_make, members_def, serializer, ctx.file.gmake, ctx.file.awk],
-        outputs = [tree],
+        inputs = [
+            archive,
+            pin,
+            members_make,
+            members_def,
+            serializer,
+            ctx.file.gmake,
+            ctx.file.awk,
+            ctx.file.python_bin,
+            ctx.file.source_state,
+            ctx.file.build_state,
+        ] + ctx.files.tool_libs + ctx.files.python_home,
+        outputs = [tree, members, identity],
         use_default_shell_env = False,
-        # Staged gmake's non-system libraries and /usr/bin/python3 are not inputs,
-        # and DYLD_LIBRARY_PATH is unset. Keep the result out of the remote cache.
-        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1"},
+        # Staged gmake, awk, and Python, and the libraries and Python home
+        # they open, are action inputs. resume() hashes those files.
+        # The action still runs on the Mac.
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
     )
     return [DefaultInfo(files = depset([tree]))]
 
@@ -95,6 +129,11 @@ orlix_tcti_isa_prepare = rule(
         "serializer": attr.label(allow_single_file = True, mandatory = True),
         "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
         "awk": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/awk")),
+        "python_bin": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/meson-python")),
+        "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
+        "python_home": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:python_home")),
+        "source_state": attr.label(allow_single_file = True, default = Label("//OrlixKernel/Sources:ports/orlix/kbuild/source_state.py")),
+        "build_state": attr.label(allow_single_file = True, default = Label("//bazel:build_state.py")),
     },
 )
 

@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Cache the ISA table restore from staged tools
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `OrlixTctiIsaRestore` with staged `gmake`, `awk`, and Python. The action inputs include those binaries, `tools/lib`, and the staged Python home. `resume()` hashes those files. The action drops `no-remote-cache` and keeps `no-remote-exec`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Give the kernel archive bison data and the SDK plist
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.plist` into the staged macOS SDK and copies Homebrew bison's `share/bison` tree beside the staged `bison` binary. `OrlixKernelMachOArchive` declares both as inputs and `resume()` hashes them. The archive stays remote-cacheable and keeps `no-remote-exec`. ISA restore keeps `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
