@@ -71,11 +71,17 @@ def _kernel_uapi_impl(ctx):
     patch_files = sorted(patch_files, key = lambda item: item.path)
     patch_list = ctx.actions.declare_file(ctx.label.name + "/patch-inputs.txt")
     ctx.actions.write(patch_list, "".join([item.path + "\n" for item in patch_files]))
+    sdk_marker = [f for f in ctx.files.macos_sdk if f.basename == "SDKSettings.json"]
+    if len(sdk_marker) != 1:
+        fail("kernel UAPI requires the staged macOS SDK")
+    sdkroot = sdk_marker[0].dirname
+    libdir = ctx.files.tool_libs[0].dirname if ctx.files.tool_libs else "none"
     pinned_inputs = [
         ctx.file.linux_makefile,
         ctx.file.archive_tool,
         ctx.file.header_digest,
         ctx.file.toolchain_identity,
+        ctx.file.clang,
         patch_list,
     ]
     seen = {}
@@ -101,8 +107,17 @@ archive_py="$exec_root/$6"
 header_digest="$exec_root/$7"
 toolchain_identity="$exec_root/$8"
 patch_list="$exec_root/$9"
+clang="$exec_root/${10}"
+sdkroot="$exec_root/${11}"
+libdir=""
+if [ "${12}" != none ]; then libdir="$exec_root/${12}"; fi
 test -s "$toolchain_identity"
-/usr/bin/wc -c "$toolchain_identity" >/dev/null
+test -x "$clang"
+case "$clang" in
+  */tools/bin/clang|*/tools/llvm/bin/clang) ;;
+  *) printf '%s\n' "headers install must execute the staged clang" >&2; exit 1 ;;
+esac
+/usr/bin/wc -c "$toolchain_identity" "$clang" >/dev/null
 test -n "${DEVELOPER_DIR:-}"
 xcode_ver="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcodebuild -version)"
 xcode_name="$(printf '%s\n' "$xcode_ver" | /usr/bin/sed -n '1p')"
@@ -114,10 +129,10 @@ esac
 gmake="$(/usr/bin/command -v gmake)"
 test -n "$gmake"
 sed --version >/dev/null
-hostcc="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-test -x "$hostcc"
-sdkroot="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk macosx --show-sdk-path)"
-test -n "$sdkroot"
+hostcc="$clang"
+test -s "$sdkroot/SDKSettings.json"
+if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir"; fi
+export PATH="${clang%/*}:$PATH"
 case "$linux_makefile" in
   *orlix_linux_source*/Makefile) ;;
   *) echo "kernel UAPI must invoke upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
@@ -177,8 +192,11 @@ digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"
             ctx.file.header_digest.path,
             ctx.file.toolchain_identity.path,
             patch_list.path,
+            ctx.file.clang.path,
+            sdkroot,
+            libdir,
         ],
-        inputs = depset(direct = pinned_inputs + patch_files + linux_inputs),
+        inputs = depset(direct = pinned_inputs + patch_files + linux_inputs + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.macos_sdk),
         outputs = [headers, archive, manifest, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
@@ -261,6 +279,10 @@ orlix_kernel_uapi = rule(
         "header_digest": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/mlibc:header_digest.py")),
         "patches": attr.label(allow_files = True, default = Label("//OrlixKernel/Sources:linux_patches")),
         "toolchain_identity": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:identity.json")),
+        "clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
+        "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
+        "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
+        "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
     },
 )
 

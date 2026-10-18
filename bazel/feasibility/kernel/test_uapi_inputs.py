@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import unittest
 
 from bazel.feasibility.kernel.uapi_inputs import EXACT, TREE_PREFIXES, headers_install_source
@@ -66,6 +67,52 @@ class UapiInputTests(unittest.TestCase):
             self.assertIn(destination, build)
         for profile in ('"development"', '"release"'):
             self.assertIn(profile, build)
+
+    def test_developer_dir_or_xcrun_cannot_satisfy_hostcc(self) -> None:
+        text = UAPI.read_text(encoding="utf-8")
+        action = text[text.index('mnemonic = "OrlixLinuxHeadersInstall"'):text.index('mnemonic = "OrlixPromotedUapiProduct"')]
+        self.assertIn('hostcc="$clang"', action)
+        self.assertIn("*/tools/bin/clang|*/tools/llvm/bin/clang", action)
+        self.assertIn('/usr/bin/wc -c "$toolchain_identity" "$clang"', action)
+        self.assertIn("ctx.file.clang", action)
+        self.assertIn('Label("@orlix_kernel_toolchain//:tools/bin/clang")', text)
+        self.assertNotIn("XcodeDefault.xctoolchain", action)
+        self.assertNotIn("xcrun", action)
+        self.assertNotIn('hostcc="$DEVELOPER_DIR', action)
+        self.assertNotIn("/usr/bin/clang", action)
+        script = r"""
+set -euo pipefail
+clang="$1"
+case "$clang" in
+  */tools/bin/clang|*/tools/llvm/bin/clang) ;;
+  *) printf '%s\n' "headers install must execute the staged clang" >&2; exit 1 ;;
+esac
+hostcc="$clang"
+case "$hostcc" in
+  */Toolchains/XcodeDefault.xctoolchain/*|*/xcrun) exit 1 ;;
+esac
+printf '%s\n' "$hostcc"
+"""
+        rejected = (
+            "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+            "/usr/bin/xcrun",
+            "/opt/homebrew/bin/clang",
+        )
+        for candidate in rejected:
+            result = subprocess.run(
+                ["bash", "-c", script, "bash", candidate],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0, candidate)
+        for candidate in ("external/orlix_kernel_toolchain/tools/bin/clang", "external/orlix_kernel_toolchain/tools/llvm/bin/clang"):
+            result = subprocess.run(
+                ["bash", "-c", script, "bash", candidate],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.stdout.strip(), candidate)
 
 
 if __name__ == "__main__":
