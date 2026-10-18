@@ -5,10 +5,10 @@ import UIKit
 import AppKit
 #endif
 
-nonisolated package enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
-    package case foreground
-    package case syncEnabled
-    package case syncDisabled
+nonisolated public enum CloudKitSyncLifecycleEvent: Equatable, Sendable {
+    public case foreground
+    public case syncEnabled
+    public case syncDisabled
 }
 
 @MainActor

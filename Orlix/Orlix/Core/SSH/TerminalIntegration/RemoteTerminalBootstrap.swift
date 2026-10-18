@@ -41,9 +41,9 @@ nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
     }
 }
 
-nonisolated package enum RemoteTerminalType: String, Hashable, Sendable {
-    package case xterm256Color = "xterm-256color"
-    package case xtermGhostty = "xterm-ghostty"
+nonisolated public enum RemoteTerminalType: String, Hashable, Sendable {
+    public case xterm256Color = "xterm-256color"
+    public case xtermGhostty = "xterm-ghostty"
 }
 
 nonisolated enum RemoteShellLaunchPlan: Hashable, Sendable {

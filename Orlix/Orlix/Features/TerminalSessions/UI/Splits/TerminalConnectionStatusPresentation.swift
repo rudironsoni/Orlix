@@ -107,13 +107,13 @@ package extension TerminalDisconnectReason {
     }
 }
 
-package enum TerminalConnectionStatusPresentation: Hashable {
-    package case hidden
-    package case connecting(serverName: String)
-    package case disconnected(message: String?)
-    package case failed(message: String, allowsHostKeyReplacement: Bool)
+public enum TerminalConnectionStatusPresentation: Hashable {
+    public case hidden
+    public case connecting(serverName: String)
+    public case disconnected(message: String?)
+    public case failed(message: String, allowsHostKeyReplacement: Bool)
 
-    static package func resolve(
+    static public func resolve(
         credentialLoadErrorMessage: String?,
         connectionState: ConnectionState,
         serverName: String,

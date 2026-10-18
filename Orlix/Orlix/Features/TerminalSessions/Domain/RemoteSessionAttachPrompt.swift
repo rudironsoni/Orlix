@@ -17,8 +17,8 @@ package struct RemoteSessionAttachPrompt: Identifiable, Equatable {
     package let existingSessions: [RemoteSessionSelectionInfo]
 }
 
-package enum RemoteSessionAttachSelection: Equatable {
-    package case createManaged
-    package case attachExisting(RemoteSessionAttachment)
-    package case plainShell
+public enum RemoteSessionAttachSelection: Equatable {
+    public case createManaged
+    public case attachExisting(RemoteSessionAttachment)
+    public case plainShell
 }

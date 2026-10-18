@@ -7,25 +7,25 @@ nonisolated enum TerminalConnectionRetryDisposition: Hashable, Sendable {
     case manual
 }
 
-nonisolated package enum TerminalConnectionRequiredAction: Hashable, Sendable {
-    package case approveHostKey
+nonisolated public enum TerminalConnectionRequiredAction: Hashable, Sendable {
+    public case approveHostKey
 }
 
-nonisolated package enum TerminalConnectionFailure: Hashable, Sendable {
-    package case reconnectTimedOut
-    package case remoteSessionStartupFailed
-    package case eternalTerminal(
+nonisolated public enum TerminalConnectionFailure: Hashable, Sendable {
+    public case reconnectTimedOut
+    public case remoteSessionStartupFailed
+    public case eternalTerminal(
         failure: EternalTerminalSessionFailure,
         host: String,
         port: Int
     )
-    package case external(
+    public case external(
         message: String,
         retryDisposition: TerminalConnectionRetryDisposition,
         requiredAction: TerminalConnectionRequiredAction?
     )
 
-    package var allowsAutomaticReconnectRetry: Bool {
+    public var allowsAutomaticReconnectRetry: Bool {
         switch self {
         case .external(_, let retryDisposition, _):
             return retryDisposition == .automatic
@@ -34,7 +34,7 @@ nonisolated package enum TerminalConnectionFailure: Hashable, Sendable {
         }
     }
 
-    package var requiredAction: TerminalConnectionRequiredAction? {
+    public var requiredAction: TerminalConnectionRequiredAction? {
         switch self {
         case .external(_, _, let requiredAction):
             return requiredAction
@@ -44,24 +44,24 @@ nonisolated package enum TerminalConnectionFailure: Hashable, Sendable {
     }
 }
 
-nonisolated package enum TerminalTabOpeningError: Error, Equatable, Sendable {
-    package case alreadyOpening
+nonisolated public enum TerminalTabOpeningError: Error, Equatable, Sendable {
+    public case alreadyOpening
 }
 
-nonisolated package enum ConnectionState: Hashable, Sendable {
-    package case disconnected
-    package case connecting
-    package case connected
-    package case reconnecting(attempt: Int)
-    package case failed(TerminalConnectionFailure)
-    package case idle
+nonisolated public enum ConnectionState: Hashable, Sendable {
+    public case disconnected
+    public case connecting
+    public case connected
+    public case reconnecting(attempt: Int)
+    public case failed(TerminalConnectionFailure)
+    public case idle
 
-    package var isConnected: Bool {
+    public var isConnected: Bool {
         if case .connected = self { return true }
         return false
     }
 
-    package var isConnecting: Bool {
+    public var isConnecting: Bool {
         switch self {
         case .connecting, .reconnecting:
             return true
@@ -70,7 +70,7 @@ nonisolated package enum ConnectionState: Hashable, Sendable {
         }
     }
 
-    package var isIdle: Bool {
+    public var isIdle: Bool {
         if case .idle = self { return true }
         return false
     }

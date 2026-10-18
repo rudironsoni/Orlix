@@ -1,34 +1,34 @@
 import Foundation
 
-nonisolated package enum BiometryKind: Equatable, Sendable {
-    package case none
-    package case touchID
-    package case faceID
+nonisolated public enum BiometryKind: Equatable, Sendable {
+    public case none
+    public case touchID
+    public case faceID
 }
 
-nonisolated package enum BiometricUnavailability: Equatable, Sendable {
-    package case notEnrolled
-    package case notAvailable
-    package case locked
-    package case passcodeNotSet
-    package case system(message: String)
+nonisolated public enum BiometricUnavailability: Equatable, Sendable {
+    public case notEnrolled
+    public case notAvailable
+    public case locked
+    public case passcodeNotSet
+    public case system(message: String)
 }
 
-nonisolated package enum BiometricAvailability: Equatable, Sendable {
-    package case available(BiometryKind)
-    package case unavailable(BiometricUnavailability)
+nonisolated public enum BiometricAvailability: Equatable, Sendable {
+    public case available(BiometryKind)
+    public case unavailable(BiometricUnavailability)
 }
 
-nonisolated package enum BiometricAuthenticationFailure: Error, Equatable, Sendable {
-    package case cancelled
-    package case notEnrolled
-    package case notAvailable
-    package case locked
-    package case passcodeNotSet
-    package case authenticationFailed
-    package case system(message: String)
+nonisolated public enum BiometricAuthenticationFailure: Error, Equatable, Sendable {
+    public case cancelled
+    public case notEnrolled
+    public case notAvailable
+    public case locked
+    public case passcodeNotSet
+    public case authenticationFailed
+    public case system(message: String)
 
-    package var isCancellation: Bool {
+    public var isCancellation: Bool {
         if case .cancelled = self {
             return true
         }
@@ -36,38 +36,38 @@ nonisolated package enum BiometricAuthenticationFailure: Error, Equatable, Senda
     }
 }
 
-nonisolated package enum BiometricAuthenticationReason: Equatable, Sendable {
-    package case enableAppLock(biometry: BiometryKind)
-    package case disableAppLock
-    package case unlockApp(biometry: BiometryKind)
-    package case unlockServer(name: String)
-    package case protectedServerAction(
+nonisolated public enum BiometricAuthenticationReason: Equatable, Sendable {
+    public case enableAppLock(biometry: BiometryKind)
+    public case disableAppLock
+    public case unlockApp(biometry: BiometryKind)
+    public case unlockServer(name: String)
+    public case protectedServerAction(
         action: AppLockAuthenticationState.ProtectedServerAction,
         serverName: String
     )
 }
 
-nonisolated package enum AppLockFailure: Equatable, Sendable {
-    package case biometryUnavailable(BiometricUnavailability)
-    package case authentication(BiometricAuthenticationFailure)
+nonisolated public enum AppLockFailure: Equatable, Sendable {
+    public case biometryUnavailable(BiometricUnavailability)
+    public case authentication(BiometricAuthenticationFailure)
 }
 
-nonisolated package enum AppLockState: Equatable, Sendable {
-    package case unlocked(at: Date?)
-    package case locked(generation: UUID)
+nonisolated public enum AppLockState: Equatable, Sendable {
+    public case unlocked(at: Date?)
+    public case locked(generation: UUID)
 
-    package var isLocked: Bool {
+    public var isLocked: Bool {
         if case .locked = self { return true }
         return false
     }
 
-    package var lastUnlockAt: Date? {
+    public var lastUnlockAt: Date? {
         guard case .unlocked(let date) = self else { return nil }
         return date
     }
 }
 
-nonisolated package enum AppLockAuthenticationState: Equatable, Sendable {
+nonisolated public enum AppLockAuthenticationState: Equatable, Sendable {
     nonisolated package enum ProtectedServerAction: Equatable, Sendable {
         case edit
         case testConnection
@@ -83,15 +83,15 @@ nonisolated package enum AppLockAuthenticationState: Equatable, Sendable {
         case protectedServerAction(serverID: UUID, action: ProtectedServerAction)
     }
 
-    package case idle
-    package case authenticating(attemptID: UUID, purpose: Purpose)
+    public case idle
+    public case authenticating(attemptID: UUID, purpose: Purpose)
 
-    package var isAuthenticating: Bool {
+    public var isAuthenticating: Bool {
         if case .authenticating = self { return true }
         return false
     }
 
-    package func accepts(attemptID: UUID, purpose: Purpose) -> Bool {
+    public func accepts(attemptID: UUID, purpose: Purpose) -> Bool {
         self == .authenticating(attemptID: attemptID, purpose: purpose)
     }
 }

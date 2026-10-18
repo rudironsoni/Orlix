@@ -87,16 +87,16 @@ nonisolated package struct TerminalShellStartupPlan: Sendable {
     )
 }
 
-nonisolated package enum TerminalShellEndReason: Hashable, Sendable {
-    package case transportInterrupted
-    package case standaloneStartupActionCompleted
-    package case remoteSessionDetached(RemoteSessionOwnership)
-    package case remoteSessionTerminated(RemoteSessionOwnership)
-    package case remoteSessionCreationFailed
-    package case remoteSessionAttachFailed
-    package case observationAmbiguous
+nonisolated public enum TerminalShellEndReason: Hashable, Sendable {
+    public case transportInterrupted
+    public case standaloneStartupActionCompleted
+    public case remoteSessionDetached(RemoteSessionOwnership)
+    public case remoteSessionTerminated(RemoteSessionOwnership)
+    public case remoteSessionCreationFailed
+    public case remoteSessionAttachFailed
+    public case observationAmbiguous
 
-    nonisolated static package func resolve(
+    nonisolated static public func resolve(
         lifecycle: RemoteSessionLifecycleContext?,
         event: RemoteSessionEvent?,
         sessionExists: Bool?
@@ -131,29 +131,29 @@ nonisolated package enum TerminalShellEndReason: Hashable, Sendable {
     }
 }
 
-nonisolated package enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
+nonisolated public enum TerminalDisconnectReason: String, Codable, Hashable, Sendable {
     // Keep raw values stable for local snapshot migration.
-    package case transportInterrupted = "transportEnded"
-    package case startupActionCompleted
-    package case remoteSessionDetached = "tmuxDetached"
-    package case externalRemoteSessionTerminated = "externalTmuxEnded"
+    public case transportInterrupted = "transportEnded"
+    public case startupActionCompleted
+    public case remoteSessionDetached = "tmuxDetached"
+    public case externalRemoteSessionTerminated = "externalTmuxEnded"
 
-    package var allowsAutomaticReconnect: Bool {
+    public var allowsAutomaticReconnect: Bool {
         self == .transportInterrupted
     }
 }
 
-nonisolated package enum TerminalTeardownIntent: CaseIterable, Sendable {
-    package case explicitClose
-    package case explicitServerDisconnect
-    package case remoteSessionEnded
-    package case applicationTermination
+nonisolated public enum TerminalTeardownIntent: CaseIterable, Sendable {
+    public case explicitClose
+    public case explicitServerDisconnect
+    public case remoteSessionEnded
+    public case applicationTermination
 
-    package var removesPersistedDescriptor: Bool {
+    public var removesPersistedDescriptor: Bool {
         self != .applicationTermination
     }
 
-    package var terminatesManagedRemoteSession: Bool {
+    public var terminatesManagedRemoteSession: Bool {
         switch self {
         case .explicitClose, .explicitServerDisconnect:
             true
@@ -162,7 +162,7 @@ nonisolated package enum TerminalTeardownIntent: CaseIterable, Sendable {
         }
     }
 
-    package var deletesResumableSessionState: Bool {
+    public var deletesResumableSessionState: Bool {
         self != .applicationTermination
     }
 }

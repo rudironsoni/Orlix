@@ -9,24 +9,24 @@ nonisolated enum ServerMoveFailureReason: Equatable, Sendable {
     case unavailable
 }
 
-nonisolated package enum OrlixError: Error, Equatable, Sendable {
-    package case proRequired(ServerProRequirement)
-    package case serverLocked(String)
-    package case workspaceLocked(String)
-    package case moveNotAllowed(ServerMoveFailureReason)
-    package case connectionFailed(String)
-    package case authenticationFailed
-    package case authorizationRequired
-    package case serverNotFound
-    package case serverDataMutationRecoveryPending
-    package case workspaceNotFound
-    package case environmentNotFound
-    package case environmentDeletionNotAllowed
-    package case environmentFallbackUnavailable
-    package case workspaceDeletionChanged
-    package case timeout
+nonisolated public enum OrlixError: Error, Equatable, Sendable {
+    public case proRequired(ServerProRequirement)
+    public case serverLocked(String)
+    public case workspaceLocked(String)
+    public case moveNotAllowed(ServerMoveFailureReason)
+    public case connectionFailed(String)
+    public case authenticationFailed
+    public case authorizationRequired
+    public case serverNotFound
+    public case serverDataMutationRecoveryPending
+    public case workspaceNotFound
+    public case environmentNotFound
+    public case environmentDeletionNotAllowed
+    public case environmentFallbackUnavailable
+    public case workspaceDeletionChanged
+    public case timeout
 
-    package var isLockedError: Bool {
+    public var isLockedError: Bool {
         switch self {
         case .serverLocked, .workspaceLocked: return true
         default: return false
