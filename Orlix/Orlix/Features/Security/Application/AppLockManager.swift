@@ -6,7 +6,7 @@ import OrlixModels
 #endif
 @MainActor
 final package class AppLockManager: ObservableObject {
-    @Published private(set) var lockState: AppLockState
+    @Published package private(set) var lockState: AppLockState
     @Published private(set) var authenticationState: AppLockAuthenticationState = .idle
     @Published private(set) var lastFailure: AppLockFailure?
     @Published private(set) var biometricAvailability: BiometricAvailability

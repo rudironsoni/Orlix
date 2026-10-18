@@ -7,7 +7,7 @@ import OrlixModels
 /// Owns the selected connection surface for each server.
 @MainActor
 final package class ConnectionViewSelectionStore: ObservableObject {
-    @Published private(set) var selectionsByServer: [UUID: ConnectionViewTabID] = [:]
+    @Published package private(set) var selectionsByServer: [UUID: ConnectionViewTabID] = [:]
 
     package func selection(for serverId: UUID) -> ConnectionViewTabID? {
         selectionsByServer[serverId]
