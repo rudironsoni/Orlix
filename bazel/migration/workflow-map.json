@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "c34b3e2a885edfb54a6e2b8238de79bcd78d9dcb90dcaa5e33cc2c739e10c85e",
+      "source_sha256": "043b3ca89af1abc5cec1445e8a2bfb489234fe6bba990d020741e91581d18ea9",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -132,7 +132,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "fa2e93b304059833b22e2bc81018876d27c40f849a4fb1a72fe6bfd11f085cbe",
+      "source_sha256": "ec65e086fb305272273cb3e4ed4f250949114e36bc7ee8db8d69601d34fa0c9e",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -323,7 +323,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -599,7 +599,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "64e5b4afb7cf681f4de73f6cb03ba9ee83f922c48e3136e79d0ea40021603b98",
+      "source_sha256": "b01c572abe28ffbb091eb4b5e2be295a33564db0826705b4c5b63af96ef6c7e7",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -638,7 +638,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -678,7 +678,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "41b6f245b15782bb3518bba336276d04eba3e4f48481d38877eece73c0ae1658",
+      "source_sha256": "d13bfadd7945ebe4e1d508a65844136777e0db4dccb4aa09febb09335937e7e0",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -718,7 +718,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -804,7 +804,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "ed4e1330af0fdd9ab180a55554bddf6f1b01217787610d36206cabf4ab859068",
+      "source_sha256": "ac0a50402c84216a79e06acadce4901186f320d8a04f1561f4fe9f5587ae65da",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -864,7 +864,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -1003,7 +1003,7 @@
       }
     },
     ".github/workflows/bazel-promoted-consumer-proof.yml": {
-      "source_sha256": "15ed01a124cd52667e9f565d2162d49a1a2238dfc6dea98aff812f193b819d58",
+      "source_sha256": "7b168a0fedb7fc9ce5991dde422e2913bd5d342be394625739a6ceef129dbd28",
       "workflow": {
         "name": "Promoted consumer proof",
         "on": {
@@ -1048,7 +1048,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",
@@ -1258,7 +1258,7 @@
       }
     },
     ".github/workflows/ios-build.yml": {
-      "source_sha256": "da40b686aff97870c07940f9884035319ef9bf04b299209708dac08868fb310d",
+      "source_sha256": "e2fe25c37cd3b953c56235ac1ac7f4336df2e91ea6b8d02fa5a80144aac04eb6",
       "workflow": {
         "name": "iOS Build",
         "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
@@ -1395,7 +1395,7 @@
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select repository Xcode",
@@ -1648,7 +1648,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "b9e15569c2b9168e200818b05197ffa4ec2c63178cff698966c03d489a1b7c63",
+      "source_sha256": "8633f2689247909c6f661bae6c7d42adca98602d0554a9efac286474cfd1d5d1",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1771,7 +1771,7 @@
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select repository Xcode",
@@ -2188,7 +2188,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "72732d8f30f4f95794aca18e75052e6c5c7d6391f15166d7afe89e656975e219",
+      "source_sha256": "469d3f6061f2030c82d35c30d08f804453d7b9057c1eb257189ebfd65a3133c9",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -2249,7 +2249,7 @@
               {
                 "name": "See whether the requested Xcode is already on the runner",
                 "id": "xcode-present",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\" || python3 bazel/ci/setup_cache.py xcode-selected --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Select Xcode",

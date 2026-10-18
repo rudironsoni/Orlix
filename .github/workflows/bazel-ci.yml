@@ -98,7 +98,7 @@ jobs:
         id: xcode-present
         run: |
           set -euo pipefail
-          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}"; then
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}" || python3 bazel/ci/setup_cache.py xcode-selected --version "${{ steps.xcode-version.outputs.version }}"; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"

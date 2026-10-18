@@ -124,6 +124,78 @@ class SetupCacheDecisionTests(unittest.TestCase):
             "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
         )
 
+    def test_permission_error_is_not_a_missing_runtime(self) -> None:
+        denied = Path("/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 15.5.simruntime")
+        with mock.patch.object(setup_cache, "path_probe", return_value="permission"):
+            self.assertTrue(setup_cache.runtime_bundle_installed("15.5"))
+        self.assertEqual(setup_cache.path_probe(denied), "missing")
+
+        def fake_run(command, **kwargs):
+            if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                raise PermissionError("Permission denied: simctl")
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary)
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            with mock.patch.object(setup_cache, "runtime_bundle_installed", side_effect=PermissionError("Permission denied")):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
+        self.assertEqual(plan, "skip")
+        self.assertEqual(setup_cache.runtime_commands("skip", "15.5", archive), [])
+
+    def test_listed_unavailable_runtime_is_not_installed(self) -> None:
+        payload = json.dumps({
+            "runtimes": [{
+                "version": "15.5",
+                "isAvailable": False,
+                "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                "bundlePath": "/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 15.5.simruntime",
+            }],
+        })
+        parsed = json.loads(payload)
+        self.assertTrue(setup_cache.simctl_runtime_listed("15.5", parsed))
+        self.assertFalse(setup_cache.simctl_runtime_available("15.5", parsed))
+        self.assertEqual(
+            setup_cache.simctl_runtime_identifier("15.5", parsed),
+            "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+        )
+
+        def fake_run(command, **kwargs):
+            if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary)
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            with mock.patch.object(setup_cache, "runtime_bundle_installed", return_value=False):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
+        self.assertEqual(plan, "skip")
+
+    def test_selected_xcode_skips_the_download(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            developer = Path(temporary) / "Xcode.app" / "Contents" / "Developer"
+            developer.mkdir(parents=True)
+            with (developer.parent / "version.plist").open("wb") as stream:
+                plistlib.dump({"CFBundleShortVersionString": "26.6"}, stream)
+            self.assertTrue(setup_cache.xcode_selected("26.6", developer))
+            self.assertFalse(setup_cache.xcode_selected("27.0", developer))
+            with mock.patch.object(setup_cache, "path_probe", return_value="permission"):
+                self.assertTrue(setup_cache.xcode_selected("26.6", developer))
+
+    def test_brewfile_permission_error_is_not_unsatisfied(self) -> None:
+        def fake_run(command, **kwargs):
+            self.assertEqual(command[:3], ["brew", "bundle", "check"])
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="Error: Permission denied")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            brewfile = Path(temporary) / "Brewfile"
+            brewfile.write_text('brew "xcodesorg/made/xcodes"\n', encoding="utf-8")
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                self.assertTrue(setup_cache.bundle_satisfied(brewfile))
+
     def test_listed_runtime_is_not_reinstalled_after_the_archive_restores(self) -> None:
         payload = json.dumps({
             "runtimes": [{
@@ -264,6 +336,7 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         ):
             text = workflow_text(name)
             self.assertIn("xcode-present", text, name)
+            self.assertIn("xcode-selected", text, name)
             self.assertIn("steps.xcode-present.outputs.installed == 'true'", text, name)
             self.assertIn("steps.xcode-present.outputs.installed != 'true'", text, name)
             self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
