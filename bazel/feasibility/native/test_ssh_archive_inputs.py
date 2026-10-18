@@ -128,7 +128,11 @@ class SshArchiveInputTests(unittest.TestCase):
         coreutils = (ROOT / "bazel/feasibility/packages/coreutils.bzl").read_text(encoding="utf-8")
         bash = (ROOT / "bazel/feasibility/packages/bash.bzl").read_text(encoding="utf-8")
         self.assertIn('"no-remote-cache": "1"', kernel)
-        self.assertIn('"no-remote-cache": "1"', autotools)
+        self.assertNotIn("no-remote-cache", autotools)
+        self.assertNotIn("xcrun", autotools)
+        self.assertNotIn("/opt/homebrew", autotools)
+        self.assertIn('clang="$tool_bin/clang"', autotools)
+        self.assertIn('autom4te_perllibdir="$share/autoconf"', autotools)
         for text in (kernel, autotools, coreutils, bash):
             self.assertIn('"no-sandbox": "1"', text)
         for text in (autotools, coreutils, bash, RULE.read_text(encoding="utf-8")):

@@ -51,6 +51,9 @@ case "$configure" in
     ;;
 esac
 tool_bin="${ORLIX_PACKAGE_TOOL_BIN:?}"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
+export PATH="$tool_bin:/usr/bin:/bin"
+export DYLD_LIBRARY_PATH="$tool_root/lib:$tool_root/llvm/lib"
 clang="$tool_bin/clang"
 ar_bin="$tool_bin/llvm-ar"
 ranlib_bin="$tool_bin/llvm-ranlib"
@@ -155,7 +158,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 ctx.file.gmake,
-            ] + ctx.files.sources + ctx.files.host_tools),
+            ] + ctx.files.sources + ctx.files.host_tools + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.guest_clang_support + ctx.files.macos_sdk),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
@@ -197,6 +200,10 @@ orlix_bash_package = rule(
         "compiler_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:guest-compiler-identity.json"),
         "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
         "host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
+        "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
+        "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
+        "guest_clang_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:guest_clang_support")),
+        "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
         "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "sysroot": attr.label(mandatory = True, providers = [OrlixLibcSysrootInfo]),

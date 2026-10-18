@@ -116,16 +116,25 @@ class PackageRootfsInputTests(unittest.TestCase):
 
     def test_cache_tags_and_tool_path_stay(self) -> None:
         autotools = (PACKAGES / "autotools.bzl").read_text(encoding="utf-8")
-        self.assertIn('"no-remote-cache": "1"', autotools)
+        self.assertNotIn('"no-remote-cache": "1"', autotools)
+        self.assertNotIn("no-remote-cache", autotools)
         self.assertIn('"no-sandbox": "1"', autotools)
+        self.assertIn('"no-remote-exec": "1"', autotools)
         self.assertIn('export PATH="$tool_bin:$work/toolchain:/usr/bin:/bin"', autotools)
+        self.assertIn('clang="$tool_bin/clang"', autotools)
+        self.assertIn('autom4te_perllibdir="$share/autoconf"', autotools)
+        self.assertNotIn("xcrun", autotools)
         kernel = (ROOT / "bazel/feasibility/kernel/kernel_macho.bzl").read_text(encoding="utf-8")
         self.assertIn('"no-remote-cache": "1"', kernel)
         self.assertIn('"no-sandbox": "1"', kernel)
         for name in ("coreutils.bzl", "bash.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")
             self.assertIn('"no-sandbox": "1"', text, name)
+            self.assertNotIn("no-remote-cache", text, name)
+            self.assertIn('export PATH="$tool_bin:/usr/bin:/bin"', text, name)
+            self.assertIn('clang="$tool_bin/clang"', text, name)
             self.assertNotIn("/opt/homebrew/bin", text, name)
+            self.assertNotIn("xcrun", text, name)
         rootfs = (ROOTFS / "rootfs.bzl").read_text(encoding="utf-8")
         self.assertIn('"PATH": "/usr/bin:/bin"', rootfs)
 
