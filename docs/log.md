@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Stage the headers_install host compiler
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) sets `OrlixLinuxHeadersInstall` `HOSTCC` to the staged `tools/bin/clang`. The action reads that binary next to the toolchain identity and does not call `xcrun`. The staged SDK supplies `SDKROOT`. This is not a BuildBuddy remote-cache hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Cache the ISA table restore from staged tools
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `OrlixTctiIsaRestore` with staged `gmake`, `awk`, and Python. The action inputs include those binaries, `tools/lib`, and the staged Python home. `resume()` hashes those files. The action drops `no-remote-cache` and keeps `no-remote-exec`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
