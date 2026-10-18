@@ -24,9 +24,9 @@ package struct RemoteFileSecurityApprovalActions {
     )
 
     package init(
-        pendingRequest: PendingRequest,
-        approve: Approve,
-        reject: Reject
+        pendingRequest: @escaping PendingRequest,
+        approve: @escaping Approve,
+        reject: @escaping Reject
     ) {
         self.pendingRequest = pendingRequest
         self.approve = approve
