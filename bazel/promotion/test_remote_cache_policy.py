@@ -34,7 +34,7 @@ FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/feasibility/packages/bash.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/kernel/kernel_uapi.bzl", "OrlixLinuxHeadersInstall"),
     ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixMLibCSysroot"),
-    ("bazel/feasibility/mlibc/mlibc_sysroot.bzl", "OrlixCompilerRuntime"),
+    ("bazel/feasibility/mlibc/compiler_runtime.bzl", "OrlixCompilerRuntime"),
     ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfs"),
     ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfsPayload"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixPackageInterface"),

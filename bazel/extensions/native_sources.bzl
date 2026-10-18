@@ -242,6 +242,9 @@ exports_files([
     "tools/bin/find",
     "tools/bin/llvm-ranlib",
     "tools/bin/llvm-objdump",
+    "tools/bin/mkdir",
+    "tools/bin/rm",
+    "tools/bin/sort",
     "tools/sdk/SDKSettings.json",
 ], visibility = ["//visibility:public"])
 

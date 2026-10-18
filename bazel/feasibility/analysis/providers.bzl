@@ -4,6 +4,7 @@ load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo", "OrlixKernelAppleProductInfo", "OrlixLinuxArchiveInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:rootfs_info.bzl", "OrlixRootfsInfo")
+load("//bazel/feasibility/mlibc:compiler_runtime.bzl", "OrlixCompilerRuntimeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
 _GUEST_SOURCE_MARKERS = [
@@ -62,16 +63,9 @@ def _sysroot_uapi_only_test_impl(ctx):
     asserts.true(env, sysroot.sysroot_digest != None)
     asserts.true(env, sysroot.consumed_uapi_digest != None)
     found = False
-    runtime_found = False
     script = " ".join([action.content for action in target.actions if action.mnemonic == "FileWrite" and any([f.basename == "sysroot.sh" for f in action.outputs.to_list()])])
     for action in target.actions:
-        if action.mnemonic == "OrlixCompilerRuntime":
-            runtime_found = True
-            joined = " ".join([f.path for f in action.inputs.to_list()])
-            asserts.true(env, sysroot.compiler_runtime in action.outputs.to_list())
-            asserts.true(env, "compiler-runtime-identity.json" in joined)
-            asserts.false(env, "mlibc" in joined)
-            asserts.false(env, "/uapi/" in joined)
+        asserts.false(env, action.mnemonic == "OrlixCompilerRuntime")
         if action.mnemonic == "OrlixMLibCSysroot":
             found = True
             joined = " ".join([f.path for f in action.inputs.to_list()])
@@ -94,10 +88,36 @@ def _sysroot_uapi_only_test_impl(ctx):
             asserts.true(env, "0024-options-ansi-fclose-preserve-flush-errno.patch" in joined)
             asserts.true(env, "0025-subprojects-frigg-hex-alt-prefix.patch" in joined)
     asserts.true(env, found)
-    asserts.true(env, runtime_found)
+    return analysistest.end(env)
+
+def _compiler_runtime_inputs_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+    runtime = target[OrlixCompilerRuntimeInfo]
+    found = False
+    for action in target.actions:
+        if action.mnemonic != "OrlixCompilerRuntime":
+            continue
+        found = True
+        joined = " ".join([f.path for f in action.inputs.to_list()])
+        argv = " ".join(action.argv)
+        asserts.true(env, runtime.archive in action.outputs.to_list())
+        asserts.true(env, "compiler-runtime-identity.json" in joined)
+        asserts.true(env, "/tools/bin/clang" in joined)
+        asserts.true(env, "/tools/bin/llvm-ar" in joined)
+        asserts.true(env, "/tools/bin/mkdir" in joined)
+        asserts.true(env, "/tools/bin/rm" in joined)
+        asserts.true(env, "/tools/bin/sort" in joined)
+        asserts.false(env, "mlibc" in joined)
+        asserts.false(env, "/uapi/" in joined)
+        asserts.false(env, "xcrun" in argv)
+        asserts.false(env, "/opt/homebrew" in argv)
+    asserts.true(env, found)
     return analysistest.end(env)
 
 sysroot_uapi_only_test = analysistest.make(_sysroot_uapi_only_test_impl)
+
+compiler_runtime_inputs_test = analysistest.make(_compiler_runtime_inputs_test_impl)
 
 def _config_flags_test_impl(ctx):
     env = analysistest.begin(ctx)

@@ -1,5 +1,6 @@
 """Meson/Ninja OrlixMLibC sysroot from installed Linux UAPI only."""
 
+load(":compiler_runtime.bzl", "OrlixCompilerRuntimeInfo")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
@@ -14,113 +15,6 @@ def _pinned_env(_ctx):
         "CCACHE_MAXSIZE": "20G",
     }
 
-_COMPILER_RT_SOURCES = [
-    "addtf3.c",
-    "aarch64/fp_mode.c",
-    "comparetf2.c",
-    "clzti2.c",
-    "divtf3.c",
-    "extenddftf2.c",
-    "extendhftf2.c",
-    "extendsftf2.c",
-    "extendxftf2.c",
-    "fixtfdi.c",
-    "fixtfsi.c",
-    "fixtfti.c",
-    "fixunstfdi.c",
-    "fixunstfsi.c",
-    "fixunstfti.c",
-    "floatditf.c",
-    "floatsitf.c",
-    "floattitf.c",
-    "floatunditf.c",
-    "floatunsitf.c",
-    "floatuntitf.c",
-    "muldc3.c",
-    "mulsc3.c",
-    "multc3.c",
-    "multf3.c",
-    "powitf2.c",
-    "subtf3.c",
-    "trunctfbf2.c",
-    "trunctfdf2.c",
-    "trunctfhf2.c",
-    "trunctfsf2.c",
-    "trunctfxf2.c",
-    "udivmodti4.c",
-    "udivti3.c",
-]
-
-def _compiler_runtime(ctx, runtime):
-    builtins = ctx.file.compiler_rt.dirname
-    sources = {f.path: f for f in ctx.files.compiler_rt_source}
-    selected = [sources[builtins + "/" + name] for name in _COMPILER_RT_SOURCES]
-    headers = [f for f in ctx.files.compiler_rt_source if f.extension in ["h", "inc"]]
-    ctx.actions.run_shell(
-        mnemonic = "OrlixCompilerRuntime",
-        progress_message = "Building Linux compiler runtime",
-        command = r"""
-set -euo pipefail
-exec_root="$PWD"
-builtins="$exec_root/$1"
-runtime_out="$exec_root/$2"
-tool_bin="$(/usr/bin/dirname "$exec_root/$3")"
-ar_name="$(/usr/bin/basename "$exec_root/$4")"
-libdir=""
-if [ "$5" != none ]; then libdir="$exec_root/$5"; fi
-if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"; fi
-tool_root="$(/usr/bin/dirname "$tool_bin")"
-export PATH="$tool_bin:/usr/bin:/bin"
-shift 5
-test -x "$tool_bin/clang"
-test -x "$tool_bin/$ar_name"
-clang=clang
-ar="$ar_name"
-work="$exec_root/compiler-rt-objects"
-/bin/rm -rf "$work"
-/bin/mkdir -p "$work"
-trap '/bin/rm -rf "$work"' EXIT
-for relative in "$@"; do
-    source="$exec_root/$relative"
-    source_name="${source#"$builtins/"}"
-    object_name="${source_name//\//-}"
-    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -nostdlibinc -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" "-ffile-prefix-map=$tool_root=/orlix/tools" -I"$builtins" -c "$source" -o "$work/${object_name%.c}.o"
-done
-(
-    cd "$work"
-    members=()
-    while IFS= read -r object; do members+=("$object"); done < <(/usr/bin/printf '%s\n' *.o | /usr/bin/sort)
-    export ZERO_AR_DATE=1
-    export SOURCE_DATE_EPOCH=1
-    "$ar" rcs "$runtime_out" "${members[@]}"
-)
-test -s "$runtime_out"
-""",
-        arguments = [
-            builtins,
-            runtime.path,
-            ctx.file.clang.path,
-            ctx.file.llvm_ar.path,
-            ctx.files.tool_libs[0].dirname if ctx.files.tool_libs else "none",
-        ] + [f.path for f in selected],
-        inputs = depset(selected + headers + [
-            ctx.file.runtime_toolchain_identity,
-            ctx.file.compiler_identity,
-            ctx.file.clang,
-            ctx.file.llvm_ar,
-        ] + ctx.files.tool_libs + ctx.files.clang_resources),
-        outputs = [runtime],
-        env = _pinned_env(ctx),
-        use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
-    )
-    return declare_artifact_identity(
-        ctx,
-        "compiler-runtime",
-        ctx.file._artifact_identity_serializer,
-        artifacts = {"libcompiler_rt.a": runtime},
-    )
-
 def _mlibc_sysroot_impl(ctx):
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
     sysroot = ctx.actions.declare_directory(ctx.label.name + "/sysroot")
@@ -129,10 +23,10 @@ def _mlibc_sysroot_impl(ctx):
     manifest = ctx.actions.declare_file(ctx.label.name + "/manifest.json")
     abi = ctx.actions.declare_file(ctx.label.name + "/abi.txt")
     loader = ctx.actions.declare_file(ctx.label.name + "/ld.so")
-    runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
+    runtime_info = ctx.attr.compiler_runtime[OrlixCompilerRuntimeInfo]
+    runtime = runtime_info.archive
     digest = ctx.actions.declare_file(ctx.label.name + "/sysroot.sha256")
     product = ctx.actions.declare_directory(ctx.label.name + "/product")
-    runtime_identity = _compiler_runtime(ctx, runtime)
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(script, r"""
 set -euo pipefail
@@ -387,16 +281,16 @@ test -s "$digest"
             product,
             artifact_identity.manifest,
             artifact_identity.digest,
-            runtime_identity.manifest,
-            runtime_identity.digest,
+            runtime_info.identity_manifest,
+            runtime_info.identity_digest,
         ])),
         OrlixLibcSysrootInfo(
             abi_manifest = abi,
             artifact_identity_digest = artifact_identity.digest,
             artifact_identity_manifest = artifact_identity.manifest,
             compiler_runtime = runtime,
-            compiler_runtime_identity_digest = runtime_identity.digest,
-            compiler_runtime_identity_manifest = runtime_identity.manifest,
+            compiler_runtime_identity_digest = runtime_info.identity_digest,
+            compiler_runtime_identity_manifest = runtime_info.identity_manifest,
             consumed_uapi_digest = uapi.uapi_digest,
             dynamic_loader = loader,
             headers = headers,
@@ -414,7 +308,7 @@ orlix_mlibc_sysroot = rule(
         "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
         "header_digest": attr.label(allow_single_file = True, default = ":header_digest.py"),
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
-        "runtime_toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
+        "compiler_runtime": attr.label(mandatory = True, providers = [OrlixCompilerRuntimeInfo]),
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
         "mlibc_source": attr.label(mandatory = True),
         "mlibc_meson": attr.label(allow_single_file = True, mandatory = True),
@@ -429,8 +323,6 @@ orlix_mlibc_sysroot = rule(
         "libsmarter": attr.label(allow_single_file = True, mandatory = True),
         "bragi_source": attr.label(mandatory = True),
         "bragi": attr.label(allow_single_file = True, mandatory = True),
-        "compiler_rt_source": attr.label(mandatory = True),
-        "compiler_rt": attr.label(allow_single_file = True, mandatory = True),
         "clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
         "clangxx": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang++")),
         "guest_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang")),

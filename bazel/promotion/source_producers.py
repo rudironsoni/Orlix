@@ -42,6 +42,7 @@ SOURCE_PRODUCERS = {
         ),
         "labels": (
             "//bazel/feasibility/mlibc:sysroot",
+            "//bazel/feasibility/mlibc:compiler_runtime",
         ),
     },
     "rootfs": {

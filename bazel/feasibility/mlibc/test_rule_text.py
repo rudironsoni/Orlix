@@ -8,6 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 UAPI = ROOT / "bazel/feasibility/kernel/kernel_uapi.bzl"
 SYSROOT = ROOT / "bazel/feasibility/mlibc/mlibc_sysroot.bzl"
+COMPILER = ROOT / "bazel/feasibility/mlibc/compiler_runtime.bzl"
 
 
 def action_text(text: str, mnemonic: str) -> str:
@@ -69,8 +70,12 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
 
     def test_sysroot_ignores_uapi_sidecar_and_keeps_cache_tags(self) -> None:
         text = SYSROOT.read_text(encoding="utf-8")
+        compiler_text = COMPILER.read_text(encoding="utf-8")
         sysroot = action_text(text, "OrlixMLibCSysroot")
-        compiler = action_text(text, "OrlixCompilerRuntime")
+        compiler = action_text(compiler_text, "OrlixCompilerRuntime")
+        self.assertIn("OrlixCompilerRuntimeInfo", text)
+        self.assertNotIn('mnemonic = "OrlixCompilerRuntime"', text)
+        self.assertIn("compiler_runtime[OrlixCompilerRuntimeInfo]", text)
         self.assertNotIn("uapi.sha256", text)
         self.assertNotIn("uapi.sha256", sysroot)
         self.assertNotIn("uapi.uapi_digest", sysroot)
@@ -85,7 +90,20 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
             self.assertIn('"no-remote-exec": "1"', action)
             self.assertIn("use_default_shell_env = False", action)
         self.assertIn('"no-sandbox": "1"', sysroot)
-        self.assertLess(text.index('mnemonic = "OrlixCompilerRuntime"'), text.index('mnemonic = "OrlixMLibCSysroot"'))
+        self.assertNotIn("xcrun", compiler)
+        self.assertNotIn("/opt/homebrew", compiler)
+        self.assertNotIn("/usr/bin/dirname", compiler)
+        self.assertNotIn("/usr/bin/basename", compiler)
+        self.assertNotIn("/usr/bin/sort", compiler)
+        self.assertNotIn("/usr/bin/printf", compiler)
+        self.assertNotIn('"/bin/mkdir"', compiler)
+        self.assertNotIn('"/bin/rm"', compiler)
+        self.assertIn("ctx.file.mkdir", compiler_text)
+        self.assertIn("ctx.file.rm", compiler_text)
+        self.assertIn("ctx.file.sort", compiler_text)
+        self.assertIn("ctx.files.clang_resources", compiler_text)
+        self.assertIn("ctx.files.tool_libs", compiler_text)
+        self.assertIn("ctx.files.compiler_rt_source", compiler_text)
         self.assertNotIn("TMPDIR", text)
         self.assertNotIn("/opt/homebrew/bin/ccache", text)
         self.assertNotIn("command -v meson", text)
@@ -114,8 +132,8 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
         self.assertIn("ctx.file.ld_lld", text)
         self.assertIn("ctx.file.guest_clang", text)
         self.assertIn("stabilize_installed_tree", text)
-        self.assertIn("ZERO_AR_DATE=1", text)
-        self.assertIn("SOURCE_DATE_EPOCH=1", text)
+        self.assertIn("ZERO_AR_DATE=1", compiler)
+        self.assertIn("SOURCE_DATE_EPOCH=1", compiler)
         self.assertNotIn("\"c = ['$clang', '--target=aarch64-linux-gnu']\"", text)
         self.assertIn("'-isysroot', '$sdkroot'", text)
         self.assertIn("llvm-nm", text)
