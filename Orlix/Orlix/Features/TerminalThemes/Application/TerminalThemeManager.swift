@@ -74,7 +74,7 @@ private final class TerminalThemeObserverCleanup {
 @MainActor
 final package class TerminalThemeManager: ObservableObject {
     @Published private(set) var customThemes: [TerminalTheme] = []
-    @Published private(set) var themeSelection: TerminalThemeSelection
+    @Published package private(set) var themeSelection: TerminalThemeSelection
     @Published private(set) var activeAppearanceSnapshot: TerminalAppearanceSnapshot = .fallback
 
     private let dependencies: TerminalThemeManagerDependencies

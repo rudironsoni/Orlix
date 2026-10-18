@@ -64,7 +64,7 @@ final package class GhosttyRuntime: ObservableObject {
     private(set) var appearanceSnapshot: TerminalAppearanceSnapshot
 
     /// Terminal settings supplied by the app composition root.
-    private(set) var configuration: Ghostty.RuntimeConfiguration
+    package private(set) var configuration: Ghostty.RuntimeConfiguration
 
     /// Track active surfaces for config propagation
     private var activeSurfaces: [Ghostty.SurfaceReference] = []

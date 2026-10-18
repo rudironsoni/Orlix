@@ -94,7 +94,7 @@ final package class MacToolbarCommandDispatcher {
 final package class MacToolbarBridge: ObservableObject {
     static package let shared = MacToolbarBridge()
 
-    @Published private(set) var snapshot: MacToolbarSnapshot = .inactive
+    @Published package private(set) var snapshot: MacToolbarSnapshot = .inactive
     package let dispatcher = MacToolbarCommandDispatcher()
 
     // Type erasure is limited to the dynamic SwiftUI content hosted by AppKit.

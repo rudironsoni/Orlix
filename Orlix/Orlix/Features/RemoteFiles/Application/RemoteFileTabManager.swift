@@ -6,7 +6,7 @@ import OrlixModels
 #endif
 @MainActor
 final package class RemoteFileTabManager: ObservableObject {
-    @Published private(set) var tabsByServer: [UUID: [RemoteFileTab]] = [:] {
+    @Published package private(set) var tabsByServer: [UUID: [RemoteFileTab]] = [:] {
         didSet { persistSnapshotIfNeeded() }
     }
     @Published private(set) var selectedTabByServer: [UUID: UUID] = [:] {

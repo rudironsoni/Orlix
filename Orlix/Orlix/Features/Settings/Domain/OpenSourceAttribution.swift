@@ -19,6 +19,11 @@ nonisolated package struct OpenSourceAttribution: Decodable, Equatable, Identifi
         package let attribution: OpenSourceAttribution
         package let legalText: String
 
+        package init(attribution: OpenSourceAttribution, legalText: String) {
+            self.attribution = attribution
+            self.legalText = legalText
+        }
+
         package var id: String { attribution.id }
     }
 
