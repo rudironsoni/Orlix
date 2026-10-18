@@ -89,6 +89,13 @@
       "must_not_rebuild": ["kernel", "mlibc", "mlibc_compilation", "other_guest_packages"]
     },
     {
+      "id": "native-ssh-archive",
+      "row": "native_ssh_archive",
+      "example": "OpenSSL or libssh2 native archive sources",
+      "rebuilds": ["native_ssh_archive"],
+      "must_not_rebuild": ["guest_packages", "kernel", "mlibc"]
+    },
+    {
       "id": "rootfs-policy",
       "row": "rootfs_policy",
       "example": "rootfs policy only",
