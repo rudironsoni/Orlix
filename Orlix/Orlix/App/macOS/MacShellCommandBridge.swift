@@ -12,7 +12,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-enum MacShellCommandID: Equatable {
+package enum MacShellCommandID: Equatable {
     case openNewTab
     case closeSelectedTab
     case selectPreviousTab
@@ -22,25 +22,25 @@ enum MacShellCommandID: Equatable {
     case openLocalDiscovery
 }
 
-struct MacShellCommandSnapshot: Equatable {
-    var ownerId: String?
-    var activeServerId: UUID?
-    var activePaneId: UUID?
-    var hasTabActions = false
-    var hasSplitActions = false
-    var hasLocalDiscovery = false
+package struct MacShellCommandSnapshot: Equatable {
+    package var ownerId: String?
+    package var activeServerId: UUID?
+    package var activePaneId: UUID?
+    package var hasTabActions = false
+    package var hasSplitActions = false
+    package var hasLocalDiscovery = false
 
-    static let inactive = MacShellCommandSnapshot()
+    static package let inactive = MacShellCommandSnapshot()
 }
 
 @MainActor
-final class MacShellCommandDispatcher {
+final package class MacShellCommandDispatcher {
     private var ownerId: String?
     private var tabActions: ServerViewTabActions?
     private var splitActions: TerminalSplitActions?
     private var openLocalDiscovery: (() -> Void)?
 
-    func install(
+    package func install(
         ownerId: String,
         tabActions: ServerViewTabActions?,
         splitActions: TerminalSplitActions?
@@ -50,18 +50,18 @@ final class MacShellCommandDispatcher {
         self.splitActions = splitActions
     }
 
-    func clear(ownerId: String) {
+    package func clear(ownerId: String) {
         guard self.ownerId == ownerId else { return }
         self.ownerId = nil
         tabActions = nil
         splitActions = nil
     }
 
-    func setLocalDiscovery(_ action: (() -> Void)?) {
+    package func setLocalDiscovery(_ action: (() -> Void)?) {
         openLocalDiscovery = action
     }
 
-    func dispatch(_ command: MacShellCommandID) {
+    package func dispatch(_ command: MacShellCommandID) {
         switch command {
         case .openNewTab:
             tabActions?.openNew()
@@ -80,11 +80,11 @@ final class MacShellCommandDispatcher {
         }
     }
 
-    func isSplitEnabled(_ command: TerminalSplitCommand) -> Bool {
+    package func isSplitEnabled(_ command: TerminalSplitCommand) -> Bool {
         splitActions?.isEnabled(command) == true
     }
 
-    var isSplitZoomed: Bool {
+    package var isSplitZoomed: Bool {
         splitActions?.isZoomed() == true
     }
 }

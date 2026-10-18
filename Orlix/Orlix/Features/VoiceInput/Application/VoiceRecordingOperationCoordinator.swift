@@ -2,14 +2,14 @@ import Foundation
 import Combine
 
 @MainActor
-final class VoiceRecordingOperationCoordinator: ObservableObject {
-    enum Phase: Equatable {
+final package class VoiceRecordingOperationCoordinator: ObservableObject {
+    package enum Phase: Equatable {
         case idle
         case starting(operationID: UUID)
         case recording(operationID: UUID)
         case processing(operationID: UUID)
 
-        var operationID: UUID? {
+        package var operationID: UUID? {
             switch self {
             case .idle:
                 return nil
@@ -20,9 +20,9 @@ final class VoiceRecordingOperationCoordinator: ObservableObject {
             }
         }
 
-        var isActive: Bool { operationID != nil }
+        package var isActive: Bool { operationID != nil }
 
-        var isProcessing: Bool {
+        package var isProcessing: Bool {
             if case .processing = self { return true }
             return false
         }
@@ -32,7 +32,7 @@ final class VoiceRecordingOperationCoordinator: ObservableObject {
     private var task: Task<Void, Never>?
 
     @discardableResult
-    func startRecording(
+    package func startRecording(
         operation: @escaping @MainActor (UUID) async throws -> Void,
         onStarted: @escaping @MainActor () -> Void = {},
         onFailure: @escaping @MainActor (Error) -> Void
@@ -61,7 +61,7 @@ final class VoiceRecordingOperationCoordinator: ObservableObject {
     }
 
     @discardableResult
-    func startProcessing<Value>(
+    package func startProcessing<Value>(
         operation: @escaping @MainActor (UUID) async throws -> Value,
         onSuccess: @escaping @MainActor (Value) -> Void,
         onFailure: @escaping @MainActor (Error) -> Void
@@ -87,14 +87,14 @@ final class VoiceRecordingOperationCoordinator: ObservableObject {
         return task
     }
 
-    func cancel() {
+    package func cancel() {
         phase = .idle
         task?.cancel()
         task = nil
     }
 
-    var isActive: Bool { phase.isActive }
-    var isProcessing: Bool { phase.isProcessing }
+    package var isActive: Bool { phase.isActive }
+    package var isProcessing: Bool { phase.isProcessing }
 
     private func finishStarting(_ operationID: UUID) -> Bool {
         guard phase == .starting(operationID: operationID) else { return false }

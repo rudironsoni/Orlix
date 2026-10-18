@@ -4,14 +4,14 @@ import SwiftUI
 import AppKit
 #endif
 
-struct ServerViewTabNavigationButton: View {
-    let icon: String
-    let action: () -> Void
-    var help: String = ""
+package struct ServerViewTabNavigationButton: View {
+    package let icon: String
+    package let action: () -> Void
+    package var help: String = ""
 
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -36,13 +36,13 @@ struct ServerViewTabNavigationButton: View {
     }
 }
 
-struct ServerViewNewTabButton: View {
-    let help: String
-    let action: () -> Void
+package struct ServerViewNewTabButton: View {
+    package let help: String
+    package let action: () -> Void
 
     @State private var isHovering = false
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.system(size: 11))
@@ -209,11 +209,11 @@ package struct ServerToolbarTabCell: View {
     private static let selectedGlassID = "orlix.selectedTab"
 }
 
-struct AdaptiveServerTabSizing: Equatable {
-    let tabWidth: CGFloat
-    let isScrollable: Bool
+package struct AdaptiveServerTabSizing: Equatable {
+    package let tabWidth: CGFloat
+    package let isScrollable: Bool
 
-    static func resolve(
+    static package func resolve(
         containerWidth: CGFloat,
         itemCount: Int,
         minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth,
@@ -248,17 +248,17 @@ struct AdaptiveServerTabSizing: Equatable {
     }
 }
 
-struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
-    let items: [Item]
-    let selectedId: Item.ID?
-    var minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth
-    var maximumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMaximumWidth
-    var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
+package struct AdaptiveServerTabStrip<Item: Identifiable, TabContent: View>: View where Item.ID: Hashable {
+    package let items: [Item]
+    package let selectedId: Item.ID?
+    package var minimumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMinimumWidth
+    package var maximumTabWidth: CGFloat = ServerViewTopTabBarMetrics.toolbarTabMaximumWidth
+    package var tabContent: (Item, CGFloat, Namespace.ID) -> TabContent
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var glassNamespace
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let sizing = AdaptiveServerTabSizing.resolve(
                 containerWidth: proxy.size.width,

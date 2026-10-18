@@ -1,3 +1,3 @@
 #if os(iOS)
-package extension GhosttyTerminalView: TerminalKeyboardInputSession {}
+extension GhosttyTerminalView: TerminalKeyboardInputSession {}
 #endif

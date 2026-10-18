@@ -3,13 +3,13 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalLiveActivityTarget: Equatable, Sendable {
+nonisolated package enum TerminalLiveActivityTarget: Equatable, Sendable {
     case end
     case active(TerminalLiveActivitySnapshot)
 }
 
 @MainActor
-protocol TerminalLiveActivityControlling: AnyObject {
+package protocol TerminalLiveActivityControlling: AnyObject {
     func reconcile(toward target: TerminalLiveActivityTarget) async
     func endForApplicationTermination() -> Bool
 }

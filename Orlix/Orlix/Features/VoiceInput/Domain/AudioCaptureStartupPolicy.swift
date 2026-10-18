@@ -9,7 +9,7 @@ package struct AudioCaptureLifecycleState: Equatable, Sendable {
     }
 }
 
-enum AudioCaptureStartupRejection: Equatable {
+package enum AudioCaptureStartupRejection: Equatable {
     case inactiveLifecycle
     case unavailableInputFormat
 }

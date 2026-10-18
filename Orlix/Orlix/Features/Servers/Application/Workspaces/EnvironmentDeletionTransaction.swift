@@ -3,23 +3,23 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct EnvironmentDeletionResult: Equatable, Sendable {
-    let workspace: Workspace
-    let selectedEnvironment: ServerEnvironment
+nonisolated package struct EnvironmentDeletionResult: Equatable, Sendable {
+    package let workspace: Workspace
+    package let selectedEnvironment: ServerEnvironment
 }
 
-nonisolated struct EnvironmentDeletionPlan: Codable, Equatable, Identifiable, Sendable {
-    let id: UUID
-    let workspaceID: UUID
-    let environmentID: UUID
-    let fallback: ServerEnvironment
-    let updatedWorkspace: Workspace
-    let updatedServers: [Server]
-    let resultingServers: [Server]
-    let resultingWorkspaces: [Workspace]
-    let pendingMutations: [ServerPendingMutation]
+nonisolated package struct EnvironmentDeletionPlan: Codable, Equatable, Identifiable, Sendable {
+    package let id: UUID
+    package let workspaceID: UUID
+    package let environmentID: UUID
+    package let fallback: ServerEnvironment
+    package let updatedWorkspace: Workspace
+    package let updatedServers: [Server]
+    package let resultingServers: [Server]
+    package let resultingWorkspaces: [Workspace]
+    package let pendingMutations: [ServerPendingMutation]
 
-    init(
+    package init(
         workspaceID: UUID,
         environmentID: UUID,
         fallbackID: UUID,

@@ -1,8 +1,8 @@
 #if ORLIX_MODULAR_APP
 import OrlixStats
 #endif
-extension StoreManagerEffects {
-    static func live(
+package extension StoreManagerEffects {
+    static package func live(
         analytics: any StoreAnalyticsRecording,
         engagementTracker: EngagementTracker
     ) -> Self {

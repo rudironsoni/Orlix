@@ -4,18 +4,18 @@ import Foundation
 import UIKit
 #endif
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_key_s`
-    struct KeyEvent {
-        let action: Action
-        let key: Key
-        let text: String?
-        let composing: Bool
-        let mods: Mods
-        let consumedMods: Mods
-        let unshiftedCodepoint: UInt32
+    package struct KeyEvent {
+        package let action: Action
+        package let key: Key
+        package let text: String?
+        package let composing: Bool
+        package let mods: Mods
+        package let consumedMods: Mods
+        package let unshiftedCodepoint: UInt32
 
-        init(
+        package init(
             key: Key,
             action: Action = .press,
             text: String? = nil,
@@ -33,7 +33,7 @@ extension Ghostty.Input {
             self.unshiftedCodepoint = unshiftedCodepoint
         }
 
-        init?(cValue: ghostty_input_key_s) {
+        package init?(cValue: ghostty_input_key_s) {
             // Convert action
             switch cValue.action {
             case GHOSTTY_ACTION_PRESS: self.action = .press
@@ -66,7 +66,7 @@ extension Ghostty.Input {
 
         #if os(iOS)
         /// Create a KeyEvent from a UIKey (iOS hardware keyboard)
-        init?(uiKey: UIKey, action: Action) {
+        package init?(uiKey: UIKey, action: Action) {
             let mods = Mods(uiKeyModifiers: uiKey.modifierFlags)
             let consumedMods = Mods(
                 uiKeyModifiers: uiKey.modifierFlags.subtracting([.control, .command])
@@ -138,7 +138,7 @@ extension Ghostty.Input {
         /// - Parameter execute: A closure that receives the C struct and returns a value
         /// - Returns: The value returned by the closure
         @discardableResult
-        func withCValue<T>(execute: (ghostty_input_key_s) -> T) -> T {
+        package func withCValue<T>(execute: (ghostty_input_key_s) -> T) -> T {
             var keyEvent = ghostty_input_key_s()
             keyEvent.action = action.cAction
             keyEvent.keycode = UInt32(key.keyCode ?? 0)
@@ -163,14 +163,14 @@ extension Ghostty.Input {
 
 // MARK: Ghostty.Input.Action
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_action_e`
-    enum Action: String, CaseIterable {
+    package enum Action: String, CaseIterable {
         case release
         case press
         case `repeat`
 
-        var cAction: ghostty_input_action_e {
+        package var cAction: ghostty_input_action_e {
             switch self {
             case .release: GHOSTTY_ACTION_RELEASE
             case .press: GHOSTTY_ACTION_PRESS

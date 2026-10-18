@@ -4,8 +4,8 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension ManageCustomThemesSheet {
-    var platformBody: some View {
+package extension ManageCustomThemesSheet {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Custom Themes") {
                 onClose()

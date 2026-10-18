@@ -7,9 +7,9 @@ import UIKit
 #endif
 
 #if os(macOS)
-extension SwiftUI.EventModifiers {
+package extension SwiftUI.EventModifiers {
     /// Initialize EventModifiers from NSEvent.ModifierFlags
-    init(nsFlags: NSEvent.ModifierFlags) {
+    package init(nsFlags: NSEvent.ModifierFlags) {
         var modifiers = SwiftUI.EventModifiers()
         if nsFlags.contains(.shift) { modifiers.insert(.shift) }
         if nsFlags.contains(.control) { modifiers.insert(.control) }

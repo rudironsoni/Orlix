@@ -102,12 +102,12 @@ package struct NoticeBannerView: View {
 }
 
 private struct NoticeDetailView: View {
-    let detail: String
+    package let detail: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var didCopy = false
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             ScrollView {
                 Text(detail)

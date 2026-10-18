@@ -11,32 +11,32 @@ import OrlixModels
 
 package actor SSHClient {
     package struct ConnectingState {
-        let id: UUID
-        let key: String
-        let task: Task<SSHSession, Error>
-        var pendingSession: SSHSession?
-        let startupTrace: SSHStartupTrace
+        package let id: UUID
+        package let key: String
+        package let task: Task<SSHSession, Error>
+        package var pendingSession: SSHSession?
+        package let startupTrace: SSHStartupTrace
     }
 
     package struct ConnectedState {
-        let id: UUID
-        let key: String
-        var server: Server
-        let session: SSHSession
-        var remoteEnvironment: RemoteEnvironment?
-        var remoteTerminalType: RemoteTerminalType?
-        let startupTrace: SSHStartupTrace
+        package let id: UUID
+        package let key: String
+        package var server: Server
+        package let session: SSHSession
+        package var remoteEnvironment: RemoteEnvironment?
+        package var remoteTerminalType: RemoteTerminalType?
+        package let startupTrace: SSHStartupTrace
     }
 
     package struct AbortedState {
-        let operationID: UUID?
-        let session: SSHSession?
-        let connectTask: Task<SSHSession, Error>?
+        package let operationID: UUID?
+        package let session: SSHSession?
+        package let connectTask: Task<SSHSession, Error>?
     }
 
     package struct DisconnectOperation {
-        let id: UUID
-        let task: Task<Void, Never>
+        package let id: UUID
+        package let task: Task<Void, Never>
     }
 
     package enum Lifecycle {

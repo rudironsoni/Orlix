@@ -29,13 +29,13 @@ nonisolated package enum ServerConnectionTestResult: Equatable, Sendable {
 }
 
 nonisolated package protocol ServerConnectionTesting: Sendable {
-    package func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult
+    func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult
 }
 
 nonisolated package protocol ServerHostKeyRepository: Sendable {
-    package func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge?
-    package func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool
-    package func reject(_ challenge: KnownHostsManager.Challenge)
+    func pendingChallenge(for host: String, port: Int, now: Date) -> KnownHostsManager.Challenge?
+    func approve(_ challenge: KnownHostsManager.Challenge, now: Date) -> Bool
+    func reject(_ challenge: KnownHostsManager.Challenge)
 }
 
 @MainActor
@@ -52,14 +52,14 @@ package struct ServerFormDependencies {
     package let makeID: @Sendable () -> UUID
 }
 
-nonisolated enum ServerFormOperationFailure: Equatable, Sendable {
+nonisolated package enum ServerFormOperationFailure: Equatable, Sendable {
     case operation(message: String)
     case credentialLoad(message: String)
     case storedKeyLoad(message: String)
     case wakeOnLANUnavailable
 }
 
-nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
+nonisolated package enum ServerFormOperationPhase: Equatable, Sendable {
     case idle
     case loadingCredentials(id: UUID)
     case testing(id: UUID, snapshot: ServerFormModel.ConnectionSnapshot)
@@ -71,7 +71,7 @@ nonisolated enum ServerFormOperationPhase: Equatable, Sendable {
 }
 
 @MainActor
-final class ServerFormOperationController: ObservableObject {
+final package class ServerFormOperationController: ObservableObject {
     @Published private(set) var phase: ServerFormOperationPhase = .idle
     @Published private(set) var storedKeys: [SSHKeyEntry] = []
     @Published private(set) var selectedStoredKeyID: UUID?
@@ -87,7 +87,7 @@ final class ServerFormOperationController: ObservableObject {
     private var connectionTestTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
-    init(
+    package init(
         credentialLoader: any ServerFormCredentialLoading,
         connectionTester: any ServerConnectionTesting,
         wakeOnLANMACAddressResolver: any WakeOnLANMACAddressResolving,
@@ -111,45 +111,45 @@ final class ServerFormOperationController: ObservableObject {
         saveTask?.cancel()
     }
 
-    var isLoadingCredentials: Bool {
+    package var isLoadingCredentials: Bool {
         if case .loadingCredentials = phase { return true }
         return false
     }
 
-    var isTestingConnection: Bool {
+    package var isTestingConnection: Bool {
         if case .testing = phase { return true }
         return false
     }
 
-    var isSaving: Bool {
+    package var isSaving: Bool {
         if case .saving = phase { return true }
         return false
     }
 
-    var requiresUpgrade: Bool {
+    package var requiresUpgrade: Bool {
         phase == .requiresUpgrade
     }
 
-    var failure: ServerFormOperationFailure? {
+    package var failure: ServerFormOperationFailure? {
         if case .failed(let failure) = phase { return failure }
         return nil
     }
 
-    var connectionTestFailure: ServerConnectionTestFailure? {
+    package var connectionTestFailure: ServerConnectionTestFailure? {
         if case .testFailed(_, let failure) = phase { return failure }
         return nil
     }
 
-    var hostKeyChallenge: KnownHostsManager.Challenge? {
+    package var hostKeyChallenge: KnownHostsManager.Challenge? {
         connectionTestFailure?.hostKeyChallenge
     }
 
-    func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
+    package func hasValidConnectionTest(for snapshot: ServerFormModel.ConnectionSnapshot) -> Bool {
         guard case .testSucceeded(let completedSnapshot) = phase else { return false }
         return completedSnapshot == snapshot
     }
 
-    func clearPresentation() {
+    package func clearPresentation() {
         switch phase {
         case .failed, .requiresUpgrade, .testFailed:
             phase = .idle
@@ -158,7 +158,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func resetConnectionTest() {
+    package func resetConnectionTest() {
         connectionTestTask?.cancel()
         connectionTestTask = nil
         switch phase {
@@ -169,7 +169,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func loadFormCredentials(
+    package func loadFormCredentials(
         for server: Server?,
         onLoaded: @escaping @MainActor (ServerCredentials) -> Void
     ) {
@@ -194,7 +194,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func refreshStoredKeys(
+    package func refreshStoredKeys(
         selecting selectedID: UUID,
         onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
     ) {
@@ -219,7 +219,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func selectStoredKey(
+    package func selectStoredKey(
         id: UUID,
         onLoaded: @escaping @MainActor (ServerFormStoredKeyLoad) -> Void
     ) {
@@ -237,12 +237,12 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func clearStoredKeySelection() {
+    package func clearStoredKeySelection() {
         invalidateCredentialLoading()
         selectedStoredKeyID = nil
     }
 
-    func invalidateCredentialLoading() {
+    package func invalidateCredentialLoading() {
         credentialLoadTask?.cancel()
         credentialLoadTask = nil
         if case .loadingCredentials = phase {
@@ -250,7 +250,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func startConnectionTest(
+    package func startConnectionTest(
         server: Server,
         credentials: ServerCredentials,
         snapshot: ServerFormModel.ConnectionSnapshot
@@ -272,14 +272,14 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func rejectHostKeyChallenge() {
+    package func rejectHostKeyChallenge() {
         guard let challenge = hostKeyChallenge else { return }
         hostKeys.reject(challenge)
         phase = .idle
     }
 
     @discardableResult
-    func approveHostKeyChallenge() -> Bool {
+    package func approveHostKeyChallenge() -> Bool {
         guard let challenge = hostKeyChallenge,
               let snapshot = currentTestSnapshot else { return false }
         guard hostKeys.approve(challenge, now: now()) else {
@@ -297,7 +297,7 @@ final class ServerFormOperationController: ObservableObject {
         return true
     }
 
-    func save(
+    package func save(
         mutation: ServerMutation,
         credentials: ServerCredentials,
         wakeOnLANPlan: ServerFormModel.WakeOnLANSavePlan,
@@ -380,7 +380,7 @@ final class ServerFormOperationController: ObservableObject {
         }
     }
 
-    func cancel() {
+    package func cancel() {
         credentialLoadTask?.cancel()
         credentialLoadTask = nil
         connectionTestTask?.cancel()

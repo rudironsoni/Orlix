@@ -1,12 +1,12 @@
 import SwiftUI
 import Combine
 
-enum NoticeTopInsetBehavior {
+package enum NoticeTopInsetBehavior {
     case contentTop
     case safeAreaTop
 }
 
-enum NoticeBottomInsetBehavior {
+package enum NoticeBottomInsetBehavior {
     case contentBottom
     case safeAreaBottom
 }

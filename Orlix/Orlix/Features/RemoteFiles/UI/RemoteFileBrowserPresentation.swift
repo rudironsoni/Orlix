@@ -3,8 +3,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-enum RemoteFileBrowserPresentation: Identifiable {
-    enum ID: Hashable {
+package enum RemoteFileBrowserPresentation: Identifiable {
+    package enum ID: Hashable {
         case upload
         case share
         case createFolder
@@ -17,38 +17,38 @@ enum RemoteFileBrowserPresentation: Identifiable {
         case transferCancellation
     }
 
-    struct CreateFolderDraft {
-        let destinationPath: String
-        var name = ""
-        var isSubmitting = false
+    package struct CreateFolderDraft {
+        package let destinationPath: String
+        package var name = ""
+        package var isSubmitting = false
     }
 
-    struct RenameDraft {
-        let entry: RemoteFileEntry
-        var name: String
-        var isSubmitting = false
+    package struct RenameDraft {
+        package let entry: RemoteFileEntry
+        package var name: String
+        package var isSubmitting = false
     }
 
-    struct MoveDraft {
-        let entry: RemoteFileEntry
-        var destinationDirectory: String
-        var isSubmitting = false
+    package struct MoveDraft {
+        package let entry: RemoteFileEntry
+        package var destinationDirectory: String
+        package var isSubmitting = false
     }
 
-    struct PermissionDraft {
-        let entry: RemoteFileEntry
-        var permissions: RemoteFilePermissionDraft
-        let originalAccessBits: UInt32
-        let preservedBits: UInt32
-        let fileTypeBits: UInt32
-        var isSubmitting = false
-        var errorMessage: String?
+    package struct PermissionDraft {
+        package let entry: RemoteFileEntry
+        package var permissions: RemoteFilePermissionDraft
+        package let originalAccessBits: UInt32
+        package let preservedBits: UInt32
+        package let fileTypeBits: UInt32
+        package var isSubmitting = false
+        package var errorMessage: String?
     }
 
-    struct DownloadExport {
-        let document: RemoteFileDownloadDocument
-        let filename: String
-        let transferID: UUID
+    package struct DownloadExport {
+        package let document: RemoteFileDownloadDocument
+        package let filename: String
+        package let transferID: UUID
     }
 
     case upload(destinationPath: String)
@@ -62,7 +62,7 @@ enum RemoteFileBrowserPresentation: Identifiable {
     case operationError(String)
     case transferCancellation(RemoteFileTransferCancellationRequest)
 
-    var id: ID {
+    package var id: ID {
         switch self {
         case .upload: .upload
         case .share: .share
@@ -77,7 +77,7 @@ enum RemoteFileBrowserPresentation: Identifiable {
         }
     }
 
-    var isAlert: Bool {
+    package var isAlert: Bool {
         switch self {
         case .operationError, .transferCancellation:
             true
@@ -86,11 +86,11 @@ enum RemoteFileBrowserPresentation: Identifiable {
         }
     }
 
-    var isDownloadExport: Bool {
+    package var isDownloadExport: Bool {
         if case .downloadExport = self { true } else { false }
     }
 
-    var isIOSSheet: Bool {
+    package var isIOSSheet: Bool {
         switch self {
         case .upload, .share, .createFolder, .rename, .move, .delete, .permissions:
             true
@@ -99,7 +99,7 @@ enum RemoteFileBrowserPresentation: Identifiable {
         }
     }
 
-    var isMacOSSheet: Bool {
+    package var isMacOSSheet: Bool {
         switch self {
         case .move, .permissions:
             true
@@ -109,11 +109,11 @@ enum RemoteFileBrowserPresentation: Identifiable {
     }
 }
 
-enum RemoteFileTransferKind {
+package enum RemoteFileTransferKind {
     case upload
     case transfer
 
-    var confirmationTitle: String {
+    package var confirmationTitle: String {
         switch self {
         case .upload:
             String(localized: "Cancel Upload?")
@@ -122,7 +122,7 @@ enum RemoteFileTransferKind {
         }
     }
 
-    var cancelButtonTitle: String {
+    package var cancelButtonTitle: String {
         switch self {
         case .upload:
             String(localized: "Cancel Upload")
@@ -131,7 +131,7 @@ enum RemoteFileTransferKind {
         }
     }
 
-    var keepButtonTitle: String {
+    package var keepButtonTitle: String {
         switch self {
         case .upload:
             String(localized: "Keep Uploading")
@@ -140,7 +140,7 @@ enum RemoteFileTransferKind {
         }
     }
 
-    var confirmationMessage: String {
+    package var confirmationMessage: String {
         switch self {
         case .upload:
             String(localized: "The current upload will stop.")
@@ -150,7 +150,7 @@ enum RemoteFileTransferKind {
     }
 }
 
-struct RemoteFileTransferCancellationRequest: Identifiable {
-    let id: UUID
-    let kind: RemoteFileTransferKind
+package struct RemoteFileTransferCancellationRequest: Identifiable {
+    package let id: UUID
+    package let kind: RemoteFileTransferKind
 }

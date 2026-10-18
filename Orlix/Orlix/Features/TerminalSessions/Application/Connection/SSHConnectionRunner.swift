@@ -5,32 +5,32 @@ import os.log
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated struct SSHConnectionInitialTerminalState: Equatable, Sendable {
-    let columns: Int
-    let rows: Int
-    let pixelSize: TerminalPixelSize?
+nonisolated package struct SSHConnectionInitialTerminalState: Equatable, Sendable {
+    package let columns: Int
+    package let rows: Int
+    package let pixelSize: TerminalPixelSize?
 }
 
-nonisolated struct SSHConnectionRestoredShell: Sendable {
-    let shell: ShellHandle
-    let remoteSessionLifecycle: RemoteSessionLifecycleContext?
-    let startupActionReplayPending: Bool
+nonisolated package struct SSHConnectionRestoredShell: Sendable {
+    package let shell: ShellHandle
+    package let remoteSessionLifecycle: RemoteSessionLifecycleContext?
+    package let startupActionReplayPending: Bool
 }
 
-nonisolated struct SSHConnectionRunnerTransport: Sendable {
-    let connect: @Sendable (_ server: Server, _ credentials: ServerCredentials) async throws -> Void
-    let startShell: @Sendable (
+nonisolated package struct SSHConnectionRunnerTransport: Sendable {
+    package let connect: @Sendable (_ server: Server, _ credentials: ServerCredentials) async throws -> Void
+    package let startShell: @Sendable (
         _ columns: Int,
         _ rows: Int,
         _ pixelSize: TerminalPixelSize?,
         _ startupCommand: String?,
         _ mayExecuteUserStartupAction: Bool
     ) async throws -> ShellHandle
-    let disconnect: @Sendable () async -> Void
-    let closeShell: @Sendable (_ shellId: UUID) async -> Void
-    let execute: @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
+    package let disconnect: @Sendable () async -> Void
+    package let closeShell: @Sendable (_ shellId: UUID) async -> Void
+    package let execute: @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 
-    static func live(client: SSHClient) -> Self {
+    static package func live(client: SSHClient) -> Self {
         Self(
             connect: { server, credentials in
                 _ = try await client.connect(to: server, credentials: credentials)
@@ -57,8 +57,8 @@ nonisolated struct SSHConnectionRunnerTransport: Sendable {
     }
 }
 
-nonisolated enum SSHConnectionRunner {
-    static func run(
+nonisolated package enum SSHConnectionRunner {
+    static package func run(
         server: Server,
         credentials: ServerCredentials,
         transport: SSHConnectionRunnerTransport,

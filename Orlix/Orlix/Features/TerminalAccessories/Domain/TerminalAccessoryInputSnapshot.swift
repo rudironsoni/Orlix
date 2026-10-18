@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum TerminalAccessoryResolvedItem: Equatable, Sendable {
+nonisolated package enum TerminalAccessoryResolvedItem: Equatable, Sendable {
     case system(TerminalAccessorySystemActionID)
     case custom(TerminalAccessoryCustomAction)
 }
 
-nonisolated enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
+nonisolated package enum TerminalAccessoryInputSnapshotChange: Equatable, Sendable {
     case none
     case leadingButtons
     case itemsAndLeadingButtons

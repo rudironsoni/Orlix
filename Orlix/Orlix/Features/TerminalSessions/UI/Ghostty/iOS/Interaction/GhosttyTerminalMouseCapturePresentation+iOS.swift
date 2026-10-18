@@ -78,10 +78,10 @@ package extension GhosttyTerminalView {
     }
 }
 
-final class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
+final package class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
     private let messageLabel = UILabel()
 
-    override init(effect: UIVisualEffect? = UIBlurEffect(style: .systemChromeMaterialDark)) {
+    override package init(effect: UIVisualEffect? = UIBlurEffect(style: .systemChromeMaterialDark)) {
         super.init(effect: effect)
         isUserInteractionEnabled = false
         isAccessibilityElement = true
@@ -106,11 +106,11 @@ final class TerminalMouseCaptureIndicatorView: UIVisualEffectView {
         ])
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(message: String) {
+    package func update(message: String) {
         messageLabel.text = message
         accessibilityLabel = message
     }

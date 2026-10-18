@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated enum SSHConnectedSessionAction: Equatable, Sendable {
+nonisolated package enum SSHConnectedSessionAction: Equatable, Sendable {
     case reuse
     case recover
     case reject
 }
 
-nonisolated enum SSHConnectedSessionPolicy {
-    static func action(
+nonisolated package enum SSHConnectedSessionPolicy {
+    static package func action(
         existingConnectionKey: String,
         requestedConnectionKey: String,
         transportIsConnected: Bool

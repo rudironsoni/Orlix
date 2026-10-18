@@ -11,10 +11,10 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey)
     private var preservesTerminalSizeForKeyboard = false
 
-    let isTerminalSelected: Bool
-    let content: Content
+    package let isTerminalSelected: Bool
+    package let content: Content
 
-    init(
+    package init(
         isTerminalSelected: Bool,
         @ViewBuilder content: () -> Content
     ) {
@@ -22,7 +22,7 @@ private struct TerminalKeyboardSafeAreaHost<Content: View>: View {
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         content.modifier(
             TerminalKeyboardSafeAreaModifier(
                 isEnabled: preservesTerminalSizeForKeyboard && isTerminalSelected
@@ -300,14 +300,14 @@ package extension ConnectionTerminalContainer {
 }
 
 private struct SharedTerminalTabsBar: View {
-    let tabs: [TerminalTab]
-    @Binding var selectedTabId: UUID?
-    @ObservedObject var projection: TerminalServerToolbarTabStripProjection
-    let onClose: (TerminalTab) -> Void
+    package let tabs: [TerminalTab]
+    @Binding package var selectedTabId: UUID?
+    @ObservedObject package var projection: TerminalServerToolbarTabStripProjection
+    package let onClose: (TerminalTab) -> Void
 
     private let minTabWidth: CGFloat = 120
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let count = max(tabs.count, 1)
             let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)
@@ -392,14 +392,14 @@ private struct SharedTerminalTabsBar: View {
 }
 
 private struct SharedTerminalTabButton: View {
-    let title: String
-    let statusColor: Color
-    let isSelected: Bool
-    let fixedWidth: CGFloat?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package let title: String
+    package let statusColor: Color
+    package let isSelected: Bool
+    package let fixedWidth: CGFloat?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(statusColor)

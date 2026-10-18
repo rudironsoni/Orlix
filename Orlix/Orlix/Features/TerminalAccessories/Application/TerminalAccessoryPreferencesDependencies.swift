@@ -3,25 +3,25 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalAccessoryCloudClientError: Error, Equatable, Sendable {
+nonisolated package enum TerminalAccessoryCloudClientError: Error, Equatable, Sendable {
     case conflictRetryLimitReached
 }
 
 @MainActor
 package protocol TerminalAccessoryCloudClient: AnyObject {
-    package func syncTerminalAccessoryProfile(
+    func syncTerminalAccessoryProfile(
         _ localProfile: TerminalAccessoryProfile
     ) async throws -> TerminalAccessoryProfile
 }
 
 @MainActor
-protocol TerminalAccessoryMutationQueue: AnyObject {
+package protocol TerminalAccessoryMutationQueue: AnyObject {
     func enqueueTerminalAccessoryProfileUpsert(_ profile: TerminalAccessoryProfile) throws
     func drainPendingMutations() async
 }
 
 @MainActor
-protocol TerminalAccessorySyncLifecycle: AnyObject {
+package protocol TerminalAccessorySyncLifecycle: AnyObject {
     func observe(
         _ observer: @escaping (CloudKitSyncLifecycleEvent) -> Void
     ) -> UUID
@@ -29,7 +29,7 @@ protocol TerminalAccessorySyncLifecycle: AnyObject {
 }
 
 @MainActor
-protocol TerminalAccessoryResolutionSource: AnyObject {
+package protocol TerminalAccessoryResolutionSource: AnyObject {
     func observeTerminalAccessoryProfile(
         _ observer: @escaping (TerminalAccessoryProfile) -> Void
     ) -> UUID
@@ -37,28 +37,28 @@ protocol TerminalAccessoryResolutionSource: AnyObject {
 }
 
 @MainActor
-protocol TerminalAccessoryResolutionPublishing: AnyObject {
+package protocol TerminalAccessoryResolutionPublishing: AnyObject {
     func publishTerminalAccessoryProfile(_ profile: TerminalAccessoryProfile)
 }
 
 @MainActor
-protocol TerminalAccessoryProfilePersisting: AnyObject {
+package protocol TerminalAccessoryProfilePersisting: AnyObject {
     func loadProfile(defaultWriterID: String) -> TerminalAccessoryProfile
     func saveProfile(_ profile: TerminalAccessoryProfile)
 }
 
 @MainActor
-struct TerminalAccessoryPreferencesDependencies {
-    let profileStore: any TerminalAccessoryProfilePersisting
-    let cloud: any TerminalAccessoryCloudClient
-    let mutationQueue: any TerminalAccessoryMutationQueue
-    let syncLifecycle: any TerminalAccessorySyncLifecycle
-    let resolutionSource: any TerminalAccessoryResolutionSource
-    let writerID: String
-    let isSyncEnabled: () -> Bool
-    let now: () -> Date
-    let makeID: () -> UUID
-    let trackCustomActionCreated: (TerminalAccessoryCustomActionKind) -> Void
-    let waitForSyncDebounce: () async throws -> Void
-    let startsSynchronization: Bool
+package struct TerminalAccessoryPreferencesDependencies {
+    package let profileStore: any TerminalAccessoryProfilePersisting
+    package let cloud: any TerminalAccessoryCloudClient
+    package let mutationQueue: any TerminalAccessoryMutationQueue
+    package let syncLifecycle: any TerminalAccessorySyncLifecycle
+    package let resolutionSource: any TerminalAccessoryResolutionSource
+    package let writerID: String
+    package let isSyncEnabled: () -> Bool
+    package let now: () -> Date
+    package let makeID: () -> UUID
+    package let trackCustomActionCreated: (TerminalAccessoryCustomActionKind) -> Void
+    package let waitForSyncDebounce: () async throws -> Void
+    package let startsSynchronization: Bool
 }

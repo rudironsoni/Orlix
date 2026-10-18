@@ -3,22 +3,22 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct ThemeBuilderSheet: View {
-    let usePerAppearanceTheme: Bool
-    let showApplyTarget: Bool
-    let title: String
-    let onDeleteRequest: (() -> Void)?
-    let onSave: (String, String, TerminalThemeSelectionTarget) throws -> Void
+package struct ThemeBuilderSheet: View {
+    package let usePerAppearanceTheme: Bool
+    package let showApplyTarget: Bool
+    package let title: String
+    package let onDeleteRequest: (() -> Void)?
+    package let onSave: (String, String, TerminalThemeSelectionTarget) throws -> Void
 
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) package var dismiss
 
     @State private var name: String
     @State private var draft: TerminalThemeDraft
     @State private var applyTarget: TerminalThemeSelectionTarget
     @State private var errorMessage: String?
-    @State var showingDeleteConfirmation = false
+    @State package var showingDeleteConfirmation = false
 
-    init(
+    package init(
         usePerAppearanceTheme: Bool,
         showApplyTarget: Bool? = nil,
         title: String = "Theme Builder",
@@ -39,7 +39,7 @@ struct ThemeBuilderSheet: View {
         _applyTarget = State(initialValue: initialApplyTarget)
     }
 
-    var canSave: Bool {
+    package var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && draft.hasValidBuilderValues
     }
@@ -68,7 +68,7 @@ struct ThemeBuilderSheet: View {
         previewColor(for: draft.selectionForeground, fallback: previewForeground)
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
         .alert("Delete Custom Theme?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
@@ -81,7 +81,7 @@ struct ThemeBuilderSheet: View {
         .adaptiveSoftScrollEdges()
     }
 
-    var formContent: some View {
+    package var formContent: some View {
         Form {
                 Section {
                     platformThemeNameField(name: $name)
@@ -298,7 +298,7 @@ struct ThemeBuilderSheet: View {
         #endif
     }
 
-    func save() {
+    package func save() {
         do {
             try onSave(
                 name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -318,16 +318,16 @@ struct ThemeBuilderSheet: View {
 }
 
 private struct ThemeBuilderColorSwatchPicker: View {
-    let label: String
-    @Binding var text: String
-    let fallback: Color
+    package let label: String
+    @Binding package var text: String
+    package let fallback: Color
 
     private var swatchColor: Color {
         guard TerminalThemeValidator.isValidHexColor(text) else { return fallback }
         return Color.fromHex(text)
     }
 
-    var body: some View {
+    package var body: some View {
         let pickColorLabel = String(
             format: String(localized: "Pick %@ color"),
             label

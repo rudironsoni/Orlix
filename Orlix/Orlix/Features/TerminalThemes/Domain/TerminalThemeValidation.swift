@@ -39,7 +39,7 @@ nonisolated package enum TerminalThemeValidator {
         case unfocusedSplitOpacity = "unfocused-split-opacity"
         case minimumContrast = "minimum-contrast"
 
-        var valueRule: ValueRule {
+        package var valueRule: ValueRule {
             switch self {
             case .background, .foreground, .cursorColor, .cursorText,
                  .selectionBackground, .selectionForeground, .boldColor,

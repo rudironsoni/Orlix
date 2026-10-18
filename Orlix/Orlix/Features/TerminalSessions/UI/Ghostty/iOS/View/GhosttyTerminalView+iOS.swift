@@ -16,13 +16,13 @@ import CoreImage
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalSurfaceGeometryUpdate: Equatable, Sendable {
+nonisolated package enum TerminalSurfaceGeometryUpdate: Equatable, Sendable {
     case apply
     case preserveCurrentGrid
 }
 
-nonisolated enum TerminalSurfaceGeometryPolicy {
-    static func update(
+nonisolated package enum TerminalSurfaceGeometryPolicy {
+    static package func update(
         renderingIsPaused: Bool,
         preservesForegroundKeyboardGrid: Bool,
         currentSize: CGSize,
@@ -337,8 +337,8 @@ package class GhosttyTerminalView: UIView {
     package var terminalAltOptionKeyCodes: Set<UInt16> = []
 
     package struct HardwarePressResult {
-        var forwardedToSystem: Set<UIPress> = []
-        var didHandleGhosttyInput = false
+        package var forwardedToSystem: Set<UIPress> = []
+        package var didHandleGhosttyInput = false
     }
 
     // MARK: - Rendering Components

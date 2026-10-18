@@ -5,11 +5,11 @@ import OrlixSSH
 private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository {
     private let knownHosts: KnownHostsManager
 
-    init(knownHosts: KnownHostsManager) {
+    package init(knownHosts: KnownHostsManager) {
         self.knownHosts = knownHosts
     }
 
-    func loadKnownHosts() -> [KnownHostSettingsItem] {
+    package func loadKnownHosts() -> [KnownHostSettingsItem] {
         knownHosts.entries().map { entry in
             KnownHostSettingsItem(
                 host: entry.host,
@@ -19,11 +19,11 @@ private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository 
         }
     }
 
-    func removeKnownHost(host: String, port: Int) {
+    package func removeKnownHost(host: String, port: Int) {
         knownHosts.remove(host: host, port: port)
     }
 
-    func removeAllKnownHosts() {
+    package func removeAllKnownHosts() {
         knownHosts.removeAll()
     }
 }

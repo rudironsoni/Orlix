@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated final class CloudKitOperationContinuation<Success: Sendable>: @unchecked Sendable {
+nonisolated final package class CloudKitOperationContinuation<Success: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Success, Error>?
     private var operation: Operation?
     private var result: Result<Success, Error>?
     private var cancelsOperation = false
 
-    func install(_ continuation: CheckedContinuation<Success, Error>) {
+    package func install(_ continuation: CheckedContinuation<Success, Error>) {
         lock.lock()
         if let result {
             lock.unlock()
@@ -18,7 +18,7 @@ nonisolated final class CloudKitOperationContinuation<Success: Sendable>: @unche
         }
     }
 
-    func install(_ operation: Operation) {
+    package func install(_ operation: Operation) {
         lock.lock()
         let isComplete = result != nil
         if !isComplete {
@@ -31,15 +31,15 @@ nonisolated final class CloudKitOperationContinuation<Success: Sendable>: @unche
         }
     }
 
-    func resume(returning value: Success) {
+    package func resume(returning value: Success) {
         complete(with: .success(value), cancellingOperation: false)
     }
 
-    func resume(throwing error: Error) {
+    package func resume(throwing error: Error) {
         complete(with: .failure(error), cancellingOperation: false)
     }
 
-    func cancel() {
+    package func cancel() {
         complete(with: .failure(CancellationError()), cancellingOperation: true)
     }
 
@@ -65,12 +65,12 @@ nonisolated final class CloudKitOperationContinuation<Success: Sendable>: @unche
     }
 }
 
-nonisolated final class CloudKitTaskContinuation<Success: Sendable>: @unchecked Sendable {
+nonisolated final package class CloudKitTaskContinuation<Success: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Success, Error>?
     private var result: Result<Success, Error>?
 
-    func install(_ continuation: CheckedContinuation<Success, Error>) {
+    package func install(_ continuation: CheckedContinuation<Success, Error>) {
         lock.lock()
         if let result {
             lock.unlock()
@@ -81,11 +81,11 @@ nonisolated final class CloudKitTaskContinuation<Success: Sendable>: @unchecked 
         }
     }
 
-    func resume(with result: Result<Success, Error>) {
+    package func resume(with result: Result<Success, Error>) {
         complete(with: result)
     }
 
-    func cancel() {
+    package func cancel() {
         complete(with: .failure(CancellationError()))
     }
 

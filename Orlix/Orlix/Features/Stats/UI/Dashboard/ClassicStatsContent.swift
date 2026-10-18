@@ -3,27 +3,27 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct ClassicStatsContent: View {
-    let serverName: String
-    let stats: ServerStats
-    let visibleBlocks: [StatsPreferences.BlockID]
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let isDockerUnlocked: Bool
-    let showsCustomizationEntryPoint: Bool
-    let customizeAction: (() -> Void)?
-    let dockerUpgradeAction: (() -> Void)?
-    let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    let loadProcesses: (() async throws -> [ProcessInfo])?
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let storageVolumes: [VolumeInfo]
-    let visibleStorageVolumes: [VolumeInfo]
-    let hiddenStorageVolumeIDs: Set<VolumeIdentity>
-    let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
+package struct ClassicStatsContent: View {
+    package let serverName: String
+    package let stats: ServerStats
+    package let visibleBlocks: [StatsPreferences.BlockID]
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let isDockerUnlocked: Bool
+    package let showsCustomizationEntryPoint: Bool
+    package let customizeAction: (() -> Void)?
+    package let dockerUpgradeAction: (() -> Void)?
+    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let storageVolumes: [VolumeInfo]
+    package let visibleStorageVolumes: [VolumeInfo]
+    package let hiddenStorageVolumeIDs: Set<VolumeIdentity>
+    package let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
-    var body: some View {
+    package var body: some View {
         LazyVStack(spacing: 16) {
             ForEach(visibleBlocks, id: \.self) { blockID in
                 classicBlock(blockID)
@@ -115,10 +115,10 @@ struct ClassicStatsContent: View {
 }
 
 private struct ClassicStatsCustomizeCard: View {
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let action: () -> Void
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: "slider.horizontal.3")
@@ -164,11 +164,11 @@ private struct ClassicStatsCustomizeCard: View {
 }
 
 private struct ClassicServerHeaderCard: View, Equatable {
-    let serverName: String
-    let osInfo: String
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let serverName: String
+    package let osInfo: String
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(serverName)
                 .font(.title2)
@@ -187,16 +187,16 @@ private struct ClassicServerHeaderCard: View, Equatable {
 }
 
 private struct ClassicCPUStatsCard: View, Equatable {
-    let usage: Double
-    let user: Double
-    let system: Double
-    let iowait: Double
-    let steal: Double
-    let idle: Double
-    let cores: Int
-    let uptime: TimeInterval
-    let loadAverage: (Double, Double, Double)
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let usage: Double
+    package let user: Double
+    package let system: Double
+    package let iowait: Double
+    package let steal: Double
+    package let idle: Double
+    package let cores: Int
+    package let uptime: TimeInterval
+    package let loadAverage: (Double, Double, Double)
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
     static func == (lhs: ClassicCPUStatsCard, rhs: ClassicCPUStatsCard) -> Bool {
         lhs.usage == rhs.usage && lhs.user == rhs.user && lhs.system == rhs.system &&
@@ -206,7 +206,7 @@ private struct ClassicCPUStatsCard: View, Equatable {
         lhs.loadAverage.2 == rhs.loadAverage.2 && lhs.surfaceStyle == rhs.surfaceStyle
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -259,14 +259,14 @@ private struct ClassicCPUStatsCard: View, Equatable {
 }
 
 private struct ClassicMemoryStatsCard: View, Equatable {
-    let used: UInt64
-    let free: UInt64
-    let cached: UInt64
-    let total: UInt64
-    let percent: Double
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let used: UInt64
+    package let free: UInt64
+    package let cached: UInt64
+    package let total: UInt64
+    package let percent: Double
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 16) {
@@ -308,11 +308,11 @@ private struct ClassicMemoryStatsCard: View, Equatable {
 }
 
 private struct ClassicGPUStatsCard: View, Equatable {
-    let device: GPUDevice?
-    let sample: GPUSample?
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let device: GPUDevice?
+    package let sample: GPUSample?
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 16) {
@@ -391,13 +391,13 @@ private struct ClassicGPUStatsCard: View, Equatable {
 }
 
 private struct ClassicNetworkStatsCard: View, Equatable {
-    let txSpeed: UInt64
-    let rxSpeed: UInt64
-    let txTotal: UInt64
-    let rxTotal: UInt64
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let txSpeed: UInt64
+    package let rxSpeed: UInt64
+    package let txTotal: UInt64
+    package let rxTotal: UInt64
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 16) {
@@ -455,16 +455,16 @@ private struct ClassicNetworkStatsCard: View, Equatable {
 }
 
 private struct ClassicVolumesCard: View {
-    let volumes: [VolumeInfo]
-    let visibleVolumes: [VolumeInfo]
-    let hiddenVolumeIDs: Set<VolumeIdentity>
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
+    package let volumes: [VolumeInfo]
+    package let visibleVolumes: [VolumeInfo]
+    package let hiddenVolumeIDs: Set<VolumeIdentity>
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -527,9 +527,9 @@ private struct ClassicVolumesCard: View {
 }
 
 private struct ClassicVolumeRow: View {
-    let volume: VolumeInfo
+    package let volume: VolumeInfo
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "internaldrive")
@@ -578,13 +578,13 @@ private struct ClassicVolumeRow: View {
 }
 
 private struct ClassicProcessesCard: View {
-    let processes: [ProcessInfo]
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    let loadProcesses: (() async throws -> [ProcessInfo])?
+    package let processes: [ProcessInfo]
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    package let loadProcesses: (() async throws -> [ProcessInfo])?
     @State private var showingProcesses = false
 
-    var body: some View {
+    package var body: some View {
         if !processes.isEmpty {
             Button {
                 showingProcesses = true
@@ -653,11 +653,11 @@ private struct ClassicProcessesCard: View {
 }
 
 private struct ClassicStatLabel: View, Equatable {
-    let color: Color
-    let label: String
-    let value: String
+    package let color: Color
+    package let label: String
+    package let value: String
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 4) {
             Circle()
                 .fill(color)
@@ -677,10 +677,10 @@ private struct ClassicStatLabel: View, Equatable {
 }
 
 private struct ClassicStatColumn: View, Equatable {
-    let label: String
-    let value: String
+    package let label: String
+    package let value: String
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 2) {
             Text(label)
                 .font(.caption2)
@@ -697,15 +697,15 @@ private struct ClassicStatColumn: View, Equatable {
 }
 
 private struct ClassicCircularGauge: View, Equatable {
-    let value: Double
-    let color: Color
-    var lineWidth: CGFloat = 6
+    package let value: Double
+    package let color: Color
+    package var lineWidth: CGFloat = 6
 
     static func == (lhs: ClassicCircularGauge, rhs: ClassicCircularGauge) -> Bool {
         lhs.value == rhs.value && lhs.lineWidth == rhs.lineWidth
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             Circle()
                 .stroke(color.opacity(0.2), lineWidth: lineWidth)
@@ -720,13 +720,13 @@ private struct ClassicCircularGauge: View, Equatable {
 }
 
 private struct ClassicDockerStatsCard: View {
-    let docker: DockerStats
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let loadDockerStats: (() async throws -> DockerStats)?
-    let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
+    package let docker: DockerStats
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let loadDockerStats: (() async throws -> DockerStats)?
+    package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
     @State private var showingDetails = false
 
-    var body: some View {
+    package var body: some View {
         Button {
             showingDetails = true
         } label: {
@@ -768,10 +768,10 @@ private struct ClassicDockerStatsCard: View {
 }
 
 private struct ClassicLockedDockerCard: View {
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
-    let action: () -> Void
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: "shippingbox")

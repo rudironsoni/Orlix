@@ -4,8 +4,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct TerminalKeyboardSyncScheduler: Equatable {
-    enum Phase: Equatable {
+package struct TerminalKeyboardSyncScheduler: Equatable {
+    package enum Phase: Equatable {
         case idle(lastReason: String)
         case scheduled(reason: String)
         case syncing(reason: String, pendingReason: String?)
@@ -13,7 +13,7 @@ struct TerminalKeyboardSyncScheduler: Equatable {
 
     private(set) var phase = Phase.idle(lastReason: "initial")
 
-    var reason: String {
+    package var reason: String {
         switch phase {
         case .idle(let reason), .scheduled(let reason):
             reason
@@ -22,7 +22,7 @@ struct TerminalKeyboardSyncScheduler: Equatable {
         }
     }
 
-    mutating func request(reason: String) -> Bool {
+    mutating package func request(reason: String) -> Bool {
         switch phase {
         case .idle:
             phase = .scheduled(reason: reason)
@@ -36,13 +36,13 @@ struct TerminalKeyboardSyncScheduler: Equatable {
         }
     }
 
-    mutating func beginSync() -> String? {
+    mutating package func beginSync() -> String? {
         guard case .scheduled(let reason) = phase else { return nil }
         phase = .syncing(reason: reason, pendingReason: nil)
         return reason
     }
 
-    mutating func finishSync() -> Bool {
+    mutating package func finishSync() -> Bool {
         guard case .syncing(let reason, let pendingReason) = phase else { return false }
         if pendingReason != nil {
             phase = .scheduled(reason: "coalescedResync")
@@ -52,7 +52,7 @@ struct TerminalKeyboardSyncScheduler: Equatable {
         return false
     }
 
-    mutating func cancel(reason: String) {
+    mutating package func cancel(reason: String) {
         phase = .idle(lastReason: reason)
     }
 }
@@ -62,7 +62,7 @@ import Combine
 import os.log
 
 @MainActor
-protocol TerminalKeyboardInputSession: AnyObject {
+package protocol TerminalKeyboardInputSession: AnyObject {
     func keyboardCoordinatorDiagnosticSnapshot() -> TerminalKeyboardCoordinatorDiagnosticSnapshot
     @discardableResult
     func acquireTerminalInput() -> Bool
@@ -96,7 +96,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         case local(generation: UUID)
         case external(generation: UUID)
 
-        var generation: UUID {
+        package var generation: UUID {
             switch self {
             case .available(let generation),
                  .local(let generation),
@@ -105,7 +105,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
             }
         }
 
-        var allowsLocalAcquisition: Bool {
+        package var allowsLocalAcquisition: Bool {
             if case .external = self {
                 return false
             }
@@ -117,7 +117,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         case currentLayoutFrame
         case observedEventsOnly
 
-        var reconcilesLayoutFrameAtDeadline: Bool {
+        package var reconcilesLayoutFrameAtDeadline: Bool {
             self == .currentLayoutFrame
         }
     }
@@ -138,7 +138,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         case docked(frame: CGRect)
         case floating(frame: CGRect)
 
-        var frame: CGRect? {
+        package var frame: CGRect? {
             switch self {
             case .hidden:
                 nil
@@ -147,7 +147,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
             }
         }
 
-        var isVisible: Bool {
+        package var isVisible: Bool {
             frame != nil
         }
     }
@@ -158,14 +158,14 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         case contentProtectionRecovery
         case forceSoftwareKeyboard(repairActiveSession: Bool)
 
-        var isExplicitSoftwareKeyboardRequest: Bool {
+        package var isExplicitSoftwareKeyboardRequest: Bool {
             if case .forceSoftwareKeyboard = self {
                 return true
             }
             return false
         }
 
-        var waitsForWindowOwnership: Bool {
+        package var waitsForWindowOwnership: Bool {
             switch self {
             case .contentProtectionRecovery, .forceSoftwareKeyboard:
                 return true
@@ -180,7 +180,7 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         case pending(paneId: UUID)
         case recovering(paneId: UUID)
 
-        func isPending(for paneId: UUID) -> Bool {
+        package func isPending(for paneId: UUID) -> Bool {
             self == .pending(paneId: paneId)
         }
     }
@@ -193,14 +193,14 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
         /// Keyboard command performs one real responder-session rebuild.
         case terminalRepairPending
 
-        var isActive: Bool {
+        package var isActive: Bool {
             if case .active = self {
                 return true
             }
             return false
         }
 
-        var requiresTerminalRepair: Bool {
+        package var requiresTerminalRepair: Bool {
             switch self {
             case .active(terminalKeyboardWasMissing: true), .terminalRepairPending:
                 return true
@@ -211,23 +211,23 @@ final package class TerminalKeyboardCoordinator: ObservableObject {
     }
 
     private struct ExplicitPresentationRecovery: Equatable {
-        enum Phase: Equatable {
+        package enum Phase: Equatable {
             case rebuilding
             case waitingForActivation
         }
 
-        let paneId: UUID
-        let terminalIdentifier: ObjectIdentifier
-        var phase: Phase
+        package let paneId: UUID
+        package let terminalIdentifier: ObjectIdentifier
+        package var phase: Phase
     }
 
     package struct StateInputs: Equatable {
-        var viewActive: Bool
-        var activePaneInputEligible: Bool
-        var activePaneWindowAttached: Bool
-        var allowsLocalInputOwnership: Bool
-        var userHidKeyboard: Bool
-        var findNavigatorActive: Bool
+        package var viewActive: Bool
+        package var activePaneInputEligible: Bool
+        package var activePaneWindowAttached: Bool
+        package var allowsLocalInputOwnership: Bool
+        package var userHidKeyboard: Bool
+        package var findNavigatorActive: Bool
     }
 
     @Published private(set) var isUserHidden = false

@@ -1,13 +1,13 @@
 import Foundation
 import Cloudflared
 
-actor CloudflareTokenStoreAdapter: TokenStore {
+package actor CloudflareTokenStoreAdapter: TokenStore {
     private let store: KeychainStore
     private let isSyncEnabled: @Sendable () -> Bool
     private let offlineChanges: CredentialOfflineChangeStore
     private let offlineWrites: CredentialOfflineWriteTransaction
 
-    init(
+    package init(
         store: KeychainStore = KeychainStore(
             service: KeychainManager.cloudflareTokenService
         ),
@@ -23,7 +23,7 @@ actor CloudflareTokenStoreAdapter: TokenStore {
         )
     }
 
-    func readToken(for key: String) async throws -> String? {
+    package func readToken(for key: String) async throws -> String? {
         try offlineWrites.resumePendingWrite()
         let key = namespacedKey(for: key)
         let preferredScope = storageScope
@@ -34,7 +34,7 @@ actor CloudflareTokenStoreAdapter: TokenStore {
         return try store.getString(key, scope: .deviceOnly)
     }
 
-    func writeToken(_ token: String, for key: String) async throws {
+    package func writeToken(_ token: String, for key: String) async throws {
         let namespacedKey = namespacedKey(for: key)
         if isSyncEnabled() {
             try offlineWrites.resumePendingWrite()
@@ -50,7 +50,7 @@ actor CloudflareTokenStoreAdapter: TokenStore {
         }
     }
 
-    func removeToken(for key: String) async throws {
+    package func removeToken(for key: String) async throws {
         try offlineWrites.resumePendingWrite()
         let namespacedKey = namespacedKey(for: key)
         if !isSyncEnabled() {

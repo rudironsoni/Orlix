@@ -6,14 +6,14 @@ import AppKit
 import UIKit
 #endif
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// Represents a mouse input event with button state, button type, and modifier keys.
-    struct MouseButtonEvent {
-        let action: MouseState
-        let button: MouseButton
-        let mods: Mods
+    package struct MouseButtonEvent {
+        package let action: MouseState
+        package let button: MouseButton
+        package let mods: Mods
 
-        init(
+        package init(
             action: MouseState,
             button: MouseButton,
             mods: Mods = []
@@ -32,7 +32,7 @@ extension Ghostty.Input {
         ///   - state: The mouse button state (press/release)
         ///   - button: The mouse button that was pressed/released
         ///   - mods: The modifier keys held during the mouse event
-        init?(state: ghostty_input_mouse_state_e, button: ghostty_input_mouse_button_e, mods: ghostty_input_mods_e) {
+        package init?(state: ghostty_input_mouse_state_e, button: ghostty_input_mouse_button_e, mods: ghostty_input_mods_e) {
             // Convert state
             switch state {
             case GHOSTTY_MOUSE_RELEASE: self.action = .release
@@ -55,12 +55,12 @@ extension Ghostty.Input {
     }
 
     /// Represents a mouse position/movement event with coordinates and modifier keys.
-    struct MousePosEvent {
-        let x: Double
-        let y: Double
-        let mods: Mods
+    package struct MousePosEvent {
+        package let x: Double
+        package let y: Double
+        package let mods: Mods
 
-        init(
+        package init(
             x: Double,
             y: Double,
             mods: Mods = []
@@ -72,12 +72,12 @@ extension Ghostty.Input {
     }
 
     /// Represents a mouse scroll event with scroll deltas and modifier keys.
-    struct MouseScrollEvent {
-        let x: Double
-        let y: Double
-        let mods: ScrollMods
+    package struct MouseScrollEvent {
+        package let x: Double
+        package let y: Double
+        package let mods: ScrollMods
 
-        init(
+        package init(
             x: Double,
             y: Double,
             mods: ScrollMods = .init(rawValue: 0)
@@ -91,13 +91,13 @@ extension Ghostty.Input {
 
 // MARK: Ghostty.Input.MouseState
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_mouse_state_e`
-    enum MouseState: String, CaseIterable {
+    package enum MouseState: String, CaseIterable {
         case release
         case press
 
-        var cMouseState: ghostty_input_mouse_state_e {
+        package var cMouseState: ghostty_input_mouse_state_e {
             switch self {
             case .release: GHOSTTY_MOUSE_RELEASE
             case .press: GHOSTTY_MOUSE_PRESS
@@ -108,15 +108,15 @@ extension Ghostty.Input {
 
 // MARK: Ghostty.Input.MouseButton
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_mouse_button_e`
-    enum MouseButton: String, CaseIterable {
+    package enum MouseButton: String, CaseIterable {
         case unknown
         case left
         case right
         case middle
 
-        var cMouseButton: ghostty_input_mouse_button_e {
+        package var cMouseButton: ghostty_input_mouse_button_e {
             switch self {
             case .unknown: GHOSTTY_MOUSE_UNKNOWN
             case .left: GHOSTTY_MOUSE_LEFT
@@ -129,9 +129,9 @@ extension Ghostty.Input {
 
 // MARK: Ghostty.Input.Momentum
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_mouse_momentum_e` - Momentum phase for scroll events
-    enum Momentum: UInt8, CaseIterable {
+    package enum Momentum: UInt8, CaseIterable {
         case none = 0
         case began = 1
         case stationary = 2
@@ -140,7 +140,7 @@ extension Ghostty.Input {
         case cancelled = 5
         case mayBegin = 6
 
-        var cMomentum: ghostty_input_mouse_momentum_e {
+        package var cMomentum: ghostty_input_mouse_momentum_e {
             switch self {
             case .none: GHOSTTY_MOUSE_MOMENTUM_NONE
             case .began: GHOSTTY_MOUSE_MOMENTUM_BEGAN
@@ -155,9 +155,9 @@ extension Ghostty.Input {
 }
 
 #if os(macOS)
-extension Ghostty.Input.Momentum {
+package extension Ghostty.Input.Momentum {
     /// Create a Momentum from an NSEvent.Phase
-    init(_ phase: NSEvent.Phase) {
+    package init(_ phase: NSEvent.Phase) {
         switch phase {
         case .began: self = .began
         case .stationary: self = .stationary

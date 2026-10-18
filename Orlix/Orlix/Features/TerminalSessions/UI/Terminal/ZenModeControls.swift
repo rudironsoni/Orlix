@@ -103,7 +103,7 @@ package struct ZenModeFloatingOverlay<Panel: View>: View {
 
 private extension View {
     @ViewBuilder
-    func zenModeLauncherButtonStyle(hitTargetSize: CGFloat) -> some View {
+    package func zenModeLauncherButtonStyle(hitTargetSize: CGFloat) -> some View {
         if #available(iOS 26, macOS 26, *) {
             self
                 .buttonStyle(SwiftUI.GlassButtonStyle())
@@ -123,19 +123,19 @@ private extension View {
     }
 }
 
-struct ZenModePanelCard<Content: View>: View {
-    let width: CGFloat
-    let backgroundColor: Color?
-    let content: Content
+package struct ZenModePanelCard<Content: View>: View {
+    package let width: CGFloat
+    package let backgroundColor: Color?
+    package let content: Content
     private let cornerRadius: CGFloat = 22
 
-    init(width: CGFloat, backgroundColor: Color? = nil, @ViewBuilder content: () -> Content) {
+    package init(width: CGFloat, backgroundColor: Color? = nil, @ViewBuilder content: () -> Content) {
         self.width = width
         self.backgroundColor = backgroundColor
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         let cardShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         ScrollView(showsIndicators: false) {
@@ -171,16 +171,16 @@ struct ZenModePanelCard<Content: View>: View {
     }
 }
 
-struct ZenModeSection<Content: View>: View {
-    let title: LocalizedStringKey
-    let content: Content
+package struct ZenModeSection<Content: View>: View {
+    package let title: LocalizedStringKey
+    package let content: Content
 
-    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+    package init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.caption.weight(.bold))
@@ -201,13 +201,13 @@ struct ZenModeSection<Content: View>: View {
     }
 }
 
-struct ZenModeChoiceChip: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-    let isSelected: Bool
-    let action: () -> Void
+package struct ZenModeChoiceChip: View {
+    package let title: LocalizedStringKey
+    package let systemImage: String
+    package let isSelected: Bool
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
                 .font(.callout.weight(.medium))
@@ -247,14 +247,14 @@ struct ZenModeChoiceChip: View {
     }
 }
 
-struct ZenModeActionButton: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-    var tint: Color = .primary
-    var isDisabled = false
-    let action: () -> Void
+package struct ZenModeActionButton: View {
+    package let title: LocalizedStringKey
+    package let systemImage: String
+    package var tint: Color = .primary
+    package var isDisabled = false
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
@@ -275,12 +275,12 @@ struct ZenModeActionButton: View {
     }
 }
 
-struct ZenModeStatusLine: View {
-    let title: String
-    let subtitle: String
-    let indicatorColor: Color
+package struct ZenModeStatusLine: View {
+    package let title: String
+    package let subtitle: String
+    package let indicatorColor: Color
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Circle()

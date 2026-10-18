@@ -1,7 +1,7 @@
 import SwiftUI
 
-extension TerminalThemeSelectionTarget {
-    var title: String {
+package extension TerminalThemeSelectionTarget {
+    package var title: String {
         switch self {
         case .dark: return String(localized: "Dark")
         case .light: return String(localized: "Light")
@@ -10,17 +10,17 @@ extension TerminalThemeSelectionTarget {
     }
 }
 
-struct CustomThemeSaveSheet: View {
-    let suggestedName: String
-    let usePerAppearanceTheme: Bool
-    let onSave: (String, TerminalThemeSelectionTarget) throws -> Void
+package struct CustomThemeSaveSheet: View {
+    package let suggestedName: String
+    package let usePerAppearanceTheme: Bool
+    package let onSave: (String, TerminalThemeSelectionTarget) throws -> Void
 
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) package var dismiss
     @State private var name: String
     @State private var applyTarget: TerminalThemeSelectionTarget = .dark
     @State private var errorMessage: String?
 
-    init(
+    package init(
         suggestedName: String,
         usePerAppearanceTheme: Bool,
         onSave: @escaping (String, TerminalThemeSelectionTarget) throws -> Void
@@ -31,15 +31,15 @@ struct CustomThemeSaveSheet: View {
         _name = State(initialValue: suggestedName)
     }
 
-    var canSave: Bool {
+    package var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 
-    var formContent: some View {
+    package var formContent: some View {
         Form {
             Section {
                 platformThemeNameField(name: $name)
@@ -81,7 +81,7 @@ struct CustomThemeSaveSheet: View {
         #endif
     }
 
-    func save() {
+    package func save() {
         do {
             try onSave(
                 name.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -1,36 +1,36 @@
 import Foundation
 
-nonisolated struct EngagementHistory: Equatable, Sendable {
-    static let empty = EngagementHistory(
+nonisolated package struct EngagementHistory: Equatable, Sendable {
+    static package let empty = EngagementHistory(
         successfulConnectionCount: 0,
         usageDayCount: 0,
         lastUsageDay: nil,
         lastReviewRequest: nil
     )
 
-    var successfulConnectionCount: Int
-    var usageDayCount: Int
-    var lastUsageDay: Date?
-    var lastReviewRequest: Date?
+    package var successfulConnectionCount: Int
+    package var usageDayCount: Int
+    package var lastUsageDay: Date?
+    package var lastReviewRequest: Date?
 }
 
 @MainActor
-protocol EngagementPersisting: AnyObject {
+package protocol EngagementPersisting: AnyObject {
     func loadHistory() -> EngagementHistory
     func saveHistory(_ history: EngagementHistory)
 }
 
 @MainActor
-protocol EngagementAnalytics: AnyObject {
+package protocol EngagementAnalytics: AnyObject {
     func trackConnectionSucceeded(transport: String)
     func trackReviewPromptRequested()
 }
 
 @MainActor
-struct EngagementTrackerDependencies {
-    let persistence: any EngagementPersisting
-    let analytics: any EngagementAnalytics
-    let now: () -> Date
-    let startOfDay: (Date) -> Date
-    let applicationIsActive: @MainActor @Sendable () -> Bool
+package struct EngagementTrackerDependencies {
+    package let persistence: any EngagementPersisting
+    package let analytics: any EngagementAnalytics
+    package let now: () -> Date
+    package let startOfDay: (Date) -> Date
+    package let applicationIsActive: @MainActor @Sendable () -> Bool
 }

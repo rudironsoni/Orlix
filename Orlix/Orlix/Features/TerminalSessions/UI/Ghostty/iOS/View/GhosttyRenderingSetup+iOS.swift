@@ -11,13 +11,13 @@ import UIKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension GhosttyRenderingSetup {
+package extension GhosttyRenderingSetup {
     // MARK: - Layer Setup
 
     /// On iOS, Ghostty handles all Metal layer configuration internally.
     /// It creates its own IOSurfaceLayer and adds it as a sublayer of the view's layer.
     /// We don't need to configure anything here.
-    func setupLayer(for view: UIView) {
+    package func setupLayer(for view: UIView) {
         // No-op: Ghostty creates its own IOSurfaceLayer as a sublayer
         // See Metal.zig: view_layer.msgSend(void, objc.sel("addSublayer:"), .{layer.layer.value})
         Self.logger.debug("iOS: Ghostty will configure Metal layer internally")
@@ -35,7 +35,7 @@ extension GhosttyRenderingSetup {
     ///   - paneId: Optional pane identifier
     ///   - command: Optional command to execute
     ///   - useCustomIO: If true, uses callback backend for custom I/O (SSH clients)
-    func setupSurface(
+    package func setupSurface(
         view: UIView,
         ghosttyApp: ghostty_app_t,
         callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>,
@@ -123,7 +123,7 @@ extension GhosttyRenderingSetup {
     /// On iOS, layout is handled by GhosttyTerminalView.sizeDidChange which follows
     /// the official Ghostty pattern. This method is provided for compatibility but
     /// the view should call sizeDidChange directly.
-    func updateLayout(view: UIView, metalLayer: CAMetalLayer?, surface: ghostty_surface_t?, lastSize: inout CGSize) -> Bool {
+    package func updateLayout(view: UIView, metalLayer: CAMetalLayer?, surface: ghostty_surface_t?, lastSize: inout CGSize) -> Bool {
         // On iOS, Ghostty manages its own IOSurfaceLayer as a sublayer.
         // Size updates should be done via sizeDidChange in GhosttyTerminalView.
         // This is a no-op for compatibility with code that still calls it.

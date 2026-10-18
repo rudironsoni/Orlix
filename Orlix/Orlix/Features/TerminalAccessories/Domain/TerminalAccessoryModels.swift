@@ -396,15 +396,15 @@ nonisolated package struct TerminalAccessoryCustomAction: Identifiable, Codable,
 
 }
 
-nonisolated struct TerminalSnippet: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var title: String
-    var content: String
-    var sendMode: TerminalSnippetSendMode
-    var updatedAt: Date
-    var deletedAt: Date?
+nonisolated package struct TerminalSnippet: Identifiable, Codable, Equatable, Sendable {
+    package let id: UUID
+    package var title: String
+    package var content: String
+    package var sendMode: TerminalSnippetSendMode
+    package var updatedAt: Date
+    package var deletedAt: Date?
 
-    init(
+    package init(
         id: UUID = UUID(),
         title: String,
         content: String,
@@ -420,7 +420,7 @@ nonisolated struct TerminalSnippet: Identifiable, Codable, Equatable, Sendable {
         self.deletedAt = deletedAt
     }
 
-    var isDeleted: Bool {
+    package var isDeleted: Bool {
         deletedAt != nil
     }
 }
@@ -723,7 +723,7 @@ private nonisolated extension TerminalAccessoryCustomAction {
 }
 
 private nonisolated extension TerminalSnippet {
-    var asCustomAction: TerminalAccessoryCustomAction {
+    package var asCustomAction: TerminalAccessoryCustomAction {
         TerminalAccessoryCustomAction(
             id: id,
             title: title,

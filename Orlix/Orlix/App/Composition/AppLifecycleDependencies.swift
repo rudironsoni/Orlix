@@ -1,9 +1,9 @@
 @MainActor
-struct AppLifecycleDependencies {
-    let subscribeToRemoteChanges: @MainActor () async -> Void
-    let refreshNetwork: @MainActor () -> Void
+package struct AppLifecycleDependencies {
+    package let subscribeToRemoteChanges: @MainActor () async -> Void
+    package let refreshNetwork: @MainActor () -> Void
 
     #if os(iOS)
-    let endLiveActivitiesForApplicationTermination: @MainActor () -> Bool
+    package let endLiveActivitiesForApplicationTermination: @MainActor () -> Bool
     #endif
 }

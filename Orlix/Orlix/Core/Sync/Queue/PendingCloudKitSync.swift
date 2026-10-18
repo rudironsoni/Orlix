@@ -117,12 +117,12 @@ nonisolated package enum PendingCloudKitMutationQuarantineReason: String, Codabl
     case unsupportedOperation
 }
 
-nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable, Sendable {
-    let id: UUID
-    let legacyMutationID: UUID?
-    let reason: PendingCloudKitMutationQuarantineReason
-    let encodedLegacyRecord: Data
-    let quarantinedAt: Date
+nonisolated package struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable, Sendable {
+    package let id: UUID
+    package let legacyMutationID: UUID?
+    package let reason: PendingCloudKitMutationQuarantineReason
+    package let encodedLegacyRecord: Data
+    package let quarantinedAt: Date
 }
 
 nonisolated package enum PendingCloudKitQueueHealth: Equatable, Sendable {
@@ -474,11 +474,11 @@ nonisolated final package class PendingCloudKitSyncQueue {
     }
 }
 
-nonisolated enum PendingCloudKitSyncQueueError: LocalizedError, Sendable {
+nonisolated package enum PendingCloudKitSyncQueueError: LocalizedError, Sendable {
     case persistenceFailed
     case migrationFailed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .persistenceFailed:
             return "The pending CloudKit mutation queue could not be saved."

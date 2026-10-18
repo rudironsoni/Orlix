@@ -8,26 +8,26 @@
 import Foundation
 import os.log
 
-extension Logger {
+package extension Logger {
     /// The app's logging subsystem - must match bundle identifier for proper filtering
     nonisolated private static let appSubsystem = Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix"
 
     /// Create a logger for a specific category
-    nonisolated static func forCategory(_ category: String) -> Logger {
+    nonisolated static package func forCategory(_ category: String) -> Logger {
         Logger(subsystem: appSubsystem, category: category)
     }
 
     /// Convenience logger instances for common categories
-    nonisolated static let agent = Logger.forCategory("Agent")
-    nonisolated static let git = Logger.forCategory("Git")
-    nonisolated static let terminal = Logger.forCategory("Terminal")
-    nonisolated static let chat = Logger.forCategory("Chat")
-    nonisolated static let workspace = Logger.forCategory("Workspace")
-    nonisolated static let worktree = Logger.forCategory("Worktree")
-    nonisolated static let settings = Logger.forCategory("Settings")
-    nonisolated static let audio = Logger.forCategory("Audio")
-    nonisolated static let acp = Logger.forCategory("ACP")
-    nonisolated static let crash = Logger.forCategory("CrashReporter")
+    nonisolated static package let agent = Logger.forCategory("Agent")
+    nonisolated static package let git = Logger.forCategory("Git")
+    nonisolated static package let terminal = Logger.forCategory("Terminal")
+    nonisolated static package let chat = Logger.forCategory("Chat")
+    nonisolated static package let workspace = Logger.forCategory("Workspace")
+    nonisolated static package let worktree = Logger.forCategory("Worktree")
+    nonisolated static package let settings = Logger.forCategory("Settings")
+    nonisolated static package let audio = Logger.forCategory("Audio")
+    nonisolated static package let acp = Logger.forCategory("ACP")
+    nonisolated static package let crash = Logger.forCategory("CrashReporter")
 }
 
 package enum DebugLogConfiguration {
@@ -89,8 +89,8 @@ package enum DebugLogConfiguration {
     }
 }
 
-enum LogPrivacy {
-    nonisolated static func errorClass(_ error: Error) -> String {
+package enum LogPrivacy {
+    nonisolated static package func errorClass(_ error: Error) -> String {
         String(reflecting: type(of: error))
     }
 }

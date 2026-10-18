@@ -185,7 +185,7 @@ private extension StoreSubscriptionStatus {
 }
 
 private extension Product.SubscriptionPeriod {
-    var isOneWeek: Bool {
+    package var isOneWeek: Bool {
         (unit == .week && value == 1) || (unit == .day && value == 7)
     }
 }

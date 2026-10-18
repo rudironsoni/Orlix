@@ -7,17 +7,17 @@ import UIKit
 import AppKit
 #endif
 
-struct CloudflareOAuthFlow: OAuthFlow {
+package struct CloudflareOAuthFlow: OAuthFlow {
     private let flow: TransferOAuthFlow
 
-    init(userAgent: String = "Orlix") {
+    package init(userAgent: String = "Orlix") {
         self.flow = TransferOAuthFlow(
             webSession: CloudflareWebAuthenticationSessionActor(),
             userAgent: userAgent
         )
     }
 
-    func fetchToken(
+    package func fetchToken(
         teamDomain: String,
         appDomain: String,
         callbackScheme: String,
@@ -32,17 +32,17 @@ struct CloudflareOAuthFlow: OAuthFlow {
     }
 }
 
-actor CloudflareWebAuthenticationSessionActor: OAuthWebSession {
+package actor CloudflareWebAuthenticationSessionActor: OAuthWebSession {
     private struct ActiveSession {
-        let generation: UUID
-        let session: any CloudflareWebAuthenticationSessionRunning
+        package let generation: UUID
+        package let session: any CloudflareWebAuthenticationSessionRunning
     }
 
     private let makeSession: CloudflareWebAuthenticationSessionFactory
     private var activeSession: ActiveSession?
     private var userDidCancel = false
 
-    init(
+    package init(
         makeSession: @escaping CloudflareWebAuthenticationSessionFactory = { url, completion in
             CloudflareWebAuthenticationSession(url: url, completion: completion)
         }
@@ -50,7 +50,7 @@ actor CloudflareWebAuthenticationSessionActor: OAuthWebSession {
         self.makeSession = makeSession
     }
 
-    func start(url: URL) async throws {
+    package func start(url: URL) async throws {
         let generation = UUID()
         userDidCancel = false
 
@@ -81,13 +81,13 @@ actor CloudflareWebAuthenticationSessionActor: OAuthWebSession {
         }
     }
 
-    func stop() async {
+    package func stop() async {
         let session = activeSession?.session
         activeSession = nil
         await session?.cancel()
     }
 
-    func didCancelLogin() async -> Bool {
+    package func didCancelLogin() async -> Bool {
         userDidCancel
     }
 
@@ -107,12 +107,12 @@ actor CloudflareWebAuthenticationSessionActor: OAuthWebSession {
 }
 
 @MainActor
-protocol CloudflareWebAuthenticationSessionRunning: AnyObject, Sendable {
+package protocol CloudflareWebAuthenticationSessionRunning: AnyObject, Sendable {
     func start() -> Bool
     func cancel()
 }
 
-typealias CloudflareWebAuthenticationSessionFactory = @MainActor @Sendable (
+package typealias CloudflareWebAuthenticationSessionFactory = @MainActor @Sendable (
     URL,
     @escaping @Sendable (Bool) -> Void
 ) -> any CloudflareWebAuthenticationSessionRunning
@@ -122,7 +122,7 @@ private final class CloudflareWebAuthenticationSession: CloudflareWebAuthenticat
     private let session: ASWebAuthenticationSession
     private let presentationContextProvider = CloudflarePresentationContextProvider()
 
-    init(url: URL, completion: @escaping @Sendable (Bool) -> Void) {
+    package init(url: URL, completion: @escaping @Sendable (Bool) -> Void) {
         self.session = ASWebAuthenticationSession(url: url, callbackURLScheme: nil) { _, error in
             completion(error != nil)
         }
@@ -130,18 +130,18 @@ private final class CloudflareWebAuthenticationSession: CloudflareWebAuthenticat
         session.prefersEphemeralWebBrowserSession = false
     }
 
-    func start() -> Bool {
+    package func start() -> Bool {
         session.start()
     }
 
-    func cancel() {
+    package func cancel() {
         session.cancel()
     }
 }
 
 @MainActor
 private final class CloudflarePresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    package func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if os(iOS)
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         for scene in scenes {

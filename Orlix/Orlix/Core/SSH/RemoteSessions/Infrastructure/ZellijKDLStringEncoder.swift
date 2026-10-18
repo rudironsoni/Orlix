@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated enum ZellijKDLStringEncoder {
-    enum EncodingError: Error, Equatable, Sendable {
+nonisolated package enum ZellijKDLStringEncoder {
+    package enum EncodingError: Error, Equatable, Sendable {
         case outputTooLong
     }
 
-    static let maximumEncodedByteCount = 32 * 1_024
+    static package let maximumEncodedByteCount = 32 * 1_024
 
-    static func encode(_ value: String) throws -> String {
+    static package func encode(_ value: String) throws -> String {
         var encoded = "\""
         var byteCount = 1
 

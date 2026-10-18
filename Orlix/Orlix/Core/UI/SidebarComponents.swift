@@ -6,17 +6,17 @@ import OrlixSettings
 
 // MARK: - Server Row
 
-struct ServerRow: View {
-    let server: Server
-    let isSelected: Bool
-    let isLocked: Bool
-    let onSelect: () -> Void
-    let onEdit: (Server) -> Void
-    var onMove: ((Server) -> Void)? = nil
-    let onDuplicate: (Server) -> Void
-    let onWake: (Server) -> Void
-    let onConnect: (Server) -> Void
-    var onLockedTap: (() -> Void)? = nil
+package struct ServerRow: View {
+    package let server: Server
+    package let isSelected: Bool
+    package let isLocked: Bool
+    package let onSelect: () -> Void
+    package let onEdit: (Server) -> Void
+    package var onMove: ((Server) -> Void)? = nil
+    package let onDuplicate: (Server) -> Void
+    package let onWake: (Server) -> Void
+    package let onConnect: (Server) -> Void
+    package var onLockedTap: (() -> Void)? = nil
 
     @ObservedObject private var serverManager: ServerManager
     @ObservedObject private var terminalNavigation: TerminalSessionNavigationProjection
@@ -25,7 +25,7 @@ struct ServerRow: View {
     @Environment(\.controlActiveState) private var controlActiveState
     #endif
 
-    init(
+    package init(
         serverManager: ServerManager,
         terminalNavigation: TerminalSessionNavigationProjection,
         server: Server,
@@ -79,7 +79,7 @@ struct ServerRow: View {
         isSelected ? selectedForegroundColor.opacity(0.9) : .secondary
     }
 
-    var body: some View {
+    package var body: some View {
         serverLabel
             .background(selectionBackground)
             .opacity(isLocked ? 0.7 : 1.0)
@@ -217,11 +217,11 @@ struct ServerRow: View {
 
 // MARK: - Pill Badge
 
-struct PillBadge: View {
-    let text: String
-    let color: Color
+package struct PillBadge: View {
+    package let text: String
+    package let color: Color
 
-    var body: some View {
+    package var body: some View {
         Text(text)
             .font(.caption2)
             .fontWeight(.medium)
@@ -234,19 +234,19 @@ struct PillBadge: View {
 
 // MARK: - Search Field
 
-struct SearchField<Trailing: View>: View {
-    let placeholder: LocalizedStringKey
-    @Binding var text: String
-    var spacing: CGFloat = 8
-    var iconSize: CGFloat = 14
-    var iconWeight: Font.Weight? = nil
-    var iconColor: Color = .secondary
-    var textFont: Font = .system(size: 14)
-    var clearButtonSize: CGFloat = 12
-    var clearButtonWeight: Font.Weight? = nil
-    @ViewBuilder var trailing: () -> Trailing
+package struct SearchField<Trailing: View>: View {
+    package let placeholder: LocalizedStringKey
+    @Binding package var text: String
+    package var spacing: CGFloat = 8
+    package var iconSize: CGFloat = 14
+    package var iconWeight: Font.Weight? = nil
+    package var iconColor: Color = .secondary
+    package var textFont: Font = .system(size: 14)
+    package var clearButtonSize: CGFloat = 12
+    package var clearButtonWeight: Font.Weight? = nil
+    @ViewBuilder package var trailing: () -> Trailing
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: spacing) {
             if let weight = iconWeight {
                 Image(systemName: "magnifyingglass")
@@ -278,8 +278,8 @@ struct SearchField<Trailing: View>: View {
     }
 }
 
-extension SearchField where Trailing == EmptyView {
-    init(placeholder: LocalizedStringKey, text: Binding<String>) {
+package extension SearchField where Trailing == EmptyView {
+    package init(placeholder: LocalizedStringKey, text: Binding<String>) {
         self.placeholder = placeholder
         self._text = text
         self.spacing = 8

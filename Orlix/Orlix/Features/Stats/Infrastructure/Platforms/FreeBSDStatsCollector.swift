@@ -7,10 +7,10 @@ import OrlixSSH
 // MARK: - FreeBSD Stats Collector
 
 /// Stats collector for FreeBSD systems (including TrueNAS, pfSense, OPNsense)
-nonisolated struct FreeBSDStatsCollector: PlatformStatsCollector {
+nonisolated package struct FreeBSDStatsCollector: PlatformStatsCollector {
     private let periodicProcessLimit = 24
 
-    func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
+    package func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
         let cmd = "uname -srm; echo '---SEP---'; hostname; echo '---SEP---'; sysctl -n hw.ncpu 2>/dev/null || echo 1"
         let output = try await client.execute(cmd)
         let parts = output.components(separatedBy: "---SEP---")
@@ -22,7 +22,7 @@ nonisolated struct FreeBSDStatsCollector: PlatformStatsCollector {
         return (hostname, osInfo, cpuCores)
     }
 
-    func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
+    package func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
         var stats = ServerStats()
 
         // Batch commands for FreeBSD
@@ -118,7 +118,7 @@ nonisolated struct FreeBSDStatsCollector: PlatformStatsCollector {
         return stats
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         let systemInfo = try await getSystemInfo(client: client)
         let memoryOutput = try await client.execute("sysctl -n hw.physmem 2>/dev/null")
         let memoryTotal = UInt64(memoryOutput.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
@@ -230,7 +230,7 @@ nonisolated struct FreeBSDStatsCollector: PlatformStatsCollector {
         return (user, system, idle)
     }
 
-    func parseDf(_ output: String) -> [VolumeInfo] {
+    package func parseDf(_ output: String) -> [VolumeInfo] {
         var volumes: [VolumeInfo] = []
 
         for line in output.components(separatedBy: .newlines) {

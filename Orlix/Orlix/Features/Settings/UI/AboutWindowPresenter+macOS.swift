@@ -3,12 +3,12 @@ import AppKit
 import SwiftUI
 
 @MainActor
-protocol AboutWindowHandling: AnyObject {
+package protocol AboutWindowHandling: AnyObject {
     func presentAboutWindow()
 }
 
-extension NSWindow: AboutWindowHandling {
-    func presentAboutWindow() {
+package extension NSWindow: AboutWindowHandling {
+    package func presentAboutWindow() {
         makeKeyAndOrderFront(nil)
     }
 }

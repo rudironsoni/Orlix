@@ -4,11 +4,11 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated enum TerminalSecurityApprovalFailure: Equatable, Sendable {
+nonisolated package enum TerminalSecurityApprovalFailure: Equatable, Sendable {
     case expired
 }
 
-nonisolated enum TerminalSecurityApprovalOutcome: Equatable, Sendable {
+nonisolated package enum TerminalSecurityApprovalOutcome: Equatable, Sendable {
     case approved
     case failed(TerminalSecurityApprovalFailure)
 }

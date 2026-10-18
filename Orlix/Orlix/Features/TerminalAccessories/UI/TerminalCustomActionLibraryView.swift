@@ -4,7 +4,7 @@ import SwiftUI
 import OrlixModels
 import OrlixSettings
 #endif
-struct TerminalCustomActionLibraryView: View {
+package struct TerminalCustomActionLibraryView: View {
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @EnvironmentObject private var storeManager: StoreManager
 
@@ -12,7 +12,7 @@ struct TerminalCustomActionLibraryView: View {
     @State private var showingProGateAlert = false
     @State private var editingAction: TerminalAccessoryCustomAction?
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 if preferences.customActions.isEmpty {

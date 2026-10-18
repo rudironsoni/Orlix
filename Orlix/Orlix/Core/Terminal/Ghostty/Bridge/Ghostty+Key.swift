@@ -4,9 +4,9 @@ import Foundation
 import UIKit
 #endif
 
-extension Ghostty.Input {
+package extension Ghostty.Input {
     /// `ghostty_input_key_e`
-    nonisolated enum Key: String, CaseIterable, Sendable {
+    nonisolated package enum Key: String, CaseIterable, Sendable {
         // Writing System Keys
         case backquote
         case backslash
@@ -199,7 +199,7 @@ extension Ghostty.Input {
         case paste
 
         /// Get a key from a keycode
-        init?(keyCode: UInt16) {
+        package init?(keyCode: UInt16) {
             if let key = Key.allCases.first(where: { $0.keyCode == keyCode }) {
                 self = key
                 return
@@ -208,7 +208,7 @@ extension Ghostty.Input {
             return nil
         }
 
-        var cKey: ghostty_input_key_e {
+        package var cKey: ghostty_input_key_e {
             switch self {
             // Writing System Keys
             case .backquote: GHOSTTY_KEY_BACKQUOTE
@@ -404,7 +404,7 @@ extension Ghostty.Input {
         }
 
         // Based on src/input/keycodes.zig
-        var keyCode: UInt16? {
+        package var keyCode: UInt16? {
             switch self {
             // Writing System Keys
             case .backquote: return 0x0032
@@ -601,7 +601,7 @@ extension Ghostty.Input {
 
         #if os(iOS)
         /// Create a Key from a UIKeyboardHIDUsage code (iOS hardware keyboard)
-        init?(uiKeyCode: UIKeyboardHIDUsage) {
+        package init?(uiKeyCode: UIKeyboardHIDUsage) {
             // Map UIKeyboardHIDUsage to Ghostty Key
             switch uiKeyCode {
             // Letters

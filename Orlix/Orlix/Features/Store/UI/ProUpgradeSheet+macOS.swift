@@ -6,8 +6,8 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension ProUpgradeSheet {
-    func platformBody<Content: View>(
+package extension ProUpgradeSheet {
+    package func platformBody<Content: View>(
         sheetContent: Content,
         source: PaywallSource,
         onClose: @escaping () -> Void
@@ -15,7 +15,7 @@ extension ProUpgradeSheet {
         sheetContent
     }
 
-    func platformSheetLayout<Content: View, Footer: View>(
+    package func platformSheetLayout<Content: View, Footer: View>(
         content: Content,
         footer: Footer,
         source: PaywallSource
@@ -43,19 +43,19 @@ extension ProUpgradeSheet {
         .background(ProUpgradeWindowConfigurator(source: source))
     }
 
-    func openSubscriptionManagement() {
+    package func openSubscriptionManagement() {
         if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
             NSWorkspace.shared.open(url)
         }
     }
 
-    var sheetBackground: Color {
+    package var sheetBackground: Color {
         Color(nsColor: .windowBackgroundColor)
     }
 }
 
-extension ProUpgradePresentationModifier {
-    func platformBody(content: Content) -> some View {
+package extension ProUpgradePresentationModifier {
+    package func platformBody(content: Content) -> some View {
         content.modifier(ProUpgradeWindowPresentationHost(
             isPresented: $isPresented,
             source: source,
@@ -66,11 +66,11 @@ extension ProUpgradePresentationModifier {
 }
 
 private struct ProUpgradeWindowPresentationHost: ViewModifier {
-    @Binding var isPresented: Bool
-    let source: PaywallSource
+    @Binding package var isPresented: Bool
+    package let source: PaywallSource
     @StateObject private var presenter: ProUpgradeWindowPresenter
 
-    init(
+    package init(
         isPresented: Binding<Bool>,
         source: PaywallSource,
         storeManager: StoreManager,
@@ -84,7 +84,7 @@ private struct ProUpgradeWindowPresentationHost: ViewModifier {
         ))
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .onAppear {
                 if isPresented {
@@ -115,51 +115,51 @@ private struct ProUpgradeWindowPresentationHost: ViewModifier {
     }
 }
 
-var paywallTableGridColor: Color {
+package var paywallTableGridColor: Color {
     Color.primary.opacity(0.13)
 }
 
-var paywallCardFillColor: Color {
+package var paywallCardFillColor: Color {
     Color(nsColor: .controlBackgroundColor)
 }
 
-var paywallCardBorderColor: Color {
+package var paywallCardBorderColor: Color {
     Color.primary.opacity(0.16)
 }
 
-struct ProUpgradeWindowConfigurator: NSViewRepresentable {
-    let source: PaywallSource
+package struct ProUpgradeWindowConfigurator: NSViewRepresentable {
+    package let source: PaywallSource
 
-    func makeNSView(context: Context) -> WindowConfigurationView {
+    package func makeNSView(context: Context) -> WindowConfigurationView {
         WindowConfigurationView(source: source)
     }
 
-    func updateNSView(_ nsView: WindowConfigurationView, context: Context) {
+    package func updateNSView(_ nsView: WindowConfigurationView, context: Context) {
         nsView.source = source
         nsView.applyWindowConfiguration()
     }
 
-    final class WindowConfigurationView: NSView {
-        var source: PaywallSource
+    final package class WindowConfigurationView: NSView {
+        package var source: PaywallSource
 
-        init(source: PaywallSource) {
+        package init(source: PaywallSource) {
             self.source = source
             super.init(frame: .zero)
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) {
+        required package init?(coder: NSCoder) {
             nil
         }
 
-        override var intrinsicContentSize: NSSize { .zero }
+        override package var intrinsicContentSize: NSSize { .zero }
 
-        override func viewDidMoveToWindow() {
+        override package func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             applyWindowConfiguration()
         }
 
-        func applyWindowConfiguration() {
+        package func applyWindowConfiguration() {
             DispatchQueue.main.async { [weak self] in
                 guard let self, let window = self.window else { return }
                 ProUpgradeWindowChrome.configure(window, setInitialSize: false, source: self.source)
@@ -169,7 +169,7 @@ struct ProUpgradeWindowConfigurator: NSViewRepresentable {
 }
 
 @MainActor
-protocol ProUpgradeWindowHandling: AnyObject {
+package protocol ProUpgradeWindowHandling: AnyObject {
     var isVisible: Bool { get }
 
     func refresh(source: PaywallSource)
@@ -178,16 +178,16 @@ protocol ProUpgradeWindowHandling: AnyObject {
 }
 
 @MainActor
-final class ProUpgradeWindowPresenter: ObservableObject {
-    typealias MakeWindow = @MainActor (
+final package class ProUpgradeWindowPresenter: ObservableObject {
+    package typealias MakeWindow = @MainActor (
         _ source: PaywallSource,
         _ onDismiss: @escaping @MainActor () -> Void,
         _ onWindowClosed: @escaping @MainActor () -> Void
     ) -> any ProUpgradeWindowHandling
 
     private struct ActiveWindow {
-        let id: UUID
-        let handle: any ProUpgradeWindowHandling
+        package let id: UUID
+        package let handle: any ProUpgradeWindowHandling
     }
 
     private let makeWindow: MakeWindow
@@ -195,7 +195,7 @@ final class ProUpgradeWindowPresenter: ObservableObject {
     private var activeWindow: ActiveWindow?
     private var onClose: (() -> Void)?
 
-    init(
+    package init(
         storeManager: StoreManager,
         serverManager: ServerManager
     ) {
@@ -213,7 +213,7 @@ final class ProUpgradeWindowPresenter: ObservableObject {
         }
     }
 
-    init(
+    package init(
         makeWindow: @escaping MakeWindow,
         noteReusedPresentation: @escaping @MainActor (PaywallSource) -> Void
     ) {
@@ -221,7 +221,7 @@ final class ProUpgradeWindowPresenter: ObservableObject {
         self.noteReusedPresentation = noteReusedPresentation
     }
 
-    func show(
+    package func show(
         source: PaywallSource,
         onClose: @escaping () -> Void
     ) {
@@ -244,7 +244,7 @@ final class ProUpgradeWindowPresenter: ObservableObject {
         window.present()
     }
 
-    func close() {
+    package func close() {
         activeWindow?.handle.close()
     }
 
@@ -258,23 +258,23 @@ final class ProUpgradeWindowPresenter: ObservableObject {
 }
 
 @MainActor
-final class ProUpgradeWindowContentModel: ObservableObject {
+final package class ProUpgradeWindowContentModel: ObservableObject {
     @Published private(set) var source: PaywallSource
 
-    init(source: PaywallSource) {
+    package init(source: PaywallSource) {
         self.source = source
     }
 
-    func refresh(source: PaywallSource) {
+    package func refresh(source: PaywallSource) {
         self.source = source
     }
 }
 
 private struct ProUpgradeWindowContent: View {
-    @ObservedObject var model: ProUpgradeWindowContentModel
-    let onDismiss: () -> Void
+    @ObservedObject package var model: ProUpgradeWindowContentModel
+    package let onDismiss: () -> Void
 
-    var body: some View {
+    package var body: some View {
         ProUpgradeSheet(source: model.source, onDismiss: onDismiss)
     }
 }
@@ -285,7 +285,7 @@ private final class ProUpgradeAppKitWindow: NSObject, ProUpgradeWindowHandling, 
     private let window: NSWindow
     private let onWindowClosed: @MainActor () -> Void
 
-    init(
+    package init(
         storeManager: StoreManager,
         serverManager: ServerManager,
         source: PaywallSource,
@@ -308,22 +308,22 @@ private final class ProUpgradeAppKitWindow: NSObject, ProUpgradeWindowHandling, 
         window.center()
     }
 
-    var isVisible: Bool { window.isVisible }
+    package var isVisible: Bool { window.isVisible }
 
-    func refresh(source: PaywallSource) {
+    package func refresh(source: PaywallSource) {
         model.refresh(source: source)
         ProUpgradeWindowChrome.configure(window, setInitialSize: false, source: source)
     }
 
-    func present() {
+    package func present() {
         window.makeKeyAndOrderFront(nil)
     }
 
-    func close() {
+    package func close() {
         window.close()
     }
 
-    func windowWillClose(_ notification: Notification) {
+    package func windowWillClose(_ notification: Notification) {
         onWindowClosed()
     }
 }
@@ -332,7 +332,7 @@ private enum ProUpgradeWindowChrome {
     private static let toolbarIdentifier = NSToolbar.Identifier("ProUpgradeWindowToolbar")
     private static let titlebarAccessoryIdentifier = NSUserInterfaceItemIdentifier("ProUpgradeTitlebarAccessory")
 
-    static func configure(_ window: NSWindow, setInitialSize: Bool, source: PaywallSource = .general) {
+    static package func configure(_ window: NSWindow, setInitialSize: Bool, source: PaywallSource = .general) {
         window.title = source.paywallTitle
         window.subtitle = source.paywallSubtitle
         window.styleMask.insert([.titled, .closable, .resizable])
@@ -382,7 +382,7 @@ private final class ProUpgradeTitlebarView: NSView {
     private let titleField = NSTextField(labelWithString: "")
     private let subtitleField = NSTextField(labelWithString: "")
 
-    init(identifier: NSUserInterfaceItemIdentifier, source: PaywallSource) {
+    package init(identifier: NSUserInterfaceItemIdentifier, source: PaywallSource) {
         super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 42))
         self.identifier = identifier
         setup()
@@ -390,11 +390,11 @@ private final class ProUpgradeTitlebarView: NSView {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         nil
     }
 
-    func updateText(source: PaywallSource) {
+    package func updateText(source: PaywallSource) {
         titleField.stringValue = source.paywallTitle
         subtitleField.stringValue = source.paywallSubtitle
     }

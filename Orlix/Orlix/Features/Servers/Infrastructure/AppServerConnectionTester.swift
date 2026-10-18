@@ -7,9 +7,9 @@ import OrlixModels
 import OrlixSSH
 import OrlixSettings
 #endif
-package extension KnownHostsManager: ServerHostKeyRepository {}
+extension KnownHostsManager: ServerHostKeyRepository {}
 
-nonisolated protocol ServerConnectionOperationRunning: Sendable {
+nonisolated package protocol ServerConnectionOperationRunning: Sendable {
     func runServerConnectionTest(
         server: Server,
         credentials: ServerCredentials,
@@ -17,14 +17,14 @@ nonisolated protocol ServerConnectionOperationRunning: Sendable {
     ) async throws
 }
 
-nonisolated protocol ServerMoshConnectionTesting: Sendable {
+nonisolated package protocol ServerMoshConnectionTesting: Sendable {
     func testServerConnection(
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws
 }
 
-package extension SSHConnectionOperationService: ServerConnectionOperationRunning {
+extension SSHConnectionOperationService: ServerConnectionOperationRunning {
     package func runServerConnectionTest(
         server: Server,
         credentials: ServerCredentials,
@@ -38,7 +38,7 @@ package extension SSHConnectionOperationService: ServerConnectionOperationRunnin
     }
 }
 
-package extension RemoteMoshManager: ServerMoshConnectionTesting {
+extension RemoteMoshManager: ServerMoshConnectionTesting {
     package func testServerConnection(
         using client: SSHClient,
         portRange: ClosedRange<Int>
@@ -59,12 +59,12 @@ package extension RemoteMoshManager: ServerMoshConnectionTesting {
     }
 }
 
-nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
+nonisolated package enum ServerConnectionTestPlan: Equatable, Sendable {
     case sshOnly
     case mosh(portRange: ClosedRange<Int>)
     case eternalTerminal(port: UInt16)
 
-    init(server: Server) {
+    package init(server: Server) {
         switch server.connectionMode {
         case .standard, .tailscale, .cloudflare:
             self = .sshOnly
@@ -78,12 +78,12 @@ nonisolated enum ServerConnectionTestPlan: Equatable, Sendable {
     }
 }
 
-nonisolated enum ServerConnectionApprovalRequirement: Equatable, Sendable {
+nonisolated package enum ServerConnectionApprovalRequirement: Equatable, Sendable {
     case hostKey(host: String, port: Int)
 }
 
-nonisolated enum ServerConnectionApprovalPolicy {
-    static func requirement(
+nonisolated package enum ServerConnectionApprovalPolicy {
+    static package func requirement(
         for error: Error,
         server: Server
     ) -> ServerConnectionApprovalRequirement? {
@@ -130,13 +130,13 @@ package extension ServerFormDependencies {
     }
 }
 
-nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
+nonisolated package struct AppServerConnectionTester: ServerConnectionTesting {
     private let connectionOperations: any ServerConnectionOperationRunning
     private let remoteMosh: any ServerMoshConnectionTesting
     private let hostKeys: any ServerHostKeyRepository
     private let now: @Sendable () -> Date
 
-    init(
+    package init(
         connectionOperations: any ServerConnectionOperationRunning,
         remoteMosh: any ServerMoshConnectionTesting,
         hostKeys: any ServerHostKeyRepository,
@@ -148,7 +148,7 @@ nonisolated struct AppServerConnectionTester: ServerConnectionTesting {
         self.now = now
     }
 
-    func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
+    package func test(server: Server, credentials: ServerCredentials) async -> ServerConnectionTestResult {
         let plan = ServerConnectionTestPlan(server: server)
         do {
             try Task.checkCancellation()

@@ -6,13 +6,13 @@ import OrlixModels
 
 // MARK: - Charts
 
-struct MetricPreviewChart: View {
-    let history: [StatsPoint]
-    let color: Color
-    let yDomain: ClosedRange<Double>
-    let style: StatsVisualStyle
+package struct MetricPreviewChart: View {
+    package let history: [StatsPoint]
+    package let color: Color
+    package let yDomain: ClosedRange<Double>
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         if history.count < 2 {
             PreviewPlaceholder(color: color, style: style)
         } else if #available(iOS 16.0, macOS 13.0, *) {
@@ -68,10 +68,10 @@ struct MetricPreviewChart: View {
     }
 }
 
-struct NetworkLineChart: View {
-    let rxHistory: [StatsPoint]
-    let txHistory: [StatsPoint]
-    let style: StatsVisualStyle
+package struct NetworkLineChart: View {
+    package let rxHistory: [StatsPoint]
+    package let txHistory: [StatsPoint]
+    package let style: StatsVisualStyle
     private let minimumWindow: TimeInterval = 60
     private let maximumWindow: TimeInterval = 300
 
@@ -98,7 +98,7 @@ struct NetworkLineChart: View {
         return (last.addingTimeInterval(-span), last)
     }
 
-    var body: some View {
+    package var body: some View {
         if rxSamples.count < 2, txSamples.count < 2 {
             NetworkLinePlaceholder()
         } else {
@@ -162,17 +162,17 @@ struct NetworkLineChart: View {
 }
 
 private nonisolated struct NetworkLineShape: Shape {
-    let points: [CGPoint]
+    package let points: [CGPoint]
 
-    func path(in rect: CGRect) -> Path {
+    package func path(in rect: CGRect) -> Path {
         NetworkPath.smoothLine(points)
     }
 }
 
 private nonisolated struct NetworkAreaShape: Shape {
-    let points: [CGPoint]
+    package let points: [CGPoint]
 
-    func path(in rect: CGRect) -> Path {
+    package func path(in rect: CGRect) -> Path {
         guard points.count >= 2 else { return Path() }
         var path = NetworkPath.smoothLine(points)
         if let first = points.first, let last = points.last {
@@ -185,7 +185,7 @@ private nonisolated struct NetworkAreaShape: Shape {
 }
 
 private nonisolated enum NetworkPath {
-    static func smoothLine(_ points: [CGPoint]) -> Path {
+    static package func smoothLine(_ points: [CGPoint]) -> Path {
         var path = Path()
         guard let first = points.first else { return path }
         path.move(to: first)
@@ -231,7 +231,7 @@ private nonisolated enum NetworkPath {
 }
 
 private struct NetworkLinePlaceholder: View {
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
@@ -261,10 +261,10 @@ private struct NetworkLinePlaceholder: View {
 }
 
 private struct PreviewPlaceholder: View {
-    let color: Color
-    let style: StatsVisualStyle
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
             ForEach(0..<6, id: \.self) { index in
                 Capsule()
@@ -280,21 +280,21 @@ private struct PreviewPlaceholder: View {
 
 // MARK: - Meters
 
-struct CapacitySegment {
-    let value: Double
-    let color: Color
+package struct CapacitySegment {
+    package let value: Double
+    package let color: Color
 }
 
-struct SegmentedCapacityBar: View {
-    let segments: [CapacitySegment]
-    let total: Double
-    let style: StatsVisualStyle
+package struct SegmentedCapacityBar: View {
+    package let segments: [CapacitySegment]
+    package let total: Double
+    package let style: StatsVisualStyle
 
     private var visibleSegments: [CapacitySegment] {
         segments.filter { $0.value > 0 }
     }
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let spacing = CGFloat(max(visibleSegments.count - 1, 0)) * 3
             let availableWidth = max(proxy.size.width - spacing, 0)
@@ -317,12 +317,12 @@ struct SegmentedCapacityBar: View {
     }
 }
 
-struct MiniMeter: View {
-    let value: Double
-    let color: Color
-    let style: StatsVisualStyle
+package struct MiniMeter: View {
+    package let value: Double
+    package let color: Color
+    package let style: StatsVisualStyle
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .leading) {
             Capsule()
                 .fill(style.meterTrack)
@@ -337,12 +337,12 @@ struct MiniMeter: View {
 
 // MARK: - Error
 
-struct ConnectionErrorOverlay: View {
-    let error: String
-    let style: StatsVisualStyle
-    let retry: () -> Void
+package struct ConnectionErrorOverlay: View {
+    package let error: String
+    package let style: StatsVisualStyle
+    package let retry: () -> Void
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)

@@ -9,7 +9,7 @@ nonisolated package struct TerminalFont: Identifiable, Codable, Equatable, Senda
         case ttc
         case otc
 
-        init?(fileExtension: String) {
+        package init?(fileExtension: String) {
             self.init(rawValue: fileExtension.lowercased())
         }
     }

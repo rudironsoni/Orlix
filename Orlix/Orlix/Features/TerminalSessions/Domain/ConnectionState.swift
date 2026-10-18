@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Connection State
 
-nonisolated enum TerminalConnectionRetryDisposition: Hashable, Sendable {
+nonisolated package enum TerminalConnectionRetryDisposition: Hashable, Sendable {
     case automatic
     case manual
 }

@@ -1,10 +1,10 @@
-nonisolated enum ServerProRequirement: Equatable, Sendable {
+nonisolated package enum ServerProRequirement: Equatable, Sendable {
     case unlimitedServers
     case unlimitedWorkspaces
     case moveIntoLockedWorkspace
 }
 
-nonisolated enum ServerMoveFailureReason: Equatable, Sendable {
+nonisolated package enum ServerMoveFailureReason: Equatable, Sendable {
     case destinationUnavailable
     case unavailable
 }

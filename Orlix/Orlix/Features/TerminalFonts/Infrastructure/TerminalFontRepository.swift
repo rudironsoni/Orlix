@@ -7,12 +7,12 @@ import OrlixModels
 #endif
 @MainActor
 package protocol TerminalFontAssetRepository: AnyObject {
-    package func installRemoteAsset(from sourceURL: URL, for font: TerminalFont) throws
-    package func existingFileURL(for font: TerminalFont) -> URL?
+    func installRemoteAsset(from sourceURL: URL, for font: TerminalFont) throws
+    func existingFileURL(for font: TerminalFont) -> URL?
 }
 
 @MainActor
-protocol TerminalFontRepository: TerminalFontAssetRepository {
+package protocol TerminalFontRepository: TerminalFontAssetRepository {
     func loadFonts() throws -> [TerminalFont]
     func saveFonts(_ fonts: [TerminalFont]) throws
     func loadPreference() -> TerminalFontPreference
@@ -356,19 +356,19 @@ final package class LocalTerminalFontRepository: TerminalFontRepository {
 }
 
 nonisolated private enum StorageKey {
-    static let fonts = "terminalCustomFontsV1"
-    static let preferenceUpdatedAt = "terminalFontPreferenceUpdatedAt"
+    static package let fonts = "terminalCustomFontsV1"
+    static package let preferenceUpdatedAt = "terminalFontPreferenceUpdatedAt"
 }
 
 nonisolated private struct FontInspection: Sendable {
-    let families: [TerminalFontFamily]
-    let format: TerminalFont.FileFormat
-    let fileSize: Int64
-    let sha256: String
+    package let families: [TerminalFontFamily]
+    package let format: TerminalFont.FileFormat
+    package let fileSize: Int64
+    package let sha256: String
 }
 
 nonisolated private enum TerminalFontFilePaths {
-    static func customFontsDirectoryURL(
+    static package func customFontsDirectoryURL(
         fileManager: FileManager = .default,
         bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> URL {
@@ -383,11 +383,11 @@ nonisolated private enum TerminalFontFilePaths {
             .appendingPathComponent("CustomFonts", isDirectory: true)
     }
 
-    static func fontDirectoryURL(for fontID: TerminalFont.ID, root: URL) -> URL {
+    static package func fontDirectoryURL(for fontID: TerminalFont.ID, root: URL) -> URL {
         root.appendingPathComponent(fontID, isDirectory: true)
     }
 
-    static func fontFileURL(for font: TerminalFont, root: URL) -> URL {
+    static package func fontFileURL(for font: TerminalFont, root: URL) -> URL {
         fontDirectoryURL(for: font.id, root: root)
             .appendingPathComponent("font", isDirectory: false)
     }

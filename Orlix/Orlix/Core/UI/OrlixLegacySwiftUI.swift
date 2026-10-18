@@ -45,9 +45,9 @@ package extension OrlixLabeledContent where Label == Text, Content == Text {
     }
 }
 
-extension View {
+package extension View {
     @ViewBuilder
-    func orlixNavigationStack() -> some View {
+    package func orlixNavigationStack() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             NavigationStack { self }
         } else {
@@ -56,7 +56,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationDestination<Destination: View>(
+    package func orlixNavigationDestination<Destination: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
@@ -75,7 +75,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixScrollContentBackgroundHidden() -> some View {
+    package func orlixScrollContentBackgroundHidden() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             scrollContentBackground(.hidden)
         } else {
@@ -84,7 +84,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixLargePresentationDetent() -> some View {
+    package func orlixLargePresentationDetent() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.large])
         } else {
@@ -93,7 +93,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixMediumAndLargePresentationDetents() -> some View {
+    package func orlixMediumAndLargePresentationDetents() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.medium, .large])
         } else {
@@ -102,7 +102,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixPresentationDetents(height: CGFloat) -> some View {
+    package func orlixPresentationDetents(height: CGFloat) -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDetents([.height(height), .large])
         } else {
@@ -111,7 +111,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationBarBackgroundHidden() -> some View {
+    package func orlixNavigationBarBackgroundHidden() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             toolbarBackground(.hidden, for: .navigationBar)
         } else {
@@ -120,7 +120,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixGroupedFormStyle() -> some View {
+    package func orlixGroupedFormStyle() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             formStyle(.grouped)
         } else {
@@ -129,7 +129,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixVisiblePresentationDragIndicator() -> some View {
+    package func orlixVisiblePresentationDragIndicator() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             presentationDragIndicator(.visible)
         } else {
@@ -138,7 +138,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixNavigationBarHidden(_ hidden: Bool) -> some View {
+    package func orlixNavigationBarHidden(_ hidden: Bool) -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             toolbar(hidden ? .hidden : .visible, for: .navigationBar)
         } else {
@@ -147,7 +147,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixListRowSeparatorLeadingZero() -> some View {
+    package func orlixListRowSeparatorLeadingZero() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         } else {
@@ -156,7 +156,7 @@ extension View {
     }
 
     @ViewBuilder
-    func orlixVisibleScrollIndicators() -> some View {
+    package func orlixVisibleScrollIndicators() -> some View {
         if #available(iOS 16.0, macOS 13.0, *) {
             scrollIndicators(.visible)
         } else {

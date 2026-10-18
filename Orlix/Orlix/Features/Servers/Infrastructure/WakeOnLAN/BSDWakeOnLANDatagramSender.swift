@@ -4,7 +4,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated protocol WakeOnLANDatagramSending: Sendable {
+nonisolated package protocol WakeOnLANDatagramSending: Sendable {
     func send(_ data: Data, to address: WakeOnLANIPv4Address, port: UInt16) throws
 }
 

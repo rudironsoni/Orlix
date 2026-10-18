@@ -12,7 +12,7 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
     private let pendingSync: CloudKitSyncCoordinator
     private let statusStore: CloudKitSyncStatusStore
 
-    init(
+    package init(
         cloudKit: CloudKitManager,
         pendingSync: CloudKitSyncCoordinator
     ) {
@@ -21,7 +21,7 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         statusStore = cloudKit.statusStore
     }
 
-    var currentState: SyncSettingsCloudState {
+    package var currentState: SyncSettingsCloudState {
         Self.state(
             syncState: statusStore.syncState,
             accountState: statusStore.accountState,
@@ -30,7 +30,7 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         )
     }
 
-    var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
+    package var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> {
         Publishers.CombineLatest(
             Publishers.CombineLatest3(
                 statusStore.$syncState,
@@ -50,11 +50,11 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
         .eraseToAnyPublisher()
     }
 
-    func setSyncEnabled(_ enabled: Bool) {
+    package func setSyncEnabled(_ enabled: Bool) {
         cloudKit.handleSyncToggle(enabled)
     }
 
-    func checkAccountStatus() async {
+    package func checkAccountStatus() async {
         await cloudKit.refreshAccountStatus()
     }
 
@@ -98,11 +98,11 @@ private final class CloudKitSyncSettingsAdapter: SyncSettingsCloudSyncing {
 private final class KeychainSyncSettingsAdapter: SyncSettingsCredentialSyncing {
     private let keychain: KeychainManager
 
-    init(keychain: KeychainManager) {
+    package init(keychain: KeychainManager) {
         self.keychain = keychain
     }
 
-    var currentState: SyncSettingsCredentialState {
+    package var currentState: SyncSettingsCredentialState {
         if !SyncSettings.isEnabled {
             return .storedOnThisDevice
         }
@@ -111,11 +111,11 @@ private final class KeychainSyncSettingsAdapter: SyncSettingsCredentialSyncing {
             : .storedInICloudKeychain
     }
 
-    func prepareCredentialStorage(isSyncEnabled: Bool) throws {
+    package func prepareCredentialStorage(isSyncEnabled: Bool) throws {
         try keychain.handleSyncToggle(isEnabled: isSyncEnabled)
     }
 
-    func removeCredentialsFromICloud() throws {
+    package func removeCredentialsFromICloud() throws {
         try keychain.removeCredentialsFromICloud()
     }
 }
@@ -129,7 +129,7 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
     private let statsPreferences: PreferencesStore
     private let pendingSync: CloudKitSyncCoordinator
 
-    init(
+    package init(
         serverManager: ServerManager,
         terminalTheme: TerminalThemeManager,
         terminalFont: TerminalFontStore,
@@ -145,11 +145,11 @@ private final class AppSyncSettingsDataAdapter: SyncSettingsDataRefreshing {
         self.pendingSync = pendingSync
     }
 
-    func handleSyncDisabled() {
+    package func handleSyncDisabled() {
         serverManager.handleSyncDisabled()
     }
 
-    func syncNow() async throws {
+    package func syncNow() async throws {
         await pendingSync.drainPendingMutations()
         await serverManager.loadData()
         guard serverManager.stateStore.ambiguousCloudRecovery == nil,
@@ -175,7 +175,7 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
     private let terminalTheme: TerminalThemeManager
     private let terminalFont: TerminalFontStore
 
-    init(
+    package init(
         serverManager: ServerManager,
         keychain: KeychainManager,
         terminalTheme: TerminalThemeManager,
@@ -187,7 +187,7 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
         self.terminalFont = terminalFont
     }
 
-    var currentSummary: SyncSettingsContentSummary {
+    package var currentSummary: SyncSettingsContentSummary {
         SyncSettingsContentSummary(
             workspaceCount: serverManager.workspaces.count,
             serverCount: serverManager.servers.count,
@@ -204,23 +204,23 @@ private final class AppSyncSettingsContentSummaryAdapter: SyncSettingsContentSum
 }
 
 @MainActor
-final class UserDefaultsSyncSettingsHistoryStore: SyncSettingsHistoryStoring {
-    nonisolated static let lastSuccessfulSyncKey = "settings.sync.lastSuccessfulDate"
+final package class UserDefaultsSyncSettingsHistoryStore: SyncSettingsHistoryStoring {
+    nonisolated static package let lastSuccessfulSyncKey = "settings.sync.lastSuccessfulDate"
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    var lastSuccessfulSyncDate: Date? {
+    package var lastSuccessfulSyncDate: Date? {
         guard let interval = defaults.object(forKey: Self.lastSuccessfulSyncKey) as? Double else {
             return nil
         }
         return Date(timeIntervalSince1970: interval)
     }
 
-    func recordSuccessfulSync(at date: Date) throws {
+    package func recordSuccessfulSync(at date: Date) throws {
         let interval = date.timeIntervalSince1970
         defaults.set(interval, forKey: Self.lastSuccessfulSyncKey)
         guard defaults.object(forKey: Self.lastSuccessfulSyncKey) as? Double == interval else {

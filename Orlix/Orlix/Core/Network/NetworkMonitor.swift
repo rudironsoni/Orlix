@@ -34,7 +34,7 @@ final package class NetworkMonitor: ObservableObject {
         case ethernet = "Ethernet"
         case unknown = "Unknown"
 
-        var displayName: String {
+        package var displayName: String {
             switch self {
             case .wifi: return String(localized: "WiFi")
             case .cellular: return String(localized: "Cellular")
@@ -43,7 +43,7 @@ final package class NetworkMonitor: ObservableObject {
             }
         }
 
-        var icon: String {
+        package var icon: String {
             switch self {
             case .wifi: return "wifi"
             case .cellular: return "antenna.radiowaves.left.and.right"
@@ -54,12 +54,12 @@ final package class NetworkMonitor: ObservableObject {
     }
 
     nonisolated package struct Snapshot: Hashable, Sendable {
-        let readiness: Readiness
-        let connectionType: ConnectionType
-        let isExpensive: Bool
-        let isConstrained: Bool
+        package let readiness: Readiness
+        package let connectionType: ConnectionType
+        package let isExpensive: Bool
+        package let isConstrained: Bool
 
-        static let unknown = Snapshot(
+        static package let unknown = Snapshot(
             readiness: .unknown,
             connectionType: .unknown,
             isExpensive: false,

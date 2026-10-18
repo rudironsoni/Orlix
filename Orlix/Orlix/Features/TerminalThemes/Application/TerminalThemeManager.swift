@@ -10,20 +10,20 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalThemeSelectionTarget: CaseIterable, Hashable, Sendable {
+nonisolated package enum TerminalThemeSelectionTarget: CaseIterable, Hashable, Sendable {
     case dark
     case light
     case both
 }
 
-nonisolated struct TerminalThemeObserverCleanupRequest: Sendable {
+nonisolated package struct TerminalThemeObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
-    init(cleanup: @escaping @MainActor @Sendable () -> Void) {
+    package init(cleanup: @escaping @MainActor @Sendable () -> Void) {
         self.cleanup = cleanup
     }
 
-    func perform() {
+    package func perform() {
         Task { @MainActor in
             cleanup()
         }
@@ -37,7 +37,7 @@ private final class TerminalThemeObserverCleanup {
     private var preferenceObserver: NSObjectProtocol?
     private var lifecycleObserverID: UUID?
 
-    init(
+    package init(
         preferenceChanges: any TerminalThemePreferenceChangeSource,
         syncLifecycle: any TerminalThemeSyncLifecycle
     ) {
@@ -45,17 +45,17 @@ private final class TerminalThemeObserverCleanup {
         self.syncLifecycle = syncLifecycle
     }
 
-    var request: TerminalThemeObserverCleanupRequest {
+    package var request: TerminalThemeObserverCleanupRequest {
         TerminalThemeObserverCleanupRequest { [self] in
             removeObservers()
         }
     }
 
-    func registerPreferenceObserver(_ observer: NSObjectProtocol) {
+    package func registerPreferenceObserver(_ observer: NSObjectProtocol) {
         preferenceObserver = observer
     }
 
-    func registerLifecycleObserver(_ id: UUID) {
+    package func registerLifecycleObserver(_ id: UUID) {
         lifecycleObserverID = id
     }
 

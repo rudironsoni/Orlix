@@ -84,4 +84,4 @@ package enum TerminalRemoteSessionLiveComposition {
     }
 }
 
-package extension RemoteSessionClient: TerminalRemoteSessionServicing {}
+extension RemoteSessionClient: TerminalRemoteSessionServicing {}
