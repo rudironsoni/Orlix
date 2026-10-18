@@ -49,16 +49,28 @@ filegroup(name = "ghostty_macos_archive", srcs = ["@orlix_ghostty_kit//:macos_li
 filegroup(name = "ghostty_ios_device_resources", srcs = ["@orlix_ghostty_kit//:ios_device_resources"])
 filegroup(name = "ghostty_ios_simulator_resources", srcs = ["@orlix_ghostty_kit//:ios_simulator_resources"])
 filegroup(name = "ghostty_macos_resources", srcs = ["@orlix_ghostty_kit//:macos_resources"])
-filegroup(name = "ssh_ios_device_archive", srcs = [":ssh_archives"], output_group = "ios_device")
-filegroup(name = "ssh_ios_simulator_archive", srcs = [":ssh_archives"], output_group = "ios_simulator")
-filegroup(name = "ssh_macos_archive", srcs = [":ssh_archives"], output_group = "macos")
-
 cc_import(name = "ghostty_ios_device", static_library = ":ghostty_ios_device_archive")
 cc_import(name = "ghostty_ios_simulator", static_library = ":ghostty_ios_simulator_archive")
 cc_import(name = "ghostty_macos", static_library = ":ghostty_macos_archive")
-cc_import(name = "ssh_ios_device", static_library = ":ssh_ios_device_archive")
-cc_import(name = "ssh_ios_simulator", static_library = ":ssh_ios_simulator_archive")
-cc_import(name = "ssh_macos", static_library = ":ssh_macos_archive")
+
+_SSH_DESTINATIONS = ["ios_device", "ios_simulator", "macos"]
+_SSH_LIBRARIES = ["libssh2", "libssl", "libcrypto"]
+
+[filegroup(
+    name = "ssh_%s_%s_archive" % (destination, library),
+    srcs = [":ssh_archives"],
+    output_group = "%s_%s" % (destination, library),
+) for destination in _SSH_DESTINATIONS for library in _SSH_LIBRARIES]
+
+[cc_import(
+    name = "ssh_%s_%s" % (destination, library),
+    static_library = ":ssh_%s_%s_archive" % (destination, library),
+) for destination in _SSH_DESTINATIONS for library in _SSH_LIBRARIES]
+
+[cc_library(
+    name = "ssh_%s" % destination,
+    deps = [":ssh_%s_%s" % (destination, library) for library in _SSH_LIBRARIES],
+) for destination in _SSH_DESTINATIONS]
 
 cc_library(
     name = "selected",

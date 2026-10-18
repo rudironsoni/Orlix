@@ -14,6 +14,11 @@ load(
     "uapi_providers_test",
     "variant_stamp_test",
 )
+load(
+    "//bazel/feasibility/native:ssh_archive_test.bzl",
+    "ghostty_archive_immutable_test",
+    "ssh_archive_inputs_test",
+)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -187,3 +192,17 @@ kernel_composition_test(
     name = "kernel_composition_test",
     target_under_test = "//bazel/product:kernel_composition",
 )
+
+ssh_archive_inputs_test(
+    name = "ssh_archive_inputs_test",
+    target_under_test = "//bazel/feasibility/native:ssh_archives",
+)
+
+[ghostty_archive_immutable_test(
+    name = "ghostty_%s_immutable_test" % slice,
+    target_under_test = "//bazel/feasibility/native:ghostty_%s_archive" % slice,
+) for slice in [
+    "ios_device",
+    "ios_simulator",
+    "macos",
+]]

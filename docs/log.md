@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 # Orlix Knowledge Log
+
+## [2026-10-18] build | Split native SSH archives by slice
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds OpenSSL and libssh2 as separate actions for each Apple destination and architecture. libssh2 consumes that slice's OpenSSL archives and headers. A libssh2-only change does not rebuild OpenSSL. A device slice input does not rebuild the simulator archive, and the reverse. GhosttyKit stays the pinned XCFramework. Kernel and Autotools keep `no-remote-cache`. Homebrew's bin directory stays off `PATH`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-17] build | Keep guest packages and rootfs from rebuilding each other
 
