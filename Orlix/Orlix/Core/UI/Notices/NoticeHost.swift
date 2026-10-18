@@ -14,7 +14,7 @@ package enum NoticeBottomInsetBehavior {
 @MainActor
 final package class NoticeHostModel: ObservableObject {
     @Published package var topBanner: NoticeItem?
-    @Published private(set) var bottomOperations: [NoticeItem] = []
+    @Published package private(set) var bottomOperations: [NoticeItem] = []
 
     private var dismissalTasks: [String: Task<Void, Never>] = [:]
 

@@ -8,8 +8,8 @@ import OrlixModels
 @MainActor
 final package class TerminalFontStore: ObservableObject {
     @Published private(set) var fontRecords: [TerminalFont]
-    @Published private(set) var catalog = TerminalFontCatalog.empty
-    @Published private(set) var preference: TerminalFontPreference
+    @Published package private(set) var catalog = TerminalFontCatalog.empty
+    @Published package private(set) var preference: TerminalFontPreference
     @Published private var registeredFamiliesByFontID: [
         TerminalFont.ID: [TerminalFontFamily]
     ] = [:]
