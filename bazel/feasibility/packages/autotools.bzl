@@ -99,6 +99,13 @@ done
     )
     return extra_input
 
+def _share_inputs(files):
+    selected = []
+    for item in files:
+        if "/share/" in item.path:
+            selected.append(item)
+    return selected
+
 def _autotools_package_impl(ctx):
     if ctx.attr.bootstrap and not ctx.attr.in_tree:
         fail("autotools bootstrap requires in_tree=True")
@@ -172,6 +179,7 @@ case "$configure" in
     ;;
 esac
 tool_bin="${ORLIX_PACKAGE_TOOL_BIN:?}"
+tool_root="$(/usr/bin/dirname "$tool_bin")"
 clang="$tool_bin/clang"
 ar_bin="$tool_bin/llvm-ar"
 ranlib_bin="$tool_bin/llvm-ranlib"
@@ -260,9 +268,15 @@ CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
   'fi' \
   'exec ${launcher:+"$launcher"} "$cc" "${common[@]}" "$@"' > "$work/toolchain/aarch64-linux-gnu-gcc"
 /bin/chmod +x "$work/toolchain/aarch64-linux-gnu-gcc"
-# The action environment is PATH=/usr/bin:/bin. Configure must see the staged
-# clang and the staged tools, and must not search Homebrew.
+# Staged tools/bin is first and clang is CC. Autotools reads share data from
+# that prefix.
 export PATH="$tool_bin:$work/toolchain:/usr/bin:/bin"
+export DYLD_LIBRARY_PATH="$tool_root/lib:$tool_root/llvm/lib"
+share="$tool_root/share"
+if [ -d "$share/autoconf" ]; then
+  export autom4te_perllibdir="$share/autoconf"
+  export AC_MACRODIR="$share/autoconf"
+fi
 export CC="${launcher:+$launcher }$clang --target=aarch64-linux-gnu -isystem $headers -isystem $uapi_headers/include $extra_inc -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 $code_model -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools"
 export CFLAGS="-O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-implicit-function-declaration -include limits.h -ffile-prefix-map=..=. -ffile-prefix-map=../..=. -ffile-prefix-map=../../..=. $CFLAGS_EXTRA"
 if [ "$MAKE_ONLY" = 1 ]; then
@@ -460,14 +474,14 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.libraries,
                 sysroot.compiler_runtime,
                 ctx.file.gmake,
-            ] + ctx.files.sources + ctx.files.host_tools + ([extra_input] if extra_input else [])),
+            ] + ctx.files.sources + ctx.files.host_tools + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.guest_clang_support + ctx.files.macos_sdk + _share_inputs(ctx.files.host_tools) + ([extra_input] if extra_input else [])),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        # autoreconf, automake, aclocal, glibtoolize, and m4 still read
-        # /opt/homebrew share trees. Those trees are not action inputs.
-        execution_requirements = {"block-network": "1", "no-remote-cache": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        # Staged tools/bin provides clang and the autotools binaries. Their
+        # dylibs, clang resources, macOS SDK, and share trees are inputs.
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(
         ctx,
@@ -509,6 +523,10 @@ orlix_autotools_package = rule(
         "compiler_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:guest-compiler-identity.json"),
         "gmake": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/gmake")),
         "host_tools": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:mlibc_support")),
+        "tool_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
+        "clang_resources": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:clang_resources")),
+        "guest_clang_support": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:guest_clang_support")),
+        "macos_sdk": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:macos_sdk")),
         "sysroot": attr.label(mandatory = True, providers = [OrlixLibcSysrootInfo]),
         "uapi": attr.label(mandatory = True, providers = [OrlixInstalledUapiInfo]),
         "configure": attr.label(allow_single_file = True, mandatory = True),

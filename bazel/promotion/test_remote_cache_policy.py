@@ -22,11 +22,9 @@ POLICY = {
 # OrlixKernelMachOArchive still runs host gmake, Homebrew clang, Xcode HOSTCC,
 # and xcrun. Dylibs and the SDK are not file inputs.
 # OrlixTctiIsaRestore does not input gmake's libraries or /usr/bin/python3.
-# Autotools OrlixGuestPackage still reads Homebrew share trees.
 REQUIRED_NO_REMOTE_CACHE = (
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixKernelMachOArchive"),
     ("bazel/feasibility/kernel/kernel_macho.bzl", "OrlixTctiIsaRestore"),
-    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
 )
 FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/artifact_identity.bzl", "OrlixArtifactIdentityV2"),
@@ -37,6 +35,7 @@ FORBIDDEN_NO_REMOTE_CACHE = (
     ("bazel/feasibility/mlibc/compiler_runtime.bzl", "OrlixCompilerRuntime"),
     ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfs"),
     ("bazel/feasibility/rootfs/rootfs.bzl", "OrlixRootfsPayload"),
+    ("bazel/feasibility/packages/autotools.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/autotools.bzl", "OrlixPackageInterface"),
     ("bazel/feasibility/packages/package.bzl", "OrlixGuestPackage"),
     ("bazel/feasibility/packages/local.bzl", "OrlixGuestPackage"),
@@ -73,7 +72,6 @@ class RemoteCachePolicyTests(unittest.TestCase):
         self.assertEqual(
             seen,
             {
-                "OrlixGuestPackage",
                 "OrlixKernelMachOArchive",
                 "OrlixTctiIsaRestore",
             },
