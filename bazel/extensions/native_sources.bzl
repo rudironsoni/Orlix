@@ -243,7 +243,14 @@ exports_files([
     "tools/bin/llvm-ranlib",
     "tools/bin/llvm-objdump",
     "tools/sdk/SDKSettings.json",
+    "tools/sdk/SDKSettings.plist",
 ], visibility = ["//visibility:public"])
+
+filegroup(
+    name = "bison_share",
+    srcs = glob(["tools/share/bison/**"]),
+    visibility = ["//visibility:public"],
+)
 
 filegroup(
     name = "macos_sdk",
