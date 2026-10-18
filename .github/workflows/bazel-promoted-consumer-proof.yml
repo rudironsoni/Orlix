@@ -62,7 +62,7 @@ jobs:
         id: xcode-present
         run: |
           set -euo pipefail
-          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}"; then
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}" || python3 bazel/ci/setup_cache.py xcode-selected --version "${{ steps.xcode-version.outputs.version }}"; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
@@ -89,13 +89,22 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
+      - name: Restore installed simulator runtimes
+        id: installed-runtimes
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
+          key: orlix-installed-simruntimes-15.5-26.5
+
       - name: Restore iOS 15.5 runtime archive
+        if: steps.installed-runtimes.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
       - name: Restore iOS 26.5 runtime archive
+        if: steps.installed-runtimes.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios26-runtime
@@ -117,7 +126,11 @@ jobs:
           git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
           brew trust --formula xcodesorg/made/xcodes
           python3 bazel/ci/setup_cache.py install-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles"
-          brew bundle --file Brewfile
+          if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then
+            echo "Homebrew packages are already installed; skipping brew bundle"
+          else
+            brew bundle --file Brewfile
+          fi
           test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
           test "$(xcodes version)" = "2.1.0"
           python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles" --brewfile Brewfile
@@ -167,10 +180,10 @@ jobs:
       - name: Prepare both simulator runtimes
         run: |
           set -euo pipefail
-          python3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"
-          python3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"
-          current_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "26.5" and .isAvailable == true) | .identifier' | head -n 1)"
-          ios15_runtime_id="$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == "15.5" and .isAvailable == true) | .identifier' | head -n 1)"
+          python3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          python3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          current_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)"
+          ios15_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)"
           test -n "$current_runtime_id"
           test -n "$ios15_runtime_id"
           device_type="com.apple.CoreSimulator.SimDeviceType.iPhone-13"

@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -89,6 +90,52 @@ def xcode_present(version: str, applications_dir: Path = XCODE_APPLICATIONS) -> 
     return any(version_satisfies(installed, version) for installed in installed_xcode_versions(applications_dir))
 
 
+def selected_developer_dir() -> Path | None:
+    completed = subprocess.run(
+        ["xcode-select", "-p"],
+        check=False, capture_output=True, text=True,
+    )
+    detail = f"{completed.stderr or ''}\n{completed.stdout or ''}"
+    if completed.returncode != 0:
+        if "permission denied" in detail.lower() or "operation not permitted" in detail.lower():
+            raise PermissionError(detail.strip())
+        return None
+    text = (completed.stdout or "").strip()
+    if not text:
+        return None
+    return Path(text)
+
+
+def xcode_selected(version: str, developer_dir: Path | None = None) -> bool:
+    """True when the selected Xcode already matches, or its plist cannot be read.
+
+    A permission error while reading the selected Xcode is not a missing Xcode.
+    """
+    directory = selected_developer_dir() if developer_dir is None else developer_dir
+    if directory is None:
+        return False
+    plist = directory.parent / "version.plist"
+    probe = path_probe(plist)
+    if probe == "permission":
+        return True
+    if probe == "missing":
+        return False
+    try:
+        with plist.open("rb") as stream:
+            payload = plistlib.load(stream)
+    except PermissionError:
+        return True
+    except (OSError, plistlib.InvalidFileException):
+        return False
+    short = payload.get("CFBundleShortVersionString")
+    if not isinstance(short, str) or not short.strip():
+        return False
+    try:
+        return version_satisfies(short.strip(), version)
+    except ValueError:
+        return False
+
+
 def archive_complete(directory: Path) -> bool:
     """A restored runtime archive is complete when a non-empty image has no aria2 sidecar."""
     if not directory.is_dir():
@@ -106,25 +153,216 @@ def archive_complete(directory: Path) -> bool:
     return False
 
 
-def simctl_runtime_available(version: str, payload: dict) -> bool:
+def runtime_matches(runtime: dict, version: str) -> bool:
+    """True when simctl lists this runtime, including a patch of a two-part version."""
+    observed = runtime.get("version")
+    if isinstance(observed, str):
+        if observed == version:
+            return True
+        try:
+            if version_satisfies(observed, version):
+                return True
+        except ValueError:
+            pass
+    if runtime.get("name") == f"iOS {version}":
+        return True
+    identifier = runtime.get("identifier")
+    suffix = "iOS-" + version.replace(".", "-")
+    return isinstance(identifier, str) and identifier.endswith(suffix)
+
+
+class RuntimeProbeDenied(Exception):
+    """The runtime bundle could not be read. That is not a missing runtime."""
+
+
+def path_probe(path: Path) -> str:
+    """Return present, missing, or permission.
+
+    ``Path.is_dir`` and ``Path.is_file`` swallow ``PermissionError`` and report
+    false. A runtime that exists but cannot be read must not look missing.
+    """
+    try:
+        path.stat()
+    except PermissionError:
+        return "permission"
+    except OSError:
+        return "missing"
+    return "present"
+
+
+def simctl_runtime_entries(version: str, payload: dict) -> list[dict]:
     runtimes = payload.get("runtimes")
     if not isinstance(runtimes, list):
-        return False
-    for runtime in runtimes:
-        if not isinstance(runtime, dict):
+        return []
+    return [
+        runtime for runtime in runtimes
+        if isinstance(runtime, dict) and runtime_matches(runtime, version)
+    ]
+
+
+def simctl_runtime_listed(version: str, payload: dict) -> bool:
+    """True when simctl lists this runtime, even if the bundle is not readable."""
+    return bool(simctl_runtime_entries(version, payload))
+
+
+def simctl_runtime_available(version: str, payload: dict) -> bool:
+    for runtime in simctl_runtime_entries(version, payload):
+        if runtime.get("isAvailable") is False:
             continue
-        if runtime.get("version") == version and runtime.get("isAvailable") is True:
+        return True
+    return False
+
+
+def simctl_runtime_identifier(version: str, payload: dict) -> str | None:
+    fallback = None
+    for runtime in simctl_runtime_entries(version, payload):
+        identifier = runtime.get("identifier")
+        if not isinstance(identifier, str) or not identifier.strip():
+            continue
+        if runtime.get("isAvailable") is False:
+            fallback = fallback or identifier.strip()
+            continue
+        return identifier.strip()
+    return fallback
+
+
+def simctl_bundle_path(version: str, payload: dict) -> Path | None:
+    fallback = None
+    for runtime in simctl_runtime_entries(version, payload):
+        bundle = runtime.get("bundlePath")
+        if not isinstance(bundle, str) or not bundle.strip():
+            continue
+        path = Path(bundle.strip())
+        if runtime.get("isAvailable") is False:
+            fallback = fallback or path
+            continue
+        return path
+    return fallback
+
+
+def simruntime_bundles(directory: Path) -> list[Path]:
+    """Return installed ``.simruntime`` directories without walking their contents.
+
+    Walking ``RuntimeRoot`` hits root-owned paths such as ``private/var/mobile``
+    and raises ``PermissionError``. That error is an installed runtime, not a
+    missing one.
+    """
+    probe = path_probe(directory)
+    if probe == "permission":
+        raise RuntimeProbeDenied(str(directory))
+    if probe == "missing":
+        return []
+    try:
+        entries = list(directory.iterdir())
+    except PermissionError as error:
+        raise RuntimeProbeDenied(str(directory)) from error
+    found = []
+    for path in sorted(entries):
+        if not path.name.endswith(".simruntime"):
+            continue
+        state = path_probe(path)
+        if state == "permission":
+            raise RuntimeProbeDenied(str(path))
+        if state == "present":
+            found.append(path)
+    return found
+
+
+def user_runtime_profiles() -> Path:
+    return Path.home() / "Library/Developer/CoreSimulator/Profiles/Runtimes"
+
+
+def runtime_profile_directories(runtime_dir: Path | None = None) -> list[Path]:
+    directories = []
+    if runtime_dir is not None:
+        directories.append(runtime_dir)
+    directories.append(Path("/Library/Developer/CoreSimulator/Profiles/Runtimes"))
+    user_profiles = user_runtime_profiles()
+    if user_profiles not in directories:
+        directories.append(user_profiles)
+    return directories
+
+
+def runtime_bundle_installed(version: str, runtime_dir: Path | None = None) -> bool:
+    """True when the ``.simruntime`` bundle is on disk or cannot be read."""
+    name = f"iOS {version}.simruntime"
+    for directory in runtime_profile_directories(runtime_dir):
+        if path_probe(directory / name) in {"present", "permission"}:
             return True
     return False
+
+
+def expose_restored_runtimes(runtime_dir: Path, profiles_dir: Path | None = None) -> list[Path]:
+    """Link a restored installed runtime into the directory simctl scans.
+
+    Linking is not an install. ``xcodes runtimes install`` is not invoked.
+    """
+    profiles = user_runtime_profiles() if profiles_dir is None else profiles_dir
+    linked = []
+    for bundle in simruntime_bundles(runtime_dir):
+        if profiles.resolve() == bundle.parent.resolve():
+            linked.append(bundle)
+            continue
+        profiles.mkdir(parents=True, exist_ok=True)
+        dest = profiles / bundle.name
+        if not dest.exists() and not dest.is_symlink():
+            dest.symlink_to(bundle.resolve(), target_is_directory=True)
+        linked.append(dest)
+    return linked
+
+
+def read_simctl_runtimes() -> dict:
+    completed = subprocess.run(
+        ["xcrun", "simctl", "list", "runtimes", "-j"],
+        check=False, capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        lowered = detail.lower()
+        if "permission denied" in lowered or "operation not permitted" in lowered:
+            raise RuntimeProbeDenied(detail)
+        raise SystemExit(f"simctl list runtimes failed: {detail}")
+    payload = json.loads(completed.stdout or "{}")
+    if not isinstance(payload, dict):
+        raise SystemExit("simctl list runtimes did not return an object")
+    return payload
+
+
+def publish_installed_runtime(version: str, payload: dict, runtime_dir: Path) -> bool:
+    """Copy an installed bundle into the cache directory after a cold install."""
+    source = simctl_bundle_path(version, payload)
+    if source is None or not source.is_dir():
+        return False
+    if source.parent.resolve() == runtime_dir.resolve():
+        return True
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    target = runtime_dir / source.name
+    if target.exists():
+        return True
+    try:
+        shutil.copytree(source, target, symlinks=True)
+    except PermissionError as error:
+        print(f"could not stage installed runtime {source}: {error}", file=sys.stderr)
+        if target.exists() or target.is_symlink():
+            shutil.rmtree(target, ignore_errors=True)
+        # The source runtime is installed. A permission error is not a miss.
+        return True
+    except OSError as error:
+        print(f"could not stage installed runtime {source}: {error}", file=sys.stderr)
+        if target.exists() or target.is_symlink():
+            shutil.rmtree(target, ignore_errors=True)
+        return False
+    return path_probe(target) in {"present", "permission"}
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
     """Return skip, install-local, or download.
 
-    ``skip`` does not run ``xcodes runtimes install``: the runner image already
-    registered the runtime. ``install-local`` runs the install against a restored
-    archive, and xcodes reuses that file instead of downloading it. ``download``
-    is the cold path.
+    ``skip`` does not run ``xcodes runtimes install``. A runtime ``simctl list
+    runtimes`` already lists is skipped even when a download archive was
+    restored. Restoring that download is not an install. ``install-local`` is
+    only the cold path for an archive simctl does not list yet. ``download``
+    is the path with no archive.
     """
     if available:
         return "skip"
@@ -149,7 +387,10 @@ def runtime_commands(plan: str, version: str, archive_dir: Path) -> list[list[st
 
 def runtime_message(plan: str, version: str, archive_dir: Path) -> str:
     if plan == "skip":
-        return f"iOS {version} runtime is already available; skipping xcodes runtimes install"
+        return (
+            f"iOS {version} runtime is already listed by simctl; "
+            "skipping xcodes runtimes install"
+        )
     if plan == "install-local":
         return (
             f"iOS {version} runtime archive is restored at {archive_dir}; "
@@ -261,25 +502,69 @@ def capture_bottles(directory: Path, brewfile: Path) -> None:
             print(f"could not bottle {formula}", file=sys.stderr)
 
 
-def prepare_runtime(version: str, archive_dir: Path) -> str:
+def bundle_satisfied(brewfile: Path) -> bool:
+    """True when the Brewfile is already satisfied.
+
+    A permission error from ``brew bundle check`` is not an unsatisfied Brewfile.
+    """
     completed = subprocess.run(
-        ["xcrun", "simctl", "list", "runtimes", "-j"],
+        ["brew", "bundle", "check", "--file", str(brewfile)],
         check=False, capture_output=True, text=True,
     )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise SystemExit(f"simctl list runtimes failed: {detail}")
-    payload = json.loads(completed.stdout)
-    plan = runtime_plan(
-        available=simctl_runtime_available(version, payload),
-        archive_ready=archive_complete(archive_dir),
-    )
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    if completed.stderr:
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
+    if completed.returncode == 0:
+        return True
+    detail = f"{completed.stderr or ''}\n{completed.stdout or ''}".lower()
+    return "permission denied" in detail or "operation not permitted" in detail
+
+
+def runtime_already_installed(version: str, runtime_dir: Path | None = None) -> bool:
+    """True when simctl lists the runtime or the bundle cannot be read.
+
+    ``xcodes runtimes install`` must not run in either case. A restored download
+    archive does not change this. A permission error is not a missing runtime.
+    """
+    try:
+        if runtime_bundle_installed(version, runtime_dir):
+            return True
+        return simctl_runtime_listed(version, read_simctl_runtimes())
+    except (RuntimeProbeDenied, PermissionError):
+        return True
+
+
+def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = None) -> str:
+    """Install a simulator runtime only when simctl does not already list it.
+
+    A restored installed bundle is exposed before the listing. A restored
+    download archive does not by itself run ``xcodes runtimes install``.
+    """
+    try:
+        if runtime_dir is not None:
+            expose_restored_runtimes(runtime_dir)
+            if simruntime_bundles(runtime_dir):
+                # Select Xcode may have started CoreSimulator before the cache
+                # restore. Restart it so the restored bundle is listed.
+                subprocess.run(
+                    ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"],
+                    check=False,
+                )
+        if runtime_already_installed(version, runtime_dir):
+            print(runtime_message("skip", version, archive_dir))
+            return "skip"
+    except (RuntimeProbeDenied, PermissionError):
+        print(runtime_message("skip", version, archive_dir))
+        return "skip"
+    plan = runtime_plan(available=False, archive_ready=archive_complete(archive_dir))
     print(runtime_message(plan, version, archive_dir))
-    if plan == "skip":
-        return plan
     archive_dir.mkdir(parents=True, exist_ok=True)
     for command in runtime_commands(plan, version, archive_dir):
         run_checked(command)
+    if runtime_dir is not None:
+        # Staging failure must not be read as "the runtime was missing".
+        publish_installed_runtime(version, read_simctl_runtimes(), runtime_dir)
     return plan
 
 
@@ -290,12 +575,26 @@ def main(argv: list[str] | None = None) -> int:
     present = commands.add_parser("xcode-present")
     present.add_argument("--version", required=True)
 
+    selected = commands.add_parser("xcode-selected")
+    selected.add_argument("--version", required=True)
+    selected.add_argument("--developer-dir", type=Path)
+
     runtime = commands.add_parser("prepare-runtime")
     runtime.add_argument("--version", required=True)
     runtime.add_argument("--archive-dir", required=True, type=Path)
+    runtime.add_argument("--runtime-dir", type=Path)
 
     archive = commands.add_parser("archive-present")
     archive.add_argument("--archive-dir", required=True, type=Path)
+
+    staged = commands.add_parser("simruntime-present")
+    staged.add_argument("--runtime-dir", required=True, type=Path)
+
+    identifier = commands.add_parser("runtime-identifier")
+    identifier.add_argument("--version", required=True)
+
+    satisfied = commands.add_parser("bundle-satisfied")
+    satisfied.add_argument("--brewfile", required=True, type=Path)
 
     install = commands.add_parser("install-bottles")
     install.add_argument("--bottle-dir", required=True, type=Path)
@@ -312,11 +611,31 @@ def main(argv: list[str] | None = None) -> int:
         found = xcode_present(args.version)
         print("true" if found else "false")
         return 0 if found else 1
+    if args.command == "xcode-selected":
+        try:
+            found = xcode_selected(args.version, args.developer_dir)
+        except PermissionError:
+            print("true")
+            return 0
+        print("true" if found else "false")
+        return 0 if found else 1
     if args.command == "prepare-runtime":
-        prepare_runtime(args.version, args.archive_dir)
+        prepare_runtime(args.version, args.archive_dir, args.runtime_dir)
         return 0
     if args.command == "archive-present":
         return 0 if archive_complete(args.archive_dir) else 1
+    if args.command == "simruntime-present":
+        return 0 if simruntime_bundles(args.runtime_dir) else 1
+    if args.command == "runtime-identifier":
+        found = simctl_runtime_identifier(args.version, read_simctl_runtimes())
+        if found is None:
+            raise SystemExit(f"iOS {args.version} runtime is not listed by simctl")
+        print(found)
+        return 0
+    if args.command == "bundle-satisfied":
+        ok = bundle_satisfied(args.brewfile)
+        print("true" if ok else "false")
+        return 0 if ok else 1
     if args.command == "install-bottles":
         install_bottles(args.bottle_dir)
         return 0

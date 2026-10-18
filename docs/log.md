@@ -7,6 +7,14 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Keep a permission error from reinstalling a listed runtime
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) treats a runtime `xcrun simctl list runtimes` already lists as installed, including when the bundle cannot be read. A permission error on that bundle is not a missing runtime and does not run `xcodes runtimes install`. The Xcode download is skipped when that Xcode is already selected. `brew bundle` is skipped when the Brewfile is already satisfied. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-10-18] build | Skip setup installers the runner already has
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) makes simulator preparation a no-op when `xcrun simctl list runtimes` already lists the required runtime. A restored download is not installed again. The installed `.simruntime` bundle is what the next job restores. Xcode download and `brew bundle` are skipped in every workflow that runs them when that installer is already satisfied. The Bazel output base stays out of `actions/cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Give the kernel archive bison data and the SDK plist
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies `SDKSettings.plist` into the staged macOS SDK and copies Homebrew bison's `share/bison` tree beside the staged `bison` binary. `OrlixKernelMachOArchive` declares both as inputs and `resume()` hashes them. The archive stays remote-cacheable and keeps `no-remote-exec`. ISA restore keeps `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

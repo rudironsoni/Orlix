@@ -29,12 +29,36 @@ jobs:
           test -s .xcode-version
           echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
 
+      - name: See whether the requested Xcode is already on the runner
+        id: xcode-present
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}" || python3 bazel/ci/setup_cache.py xcode-selected --version "${{ steps.xcode-version.outputs.version }}"; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Select Xcode
+        if: steps.xcode-present.outputs.installed == 'true'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Install the requested Xcode
+        if: steps.xcode-present.outputs.installed != 'true'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
       - name: Install declared build tools
-        run: brew bundle --file Brewfile
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then
+            echo "Homebrew packages are already installed; skipping brew bundle"
+          else
+            brew bundle --file Brewfile
+          fi
 
       - name: Export the selected Xcode to Make
         run: |

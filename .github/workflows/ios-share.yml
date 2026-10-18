@@ -172,8 +172,25 @@ jobs:
           test -s .xcode-version
           echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
 
-      - name: Select repository Xcode
+      - name: See whether the requested Xcode is already on the runner
+        id: xcode-present
         if: steps.detect.outputs.type == 'orlix'
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}" || python3 bazel/ci/setup_cache.py xcode-selected --version "${{ steps.xcode-version.outputs.version }}"; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select repository Xcode
+        if: steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed == 'true'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Install repository Xcode
+        if: steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed != 'true'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: ${{ steps.xcode-version.outputs.version }}
@@ -183,7 +200,11 @@ jobs:
         run: |
           set -euo pipefail
           brew trust --formula xcodesorg/made/xcodes
-          brew bundle --file Brewfile
+          if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then
+            echo "Homebrew packages are already installed; skipping brew bundle"
+          else
+            brew bundle --file Brewfile
+          fi
           python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$(xcode-select -p)"
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
