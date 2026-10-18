@@ -46,6 +46,7 @@ esac
 mke2fs="$exec_root/${10}"
 debugfs="$exec_root/${11}"
 export MKE2FS_CONFIG="$exec_root/${12}"
+policy="$exec_root/${14}"
 libdir=""
 if [ "${13}" != none ]; then libdir="$exec_root/${13}"; fi
 if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir"; fi
@@ -54,13 +55,44 @@ test -s "$toolchain_identity"
 test -x "$mke2fs"
 test -x "$debugfs"
 test -s "$MKE2FS_CONFIG"
+test -s "$policy"
 work="$exec_root/rootfs-work"
 /bin/rm -rf "$work"
 /bin/mkdir -p "$work"
 trap '/bin/rm -rf "$work"' EXIT
 base_tree="$work/base-tree"
 state_tree="$work/state-tree"
-/bin/mkdir -p "$base_tree/bin" "$base_tree/sbin" "$base_tree/usr/bin" "$base_tree/dev" "$base_tree/proc" "$base_tree/sys" "$base_tree/tmp" "$state_tree/upper" "$state_tree/work"
+for name in base_dirs state_dirs copy_bins requires symlinks metadata image_files image_dirs image_links; do
+  : > "$work/$name"
+done
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  key="${line%% *}"
+  rest="${line#"$key"}"
+  rest="${rest# }"
+  case "$key" in
+    base_dir) printf '%s\n' "$rest" >> "$work/base_dirs" ;;
+    state_dir) printf '%s\n' "$rest" >> "$work/state_dirs" ;;
+    copy_bin) printf '%s\n' "$rest" >> "$work/copy_bins" ;;
+    require) printf '%s\n' "$rest" >> "$work/requires" ;;
+    symlink) printf '%s\n' "$rest" >> "$work/symlinks" ;;
+    metadata) printf '%s\n' "$rest" >> "$work/metadata" ;;
+    image_file) printf '%s\n' "$rest" >> "$work/image_files" ;;
+    image_dir) printf '%s\n' "$rest" >> "$work/image_dirs" ;;
+    image_link) printf '%s\n' "$rest" >> "$work/image_links" ;;
+    *) echo "unknown rootfs policy: $line" >&2; exit 1 ;;
+  esac
+done < "$policy"
+while IFS= read -r dir; do
+  [ -n "$dir" ] || continue
+  /bin/mkdir -p "$base_tree/$dir"
+done < "$work/base_dirs"
+while IFS= read -r dir; do
+  [ -n "$dir" ] || continue
+  /bin/mkdir -p "$state_tree/$dir"
+done < "$work/state_dirs"
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
   tree="$exec_root/$rel"
@@ -76,34 +108,18 @@ copy_bin() {
   /bin/cp "$src" "$dest"
   /bin/chmod 0755 "$dest"
 }
-copy_bin "$base_tree/usr/bin/true" "$base_tree/bin/true"
-copy_bin "$base_tree/usr/bin/ls" "$base_tree/bin/ls"
-copy_bin "$base_tree/usr/bin/bash" "$base_tree/bin/bash"
-copy_bin "$base_tree/usr/bin/grep" "$base_tree/bin/grep"
-copy_bin "$base_tree/usr/bin/find" "$base_tree/bin/find"
-copy_bin "$base_tree/usr/bin/xargs" "$base_tree/bin/xargs"
-copy_bin "$base_tree/usr/bin/mke2fs" "$base_tree/bin/mke2fs"
-copy_bin "$base_tree/usr/bin/mkfs.ext4" "$base_tree/bin/mkfs.ext4"
-copy_bin "$base_tree/usr/bin/debugfs" "$base_tree/bin/debugfs"
-copy_bin "$base_tree/usr/bin/e2fsck" "$base_tree/bin/e2fsck"
-test -x "$base_tree/usr/bin/getconf"
-test -x "$base_tree/usr/bin/getent"
-test -x "$base_tree/sbin/init"
-test -x "$base_tree/usr/bin/jq"
-test -x "$base_tree/usr/bin/curl"
-test -x "$base_tree/usr/bin/zsh"
-test -x "$base_tree/usr/bin/getfattr"
-test -x "$base_tree/usr/bin/setfattr"
-test -x "$base_tree/usr/bin/getfacl"
-test -x "$base_tree/usr/bin/setfacl"
-test -x "$base_tree/usr/bin/getcap"
-test -x "$base_tree/usr/bin/setcap"
-test -x "$base_tree/usr/bin/getenforce"
-test -x "$base_tree/usr/bin/setenforce"
-test -x "$base_tree/usr/bin/selinuxenabled"
-test -x "$base_tree/usr/bin/policyvers"
-test -x "$base_tree/usr/bin/getpolicyload"
-/bin/ln -sf bash "$base_tree/bin/sh"
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  copy_bin "$base_tree/${spec%% *}" "$base_tree/${spec#* }"
+done < "$work/copy_bins"
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  /bin/ln -sf "${spec#* }" "$base_tree/${spec%% *}"
+done < "$work/symlinks"
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  test -x "$base_tree/$path"
+done < "$work/requires"
 test -x "$work/init"
 /usr/bin/printf '%s\n' 'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'file /init '"$work/init"' 0755 0 0' > "$work/initramfs.list"
 "$gen_init_cpio" -t 1 "$work/initramfs.list" | /usr/bin/gzip -n > "$initramfs_out"
@@ -133,15 +149,28 @@ check_image_entry() {
   fi
   /usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Eq 'User:[[:space:]]+0[[:space:]]+Group:[[:space:]]+0[[:space:]]' || { echo "non-root image ownership at $1:$2" >&2; exit 1; }
 }
-for entry in /bin/true /bin/ls /usr/bin/true /usr/bin/ls /bin/bash /usr/bin/bash /bin/grep /bin/find /bin/xargs /bin/mke2fs /bin/mkfs.ext4 /bin/debugfs /bin/e2fsck /usr/bin/getconf /usr/bin/getent /sbin/init /usr/bin/jq /usr/bin/curl /usr/bin/zsh /usr/bin/getfattr /usr/bin/setfattr /usr/bin/getfacl /usr/bin/setfacl /usr/bin/getcap /usr/bin/setcap /usr/bin/getenforce /usr/bin/setenforce /usr/bin/selinuxenabled /usr/bin/policyvers /usr/bin/getpolicyload; do
-  check_image_entry "$base_ext4" "$entry" regular
-done
-for entry in /dev /proc /sys /tmp; do check_image_entry "$base_ext4" "$entry" directory; done
-for entry in /upper /work; do check_image_entry "$state_ext4" "$entry" directory; done
-check_image_entry "$base_ext4" /bin/sh symlink
-/usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Fx 'Fast link dest: "bash"'
+policy_image() {
+  if [ "$1" = base ]; then printf '%s\n' "$base_ext4"; else printf '%s\n' "$state_ext4"; fi
+}
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  check_image_entry "$(policy_image "${spec%% *}")" "${spec#* }" regular
+done < "$work/image_files"
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  check_image_entry "$(policy_image "${spec%% *}")" "${spec#* }" directory
+done < "$work/image_dirs"
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  image="${spec%% *}"
+  tail="${spec#* }"
+  entry="${tail%% *}"
+  target="${tail#* }"
+  check_image_entry "$(policy_image "$image")" "$entry" symlink
+  /usr/bin/printf '%s\n' "$entry_stat" | /usr/bin/grep -Fx "Fast link dest: \"$target\""
+done < "$work/image_links"
 (cd "$base_tree" && /usr/bin/find . -print | /usr/bin/sort) > "$file_manifest"
-/usr/bin/printf 'init=/init\ninitramfs=initramfs.cpio.gz\nbase_ext4=base.ext4\nstate_ext4=state.ext4\npackages=coreutils,bash,grep,findutils,e2fsprogs,getconf,getent,init,jq,curl,zsh,attr,acl,libcap,libselinux\nbase_packages=bash coreutils grep findutils e2fsprogs jq curl zsh attr acl libcap libselinux\nshell=/bin/sh\n' > "$payload_metadata"
+/bin/cp "$work/metadata" "$payload_metadata"
 digest="$( (
   cd "$base_tree"
   /usr/bin/find . -type f -print0 | /usr/bin/sort -z | /usr/bin/xargs -0 /usr/bin/shasum -a 256
@@ -166,6 +195,7 @@ digest="$( (
             ctx.file.debugfs.path,
             ctx.file.mke2fs_config.path,
             ctx.files.rootfs_libs[0].dirname if ctx.files.rootfs_libs else "none",
+            ctx.file.assembly_policy.path,
         ],
         inputs = depset(
             direct = pkg_inputs + [
@@ -174,6 +204,7 @@ digest="$( (
                 ctx.file.mke2fs,
                 ctx.file.debugfs,
                 ctx.file.mke2fs_config,
+                ctx.file.assembly_policy,
             ] + ctx.files.rootfs_libs,
         ),
         tools = [ctx.executable.gen_init_cpio],
@@ -281,6 +312,10 @@ orlix_rootfs = rule(
         "mke2fs_config": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/mke2fs.conf")),
         "rootfs_libs": attr.label(allow_files = True, default = Label("@orlix_kernel_toolchain//:tool_libs")),
         "toolchain_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:rootfs-identity.json"),
+        "assembly_policy": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/rootfs:assembly_policy.txt"),
+        ),
         "_artifact_identity_serializer": attr.label(
             allow_single_file = True,
             default = Label("//bazel:content_digest.py"),

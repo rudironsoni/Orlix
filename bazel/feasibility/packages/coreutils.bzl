@@ -1,5 +1,6 @@
 """Pinned GNU Coreutils Autotools guest package."""
 
+load(":action_inputs.bzl", "guest_configure_inputs")
 load(":autotools.bzl", "declare_orlix_package_interface")
 load(":programs.bzl", "ORLIX_COREUTILS_PROGRAMS")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
@@ -204,7 +205,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
             feature_input.path,
         ],
         inputs = depset(
-            direct = [
+            direct = guest_configure_inputs(ctx.attr.package_name, [
                 script,
                 ctx.file.toolchain_identity,
                 ctx.file.compiler_identity,
@@ -218,7 +219,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 sysroot.compiler_runtime,
                 feature_input,
                 ctx.file.gmake,
-            ] + ctx.files.sources + ctx.files.host_tools,
+            ] + ctx.files.sources + ctx.files.host_tools),
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),

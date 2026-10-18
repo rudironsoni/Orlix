@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from bazel import build_state as state
+from bazel.feasibility.mlibc.header_digest import followed_tree_digest
 
 _TREES = ("src", "build", "inputs")
 _CONFIGURATION_NAMES = {
@@ -52,14 +53,6 @@ def _source_identity(source: Path) -> bytes:
     return (json.dumps(entries, sort_keys=True) + "\n").encode()
 
 
-def _sync_digest(files: dict[str, Path]) -> str:
-    digest = hashlib.sha256()
-    for name, source in sorted(files.items()):
-        mode, data = state._entry(source)
-        digest.update(json.dumps([name, mode, hashlib.sha256(data).hexdigest()]).encode() + b"\n")
-    return digest.hexdigest()
-
-
 def _configured_source(path: Path) -> bool:
     return (
         path.name in _CONFIGURATION_NAMES
@@ -68,17 +61,30 @@ def _configured_source(path: Path) -> bool:
     )
 
 
-def _configuration_digest(files: dict[str, Path], arguments: list[str], extra_tree: str | None) -> str:
+def _configuration_digest(files: dict[str, Path], arguments: list[str], extra_tree: str | None, flags: str) -> str:
+    """Digest configure inputs. Package .c/.h edits stay out; headers are followed."""
     configuration = hashlib.sha256()
     for name, path in sorted(files.items()):
         if _configured_source(path):
             configuration.update(name.encode() + hashlib.sha256(path.read_bytes()).digest())
     for name, argument in zip(("headers", "uapi", "libraries"), arguments[1:4]):
-        configuration.update(name.encode() + _sync_digest(state._files(Path(argument))).encode())
-    configuration.update(_sync_digest({"libcompiler_rt.a": Path(arguments[4])}).encode())
+        configuration.update(name.encode() + followed_tree_digest(Path(argument)).encode())
+    configuration.update(b"runtime" + hashlib.sha256(Path(arguments[4]).read_bytes()).digest())
     if extra_tree:
-        configuration.update(_sync_digest(state._files(Path(extra_tree))).encode())
+        configuration.update(b"extra" + followed_tree_digest(Path(extra_tree)).encode())
+    configuration.update(b"flags" + flags.encode())
     return configuration.hexdigest()
+
+
+def _flag_digest(script: str, compiler: str, configuration: str | None) -> str:
+    digest = hashlib.sha256()
+    digest.update(Path(script).read_bytes())
+    digest.update(b"\0")
+    digest.update(Path(compiler).read_bytes())
+    if configuration:
+        digest.update(b"\0")
+        digest.update(Path(configuration).read_bytes())
+    return digest.hexdigest()
 
 
 def _preserve_shipped_mtimes(copied: dict[str, Path], destination: Path) -> None:
@@ -93,11 +99,11 @@ def _preserve_shipped_mtimes(copied: dict[str, Path], destination: Path) -> None
         os.utime(target, ns=(copied_stat.st_atime_ns, copied_stat.st_mtime_ns))
 
 
-def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tree: str | None = None) -> None:
+def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tree: str | None = None, flags: str = "") -> None:
     source = Path(arguments[0]).absolute().parent
     files = state._files(source)
     files.pop("BUILD.bazel", None)
-    current_configuration = _configuration_digest(files, arguments, extra_tree)
+    current_configuration = _configuration_digest(files, arguments, extra_tree, flags)
     signature = root / "inputs/configured.sha256"
     previous_configuration = signature.read_text() if signature.is_file() else None
     if previous_configuration != current_configuration:
@@ -182,7 +188,13 @@ def run(package: str, script: str, toolchain: str, compiler: str, arguments: lis
             identity_inputs.append(source_identity)
         valid = state.resume(root, identity_inputs, _TREES, compatibility=compatibility)
         print("Orlix package Make state: " + ("verified" if valid else "clean"), flush=True)
-        prepare(root, arguments, in_tree=in_tree, extra_tree=extra_tree)
+        prepare(
+            root,
+            arguments,
+            in_tree=in_tree,
+            extra_tree=extra_tree,
+            flags=_flag_digest(script, compiler, configuration),
+        )
         state._remove(root / "dest")
         state._remove(root / "compiler-cache.log")
         environment["ORLIX_PACKAGE_WORK_ROOT"] = str(root)
