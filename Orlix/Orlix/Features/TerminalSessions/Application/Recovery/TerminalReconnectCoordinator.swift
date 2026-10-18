@@ -42,6 +42,7 @@ package struct TerminalReconnectAccess {
     package let markMoshConnected: @MainActor @Sendable (UUID) -> Void
     #endif
 
+    #if os(macOS)
     package init(
         paneFacts: @escaping @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?,
         paneIDs: @escaping @MainActor @Sendable () -> [UUID],
@@ -49,15 +50,12 @@ package struct TerminalReconnectAccess {
         networkPathBecameReady: @escaping @MainActor @Sendable (UUID) -> Void,
         prepareTransport: @escaping @MainActor @Sendable (UUID) async -> Void,
         startConnection: @escaping @MainActor @Sendable (UUID) -> Bool,
-        failConnection: @escaping @MainActor @Sendable (UUID) -> Void
-        #if os(macOS)
-        ,
+        failConnection: @escaping @MainActor @Sendable (UUID) -> Void,
         offlineMacRecoveryPaneIDs: @escaping @MainActor @Sendable () -> [UUID],
         macRecoveryCandidates: @escaping @MainActor @Sendable () -> [MacTerminalRecoveryCandidate],
         beginEternalTerminalProbe: @escaping @MainActor @Sendable (UUID) async -> UUID?,
         hasVerifiedLiveTransport: @escaping @MainActor @Sendable (UUID, UUID?) async -> Bool,
         markMoshConnected: @escaping @MainActor @Sendable (UUID) -> Void
-        #endif
     ) {
         self.paneFacts = paneFacts
         self.paneIDs = paneIDs
@@ -66,14 +64,31 @@ package struct TerminalReconnectAccess {
         self.prepareTransport = prepareTransport
         self.startConnection = startConnection
         self.failConnection = failConnection
-        #if os(macOS)
         self.offlineMacRecoveryPaneIDs = offlineMacRecoveryPaneIDs
         self.macRecoveryCandidates = macRecoveryCandidates
         self.beginEternalTerminalProbe = beginEternalTerminalProbe
         self.hasVerifiedLiveTransport = hasVerifiedLiveTransport
         self.markMoshConnected = markMoshConnected
-        #endif
     }
+    #else
+    package init(
+        paneFacts: @escaping @MainActor @Sendable (UUID) -> TerminalReconnectPaneFacts?,
+        paneIDs: @escaping @MainActor @Sendable () -> [UUID],
+        paneIDsForServer: @escaping @MainActor @Sendable (UUID) -> [UUID],
+        networkPathBecameReady: @escaping @MainActor @Sendable (UUID) -> Void,
+        prepareTransport: @escaping @MainActor @Sendable (UUID) async -> Void,
+        startConnection: @escaping @MainActor @Sendable (UUID) -> Bool,
+        failConnection: @escaping @MainActor @Sendable (UUID) -> Void
+    ) {
+        self.paneFacts = paneFacts
+        self.paneIDs = paneIDs
+        self.paneIDsForServer = paneIDsForServer
+        self.networkPathBecameReady = networkPathBecameReady
+        self.prepareTransport = prepareTransport
+        self.startConnection = startConnection
+        self.failConnection = failConnection
+    }
+    #endif
 }
 
 @MainActor

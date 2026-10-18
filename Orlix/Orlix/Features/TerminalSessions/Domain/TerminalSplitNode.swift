@@ -85,6 +85,18 @@ nonisolated indirect package enum TerminalSplitNode: Equatable, Codable, Sendabl
         package let ratio: Double  // 0.0 to 1.0, left/top percentage
         package let left: TerminalSplitNode
         package let right: TerminalSplitNode
+
+        package init(
+            direction: TerminalSplitDirection,
+            ratio: Double,
+            left: TerminalSplitNode,
+            right: TerminalSplitNode
+        ) {
+            self.direction = direction
+            self.ratio = ratio
+            self.left = left
+            self.right = right
+        }
     }
 
     nonisolated private enum CodingKeys: String, CodingKey {

@@ -73,7 +73,7 @@ package struct ConnectionTerminalContainer: View {
 
     /// Tab limit alert
     @State private var showingTabLimitAlert = false
-    @State private var isShowingDockerUpgrade = false
+    @State package var isShowingDockerUpgrade = false
     @State package var showingFileTabLimitAlert = false
     @State package var showingSplitPaneUpgradeAlert = false
     @State package var showingZenPanel = false
