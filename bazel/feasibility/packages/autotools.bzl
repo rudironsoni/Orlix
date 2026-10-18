@@ -242,7 +242,7 @@ else
   ld_mode="-static -Wl,--image-base=0x0000000100000000"
 fi
 CPPFLAGS_EXTRA="${CPPFLAGS_EXTRA//@SRC@/src}"
-/usr/bin/printf '%s\n' '#!/bin/bash' 'set -euo pipefail' \
+"$tool_bin/printf" '%s\n' '#!/bin/bash' 'set -euo pipefail' \
   "cc='$clang'" \
   "launcher='$launcher'" \
   "headers='$headers'" \
@@ -361,11 +361,11 @@ while [ -n "$remaining" ]; do
   target="${mapping%%:*}"
   case "$target" in
     *.a|*.h) ;;
-    *) /usr/bin/printf '%s: private .EXTRA_PREREQS := %s\n' "${target##*/}" "$link_inputs" >> "$work/toolchain/link-inputs.mk" ;;
+    *) "$tool_bin/printf" '%s: private .EXTRA_PREREQS := %s\n' "${target##*/}" "$link_inputs" >> "$work/toolchain/link-inputs.mk" ;;
   esac
 done
 if [ "$MAKE_ONLY" = 1 ]; then
-  /usr/bin/printf '%s\n' '%: %.c' '	$(LINK.c) $< $(LOADLIBES) $(LDLIBS) -o $@' '-include $(wildcard *.d)' >> "$work/toolchain/link-inputs.mk"
+  "$tool_bin/printf" '%s\n' '%: %.c' '	$(LINK.c) $< $(LOADLIBES) $(LDLIBS) -o $@' '-include $(wildcard *.d)' >> "$work/toolchain/link-inputs.mk"
 fi
 export MAKEFILES="$work/toolchain/link-inputs.mk"
 remaining="$MAKE_STEPS"
@@ -397,7 +397,7 @@ while [ -n "$remaining" ]; do
   esac
   src_rel="${mapping%%:*}"
   dest_rel="${mapping#*:}"
-  base="$(/usr/bin/basename "$src_rel")"
+  base="$("$tool_bin/basename" "$src_rel")"
   if [ -e ".libs/$base" ] && /usr/bin/file ".libs/$base" | /usr/bin/grep -F -q 'ELF 64-bit LSB'; then
     src_rel=".libs/$base"
   fi
@@ -405,19 +405,19 @@ while [ -n "$remaining" ]; do
   /bin/mkdir -p "$work/dest/$(/usr/bin/dirname "$dest_rel")"
   mode=0644
   if [ -x "$src_rel" ] || /usr/bin/file "$src_rel" | /usr/bin/grep -F -q 'ELF 64-bit'; then mode=0755; fi
-  /usr/bin/install -m "$mode" "$src_rel" "$work/dest/$dest_rel"
+  "$tool_bin/install" -m "$mode" "$src_rel" "$work/dest/$dest_rel"
   echo "orlix-autotools: installed $src_rel -> $dest_rel $(/usr/bin/file "$work/dest/$dest_rel")" >&2
 done
-/usr/bin/find "$work/dest" -type f -perm -111 -print | while IFS= read -r bin; do
+"$tool_bin/find" "$work/dest" -type f -perm -111 -print | while IFS= read -r bin; do
   info="$(/usr/bin/file "$bin")"
-  /usr/bin/printf '%s\n' "$info" | /usr/bin/grep -F -q 'ELF 64-bit LSB' || continue
+  "$tool_bin/printf" '%s\n' "$info" | /usr/bin/grep -F -q 'ELF 64-bit LSB' || continue
   "$strip_bin" "$bin"
-  /usr/bin/printf '%s\n' "$info" | /usr/bin/grep -F -q 'ARM aarch64' || { /usr/bin/printf '%s\n' "$info" >&2; exit 1; }
+  "$tool_bin/printf" '%s\n' "$info" | /usr/bin/grep -F -q 'ARM aarch64' || { "$tool_bin/printf" '%s\n' "$info" >&2; exit 1; }
   if [ -n "$FILE_EXPECT" ]; then
-    /usr/bin/printf '%s\n' "$info" | /usr/bin/grep -F -q "$FILE_EXPECT" || { /usr/bin/printf '%s\n' "$info" >&2; exit 1; }
+    "$tool_bin/printf" '%s\n' "$info" | /usr/bin/grep -F -q "$FILE_EXPECT" || { "$tool_bin/printf" '%s\n' "$info" >&2; exit 1; }
   fi
   if [ "$REQUIRE_STATIC" = 1 ]; then
-    /usr/bin/printf '%s\n' "$info" | /usr/bin/grep -E -q 'statically linked|static-pie linked' || { /usr/bin/printf '%s\n' "$info" >&2; exit 1; }
+    "$tool_bin/printf" '%s\n' "$info" | /usr/bin/grep -E -q 'statically linked|static-pie linked' || { "$tool_bin/printf" '%s\n' "$info" >&2; exit 1; }
   fi
 done
 remaining="$VERIFY_FILES"
@@ -430,9 +430,9 @@ while [ -n "$remaining" ]; do
 done
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
-(cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
-/usr/bin/printf '%s\n' 'license=GPL-compatible' > "$license_manifest"
-/usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$PACKAGE_NAME" "$PACKAGE_VERSION" > "$metadata"
+(cd "$install_out" && "$tool_bin/find" . -type f -print | "$tool_bin/sort") > "$file_manifest"
+"$tool_bin/printf" '%s\n' 'license=GPL-compatible' > "$license_manifest"
+"$tool_bin/printf" 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$PACKAGE_NAME" "$PACKAGE_VERSION" > "$metadata"
 if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
 """.replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
     ctx.actions.run_shell(
