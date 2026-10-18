@@ -130,13 +130,45 @@ build_ext4() {
   tree="$1"
   image="$2"
   label="$3"
-  SOURCE_DATE_EPOCH=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001 -d "$tree" "$image"
+  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001 -d "$tree" "$image"
   (cd "$tree" && /usr/bin/find . -print | /usr/bin/sort) > "$work/paths"
-  while IFS= read -r path; do
-    [ "$path" != . ] || continue
-    /usr/bin/printf 'set_inode_field "%s" uid 0\nset_inode_field "%s" gid 0\n' "${path#.}" "${path#.}"
-  done < "$work/paths" > "$work/owners"
-  SOURCE_DATE_EPOCH=1 "$debugfs" -w -f "$work/owners" "$image" > "$work/owners.out" 2> "$work/owners.err"
+  {
+    /usr/bin/printf '%s\n' \
+      'set_inode_field "/lost+found" uid 0' \
+      'set_inode_field "/lost+found" gid 0' \
+      'set_inode_field "/lost+found" atime 1' \
+      'set_inode_field "/lost+found" ctime 1' \
+      'set_inode_field "/lost+found" mtime 1' \
+      'set_inode_field "/lost+found" crtime 1' \
+      'set_inode_field "/lost+found" atime_extra 0' \
+      'set_inode_field "/lost+found" ctime_extra 0' \
+      'set_inode_field "/lost+found" mtime_extra 0' \
+      'set_inode_field "/lost+found" crtime_extra 0' \
+      'set_inode_field <8> atime 1' \
+      'set_inode_field <8> ctime 1' \
+      'set_inode_field <8> mtime 1' \
+      'set_inode_field <8> crtime 1' \
+      'set_inode_field <8> atime_extra 0' \
+      'set_inode_field <8> ctime_extra 0' \
+      'set_inode_field <8> mtime_extra 0' \
+      'set_inode_field <8> crtime_extra 0'
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      if [ "$path" = . ]; then
+        rel=/
+      else
+        rel="${path#.}"
+      fi
+      /usr/bin/printf 'set_inode_field "%s" uid 0\nset_inode_field "%s" gid 0\nset_inode_field "%s" atime 1\nset_inode_field "%s" ctime 1\nset_inode_field "%s" mtime 1\nset_inode_field "%s" crtime 1\nset_inode_field "%s" atime_extra 0\nset_inode_field "%s" ctime_extra 0\nset_inode_field "%s" mtime_extra 0\nset_inode_field "%s" crtime_extra 0\n' \
+        "$rel" "$rel" "$rel" "$rel" "$rel" "$rel" "$rel" "$rel" "$rel" "$rel"
+    done < "$work/paths"
+    /usr/bin/printf '%s\n' \
+      'set_super_value mkfs_time 1' \
+      'set_super_value wtime 1' \
+      'set_super_value lastcheck 1' \
+      'set_super_value mtime 1'
+  } > "$work/owners"
+  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$debugfs" -w -f "$work/owners" "$image" > "$work/owners.out" 2> "$work/owners.err"
   if /usr/bin/grep -Ev '^(debugfs [0-9].*|[[:space:]]*)$' "$work/owners.err"; then exit 1; fi
 }
 build_ext4 "$base_tree" "$base_ext4" ORLIXROOT
