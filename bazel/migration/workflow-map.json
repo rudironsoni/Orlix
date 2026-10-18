@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "0d4bf8bbaa71a38ce48b175126eec12dd709ce2ab956ffe49a719cf7bdfcc01a",
+      "source_sha256": "c34b3e2a885edfb54a6e2b8238de79bcd78d9dcb90dcaa5e33cc2c739e10c85e",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -162,7 +162,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nbrew bundle --file Brewfile\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "27129aecfafc1e7bbe59dcc17e07695d4f5b51ec2a02f5864adda7ef6f08cee6",
+      "source_sha256": "fa2e93b304059833b22e2bc81018876d27c40f849a4fb1a72fe6bfd11f085cbe",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -352,7 +352,17 @@
                 }
               },
               {
+                "name": "Restore installed simulator runtimes",
+                "id": "installed-runtimes",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
+                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                }
+              },
+              {
                 "name": "Restore iOS 15.5 runtime archive",
+                "if": "steps.installed-runtimes.outputs.cache-hit != 'true'",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios15-runtime",
@@ -361,6 +371,7 @@
               },
               {
                 "name": "Restore iOS 26.5 runtime archive",
+                "if": "steps.installed-runtimes.outputs.cache-hit != 'true'",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios26-runtime",
@@ -378,7 +389,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nbrew bundle --file Brewfile\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -440,7 +451,7 @@
               {
                 "name": "Prepare both simulator runtimes",
                 "id": "runtimes",
-                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\"\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"; then\n  echo \"ios15_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios15_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\"; then\n  echo \"ios26_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios26_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"26.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"; then\n  echo \"ios15_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios15_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\"; then\n  echo \"ios26_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios26_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"; then\n  echo \"simruntime=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"simruntime=false\" >> \"$GITHUB_OUTPUT\"\nfi\ncurrent_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)\"\nios15_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Select the component mode",
@@ -526,6 +537,15 @@
                 }
               },
               {
+                "name": "Save installed simulator runtimes",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
+                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                }
+              },
+              {
                 "name": "Save cached Xcode archive",
                 "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true'",
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -579,7 +599,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "feabb601730febc362ccad501017bbb07a4fc6796009339618693a1afc541982",
+      "source_sha256": "64e5b4afb7cf681f4de73f6cb03ba9ee83f922c48e3136e79d0ea40021603b98",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -616,7 +636,21 @@
                 "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
+                "name": "See whether the requested Xcode is already on the runner",
+                "id": "xcode-present",
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
                 "name": "Select Xcode",
+                "if": "steps.xcode-present.outputs.installed == 'true'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Install the requested Xcode",
+                "if": "steps.xcode-present.outputs.installed != 'true'",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "${{ steps.xcode-version.outputs.version }}"
@@ -624,7 +658,7 @@
               },
               {
                 "name": "Install declared build tools",
-                "run": "brew bundle --file Brewfile"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\n"
               },
               {
                 "name": "Export the selected Xcode to Make",
@@ -644,7 +678,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "61f4f902b4baa3a3e105ee68137fdada8173f939fd205dd2dcb257d4f85a3a7c",
+      "source_sha256": "41b6f245b15782bb3518bba336276d04eba3e4f48481d38877eece73c0ae1658",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -714,7 +748,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nbrew bundle --file Brewfile\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -770,7 +804,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "9d5dbf0c73b0296c7c4e5603f267f7859a7a0c05ec2d1b6db35c187c0c90de71",
+      "source_sha256": "ed4e1330af0fdd9ab180a55554bddf6f1b01217787610d36206cabf4ab859068",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -879,7 +913,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nbrew bundle --file Brewfile\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -969,7 +1003,7 @@
       }
     },
     ".github/workflows/bazel-promoted-consumer-proof.yml": {
-      "source_sha256": "f1f7123b8b74ea611f68275e63a726d509a40e052b5a225b42317f7b9b76c161",
+      "source_sha256": "15ed01a124cd52667e9f565d2162d49a1a2238dfc6dea98aff812f193b819d58",
       "workflow": {
         "name": "Promoted consumer proof",
         "on": {
@@ -1043,7 +1077,17 @@
                 }
               },
               {
+                "name": "Restore installed simulator runtimes",
+                "id": "installed-runtimes",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
+                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                }
+              },
+              {
                 "name": "Restore iOS 15.5 runtime archive",
+                "if": "steps.installed-runtimes.outputs.cache-hit != 'true'",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios15-runtime",
@@ -1052,6 +1096,7 @@
               },
               {
                 "name": "Restore iOS 26.5 runtime archive",
+                "if": "steps.installed-runtimes.outputs.cache-hit != 'true'",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios26-runtime",
@@ -1069,7 +1114,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nbrew bundle --file Brewfile\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -1108,7 +1153,7 @@
               },
               {
                 "name": "Prepare both simulator runtimes",
-                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\"\ncurrent_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"26.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\nios15_runtime_id=\"$(xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.version == \"15.5\" and .isAvailable == true) | .identifier' | head -n 1)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\ncurrent_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)\"\nios15_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\nxcrun simctl boot \"$current_id\"\nxcrun simctl boot \"$ios15_id\"\nxcrun simctl bootstatus \"$current_id\" -b\nxcrun simctl bootstatus \"$ios15_id\" -b\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Prepare promoted-mode verification inputs",
@@ -1213,7 +1258,7 @@
       }
     },
     ".github/workflows/ios-build.yml": {
-      "source_sha256": "34c753680b9ca27c8d9241a058efad31298a804a7ccefe450ef5b328d9c17ed9",
+      "source_sha256": "da40b686aff97870c07940f9884035319ef9bf04b299209708dac08868fb310d",
       "workflow": {
         "name": "iOS Build",
         "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
@@ -1347,8 +1392,22 @@
                 "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
-                "name": "Select repository Xcode",
+                "name": "See whether the requested Xcode is already on the runner",
+                "id": "xcode-present",
                 "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
+                "name": "Select repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed == 'true'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Install repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed != 'true'",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "${{ steps.xcode-version.outputs.version }}"
@@ -1357,7 +1416,7 @@
               {
                 "name": "Setup Orlix Xcode and build tools",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Restore DerivedData cache",
@@ -1589,7 +1648,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "0c72c7bdd26dca9141c8cf2cb5e5c750af9b5216c165c28be594fa103a39847a",
+      "source_sha256": "b9e15569c2b9168e200818b05197ffa4ec2c63178cff698966c03d489a1b7c63",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1709,8 +1768,22 @@
                 "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
-                "name": "Select repository Xcode",
+                "name": "See whether the requested Xcode is already on the runner",
+                "id": "xcode-present",
                 "if": "steps.detect.outputs.type == 'orlix'",
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
+                "name": "Select repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed == 'true'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Install repository Xcode",
+                "if": "steps.detect.outputs.type == 'orlix' && steps.xcode-present.outputs.installed != 'true'",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "${{ steps.xcode-version.outputs.version }}"
@@ -1719,7 +1792,7 @@
               {
                 "name": "Setup Orlix Xcode and build tools",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nbrew bundle --file Brewfile\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Restore DerivedData cache",
@@ -2115,7 +2188,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "1e7db648a0ed29cc248d9d05edfbd32586661a48b621f9743028b9e41f728953",
+      "source_sha256": "72732d8f30f4f95794aca18e75052e6c5c7d6391f15166d7afe89e656975e219",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -2174,7 +2247,21 @@
                 "run": "set -euo pipefail\ntest -s .xcode-version\necho \"version=$(tr -d '[:space:]' < .xcode-version)\" >> \"$GITHUB_OUTPUT\"\n"
               },
               {
+                "name": "See whether the requested Xcode is already on the runner",
+                "id": "xcode-present",
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py xcode-present --version \"${{ steps.xcode-version.outputs.version }}\"; then\n  echo \"installed=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"installed=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
                 "name": "Select Xcode",
+                "if": "steps.xcode-present.outputs.installed == 'true'",
+                "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
+                "with": {
+                  "xcode-version": "${{ steps.xcode-version.outputs.version }}"
+                }
+              },
+              {
+                "name": "Install the requested Xcode",
+                "if": "steps.xcode-present.outputs.installed != 'true'",
                 "uses": "maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90",
                 "with": {
                   "xcode-version": "${{ steps.xcode-version.outputs.version }}"
@@ -2202,7 +2289,7 @@
               },
               {
                 "name": "Install build tools",
-                "run": "brew bundle --file Brewfile"
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\n"
               },
               {
                 "name": "Verify selected Xcode",
