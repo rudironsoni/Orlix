@@ -102,7 +102,7 @@ nonisolated package enum OpenSourceAttributionCatalog {
 
     private static func resourceURL(
         named name: String,
-        package extension fileExtension: String,
+        extension fileExtension: String,
         subdirectories: [String],
         in bundle: Bundle
     ) -> URL? {
