@@ -102,7 +102,7 @@ package struct ServerDuplicateUITestHarness: View {
     package init(
         serverManager: ServerManager,
         dependencies: ServerFormDependencies,
-        makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+        makeLocalDiscoveryManager: @escaping LocalSSHDiscoveryManagerFactory
     ) {
         self.serverManager = serverManager
         self.dependencies = dependencies
