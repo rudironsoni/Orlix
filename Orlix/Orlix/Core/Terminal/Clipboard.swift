@@ -9,18 +9,18 @@
 import AppKit
 import UniformTypeIdentifiers
 
-package struct ClipboardImagePayload: Sendable {
-    package let data: Data
-    package let mimeType: String
-    package let utType: String
-    package let suggestedExtension: String
+nonisolated package struct ClipboardImagePayload: Sendable {
+    nonisolated package let data: Data
+    nonisolated package let mimeType: String
+    nonisolated package let utType: String
+    nonisolated package let suggestedExtension: String
 
     nonisolated package var sizeBytes: Int { data.count }
 }
 
-package struct ClipboardSnapshot: Sendable {
-    package let text: String?
-    package let image: ClipboardImagePayload?
+nonisolated package struct ClipboardSnapshot: Sendable {
+    nonisolated package let text: String?
+    nonisolated package let image: ClipboardImagePayload?
 
     nonisolated package var hasText: Bool {
         guard let text else { return false }
@@ -103,18 +103,18 @@ package enum Clipboard {
 import UIKit
 import UniformTypeIdentifiers
 
-package struct ClipboardImagePayload: Sendable {
-    package let data: Data
-    package let mimeType: String
-    package let utType: String
-    package let suggestedExtension: String
+nonisolated package struct ClipboardImagePayload: Sendable {
+    nonisolated package let data: Data
+    nonisolated package let mimeType: String
+    nonisolated package let utType: String
+    nonisolated package let suggestedExtension: String
 
     nonisolated package var sizeBytes: Int { data.count }
 }
 
-package struct ClipboardSnapshot: Sendable {
-    package let text: String?
-    package let image: ClipboardImagePayload?
+nonisolated package struct ClipboardSnapshot: Sendable {
+    nonisolated package let text: String?
+    nonisolated package let image: ClipboardImagePayload?
 
     nonisolated package var hasText: Bool {
         guard let text else { return false }
