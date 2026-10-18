@@ -515,7 +515,7 @@ nonisolated private struct NeighborScore: Comparable, Sendable {
         self.order = order
     }
 
-    static func < (lhs: NeighborScore, rhs: NeighborScore) -> Bool {
+    package static func < (lhs: NeighborScore, rhs: NeighborScore) -> Bool {
         if lhs.primaryGap != rhs.primaryGap { return lhs.primaryGap < rhs.primaryGap }
         if lhs.perpendicularGap != rhs.perpendicularGap { return lhs.perpendicularGap < rhs.perpendicularGap }
         if lhs.perpendicularCenterDistance != rhs.perpendicularCenterDistance {

@@ -51,7 +51,7 @@ nonisolated package struct RemoteSessionSemanticVersion: Codable, Comparable, Ha
         self.init(major: major, minor: minor, patch: patch)
     }
 
-    static func < (lhs: Self, rhs: Self) -> Bool {
+    package static func < (lhs: Self, rhs: Self) -> Bool {
         (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
     }
 }
