@@ -112,4 +112,8 @@ package struct NavigationStatsSettingsView: View {
             set: { viewTabConfig.setDefaultTab($0) }
         )
     }
+
+    package init(statsPreferencesStore: PreferencesStore) {
+        self.statsPreferencesStore = statsPreferencesStore
+    }
 }

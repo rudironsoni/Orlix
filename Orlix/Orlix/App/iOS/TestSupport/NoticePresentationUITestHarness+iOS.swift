@@ -66,6 +66,8 @@ package struct NoticePresentationUITestHarness: View {
             NoticeConnectionStatusHarness(scenario: connectionStatusScenario)
         }
     }
+
+    package init() {}
 }
 
 private struct NoticeDiagnosticDetailHarness: View {

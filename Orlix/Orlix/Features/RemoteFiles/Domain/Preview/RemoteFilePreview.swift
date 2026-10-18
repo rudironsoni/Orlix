@@ -19,6 +19,45 @@ nonisolated package struct RemoteFileViewerPayload: Identifiable, Hashable, Send
     package var canEditText: Bool {
         previewKind == .text && textPreview != nil && !isTruncated
     }
+
+
+    package init(
+
+        previewKind: RemoteFilePreviewKind,
+
+        entry: RemoteFileEntry,
+
+        textPreview: String? = nil,
+
+        previewFileURL: URL? = nil,
+
+        isTruncated: Bool,
+
+        unavailableMessage: String? = nil,
+
+        requiresExplicitDownload: Bool,
+
+        previewByteCount: UInt64? = nil
+
+    ) {
+
+        self.previewKind = previewKind
+
+        self.entry = entry
+
+        self.textPreview = textPreview
+
+        self.previewFileURL = previewFileURL
+
+        self.isTruncated = isTruncated
+
+        self.unavailableMessage = unavailableMessage
+
+        self.requiresExplicitDownload = requiresExplicitDownload
+
+        self.previewByteCount = previewByteCount
+
+    }
 }
 
 nonisolated package enum RemoteFilePreviewKind: Hashable, Sendable {

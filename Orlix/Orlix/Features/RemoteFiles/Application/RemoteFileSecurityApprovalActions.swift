@@ -22,4 +22,14 @@ package struct RemoteFileSecurityApprovalActions {
         approve: { _ in false },
         reject: { _ in }
     )
+
+    package init(
+        pendingRequest: PendingRequest,
+        approve: Approve,
+        reject: Reject
+    ) {
+        self.pendingRequest = pendingRequest
+        self.approve = approve
+        self.reject = reject
+    }
 }

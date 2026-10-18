@@ -155,4 +155,6 @@ final package class TerminalClipboardConfirmationQueue {
             request.completion(.cancel)
         }
     }
+
+    package init() {}
 }

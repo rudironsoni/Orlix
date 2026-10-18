@@ -264,5 +264,21 @@ package struct TerminalConnectionStatusView: View {
             return allowsHostKeyReplacement ? 500 : 420
         }
     }
+
+    package init(
+        presentation: TerminalConnectionStatusPresentation,
+        connectionAttemptID: UUID,
+        surfaceStyle: NoticeSurfaceStyle,
+        isActive: Bool,
+        onRetry: @escaping () -> Void,
+        onTrustNewHostKey: @escaping () -> Void
+    ) {
+        self.presentation = presentation
+        self.connectionAttemptID = connectionAttemptID
+        self.surfaceStyle = surfaceStyle
+        self.isActive = isActive
+        self.onRetry = onRetry
+        self.onTrustNewHostKey = onTrustNewHostKey
+    }
 }
 #endif

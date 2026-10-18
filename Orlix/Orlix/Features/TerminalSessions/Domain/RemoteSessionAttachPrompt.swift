@@ -7,6 +7,25 @@ package struct RemoteSessionSelectionInfo: Identifiable, Equatable {
 
     package var id: RemoteSessionIdentifier { attachment.identifier }
     package var displayName: String { id.rawValue }
+
+
+    package init(
+
+        attachment: RemoteSessionAttachment,
+
+        attachedClientCount: Int? = nil,
+
+        containerCount: Int? = nil
+
+    ) {
+
+        self.attachment = attachment
+
+        self.attachedClientCount = attachedClientCount
+
+        self.containerCount = containerCount
+
+    }
 }
 
 package struct RemoteSessionAttachPrompt: Identifiable, Equatable {
@@ -15,6 +34,29 @@ package struct RemoteSessionAttachPrompt: Identifiable, Equatable {
     package let paneId: UUID
     package let backendName: String
     package let existingSessions: [RemoteSessionSelectionInfo]
+
+
+    package init(
+
+        id: UUID,
+
+        paneId: UUID,
+
+        backendName: String,
+
+        existingSessions: [RemoteSessionSelectionInfo]
+
+    ) {
+
+        self.id = id
+
+        self.paneId = paneId
+
+        self.backendName = backendName
+
+        self.existingSessions = existingSessions
+
+    }
 }
 
 package enum RemoteSessionAttachSelection: Equatable {

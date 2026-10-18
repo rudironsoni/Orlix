@@ -63,6 +63,8 @@ package struct AppearanceModifier: ViewModifier {
             )
         #endif
     }
+
+    package init() {}
 }
 
 // MARK: - Appearance Picker View

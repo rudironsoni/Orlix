@@ -15,7 +15,7 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
         category: "TerminalFontCloudKit"
     )
 
-    init(
+    package init(
         transport: any CloudKitRecordTransport,
         repository: any TerminalFontAssetRepository
     ) {
@@ -104,4 +104,5 @@ final package class TerminalFontCloudKitClient: TerminalFontCloudClient,
             try await transport.upsertCloudKitRecord(record)
         }
     }
+
 }

@@ -92,6 +92,25 @@ nonisolated package struct SyncSettingsRuntimeInfo: Equatable, Sendable {
     package let appVersion: String
     package let buildVersion: String
     package let platform: String
+
+
+    package init(
+
+        appVersion: String,
+
+        buildVersion: String,
+
+        platform: String
+
+    ) {
+
+        self.appVersion = appVersion
+
+        self.buildVersion = buildVersion
+
+        self.platform = platform
+
+    }
 }
 
 nonisolated package struct SyncSettingsContentSummary: Equatable, Sendable {
@@ -101,6 +120,37 @@ nonisolated package struct SyncSettingsContentSummary: Equatable, Sendable {
     package let customFontCount: Int
     package let serverCredentialCount: Int
     package let reusableSSHKeyCount: Int
+
+
+    package init(
+
+        workspaceCount: Int,
+
+        serverCount: Int,
+
+        customThemeCount: Int,
+
+        customFontCount: Int,
+
+        serverCredentialCount: Int,
+
+        reusableSSHKeyCount: Int
+
+    ) {
+
+        self.workspaceCount = workspaceCount
+
+        self.serverCount = serverCount
+
+        self.customThemeCount = customThemeCount
+
+        self.customFontCount = customFontCount
+
+        self.serverCredentialCount = serverCredentialCount
+
+        self.reusableSSHKeyCount = reusableSSHKeyCount
+
+    }
 }
 
 nonisolated package enum SyncSettingsAccountCategory: String, Equatable, Sendable {

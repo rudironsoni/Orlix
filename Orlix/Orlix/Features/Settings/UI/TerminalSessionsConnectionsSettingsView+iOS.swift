@@ -10,6 +10,8 @@ package struct TerminalSessionPlatformSettingsSection: View {
             TerminalScreenAwakeSettingRow()
         }
     }
+
+    package init() {}
 }
 
 package struct TerminalScreenAwakeSettingRow: View {
@@ -20,5 +22,8 @@ package struct TerminalScreenAwakeSettingRow: View {
         Toggle("Keep screen awake", isOn: $keepScreenAwake)
             .accessibilityIdentifier("orlix.settings.terminal.keepScreenAwake")
     }
+
+
+    package init() {}
 }
 #endif

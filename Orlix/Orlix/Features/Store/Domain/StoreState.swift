@@ -4,6 +4,12 @@ nonisolated package struct StoreProduct: Identifiable, Equatable, Sendable {
     package let id: String
     package let displayName: String
     package let displayPrice: String
+
+    package init(id: String, displayName: String, displayPrice: String) {
+        self.id = id
+        self.displayName = displayName
+        self.displayPrice = displayPrice
+    }
 }
 
 nonisolated package enum StorePurchaseResult: Equatable, Sendable {
@@ -31,6 +37,11 @@ nonisolated package enum StoreSubscriptionState: Equatable, Sendable {
 nonisolated package struct StoreSubscriptionEntitlement: Equatable, Sendable {
     package let state: StoreSubscriptionState
     package let isVerified: Bool
+
+    package init(state: StoreSubscriptionState, isVerified: Bool) {
+        self.state = state
+        self.isVerified = isVerified
+    }
 }
 
 nonisolated package enum StoreVerificationResult<Value: Equatable & Sendable>: Equatable, Sendable {
@@ -41,11 +52,34 @@ nonisolated package enum StoreVerificationResult<Value: Equatable & Sendable>: E
 nonisolated package struct StoreSubscriptionTransaction: Equatable, Sendable {
     package let productID: String
     package let expirationDate: Date?
+
+
+    package init(
+
+        productID: String,
+
+        expirationDate: Date? = nil
+
+    ) {
+
+        self.productID = productID
+
+        self.expirationDate = expirationDate
+
+    }
 }
 
 nonisolated package struct StoreSubscriptionStatus: Equatable, Sendable {
     package let transaction: StoreVerificationResult<StoreSubscriptionTransaction>
     package let state: StoreSubscriptionState
+
+    package init(
+        transaction: StoreVerificationResult<StoreSubscriptionTransaction>,
+        state: StoreSubscriptionState
+    ) {
+        self.transaction = transaction
+        self.state = state
+    }
 
     package var expirationDate: Date? {
         guard case .verified(let transaction) = transaction else { return nil }

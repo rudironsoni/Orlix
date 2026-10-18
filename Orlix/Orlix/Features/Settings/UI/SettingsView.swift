@@ -103,4 +103,16 @@ package struct SettingsView: View {
             String(localized: "PRO")
         }
     }
+
+    package init(
+        statsPreferencesStore: PreferencesStore,
+        voiceModelManagers: VoiceSettingsModelManagerOwner,
+        analyticsOptOutAction: AnalyticsOptOutAction,
+        remoteSessionBackends: [RemoteSessionBackendMetadata]
+    ) {
+        self.statsPreferencesStore = statsPreferencesStore
+        self.voiceModelManagers = voiceModelManagers
+        self.analyticsOptOutAction = analyticsOptOutAction
+        self.remoteSessionBackends = remoteSessionBackends
+    }
 }

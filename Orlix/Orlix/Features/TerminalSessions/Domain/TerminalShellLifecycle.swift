@@ -85,6 +85,25 @@ nonisolated package struct TerminalShellStartupPlan: Sendable {
         remoteSessionLifecycle: nil,
         mayExecuteUserStartupAction: false
     )
+
+
+    package init(
+
+        command: String? = nil,
+
+        remoteSessionLifecycle: RemoteSessionLifecycleContext? = nil,
+
+        mayExecuteUserStartupAction: Bool
+
+    ) {
+
+        self.command = command
+
+        self.remoteSessionLifecycle = remoteSessionLifecycle
+
+        self.mayExecuteUserStartupAction = mayExecuteUserStartupAction
+
+    }
 }
 
 nonisolated package enum TerminalShellEndReason: Hashable, Sendable {

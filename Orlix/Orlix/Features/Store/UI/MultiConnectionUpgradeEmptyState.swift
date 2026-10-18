@@ -57,4 +57,11 @@ package struct MultiConnectionUpgradeEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .limitReachedAlert(.tabs, isPresented: $showingTabLimitAlert)
     }
+
+
+    package init(server: Server) {
+
+        self.server = server
+
+    }
 }

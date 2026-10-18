@@ -21,6 +21,14 @@ package struct ServerStatsSecurityApprovalActions {
 
     package let approve: Approve
     package let reject: Reject
+
+    package init(
+        approve: Approve,
+        reject: Reject
+    ) {
+        self.approve = approve
+        self.reject = reject
+    }
 }
 
 /// Stable app-owned dependencies for Stats screens.
@@ -30,4 +38,16 @@ package struct ServerStatsScreenDependencies {
     package let preferencesStore: PreferencesStore
     package let volumeVisibilityStore: ServerVolumeVisibilityStore
     package let securityApprovalActions: ServerStatsSecurityApprovalActions
+
+    package init(
+        runtimeStore: ServerStatsRuntimeStore,
+        preferencesStore: PreferencesStore,
+        volumeVisibilityStore: ServerVolumeVisibilityStore,
+        securityApprovalActions: ServerStatsSecurityApprovalActions
+    ) {
+        self.runtimeStore = runtimeStore
+        self.preferencesStore = preferencesStore
+        self.volumeVisibilityStore = volumeVisibilityStore
+        self.securityApprovalActions = securityApprovalActions
+    }
 }

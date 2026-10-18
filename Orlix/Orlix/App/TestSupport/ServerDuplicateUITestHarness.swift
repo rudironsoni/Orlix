@@ -98,5 +98,15 @@ package struct ServerDuplicateUITestHarness: View {
             onSave: { _ in formIntent = nil }
         )
     }
+
+    package init(
+        serverManager: ServerManager,
+        dependencies: ServerFormDependencies,
+        makeLocalDiscoveryManager: LocalSSHDiscoveryManagerFactory
+    ) {
+        self.serverManager = serverManager
+        self.dependencies = dependencies
+        self.makeLocalDiscoveryManager = makeLocalDiscoveryManager
+    }
 }
 #endif

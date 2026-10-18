@@ -17,6 +17,29 @@ nonisolated package struct RemoteFileFilesystemStatus: Hashable, Sendable {
     package var availableBytes: UInt64 {
         blockSize.saturatingMultiply(availableBlocks)
     }
+
+
+    package init(
+
+        blockSize: UInt64,
+
+        totalBlocks: UInt64,
+
+        freeBlocks: UInt64,
+
+        availableBlocks: UInt64
+
+    ) {
+
+        self.blockSize = blockSize
+
+        self.totalBlocks = totalBlocks
+
+        self.freeBlocks = freeBlocks
+
+        self.availableBlocks = availableBlocks
+
+    }
 }
 
 nonisolated package enum RemoteFileFilesystemCapacity: Hashable, Sendable {
