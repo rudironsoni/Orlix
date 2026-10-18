@@ -79,7 +79,7 @@ def _pinned_apple_env(ctx):
 
 def _openssl_action(ctx, slice, spec, ssl, crypto, headers):
     inputs = depset(
-        direct = [spec, ctx.file.openssl_configure],
+        direct = [spec, ctx.file.openssl_configure, ctx.file.clang],
         transitive = [ctx.attr.openssl_source[DefaultInfo].files],
     )
     ctx.actions.run_shell(
@@ -94,6 +94,7 @@ openssl_configure="$exec_root/$2"
 ssl_out="$exec_root/$3"
 crypto_out="$exec_root/$4"
 headers_out="$exec_root/$5"
+clang="$exec_root/$6"
 read_field() { /usr/bin/sed -n "s/^$1=//p" "$spec"; }
 destination="$(read_field destination)"
 architecture="$(read_field architecture)"
@@ -129,7 +130,12 @@ openssl_prefix="$work/openssl-install"
 /bin/cp -RL "$openssl_root" "$openssl_src"
 /bin/chmod -R u+w "$openssl_src"
 sdk_path="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" --show-sdk-path)"
-clang="$(DEVELOPER_DIR="$DEVELOPER_DIR" /usr/bin/xcrun --sdk "$sdk" -f clang)"
+case "$clang" in
+  */tools/bin/clang) ;;
+  *) echo "unsupported clang: $clang" >&2; exit 1 ;;
+esac
+clang_sha="$(/usr/bin/shasum -a 256 "$clang" | /usr/bin/awk '{print $1}')"
+test -n "$clang_sha"
 (
   cd "$openssl_src"
   export CC="$clang -isysroot $sdk_path -arch $architecture $min_flag"
@@ -159,6 +165,7 @@ test -s "$headers_out/openssl/opensslv.h"
             ssl.path,
             crypto.path,
             headers.path,
+            ctx.file.clang.path,
         ],
         inputs = inputs,
         outputs = [ssl, crypto, headers],
@@ -295,6 +302,10 @@ orlix_ssh_archives = rule(
     attrs = {
         "openssl_source": attr.label(mandatory = True),
         "openssl_configure": attr.label(allow_single_file = True, mandatory = True),
+        "clang": attr.label(
+            allow_single_file = True,
+            default = Label("@orlix_kernel_toolchain//:tools/bin/clang"),
+        ),
         "libssh2_source": attr.label(mandatory = True),
         "libssh2_cmake": attr.label(allow_single_file = True, mandatory = True),
         "cmake": attr.label(allow_single_file = True, executable = True, cfg = "exec", mandatory = True),
