@@ -12,8 +12,8 @@ package struct ClassicStatsContent: View {
     package let showsCustomizationEntryPoint: Bool
     package let customizeAction: (() -> Void)?
     package let dockerUpgradeAction: (() -> Void)?
-    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    let loadProcesses: (() async throws -> [ProcessInfo])?
     package let loadDockerStats: (() async throws -> DockerStats)?
     package let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
     package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
@@ -578,10 +578,10 @@ private struct ClassicVolumeRow: View {
 }
 
 private struct ClassicProcessesCard: View {
-    package let processes: [ProcessInfo]
+    let processes: [ProcessInfo]
     package let surfaceStyle: ClassicStatsCardSurfaceStyle
-    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    let loadProcesses: (() async throws -> [ProcessInfo])?
     @State private var showingProcesses = false
 
     package var body: some View {

@@ -2,7 +2,7 @@ import Foundation
 
 #if ORLIX_MODULAR_APP
 import OrlixModels
-typealias ProcessInfo = OrlixModels.ProcessInfo
+package typealias ProcessInfo = OrlixModels.ProcessInfo
 #endif
 package enum StatsPreviewFixture {
     static package let now = Date(timeIntervalSinceReferenceDate: 804_000_000)

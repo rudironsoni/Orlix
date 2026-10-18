@@ -4,10 +4,10 @@ import SwiftUI
 import OrlixModels
 #endif
 package struct ProcessesSheet: View {
-    package let processes: [ProcessInfo]
+    let processes: [ProcessInfo]
     package let processCount: Int
-    package let terminateProcess: ((ProcessInfo) async throws -> Void)?
-    package let loadProcesses: (() async throws -> [ProcessInfo])?
+    let terminateProcess: ((ProcessInfo) async throws -> Void)?
+    let loadProcesses: (() async throws -> [ProcessInfo])?
 
     @State private var loadedProcesses: [ProcessInfo] = []
     @State private var searchText = ""
@@ -360,7 +360,7 @@ private struct ProcessListFooter: View {
 }
 
 private struct ProcessSheetRow: View {
-    package let process: ProcessInfo
+    let process: ProcessInfo
     package let isKilling: Bool
 
     package var body: some View {
@@ -422,7 +422,7 @@ private struct ProcessSheetRow: View {
 }
 
 private struct ProcessDetailsSheet: View {
-    package let process: ProcessInfo
+    let process: ProcessInfo
 
     package var body: some View {
         sheetContent

@@ -374,7 +374,7 @@ package struct VolumeCardRow: View {
 }
 
 package struct ProcessCardRow: View {
-    package let process: ProcessInfo
+    let process: ProcessInfo
     package let style: StatsVisualStyle
 
     package var body: some View {
