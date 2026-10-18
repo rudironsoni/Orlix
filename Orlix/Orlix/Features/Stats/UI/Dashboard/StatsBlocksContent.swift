@@ -235,6 +235,50 @@ package struct StatsBlocksContent: View {
     package let setStorageVolumeVisibility: (VolumeInfo, Bool) -> Void
     package let setStorageVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
+    package init(
+        serverName: String,
+        snapshot: ServerStatsPresentationSnapshot,
+        preferences: StatsPreferences,
+        storageVolumes: [VolumeInfo],
+        hiddenStorageVolumeIDs: Set<VolumeIdentity>,
+        backgroundColor: Color,
+        surface: StatsVisualStyle.Surface,
+        constrainsWidth: Bool,
+        usesPagePadding: Bool,
+        isDockerUnlocked: Bool,
+        showsCustomizationEntryPoint: Bool,
+        customizeAction: (() -> Void)?,
+        dockerUpgradeAction: (() -> Void)?,
+        terminateProcess: ((ProcessInfo) async throws -> Void)?,
+        loadProcesses: (() async throws -> [ProcessInfo])?,
+        loadDockerStats: (() async throws -> DockerStats)?,
+        performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?,
+        loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?,
+        setStorageVolumeVisibility: @escaping (VolumeInfo, Bool) -> Void,
+        setStorageVolumesVisibility: @escaping ([VolumeInfo], Bool) -> Void
+    ) {
+        self.serverName = serverName
+        self.snapshot = snapshot
+        self.preferences = preferences
+        self.storageVolumes = storageVolumes
+        self.hiddenStorageVolumeIDs = hiddenStorageVolumeIDs
+        self.backgroundColor = backgroundColor
+        self.surface = surface
+        self.constrainsWidth = constrainsWidth
+        self.usesPagePadding = usesPagePadding
+        self.isDockerUnlocked = isDockerUnlocked
+        self.showsCustomizationEntryPoint = showsCustomizationEntryPoint
+        self.customizeAction = customizeAction
+        self.dockerUpgradeAction = dockerUpgradeAction
+        self.terminateProcess = terminateProcess
+        self.loadProcesses = loadProcesses
+        self.loadDockerStats = loadDockerStats
+        self.performDockerAction = performDockerAction
+        self.loadStorageHealth = loadStorageHealth
+        self.setStorageVolumeVisibility = setStorageVolumeVisibility
+        self.setStorageVolumesVisibility = setStorageVolumesVisibility
+    }
+
     static package func pageBackground(
         for preferencesStyle: StatsPreferences.Style,
         backgroundColor: Color,

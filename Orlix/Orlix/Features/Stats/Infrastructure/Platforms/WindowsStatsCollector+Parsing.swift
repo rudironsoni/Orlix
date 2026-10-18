@@ -54,7 +54,7 @@ nonisolated package extension WindowsStatsCollector {
         )
     }
 
-    package func parseProcesses(_ output: String) -> [ProcessInfo] {
+    func parseProcesses(_ output: String) -> [ProcessInfo] {
         var processes: [ProcessInfo] = []
 
         for line in output.components(separatedBy: .newlines) {
@@ -184,7 +184,7 @@ nonisolated package extension WindowsStatsCollector {
         return "\(drive)\\"
     }
 
-    package func parseWMICProcesses(
+    func parseWMICProcesses(
         _ output: String,
         memoryTotal: UInt64,
         logicalProcessorCount: Int = 1

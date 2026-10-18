@@ -389,7 +389,7 @@ final package class ServerStatsCollector: ObservableObject {
 
     // MARK: - User-Initiated Operations
 
-    package func terminateProcess(_ process: ProcessInfo) async throws {
+    func terminateProcess(_ process: ProcessInfo) async throws {
         guard process.pid > 1 else {
             throw ProcessControlError.protectedProcess
         }
@@ -421,7 +421,7 @@ final package class ServerStatsCollector: ObservableObject {
         }
     }
 
-    package func loadProcesses() async throws -> [ProcessInfo] {
+    func loadProcesses() async throws -> [ProcessInfo] {
         let attempt = try requireActiveAttempt()
         let fallback = stats.topProcesses
         return try await performTrackedOperation(for: attempt) { session in

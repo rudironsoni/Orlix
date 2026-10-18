@@ -89,7 +89,7 @@ package extension PlatformStatsCollector {
         )
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         []
     }
 
@@ -229,7 +229,7 @@ nonisolated final package class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    package func updatePeriodicProcesses(_ processes: [ProcessInfo], timestamp: Date = Date()) {
+    func updatePeriodicProcesses(_ processes: [ProcessInfo], timestamp: Date = Date()) {
         withLock {
             lastPeriodicProcessesTimestamp = timestamp
             if !processes.isEmpty {
@@ -238,7 +238,7 @@ nonisolated final package class StatsCollectionContext: @unchecked Sendable {
         }
     }
 
-    package func getPeriodicProcesses() -> [ProcessInfo] {
+    func getPeriodicProcesses() -> [ProcessInfo] {
         withLock { lastPeriodicProcesses }
     }
 
