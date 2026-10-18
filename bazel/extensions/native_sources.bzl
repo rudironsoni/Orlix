@@ -237,6 +237,7 @@ exports_files([
     "tools/bin/gmake",
     "tools/bin/ccache",
     "tools/bin/awk",
+    "tools/bin/printf",
     "tools/bin/sed",
     "tools/bin/readlink",
     "tools/bin/find",
