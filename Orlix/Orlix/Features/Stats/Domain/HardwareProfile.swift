@@ -13,6 +13,32 @@ nonisolated package struct HardwareProfile: Equatable, Sendable {
     package var gpus: [GPUDevice]
     package var collectedAt: Date
 
+    package init(
+        hostname: String,
+        osInfo: String,
+        architecture: String,
+        kernelVersion: String,
+        cpuModel: String,
+        cpuVendor: String,
+        cpuCores: Int,
+        cpuThreads: Int,
+        memoryTotal: UInt64,
+        gpus: [GPUDevice],
+        collectedAt: Date
+    ) {
+        self.hostname = hostname
+        self.osInfo = osInfo
+        self.architecture = architecture
+        self.kernelVersion = kernelVersion
+        self.cpuModel = cpuModel
+        self.cpuVendor = cpuVendor
+        self.cpuCores = cpuCores
+        self.cpuThreads = cpuThreads
+        self.memoryTotal = memoryTotal
+        self.gpus = gpus
+        self.collectedAt = collectedAt
+    }
+
     static package let empty = HardwareProfile(
         hostname: "",
         osInfo: "",

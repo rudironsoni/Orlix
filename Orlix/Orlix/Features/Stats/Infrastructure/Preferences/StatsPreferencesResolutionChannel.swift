@@ -12,7 +12,7 @@ final package class StatsPreferencesResolutionChannel:
     private var observers: [UUID: Observer] = [:]
 
     @discardableResult
-    func observeStatsPreferences(
+    package func observeStatsPreferences(
         _ observer: @escaping Observer
     ) -> UUID {
         let id = UUID()
@@ -20,11 +20,11 @@ final package class StatsPreferencesResolutionChannel:
         return id
     }
 
-    func removeStatsPreferencesObserver(_ id: UUID) {
+    package func removeStatsPreferencesObserver(_ id: UUID) {
         observers.removeValue(forKey: id)
     }
 
-    func publishStatsPreferences(_ preferences: StatsPreferences) {
+    package func publishStatsPreferences(_ preferences: StatsPreferences) {
         for observer in Array(observers.values) {
             observer(preferences)
         }
