@@ -153,6 +153,20 @@ def archive_complete(directory: Path) -> bool:
     return False
 
 
+def runtime_name_matches(name: str, version: str) -> bool:
+    prefix = f"iOS {version}"
+    if not name.startswith(prefix):
+        return False
+    return len(name) == len(prefix) or not name[len(prefix)].isdigit()
+
+
+def runtime_identifier_matches(identifier: str, version: str) -> bool:
+    token = "iOS-" + version.replace(".", "-")
+    if identifier.endswith(token):
+        return True
+    return f"{token}-" in identifier
+
+
 def runtime_matches(runtime: dict, version: str) -> bool:
     """True when simctl lists this runtime, including a patch of a two-part version."""
     observed = runtime.get("version")
@@ -164,11 +178,14 @@ def runtime_matches(runtime: dict, version: str) -> bool:
                 return True
         except ValueError:
             pass
-    if runtime.get("name") == f"iOS {version}":
+    name = runtime.get("name")
+    if isinstance(name, str) and runtime_name_matches(name, version):
         return True
-    identifier = runtime.get("identifier")
-    suffix = "iOS-" + version.replace(".", "-")
-    return isinstance(identifier, str) and identifier.endswith(suffix)
+    for key in ("identifier", "runtimeIdentifier"):
+        identifier = runtime.get(key)
+        if isinstance(identifier, str) and runtime_identifier_matches(identifier, version):
+            return True
+    return False
 
 
 class RuntimeProbeDenied(Exception):
@@ -191,11 +208,19 @@ def path_probe(path: Path) -> str:
 
 
 def simctl_runtime_entries(version: str, payload: dict) -> list[dict]:
-    runtimes = payload.get("runtimes")
-    if not isinstance(runtimes, list):
-        return []
+    collected = []
+    if isinstance(payload, list):
+        collected.extend(payload)
+    elif isinstance(payload, dict):
+        runtimes = payload.get("runtimes")
+        if isinstance(runtimes, list):
+            collected.extend(runtimes)
+        else:
+            for value in payload.values():
+                if isinstance(value, list):
+                    collected.extend(value)
     return [
-        runtime for runtime in runtimes
+        runtime for runtime in collected
         if isinstance(runtime, dict) and runtime_matches(runtime, version)
     ]
 
@@ -311,48 +336,47 @@ def expose_restored_runtimes(runtime_dir: Path, profiles_dir: Path | None = None
     return linked
 
 
-def read_simctl_runtimes() -> dict:
-    completed = subprocess.run(
-        ["xcrun", "simctl", "list", "runtimes", "-j"],
-        check=False, capture_output=True, text=True,
-    )
+def read_simctl_json(command: list[str]) -> dict:
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
         lowered = detail.lower()
         if "permission denied" in lowered or "operation not permitted" in lowered:
             raise RuntimeProbeDenied(detail)
-        raise SystemExit(f"simctl list runtimes failed: {detail}")
+        if command[2:4] == ["runtime", "list"]:
+            return {"runtimes": []}
+        raise SystemExit(f"{' '.join(command)} failed: {detail}")
     payload = json.loads(completed.stdout or "{}")
+    if isinstance(payload, list):
+        return {"runtimes": payload}
     if not isinstance(payload, dict):
-        raise SystemExit("simctl list runtimes did not return an object")
+        raise SystemExit(f"{' '.join(command)} did not return an object")
     return payload
 
 
+def read_simctl_runtimes() -> dict:
+    return read_simctl_json(["xcrun", "simctl", "list", "runtimes", "-j"])
+
+
+def read_simctl_runtime_images() -> dict:
+    """Runtimes from ``simctl runtime list``, including ones ``list runtimes`` omits."""
+    return read_simctl_json(["xcrun", "simctl", "runtime", "list", "-j"])
+
+
 def publish_installed_runtime(version: str, payload: dict, runtime_dir: Path) -> bool:
-    """Copy an installed bundle into the cache directory after a cold install."""
+    """Report an installed runtime without copying it.
+
+    ``shutil.copytree`` walks ``RuntimeRoot/private/var/mobile`` and raises
+    ``PermissionError``. A runtime simctl already lists is not copied and is
+    not installed again.
+    """
+    del runtime_dir
+    if simctl_runtime_listed(version, payload):
+        return True
     source = simctl_bundle_path(version, payload)
-    if source is None or not source.is_dir():
+    if source is None:
         return False
-    if source.parent.resolve() == runtime_dir.resolve():
-        return True
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    target = runtime_dir / source.name
-    if target.exists():
-        return True
-    try:
-        shutil.copytree(source, target, symlinks=True)
-    except PermissionError as error:
-        print(f"could not stage installed runtime {source}: {error}", file=sys.stderr)
-        if target.exists() or target.is_symlink():
-            shutil.rmtree(target, ignore_errors=True)
-        # The source runtime is installed. A permission error is not a miss.
-        return True
-    except OSError as error:
-        print(f"could not stage installed runtime {source}: {error}", file=sys.stderr)
-        if target.exists() or target.is_symlink():
-            shutil.rmtree(target, ignore_errors=True)
-        return False
-    return path_probe(target) in {"present", "permission"}
+    return path_probe(source) in {"present", "permission"}
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
@@ -524,13 +548,16 @@ def bundle_satisfied(brewfile: Path) -> bool:
 def runtime_already_installed(version: str, runtime_dir: Path | None = None) -> bool:
     """True when simctl lists the runtime or the bundle cannot be read.
 
-    ``xcodes runtimes install`` must not run in either case. A restored download
-    archive does not change this. A permission error is not a missing runtime.
+    ``xcodes runtimes install`` must not run in either case. ``list runtimes``
+    and ``runtime list`` both count. A restored download archive does not
+    change this. A permission error is not a missing runtime.
     """
     try:
         if runtime_bundle_installed(version, runtime_dir):
             return True
-        return simctl_runtime_listed(version, read_simctl_runtimes())
+        if simctl_runtime_listed(version, read_simctl_runtimes()):
+            return True
+        return simctl_runtime_listed(version, read_simctl_runtime_images())
     except (RuntimeProbeDenied, PermissionError):
         return True
 
@@ -552,19 +579,25 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
                     check=False,
                 )
         if runtime_already_installed(version, runtime_dir):
-            print(runtime_message("skip", version, archive_dir))
+            print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
     except (RuntimeProbeDenied, PermissionError):
-        print(runtime_message("skip", version, archive_dir))
+        print(runtime_message("skip", version, archive_dir), flush=True)
+        return "skip"
+    # Ask simctl again immediately before any installer. A runtime that is
+    # listed now must not fall through to xcodes, and must not be copied.
+    try:
+        if simctl_runtime_listed(version, read_simctl_runtimes()) or simctl_runtime_listed(version, read_simctl_runtime_images()):
+            print(runtime_message("skip", version, archive_dir), flush=True)
+            return "skip"
+    except (RuntimeProbeDenied, PermissionError):
+        print(runtime_message("skip", version, archive_dir), flush=True)
         return "skip"
     plan = runtime_plan(available=False, archive_ready=archive_complete(archive_dir))
-    print(runtime_message(plan, version, archive_dir))
+    print(runtime_message(plan, version, archive_dir), flush=True)
     archive_dir.mkdir(parents=True, exist_ok=True)
     for command in runtime_commands(plan, version, archive_dir):
         run_checked(command)
-    if runtime_dir is not None:
-        # Staging failure must not be read as "the runtime was missing".
-        publish_installed_runtime(version, read_simctl_runtimes(), runtime_dir)
     return plan
 
 

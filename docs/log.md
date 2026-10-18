@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Do not install a runtime simctl already lists
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) treats both `simctl list runtimes` and `simctl runtime list` as the installed-runtime check. A match returns before `xcodes runtimes install`. The installed bundle is not copied; copying walks `private/var/mobile` and is not a second install. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Keep a permission error from reinstalling a listed runtime
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) treats a runtime `xcrun simctl list runtimes` already lists as installed, including when the bundle cannot be read. A permission error on that bundle is not a missing runtime and does not run `xcodes runtimes install`. The Xcode download is skipped when that Xcode is already selected. `brew bundle` is skipped when the Brewfile is already satisfied. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

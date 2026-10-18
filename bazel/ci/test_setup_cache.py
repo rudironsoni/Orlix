@@ -144,6 +144,38 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertEqual(plan, "skip")
         self.assertEqual(setup_cache.runtime_commands("skip", "15.5", archive), [])
 
+    def test_runtime_list_image_is_not_installed_again(self) -> None:
+        """``simctl runtime list`` counts even when ``list runtimes`` omits it."""
+        images = json.dumps({
+            "runtimes": [{
+                "version": "15.5",
+                "state": "Ready",
+                "name": "iOS 15.5 (19F70)",
+                "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                "bundlePath": "/Library/Developer/CoreSimulator/Volumes/iOS_19F70/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 15.5.simruntime",
+            }],
+        })
+        self.assertTrue(setup_cache.simctl_runtime_listed("15.5", json.loads(images)))
+        self.assertTrue(setup_cache.runtime_name_matches("iOS 15.5 (19F70)", "15.5"))
+        self.assertFalse(setup_cache.runtime_name_matches("iOS 15.50", "15.5"))
+
+        def fake_run(command, **kwargs):
+            if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+            if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
+                return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary)
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            with mock.patch.object(setup_cache.shutil, "copytree", side_effect=AssertionError("copy")):
+                with mock.patch.object(setup_cache, "runtime_bundle_installed", return_value=False):
+                    with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                        plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
+        self.assertEqual(plan, "skip")
+        self.assertEqual(setup_cache.runtime_commands("skip", "15.5", archive), [])
+
     def test_listed_unavailable_runtime_is_not_installed(self) -> None:
         payload = json.dumps({
             "runtimes": [{
