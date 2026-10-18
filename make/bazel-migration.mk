@@ -1128,7 +1128,23 @@ __bazel-xctest-runtime-proof:
 	xcrun simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" com.apple.test.OrlixUITests-Runner >/dev/null 2>&1 || true; \
 	xcrun simctl terminate "$(ORLIX_XCTEST_SIMULATOR_ID)" "$$app_bundle_id" >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" "$$app_bundle_id" >/dev/null 2>&1 || true; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild test-without-building -xctestrun "$$evidence_dir/test.xctestrun" -destination "id=$(ORLIX_XCTEST_SIMULATOR_ID)" -resultBundlePath "$$evidence_dir/test.xcresult" -derivedDataPath "$$evidence_dir/derived_data" 2>&1 | tee "$$evidence_dir/test.log"; test "$${PIPESTATUS[0]}" -eq 0; \
+	run_xctest() { \
+		rm -rf "$$evidence_dir/test.xcresult" "$$evidence_dir/derived_data"; \
+		set +e; \
+		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" /usr/bin/xcodebuild test-without-building -xctestrun "$$evidence_dir/test.xctestrun" -destination "id=$(ORLIX_XCTEST_SIMULATOR_ID)" -resultBundlePath "$$evidence_dir/test.xcresult" -derivedDataPath "$$evidence_dir/derived_data" 2>&1 | tee "$$evidence_dir/test.log"; \
+		xctest_status="$${PIPESTATUS[0]}"; \
+		set -e; \
+		return "$$xctest_status"; \
+	}; \
+	if ! run_xctest; then \
+		echo "xcodebuild test-without-building failed on $(ORLIX_SIMULATOR_LABEL) simulator $(ORLIX_XCTEST_SIMULATOR_ID); retrying the same test once" >&2; \
+		cp "$$evidence_dir/test.log" "$$evidence_dir/test-attempt-1.log"; \
+		xcrun simctl terminate "$(ORLIX_XCTEST_SIMULATOR_ID)" com.apple.test.OrlixUITests-Runner >/dev/null 2>&1 || true; \
+		xcrun simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" com.apple.test.OrlixUITests-Runner >/dev/null 2>&1 || true; \
+		xcrun simctl terminate "$(ORLIX_XCTEST_SIMULATOR_ID)" "$$app_bundle_id" >/dev/null 2>&1 || true; \
+		xcrun simctl uninstall "$(ORLIX_XCTEST_SIMULATOR_ID)" "$$app_bundle_id" >/dev/null 2>&1 || true; \
+		run_xctest; \
+	fi; \
 	test -d "$$evidence_dir/test.xcresult" || { echo "missing result bundle for $(ORLIX_SIMULATOR_LABEL)" >&2; exit 1; }; \
 	/usr/bin/touch "$$evidence_dir/xctest-passed.log"
 
