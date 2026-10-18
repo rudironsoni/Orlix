@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum NoticeLane {
+package enum NoticeLane {
     case topBanner
     case bottomOperation
 }
@@ -18,7 +18,7 @@ package enum NoticeLeading {
     case activity
 }
 
-enum NoticeLifetime {
+package enum NoticeLifetime {
     case persistent
     case autoDismiss(Duration)
 }

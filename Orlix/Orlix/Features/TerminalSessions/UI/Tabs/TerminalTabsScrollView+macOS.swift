@@ -4,14 +4,14 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct TerminalTabsScrollView: View {
-    let tabs: [TerminalTab]
-    @Binding var selectedTabId: UUID?
-    let onClose: (TerminalTab) -> Void
-    let onNew: () -> Void
-    @ObservedObject var projection: TerminalServerToolbarTabStripProjection
+package struct TerminalTabsScrollView: View {
+    package let tabs: [TerminalTab]
+    @Binding package var selectedTabId: UUID?
+    package let onClose: (TerminalTab) -> Void
+    package let onNew: () -> Void
+    @ObservedObject package var projection: TerminalServerToolbarTabStripProjection
 
-    var body: some View {
+    package var body: some View {
         ServerToolbarTabStrip(
             items: tabs,
             selectedId: selectedTabId,
@@ -52,14 +52,14 @@ struct TerminalTabsScrollView: View {
 }
 
 private struct TerminalTabButton: View {
-    let tab: TerminalTab
-    let item: TerminalServerToolbarTabItem?
-    let isSelected: Bool
-    let width: CGFloat
-    var glassNamespace: Namespace.ID?
-    var shortcutNumber: Int?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package let tab: TerminalTab
+    package let item: TerminalServerToolbarTabItem?
+    package let isSelected: Bool
+    package let width: CGFloat
+    package var glassNamespace: Namespace.ID?
+    package var shortcutNumber: Int?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
     private var statusColor: Color {
         guard let connectionState = item?.connectionState else { return .secondary }
@@ -75,7 +75,7 @@ private struct TerminalTabButton: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         ServerToolbarTabCell(
             title: tabTitle,
             isSelected: isSelected,

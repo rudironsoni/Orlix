@@ -235,8 +235,8 @@ package struct WorkspaceFormSheet: View {
 
 // MARK: - Color Extension
 
-extension Color {
-    func toHex() -> String {
+package extension Color {
+    package func toHex() -> String {
         #if os(macOS)
         guard let components = NSColor(self).cgColor.components, components.count >= 3 else { return "#0000FF" }
         #else

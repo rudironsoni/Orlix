@@ -6,10 +6,10 @@ import MLX
 // MARK: - Prediction Network
 
 @preconcurrency nonisolated public class PredictNetwork: Module {
-    let config: PredictConfig
-    let predHidden: Int
-    let embed: Embedding
-    let decRNN: CustomLSTM
+    package let config: PredictConfig
+    package let predHidden: Int
+    package let embed: Embedding
+    package let decRNN: CustomLSTM
 
     public init(config: PredictConfig) {
         self.config = config
@@ -68,12 +68,12 @@ import MLX
 // MARK: - Joint Network
 
 @preconcurrency nonisolated public class JointNetwork: Module {
-    let config: JointConfig
-    let numClasses: Int
-    let encLinear: Linear
-    let predLinear: Linear
-    let activation: Module
-    let jointLinear: Linear
+    package let config: JointConfig
+    package let numClasses: Int
+    package let encLinear: Linear
+    package let predLinear: Linear
+    package let activation: Module
+    package let jointLinear: Linear
 
     public init(config: JointConfig) {
         self.config = config
@@ -244,11 +244,11 @@ import MLX
 }
 
 @preconcurrency nonisolated public class CustomLSTM: Module {
-    let inputSize: Int
-    let hiddenSize: Int
-    let numLayers: Int
-    let batchFirst: Bool
-    let lstmLayers: [LSTMLayer]
+    package let inputSize: Int
+    package let hiddenSize: Int
+    package let numLayers: Int
+    package let batchFirst: Bool
+    package let lstmLayers: [LSTMLayer]
 
     public init(
         inputSize: Int,
@@ -346,10 +346,10 @@ import MLX
 // MARK: - Helper RNN Implementations (if needed for GRU)
 
 @preconcurrency nonisolated public class GRU: Module {
-    let inputSize: Int
-    let hiddenSize: Int
-    let Wih: Linear  // input to hidden
-    let Whh: Linear  // hidden to hidden
+    package let inputSize: Int
+    package let hiddenSize: Int
+    package let Wih: Linear  // input to hidden
+    package let Whh: Linear  // hidden to hidden
 
     public init(inputSize: Int, hiddenSize: Int) {
         self.inputSize = inputSize

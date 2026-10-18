@@ -5,15 +5,15 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ServerStatsCollectionFailure: Equatable, Sendable {
+nonisolated package enum ServerStatsCollectionFailure: Equatable, Sendable {
     case securityApprovalCancelled
     case securityApprovalExpired
     case securityApprovalUnavailable
     case external(detail: String)
 }
 
-nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
-    nonisolated enum Phase: Equatable, Sendable {
+nonisolated package struct ServerStatsCollectionState: Equatable, Sendable {
+    nonisolated package enum Phase: Equatable, Sendable {
         case idle
         case starting(attemptID: UUID)
         case startingPaused(attemptID: UUID)
@@ -22,7 +22,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         case approvalRequired(ServerStatsApprovalRequest)
         case failed(ServerStatsCollectionFailure)
 
-        var attemptID: UUID? {
+        package var attemptID: UUID? {
             switch self {
             case .starting(let attemptID),
                  .startingPaused(let attemptID),
@@ -37,7 +37,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
 
     private(set) var phase: Phase = .idle
 
-    var isCollecting: Bool {
+    package var isCollecting: Bool {
         switch phase {
         case .starting, .collecting:
             return true
@@ -46,22 +46,22 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         }
     }
 
-    var isPolling: Bool {
+    package var isPolling: Bool {
         if case .collecting = phase { return true }
         return false
     }
 
-    var approvalRequest: ServerStatsApprovalRequest? {
+    package var approvalRequest: ServerStatsApprovalRequest? {
         guard case .approvalRequired(let request) = phase else { return nil }
         return request
     }
 
-    mutating func start(attemptID: UUID) {
+    mutating package func start(attemptID: UUID) {
         phase = .starting(attemptID: attemptID)
     }
 
     @discardableResult
-    mutating func markConnected(attemptID: UUID) -> Bool {
+    mutating package func markConnected(attemptID: UUID) -> Bool {
         switch phase {
         case .starting(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .collecting(attemptID: attemptID)
@@ -75,7 +75,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func pause(attemptID: UUID) -> Bool {
+    mutating package func pause(attemptID: UUID) -> Bool {
         switch phase {
         case .starting(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .startingPaused(attemptID: attemptID)
@@ -93,7 +93,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func resume(attemptID: UUID) -> Bool {
+    mutating package func resume(attemptID: UUID) -> Bool {
         switch phase {
         case .startingPaused(let currentAttemptID) where currentAttemptID == attemptID:
             phase = .starting(attemptID: attemptID)
@@ -111,7 +111,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func finish(
+    mutating package func finish(
         attemptID: UUID,
         failure: ServerStatsCollectionFailure? = nil
     ) -> Bool {
@@ -124,12 +124,12 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
         return true
     }
 
-    mutating func stop() {
+    mutating package func stop() {
         phase = .idle
     }
 
     @discardableResult
-    mutating func requireApproval(
+    mutating package func requireApproval(
         attemptID: UUID,
         request: ServerStatsApprovalRequest
     ) -> Bool {
@@ -139,7 +139,7 @@ nonisolated struct ServerStatsCollectionState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func resolveApproval(
+    mutating package func resolveApproval(
         _ request: ServerStatsApprovalRequest,
         failure: ServerStatsCollectionFailure? = nil
     ) -> Bool {
@@ -170,25 +170,25 @@ final package class ServerStatsCollector: ObservableObject {
     private let dependencies: ServerStatsCollectorDependencies
 
     private struct CollectionIdentity: Equatable {
-        let serverID: UUID
-        let connectionID: ServerStatsConnectionIdentity
-        let ownership: ServerStatsClientOwnership
+        package let serverID: UUID
+        package let connectionID: ServerStatsConnectionIdentity
+        package let ownership: ServerStatsClientOwnership
     }
 
     private final class AttemptIdentity: Sendable {}
 
     @MainActor
     private final class CollectionAttempt {
-        let id: UUID
-        let attemptIdentity = AttemptIdentity()
-        let serverID: UUID
-        let session: any ServerStatsCollectionSession
-        let identity: CollectionIdentity
-        var collectDocker: Bool
-        var primaryTask: Task<Void, Never>?
-        var operationTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+        package let id: UUID
+        package let attemptIdentity = AttemptIdentity()
+        package let serverID: UUID
+        package let session: any ServerStatsCollectionSession
+        package let identity: CollectionIdentity
+        package var collectDocker: Bool
+        package var primaryTask: Task<Void, Never>?
+        package var operationTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
-        init(
+        package init(
             id: UUID,
             serverID: UUID,
             session: any ServerStatsCollectionSession,
@@ -205,7 +205,7 @@ final package class ServerStatsCollector: ObservableObject {
             self.collectDocker = collectDocker
         }
 
-        func cancelAllTasks() {
+        package func cancelAllTasks() {
             primaryTask?.cancel()
             primaryTask = nil
             let tasks = Array(operationTasks.values)
@@ -216,7 +216,7 @@ final package class ServerStatsCollector: ObservableObject {
 
     @MainActor
     private final class TrackedOperationResult<Output> {
-        var value: Result<Output, Error>?
+        package var value: Result<Output, Error>?
 
         #if compiler(<6.4)
         // Xcode 26.5 crashes while optimizing the isolated destructor of a
@@ -689,7 +689,7 @@ final package class ServerStatsCollector: ObservableObject {
     }
 }
 
-nonisolated enum ProcessControlError: Error, Equatable, Sendable {
+nonisolated package enum ProcessControlError: Error, Equatable, Sendable {
     case notConnected
     case protectedProcess
 }

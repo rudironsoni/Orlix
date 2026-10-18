@@ -1,10 +1,10 @@
 import Foundation
 
-func formatPercent(_ value: Double) -> String {
+package func formatPercent(_ value: Double) -> String {
     String(format: "%.0f%%", value)
 }
 
-func formatSpeed(_ bytesPerSecond: UInt64) -> String {
+package func formatSpeed(_ bytesPerSecond: UInt64) -> String {
     let mbps = Double(bytesPerSecond) / 1_048_576
     if mbps >= 1 {
         return String(format: "%.1f MB/s", mbps)
@@ -18,7 +18,7 @@ func formatSpeed(_ bytesPerSecond: UInt64) -> String {
     return "0 B/s"
 }
 
-func formatUptimeDetail(_ seconds: TimeInterval) -> String {
+package func formatUptimeDetail(_ seconds: TimeInterval) -> String {
     let totalSeconds = max(Int(seconds), 0)
     let days = totalSeconds / 86_400
     let hours = (totalSeconds % 86_400) / 3_600
@@ -33,7 +33,7 @@ func formatUptimeDetail(_ seconds: TimeInterval) -> String {
     return String(format: String(localized: "%lldm"), Int64(minutes))
 }
 
-func formatBytes(_ bytes: UInt64) -> String {
+package func formatBytes(_ bytes: UInt64) -> String {
     let tb = Double(bytes) / 1_099_511_627_776
     if tb >= 1 {
         return String(format: "%.1f TB", tb)
@@ -57,7 +57,7 @@ func formatBytes(_ bytes: UInt64) -> String {
     return "\(bytes) B"
 }
 
-func formatUsedCapacity(_ used: UInt64, total: UInt64) -> String {
+package func formatUsedCapacity(_ used: UInt64, total: UInt64) -> String {
     guard total > 0 else {
         return String(format: String(localized: "%@ used"), formatBytes(used))
     }

@@ -5,12 +5,12 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated enum EternalTerminalHostCompatibility: Equatable {
+nonisolated package enum EternalTerminalHostCompatibility: Equatable {
     case supported
     case unsupportedNativeWindows
     case unsupportedShell
 
-    init(environment: RemoteEnvironment) {
+    package init(environment: RemoteEnvironment) {
         if environment.platform == .windows {
             self = .unsupportedNativeWindows
         } else if environment.shellProfile.supportsPOSIXExecWrapper {
@@ -20,7 +20,7 @@ nonisolated enum EternalTerminalHostCompatibility: Equatable {
         }
     }
 
-    var bootstrapDiagnostic: String? {
+    package var bootstrapDiagnostic: String? {
         switch self {
         case .supported:
             nil
@@ -33,8 +33,8 @@ nonisolated enum EternalTerminalHostCompatibility: Equatable {
 }
 
 /// Runs swift-et's SSH bootstrap and auxiliary remote operations through Orlix's SSH stack.
-actor SSHETBootstrapExecutor: ETBootstrapExecutor {
-    nonisolated static var bootstrapOptions: ETBootstrapOptions {
+package actor SSHETBootstrapExecutor: ETBootstrapExecutor {
+    nonisolated static package var bootstrapOptions: ETBootstrapOptions {
         ETBootstrapOptions(etterminalPath: "etterminal --logtostdout")
     }
 
@@ -45,11 +45,11 @@ actor SSHETBootstrapExecutor: ETBootstrapExecutor {
     private var terminalType = RemoteTerminalBootstrap.defaultTerminalType
 
     private struct Connection: Sendable {
-        let server: Server
-        let credentials: ServerCredentials
+        package let server: Server
+        package let credentials: ServerCredentials
     }
 
-    init(
+    package init(
         server: Server,
         credentials: ServerCredentials,
         client: SSHClient,
@@ -61,21 +61,21 @@ actor SSHETBootstrapExecutor: ETBootstrapExecutor {
     }
 
     /// Used while a caller already owns the temporary SSH connection lifecycle.
-    init(connectedClient: SSHClient) {
+    package init(connectedClient: SSHClient) {
         client = connectedClient
         connection = nil
         startupPlanProvider = nil
     }
 
-    func preparedStartupPlan() -> TerminalShellStartupPlan {
+    package func preparedStartupPlan() -> TerminalShellStartupPlan {
         startupPlan
     }
 
-    func preparedTerminalType() -> RemoteTerminalType {
+    package func preparedTerminalType() -> RemoteTerminalType {
         terminalType
     }
 
-    func run(command: String) async throws -> String {
+    package func run(command: String) async throws -> String {
         let command = Self.remoteBootstrapCommand(command)
         guard let connection else {
             return try await client.execute(command, timeout: .seconds(20))
@@ -108,7 +108,7 @@ actor SSHETBootstrapExecutor: ETBootstrapExecutor {
 
     /// Use a known POSIX shell even when the account's login shell is fish, and
     /// make common package-manager locations available to non-interactive SSH.
-    nonisolated static func remoteBootstrapCommand(_ command: String) -> String {
+    nonisolated static package func remoteBootstrapCommand(_ command: String) -> String {
         let script = """
         \(RemoteTerminalBootstrap.shellPathExport());
         if ! command -v etterminal >/dev/null 2>&1; then
@@ -120,7 +120,7 @@ actor SSHETBootstrapExecutor: ETBootstrapExecutor {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    func withConnectedClient<Result: Sendable>(
+    package func withConnectedClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {
         guard let connection else {

@@ -4,7 +4,7 @@ import SwiftUI
 import OrlixModels
 import OrlixSettings
 #endif
-struct TerminalAccessoryCustomizationView: View {
+package struct TerminalAccessoryCustomizationView: View {
     @EnvironmentObject private var preferences: TerminalAccessoryPreferencesManager
     @EnvironmentObject private var storeManager: StoreManager
     @State private var showingCreateActionSheet = false
@@ -49,7 +49,7 @@ struct TerminalAccessoryCustomizationView: View {
         Dictionary(uniqueKeysWithValues: preferences.customActions.map { ($0.id, $0) })
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section("Preview") {
                 ScrollView(.horizontal, showsIndicators: false) {

@@ -1,9 +1,9 @@
 import Foundation
 
-extension SSHSession {
+package extension SSHSession {
     // MARK: - Remote Files
 
-    func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [SFTPFileEntry] {
+    package func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [SFTPFileEntry] {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openDirectoryHandle(at: normalizedPath, sftp: sftp)
@@ -65,7 +65,7 @@ extension SSHSession {
         return entries
     }
 
-    nonisolated static func directoryListingEntry(
+    nonisolated static package func directoryListingEntry(
         name: String,
         path: String,
         attributes: LIBSSH2_SFTP_ATTRIBUTES
@@ -78,20 +78,20 @@ extension SSHSession {
         )
     }
 
-    func stat(at path: String) async throws -> SFTPFileEntry {
+    package func stat(at path: String) async throws -> SFTPFileEntry {
         try await stat(at: path, statType: Int32(LIBSSH2_SFTP_STAT))
     }
 
-    func lstat(at path: String) async throws -> SFTPFileEntry {
+    package func lstat(at path: String) async throws -> SFTPFileEntry {
         try await stat(at: path, statType: Int32(LIBSSH2_SFTP_LSTAT))
     }
 
-    func readlink(at path: String) async throws -> String {
+    package func readlink(at path: String) async throws -> String {
         let sftp = try await ensureSFTPSession()
         return try await readSymlinkTarget(at: path, linkType: Int32(LIBSSH2_SFTP_READLINK), sftp: sftp)
     }
 
-    func readFile(at path: String, maxBytes: Int, offset: UInt64 = 0) async throws -> Data {
+    package func readFile(at path: String, maxBytes: Int, offset: UInt64 = 0) async throws -> Data {
         guard maxBytes > 0 else { return Data() }
 
         let sftp = try await ensureSFTPSession()
@@ -147,7 +147,7 @@ extension SSHSession {
         return data
     }
 
-    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
+    package func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openFileHandle(
@@ -218,7 +218,7 @@ extension SSHSession {
         try localFileHandle.close()
     }
 
-    func writeFile(_ data: Data, to path: String, permissions: Int32 = 0o644) async throws {
+    package func writeFile(_ data: Data, to path: String, permissions: Int32 = 0o644) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         let handle = try await openFileHandle(
@@ -257,7 +257,7 @@ extension SSHSession {
         }
     }
 
-    func writeFile(
+    package func writeFile(
         from localURL: URL,
         to path: String,
         expectedBytes: UInt64,
@@ -353,13 +353,13 @@ extension SSHSession {
         }
     }
 
-    func resolveHomeDirectory() async throws -> String {
+    package func resolveHomeDirectory() async throws -> String {
         let sftp = try await ensureSFTPSession()
         let path = try await readSymlinkTarget(at: ".", linkType: Int32(LIBSSH2_SFTP_REALPATH), sftp: sftp)
         return path.isEmpty ? "/" : path
     }
 
-    func fileSystemCapacity(at path: String) async throws -> SFTPFilesystemCapacity {
+    package func fileSystemCapacity(at path: String) async throws -> SFTPFilesystemCapacity {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         var status = LIBSSH2_SFTP_STATVFS()
@@ -403,7 +403,7 @@ extension SSHSession {
         }
     }
 
-    func createDirectory(at path: String, permissions: Int32 = 0o755) async throws {
+    package func createDirectory(at path: String, permissions: Int32 = 0o755) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(
@@ -422,7 +422,7 @@ extension SSHSession {
         }
     }
 
-    func setPermissions(at path: String, permissions: UInt32) async throws {
+    package func setPermissions(at path: String, permissions: UInt32) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         var attributes = LIBSSH2_SFTP_ATTRIBUTES()
@@ -455,7 +455,7 @@ extension SSHSession {
         }
     }
 
-    func renameItem(at sourcePath: String, to destinationPath: String) async throws {
+    package func renameItem(at sourcePath: String, to destinationPath: String) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedSource = SFTPRemotePath.normalize(sourcePath)
         let normalizedDestination = SFTPRemotePath.normalize(destinationPath)
@@ -500,7 +500,7 @@ extension SSHSession {
         throw lastError ?? SFTPTransportError.failed(String(localized: "Failed to rename item."))
     }
 
-    func deleteFile(at path: String) async throws {
+    package func deleteFile(at path: String) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(
@@ -518,7 +518,7 @@ extension SSHSession {
         }
     }
 
-    func deleteDirectory(at path: String) async throws {
+    package func deleteDirectory(at path: String) async throws {
         let sftp = try await ensureSFTPSession()
         let normalizedPath = SFTPRemotePath.normalize(path)
         try await performSFTPMutation(

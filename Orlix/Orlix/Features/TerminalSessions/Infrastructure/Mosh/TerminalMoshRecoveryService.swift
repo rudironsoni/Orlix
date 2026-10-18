@@ -6,27 +6,27 @@ import os.log
 import OrlixSSH
 #endif
 @MainActor
-struct TerminalMoshClientOperations {
-    let restoreShell: @MainActor @Sendable (
+package struct TerminalMoshClientOperations {
+    package let restoreShell: @MainActor @Sendable (
         _ client: SSHClient,
         _ snapshot: MoshSnapshot,
         _ cols: Int,
         _ rows: Int
     ) async throws -> ShellHandle
-    let checkpoint: @MainActor @Sendable (
+    package let checkpoint: @MainActor @Sendable (
         _ client: SSHClient,
         _ shellId: UUID
     ) async throws -> MoshSnapshot?
-    let prepareForApplicationBackground: @MainActor @Sendable (
+    package let prepareForApplicationBackground: @MainActor @Sendable (
         _ client: SSHClient,
         _ shellId: UUID
     ) async throws -> MoshSnapshot?
-    let resumeFromApplicationBackground: @MainActor @Sendable (
+    package let resumeFromApplicationBackground: @MainActor @Sendable (
         _ client: SSHClient,
         _ shellId: UUID
     ) async throws -> Void
 
-    static let live = Self(
+    static package let live = Self(
         restoreShell: { client, snapshot, cols, rows in
             try await client.restoreMoshShell(
                 from: snapshot,
@@ -47,7 +47,7 @@ struct TerminalMoshClientOperations {
 }
 
 @MainActor
-final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
+final package class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
     private let store: any MoshResumeStoring
     private let client: TerminalMoshClientOperations
     private let logger = Logger(
@@ -55,7 +55,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         category: "MoshRecovery"
     )
 
-    init(
+    package init(
         store: any MoshResumeStoring,
         client: TerminalMoshClientOperations = .live
     ) {
@@ -63,11 +63,11 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         self.client = client
     }
 
-    func hasCheckpoint(for paneId: UUID) -> Bool {
+    package func hasCheckpoint(for paneId: UUID) -> Bool {
         store.hasSnapshot(for: paneId)
     }
 
-    func restoreShell(
+    package func restoreShell(
         for paneId: UUID,
         using sshClient: SSHClient,
         cols: Int,
@@ -103,7 +103,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         }
     }
 
-    func persistCheckpoint(
+    package func persistCheckpoint(
         for paneId: UUID,
         using sshClient: SSHClient,
         shellId: UUID,
@@ -122,7 +122,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         }
     }
 
-    func prepareForApplicationBackground(
+    package func prepareForApplicationBackground(
         for paneId: UUID,
         using sshClient: SSHClient,
         shellId: UUID,
@@ -144,7 +144,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         }
     }
 
-    func resumeFromApplicationBackground(
+    package func resumeFromApplicationBackground(
         for paneId: UUID,
         using sshClient: SSHClient,
         shellId: UUID,
@@ -167,7 +167,7 @@ final class TerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         )
     }
 
-    func deleteCheckpoint(for paneId: UUID) throws {
+    package func deleteCheckpoint(for paneId: UUID) throws {
         try store.deleteSnapshot(for: paneId)
     }
 

@@ -3,11 +3,11 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct RemoteShellStartupActionSection: View {
-    @Binding var model: RemoteShellStartupActionFormModel
-    let remoteSessionEnabled: Bool
+package struct RemoteShellStartupActionSection: View {
+    @Binding package var model: RemoteShellStartupActionFormModel
+    package let remoteSessionEnabled: Bool
 
-    var body: some View {
+    package var body: some View {
         Section {
             commandField
 

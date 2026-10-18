@@ -8,8 +8,8 @@ import UIKit
 import OrlixModels
 #endif
 @MainActor
-final class RemoteFileBrowserPlatformState: ObservableObject {
-    @Published var searchQuery = ""
+final package class RemoteFileBrowserPlatformState: ObservableObject {
+    @Published package var searchQuery = ""
 }
 
 package extension RemoteFileBrowserScreen {
@@ -421,7 +421,7 @@ package extension RemoteFileBrowserScreen {
 
 private extension View {
     @ViewBuilder
-    func orlixRemoteFileBrowserToolbar(
+    package func orlixRemoteFileBrowserToolbar(
         goUp: AnyView,
         upload: AnyView,
         createFolder: AnyView,

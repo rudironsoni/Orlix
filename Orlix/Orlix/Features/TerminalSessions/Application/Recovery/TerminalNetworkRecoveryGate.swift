@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct TerminalNetworkRecoveryGate {
-    enum Action: Equatable, Sendable {
+nonisolated package struct TerminalNetworkRecoveryGate {
+    package enum Action: Equatable, Sendable {
         case none
         case wait(UUID)
         case resume(UUID)
@@ -9,7 +9,7 @@ nonisolated struct TerminalNetworkRecoveryGate {
 
     private var generation: UUID?
 
-    mutating func receive(
+    mutating package func receive(
         _ readiness: TerminalNetworkReadiness,
         shouldWait: Bool
     ) -> Action {

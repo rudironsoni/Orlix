@@ -4,7 +4,7 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated enum EternalTerminalSessionState: Equatable, Sendable {
+nonisolated package enum EternalTerminalSessionState: Equatable, Sendable {
     case idle
     case bootstrapping
     case connecting
@@ -15,23 +15,23 @@ nonisolated enum EternalTerminalSessionState: Equatable, Sendable {
     case closed
 }
 
-nonisolated enum EternalTerminalSessionOrigin: Equatable, Sendable {
+nonisolated package enum EternalTerminalSessionOrigin: Equatable, Sendable {
     case bootstrapped
     case resumed
 }
 
-nonisolated struct EternalTerminalSessionRequest: Sendable {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
+nonisolated package struct EternalTerminalSessionRequest: Sendable {
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
 }
 
-nonisolated struct PreparedEternalTerminalSession: Sendable {
-    let session: any EternalTerminalSession
-    let origin: EternalTerminalSessionOrigin
+nonisolated package struct PreparedEternalTerminalSession: Sendable {
+    package let session: any EternalTerminalSession
+    package let origin: EternalTerminalSessionOrigin
 }
 
-nonisolated protocol EternalTerminalSession: Sendable {
+nonisolated package protocol EternalTerminalSession: Sendable {
     var output: AsyncStream<Data> { get }
     var stateChanges: AsyncStream<EternalTerminalSessionState> { get }
 
@@ -59,7 +59,7 @@ nonisolated protocol EternalTerminalSession: Sendable {
 }
 
 @MainActor
-protocol EternalTerminalSessionPreparing: Sendable {
+package protocol EternalTerminalSessionPreparing: Sendable {
     func prepareSession(
         request: EternalTerminalSessionRequest,
         startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
@@ -70,6 +70,6 @@ protocol EternalTerminalSessionPreparing: Sendable {
 }
 
 @MainActor
-protocol TerminalOutputSink: AnyObject {
+package protocol TerminalOutputSink: AnyObject {
     func receiveTerminalOutput(_ data: Data)
 }

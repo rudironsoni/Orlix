@@ -1,10 +1,10 @@
 import SwiftUI
 
-struct OperationNoticeView: View {
-    let item: NoticeItem
-    var surfaceStyle: NoticeSurfaceStyle = .standard
+package struct OperationNoticeView: View {
+    package let item: NoticeItem
+    package var surfaceStyle: NoticeSurfaceStyle = .standard
 
-    var body: some View {
+    package var body: some View {
         NoticeGlassGroup(spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {

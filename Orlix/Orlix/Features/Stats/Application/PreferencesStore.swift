@@ -5,14 +5,14 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct StatsPreferencesObserverCleanupRequest: Sendable {
+nonisolated package struct StatsPreferencesObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
-    init(cleanup: @escaping @MainActor @Sendable () -> Void) {
+    package init(cleanup: @escaping @MainActor @Sendable () -> Void) {
         self.cleanup = cleanup
     }
 
-    func perform() {
+    package func perform() {
         Task { @MainActor in
             cleanup()
         }
@@ -26,7 +26,7 @@ private final class StatsPreferencesObserverCleanup {
     private var lifecycleObserverID: UUID?
     private var resolutionObserverID: UUID?
 
-    init(
+    package init(
         syncLifecycle: any StatsPreferencesSyncLifecycle,
         resolutionSource: any StatsPreferencesResolutionSource
     ) {
@@ -34,17 +34,17 @@ private final class StatsPreferencesObserverCleanup {
         self.resolutionSource = resolutionSource
     }
 
-    var request: StatsPreferencesObserverCleanupRequest {
+    package var request: StatsPreferencesObserverCleanupRequest {
         StatsPreferencesObserverCleanupRequest { [self] in
             removeObservers()
         }
     }
 
-    func registerLifecycleObserver(_ id: UUID) {
+    package func registerLifecycleObserver(_ id: UUID) {
         lifecycleObserverID = id
     }
 
-    func registerResolutionObserver(_ id: UUID) {
+    package func registerResolutionObserver(_ id: UUID) {
         resolutionObserverID = id
     }
 
@@ -296,7 +296,7 @@ final package class PreferencesStore: ObservableObject {
 }
 
 private extension Array {
-    mutating func moveElements(fromOffsets source: IndexSet, toOffset destination: Int) {
+    mutating package func moveElements(fromOffsets source: IndexSet, toOffset destination: Int) {
         guard !source.isEmpty else { return }
 
         let movingElements = source.map { self[$0] }

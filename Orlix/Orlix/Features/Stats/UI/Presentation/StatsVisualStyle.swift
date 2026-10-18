@@ -8,12 +8,12 @@ import AppKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct ClassicStatsCardSurfaceStyle: Equatable {
-    let fill: Color
-    let stroke: Color
-    let pageBackground: Color
+package struct ClassicStatsCardSurfaceStyle: Equatable {
+    package let fill: Color
+    package let stroke: Color
+    package let pageBackground: Color
 
-    static func make(for backgroundColor: Color) -> ClassicStatsCardSurfaceStyle {
+    static package func make(for backgroundColor: Color) -> ClassicStatsCardSurfaceStyle {
         #if os(iOS)
         ClassicStatsCardSurfaceStyle(
             fill: Color(UIColor.secondarySystemGroupedBackground),
@@ -31,9 +31,9 @@ struct ClassicStatsCardSurfaceStyle: Equatable {
 }
 
 private struct ClassicStatsCardModifier: ViewModifier {
-    let surfaceStyle: ClassicStatsCardSurfaceStyle
+    package let surfaceStyle: ClassicStatsCardSurfaceStyle
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         content
             .background(surfaceStyle.fill, in: shape)
@@ -43,38 +43,38 @@ private struct ClassicStatsCardModifier: ViewModifier {
     }
 }
 
-extension View {
-    func classicStatsCardSurface(_ surfaceStyle: ClassicStatsCardSurfaceStyle) -> some View {
+package extension View {
+    package func classicStatsCardSurface(_ surfaceStyle: ClassicStatsCardSurfaceStyle) -> some View {
         modifier(ClassicStatsCardModifier(surfaceStyle: surfaceStyle))
     }
 }
 
-enum StatsIcon {
-    static let gpu = "display"
+package enum StatsIcon {
+    static package let gpu = "display"
 }
 
-struct StatsVisualStyle {
-    enum Density {
+package struct StatsVisualStyle {
+    package enum Density {
         case compact
         case detailed
         case classic
     }
 
-    enum Surface {
+    package enum Surface {
         case dashboard
         case grouped
     }
 
-    let density: Density
-    let pageBackground: Color
-    let cardFill: Color
-    let cardStroke: Color
-    let primaryText: Color
-    let secondaryText: Color
-    let tertiaryText: Color
-    let meterTrack: Color
+    package let density: Density
+    package let pageBackground: Color
+    package let cardFill: Color
+    package let cardStroke: Color
+    package let primaryText: Color
+    package let secondaryText: Color
+    package let tertiaryText: Color
+    package let meterTrack: Color
 
-    init(
+    package init(
         preferencesStyle: StatsPreferences.Style = .cardsCompact,
         surface: Surface = .dashboard,
         colorScheme: ColorScheme = .dark
@@ -134,87 +134,87 @@ struct StatsVisualStyle {
         }
     }
 
-    var cardSpacing: CGFloat {
+    package var cardSpacing: CGFloat {
         density == .detailed ? 18 : 14
     }
 
-    var gridMinimumColumnWidth: CGFloat {
+    package var gridMinimumColumnWidth: CGFloat {
         density == .detailed ? 320 : 292
     }
 
-    var gridMaximumWidth: CGFloat {
+    package var gridMaximumWidth: CGFloat {
         density == .detailed ? 1_360 : 1_180
     }
 
-    var horizontalPadding: CGFloat {
+    package var horizontalPadding: CGFloat {
         density == .detailed ? 18 : 14
     }
 
-    var topPadding: CGFloat {
+    package var topPadding: CGFloat {
         density == .detailed ? 22 : 16
     }
 
-    var bottomPadding: CGFloat {
+    package var bottomPadding: CGFloat {
         density == .detailed ? 28 : 22
     }
 
-    var cardPadding: CGFloat {
+    package var cardPadding: CGFloat {
         density == .detailed ? 22 : 18
     }
 
-    var cardCornerRadius: CGFloat {
+    package var cardCornerRadius: CGFloat {
         density == .classic ? 22 : 28
     }
 
-    var titleSize: CGFloat {
+    package var titleSize: CGFloat {
         density == .detailed ? 44 : 38
     }
 
-    var prominentValueSize: CGFloat {
+    package var prominentValueSize: CGFloat {
         density == .detailed ? 44 : 38
     }
 
-    var metricValueSize: CGFloat {
+    package var metricValueSize: CGFloat {
         density == .detailed ? 44 : 38
     }
 
-    var networkValueSize: CGFloat {
+    package var networkValueSize: CGFloat {
         density == .detailed ? 34 : 30
     }
 
-    var metricPreviewWidth: CGFloat {
+    package var metricPreviewWidth: CGFloat {
         density == .detailed ? 168 : 136
     }
 
-    var metricPreviewHeight: CGFloat {
+    package var metricPreviewHeight: CGFloat {
         density == .detailed ? 118 : 92
     }
 
-    var overviewMinHeight: CGFloat {
+    package var overviewMinHeight: CGFloat {
         density == .detailed ? 164 : 136
     }
 
-    var metricMinHeight: CGFloat {
+    package var metricMinHeight: CGFloat {
         density == .detailed ? 196 : 164
     }
 
-    var networkMinHeight: CGFloat {
+    package var networkMinHeight: CGFloat {
         density == .detailed ? 246 : 222
     }
 
-    var networkChartHeight: CGFloat {
+    package var networkChartHeight: CGFloat {
         density == .detailed ? 142 : 122
     }
 
-    var networkValuesWidth: CGFloat {
+    package var networkValuesWidth: CGFloat {
         density == .detailed ? 150 : 132
     }
 
-    var processLimit: Int {
+    package var processLimit: Int {
         density == .detailed ? 5 : 4
     }
 
-    var volumeLimit: Int {
+    package var volumeLimit: Int {
         density == .detailed ? 6 : 4
     }
 
@@ -249,10 +249,10 @@ struct StatsVisualStyle {
     }
 }
 
-enum StatsResolvedAppearance {
-    static let storageKey = "appearanceMode"
+package enum StatsResolvedAppearance {
+    static package let storageKey = "appearanceMode"
 
-    static func colorScheme(from rawValue: String, fallback: ColorScheme) -> ColorScheme {
+    static package func colorScheme(from rawValue: String, fallback: ColorScheme) -> ColorScheme {
         switch rawValue {
         case "light":
             return .light

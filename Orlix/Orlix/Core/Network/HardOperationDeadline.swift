@@ -10,7 +10,7 @@ private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unc
     private var tasks: [Task<Void, Never>] = []
     private var resolvedResult: Result<Value, Error>?
 
-    func install(_ continuation: CheckedContinuation<Value, Error>) {
+    package func install(_ continuation: CheckedContinuation<Value, Error>) {
         lock.lock()
         if let resolvedResult {
             lock.unlock()
@@ -21,7 +21,7 @@ private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unc
         lock.unlock()
     }
 
-    func track(_ tasks: [Task<Void, Never>]) {
+    package func track(_ tasks: [Task<Void, Never>]) {
         lock.lock()
         if resolvedResult != nil {
             lock.unlock()
@@ -32,7 +32,7 @@ private nonisolated final class HardOperationDeadlineRace<Value: Sendable>: @unc
         lock.unlock()
     }
 
-    func resolve(
+    package func resolve(
         _ result: Result<Value, Error>,
         beforeResuming: () -> Void = {}
     ) {

@@ -5,30 +5,30 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum StoreAccessState: Equatable, Sendable {
+nonisolated package enum StoreAccessState: Equatable, Sendable {
     case checking
     case free
     case pro
 }
 
-nonisolated struct StoreEntitlementSnapshot: Equatable, Sendable {
-    static let checking = StoreEntitlementSnapshot(
+nonisolated package struct StoreEntitlementSnapshot: Equatable, Sendable {
+    static package let checking = StoreEntitlementSnapshot(
         accessState: .checking,
         hasLifetimeAccess: false,
         subscriptionStatus: nil
     )
 
-    static let free = StoreEntitlementSnapshot(
+    static package let free = StoreEntitlementSnapshot(
         accessState: .free,
         hasLifetimeAccess: false,
         subscriptionStatus: nil
     )
 
-    let accessState: StoreAccessState
-    let hasLifetimeAccess: Bool
-    let subscriptionStatus: StoreSubscriptionStatus?
+    package let accessState: StoreAccessState
+    package let hasLifetimeAccess: Bool
+    package let subscriptionStatus: StoreSubscriptionStatus?
 
-    var hasStoreAccess: Bool {
+    package var hasStoreAccess: Bool {
         accessState == .pro
     }
 }

@@ -57,7 +57,7 @@ nonisolated package enum SyncSettingsCredentialState: Equatable, Sendable {
     case needsAttention
 }
 
-nonisolated enum SyncSettingsUserState: Equatable, Sendable {
+nonisolated package enum SyncSettingsUserState: Equatable, Sendable {
     case readyToSync
     case upToDate
     case syncing
@@ -67,7 +67,7 @@ nonisolated enum SyncSettingsUserState: Equatable, Sendable {
     case disabled
 }
 
-nonisolated enum SyncSettingsManualSyncState: Equatable, Sendable {
+nonisolated package enum SyncSettingsManualSyncState: Equatable, Sendable {
     case idle
     case running
     case success
@@ -76,16 +76,16 @@ nonisolated enum SyncSettingsManualSyncState: Equatable, Sendable {
     case failure
 }
 
-nonisolated enum SyncSettingsErrorCategory: String, Equatable, Sendable {
+nonisolated package enum SyncSettingsErrorCategory: String, Equatable, Sendable {
     case account
     case cloudData
     case credentials
     case network
 }
 
-nonisolated struct SyncSettingsErrorRecord: Equatable, Sendable {
-    let category: SyncSettingsErrorCategory
-    let date: Date
+nonisolated package struct SyncSettingsErrorRecord: Equatable, Sendable {
+    package let category: SyncSettingsErrorCategory
+    package let date: Date
 }
 
 nonisolated package struct SyncSettingsRuntimeInfo: Equatable, Sendable {
@@ -103,7 +103,7 @@ nonisolated package struct SyncSettingsContentSummary: Equatable, Sendable {
     package let reusableSSHKeyCount: Int
 }
 
-nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {
+nonisolated package enum SyncSettingsAccountCategory: String, Equatable, Sendable {
     case available
     case checking
     case noAccount
@@ -111,7 +111,7 @@ nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {
     case temporarilyUnavailable
     case unavailable
 
-    init(_ state: CloudKitAccountState) {
+    package init(_ state: CloudKitAccountState) {
         switch state {
         case .available:
             self = .available
@@ -131,17 +131,17 @@ nonisolated enum SyncSettingsAccountCategory: String, Equatable, Sendable {
     }
 }
 
-nonisolated struct SyncSettingsDiagnostics: Equatable, Sendable {
-    let state: SyncSettingsUserState
-    let account: SyncSettingsAccountCategory
-    let lastSuccessfulSyncDate: Date?
-    let pendingOperationCount: Int
-    let quarantinedOperationCount: Int
-    let pendingQueueHealth: PendingCloudKitQueueHealth
-    let lastError: SyncSettingsErrorRecord?
-    let runtime: SyncSettingsRuntimeInfo
+nonisolated package struct SyncSettingsDiagnostics: Equatable, Sendable {
+    package let state: SyncSettingsUserState
+    package let account: SyncSettingsAccountCategory
+    package let lastSuccessfulSyncDate: Date?
+    package let pendingOperationCount: Int
+    package let quarantinedOperationCount: Int
+    package let pendingQueueHealth: PendingCloudKitQueueHealth
+    package let lastError: SyncSettingsErrorRecord?
+    package let runtime: SyncSettingsRuntimeInfo
 
-    var text: String {
+    package var text: String {
         var lines = [
             "Orlix Sync Diagnostics",
             "Status: \(state.diagnosticValue)",
@@ -177,7 +177,7 @@ private extension PendingCloudKitQueueHealth {
 }
 
 private extension SyncSettingsUserState {
-    nonisolated var diagnosticValue: String {
+    nonisolated package var diagnosticValue: String {
         switch self {
         case .readyToSync: "readyToSync"
         case .upToDate: "upToDate"
@@ -192,36 +192,36 @@ private extension SyncSettingsUserState {
 
 @MainActor
 package protocol SyncSettingsCloudSyncing: AnyObject {
-    package var currentState: SyncSettingsCloudState { get }
-    package var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> { get }
+    var currentState: SyncSettingsCloudState { get }
+    var stateUpdates: AnyPublisher<SyncSettingsCloudState, Never> { get }
 
-    package func setSyncEnabled(_ enabled: Bool)
-    package func checkAccountStatus() async
+    func setSyncEnabled(_ enabled: Bool)
+    func checkAccountStatus() async
 }
 
 @MainActor
 package protocol SyncSettingsCredentialSyncing: AnyObject {
-    package var currentState: SyncSettingsCredentialState { get }
+    var currentState: SyncSettingsCredentialState { get }
 
-    package func prepareCredentialStorage(isSyncEnabled: Bool) throws
-    package func removeCredentialsFromICloud() throws
+    func prepareCredentialStorage(isSyncEnabled: Bool) throws
+    func removeCredentialsFromICloud() throws
 }
 
 @MainActor
 package protocol SyncSettingsDataRefreshing: AnyObject {
-    package func handleSyncDisabled()
-    package func syncNow() async throws
+    func handleSyncDisabled()
+    func syncNow() async throws
 }
 
 @MainActor
 package protocol SyncSettingsContentSummarizing: AnyObject {
-    package var currentSummary: SyncSettingsContentSummary { get }
+    var currentSummary: SyncSettingsContentSummary { get }
 }
 
 @MainActor
 package protocol SyncSettingsHistoryStoring: AnyObject {
-    package var lastSuccessfulSyncDate: Date? { get }
-    package func recordSuccessfulSync(at date: Date) throws
+    var lastSuccessfulSyncDate: Date? { get }
+    func recordSuccessfulSync(at date: Date) throws
 }
 
 @MainActor

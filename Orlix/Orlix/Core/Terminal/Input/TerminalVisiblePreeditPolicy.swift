@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum TerminalVisiblePreeditPolicy {
-    static func isDictationInputMode(_ inputModePrimaryLanguage: String?) -> Bool {
+nonisolated package enum TerminalVisiblePreeditPolicy {
+    static package func isDictationInputMode(_ inputModePrimaryLanguage: String?) -> Bool {
         inputModePrimaryLanguage?.lowercased() == "dictation"
     }
 
-    static func shouldDisplay(_ text: String, inputModePrimaryLanguage: String?) -> Bool {
+    static package func shouldDisplay(_ text: String, inputModePrimaryLanguage: String?) -> Bool {
         let normalized = text.precomposedStringWithCanonicalMapping
         let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }

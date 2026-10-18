@@ -4,7 +4,7 @@ import Foundation
 import OrlixSSH
 #endif
 @MainActor
-protocol TerminalMoshRecoveryServicing: Sendable {
+package protocol TerminalMoshRecoveryServicing: Sendable {
     func hasCheckpoint(for paneId: UUID) -> Bool
     func restoreShell(
         for paneId: UUID,
@@ -35,10 +35,10 @@ protocol TerminalMoshRecoveryServicing: Sendable {
 
 #if DEBUG
 @MainActor
-struct UnavailableTerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
-    func hasCheckpoint(for paneId: UUID) -> Bool { false }
+package struct UnavailableTerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
+    package func hasCheckpoint(for paneId: UUID) -> Bool { false }
 
-    func restoreShell(
+    package func restoreShell(
         for paneId: UUID,
         using client: SSHClient,
         cols: Int,
@@ -47,27 +47,27 @@ struct UnavailableTerminalMoshRecoveryService: TerminalMoshRecoveryServicing {
         nil
     }
 
-    func persistCheckpoint(
+    package func persistCheckpoint(
         for paneId: UUID,
         using client: SSHClient,
         shellId: UUID,
         isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
-    func prepareForApplicationBackground(
+    package func prepareForApplicationBackground(
         for paneId: UUID,
         using client: SSHClient,
         shellId: UUID,
         isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
-    func resumeFromApplicationBackground(
+    package func resumeFromApplicationBackground(
         for paneId: UUID,
         using client: SSHClient,
         shellId: UUID,
         isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async {}
 
-    func deleteCheckpoint(for paneId: UUID) throws {}
+    package func deleteCheckpoint(for paneId: UUID) throws {}
 }
 #endif

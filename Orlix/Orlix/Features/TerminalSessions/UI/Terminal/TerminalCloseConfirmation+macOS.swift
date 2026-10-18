@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-extension View {
-    func terminalCloseConfirmationAlert(
+package extension View {
+    package func terminalCloseConfirmationAlert(
         isPresented: Binding<Bool>,
         message: String,
         onCancel: @escaping () -> Void = {},

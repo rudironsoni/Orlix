@@ -2,16 +2,16 @@
 import AppKit
 import SwiftUI
 
-struct StatsDetailShell<Controls: View, Content: View>: View {
+package struct StatsDetailShell<Controls: View, Content: View>: View {
     @Environment(\.dismiss) private var dismiss
-    let title: String
-    let systemImage: String
-    let tint: Color
-    let showsControls: Bool
-    let controls: () -> Controls
-    let content: () -> Content
+    package let title: String
+    package let systemImage: String
+    package let tint: Color
+    package let showsControls: Bool
+    package let controls: () -> Controls
+    package let content: () -> Content
 
-    init(
+    package init(
         _ title: String,
         systemImage: String,
         tint: Color,
@@ -26,7 +26,7 @@ struct StatsDetailShell<Controls: View, Content: View>: View {
         self.content = content
     }
 
-    init(
+    package init(
         _ title: String,
         systemImage: String,
         tint: Color,
@@ -40,7 +40,7 @@ struct StatsDetailShell<Controls: View, Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 StatsSheetTitle(title: title, systemImage: systemImage, tint: tint)
@@ -73,11 +73,11 @@ struct StatsDetailShell<Controls: View, Content: View>: View {
 }
 
 private struct StatsSheetTitle: View {
-    let title: String
-    let systemImage: String
-    let tint: Color
+    package let title: String
+    package let systemImage: String
+    package let tint: Color
 
-    var body: some View {
+    package var body: some View {
         Label {
             Text(title)
                 .font(.headline.weight(.semibold))
@@ -92,11 +92,11 @@ private struct StatsSheetTitle: View {
     }
 }
 
-struct StatsSearchField: View {
-    let prompt: String
-    @Binding var text: String
+package struct StatsSearchField: View {
+    package let prompt: String
+    @Binding package var text: String
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
@@ -112,7 +112,7 @@ struct StatsSearchField: View {
 
 private struct StatsSheetCloseToolbarModifier: ViewModifier {
     @Environment(\.dismiss) private var dismiss
-    let placement: StatsSheetClosePlacement
+    package let placement: StatsSheetClosePlacement
 
     private var closePlacement: ToolbarItemPlacement {
         switch placement {
@@ -123,7 +123,7 @@ private struct StatsSheetCloseToolbarModifier: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .toolbar {
                 ToolbarItem(placement: closePlacement) {
@@ -141,13 +141,13 @@ private struct StatsSheetCloseToolbarModifier: ViewModifier {
     }
 }
 
-extension View {
-    func statsSheetCloseToolbar(placement: StatsSheetClosePlacement = .automatic) -> some View {
+package extension View {
+    package func statsSheetCloseToolbar(placement: StatsSheetClosePlacement = .automatic) -> some View {
         modifier(StatsSheetCloseToolbarModifier(placement: placement))
     }
 
     @ViewBuilder
-    func statsDetailPresentation<Content: View>(
+    package func statsDetailPresentation<Content: View>(
         isPresented: Binding<Bool>,
         size: CGSize = StatsPresentationSize.standard,
         @ViewBuilder content: @escaping () -> Content
@@ -159,7 +159,7 @@ extension View {
     }
 
     @ViewBuilder
-    func statsDetailPresentation<Item: Identifiable, Content: View>(
+    package func statsDetailPresentation<Item: Identifiable, Content: View>(
         item: Binding<Item?>,
         size: CGSize = StatsPresentationSize.standard,
         @ViewBuilder content: @escaping (Item) -> Content

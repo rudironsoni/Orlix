@@ -12,11 +12,11 @@ import UIKit
 import OrlixModels
 import OrlixSettings
 #endif
-struct ConnectionViewSegmentedPicker: UIViewRepresentable {
-    @Binding var selection: ConnectionViewTabID
-    let tabs: [ConnectionViewTabID]
+package struct ConnectionViewSegmentedPicker: UIViewRepresentable {
+    @Binding package var selection: ConnectionViewTabID
+    package let tabs: [ConnectionViewTabID]
 
-    func makeUIView(context: Context) -> UISegmentedControl {
+    package func makeUIView(context: Context) -> UISegmentedControl {
         let control = UISegmentedControl()
         configure(control, tabs: tabs)
         control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
@@ -27,7 +27,7 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
         return control
     }
 
-    func updateUIView(_ uiView: UISegmentedControl, context: Context) {
+    package func updateUIView(_ uiView: UISegmentedControl, context: Context) {
         context.coordinator.selection = $selection
         context.coordinator.tabs = tabs
         if context.coordinator.renderedTabs != tabs {
@@ -51,12 +51,12 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
     }
 
     @available(iOS 16.0, *)
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
+    package func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
         uiView.sizeToFit()
         return uiView.intrinsicContentSize
     }
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(selection: $selection, tabs: tabs)
     }
 
@@ -72,18 +72,18 @@ struct ConnectionViewSegmentedPicker: UIViewRepresentable {
         control.accessibilityLabel = tabs.map(\.localizedKey).joined(separator: ", ")
     }
 
-    final class Coordinator: NSObject {
-        var selection: Binding<ConnectionViewTabID>
-        var tabs: [ConnectionViewTabID]
-        var renderedTabs: [ConnectionViewTabID]
+    final package class Coordinator: NSObject {
+        package var selection: Binding<ConnectionViewTabID>
+        package var tabs: [ConnectionViewTabID]
+        package var renderedTabs: [ConnectionViewTabID]
 
-        init(selection: Binding<ConnectionViewTabID>, tabs: [ConnectionViewTabID]) {
+        package init(selection: Binding<ConnectionViewTabID>, tabs: [ConnectionViewTabID]) {
             self.selection = selection
             self.tabs = tabs
             self.renderedTabs = tabs
         }
 
-        @objc func valueChanged(_ sender: UISegmentedControl) {
+        @objc package func valueChanged(_ sender: UISegmentedControl) {
             let index = sender.selectedSegmentIndex
             guard tabs.indices.contains(index) else { return }
             let selectedTabID = tabs[index]

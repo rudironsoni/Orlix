@@ -1,14 +1,14 @@
 import Foundation
 
-nonisolated struct WhisperEncoding: Sendable {
-    let baseTokens: [Data]
-    let baseVocabCount: Int
-    let specialTokens: [String: Int]
-    let nVocab: Int
+nonisolated package struct WhisperEncoding: Sendable {
+    package let baseTokens: [Data]
+    package let baseVocabCount: Int
+    package let specialTokens: [String: Int]
+    package let nVocab: Int
 }
 
-nonisolated final class WhisperTokenizer {
-    static let supportedLanguages: [String] = [
+nonisolated final package class WhisperTokenizer {
+    static package let supportedLanguages: [String] = [
         "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it",
         "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th",
         "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az",
@@ -20,12 +20,12 @@ nonisolated final class WhisperTokenizer {
 
     private static let encodingCache = WhisperEncodingCache()
 
-    let encoding: WhisperEncoding
-    let language: String?
-    let task: String?
-    let numLanguages: Int
+    package let encoding: WhisperEncoding
+    package let language: String?
+    package let task: String?
+    package let numLanguages: Int
 
-    init(
+    package init(
         multilingual: Bool,
         numLanguages: Int = 99,
         language: String? = "en",
@@ -46,14 +46,14 @@ nonisolated final class WhisperTokenizer {
         }
     }
 
-    var sot: Int { specialToken("<|startoftranscript|>") }
-    var eot: Int { specialToken("<|endoftext|>") }
-    var transcribe: Int { specialToken("<|transcribe|>") }
-    var translate: Int { specialToken("<|translate|>") }
-    var noTimestamps: Int { specialToken("<|notimestamps|>") }
-    var timestampBegin: Int { specialToken("<|0.00|>") }
+    package var sot: Int { specialToken("<|startoftranscript|>") }
+    package var eot: Int { specialToken("<|endoftext|>") }
+    package var transcribe: Int { specialToken("<|transcribe|>") }
+    package var translate: Int { specialToken("<|translate|>") }
+    package var noTimestamps: Int { specialToken("<|notimestamps|>") }
+    package var timestampBegin: Int { specialToken("<|0.00|>") }
 
-    var sotSequence: [Int] {
+    package var sotSequence: [Int] {
         var sequence = [sot]
         if let language, let languageToken = languageToken(for: language) {
             sequence.append(languageToken)
@@ -64,7 +64,7 @@ nonisolated final class WhisperTokenizer {
         return sequence
     }
 
-    func initialTokens(withoutTimestamps: Bool = true) -> [Int] {
+    package func initialTokens(withoutTimestamps: Bool = true) -> [Int] {
         var tokens = sotSequence
         if withoutTimestamps {
             tokens.append(noTimestamps)
@@ -72,7 +72,7 @@ nonisolated final class WhisperTokenizer {
         return tokens
     }
 
-    func decode(_ tokens: [Int]) -> String {
+    package func decode(_ tokens: [Int]) -> String {
         let filtered = tokens.filter { $0 < timestampBegin && $0 < encoding.baseVocabCount }
         var data = Data()
         data.reserveCapacity(filtered.count * 2)
@@ -195,7 +195,7 @@ private nonisolated final class WhisperEncodingCache: @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: WhisperEncoding] = [:]
 
-    func value(
+    package func value(
         for key: String,
         load: () throws -> WhisperEncoding
     ) rethrows -> WhisperEncoding {

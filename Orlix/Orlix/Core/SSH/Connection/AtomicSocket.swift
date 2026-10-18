@@ -3,7 +3,7 @@ import Foundation
 
 /// Thread-safe socket storage that separates cross-thread I/O interruption
 /// from the actor-owned final descriptor close.
-final class AtomicSocket: @unchecked Sendable {
+final package class AtomicSocket: @unchecked Sendable {
     private enum State: Sendable {
         case closed
         case open(Int32)
@@ -13,9 +13,9 @@ final class AtomicSocket: @unchecked Sendable {
     private nonisolated(unsafe) var state = State.closed
     private let lock = NSLock()
 
-    nonisolated init() {}
+    nonisolated package init() {}
 
-    nonisolated var isUsable: Bool {
+    nonisolated package var isUsable: Bool {
         lock.withLock {
             if case .open = state {
                 true
@@ -25,7 +25,7 @@ final class AtomicSocket: @unchecked Sendable {
         }
     }
 
-    nonisolated func install(_ socket: Int32) {
+    nonisolated package func install(_ socket: Int32) {
         lock.withLock {
             state = .open(socket)
         }
@@ -33,7 +33,7 @@ final class AtomicSocket: @unchecked Sendable {
 
     /// Wake blocking socket I/O without releasing the descriptor. This avoids
     /// descriptor reuse while libssh2 may still be returning from a native call.
-    nonisolated func interrupt() {
+    nonisolated package func interrupt() {
         lock.withLock {
             guard case .open(let socket) = state else { return }
             Darwin.shutdown(socket, SHUT_RDWR)
@@ -42,7 +42,7 @@ final class AtomicSocket: @unchecked Sendable {
     }
 
     /// Release the descriptor after the SSHSession actor has finished libssh2 cleanup.
-    nonisolated func close() {
+    nonisolated package func close() {
         lock.withLock {
             switch state {
             case .closed:

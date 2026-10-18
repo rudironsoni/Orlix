@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum RemoteSessionCleanupPolicy {
-    static func identifiersToDelete(
+nonisolated package enum RemoteSessionCleanupPolicy {
+    static package func identifiersToDelete(
         from sessions: [RemoteSessionDescriptor],
         keeping identifiers: Set<RemoteSessionIdentifier>
     ) -> [RemoteSessionIdentifier] {

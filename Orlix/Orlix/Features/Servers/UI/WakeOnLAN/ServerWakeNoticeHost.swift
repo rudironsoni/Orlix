@@ -97,7 +97,7 @@ package struct ServerWakeNoticeHost<Content: View>: View {
 }
 
 private extension ServerWakeFailure {
-    var message: String {
+    package var message: String {
         switch self {
         case .macAddressUnavailable:
             return String(
@@ -112,7 +112,7 @@ private extension ServerWakeFailure {
 }
 
 private extension WakeOnLANSendError {
-    var message: String {
+    package var message: String {
         switch self {
         case .localNetworkAccessDenied:
             return String(

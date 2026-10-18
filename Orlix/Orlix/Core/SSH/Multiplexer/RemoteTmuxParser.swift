@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum RemoteTmuxParser {
-    static func resolvedBackend(
+nonisolated package enum RemoteTmuxParser {
+    static package func resolvedBackend(
         from output: String,
         variant: RemoteTmuxBackend.Variant
     ) -> RemoteTmuxBackend? {
@@ -29,7 +29,7 @@ nonisolated enum RemoteTmuxParser {
         )
     }
 
-    static func classifyAvailabilityOutput(
+    static package func classifyAvailabilityOutput(
         _ output: String,
         availableMarker: String,
         missingMarker: String,
@@ -47,7 +47,7 @@ nonisolated enum RemoteTmuxParser {
         }
     }
 
-    static func parseSessionListOutput(
+    static package func parseSessionListOutput(
         _ output: String,
         allowLegacy: Bool
     ) -> [RemoteTmuxSession] {

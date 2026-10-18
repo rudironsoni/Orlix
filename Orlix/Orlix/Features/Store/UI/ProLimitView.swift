@@ -5,12 +5,12 @@ import OrlixModels
 
 // MARK: - Pro Limit Banner
 
-struct ProLimitBanner: View {
-    let title: String
-    let message: String
-    let action: () -> Void
+package struct ProLimitBanner: View {
+    package let title: String
+    package let message: String
+    package let action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "star.fill")
                 .foregroundStyle(.orange)
@@ -38,12 +38,12 @@ struct ProLimitBanner: View {
 
 // MARK: - Pro Feature Lock
 
-struct ProFeatureLock: View {
-    let feature: String
-    let description: String
-    @Binding var showUpgrade: Bool
+package struct ProFeatureLock: View {
+    package let feature: String
+    package let description: String
+    @Binding package var showUpgrade: Bool
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "lock.fill")
                 .font(.largeTitle)
@@ -71,20 +71,20 @@ struct ProFeatureLock: View {
 
 // MARK: - Limit Reached Alert
 
-struct LimitReachedAlert: ViewModifier {
-    let limitType: LimitType
-    @Binding var isPresented: Bool
+package struct LimitReachedAlert: ViewModifier {
+    package let limitType: LimitType
+    @Binding package var isPresented: Bool
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var storeManager: StoreManager
     @State private var showUpgrade = false
 
-    enum LimitType {
+    package enum LimitType {
         case servers
         case workspaces
         case tabs
         case fileTabs
 
-        var title: String {
+        package var title: String {
             switch self {
             case .servers: return String(localized: "Server Limit Reached")
             case .workspaces: return String(localized: "Workspace Limit Reached")
@@ -93,7 +93,7 @@ struct LimitReachedAlert: ViewModifier {
             }
         }
 
-        func message(serverLimit: Int) -> String {
+        package func message(serverLimit: Int) -> String {
             switch self {
             case .servers:
                 return String(
@@ -109,7 +109,7 @@ struct LimitReachedAlert: ViewModifier {
             }
         }
 
-        var paywallSource: PaywallSource {
+        package var paywallSource: PaywallSource {
             switch self {
             case .servers: return .serverLimit
             case .workspaces: return .workspaceLimit
@@ -119,7 +119,7 @@ struct LimitReachedAlert: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .alert(limitType.title, isPresented: $isPresented) {
                 Button("Upgrade to Pro") {
@@ -163,22 +163,22 @@ struct LimitReachedAlert: ViewModifier {
     }
 }
 
-extension View {
-    func limitReachedAlert(_ limitType: LimitReachedAlert.LimitType, isPresented: Binding<Bool>) -> some View {
+package extension View {
+    package func limitReachedAlert(_ limitType: LimitReachedAlert.LimitType, isPresented: Binding<Bool>) -> some View {
         modifier(LimitReachedAlert(limitType: limitType, isPresented: isPresented))
     }
 }
 
 // MARK: - Pro Feature Alert
 
-struct ProFeatureAlert: ViewModifier {
-    let title: String
-    let message: String
-    let source: PaywallSource
-    @Binding var isPresented: Bool
+package struct ProFeatureAlert: ViewModifier {
+    package let title: String
+    package let message: String
+    package let source: PaywallSource
+    @Binding package var isPresented: Bool
     @State private var showUpgrade = false
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .alert(title, isPresented: $isPresented) {
                 Button("Upgrade to Pro") {
@@ -193,12 +193,12 @@ struct ProFeatureAlert: ViewModifier {
     }
 }
 
-extension View {
-    func proFeatureAlert(title: String, message: String, source: PaywallSource = .general, isPresented: Binding<Bool>) -> some View {
+package extension View {
+    package func proFeatureAlert(title: String, message: String, source: PaywallSource = .general, isPresented: Binding<Bool>) -> some View {
         modifier(ProFeatureAlert(title: title, message: message, source: source, isPresented: isPresented))
     }
 
-    func splitPaneProFeatureAlert(isPresented: Binding<Bool>) -> some View {
+    package func splitPaneProFeatureAlert(isPresented: Binding<Bool>) -> some View {
         proFeatureAlert(
             title: String(localized: "Split Panes"),
             message: String(localized: "Upgrade to Pro to split terminal panes"),
@@ -211,12 +211,12 @@ extension View {
 
 // MARK: - Pro Gate View
 
-struct ProGateView<Content: View, LockedContent: View>: View {
+package struct ProGateView<Content: View, LockedContent: View>: View {
     @EnvironmentObject private var storeManager: StoreManager
-    let content: () -> Content
-    let lockedContent: () -> LockedContent
+    package let content: () -> Content
+    package let lockedContent: () -> LockedContent
 
-    init(
+    package init(
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder lockedContent: @escaping () -> LockedContent
     ) {
@@ -224,7 +224,7 @@ struct ProGateView<Content: View, LockedContent: View>: View {
         self.lockedContent = lockedContent
     }
 
-    var body: some View {
+    package var body: some View {
         if storeManager.allowsProFeatures {
             content()
         } else {
@@ -235,15 +235,15 @@ struct ProGateView<Content: View, LockedContent: View>: View {
 
 // MARK: - Usage Indicator
 
-struct UsageIndicator: View {
-    let current: Int
-    let limit: Int
-    let label: String
-    @Binding var showUpgrade: Bool
+package struct UsageIndicator: View {
+    package let current: Int
+    package let limit: Int
+    package let label: String
+    @Binding package var showUpgrade: Bool
 
-    var isAtLimit: Bool { current >= limit }
+    package var isAtLimit: Bool { current >= limit }
 
-    var body: some View {
+    package var body: some View {
         HStack {
             Text(label)
                 .font(.subheadline)
@@ -271,25 +271,25 @@ struct UsageIndicator: View {
 
 // MARK: - Locked Item Alert (for downgraded users)
 
-struct LockedItemAlert: ViewModifier {
-    let itemType: ItemType
-    let itemName: String
-    @Binding var isPresented: Bool
+package struct LockedItemAlert: ViewModifier {
+    package let itemType: ItemType
+    package let itemName: String
+    @Binding package var isPresented: Bool
     @EnvironmentObject private var serverManager: ServerManager
     @State private var showUpgrade = false
 
-    enum ItemType {
+    package enum ItemType {
         case server
         case workspace
 
-        var title: String {
+        package var title: String {
             switch self {
             case .server: return String(localized: "Server Locked")
             case .workspace: return String(localized: "Workspace Locked")
             }
         }
 
-        func message(serverLimit: Int) -> String {
+        package func message(serverLimit: Int) -> String {
             switch self {
             case .server:
                 return String(
@@ -301,7 +301,7 @@ struct LockedItemAlert: ViewModifier {
             }
         }
 
-        var paywallSource: PaywallSource {
+        package var paywallSource: PaywallSource {
             switch self {
             case .server: return .serverLimit
             case .workspace: return .workspaceLimit
@@ -309,7 +309,7 @@ struct LockedItemAlert: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .alert(itemType.title, isPresented: $isPresented) {
                 Button("Renew Pro") {
@@ -323,8 +323,8 @@ struct LockedItemAlert: ViewModifier {
     }
 }
 
-extension View {
-    func lockedItemAlert(_ itemType: LockedItemAlert.ItemType, itemName: String, isPresented: Binding<Bool>) -> some View {
+package extension View {
+    package func lockedItemAlert(_ itemType: LockedItemAlert.ItemType, itemName: String, isPresented: Binding<Bool>) -> some View {
         modifier(LockedItemAlert(itemType: itemType, itemName: itemName, isPresented: isPresented))
     }
 }
@@ -332,10 +332,10 @@ extension View {
 
 // MARK: - Downgrade Banner (shown when user has locked items)
 
-struct DowngradeBanner: View {
-    let lockedServers: Int
-    let lockedWorkspaces: Int
-    let action: () -> Void
+package struct DowngradeBanner: View {
+    package let lockedServers: Int
+    package let lockedWorkspaces: Int
+    package let action: () -> Void
 
     private var message: String {
         var parts: [String] = []
@@ -356,7 +356,7 @@ struct DowngradeBanner: View {
         return String(format: String(localized: "%@ locked"), joined)
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "lock.fill")
                 .foregroundStyle(.orange)

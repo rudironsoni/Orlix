@@ -4,8 +4,8 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension CustomFontLibraryView {
-    var platformBody: some View {
+package extension CustomFontLibraryView {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Custom Fonts", onClose: onClose)
             Divider()

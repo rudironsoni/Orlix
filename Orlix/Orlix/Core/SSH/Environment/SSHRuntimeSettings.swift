@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum SSHKeepAlivePolicy: Equatable, Sendable {
+nonisolated package enum SSHKeepAlivePolicy: Equatable, Sendable {
     case disabled
     case enabled(intervalSeconds: Int)
 }

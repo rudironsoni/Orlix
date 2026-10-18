@@ -2,11 +2,11 @@
 import OrlixModels
 #endif
 @MainActor
-protocol StoreAnalyticsRecording {
+package protocol StoreAnalyticsRecording {
     func record(_ event: StoreAnalyticsEvent)
 }
 
-nonisolated enum StoreAnalyticsEvent: Equatable, Sendable {
+nonisolated package enum StoreAnalyticsEvent: Equatable, Sendable {
     case paywallPresented(source: PaywallSource)
     case paywallCTATapped(source: PaywallSource, productID: String)
     case purchaseStarted(source: PaywallSource, productID: String)

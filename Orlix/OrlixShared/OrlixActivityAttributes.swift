@@ -27,8 +27,8 @@ nonisolated package enum OrlixLiveActivityStatus: String, Codable, Hashable {
 @available(iOS 16.1, *)
 nonisolated package struct OrlixActivityAttributes: ActivityAttributes {
     package struct ContentState: Codable, Hashable {
-        var status: OrlixLiveActivityStatus
-        var activeCount: Int
+        package var status: OrlixLiveActivityStatus
+        package var activeCount: Int
     }
 
     package var appName: String

@@ -3,10 +3,10 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
+nonisolated final package class RemoteFileTemporaryStorage: @unchecked Sendable {
     private struct DragExport {
-        let rootURL: URL
-        let itemURL: URL
+        package let rootURL: URL
+        package let itemURL: URL
     }
 
     private let fileManager: FileManager
@@ -14,7 +14,7 @@ nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
     private static let staleDragExportAge: TimeInterval = 24 * 60 * 60
     private static let staleDragExportCleanupLimit = 64
 
-    init(
+    package init(
         fileManager: FileManager = .default,
         rootDirectory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("OrlixRemoteFiles", isDirectory: true)
     ) {
@@ -22,15 +22,15 @@ nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
         self.rootDirectory = rootDirectory
     }
 
-    func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
+    package func makePreviewFileURL(for entry: RemoteFileEntry) throws -> URL {
         try makeFileURL(in: "Previews", suggestedName: entry.name)
     }
 
-    func makeTransferFileURL(for entry: RemoteFileEntry) throws -> URL {
+    package func makeTransferFileURL(for entry: RemoteFileEntry) throws -> URL {
         try makeFileURL(in: "Transfers", suggestedName: entry.name.isEmpty ? "download" : entry.name)
     }
 
-    func prepareDragExport(
+    package func prepareDragExport(
         for entry: RemoteFileEntry,
         download: @Sendable (URL) async throws -> Void
     ) async throws -> URL {
@@ -45,16 +45,16 @@ nonisolated final class RemoteFileTemporaryStorage: @unchecked Sendable {
         }
     }
 
-    func removeItem(at url: URL) {
+    package func removeItem(at url: URL) {
         try? fileManager.removeItem(at: url)
     }
 
-    func removePreviewArtifact(for payload: RemoteFileViewerPayload?) {
+    package func removePreviewArtifact(for payload: RemoteFileViewerPayload?) {
         guard let previewFileURL = payload?.previewFileURL else { return }
         removeItem(at: previewFileURL)
     }
 
-    func removeStaleDragExports(olderThan cutoff: Date) {
+    package func removeStaleDragExports(olderThan cutoff: Date) {
         let dragRoot = dragRootDirectory
         guard let exports = try? fileManager.contentsOfDirectory(
             at: dragRoot,

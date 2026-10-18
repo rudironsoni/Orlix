@@ -308,10 +308,10 @@ package struct LocalDeviceDiscoverySheet: View {
 }
 
 private struct DiscoveryHostRow: View {
-    let host: DiscoveredSSHHost
+    package let host: DiscoveredSSHHost
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "server.rack")
                 .font(.body)
@@ -355,11 +355,11 @@ private struct DiscoveryHostRow: View {
 
 #if os(macOS)
 private struct DiscoveryHostSwitcherRow: View {
-    let host: DiscoveredSSHHost
-    let isSelected: Bool
-    let isHovered: Bool
-    let onSelect: () -> Void
-    let onUse: () -> Void
+    package let host: DiscoveredSSHHost
+    package let isSelected: Bool
+    package let isHovered: Bool
+    package let onSelect: () -> Void
+    package let onUse: () -> Void
 
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.privacyModeEnabled) private var privacyModeEnabled
@@ -374,7 +374,7 @@ private struct DiscoveryHostSwitcherRow: View {
         Color(nsColor: .selectedTextColor)
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "server.rack")
                 .font(.body)

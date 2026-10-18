@@ -92,8 +92,8 @@ nonisolated package enum ShellTransportState: Equatable, Sendable {
     }
 }
 
-nonisolated enum MoshEndpointCandidatePolicy {
-    static func hosts(configuredHost: String, sshPeerHost: String?) -> [String] {
+nonisolated package enum MoshEndpointCandidatePolicy {
+    static package func hosts(configuredHost: String, sshPeerHost: String?) -> [String] {
         let configured = configuredHost.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !configured.isEmpty else { return [] }
         var result = [configured]

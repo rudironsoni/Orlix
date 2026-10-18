@@ -7,14 +7,14 @@ import UIKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalRenderingTransition: Equatable, Sendable {
+nonisolated package enum TerminalRenderingTransition: Equatable, Sendable {
     case none
     case pause
     case resume
 }
 
-nonisolated enum TerminalRenderingPolicy {
-    static func transition(
+nonisolated package enum TerminalRenderingPolicy {
+    static package func transition(
         terminalIsActive: Bool,
         sceneIsActive: Bool,
         renderingIsPaused: Bool
@@ -26,8 +26,8 @@ nonisolated enum TerminalRenderingPolicy {
     }
 }
 
-extension View {
-    func terminalCommandFocusValues(
+package extension View {
+    package func terminalCommandFocusValues(
         activeServerId: UUID?,
         activePaneId: UUID?,
         splitActions: TerminalSplitActions?
@@ -35,7 +35,7 @@ extension View {
         self
     }
 
-    func terminalKeyboardAvoidance(
+    package func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
         terminalSurfaceChange: TerminalSurfaceStoreChange?,
@@ -59,9 +59,9 @@ extension View {
 @MainActor
 private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     private struct BaseGeometry {
-        let windowIdentifier: ObjectIdentifier
-        let boundsFrame: CGRect
-        let terminalFrame: CGRect
+        package let windowIdentifier: ObjectIdentifier
+        package let boundsFrame: CGRect
+        package let terminalFrame: CGRect
     }
 
     @Published private(set) var layout = TerminalKeyboardAvoidancePolicy.Layout.unobstructed
@@ -72,7 +72,7 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
     private var preservesTerminalSize = false
     private var baseGeometry: BaseGeometry?
 
-    func update(
+    package func update(
         preservesTerminalSize: Bool,
         terminal newTerminal: GhosttyTerminalView?,
         keyboardFrame: CGRect?,
@@ -107,7 +107,7 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
         recalculate(animation: animation)
     }
 
-    func detach() {
+    package func detach() {
         detachTerminal()
         layout = .unobstructed
     }
@@ -215,17 +215,17 @@ private final class TerminalKeyboardAvoidanceViewModel: ObservableObject {
 }
 
 private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
-    let focusedPaneId: UUID?
-    let paneIds: [UUID]
-    let terminalSurfaceChange: TerminalSurfaceStoreChange?
-    let terminalProvider: (UUID) -> GhosttyTerminalView?
-    let enabledOverride: Bool?
+    package let focusedPaneId: UUID?
+    package let paneIds: [UUID]
+    package let terminalSurfaceChange: TerminalSurfaceStoreChange?
+    package let terminalProvider: (UUID) -> GhosttyTerminalView?
+    package let enabledOverride: Bool?
 
     @AppStorage(TerminalDefaults.preserveTerminalSizeForKeyboardKey) private var storedEnabled = false
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @StateObject private var model = TerminalKeyboardAvoidanceViewModel()
 
-    init(
+    package init(
         focusedPaneId: UUID?,
         paneIds: [UUID],
         terminalSurfaceChange: TerminalSurfaceStoreChange?,
@@ -245,7 +245,7 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
         enabledOverride ?? storedEnabled
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .padding(.bottom, preservesTerminalSize ? model.layout.bottomInset : 0)
             .offset(y: preservesTerminalSize ? model.layout.verticalOffset : 0)
@@ -305,18 +305,18 @@ private struct TerminalKeyboardAvoidanceModifier: ViewModifier {
 }
 
 /// Wraps a remote connection and Ghostty terminal for a pane on iOS/iPadOS.
-struct RemoteTerminalPaneWrapper: View {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
-    let tabManager: TerminalTabManager
-    let isActive: Bool
-    let terminalContextMenuActions: TerminalContextMenuActions
-    let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
-    let onProcessExit: () -> Void
-    let onReady: () -> Void
-    let onVoiceTrigger: (() -> Void)?
-    let onSceneActivation: () -> Void
+package struct RemoteTerminalPaneWrapper: View {
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
+    package let tabManager: TerminalTabManager
+    package let isActive: Bool
+    package let terminalContextMenuActions: TerminalContextMenuActions
+    package let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
+    package let onProcessExit: () -> Void
+    package let onReady: () -> Void
+    package let onVoiceTrigger: (() -> Void)?
+    package let onSceneActivation: () -> Void
 
     @EnvironmentObject private var terminalAccessoryPreferencesManager: TerminalAccessoryPreferencesManager
     @AppStorage("terminalKeyboardDismissButtonEnabled") private var keyboardDismissButtonEnabled = true
@@ -328,7 +328,7 @@ struct RemoteTerminalPaneWrapper: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { geometry in
             RemoteTerminalPaneRepresentable(
                 paneId: paneId,
@@ -373,21 +373,21 @@ struct RemoteTerminalPaneWrapper: View {
 }
 
 private struct TerminalSceneActivationObserver: UIViewRepresentable {
-    let onSceneActivation: (UIScene) -> Void
+    package let onSceneActivation: (UIScene) -> Void
 
-    func makeUIView(context: Context) -> TerminalSceneActivationView {
+    package func makeUIView(context: Context) -> TerminalSceneActivationView {
         TerminalSceneActivationView(onSceneActivation: onSceneActivation)
     }
 
-    func updateUIView(_ view: TerminalSceneActivationView, context: Context) {
+    package func updateUIView(_ view: TerminalSceneActivationView, context: Context) {
         view.onSceneActivation = onSceneActivation
     }
 }
 
 private final class TerminalSceneActivationView: UIView {
-    var onSceneActivation: (UIScene) -> Void
+    package var onSceneActivation: (UIScene) -> Void
 
-    init(onSceneActivation: @escaping (UIScene) -> Void) {
+    package init(onSceneActivation: @escaping (UIScene) -> Void) {
         self.onSceneActivation = onSceneActivation
         super.init(frame: .zero)
         isUserInteractionEnabled = false
@@ -400,7 +400,7 @@ private final class TerminalSceneActivationView: UIView {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
@@ -420,20 +420,20 @@ private final class TerminalSceneActivationView: UIView {
 }
 
 private struct RemoteTerminalPaneRepresentable: View {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
-    let tabManager: TerminalTabManager
-    let size: CGSize
-    let isActive: Bool
-    let terminalContextMenuActions: TerminalContextMenuActions
-    let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
-    let onProcessExit: () -> Void
-    let onReady: () -> Void
-    let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
-    let onVoiceTrigger: (() -> Void)?
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
+    package let tabManager: TerminalTabManager
+    package let size: CGSize
+    package let isActive: Bool
+    package let terminalContextMenuActions: TerminalContextMenuActions
+    package let onPaneKeyboardShortcut: (TerminalSplitCommand) -> Void
+    package let onProcessExit: () -> Void
+    package let onReady: () -> Void
+    package let terminalAccessoryInputSnapshot: TerminalAccessoryInputSnapshot
+    package let onVoiceTrigger: (() -> Void)?
 
-    var body: some View {
+    package var body: some View {
         TerminalPaneSurface(
             paneId: paneId.uuidString,
             size: size,
@@ -448,7 +448,7 @@ private struct RemoteTerminalPaneRepresentable: View {
         )
     }
 
-    func makeCoordinator() -> TerminalPaneConnectionCoordinator {
+    package func makeCoordinator() -> TerminalPaneConnectionCoordinator {
         TerminalPaneConnectionCoordinator(
             paneId: paneId,
             server: server,

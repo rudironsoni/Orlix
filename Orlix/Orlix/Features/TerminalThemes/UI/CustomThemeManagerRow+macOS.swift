@@ -4,15 +4,15 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct CustomThemeManagerRow: View {
-    let theme: TerminalTheme
-    let assignment: String?
-    let usePerAppearanceTheme: Bool
-    let isHovered: Bool
-    let isSelected: Bool
-    let onApply: (TerminalThemeSelectionTarget) -> Void
-    let onEdit: () -> Void
-    let onDeleteRequest: () -> Void
+package struct CustomThemeManagerRow: View {
+    package let theme: TerminalTheme
+    package let assignment: String?
+    package let usePerAppearanceTheme: Bool
+    package let isHovered: Bool
+    package let isSelected: Bool
+    package let onApply: (TerminalThemeSelectionTarget) -> Void
+    package let onEdit: () -> Void
+    package let onDeleteRequest: () -> Void
 
     @Environment(\.controlActiveState) private var controlActiveState
 
@@ -26,7 +26,7 @@ struct CustomThemeManagerRow: View {
         Color(nsColor: .selectedTextColor)
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             Text(theme.name)
                 .font(.body)

@@ -1,22 +1,22 @@
 import Foundation
 
-nonisolated enum CloudKitSyncConstants {
-    static let appPrefix = "com.rudironsoni.orlix"
-    static let cloudKitContainerIdentifier = "iCloud.com.rudironsoni.orlix"
-    static let recordZoneName = "OrlixZone"
-    static let databaseSubscriptionID = "database-changes"
+nonisolated package enum CloudKitSyncConstants {
+    static package let appPrefix = "com.rudironsoni.orlix"
+    static package let cloudKitContainerIdentifier = "iCloud.com.rudironsoni.orlix"
+    static package let recordZoneName = "OrlixZone"
+    static package let databaseSubscriptionID = "database-changes"
 
-    static let syncEnabledKey = "iCloudSyncEnabled"
-    static let pendingCloudKitSyncQueueStorageKey = "\(appPrefix).pendingCloudKitSyncQueue"
-    static let terminalThemeNameKey = "terminalThemeName"
-    static let terminalThemeNameLightKey = "terminalThemeNameLight"
-    static let terminalUsePerAppearanceThemeKey = "terminalUsePerAppearanceTheme"
+    static package let syncEnabledKey = "iCloudSyncEnabled"
+    static package let pendingCloudKitSyncQueueStorageKey = "\(appPrefix).pendingCloudKitSyncQueue"
+    static package let terminalThemeNameKey = "terminalThemeName"
+    static package let terminalThemeNameLightKey = "terminalThemeNameLight"
+    static package let terminalUsePerAppearanceThemeKey = "terminalUsePerAppearanceTheme"
 
-    static func changeTokenKey(for zoneName: String = recordZoneName) -> String {
+    static package func changeTokenKey(for zoneName: String = recordZoneName) -> String {
         "\(appPrefix).cloudkit.\(zoneName).token"
     }
 
-    static func zoneReadyKey(for zoneName: String = recordZoneName) -> String {
+    static package func zoneReadyKey(for zoneName: String = recordZoneName) -> String {
         "\(appPrefix).cloudkit.\(zoneName).ready"
     }
 }

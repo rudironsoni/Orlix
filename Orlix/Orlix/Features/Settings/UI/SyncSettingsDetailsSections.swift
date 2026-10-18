@@ -3,19 +3,19 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct SyncSettingsDetailsSections: View {
-    let summary: SyncSettingsContentSummary
-    let contentSyncState: SyncSettingsContentSyncState
-    let syncEnabled: Bool
-    let lastSuccessfulSyncDate: Date?
-    let pendingChangeCount: Int
-    let lastError: SyncSettingsErrorRecord?
-    let diagnostics: String
-    let requestCredentialRemoval: () -> Void
+package struct SyncSettingsDetailsSections: View {
+    package let summary: SyncSettingsContentSummary
+    package let contentSyncState: SyncSettingsContentSyncState
+    package let syncEnabled: Bool
+    package let lastSuccessfulSyncDate: Date?
+    package let pendingChangeCount: Int
+    package let lastError: SyncSettingsErrorRecord?
+    package let diagnostics: String
+    package let requestCredentialRemoval: () -> Void
 
     @State private var copiedDiagnostics: String?
 
-    var body: some View {
+    package var body: some View {
         syncedDataSection
         syncDetailsSection
         if !syncEnabled {
@@ -165,12 +165,12 @@ struct SyncSettingsDetailsSections: View {
 }
 
 private struct SyncSettingsDetailsCountRow: View {
-    let title: String
-    let systemImage: String
-    let count: Int
-    let accessibilityIdentifier: String
+    package let title: String
+    package let systemImage: String
+    package let count: Int
+    package let accessibilityIdentifier: String
 
-    var body: some View {
+    package var body: some View {
         SyncSettingsDetailsRow(title: title, systemImage: systemImage) {
             Text(count, format: .number)
                 .foregroundStyle(.secondary)
@@ -180,11 +180,11 @@ private struct SyncSettingsDetailsCountRow: View {
 }
 
 private struct SyncSettingsDetailsStatusRow: View {
-    let title: String
-    let systemImage: String
-    let status: String
+    package let title: String
+    package let systemImage: String
+    package let status: String
 
-    var body: some View {
+    package var body: some View {
         SyncSettingsDetailsRow(title: title, systemImage: systemImage) {
             Text(status)
                 .foregroundStyle(.secondary)
@@ -193,11 +193,11 @@ private struct SyncSettingsDetailsStatusRow: View {
 }
 
 private struct SyncSettingsDetailsRow<Content: View>: View {
-    let title: String
-    let systemImage: String?
-    @ViewBuilder let content: () -> Content
+    package let title: String
+    package let systemImage: String?
+    @ViewBuilder package let content: () -> Content
 
-    init(
+    package init(
         title: String,
         systemImage: String? = nil,
         @ViewBuilder content: @escaping () -> Content
@@ -207,7 +207,7 @@ private struct SyncSettingsDetailsRow<Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         HStack {
             if let systemImage {
                 Label(title, systemImage: systemImage)

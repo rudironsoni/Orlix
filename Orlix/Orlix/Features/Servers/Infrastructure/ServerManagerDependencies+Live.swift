@@ -5,7 +5,7 @@ import OrlixModels
 import OrlixSSH
 import OrlixStats
 #endif
-package extension CloudKitSyncCoordinator: ServerSyncRepository {
+extension CloudKitSyncCoordinator: ServerSyncRepository {
     package func clearPendingServerAndWorkspaceMutations() throws {
         try removeAll { ServerPendingCloudKitPayloadCodec.contains($0.payload) }
     }
@@ -40,7 +40,7 @@ package extension CloudKitSyncCoordinator: ServerSyncRepository {
 
 }
 
-package extension KeychainManager: ServerManagerCredentialRepository {
+extension KeychainManager: ServerManagerCredentialRepository {
     package func cleanupCredentials(for server: Server) throws {
         try deleteCredentials(for: server.id)
         guard try !hasCredentials(for: server) else {
@@ -48,7 +48,7 @@ package extension KeychainManager: ServerManagerCredentialRepository {
         }
     }
 }
-package extension AppLockManager: ProtectedServerActionAuthorizing {
+extension AppLockManager: ProtectedServerActionAuthorizing {
     package func authorize(_ server: Server, for action: ServerProtectedAction) async -> Bool {
         switch action {
         case .delete:
@@ -56,11 +56,11 @@ package extension AppLockManager: ProtectedServerActionAuthorizing {
         }
     }
 }
-package extension KnownHostsManager: ServerKnownHostRepository {}
-package extension AnalyticsTracker: FreePlanAssignmentTracking {}
+extension KnownHostsManager: ServerKnownHostRepository {}
+extension AnalyticsTracker: FreePlanAssignmentTracking {}
 
-extension ServerManagerDependencies {
-    static func live(
+package extension ServerManagerDependencies {
+    static package func live(
         defaults: UserDefaults,
         serverCloud: ServerCloudKitClient,
         credentialRepository: any ServerManagerCredentialRepository,
@@ -102,7 +102,7 @@ extension ServerManagerDependencies {
 }
 
 private extension ServerPendingMutation {
-    init?(_ mutation: PendingCloudKitMutation) {
+    package init?(_ mutation: PendingCloudKitMutation) {
         guard let payload = try? ServerPendingCloudKitPayloadCodec.decode(mutation.payload) else {
             return nil
         }
@@ -123,7 +123,7 @@ private extension PendingCloudKitMutation {
 private enum ServerCredentialCleanupError: LocalizedError {
     case incomplete
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         "The server credentials are still present after cleanup."
     }
 }

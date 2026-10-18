@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-package extension CloudKitSyncCoordinator: TerminalFontMutationQueue {
+extension CloudKitSyncCoordinator: TerminalFontMutationQueue {
     package func enqueueTerminalFontUpsert(_ font: TerminalFont) throws {
         try enqueue(.terminalFontUpsert(font))
     }
@@ -13,10 +13,10 @@ package extension CloudKitSyncCoordinator: TerminalFontMutationQueue {
     }
 }
 
-package extension CloudKitSyncLifecycleDriver: TerminalFontSyncLifecycle {}
+extension CloudKitSyncLifecycleDriver: TerminalFontSyncLifecycle {}
 
-extension TerminalFontStoreDependencies {
-    static func live(
+package extension TerminalFontStoreDependencies {
+    static package func live(
         repository: any TerminalFontRepository,
         cloud: any TerminalFontCloudClient,
         mutationQueue: any TerminalFontMutationQueue,

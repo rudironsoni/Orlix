@@ -5,11 +5,11 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
-    let clientID: String
-    let passkey: Data
+nonisolated package struct EternalTerminalResumeCredentials: Codable, Equatable, Sendable {
+    package let clientID: String
+    package let passkey: Data
 
-    init(clientID: String, passkey: Data) throws {
+    package init(clientID: String, passkey: Data) throws {
         guard clientID.utf8.count == 16, passkey.count == 32 else {
             throw EternalTerminalResumeCredentialError.invalidCredentials
         }
@@ -17,19 +17,19 @@ nonisolated struct EternalTerminalResumeCredentials: Codable, Equatable, Sendabl
         self.passkey = passkey
     }
 
-    init(_ credentials: ETCredentials) throws {
+    package init(_ credentials: ETCredentials) throws {
         try self.init(clientID: credentials.clientID, passkey: credentials.passkey)
     }
 }
 
-nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable {
+nonisolated package enum EternalTerminalResumeCredentialError: LocalizedError, Sendable {
     case invalidCredentials
     case corruptStoredCredentials
     case secureStorageUnavailable
     case corruptStoredCheckpoint
     case checkpointStorageUnavailable
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .invalidCredentials:
             String(localized: "Eternal Terminal returned invalid resume credentials. Update Eternal Terminal on the host and try again.")
@@ -44,7 +44,7 @@ nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable 
         }
     }
 
-    var shouldDeleteStoredCredentials: Bool {
+    package var shouldDeleteStoredCredentials: Bool {
         switch self {
         case .corruptStoredCredentials, .corruptStoredCheckpoint:
             true
@@ -54,7 +54,7 @@ nonisolated enum EternalTerminalResumeCredentialError: LocalizedError, Sendable 
     }
 }
 
-protocol EternalTerminalResumeStoring: Sendable {
+package protocol EternalTerminalResumeStoring: Sendable {
     func credentials(for paneId: UUID) throws -> EternalTerminalResumeCredentials?
     func checkpoint(for paneId: UUID) throws -> ETSessionCheckpoint?
     func hasCheckpoint(for paneId: UUID) -> Bool

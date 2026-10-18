@@ -2,10 +2,10 @@ import Foundation
 
 nonisolated package struct MoshFallbackDiagnostics: Equatable, Sendable {
     package struct AppContext: Equatable, Sendable {
-        let version: String
-        let platform: String
+        package let version: String
+        package let platform: String
 
-        static var current: Self {
+        static package var current: Self {
             let shortVersion = Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "unknown"
@@ -28,8 +28,8 @@ nonisolated package struct MoshFallbackDiagnostics: Equatable, Sendable {
     }
 
     package struct StageDuration: Equatable, Sendable {
-        let stage: SSHStartupStage
-        let milliseconds: Int
+        package let stage: SSHStartupStage
+        package let milliseconds: Int
     }
 
     package let appContext: AppContext

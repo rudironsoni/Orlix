@@ -7,11 +7,11 @@ import OrlixModels
 import OrlixSSH
 #endif
 @MainActor
-struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
+package struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
     private let resumeStore: any EternalTerminalResumeStoring
     private let sshClientFactory: SSHClientFactory
 
-    init(
+    package init(
         resumeStore: any EternalTerminalResumeStoring,
         sshClientFactory: SSHClientFactory
     ) {
@@ -19,7 +19,7 @@ struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
         self.sshClientFactory = sshClientFactory
     }
 
-    func prepareSession(
+    package func prepareSession(
         request: EternalTerminalSessionRequest,
         startupPlanProvider: @Sendable @escaping (SSHClient) async throws -> TerminalShellStartupPlan,
         isCurrentOwner: @MainActor @Sendable @escaping () -> Bool
@@ -104,7 +104,7 @@ struct LiveEternalTerminalSessionPreparer: EternalTerminalSessionPreparing {
         }
     }
 
-    func discardResumeState(for paneId: UUID) throws {
+    package func discardResumeState(for paneId: UUID) throws {
         try resumeStore.deleteResumeState(for: paneId)
     }
 }
@@ -115,7 +115,7 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
     private let paneId: UUID
     private let resumeStore: any EternalTerminalResumeStoring
 
-    nonisolated init(
+    nonisolated package init(
         session: ETTerminalSession,
         executor: SSHETBootstrapExecutor,
         paneId: UUID,
@@ -127,11 +127,11 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         self.resumeStore = resumeStore
     }
 
-    nonisolated var output: AsyncStream<Data> {
+    nonisolated package var output: AsyncStream<Data> {
         session.output
     }
 
-    nonisolated var stateChanges: AsyncStream<EternalTerminalSessionState> {
+    nonisolated package var stateChanges: AsyncStream<EternalTerminalSessionState> {
         let upstream = session.stateChanges
         return AsyncStream(bufferingPolicy: .bufferingNewest(16)) { continuation in
             let task = Task {
@@ -147,15 +147,15 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         }
     }
 
-    func connect() async throws {
+    package func connect() async throws {
         try await mapFailure { try await session.connect() }
     }
 
-    func send(_ data: Data) async throws {
+    package func send(_ data: Data) async throws {
         try await mapFailure { try await session.send(data) }
     }
 
-    func resize(
+    package func resize(
         rows: Int,
         cols: Int,
         pixelWidth: Int?,
@@ -171,11 +171,11 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         }
     }
 
-    func notifyNetworkPathChanged() async {
+    package func notifyNetworkPathChanged() async {
         await session.notifyNetworkPathChanged()
     }
 
-    func persistCheckpoint(
+    package func persistCheckpoint(
         ifCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async throws {
         try await mapFailure {
@@ -187,7 +187,7 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         }
     }
 
-    func prepareForApplicationBackground(
+    package func prepareForApplicationBackground(
         ifCurrentOwner: @MainActor @Sendable @escaping () -> Bool
     ) async throws {
         try await mapFailure {
@@ -199,15 +199,15 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         }
     }
 
-    func resumeFromApplicationBackground() async {
+    package func resumeFromApplicationBackground() async {
         await session.resumeFromApplicationBackground()
     }
 
-    func preparedStartupPlan() async -> TerminalShellStartupPlan {
+    package func preparedStartupPlan() async -> TerminalShellStartupPlan {
         await executor.preparedStartupPlan()
     }
 
-    func withBootstrapSSHClient<Result: Sendable>(
+    package func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {
         try await mapFailure {
@@ -215,7 +215,7 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
         }
     }
 
-    func close() async {
+    package func close() async {
         await session.close()
     }
 
@@ -232,8 +232,8 @@ private nonisolated struct LiveEternalTerminalSession: EternalTerminalSession {
     }
 }
 
-nonisolated enum EternalTerminalVendorErrorMapper {
-    static func state(for state: ETConnectionState) -> EternalTerminalSessionState {
+nonisolated package enum EternalTerminalVendorErrorMapper {
+    static package func state(for state: ETConnectionState) -> EternalTerminalSessionState {
         switch state {
         case .idle:
             .idle
@@ -254,7 +254,7 @@ nonisolated enum EternalTerminalVendorErrorMapper {
         }
     }
 
-    static func failure(for error: Error) -> EternalTerminalSessionFailure {
+    static package func failure(for error: Error) -> EternalTerminalSessionFailure {
         if let failure = error as? EternalTerminalSessionFailure {
             return failure
         }
@@ -300,16 +300,16 @@ nonisolated enum EternalTerminalVendorErrorMapper {
     }
 }
 
-extension EternalTerminalFailureAnalytics {
-    nonisolated static func analyticsCategory(for error: Error) -> String {
+package extension EternalTerminalFailureAnalytics {
+    nonisolated static package func analyticsCategory(for error: Error) -> String {
         analyticsCategory(
             for: EternalTerminalVendorErrorMapper.failure(for: error)
         )
     }
 }
 
-extension EternalTerminalResumePolicy {
-    nonisolated static func shouldDiscardCredentials(after error: Error) -> Bool {
+package extension EternalTerminalResumePolicy {
+    nonisolated static package func shouldDiscardCredentials(after error: Error) -> Bool {
         shouldDiscardCredentials(
             after: EternalTerminalVendorErrorMapper.failure(for: error)
         )

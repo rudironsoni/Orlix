@@ -10,9 +10,9 @@ nonisolated package struct TerminalReconnectPaneFacts: Sendable {
 }
 
 #if os(macOS)
-nonisolated struct MacTerminalRecoveryCandidate: Sendable {
-    let paneId: UUID
-    let strategy: MacTerminalRecoveryPolicy.ReadyStrategy
+nonisolated package struct MacTerminalRecoveryCandidate: Sendable {
+    package let paneId: UUID
+    package let strategy: MacTerminalRecoveryPolicy.ReadyStrategy
 }
 #endif
 
@@ -46,11 +46,11 @@ final package class TerminalReconnectCoordinator: ObservableObject {
     }
 
     nonisolated package struct Attempt: Hashable, Sendable {
-        let id: UUID
-        let paneId: UUID
-        let generation: UUID
-        let startedAt: Date
-        var phase: Phase
+        package let id: UUID
+        package let paneId: UUID
+        package let generation: UUID
+        package let startedAt: Date
+        package var phase: Phase
     }
 
     nonisolated package enum EventStage: String, Equatable, Sendable {
@@ -70,9 +70,9 @@ final package class TerminalReconnectCoordinator: ObservableObject {
     }
 
     nonisolated package struct Event: Sendable {
-        let attempt: Attempt
-        let stage: EventStage
-        let systemUptime: TimeInterval
+        package let attempt: Attempt
+        package let stage: EventStage
+        package let systemUptime: TimeInterval
     }
 
     private nonisolated enum CleanupOutcome: Equatable, Sendable {
@@ -86,20 +86,20 @@ final package class TerminalReconnectCoordinator: ObservableObject {
     package typealias EventHandler = @MainActor @Sendable (Event) -> Void
 
     private struct Record {
-        var attempt: Attempt
-        var requiresReadyNetwork: Bool
-        var task: Task<Void, Never>?
+        package var attempt: Attempt
+        package var requiresReadyNetwork: Bool
+        package var task: Task<Void, Never>?
     }
 
     private struct AutomaticContext {
-        var sceneIsActive: Bool
-        var automaticReconnectAllowed: Bool
+        package var sceneIsActive: Bool
+        package var automaticReconnectAllowed: Bool
     }
 
     private final class AutomaticRetry {
-        var task: Task<Void, Never>?
+        package var task: Task<Void, Never>?
 
-        func cancel() {
+        package func cancel() {
             task?.cancel()
         }
     }

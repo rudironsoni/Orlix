@@ -5,14 +5,14 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct TerminalAccessoryObserverCleanupRequest: Sendable {
+nonisolated package struct TerminalAccessoryObserverCleanupRequest: Sendable {
     private let cleanup: @MainActor @Sendable () -> Void
 
-    init(cleanup: @escaping @MainActor @Sendable () -> Void) {
+    package init(cleanup: @escaping @MainActor @Sendable () -> Void) {
         self.cleanup = cleanup
     }
 
-    func perform() {
+    package func perform() {
         Task { @MainActor in
             cleanup()
         }
@@ -26,7 +26,7 @@ private final class TerminalAccessoryObserverCleanup {
     private var lifecycleObserverID: UUID?
     private var resolutionObserverID: UUID?
 
-    init(
+    package init(
         syncLifecycle: any TerminalAccessorySyncLifecycle,
         resolutionSource: any TerminalAccessoryResolutionSource
     ) {
@@ -34,17 +34,17 @@ private final class TerminalAccessoryObserverCleanup {
         self.resolutionSource = resolutionSource
     }
 
-    var request: TerminalAccessoryObserverCleanupRequest {
+    package var request: TerminalAccessoryObserverCleanupRequest {
         TerminalAccessoryObserverCleanupRequest { [self] in
             removeObservers()
         }
     }
 
-    func registerLifecycleObserver(_ id: UUID) {
+    package func registerLifecycleObserver(_ id: UUID) {
         lifecycleObserverID = id
     }
 
-    func registerResolutionObserver(_ id: UUID) {
+    package func registerResolutionObserver(_ id: UUID) {
         resolutionObserverID = id
     }
 

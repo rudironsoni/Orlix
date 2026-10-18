@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 import OrlixModels
 import OrlixSettings
 #endif
-struct CustomFontLibraryView: View {
-    enum Presentation {
+package struct CustomFontLibraryView: View {
+    package enum Presentation {
         case importer
         case deleteConfirmation(TerminalFont.ID)
         case proUpgrade
@@ -14,22 +14,22 @@ struct CustomFontLibraryView: View {
     }
 
     #if os(macOS)
-    let onClose: () -> Void
+    package let onClose: () -> Void
     #endif
 
-    @EnvironmentObject var fontStore: TerminalFontStore
-    @EnvironmentObject var storeManager: StoreManager
-    @State var presentation: Presentation?
+    @EnvironmentObject package var fontStore: TerminalFontStore
+    @EnvironmentObject package var storeManager: StoreManager
+    @State package var presentation: Presentation?
 
     #if os(macOS)
-    init(onClose: @escaping () -> Void) {
+    package init(onClose: @escaping () -> Void) {
         self.onClose = onClose
     }
     #else
-    init() {}
+    package init() {}
     #endif
 
-    var body: some View {
+    package var body: some View {
         platformBody
             .fileImporter(
                 isPresented: importerBinding,
@@ -64,7 +64,7 @@ struct CustomFontLibraryView: View {
             .adaptiveSoftScrollEdges()
     }
 
-    var emptyState: some View {
+    package var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "textformat")
                 .font(.system(size: 44))
@@ -80,13 +80,13 @@ struct CustomFontLibraryView: View {
         .padding()
     }
 
-    var libraryNote: some View {
+    package var libraryNote: some View {
         Text("Fonts stay inside Orlix. iCloud Sync keeps them on your devices.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
 
-    func requestImport() {
+    package func requestImport() {
         guard storeManager.allowsProFeatures else {
             presentation = .proUpgrade
             return
@@ -94,7 +94,7 @@ struct CustomFontLibraryView: View {
         presentation = .importer
     }
 
-    func deleteButton(for font: TerminalFont) -> some View {
+    package func deleteButton(for font: TerminalFont) -> some View {
         Button("Delete", role: .destructive) {
             presentation = .deleteConfirmation(font.id)
         }
@@ -187,12 +187,12 @@ struct CustomFontLibraryView: View {
     }
 }
 
-extension CustomFontLibraryView {
-    struct FontRow: View {
-        let font: TerminalFont
-        let isAvailable: Bool
+package extension CustomFontLibraryView {
+    package struct FontRow: View {
+        package let font: TerminalFont
+        package let isAvailable: Bool
 
-        var body: some View {
+        package var body: some View {
             HStack(spacing: 10) {
                 Image(systemName: "textformat")
                     .foregroundStyle(.secondary)

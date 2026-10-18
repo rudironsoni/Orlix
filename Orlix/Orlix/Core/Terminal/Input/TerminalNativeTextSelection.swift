@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
-    nonisolated enum Phase: Equatable, Sendable {
+nonisolated package struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
+    nonisolated package enum Phase: Equatable, Sendable {
         case inactive
         case prepared(selection: NSRange?, restoreTerminalInput: Bool)
         case interacting(selection: NSRange?, restoreTerminalInput: Bool)
@@ -11,7 +11,7 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
 
     private(set) var phase: Phase = .inactive
 
-    var selection: NSRange? {
+    package var selection: NSRange? {
         switch phase {
         case .prepared(let selection, _), .interacting(let selection, _):
             selection
@@ -22,14 +22,14 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
         }
     }
 
-    var interactionIsActive: Bool {
+    package var interactionIsActive: Bool {
         if case .interacting = phase {
             return true
         }
         return false
     }
 
-    var keepsFirstResponder: Bool {
+    package var keepsFirstResponder: Bool {
         switch phase {
         case .prepared, .interacting, .selected:
             true
@@ -38,25 +38,25 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
         }
     }
 
-    var shouldRefreshSnapshot: Bool {
+    package var shouldRefreshSnapshot: Bool {
         interactionIsActive || selection != nil
     }
 
-    mutating func prepare(restoreTerminalInput: Bool) {
+    mutating package func prepare(restoreTerminalInput: Bool) {
         phase = .prepared(
             selection: selection,
             restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
         )
     }
 
-    mutating func beginInteraction(restoreTerminalInput: Bool) {
+    mutating package func beginInteraction(restoreTerminalInput: Bool) {
         phase = .interacting(
             selection: selection,
             restoreTerminalInput: shouldRestoreTerminalInput || restoreTerminalInput
         )
     }
 
-    mutating func endInteraction(restorationID: UUID = UUID()) -> UUID? {
+    mutating package func endInteraction(restorationID: UUID = UUID()) -> UUID? {
         if let selection, selection.length > 0 {
             phase = .selected(
                 range: selection,
@@ -67,7 +67,7 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
         return beginRestorationIfNeeded(id: restorationID)
     }
 
-    mutating func setSelection(
+    mutating package func setSelection(
         _ selection: NSRange?,
         restorationID: UUID = UUID()
     ) -> UUID? {
@@ -94,11 +94,11 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
         return nil
     }
 
-    mutating func cancel() {
+    mutating package func cancel() {
         phase = .inactive
     }
 
-    mutating func completeRestoration(id: UUID) -> Bool {
+    mutating package func completeRestoration(id: UUID) -> Bool {
         guard case .restoringTerminalInput(let pendingID) = phase,
               pendingID == id else {
             return false
@@ -131,24 +131,24 @@ nonisolated struct TerminalNativeSelectionLifecycle: Equatable, Sendable {
 #if os(iOS)
 import UIKit
 
-final class TerminalNativeTextPosition: UITextPosition {
-    let offset: Int
+final package class TerminalNativeTextPosition: UITextPosition {
+    package let offset: Int
 
-    init(offset: Int) {
+    package init(offset: Int) {
         self.offset = offset
         super.init()
     }
 }
 
-final class TerminalNativeTextRange: UITextRange {
-    let startPosition: TerminalNativeTextPosition
-    let endPosition: TerminalNativeTextPosition
+final package class TerminalNativeTextRange: UITextRange {
+    package let startPosition: TerminalNativeTextPosition
+    package let endPosition: TerminalNativeTextPosition
 
-    override var start: UITextPosition { startPosition }
-    override var end: UITextPosition { endPosition }
-    override var isEmpty: Bool { startPosition.offset == endPosition.offset }
+    override package var start: UITextPosition { startPosition }
+    override package var end: UITextPosition { endPosition }
+    override package var isEmpty: Bool { startPosition.offset == endPosition.offset }
 
-    var nsRange: NSRange {
+    package var nsRange: NSRange {
         let location = max(startPosition.offset, 0)
         let end = max(endPosition.offset, location)
         let subtraction = end.subtractingReportingOverflow(location)
@@ -158,7 +158,7 @@ final class TerminalNativeTextRange: UITextRange {
         )
     }
 
-    init(start: Int, end: Int) {
+    package init(start: Int, end: Int) {
         let lowerBound = min(start, end)
         let upperBound = max(start, end)
         self.startPosition = TerminalNativeTextPosition(offset: lowerBound)
@@ -167,52 +167,52 @@ final class TerminalNativeTextRange: UITextRange {
     }
 }
 
-final class TerminalNativeSelectionRect: UITextSelectionRect {
+final package class TerminalNativeSelectionRect: UITextSelectionRect {
     private let storedRect: CGRect
     private let storedContainsStart: Bool
     private let storedContainsEnd: Bool
 
-    init(rect: CGRect, containsStart: Bool, containsEnd: Bool) {
+    package init(rect: CGRect, containsStart: Bool, containsEnd: Bool) {
         self.storedRect = rect
         self.storedContainsStart = containsStart
         self.storedContainsEnd = containsEnd
         super.init()
     }
 
-    override var rect: CGRect { storedRect }
-    override var writingDirection: NSWritingDirection { .leftToRight }
-    override var containsStart: Bool { storedContainsStart }
-    override var containsEnd: Bool { storedContainsEnd }
-    override var isVertical: Bool { false }
+    override package var rect: CGRect { storedRect }
+    override package var writingDirection: NSWritingDirection { .leftToRight }
+    override package var containsStart: Bool { storedContainsStart }
+    override package var containsEnd: Bool { storedContainsEnd }
+    override package var isVertical: Bool { false }
 
     @available(iOS 17.4, *)
-    override var transform: CGAffineTransform { .identity }
+    override package var transform: CGAffineTransform { .identity }
 }
 
-enum TerminalNativeFindDecorationStyle {
+package enum TerminalNativeFindDecorationStyle {
     case found
     case highlighted
 }
 
-struct TerminalNativeFindDecoration {
-    let range: NSRange
-    let style: TerminalNativeFindDecorationStyle
+package struct TerminalNativeFindDecoration {
+    package let range: NSRange
+    package let style: TerminalNativeFindDecorationStyle
 }
 
-final class TerminalNativeFindOverlayView: UIView {
-    struct Highlight {
-        let rect: CGRect
-        let style: TerminalNativeFindDecorationStyle
+final package class TerminalNativeFindOverlayView: UIView {
+    package struct Highlight {
+        package let rect: CGRect
+        package let style: TerminalNativeFindDecorationStyle
     }
 
-    var highlights: [Highlight] = [] {
+    package var highlights: [Highlight] = [] {
         didSet {
             isHidden = highlights.isEmpty
             setNeedsDisplay()
         }
     }
 
-    override init(frame: CGRect) {
+    override package init(frame: CGRect) {
         super.init(frame: frame)
         isOpaque = false
         isHidden = true
@@ -220,11 +220,11 @@ final class TerminalNativeFindOverlayView: UIView {
         isUserInteractionEnabled = false
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func draw(_ rect: CGRect) {
+    override package func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
 
         for highlight in highlights where highlight.style == .found {
@@ -248,25 +248,25 @@ final class TerminalNativeFindOverlayView: UIView {
     }
 }
 
-nonisolated struct TerminalNativeTextSnapshot: Sendable {
-    nonisolated struct Line: Sendable {
-        let text: String
-        let startOffset: Int
-        let utf16Length: Int
+nonisolated package struct TerminalNativeTextSnapshot: Sendable {
+    nonisolated package struct Line: Sendable {
+        package let text: String
+        package let startOffset: Int
+        package let utf16Length: Int
     }
 
-    static let empty = TerminalNativeTextSnapshot(lines: [], cellSize: CGSize(width: 1, height: 1), columns: 1)
+    static package let empty = TerminalNativeTextSnapshot(lines: [], cellSize: CGSize(width: 1, height: 1), columns: 1)
 
-    let lines: [Line]
-    let text: String
-    let cellSize: CGSize
-    let columns: Int
+    package let lines: [Line]
+    package let text: String
+    package let cellSize: CGSize
+    package let columns: Int
 
     private var nsText: NSString {
         text as NSString
     }
 
-    init(lines rawLines: [String], cellSize: CGSize, columns: Int) {
+    package init(lines rawLines: [String], cellSize: CGSize, columns: Int) {
         let sanitizedCellSize = CGSize(width: max(cellSize.width, 1), height: max(cellSize.height, 1))
         self.cellSize = sanitizedCellSize
         self.columns = max(columns, 1)
@@ -286,45 +286,45 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         self.text = rawLines.joined(separator: "\n")
     }
 
-    var length: Int {
+    package var length: Int {
         nsText.length
     }
 
-    func clampedOffset(_ offset: Int) -> Int {
+    package func clampedOffset(_ offset: Int) -> Int {
         min(max(offset, 0), length)
     }
 
-    func clampedRange(_ range: NSRange) -> NSRange {
+    package func clampedRange(_ range: NSRange) -> NSRange {
         let location = clampedOffset(range.location)
         let rangeLength = min(max(range.length, 0), max(length - location, 0))
         return NSRange(location: location, length: rangeLength)
     }
 
-    func upperBound(of range: NSRange) -> Int {
+    package func upperBound(of range: NSRange) -> Int {
         let clamped = clampedRange(range)
         let addition = clamped.location.addingReportingOverflow(clamped.length)
         return addition.overflow ? length : addition.partialValue
     }
 
-    @MainActor func nativeRange(from range: UITextRange?) -> NSRange? {
+    @MainActor package func nativeRange(from range: UITextRange?) -> NSRange? {
         guard let range = range as? TerminalNativeTextRange else { return nil }
         return clampedRange(range.nsRange)
     }
 
-    @MainActor func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
+    @MainActor package func nativeRange(_ range: NSRange?) -> TerminalNativeTextRange? {
         guard let range else { return nil }
         let clamped = clampedRange(range)
         return TerminalNativeTextRange(start: clamped.location, end: upperBound(of: clamped))
     }
 
-    func text(in range: NSRange) -> String? {
+    package func text(in range: NSRange) -> String? {
         guard length > 0 else { return nil }
         let clamped = clampedRange(range)
         guard clamped.length > 0 else { return "" }
         return nsText.substring(with: clamped)
     }
 
-    func offset(for point: CGPoint) -> Int {
+    package func offset(for point: CGPoint) -> Int {
         guard !lines.isEmpty else { return 0 }
         let row = min(max(Int(floor(point.y / cellSize.height)), 0), lines.count - 1)
         let column = min(max(Int(floor(point.x / cellSize.width)), 0), columns)
@@ -332,7 +332,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return clampedOffset(line.startOffset + min(column, line.utf16Length))
     }
 
-    func characterRange(at point: CGPoint) -> NSRange? {
+    package func characterRange(at point: CGPoint) -> NSRange? {
         guard length > 0, !lines.isEmpty else { return nil }
         let offset = offset(for: point)
         let (lineIndex, column) = lineAndColumn(for: offset)
@@ -342,7 +342,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return NSRange(location: line.startOffset + clampedColumn, length: 1)
     }
 
-    func caretRect(for offset: Int) -> CGRect {
+    package func caretRect(for offset: Int) -> CGRect {
         let (lineIndex, column) = lineAndColumn(for: offset)
         let caretWidth = max(2, cellSize.width * 0.08)
         return CGRect(
@@ -353,7 +353,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         ).integral
     }
 
-    @MainActor func firstRect(for range: NSRange) -> CGRect {
+    @MainActor package func firstRect(for range: NSRange) -> CGRect {
         let rects = selectionRects(for: range)
         if let firstRect = rects.first?.rect {
             return firstRect
@@ -361,7 +361,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return caretRect(for: range.location)
     }
 
-    @MainActor func selectionRects(for range: NSRange) -> [TerminalNativeSelectionRect] {
+    @MainActor package func selectionRects(for range: NSRange) -> [TerminalNativeSelectionRect] {
         let clamped = clampedRange(range)
         guard clamped.length > 0, !lines.isEmpty else { return [] }
 
@@ -398,7 +398,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
     }
 
     @available(iOS 16.0, *)
-    @MainActor func searchRanges(
+    @MainActor package func searchRanges(
         query: String,
         options: UITextSearchOptions
     ) -> [NSRange] {
@@ -427,7 +427,7 @@ nonisolated struct TerminalNativeTextSnapshot: Sendable {
         return results
     }
 
-    func lineAndColumn(for offset: Int) -> (line: Int, column: Int) {
+    package func lineAndColumn(for offset: Int) -> (line: Int, column: Int) {
         guard !lines.isEmpty else { return (0, 0) }
 
         let clamped = clampedOffset(offset)

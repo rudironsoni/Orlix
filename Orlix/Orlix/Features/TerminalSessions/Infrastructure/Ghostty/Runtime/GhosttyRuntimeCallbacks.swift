@@ -38,17 +38,17 @@ private nonisolated enum GhosttyRuntimeActionDisposition: Sendable {
 }
 
 private nonisolated struct GhosttyRuntimeActionTarget: Sendable {
-    let app: GhosttyRuntime?
-    let surfaceAddress: UInt?
-    let fallbackTerminalView: GhosttyTerminalView?
-    let description: String
-    let tagRawValue: UInt32
+    package let app: GhosttyRuntime?
+    package let surfaceAddress: UInt?
+    package let fallbackTerminalView: GhosttyTerminalView?
+    package let description: String
+    package let tagRawValue: UInt32
 }
 
 package extension GhosttyRuntime {
     @MainActor
     private struct TitleDeliveryLogCache {
-        static var lastUndeliveredTitleBySurface: [String: String] = [:]
+        static package var lastUndeliveredTitleBySurface: [String: String] = [:]
     }
 
     /// Builds C callbacks outside the app's Main Actor isolation. libghostty may

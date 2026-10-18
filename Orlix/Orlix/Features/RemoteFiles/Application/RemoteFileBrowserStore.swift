@@ -16,32 +16,32 @@ final package class RemoteFileBrowserStore: ObservableObject {
     }
 
     package struct ToolbarCommand: Identifiable, Sendable {
-        let id = UUID()
-        let serverId: UUID
-        let tabId: UUID
-        let action: ToolbarCommandAction
+        package let id = UUID()
+        package let serverId: UUID
+        package let tabId: UUID
+        package let action: ToolbarCommandAction
     }
 
     package struct TransferProgress: Sendable {
-        let completedUnitCount: Int
-        let totalUnitCount: Int
-        let currentItemName: String
+        package let completedUnitCount: Int
+        package let totalUnitCount: Int
+        package let currentItemName: String
     }
 
     package struct BrowserState: Sendable {
-        let serverId: UUID
-        var currentPath: String?
-        var entries: [RemoteFileEntry]
-        var sort: RemoteFileSort
-        var sortDirection: RemoteFileSortDirection
-        var showHiddenFiles: Bool
-        var hasCustomizedHiddenFiles: Bool
-        var directoryPhase: RemoteFileDirectoryPhase
-        var viewerPhase: RemoteFileViewerPhase
-        var isDirectoryTruncated: Bool
-        var filesystemStatus: RemoteFileFilesystemStatus?
+        package let serverId: UUID
+        package var currentPath: String?
+        package var entries: [RemoteFileEntry]
+        package var sort: RemoteFileSort
+        package var sortDirection: RemoteFileSortDirection
+        package var showHiddenFiles: Bool
+        package var hasCustomizedHiddenFiles: Bool
+        package var directoryPhase: RemoteFileDirectoryPhase
+        package var viewerPhase: RemoteFileViewerPhase
+        package var isDirectoryTruncated: Bool
+        package var filesystemStatus: RemoteFileFilesystemStatus?
 
-        init(serverId: UUID, persisted: RemoteFileBrowserPersistedState) {
+        package init(serverId: UUID, persisted: RemoteFileBrowserPersistedState) {
             self.serverId = serverId
             currentPath = persisted.lastVisitedPath.map { RemoteFilePath.normalize($0) }
             entries = []
@@ -55,25 +55,25 @@ final package class RemoteFileBrowserStore: ObservableObject {
             filesystemStatus = nil
         }
 
-        var breadcrumbs: [RemoteFileBreadcrumb] {
+        package var breadcrumbs: [RemoteFileBreadcrumb] {
             guard let currentPath else { return [] }
             return RemoteFilePath.breadcrumbs(for: currentPath)
         }
 
-        var hasLoadedDirectory: Bool { directoryPhase.hasLoadedDirectory }
-        var isLoadingDirectory: Bool { directoryPhase.isLoading }
-        var isLoadingViewer: Bool { viewerPhase.isLoading }
-        var error: RemoteFileBrowserError? { directoryPhase.error }
-        var viewerError: RemoteFileBrowserError? { viewerPhase.error }
-        var viewerPayload: RemoteFileViewerPayload? { viewerPhase.payload }
-        var selectedEntryPath: String? { viewerPhase.selectedEntryPath }
+        package var hasLoadedDirectory: Bool { directoryPhase.hasLoadedDirectory }
+        package var isLoadingDirectory: Bool { directoryPhase.isLoading }
+        package var isLoadingViewer: Bool { viewerPhase.isLoading }
+        package var error: RemoteFileBrowserError? { directoryPhase.error }
+        package var viewerError: RemoteFileBrowserError? { viewerPhase.error }
+        package var viewerPayload: RemoteFileViewerPayload? { viewerPhase.payload }
+        package var selectedEntryPath: String? { viewerPhase.selectedEntryPath }
     }
 
     package struct DirectorySnapshot: Sendable {
-        let path: String
-        let entries: [RemoteFileEntry]
-        let isTruncated: Bool
-        let filesystemStatus: RemoteFileFilesystemStatus?
+        package let path: String
+        package let entries: [RemoteFileEntry]
+        package let isTruncated: Bool
+        package let filesystemStatus: RemoteFileFilesystemStatus?
     }
 
     @Published private(set) var states: [UUID: BrowserState] = [:]
@@ -577,8 +577,8 @@ final package class RemoteFileBrowserStore: ObservableObject {
     }
 }
 
-extension String {
-    var nonEmptyString: String? {
+package extension String {
+    package var nonEmptyString: String? {
         isEmpty ? nil : self
     }
 }

@@ -8,13 +8,13 @@ import SwiftUI
 import AppKit
 #endif
 
-struct AboutView: View {
+package struct AboutView: View {
     @State private var isShowingOpenSourceLicenses = false
 
     private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.1"
     private let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             // App icon and name
             VStack(spacing: 12) {
@@ -122,11 +122,11 @@ struct AboutView: View {
 }
 
 private struct LinkButton: View {
-    let title: String
-    let icon: String
-    let url: String
+    package let title: String
+    package let icon: String
+    package let url: String
 
-    var body: some View {
+    package var body: some View {
         Link(destination: URL(string: url)!) {
             AboutButtonLabel(title: title, icon: icon)
         }
@@ -135,11 +135,11 @@ private struct LinkButton: View {
 }
 
 private struct AboutButtonLabel: View {
-    let title: String
-    let icon: String
-    var trailingIcon = "arrow.up.right"
+    package let title: String
+    package let icon: String
+    package var trailingIcon = "arrow.up.right"
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .frame(width: 18, height: 18)

@@ -7,10 +7,10 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct RemoteFilePreviewLoader {
-    nonisolated init() {}
+package struct RemoteFilePreviewLoader {
+    nonisolated package init() {}
 
-    func previewKind(for entry: RemoteFileEntry, data: Data) -> RemoteFilePreviewKind {
+    package func previewKind(for entry: RemoteFileEntry, data: Data) -> RemoteFilePreviewKind {
         if RemoteFilePreviewDetector.decodeTextPreview(from: data) != nil {
             return .text
         }
@@ -29,11 +29,11 @@ struct RemoteFilePreviewLoader {
         return .unavailable
     }
 
-    func decodeTextPreview(from data: Data) -> String? {
+    package func decodeTextPreview(from data: Data) -> String? {
         RemoteFilePreviewDetector.decodeTextPreview(from: data)
     }
 
-    func validateDownloadedPreview(
+    package func validateDownloadedPreview(
         at url: URL,
         kind: RemoteFilePreviewKind,
         logger: Logger

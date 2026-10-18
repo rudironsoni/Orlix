@@ -6,7 +6,7 @@ import OrlixSettings
 #endif
 private extension View {
     @ViewBuilder
-    func removingSidebarToggle() -> some View {
+    package func removingSidebarToggle() -> some View {
         if #available(macOS 14.0, *) {
             toolbar(removing: .sidebarToggle)
         } else {

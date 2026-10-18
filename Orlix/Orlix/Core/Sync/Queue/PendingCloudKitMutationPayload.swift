@@ -60,6 +60,6 @@ nonisolated package struct PendingCloudKitPayloadEnvelope: Codable, Equatable, S
     }
 }
 
-nonisolated enum PendingCloudKitPayloadEnvelopeError: Error, Equatable {
+nonisolated package enum PendingCloudKitPayloadEnvelopeError: Error, Equatable {
     case invalidRoutingMetadata
 }

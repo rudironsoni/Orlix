@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-extension CustomThemeSaveSheet {
-    func platformThemeNameField(name: Binding<String>) -> some View {
+package extension CustomThemeSaveSheet {
+    package func platformThemeNameField(name: Binding<String>) -> some View {
         HStack(spacing: 10) {
             Text("Name")
             Spacer(minLength: 8)
@@ -11,7 +11,7 @@ extension CustomThemeSaveSheet {
         }
     }
 
-    var platformBody: some View {
+    package var platformBody: some View {
         NavigationView {
             formContent
                 .navigationTitle("Save Custom Theme")

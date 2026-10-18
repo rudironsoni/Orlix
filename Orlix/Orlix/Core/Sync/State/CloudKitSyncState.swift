@@ -15,9 +15,9 @@ nonisolated package struct CloudKitSyncState: Equatable, Sendable {
     }
 
     private struct AvailableContext: Equatable, Sendable {
-        var activeOperations: Set<UUID> = []
-        var latestOperationID: UUID?
-        var latestFailure: String?
+        package var activeOperations: Set<UUID> = []
+        package var latestOperationID: UUID?
+        package var latestFailure: String?
     }
 
     private enum Phase: Equatable, Sendable {

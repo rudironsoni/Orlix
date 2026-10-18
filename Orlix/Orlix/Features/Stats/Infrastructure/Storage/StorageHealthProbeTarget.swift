@@ -3,8 +3,8 @@
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct StorageHealthProbeTarget: Hashable, Sendable {
-    nonisolated enum Kind: Hashable, Sendable {
+nonisolated package struct StorageHealthProbeTarget: Hashable, Sendable {
+    nonisolated package enum Kind: Hashable, Sendable {
         case linux(devicePath: String, isEMMC: Bool)
         case darwin(nativeIdentifier: String, smartctlDevicePath: String?)
         case windows(diskNumber: UInt32)
@@ -13,11 +13,11 @@ nonisolated struct StorageHealthProbeTarget: Hashable, Sendable {
         case netBSD(devicePath: String)
     }
 
-    let deviceID: StorageDeviceIdentity
-    let kind: Kind
+    package let deviceID: StorageDeviceIdentity
+    package let kind: Kind
 }
 
-nonisolated enum StorageHealthResolvedMember: Hashable, Sendable {
+nonisolated package enum StorageHealthResolvedMember: Hashable, Sendable {
     case target(
         role: StorageHealthMemberRole,
         StorageHealthProbeTarget,
@@ -29,14 +29,14 @@ nonisolated enum StorageHealthResolvedMember: Hashable, Sendable {
         reason: StorageHealthUnavailableReason
     )
 
-    var id: StorageDeviceIdentity {
+    package var id: StorageDeviceIdentity {
         switch self {
         case .target(_, let target, _): target.deviceID
         case .unresolved(let id, _, _): id
         }
     }
 
-    var role: StorageHealthMemberRole {
+    package var role: StorageHealthMemberRole {
         switch self {
         case .target(let role, _, _), .unresolved(_, let role, _): role
         }
@@ -44,13 +44,13 @@ nonisolated enum StorageHealthResolvedMember: Hashable, Sendable {
 
 }
 
-nonisolated struct StorageHealthResolvedTopology: Hashable, Sendable {
-    let kind: StorageTopologyKind
-    let name: String?
-    let findings: [StorageHealthFinding]
-    let members: [StorageHealthResolvedMember]
+nonisolated package struct StorageHealthResolvedTopology: Hashable, Sendable {
+    package let kind: StorageTopologyKind
+    package let name: String?
+    package let findings: [StorageHealthFinding]
+    package let members: [StorageHealthResolvedMember]
 
-    var coverage: StorageHealthCoverage {
+    package var coverage: StorageHealthCoverage {
         members.contains {
             if case .unresolved = $0 { return true }
             return false

@@ -3,8 +3,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalAutoReconnectPolicy {
-    static func shouldScheduleRetry(
+nonisolated package enum TerminalAutoReconnectPolicy {
+    static package func shouldScheduleRetry(
         automaticReconnectAllowed: Bool,
         hasEstablishedConnection: Bool,
         connectionState: ConnectionState
@@ -16,7 +16,7 @@ nonisolated enum TerminalAutoReconnectPolicy {
         return false
     }
 
-    static func shouldAttempt(
+    static package func shouldAttempt(
         sceneIsActive: Bool,
         applicationIsActive: Bool,
         appIsLocked: Bool,

@@ -1,16 +1,16 @@
 import CloudKit
 import Foundation
 
-nonisolated struct CloudKitSyncBudget: Sendable {
-    struct Limits: Sendable {
-        let maximumRecords: Int
-        let maximumDeletions: Int
-        let maximumAggregateBytes: Int
-        let maximumStringBytes: Int
-        let maximumDataBytes: Int
-        let maximumCollectionCount: Int
+nonisolated package struct CloudKitSyncBudget: Sendable {
+    package struct Limits: Sendable {
+        package let maximumRecords: Int
+        package let maximumDeletions: Int
+        package let maximumAggregateBytes: Int
+        package let maximumStringBytes: Int
+        package let maximumDataBytes: Int
+        package let maximumCollectionCount: Int
 
-        static let standard = Limits(
+        static package let standard = Limits(
             maximumRecords: 10_000,
             maximumDeletions: 10_000,
             maximumAggregateBytes: 32 * 1024 * 1024,
@@ -20,20 +20,20 @@ nonisolated struct CloudKitSyncBudget: Sendable {
         )
     }
 
-    let limits: Limits
+    package let limits: Limits
     private(set) var recordCount = 0
     private(set) var deletionCount = 0
     private(set) var aggregateBytes = 0
 
-    init(limits: Limits = .standard) {
+    package init(limits: Limits = .standard) {
         self.limits = limits
     }
 
-    var remainingRecords: Int { limits.maximumRecords - recordCount }
-    var remainingDeletions: Int { limits.maximumDeletions - deletionCount }
-    var remainingBytes: Int { limits.maximumAggregateBytes - aggregateBytes }
+    package var remainingRecords: Int { limits.maximumRecords - recordCount }
+    package var remainingDeletions: Int { limits.maximumDeletions - deletionCount }
+    package var remainingBytes: Int { limits.maximumAggregateBytes - aggregateBytes }
 
-    mutating func recordBatch(
+    mutating package func recordBatch(
         records: Int,
         deletions: Int,
         aggregateBytes bytes: Int
@@ -57,7 +57,7 @@ nonisolated struct CloudKitSyncBudget: Sendable {
         aggregateBytes = newAggregateBytes
     }
 
-    func requireCapacityForNextPage() throws {
+    package func requireCapacityForNextPage() throws {
         guard remainingRecords > 0 else {
             throw CloudKitSyncBudgetError.tooManyRecords
         }
@@ -77,7 +77,7 @@ nonisolated struct CloudKitSyncBudget: Sendable {
     }
 }
 
-nonisolated enum CloudKitSyncBudgetError: LocalizedError, Equatable {
+nonisolated package enum CloudKitSyncBudgetError: LocalizedError, Equatable {
     case tooManyRecords
     case tooManyDeletions
     case aggregateDataTooLarge
@@ -86,7 +86,7 @@ nonisolated enum CloudKitSyncBudgetError: LocalizedError, Equatable {
     case unsupportedFieldType
     case invalidSize
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .tooManyRecords:
             return "iCloud sync returned too many records"
@@ -106,8 +106,8 @@ nonisolated enum CloudKitSyncBudgetError: LocalizedError, Equatable {
     }
 }
 
-nonisolated enum CloudKitRecordSizer {
-    static func byteCount(
+nonisolated package enum CloudKitRecordSizer {
+    static package func byteCount(
         of record: CKRecord,
         limits: CloudKitSyncBudget.Limits
     ) throws -> Int {

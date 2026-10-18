@@ -4,14 +4,14 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum WorkspaceCloudKitRecordCodec {
-    static let recordType = "Workspace"
-    static let recordKeys = [
+nonisolated package enum WorkspaceCloudKitRecordCodec {
+    static package let recordType = "Workspace"
+    static package let recordKeys = [
         "name", "colorHex", "icon", "order", "createdAt", "updatedAt",
         "lastSelectedEnvironmentId", "lastSelectedServerId", "environments"
     ]
 
-    static func workspace(from record: CKRecord, now: Date) -> Workspace? {
+    static package func workspace(from record: CKRecord, now: Date) -> Workspace? {
         guard let id = UUID(uuidString: record.recordID.recordName),
               let name = record["name"] as? String,
               let colorHex = record["colorHex"] as? String else {
@@ -42,7 +42,7 @@ nonisolated enum WorkspaceCloudKitRecordCodec {
         )
     }
 
-    static func record(
+    static package func record(
         for workspace: Workspace,
         in zoneID: CKRecordZone.ID,
         now: Date

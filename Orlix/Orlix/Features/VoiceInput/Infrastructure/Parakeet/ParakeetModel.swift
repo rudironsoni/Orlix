@@ -27,7 +27,7 @@ nonisolated public struct PreprocessConfig: Codable {
         Int(windowStride * Float(sampleRate))
     }
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case normalize
         case windowSize = "window_size"
@@ -86,7 +86,7 @@ nonisolated public struct ConformerConfig: Codable {
         posBiasV.map { MLXArray($0) }
     }
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case featIn = "feat_in"
         case nLayers = "n_layers"
         case dModel = "d_model"
@@ -113,7 +113,7 @@ nonisolated public struct PredictNetworkConfig: Codable {
     public let predRNNLayers: Int
     public let rnnHiddenSize: Int?
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case predHidden = "pred_hidden"
         case predRNNLayers = "pred_rnn_layers"
         case rnnHiddenSize = "rnn_hidden_size"
@@ -126,7 +126,7 @@ nonisolated public struct JointNetworkConfig: Codable {
     public let encoderHidden: Int
     public let predHidden: Int
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case jointHidden = "joint_hidden"
         case activation
         case encoderHidden = "encoder_hidden"
@@ -139,7 +139,7 @@ nonisolated public struct PredictConfig: Codable {
     public let vocabSize: Int
     public let prednet: PredictNetworkConfig
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case blankAsPad = "blank_as_pad"
         case vocabSize = "vocab_size"
         case prednet
@@ -152,7 +152,7 @@ nonisolated public struct JointConfig: Codable {
     public let jointnet: JointNetworkConfig
     public let numExtraOutputs: Int
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case numClasses = "num_classes"
         case vocabulary
         case jointnet
@@ -173,7 +173,7 @@ nonisolated public struct TDTDecodingConfig: Codable {
     public let durations: [Int]
     public let greedy: [String: Any]?
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
         case durations
         case greedy
@@ -731,10 +731,10 @@ nonisolated private func mergeLongestContiguous(
 // MARK: - Streaming Support
 
 nonisolated public class StreamingParakeet {
-    let model: ParakeetTDT
-    let contextSize: (Int, Int)
-    let depth: Int
-    let decodingConfig: DecodingConfig
+    package let model: ParakeetTDT
+    package let contextSize: (Int, Int)
+    package let depth: Int
+    package let decodingConfig: DecodingConfig
 
     private var audioBuffer: MLXArray
     private var decoderHidden: (MLXArray, MLXArray)?
@@ -814,7 +814,7 @@ nonisolated public class StreamingParakeet {
     }
 }
 
-extension ParakeetTDT {
+package extension ParakeetTDT {
     public func transcribeStream(
         contextSize: (Int, Int) = (256, 256),
         depth: Int = 1

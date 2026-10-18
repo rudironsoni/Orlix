@@ -2,13 +2,13 @@ import Foundation
 import Combine
 import os.log
 
-enum MLXModelKind: String, CaseIterable, Identifiable {
+package enum MLXModelKind: String, CaseIterable, Identifiable {
     case whisper
     case parakeetTDT
 
-    nonisolated var id: String { rawValue }
+    nonisolated package var id: String { rawValue }
 
-    nonisolated var displayName: String {
+    nonisolated package var displayName: String {
         switch self {
         case .whisper:
             return String(localized: "MLX Whisper")
@@ -17,7 +17,7 @@ enum MLXModelKind: String, CaseIterable, Identifiable {
         }
     }
 
-    nonisolated var folderName: String {
+    nonisolated package var folderName: String {
         switch self {
         case .whisper:
             return "whisper"
@@ -27,8 +27,8 @@ enum MLXModelKind: String, CaseIterable, Identifiable {
     }
 }
 
-nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
-    nonisolated enum Phase: Equatable, Sendable {
+nonisolated package struct MLXDownloadOperationState: Equatable, Sendable {
+    nonisolated package enum Phase: Equatable, Sendable {
         case idle
         case resolving(operationID: UUID)
         case downloading(operationID: UUID, taskIdentifier: Int)
@@ -37,26 +37,26 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
 
     private(set) var phase: Phase = .idle
 
-    mutating func start() -> UUID? {
+    mutating package func start() -> UUID? {
         guard phase == .idle else { return nil }
         let operationID = UUID()
         phase = .resolving(operationID: operationID)
         return operationID
     }
 
-    mutating func beginTask(operationID: UUID, taskIdentifier: Int) -> Bool {
+    mutating package func beginTask(operationID: UUID, taskIdentifier: Int) -> Bool {
         guard phase == .resolving(operationID: operationID) else { return false }
         phase = .downloading(operationID: operationID, taskIdentifier: taskIdentifier)
         return true
     }
 
-    func accepts(taskIdentifier: Int) -> Bool {
+    package func accepts(taskIdentifier: Int) -> Bool {
         guard case .downloading(_, let activeTaskIdentifier) = phase else { return false }
         return activeTaskIdentifier == taskIdentifier
     }
 
     @discardableResult
-    mutating func finishTask(taskIdentifier: Int) -> Bool {
+    mutating package func finishTask(taskIdentifier: Int) -> Bool {
         guard case .downloading(let operationID, let activeTaskIdentifier) = phase,
               activeTaskIdentifier == taskIdentifier else { return false }
         phase = .resolving(operationID: operationID)
@@ -64,14 +64,14 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func finish(operationID: UUID) -> Bool {
+    mutating package func finish(operationID: UUID) -> Bool {
         guard phase == .resolving(operationID: operationID) else { return false }
         phase = .idle
         return true
     }
 
     @discardableResult
-    mutating func cancel(operationID: UUID) -> Bool {
+    mutating package func cancel(operationID: UUID) -> Bool {
         let activeOperationID: UUID
         switch phase {
         case .idle, .shutdown:
@@ -84,7 +84,7 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
         return true
     }
 
-    func isActive(operationID: UUID) -> Bool {
+    package func isActive(operationID: UUID) -> Bool {
         switch phase {
         case .idle, .shutdown:
             return false
@@ -93,21 +93,21 @@ nonisolated struct MLXDownloadOperationState: Equatable, Sendable {
         }
     }
 
-    mutating func shutdown() {
+    mutating package func shutdown() {
         phase = .shutdown
     }
 
-    var isShutdown: Bool {
+    package var isShutdown: Bool {
         phase == .shutdown
     }
 }
 
 @MainActor
-struct MLXModelSessionLifecycle {
-    let configuration: URLSessionConfiguration
-    let invalidate: @MainActor (URLSession) -> Void
+package struct MLXModelSessionLifecycle {
+    package let configuration: URLSessionConfiguration
+    package let invalidate: @MainActor (URLSession) -> Void
 
-    static var live: Self {
+    static package var live: Self {
         MLXModelSessionLifecycle(
             configuration: .default,
             invalidate: { $0.invalidateAndCancel() }
@@ -115,14 +115,14 @@ struct MLXModelSessionLifecycle {
     }
 }
 
-nonisolated struct MLXModelManagerOperations: Sendable {
-    let adoptLegacyDownload: @Sendable (
+nonisolated package struct MLXModelManagerOperations: Sendable {
+    package let adoptLegacyDownload: @Sendable (
         _ root: URL,
         _ kind: MLXModelKind,
         _ modelID: String
     ) async -> MLXLegacyModelAdoptionResult
 
-    static let live = MLXModelManagerOperations(
+    static package let live = MLXModelManagerOperations(
         adoptLegacyDownload: { root, kind, modelID in
             MLXModelLegacyAdopter.adoptIfPossible(
                 root: root,
@@ -136,10 +136,10 @@ nonisolated struct MLXModelManagerOperations: Sendable {
 @MainActor
 final package class MLXModelManager: NSObject, ObservableObject {
     package struct DownloadProgress: Equatable {
-        var fraction: Double
-        var bytesDownloaded: Int64
-        var totalBytes: Int64
-        var estimatedSecondsRemaining: Int?
+        package var fraction: Double
+        package var bytesDownloaded: Int64
+        package var totalBytes: Int64
+        package var estimatedSecondsRemaining: Int?
     }
 
     package enum DownloadState: Equatable {
@@ -205,23 +205,23 @@ final package class MLXModelManager: NSObject, ObservableObject {
     }
 
     package struct DownloadItem {
-        let url: URL
-        let destination: URL
-        let expectedBytes: Int64
-        let sha256: String
+        package let url: URL
+        package let destination: URL
+        package let expectedBytes: Int64
+        package let sha256: String
     }
 
     private struct DownloadContext {
-        let modelID: String
-        let manifest: MLXModelDownloadManifest
-        let finalDirectory: URL
-        let stagingDirectory: URL
+        package let modelID: String
+        package let manifest: MLXModelDownloadManifest
+        package let finalDirectory: URL
+        package let stagingDirectory: URL
     }
 
     private struct ActiveFileDownload {
-        let task: URLSessionDownloadTask
-        let item: DownloadItem
-        let continuation: CheckedContinuation<URL, Error>
+        package let task: URLSessionDownloadTask
+        package let item: DownloadItem
+        package let continuation: CheckedContinuation<URL, Error>
     }
 
     package var modelDirectory: URL {
@@ -710,7 +710,7 @@ final package class MLXModelManager: NSObject, ObservableObject {
     }
 }
 
-package extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
+extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
     @MainActor
     package func urlSession(
         _ session: URLSession,

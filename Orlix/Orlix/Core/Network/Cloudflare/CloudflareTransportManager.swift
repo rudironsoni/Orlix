@@ -2,17 +2,17 @@ import Foundation
 import Cloudflared
 import os.log
 
-nonisolated struct CloudflareMetadataBodyBudget: Sendable {
+nonisolated package struct CloudflareMetadataBodyBudget: Sendable {
     private(set) var receivedBytes = 0
-    let maximumBytes: Int
+    package let maximumBytes: Int
 
-    func validateExpectedContentLength(_ expectedContentLength: Int64) throws {
+    package func validateExpectedContentLength(_ expectedContentLength: Int64) throws {
         guard expectedContentLength < 0 || expectedContentLength <= Int64(maximumBytes) else {
             throw CloudflareMetadataRequestError.responseTooLarge
         }
     }
 
-    mutating func record(byteCount: Int) throws {
+    mutating package func record(byteCount: Int) throws {
         guard byteCount >= 0,
               byteCount <= maximumBytes - min(receivedBytes, maximumBytes) else {
             throw CloudflareMetadataRequestError.responseTooLarge
@@ -21,11 +21,11 @@ nonisolated struct CloudflareMetadataBodyBudget: Sendable {
     }
 }
 
-nonisolated enum CloudflareMetadataRequestError: LocalizedError {
+nonisolated package enum CloudflareMetadataRequestError: LocalizedError {
     case nonHTTPResponse
     case responseTooLarge
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .nonHTTPResponse:
             return "Cloudflare metadata returned a non-HTTP response."
@@ -35,12 +35,12 @@ nonisolated enum CloudflareMetadataRequestError: LocalizedError {
     }
 }
 
-nonisolated struct CloudflareTransportSession: Sendable {
-    let connect: @Sendable (String, Cloudflared.AuthMethod) async throws -> UInt16
-    let disconnect: @Sendable () async -> Void
+nonisolated package struct CloudflareTransportSession: Sendable {
+    package let connect: @Sendable (String, Cloudflared.AuthMethod) async throws -> UInt16
+    package let disconnect: @Sendable () async -> Void
 }
 
-typealias CloudflareTransportSessionFactory = @Sendable (
+package typealias CloudflareTransportSessionFactory = @Sendable (
     any AuthProviding
 ) -> CloudflareTransportSession
 
@@ -51,7 +51,7 @@ package actor CloudflareTransportManager {
         case connecting(UUID, CloudflareTransportSession)
         case connected(UUID, CloudflareTransportSession)
 
-        var operationID: UUID? {
+        package var operationID: UUID? {
             switch self {
             case .idle:
                 return nil
@@ -62,7 +62,7 @@ package actor CloudflareTransportManager {
             }
         }
 
-        var session: CloudflareTransportSession? {
+        package var session: CloudflareTransportSession? {
             switch self {
             case .connecting(_, let session), .connected(_, let session):
                 return session
@@ -73,12 +73,12 @@ package actor CloudflareTransportManager {
     }
 
     private struct AccessMetadata: Sendable {
-        let teamDomain: String
-        let appDomain: String
+        package let teamDomain: String
+        package let appDomain: String
     }
     private struct PersistedAccessMetadata: Codable {
-        let teamDomain: String
-        let appDomain: String
+        package let teamDomain: String
+        package let appDomain: String
     }
     private enum RedirectPolicy: Sendable {
         case follow(maximumRedirects: Int)
@@ -90,11 +90,11 @@ package actor CloudflareTransportManager {
         private let lock = NSLock()
         private var redirectCount = 0
 
-        init(policy: RedirectPolicy) {
+        package init(policy: RedirectPolicy) {
             self.policy = policy
         }
 
-        func urlSession(
+        package func urlSession(
             _ session: URLSession,
             task: URLSessionTask,
             willPerformHTTPRedirection response: HTTPURLResponse,
@@ -115,11 +115,11 @@ package actor CloudflareTransportManager {
     }
 
     private struct BoundedMetadataHTTPClient: HTTPClient {
-        let maximumBodyBytes: Int
-        let timeout: TimeInterval
-        let redirectPolicy: RedirectPolicy
+        package let maximumBodyBytes: Int
+        package let timeout: TimeInterval
+        package let redirectPolicy: RedirectPolicy
 
-        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        package func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
             var request = request
             request.timeoutInterval = timeout
             let delegate = RedirectDelegate(policy: redirectPolicy)

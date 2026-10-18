@@ -23,12 +23,12 @@ package enum NoticeSurfaceStyle {
     }
 }
 
-struct NoticeMetrics {
-    static let cornerRadius: CGFloat = 16
-    static let bannerMaxWidth: CGFloat = 620
-    static let operationMaxWidth: CGFloat = 560
-    static let blockingMaxWidth: CGFloat = 340
-    static let notificationCornerRadius: CGFloat = 30
+package struct NoticeMetrics {
+    static package let cornerRadius: CGFloat = 16
+    static package let bannerMaxWidth: CGFloat = 620
+    static package let operationMaxWidth: CGFloat = 560
+    static package let blockingMaxWidth: CGFloat = 340
+    static package let notificationCornerRadius: CGFloat = 30
 }
 
 package extension NoticeLevel {

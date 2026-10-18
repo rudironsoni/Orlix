@@ -9,8 +9,8 @@
 
 import Foundation
 
-enum GhosttyHostIO {
-    static func feed(_ surface: ghostty_surface_t, _ data: Data) {
+package enum GhosttyHostIO {
+    static package func feed(_ surface: ghostty_surface_t, _ data: Data) {
         guard !data.isEmpty else { return }
         data.withUnsafeBytes { buffer in
             guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
@@ -22,7 +22,7 @@ enum GhosttyHostIO {
         }
     }
 
-    static func setWriteCallback(
+    static package func setWriteCallback(
         _ surface: ghostty_surface_t,
         _ callback: Ghostty.Surface.WriteCallback?,
         userdata: UnsafeMutableRawPointer?
@@ -36,7 +36,7 @@ enum GhosttyHostIO {
         #endif
     }
 
-    static func applyHostManagedIO(
+    static package func applyHostManagedIO(
         _ config: inout ghostty_surface_config_s,
         enabled: Bool,
         userdata: UnsafeMutableRawPointer?

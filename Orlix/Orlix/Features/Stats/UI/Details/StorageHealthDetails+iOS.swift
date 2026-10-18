@@ -1,14 +1,14 @@
 #if os(iOS)
 import SwiftUI
 
-struct StorageHealthDetailsPlatformShell<Content: View>: View {
-    let content: () -> Content
+package struct StorageHealthDetailsPlatformShell<Content: View>: View {
+    package let content: () -> Content
 
-    init(@ViewBuilder content: @escaping () -> Content) {
+    package init(@ViewBuilder content: @escaping () -> Content) {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             content()
                 .navigationTitle(Text("Storage Health"))

@@ -5,8 +5,8 @@ import UIKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension ProUpgradeSheet {
-    func platformBody<Content: View>(
+package extension ProUpgradeSheet {
+    package func platformBody<Content: View>(
         sheetContent: Content,
         source: PaywallSource,
         onClose: @escaping () -> Void
@@ -43,7 +43,7 @@ extension ProUpgradeSheet {
         .adaptiveSoftScrollEdges()
     }
 
-    func platformSheetLayout<Content: View, Footer: View>(
+    package func platformSheetLayout<Content: View, Footer: View>(
         content: Content,
         footer: Footer,
         source: PaywallSource
@@ -62,17 +62,17 @@ extension ProUpgradeSheet {
         .background(sheetBackground.ignoresSafeArea())
     }
 
-    func openSubscriptionManagement() {
+    package func openSubscriptionManagement() {
         showManageSubscription = true
     }
 
-    var sheetBackground: Color {
+    package var sheetBackground: Color {
         Color(uiColor: .systemGroupedBackground)
     }
 }
 
-extension ProUpgradePresentationModifier {
-    func platformBody(content: Content) -> some View {
+package extension ProUpgradePresentationModifier {
+    package func platformBody(content: Content) -> some View {
         content
             .sheet(isPresented: $isPresented) {
                 ProUpgradeSheet(source: source)
@@ -81,15 +81,15 @@ extension ProUpgradePresentationModifier {
     }
 }
 
-var paywallTableGridColor: Color {
+package var paywallTableGridColor: Color {
     Color.primary.opacity(0.10)
 }
 
-var paywallCardFillColor: Color {
+package var paywallCardFillColor: Color {
     Color(uiColor: .secondarySystemGroupedBackground)
 }
 
-var paywallCardBorderColor: Color {
+package var paywallCardBorderColor: Color {
     Color.primary.opacity(0.10)
 }
 #endif

@@ -6,18 +6,18 @@ import OrlixModels
 import OrlixSSH
 #endif
 @MainActor
-final class TerminalPaneSSHCoordinator {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
-    let sshClient: SSHClient
-    let tabManager: TerminalTabManager
+final package class TerminalPaneSSHCoordinator {
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
+    package let sshClient: SSHClient
+    package let tabManager: TerminalTabManager
 
     private let richPasteRuntime: TerminalRichPasteRuntime
     private let failureOutput: @MainActor @Sendable (TerminalConnectionFailure) -> Data?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Orlix", category: "SSHPane")
 
-    init(
+    package init(
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
@@ -38,17 +38,17 @@ final class TerminalPaneSSHCoordinator {
     }
 
     @MainActor
-    func installRichPasteInterception(on terminal: any TerminalSurface) {
+    package func installRichPasteInterception(on terminal: any TerminalSurface) {
         richPasteRuntime.install(on: terminal)
     }
 
     @MainActor
-    func sendToSSH(_ data: Data) {
+    package func sendToSSH(_ data: Data) {
         tabManager.transportCoordinator.sendSSHInput(data, for: paneId)
     }
 
     @MainActor
-    func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
+    package func handleResize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
         tabManager.transportCoordinator.resizeSSH(
             for: paneId,
             cols: cols,
@@ -57,7 +57,7 @@ final class TerminalPaneSSHCoordinator {
         )
     }
 
-    func startSSHConnection(terminal: any TerminalSurface) {
+    package func startSSHConnection(terminal: any TerminalSurface) {
         let paneId = self.paneId
         if tabManager.transportCoordinator.activeSSHRoute(for: paneId) != nil {
             tabManager.updatePaneState(paneId, connectionState: .connected)

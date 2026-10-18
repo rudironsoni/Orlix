@@ -1,19 +1,19 @@
 import CryptoKit
 import Foundation
 
-nonisolated struct MLXModelDownloadFile: Equatable, Sendable {
-    let sourceURL: String
-    let localFilename: String
-    let expectedBytes: Int64
-    let sha256: String
+nonisolated package struct MLXModelDownloadFile: Equatable, Sendable {
+    package let sourceURL: String
+    package let localFilename: String
+    package let expectedBytes: Int64
+    package let sha256: String
 }
 
-nonisolated struct MLXModelDownloadManifest: Equatable, Sendable {
-    let modelID: String
-    let revision: String
-    let files: [MLXModelDownloadFile]
+nonisolated package struct MLXModelDownloadManifest: Equatable, Sendable {
+    package let modelID: String
+    package let revision: String
+    package let files: [MLXModelDownloadFile]
 
-    var expectedBytes: Int64? {
+    package var expectedBytes: Int64? {
         files.reduce(into: Optional<Int64>(0)) { total, file in
             guard let current = total else { return }
             let result = current.addingReportingOverflow(file.expectedBytes)
@@ -21,10 +21,10 @@ nonisolated struct MLXModelDownloadManifest: Equatable, Sendable {
         }
     }
 
-    static let markerFilename = ".orlix-model-revision"
+    static package let markerFilename = ".orlix-model-revision"
 }
 
-nonisolated enum MLXModelDownloadError: Error, Equatable, LocalizedError {
+nonisolated package enum MLXModelDownloadError: Error, Equatable, LocalizedError {
     case unsupportedModel
     case invalidManifest
     case fileCountLimitExceeded
@@ -35,7 +35,7 @@ nonisolated enum MLXModelDownloadError: Error, Equatable, LocalizedError {
     case unexpectedResponseSize
     case checksumMismatch
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .unsupportedModel:
             return "This model does not have a trusted download manifest."
@@ -59,14 +59,14 @@ nonisolated enum MLXModelDownloadError: Error, Equatable, LocalizedError {
     }
 }
 
-nonisolated enum MLXModelDownloadBudget {
-    static let maximumFileCount = 8
-    static let maximumFileBytes: Int64 = 4 * 1_024 * 1_024 * 1_024
-    static let maximumDownloadBytes: Int64 = 4 * 1_024 * 1_024 * 1_024
-    static let maximumRepositoryBytes: Int64 = 12 * 1_024 * 1_024 * 1_024
-    static let requiredFreeSpaceReserve: Int64 = 512 * 1_024 * 1_024
+nonisolated package enum MLXModelDownloadBudget {
+    static package let maximumFileCount = 8
+    static package let maximumFileBytes: Int64 = 4 * 1_024 * 1_024 * 1_024
+    static package let maximumDownloadBytes: Int64 = 4 * 1_024 * 1_024 * 1_024
+    static package let maximumRepositoryBytes: Int64 = 12 * 1_024 * 1_024 * 1_024
+    static package let requiredFreeSpaceReserve: Int64 = 512 * 1_024 * 1_024
 
-    static func validate(
+    static package func validate(
         manifest: MLXModelDownloadManifest,
         currentRepositoryBytes: Int64,
         availableCapacity: Int64
@@ -118,8 +118,8 @@ nonisolated enum MLXModelDownloadBudget {
     }
 }
 
-nonisolated enum MLXModelFileVerifier {
-    static func verify(
+nonisolated package enum MLXModelFileVerifier {
+    static package func verify(
         _ url: URL,
         expectedBytes: Int64,
         sha256 expectedSHA256: String
@@ -152,8 +152,8 @@ nonisolated enum MLXModelFileVerifier {
     }
 }
 
-extension MLXModelCatalog {
-    nonisolated static func downloadManifest(
+package extension MLXModelCatalog {
+    nonisolated static package func downloadManifest(
         for modelID: String,
         kind: MLXModelKind
     ) -> MLXModelDownloadManifest? {

@@ -65,21 +65,21 @@ package struct AppLockContainer<Content: View>: View {
 }
 
 private struct AppPrivacyShieldView: View {
-    var body: some View {
+    package var body: some View {
         Color.black
             .opacity(0.55)
             .ignoresSafeArea()
     }
 }
 
-struct AppLockGateView: View {
+package struct AppLockGateView: View {
     @EnvironmentObject private var appLockManager: AppLockManager
 
     private var unlockLabel: String {
         String(format: String(localized: "Unlock with %@"), appLockManager.biometryDisplayName)
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             Color.black.opacity(0.35)
                 .ignoresSafeArea()

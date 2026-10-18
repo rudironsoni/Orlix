@@ -1,8 +1,8 @@
 import Foundation
 
 @MainActor
-enum LocalSSHDiscoveryStatusText {
-    static func text(
+package enum LocalSSHDiscoveryStatusText {
+    static package func text(
         for phase: LocalSSHDiscoveryState.Phase,
         hostCount: Int
     ) -> String {

@@ -13,7 +13,7 @@ import OrlixModels
 
 // MARK: - Gesture Recognizer Delegate
 
-package extension GhosttyTerminalView: UIGestureRecognizerDelegate {
+extension GhosttyTerminalView: UIGestureRecognizerDelegate {
     package func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         if gestureRecognizer == nativeSelectionLongPressRecognizer {
             guard canRouteTerminalInput, !isPaused, !isShuttingDown else { return false }

@@ -4,8 +4,8 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension SSHSession {
-    func upload(
+package extension SSHSession {
+    package func upload(
         _ data: Data,
         to remotePath: String,
         permissions: Int32 = 0o600,

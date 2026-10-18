@@ -12,11 +12,11 @@ package extension WelcomeView {
 }
 
 private struct WelcomeContent: View {
-    @Binding var hasSeenWelcome: Bool
-    let onCompleted: () -> Void
+    @Binding package var hasSeenWelcome: Bool
+    package let onCompleted: () -> Void
     @State private var showingProUpgrade = false
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
@@ -119,7 +119,7 @@ private struct WelcomeContent: View {
 
 private extension View {
     @ViewBuilder
-    func buttonBorderShapeCompat() -> some View {
+    package func buttonBorderShapeCompat() -> some View {
         if #available(macOS 14.0, *) {
             buttonBorderShape(.capsule)
         } else {

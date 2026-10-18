@@ -1,21 +1,21 @@
 import Foundation
 
 @MainActor
-final class UserDefaultsEngagementPersistence: EngagementPersisting {
+final package class UserDefaultsEngagementPersistence: EngagementPersisting {
     private enum Keys {
-        static let successfulConnectionCount = "engagement.successfulConnectionCount"
-        static let usageDayCount = "engagement.usageDayCount"
-        static let lastUsageDay = "engagement.lastUsageDay"
-        static let lastReviewRequest = "engagement.lastReviewRequest"
+        static package let successfulConnectionCount = "engagement.successfulConnectionCount"
+        static package let usageDayCount = "engagement.usageDayCount"
+        static package let lastUsageDay = "engagement.lastUsageDay"
+        static package let lastReviewRequest = "engagement.lastReviewRequest"
     }
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    func loadHistory() -> EngagementHistory {
+    package func loadHistory() -> EngagementHistory {
         EngagementHistory(
             successfulConnectionCount: defaults.integer(
                 forKey: Keys.successfulConnectionCount
@@ -26,7 +26,7 @@ final class UserDefaultsEngagementPersistence: EngagementPersisting {
         )
     }
 
-    func saveHistory(_ history: EngagementHistory) {
+    package func saveHistory(_ history: EngagementHistory) {
         defaults.set(
             history.successfulConnectionCount,
             forKey: Keys.successfulConnectionCount

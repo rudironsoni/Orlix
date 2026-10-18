@@ -32,29 +32,29 @@ final package class CloudKitManager {
     package let fetchAccountStatus: @MainActor @Sendable () async throws -> CKAccountStatus
     package var isSyncEnabled: Bool { syncEnabled() }
     package struct AccountStatusCheck {
-        let id: UUID
-        let generation: UUID
-        let task: Task<CKAccountStatus, Error>
+        package let id: UUID
+        package let generation: UUID
+        package let task: Task<CKAccountStatus, Error>
     }
 
     package struct InFlightRecordChanges {
-        let id: UUID
-        let identity: CloudKitRecordChangeFetchIdentity
-        let task: Task<CloudKitRawRecordChanges, Error>
-        var waiters: [UUID: CloudKitTaskContinuation<CloudKitRawRecordChanges>]
-        var teardownWaiters: [UUID: CloudKitTaskContinuation<Void>]
+        package let id: UUID
+        package let identity: CloudKitRecordChangeFetchIdentity
+        package let task: Task<CloudKitRawRecordChanges, Error>
+        package var waiters: [UUID: CloudKitTaskContinuation<CloudKitRawRecordChanges>]
+        package var teardownWaiters: [UUID: CloudKitTaskContinuation<Void>]
     }
 
     package struct PendingRecordChanges {
-        let identity: CloudKitRecordChangeFetchIdentity
-        let changes: CloudKitRawRecordChanges
-        let token: CKServerChangeToken?
+        package let identity: CloudKitRecordChangeFetchIdentity
+        package let changes: CloudKitRawRecordChanges
+        package let token: CKServerChangeToken?
     }
 
     package struct FetchedRecordChanges {
-        let changes: [CloudKitRawRecordChange]
-        let isFullFetch: Bool
-        let token: CKServerChangeToken?
+        package let changes: [CloudKitRawRecordChange]
+        package let isFullFetch: Bool
+        package let token: CKServerChangeToken?
     }
 
     package var inFlightRecordChanges: InFlightRecordChanges?

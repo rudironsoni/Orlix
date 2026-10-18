@@ -5,10 +5,10 @@ import os.log
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension SSHSession {
+package extension SSHSession {
     // MARK: - Shell
 
-    func startShell(
+    package func startShell(
         cols: Int,
         rows: Int,
         pixelSize: TerminalPixelSize? = nil,
@@ -339,7 +339,7 @@ extension SSHSession {
         return freeResult == 0
     }
 
-    func completeActiveChannelCleanupCall(
+    package func completeActiveChannelCleanupCall(
         session: OpaquePointer,
         operation: () -> Int32
     ) async -> Int32 {
@@ -374,7 +374,7 @@ extension SSHSession {
     }
 
     #if DEBUG
-    func completeChannelCleanupCallForTesting(
+    package func completeChannelCleanupCallForTesting(
         results: [Int32]
     ) async -> (result: Int32, callCount: Int) {
         var pendingResults = results
@@ -391,18 +391,18 @@ extension SSHSession {
     }
     #endif
 
-    func closeShell(_ shellId: UUID) async {
+    package func closeShell(_ shellId: UUID) async {
         await closeShellInternal(shellId)
     }
 
-    func flushShellOutput(_ state: ShellChannelState) async -> Bool {
+    package func flushShellOutput(_ state: ShellChannelState) async -> Bool {
         guard !state.batchBuffer.isEmpty else { return true }
         let data = state.batchBuffer
         state.batchBuffer = Data()
         return await state.output.send(data)
     }
 
-    func closeShellInternal(
+    package func closeShellInternal(
         _ shellId: UUID,
         preservesOutput: Bool = false
     ) async {
@@ -416,7 +416,7 @@ extension SSHSession {
         libssh2_channel_free(state.channel)
     }
 
-    func closeAllShellChannels() async {
+    package func closeAllShellChannels() async {
         let states = shellChannels
         shellChannels.removeAll()
         for state in states.values {
@@ -426,7 +426,7 @@ extension SSHSession {
         }
     }
 
-    func abandonAllShellChannels() {
+    package func abandonAllShellChannels() {
         let states = shellChannels
         shellChannels.removeAll()
         for state in states.values {
@@ -439,7 +439,7 @@ extension SSHSession {
 
     // MARK: - Write
 
-    func write(_ data: Data, to shellId: UUID) async throws {
+    package func write(_ data: Data, to shellId: UUID) async throws {
         guard let state = shellChannels[shellId] else {
             throw SSHError.notConnected
         }
@@ -474,7 +474,7 @@ extension SSHSession {
 
     // MARK: - Resize
 
-    func resize(
+    package func resize(
         cols: Int,
         rows: Int,
         pixelSize: TerminalPixelSize? = nil,

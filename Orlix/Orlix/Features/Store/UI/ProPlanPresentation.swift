@@ -1,7 +1,7 @@
 import Foundation
 
-extension ProPlanKind {
-    var title: String {
+package extension ProPlanKind {
+    package var title: String {
         switch self {
         case .monthly:
             return String(localized: "Monthly")
@@ -12,7 +12,7 @@ extension ProPlanKind {
         }
     }
 
-    var detail: String {
+    package var detail: String {
         switch self {
         case .monthly:
             return String(localized: "Flexible access to every Pro feature.")
@@ -23,17 +23,17 @@ extension ProPlanKind {
         }
     }
 
-    var badge: String? {
+    package var badge: String? {
         self == .yearly ? String(localized: "Best value") : nil
     }
 }
 
-struct ProPlanPresentation {
-    let plan: ProPlanKind
-    let displayPrice: String
-    let introductoryOfferState: ProPlanIntroductoryOfferState
+package struct ProPlanPresentation {
+    package let plan: ProPlanKind
+    package let displayPrice: String
+    package let introductoryOfferState: ProPlanIntroductoryOfferState
 
-    init(
+    package init(
         plan: ProPlanKind,
         displayPrice: String,
         introductoryOfferState: ProPlanIntroductoryOfferState = .unavailable
@@ -43,7 +43,7 @@ struct ProPlanPresentation {
         self.introductoryOfferState = plan == .yearly ? introductoryOfferState : .unavailable
     }
 
-    var priceLine: String {
+    package var priceLine: String {
         if advertisesFreeTrial {
             return String(localized: "7 days free")
         }
@@ -58,13 +58,13 @@ struct ProPlanPresentation {
         }
     }
 
-    var detail: String {
+    package var detail: String {
         advertisesFreeTrial
             ? String(format: String(localized: "Then %@ per year."), displayPrice)
             : plan.detail
     }
 
-    var purchaseButtonTitle: String {
+    package var purchaseButtonTitle: String {
         if plan == .lifetime {
             return String(format: String(localized: "Buy %@"), displayPrice)
         }
@@ -74,7 +74,7 @@ struct ProPlanPresentation {
         return String(format: String(localized: "Subscribe for %@"), displayPrice)
     }
 
-    var renewalDisclosure: String {
+    package var renewalDisclosure: String {
         if plan == .lifetime {
             return String(localized: "One-time purchase. No subscription renewal.")
         }
@@ -87,11 +87,11 @@ struct ProPlanPresentation {
         return String(localized: "Auto-renews until canceled.")
     }
 
-    var planAccessibilityLabel: String {
+    package var planAccessibilityLabel: String {
         [plan.title, priceLine, detail].joined(separator: ". ")
     }
 
-    var purchaseButtonAccessibilityLabel: String {
+    package var purchaseButtonAccessibilityLabel: String {
         advertisesFreeTrial
             ? [purchaseButtonTitle, renewalDisclosure].joined(separator: ". ")
             : purchaseButtonTitle

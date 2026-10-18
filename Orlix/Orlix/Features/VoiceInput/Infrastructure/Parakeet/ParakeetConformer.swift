@@ -6,9 +6,9 @@ import MLX
 // MARK: - Feed Forward Network
 
 @preconcurrency nonisolated public class FeedForward: Module {
-    let linear1: Linear
-    let linear2: Linear
-    let activation: SiLU
+    package let linear1: Linear
+    package let linear2: Linear
+    package let activation: SiLU
 
     public init(dModel: Int, dFF: Int, useBias: Bool = true) {
         self.linear1 = Linear(dModel, dFF, bias: useBias)
@@ -25,12 +25,12 @@ import MLX
 // MARK: - Convolution Module
 
 @preconcurrency nonisolated public class ConformerConvolution: Module {
-    let padding: Int
-    let pointwiseConv1: Conv1d
-    let depthwiseConv: Conv1d
-    let batchNorm: BatchNorm
-    let pointwiseConv2: Conv1d
-    let activation: SiLU
+    package let padding: Int
+    package let pointwiseConv1: Conv1d
+    package let depthwiseConv: Conv1d
+    package let batchNorm: BatchNorm
+    package let pointwiseConv2: Conv1d
+    package let activation: SiLU
 
     public init(config: ConformerConfig) {
         assert((config.convKernelSize - 1) % 2 == 0)
@@ -88,16 +88,16 @@ import MLX
 // MARK: - Conformer Block
 
 @preconcurrency nonisolated public class ConformerBlock: Module {
-    let config: ConformerConfig
-    let normFeedForward1: LayerNorm
-    let feedForward1: FeedForward
-    let normSelfAtt: LayerNorm
-    var selfAttn: Module
-    let normConv: LayerNorm
-    let conv: ConformerConvolution
-    let normFeedForward2: LayerNorm
-    let feedForward2: FeedForward
-    let normOut: LayerNorm
+    package let config: ConformerConfig
+    package let normFeedForward1: LayerNorm
+    package let feedForward1: FeedForward
+    package let normSelfAtt: LayerNorm
+    package var selfAttn: Module
+    package let normConv: LayerNorm
+    package let conv: ConformerConvolution
+    package let normFeedForward2: LayerNorm
+    package let feedForward2: FeedForward
+    package let normOut: LayerNorm
 
     public init(config: ConformerConfig) {
         self.config = config
@@ -251,15 +251,15 @@ import MLX
 // MARK: - Depth-wise Striding Subsampling
 
 @preconcurrency nonisolated public class DwStridingSubsampling: Module {
-    let subsamplingConvChunkingFactor: Int
-    let convChannels: Int
-    let samplingNum: Int
-    let stride: Int
-    let kernelSize: Int
-    let padding: Int
-    let conv: [Module]
-    let out: Linear
-    let finalFreqDim: Int
+    package let subsamplingConvChunkingFactor: Int
+    package let convChannels: Int
+    package let samplingNum: Int
+    package let stride: Int
+    package let kernelSize: Int
+    package let padding: Int
+    package let conv: [Module]
+    package let out: Linear
+    package let finalFreqDim: Int
 
     public init(config: ConformerConfig) {
         assert(
@@ -391,10 +391,10 @@ import MLX
 // MARK: - Positional Encoding (simplified implementations)
 
 @preconcurrency nonisolated public class RelPositionalEncoding: Module {
-    let dModel: Int
-    var maxLen: Int
-    let scaleInput: Bool
-    var posEmb: MLXArray
+    package let dModel: Int
+    package var maxLen: Int
+    package let scaleInput: Bool
+    package var posEmb: MLXArray
 
     public init(dModel: Int, maxLen: Int, scaleInput: Bool = false) {
         assert(dModel % 2 == 0 && maxLen > 0, "dModel must be even and maxLen must be positive")
@@ -476,8 +476,8 @@ import MLX
 }
 
 @preconcurrency nonisolated public class LocalRelPositionalEncoding: RelPositionalEncoding {
-    let leftContext: Int
-    let rightContext: Int
+    package let leftContext: Int
+    package let rightContext: Int
 
     public init(
         dModel: Int, maxLen: Int, scaleInput: Bool = false, contextSize: (Int, Int) = (256, 256)
@@ -487,7 +487,7 @@ import MLX
         super.init(dModel: dModel, maxLen: maxLen, scaleInput: scaleInput)
     }
 
-    override func calculatePE() {
+    override package func calculatePE() {
         // For local attention, positions range from leftContext to -rightContext
         let positions = MLXArray(
             stride(from: leftContext, through: -rightContext, by: -1).map(Float.init)
@@ -534,10 +534,10 @@ import MLX
 }
 
 @preconcurrency nonisolated public class Conformer: Module {
-    let config: ConformerConfig
-    let posEnc: Module?
-    let preEncode: Module
-    let layers: [ConformerBlock]
+    package let config: ConformerConfig
+    package let posEnc: Module?
+    package let preEncode: Module
+    package let layers: [ConformerBlock]
 
     public init(config: ConformerConfig) {
         self.config = config
@@ -663,8 +663,8 @@ nonisolated public class ConformerCache {
 }
 
 nonisolated public class RotatingConformerCache: ConformerCache {
-    let contextSize: Int
-    let cacheDropSize: Int
+    package let contextSize: Int
+    package let cacheDropSize: Int
 
     public init(contextSize: Int, cacheDropSize: Int) {
         self.contextSize = contextSize

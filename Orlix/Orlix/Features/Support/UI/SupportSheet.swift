@@ -9,14 +9,14 @@ package struct SupportSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private struct ContactOption: Identifiable {
-        let id = UUID()
-        let title: String
-        let subtitle: String
-        let icon: String
-        let iconImage: String?
-        let iconText: String?
-        let color: Color
-        let url: String
+        package let id = UUID()
+        package let title: String
+        package let subtitle: String
+        package let icon: String
+        package let iconImage: String?
+        package let iconText: String?
+        package let color: Color
+        package let url: String
     }
 
     private let contactOptions: [ContactOption] = [

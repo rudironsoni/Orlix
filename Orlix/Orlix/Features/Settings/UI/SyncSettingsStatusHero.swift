@@ -1,21 +1,21 @@
 import SwiftUI
 
-struct SyncSettingsStatusHero: View {
-    let state: SyncSettingsUserState
-    let lastSuccessfulSyncDate: Date?
-    let primaryAction: SyncSettingsPrimaryAction?
-    let onPrimaryAction: () -> Void
+package struct SyncSettingsStatusHero: View {
+    package let state: SyncSettingsUserState
+    package let lastSuccessfulSyncDate: Date?
+    package let primaryAction: SyncSettingsPrimaryAction?
+    package let onPrimaryAction: () -> Void
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 }
 
-struct SyncSettingsPrimaryActionButton: View {
-    let action: SyncSettingsPrimaryAction
-    let perform: () -> Void
+package struct SyncSettingsPrimaryActionButton: View {
+    package let action: SyncSettingsPrimaryAction
+    package let perform: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: perform) {
             if action.isRunning {
                 HStack(spacing: 7) {
@@ -34,8 +34,8 @@ struct SyncSettingsPrimaryActionButton: View {
     }
 }
 
-extension SyncSettingsUserState {
-    var statusHeroSystemImage: String {
+package extension SyncSettingsUserState {
+    package var statusHeroSystemImage: String {
         switch self {
         case .readyToSync, .upToDate:
             "icloud.fill"
@@ -50,7 +50,7 @@ extension SyncSettingsUserState {
         }
     }
 
-    var statusHeroTint: Color {
+    package var statusHeroTint: Color {
         switch self {
         case .readyToSync, .upToDate, .syncing:
             .blue
@@ -64,11 +64,11 @@ extension SyncSettingsUserState {
     }
 }
 
-struct SyncSettingsStatusDetail: View {
-    let state: SyncSettingsUserState
-    let lastSuccessfulSyncDate: Date?
+package struct SyncSettingsStatusDetail: View {
+    package let state: SyncSettingsUserState
+    package let lastSuccessfulSyncDate: Date?
 
-    var body: some View {
+    package var body: some View {
         Group {
             switch state {
             case .readyToSync:

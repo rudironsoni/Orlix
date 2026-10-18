@@ -135,16 +135,16 @@ package extension CloudKitManager {
     // MARK: - Record Fetching (No Queries)
 
     package struct ZoneChangeBatch: @unchecked Sendable {
-        let records: [CKRecord]
-        let deletions: [Deletion]
-        let recordByteCount: Int
-        let serverChangeToken: CKServerChangeToken?
-        let moreComing: Bool
+        package let records: [CKRecord]
+        package let deletions: [Deletion]
+        package let recordByteCount: Int
+        package let serverChangeToken: CKServerChangeToken?
+        package let moreComing: Bool
     }
 
     package struct Deletion {
-        let recordID: CKRecord.ID
-        let recordType: CKRecord.RecordType
+        package let recordID: CKRecord.ID
+        package let recordType: CKRecord.RecordType
     }
 
     package func loadChangeToken() -> CKServerChangeToken? {

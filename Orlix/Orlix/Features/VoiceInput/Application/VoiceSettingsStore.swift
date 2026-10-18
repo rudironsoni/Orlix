@@ -4,12 +4,12 @@ import Combine
 import OrlixModels
 #endif
 @MainActor
-protocol VoiceSettingsReading: AnyObject {
+package protocol VoiceSettingsReading: AnyObject {
     var currentSettings: VoiceSettings { get }
 }
 
 @MainActor
-protocol VoiceSettingsPersisting: AnyObject {
+package protocol VoiceSettingsPersisting: AnyObject {
     func loadSettings() -> VoiceSettings
     func saveSettings(_ settings: VoiceSettings)
 }

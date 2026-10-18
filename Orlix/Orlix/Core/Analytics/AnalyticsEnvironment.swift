@@ -4,13 +4,13 @@ import StoreKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum AnalyticsMode: Equatable, Sendable {
+nonisolated package enum AnalyticsMode: Equatable, Sendable {
     case disabled
     case production
 }
 
-nonisolated enum AnalyticsEnvironmentPolicy {
-    static func mode(
+nonisolated package enum AnalyticsEnvironmentPolicy {
+    static package func mode(
         userEnabled: Bool,
         isDevelopmentBuild: Bool,
         isSimulator: Bool,
@@ -29,7 +29,7 @@ nonisolated enum AnalyticsEnvironmentPolicy {
         return .production
     }
 
-    static func currentInstallMode() async -> AnalyticsMode {
+    static package func currentInstallMode() async -> AnalyticsMode {
         #if DEBUG || targetEnvironment(simulator)
         return .disabled
         #else
@@ -65,17 +65,17 @@ nonisolated enum AnalyticsEnvironmentPolicy {
     }
 }
 
-actor AnalyticsModeResolver {
-    typealias Provider = @Sendable () async -> AnalyticsMode
+package actor AnalyticsModeResolver {
+    package typealias Provider = @Sendable () async -> AnalyticsMode
 
     private let provider: Provider
     private var resolution: Task<AnalyticsMode, Never>?
 
-    init(provider: @escaping Provider) {
+    package init(provider: @escaping Provider) {
         self.provider = provider
     }
 
-    func mode() async -> AnalyticsMode {
+    package func mode() async -> AnalyticsMode {
         if let resolution {
             return await resolution.value
         }

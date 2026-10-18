@@ -1,12 +1,12 @@
 #if os(iOS)
 import SwiftUI
 
-struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
-    @Binding var searchText: String
-    let controls: () -> Controls
-    let content: () -> Content
+package struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
+    @Binding package var searchText: String
+    package let controls: () -> Controls
+    package let content: () -> Content
 
-    init(
+    package init(
         searchText: Binding<String>,
         @ViewBuilder controls: @escaping () -> Controls,
         @ViewBuilder content: @escaping () -> Content
@@ -16,7 +16,7 @@ struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationView {
             content()
                 .navigationTitle(Text("Storage"))
@@ -33,7 +33,7 @@ struct StorageDetailsPlatformShell<Controls: View, Content: View>: View {
     }
 }
 
-extension View {
-    func storageVolumeToggleLabelAlignment() -> some View { self }
+package extension View {
+    package func storageVolumeToggleLabelAlignment() -> some View { self }
 }
 #endif

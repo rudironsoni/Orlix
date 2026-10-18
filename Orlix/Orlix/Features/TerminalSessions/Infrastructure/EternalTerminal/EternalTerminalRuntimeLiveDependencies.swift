@@ -5,8 +5,8 @@ import OrlixSSH
 import OrlixStats
 #endif
 @MainActor
-extension EternalTerminalRuntimeDependencies {
-    static func live(
+package extension EternalTerminalRuntimeDependencies {
+    static package func live(
         resumeStore: any EternalTerminalResumeStoring,
         analyticsTracker: AnalyticsTracker,
         remoteSessions: any TerminalRemoteSessionServicing,
@@ -42,9 +42,9 @@ extension EternalTerminalRuntimeDependencies {
 }
 
 private nonisolated struct LiveEternalTerminalRemoteSessionKiller: EternalTerminalRemoteSessionKilling {
-    let remoteSessions: any TerminalRemoteSessionServicing
+    package let remoteSessions: any TerminalRemoteSessionServicing
 
-    func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {
+    package func killSession(_ identifier: RemoteSessionIdentifier, using client: SSHClient) async {
         await remoteSessions.killSession(identifier, using: client, runtime: nil)
     }
 }

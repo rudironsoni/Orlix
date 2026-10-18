@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-package extension StoreError: LocalizedError {
+extension StoreError: LocalizedError {
     nonisolated package var errorDescription: String? {
         switch self {
         case .verificationFailed:

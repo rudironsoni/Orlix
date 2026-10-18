@@ -11,9 +11,9 @@ import OrlixModels
 #endif
 @MainActor
 private final class DisabledTerminalLiveActivityController: TerminalLiveActivityControlling {
-    func reconcile(toward target: TerminalLiveActivityTarget) async {}
+    package func reconcile(toward target: TerminalLiveActivityTarget) async {}
 
-    func endForApplicationTermination() -> Bool {
+    package func endForApplicationTermination() -> Bool {
         true
     }
 }
@@ -28,7 +28,7 @@ private final class ActivityKitTerminalLiveActivityController: TerminalLiveActiv
     )
     private var reconciledTarget: TerminalLiveActivityTarget?
 
-    func reconcile(toward target: TerminalLiveActivityTarget) async {
+    package func reconcile(toward target: TerminalLiveActivityTarget) async {
         let activities = Activity<OrlixActivityAttributes>.activities
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             for activity in activities {
@@ -77,7 +77,7 @@ private final class ActivityKitTerminalLiveActivityController: TerminalLiveActiv
         }
     }
 
-    func endForApplicationTermination() -> Bool {
+    package func endForApplicationTermination() -> Bool {
         let completion = DispatchSemaphore(value: 0)
         Task.detached(priority: .high) {
             defer { completion.signal() }
@@ -112,7 +112,7 @@ private final class ActivityKitTerminalLiveActivityController: TerminalLiveActiv
 
 @MainActor
 private enum TerminalLiveActivityLiveComposition {
-    static let shared: LiveActivityManager = {
+    static package let shared: LiveActivityManager = {
         #if os(iOS)
         if #available(iOS 16.1, *) {
             return LiveActivityManager(controller: ActivityKitTerminalLiveActivityController())

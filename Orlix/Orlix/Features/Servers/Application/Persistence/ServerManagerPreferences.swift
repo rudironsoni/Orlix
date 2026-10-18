@@ -4,7 +4,7 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-protocol ServerManagerPreferences: AnyObject {
+package protocol ServerManagerPreferences: AnyObject {
     var didBootstrapDefaultWorkspace: Bool { get set }
     var hasSeenWelcome: Bool { get }
     var freePlanGeneration: FreePlanGeneration? { get set }

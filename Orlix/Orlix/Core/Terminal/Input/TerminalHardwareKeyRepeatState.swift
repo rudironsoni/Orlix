@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
-    nonisolated struct Active {
-        let token: UUID
-        let keyCode: UInt16
-        var payload: Payload
+nonisolated package struct TerminalHardwareKeyRepeatState<Payload> {
+    nonisolated package struct Active {
+        package let token: UUID
+        package let keyCode: UInt16
+        package var payload: Payload
     }
 
-    nonisolated enum Phase {
+    nonisolated package enum Phase {
         case idle
         case repeating(Active)
     }
 
-    nonisolated enum Registration {
+    nonisolated package enum Registration {
         case started(Active)
         case updated(Active)
     }
@@ -20,7 +20,7 @@ nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
     private(set) var phase: Phase = .idle
 
     @discardableResult
-    mutating func register(
+    mutating package func register(
         keyCode: UInt16,
         payload: Payload
     ) -> Registration {
@@ -40,7 +40,7 @@ nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
         return .started(active)
     }
 
-    func active(for token: UUID) -> Active? {
+    package func active(for token: UUID) -> Active? {
         guard case .repeating(let active) = phase,
               active.token == token else {
             return nil
@@ -49,7 +49,7 @@ nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
     }
 
     @discardableResult
-    mutating func end(keyCode: UInt16) -> Active? {
+    mutating package func end(keyCode: UInt16) -> Active? {
         guard case .repeating(let active) = phase,
               active.keyCode == keyCode else {
             return nil
@@ -59,7 +59,7 @@ nonisolated struct TerminalHardwareKeyRepeatState<Payload> {
     }
 
     @discardableResult
-    mutating func cancel() -> Active? {
+    mutating package func cancel() -> Active? {
         guard case .repeating(let active) = phase else {
             return nil
         }

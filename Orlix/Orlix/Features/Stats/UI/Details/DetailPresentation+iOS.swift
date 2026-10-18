@@ -3,7 +3,7 @@ import SwiftUI
 
 private struct StatsSheetCloseToolbarModifier: ViewModifier {
     @Environment(\.dismiss) private var dismiss
-    let placement: StatsSheetClosePlacement
+    package let placement: StatsSheetClosePlacement
 
     private var closePlacement: ToolbarItemPlacement {
         switch placement {
@@ -14,7 +14,7 @@ private struct StatsSheetCloseToolbarModifier: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .toolbar {
                 ToolbarItem(placement: closePlacement) {
@@ -32,13 +32,13 @@ private struct StatsSheetCloseToolbarModifier: ViewModifier {
     }
 }
 
-extension View {
-    func statsSheetCloseToolbar(placement: StatsSheetClosePlacement = .automatic) -> some View {
+package extension View {
+    package func statsSheetCloseToolbar(placement: StatsSheetClosePlacement = .automatic) -> some View {
         modifier(StatsSheetCloseToolbarModifier(placement: placement))
     }
 
     @ViewBuilder
-    func statsDetailPresentation<Content: View>(
+    package func statsDetailPresentation<Content: View>(
         isPresented: Binding<Bool>,
         size: CGSize = StatsPresentationSize.standard,
         @ViewBuilder content: @escaping () -> Content
@@ -49,7 +49,7 @@ extension View {
     }
 
     @ViewBuilder
-    func statsDetailPresentation<Item: Identifiable, Content: View>(
+    package func statsDetailPresentation<Item: Identifiable, Content: View>(
         item: Binding<Item?>,
         size: CGSize = StatsPresentationSize.standard,
         @ViewBuilder content: @escaping (Item) -> Content

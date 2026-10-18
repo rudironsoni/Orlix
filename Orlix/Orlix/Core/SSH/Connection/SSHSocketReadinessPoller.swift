@@ -3,26 +3,26 @@ import Foundation
 
 /// Coalesces short libssh2 socket waits onto one dedicated serial queue.
 /// SSHSession actors suspend while the queue performs the blocking poll call.
-nonisolated final class SSHSocketReadinessPoller: @unchecked Sendable {
-    static let shared = SSHSocketReadinessPoller()
+nonisolated final package class SSHSocketReadinessPoller: @unchecked Sendable {
+    static package let shared = SSHSocketReadinessPoller()
 
     private struct Request {
-        let id: UUID
-        let fileDescriptor: Int32
-        let events: Int16
-        let deadlineNanoseconds: UInt64
-        let continuation: CheckedContinuation<Void, Never>
+        package let id: UUID
+        package let fileDescriptor: Int32
+        package let events: Int16
+        package let deadlineNanoseconds: UInt64
+        package let continuation: CheckedContinuation<Void, Never>
     }
 
     private let queue: DispatchQueue
     private var requests: [UUID: Request] = [:]
     private var isPolling = false
 
-    init(label: String = "com.rudironsoni.orlix.ssh-socket-readiness") {
+    package init(label: String = "com.rudironsoni.orlix.ssh-socket-readiness") {
         queue = DispatchQueue(label: label, qos: .userInitiated)
     }
 
-    func wait(
+    package func wait(
         fileDescriptor: Int32,
         events: Int16,
         timeoutMilliseconds: Int32
@@ -133,11 +133,11 @@ private nonisolated final class WaitCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
 
-    var isCancelled: Bool {
+    package var isCancelled: Bool {
         lock.withLock { cancelled }
     }
 
-    func cancel() {
+    package func cancel() {
         lock.withLock {
             cancelled = true
         }

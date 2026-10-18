@@ -16,8 +16,8 @@ import OrlixTerminal
 package struct iOSContentView: View {
     /// Keeps one tab-open operation alive if its navigation route is popped and retried.
     private struct PendingConnection {
-        let operationID: UUID
-        let task: Task<TerminalTab, Error>
+        package let operationID: UUID
+        package let task: Task<TerminalTab, Error>
     }
 
     package let fileTabs: RemoteFileTabManager

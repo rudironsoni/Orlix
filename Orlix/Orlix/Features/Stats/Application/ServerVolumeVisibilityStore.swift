@@ -5,7 +5,7 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-protocol ServerVolumeVisibilityPreferencesPersisting: AnyObject {
+package protocol ServerVolumeVisibilityPreferencesPersisting: AnyObject {
     func loadPreferences() -> ServerVolumeVisibilityPreferences
     func savePreferences(_ preferences: ServerVolumeVisibilityPreferences)
 }

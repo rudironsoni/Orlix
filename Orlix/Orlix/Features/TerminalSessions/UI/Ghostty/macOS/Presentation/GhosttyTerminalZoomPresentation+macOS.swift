@@ -81,12 +81,12 @@ package extension GhosttyTerminalView {
     }
 }
 
-final class TerminalZoomIndicatorView: NSVisualEffectView {
+final package class TerminalZoomIndicatorView: NSVisualEffectView {
     private let valueLabel = NSTextField(labelWithString: "")
     private let titleLabel = NSTextField(labelWithString: TerminalZoomPresentation.indicatorTitle)
     private let stackView = NSStackView()
 
-    override init(frame frameRect: NSRect) {
+    override package init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         material = .hudWindow
         blendingMode = .withinWindow
@@ -129,15 +129,15 @@ final class TerminalZoomIndicatorView: NSVisualEffectView {
         ])
     }
 
-    required init?(coder: NSCoder) {
+    required package init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
+    override package func hitTest(_ point: NSPoint) -> NSView? {
         nil
     }
 
-    func update(fontSize: Double) {
+    package func update(fontSize: Double) {
         valueLabel.stringValue = TerminalZoomPresentation.formattedFontSize(fontSize)
     }
 }

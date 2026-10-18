@@ -1,19 +1,19 @@
 import SwiftUI
 
-struct ProSettingsStatusHero: View {
-    let state: ProSettingsUserState
-    let onPrimaryAction: (ProSettingsPrimaryAction) -> Void
+package struct ProSettingsStatusHero: View {
+    package let state: ProSettingsUserState
+    package let onPrimaryAction: (ProSettingsPrimaryAction) -> Void
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 }
 
-struct ProSettingsPrimaryActionButton: View {
-    let action: ProSettingsPrimaryAction
-    let perform: () -> Void
+package struct ProSettingsPrimaryActionButton: View {
+    package let action: ProSettingsPrimaryAction
+    package let perform: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: perform) {
             Text(action.title)
         }
@@ -24,12 +24,12 @@ struct ProSettingsPrimaryActionButton: View {
     }
 }
 
-struct ProSettingsStatusContent: View {
-    let state: ProSettingsUserState
-    let alignment: HorizontalAlignment
-    let textAlignment: TextAlignment
+package struct ProSettingsStatusContent: View {
+    package let state: ProSettingsUserState
+    package let alignment: HorizontalAlignment
+    package let textAlignment: TextAlignment
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: alignment, spacing: 4) {
             Text(state.title)
                 .font(.title2.weight(.semibold))
