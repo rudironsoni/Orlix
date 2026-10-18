@@ -16,10 +16,10 @@ nonisolated enum TerminalSplitDirection: String, Codable, Equatable, Sendable {
 }
 
 nonisolated package enum TerminalSplitPlacement: Equatable, Sendable {
-    package case right
-    package case left
-    package case down
-    package case up
+    case right
+    case left
+    case down
+    case up
 
     package var direction: TerminalSplitDirection {
         switch self {
@@ -41,17 +41,17 @@ nonisolated package enum TerminalSplitPlacement: Equatable, Sendable {
 }
 
 nonisolated package enum TerminalSplitFocusDirection: Equatable, Sendable {
-    package case above
-    package case below
-    package case left
-    package case right
+    case above
+    case below
+    case left
+    case right
 }
 
 nonisolated package enum TerminalSplitResizeDirection: Equatable, Sendable {
-    package case up
-    package case down
-    package case left
-    package case right
+    case up
+    case down
+    case left
+    case right
 
     fileprivate var splitDirection: TerminalSplitDirection {
         switch self {
@@ -77,8 +77,8 @@ nonisolated package enum TerminalSplitResizeDirection: Equatable, Sendable {
 /// A split node stores pane IDs, not connection objects.
 /// This allows the view hierarchy to change without losing terminal state.
 nonisolated indirect package enum TerminalSplitNode: Equatable, Codable, Sendable {
-    package case leaf(paneId: UUID)
-    package case split(Split)
+    case leaf(paneId: UUID)
+    case split(Split)
 
     nonisolated package struct Split: Equatable, Codable, Sendable {
         let direction: TerminalSplitDirection

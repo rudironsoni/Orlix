@@ -4,7 +4,7 @@ import Foundation
 import OrlixModels
 #endif
 nonisolated package enum ServerSecurityApprovalRequest: Identifiable, Equatable, Sendable {
-    package case hostKey(KnownHostsManager.Challenge)
+    case hostKey(KnownHostsManager.Challenge)
 
     package var id: String {
         switch self {
@@ -32,9 +32,9 @@ nonisolated package enum ServerSecurityApprovalRequest: Identifiable, Equatable,
 }
 
 nonisolated package enum ServerSecurityApprovalError: LocalizedError, Equatable, Sendable {
-    package case cancelled
-    package case expired
-    package case unavailable
+    case cancelled
+    case expired
+    case unavailable
 
     package var errorDescription: String? {
         switch self {

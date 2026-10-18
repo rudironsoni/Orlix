@@ -1,21 +1,21 @@
 import Foundation
 
 nonisolated package enum GPUKind: String, Codable, Equatable, Sendable {
-    package case nvidia
-    package case amd
-    package case intel
-    package case apple
-    package case unknown
+    case nvidia
+    case amd
+    case intel
+    case apple
+    case unknown
 }
 
 nonisolated package enum GPUSource: String, Codable, Equatable, Sendable {
-    package case nvidiaSMI
-    package case rocmSMI
-    package case intelGPU
-    package case systemProfiler
-    package case powerMetrics
-    package case wmi
-    package case unknown
+    case nvidiaSMI
+    case rocmSMI
+    case intelGPU
+    case systemProfiler
+    case powerMetrics
+    case wmi
+    case unknown
 }
 
 nonisolated package struct GPUDevice: Identifiable, Codable, Equatable, Sendable {

@@ -1,8 +1,8 @@
 import SwiftUI
 
 package enum NoticeSurfaceStyle {
-    package case standard
-    package case terminal(backgroundColor: Color, foregroundColor: Color)
+    case standard
+    case terminal(backgroundColor: Color, foregroundColor: Color)
 
     package var primaryForegroundColor: Color {
         switch self {

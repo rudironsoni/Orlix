@@ -68,12 +68,12 @@ nonisolated package struct DockerStats: Equatable, Sendable {
 }
 
 nonisolated package enum DockerAvailability: Equatable, Sendable {
-    package case unknown
-    package case available
-    package case commandMissing
-    package case daemonUnavailable(String)
-    package case permissionDenied(String)
-    package case unavailable(String)
+    case unknown
+    case available
+    case commandMissing
+    case daemonUnavailable(String)
+    case permissionDenied(String)
+    case unavailable(String)
 }
 
 nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
@@ -111,14 +111,14 @@ nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
 }
 
 nonisolated package enum DockerContainerState: String, Equatable, Sendable {
-    package case running
-    package case exited
-    package case paused
-    package case restarting
-    package case created
-    package case dead
-    package case removing
-    package case unknown
+    case running
+    case exited
+    case paused
+    case restarting
+    case created
+    case dead
+    case removing
+    case unknown
 
     package init(rawState: String) {
         self = DockerContainerState(rawValue: rawState.lowercased()) ?? .unknown
@@ -126,10 +126,10 @@ nonisolated package enum DockerContainerState: String, Equatable, Sendable {
 }
 
 nonisolated package enum DockerHealthStatus: String, Equatable, Sendable {
-    package case healthy
-    package case unhealthy
-    package case starting
-    package case none
+    case healthy
+    case unhealthy
+    case starting
+    case none
 
     package init(statusText: String) {
         let lowercased = statusText.lowercased()
@@ -146,7 +146,7 @@ nonisolated package enum DockerHealthStatus: String, Equatable, Sendable {
 }
 
 nonisolated package enum DockerContainerAction: String, Equatable, Sendable {
-    package case start
-    package case stop
-    package case restart
+    case start
+    case stop
+    case restart
 }

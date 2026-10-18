@@ -4,8 +4,8 @@
 //
 
 nonisolated package enum TerminalColorAppearance: Equatable, Sendable {
-    package case light
-    package case dark
+    case light
+    case dark
 }
 
 nonisolated package struct TerminalThemeSelection: Equatable, Sendable {

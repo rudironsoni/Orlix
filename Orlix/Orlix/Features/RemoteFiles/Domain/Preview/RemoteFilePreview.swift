@@ -22,10 +22,10 @@ nonisolated package struct RemoteFileViewerPayload: Identifiable, Hashable, Send
 }
 
 nonisolated package enum RemoteFilePreviewKind: Hashable, Sendable {
-    package case text
-    package case image
-    package case video
-    package case unavailable
+    case text
+    case image
+    case video
+    case unavailable
 }
 
 nonisolated package enum RemoteFilePreviewDetector {
