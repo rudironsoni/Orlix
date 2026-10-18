@@ -125,9 +125,24 @@ def _prune_deleted_objects(destination: Path, removed: set[str]) -> None:
 _TREES = ("OrlixKernel/build", "OrlixKernel/release", "OrlixKernel/development")
 
 
+def _identity_files(paths: list[Path]) -> list[Path]:
+    """Hash declared tool files, including every file under a tool directory."""
+    files: list[Path] = []
+    for path in paths:
+        if path.is_dir() and not path.is_symlink():
+            files.extend(
+                child
+                for child in sorted(path.rglob("*"))
+                if child.is_symlink() or child.is_file()
+            )
+        else:
+            files.append(path)
+    return files
+
+
 def resume(root: Path, identity_inputs: list[Path]) -> None:
     directory(root / "OrlixKernel", root)
-    valid = build_state.resume(root, identity_inputs, _TREES)
+    valid = build_state.resume(root, _identity_files(identity_inputs), _TREES)
     print("Orlix Kbuild state: " + ("verified" if valid else "clean"), flush=True)
 
 

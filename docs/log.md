@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Cache the Mach-O kernel archive from staged tools
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `OrlixKernelMachOArchive` with the staged `tools/bin` binaries. The action inputs include the dylibs those binaries open, the staged macOS SDK slice, and `make/tcti-proof-registry-provenance.mk`. `resume()` hashes those files, so a Kbuild identity miss cannot upload stale objects. The archive drops `no-remote-cache` and keeps `no-remote-exec`. ISA restore, Coreutils, Bash, and Autotools keep their cache tags. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Give compiler-rt its own Bazel rule
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves `OrlixCompilerRuntime` out of `orlix_mlibc_sysroot` into one rule the sysroot depends on. The recipe executes staged clang, llvm-ar, mkdir, rm, and sort, and declares the builtin sources, headers, clang resources, and tool libraries it opens. It does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
