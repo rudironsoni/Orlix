@@ -130,7 +130,11 @@ jobs:
           git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
           brew trust --formula xcodesorg/made/xcodes
           python3 bazel/ci/setup_cache.py install-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles"
-          brew bundle --file Brewfile
+          if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then
+            echo "Homebrew packages are already installed; skipping brew bundle"
+          else
+            brew bundle --file Brewfile
+          fi
           test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
           test "$(xcodes version)" = "2.1.0"
           python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles" --brewfile Brewfile
