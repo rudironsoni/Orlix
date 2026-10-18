@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Give compiler-rt its own Bazel rule
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves `OrlixCompilerRuntime` out of `orlix_mlibc_sysroot` into one rule the sysroot depends on. The recipe executes staged clang, llvm-ar, mkdir, rm, and sort, and declares the builtin sources, headers, clang resources, and tool libraries it opens. It does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Cache Bazel CI setup outside the action cache
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) caches Xcode, Homebrew source bottles, simulator runtime archives, and the local ccache directory in GitHub Actions. An iOS runtime that is already on the runner image is not downloaded. A restored runtime archive is not downloaded again. ccache is keyed by the pinned compiler identity and is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. Kernel and Autotools keep `no-remote-cache`. The xcodes assertion stays `2.1.0`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

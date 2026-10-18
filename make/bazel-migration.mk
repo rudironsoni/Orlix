@@ -550,8 +550,8 @@ __bazel-mlibc-from-uapi: __bazel-kernel-uapi
 	rg -q '"sysroot_digest": "'"$$sysroot_digest"'"' bazel-bin/bazel/feasibility/mlibc/sysroot/manifest.json
 	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.json
 	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/sysroot.artifact-identity-v2.sha256
-	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/compiler-runtime.artifact-identity-v2.json
-	@test -s bazel-bin/bazel/feasibility/mlibc/sysroot/compiler-runtime.artifact-identity-v2.sha256
+	@test -s bazel-bin/bazel/feasibility/mlibc/compiler_runtime/compiler-runtime.artifact-identity-v2.json
+	@test -s bazel-bin/bazel/feasibility/mlibc/compiler_runtime/compiler-runtime.artifact-identity-v2.sha256
 
 __bazel-guest-package: __bazel-mlibc-from-uapi
 	@DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" build //bazel/feasibility/packages:true --config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache="$(ORLIX_BAZEL_DISK_CACHE)" --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)"

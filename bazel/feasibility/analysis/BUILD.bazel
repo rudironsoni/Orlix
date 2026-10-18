@@ -10,6 +10,7 @@ load(
     "package_tree_test",
     "rootfs_info_test",
     "kernel_composition_test",
+    "compiler_runtime_inputs_test",
     "sysroot_uapi_only_test",
     "uapi_providers_test",
     "variant_stamp_test",
@@ -35,6 +36,11 @@ uapi_providers_test(
 sysroot_uapi_only_test(
     name = "sysroot_uapi_only_test",
     target_under_test = "//bazel/feasibility/mlibc:sysroot",
+)
+
+compiler_runtime_inputs_test(
+    name = "compiler_runtime_inputs_test",
+    target_under_test = "//bazel/feasibility/mlibc:compiler_runtime",
 )
 
 config_flags_test(

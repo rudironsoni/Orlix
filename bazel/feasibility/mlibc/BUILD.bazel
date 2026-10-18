@@ -1,3 +1,4 @@
+load(":compiler_runtime.bzl", "orlix_compiler_runtime")
 load(":mlibc_sysroot.bzl", "orlix_mlibc_sysroot")
 load("//bazel/selection:boundary.bzl", "orlix_selected_sysroot")
 
@@ -8,15 +9,22 @@ exports_files(
     visibility = ["//bazel/feasibility/kernel:__pkg__"],
 )
 
+orlix_compiler_runtime(
+    name = "compiler_runtime",
+    compiler_rt = "@orlix_compiler_rt_source//:compiler-rt/lib/builtins/addtf3.c",
+    compiler_rt_source = "@orlix_compiler_rt_source//:source",
+    runtime_toolchain_identity = "@orlix_kernel_toolchain//:compiler-runtime-identity.json",
+    tags = ["manual"],
+    visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
 orlix_mlibc_sysroot(
     name = "sysroot",
     toolchain_identity = "@orlix_kernel_toolchain//:mlibc-identity.json",
     compiler_identity = "@orlix_kernel_toolchain//:guest-compiler-identity.json",
-    runtime_toolchain_identity = "@orlix_kernel_toolchain//:compiler-runtime-identity.json",
+    compiler_runtime = ":compiler_runtime",
     bragi = "@orlix_bragi_source//:Cargo.toml",
     bragi_source = "@orlix_bragi_source//:source",
-    compiler_rt = "@orlix_compiler_rt_source//:compiler-rt/lib/builtins/addtf3.c",
-    compiler_rt_source = "@orlix_compiler_rt_source//:source",
     freestnd_c = "@orlix_freestnd_c_source//:COPYING",
     freestnd_c_source = "@orlix_freestnd_c_source//:source",
     freestnd_cxx = "@orlix_freestnd_cxx_source//:COPYING",
