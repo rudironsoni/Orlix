@@ -92,7 +92,7 @@ package struct ServerLocalStore {
     }
 }
 
-package extension ServerLocalStore: ServerDataMutationJournalStoring {
+extension ServerLocalStore: ServerDataMutationJournalStoring {
     package func loadServerDataMutationJournal() throws -> ServerDataMutationJournal? {
         guard let data = defaults.data(forKey: Self.serverDataMutationJournalKey) else {
             return nil
@@ -126,7 +126,7 @@ package extension ServerLocalStore: ServerDataMutationJournalStoring {
     }
 }
 
-package extension ServerLocalStore: ServerLocalRepository {
+extension ServerLocalStore: ServerLocalRepository {
     package func loadSnapshot() -> ServerLocalRepositorySnapshot {
         ServerLocalRepositorySnapshot(
             servers: loadServers(),

@@ -7,7 +7,7 @@ package protocol AboutWindowHandling: AnyObject {
     func presentAboutWindow()
 }
 
-package extension NSWindow: AboutWindowHandling {
+extension NSWindow: AboutWindowHandling {
     package func presentAboutWindow() {
         makeKeyAndOrderFront(nil)
     }

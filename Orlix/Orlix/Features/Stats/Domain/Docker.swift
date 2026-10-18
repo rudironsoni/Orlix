@@ -5,6 +5,16 @@ nonisolated package struct DockerStats: Equatable, Sendable {
     package var containers: [DockerContainer] = []
     package var timestamp: Date = Date()
 
+    package init(
+        availability: DockerAvailability = .unknown,
+        containers: [DockerContainer] = [],
+        timestamp: Date = Date()
+    ) {
+        self.availability = availability
+        self.containers = containers
+        self.timestamp = timestamp
+    }
+
     package var isAvailable: Bool {
         if case .available = availability {
             return true
@@ -96,6 +106,48 @@ nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
     package let blockRead: UInt64?
     package let blockWrite: UInt64?
     package let pids: Int?
+
+    package init(
+        id: String,
+        name: String,
+        image: String,
+        command: String,
+        state: DockerContainerState,
+        status: String,
+        health: DockerHealthStatus,
+        createdAt: String,
+        runningFor: String,
+        ports: String,
+        cpuPercent: Double,
+        memoryPercent: Double,
+        memoryUsed: UInt64? = nil,
+        memoryLimit: UInt64? = nil,
+        networkRx: UInt64? = nil,
+        networkTx: UInt64? = nil,
+        blockRead: UInt64? = nil,
+        blockWrite: UInt64? = nil,
+        pids: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.image = image
+        self.command = command
+        self.state = state
+        self.status = status
+        self.health = health
+        self.createdAt = createdAt
+        self.runningFor = runningFor
+        self.ports = ports
+        self.cpuPercent = cpuPercent
+        self.memoryPercent = memoryPercent
+        self.memoryUsed = memoryUsed
+        self.memoryLimit = memoryLimit
+        self.networkRx = networkRx
+        self.networkTx = networkTx
+        self.blockRead = blockRead
+        self.blockWrite = blockWrite
+        self.pids = pids
+    }
 
     package var shortID: String {
         String(id.prefix(12))

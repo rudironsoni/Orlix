@@ -3,6 +3,10 @@ import SwiftUI
 package struct ProBadge: View {
     package var compact: Bool = false
 
+    package init(compact: Bool = false) {
+        self.compact = compact
+    }
+
     package var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "star.fill")
@@ -21,6 +25,8 @@ package struct ProBadge: View {
 }
 
 package struct LockedBadge: View {
+    package init() {}
+
     package var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "lock.fill")

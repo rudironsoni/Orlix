@@ -14,7 +14,7 @@ final package class UserDefaultsServerVolumeVisibilityPersistence:
         self.defaults = defaults
     }
 
-    func loadPreferences() -> ServerVolumeVisibilityPreferences {
+    package func loadPreferences() -> ServerVolumeVisibilityPreferences {
         guard let data = defaults.data(forKey: Self.storageKey),
               let preferences = try? JSONDecoder().decode(
                   ServerVolumeVisibilityPreferences.self,
@@ -25,7 +25,7 @@ final package class UserDefaultsServerVolumeVisibilityPersistence:
         return preferences
     }
 
-    func savePreferences(_ preferences: ServerVolumeVisibilityPreferences) {
+    package func savePreferences(_ preferences: ServerVolumeVisibilityPreferences) {
         guard !containsFutureSchema else { return }
         guard let data = try? JSONEncoder().encode(preferences) else { return }
         defaults.set(data, forKey: Self.storageKey)

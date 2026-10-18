@@ -190,6 +190,16 @@ nonisolated package struct EMMCHealth: Hashable, Sendable {
     package let preEOL: EMMCPreEOLStatus
     package let lifetimeTypeA: EMMCLifetimeEstimate?
     package let lifetimeTypeB: EMMCLifetimeEstimate?
+
+    package init(
+        preEOL: EMMCPreEOLStatus,
+        lifetimeTypeA: EMMCLifetimeEstimate? = nil,
+        lifetimeTypeB: EMMCLifetimeEstimate? = nil
+    ) {
+        self.preEOL = preEOL
+        self.lifetimeTypeA = lifetimeTypeA
+        self.lifetimeTypeB = lifetimeTypeB
+    }
 }
 
 nonisolated package struct StorageHealthMetrics: Hashable, Sendable {
@@ -211,6 +221,44 @@ nonisolated package struct StorageHealthMetrics: Hashable, Sendable {
     package var startStopCycleCount: UInt64?
     package var loadUnloadCycleCount: UInt64?
     package var emmc: EMMCHealth?
+
+    package init(
+        temperatureCelsius: Double? = nil,
+        maximumTemperatureCelsius: Double? = nil,
+        percentageUsed: Double? = nil,
+        availableSparePercent: Double? = nil,
+        availableSpareThresholdPercent: Double? = nil,
+        powerOnHours: UInt64? = nil,
+        powerCycleCount: UInt64? = nil,
+        unsafeShutdownCount: UInt64? = nil,
+        mediaErrorCount: UInt64? = nil,
+        errorLogEntryCount: UInt64? = nil,
+        readErrorsCorrected: UInt64? = nil,
+        readErrorsUncorrected: UInt64? = nil,
+        writeErrorsCorrected: UInt64? = nil,
+        writeErrorsUncorrected: UInt64? = nil,
+        startStopCycleCount: UInt64? = nil,
+        loadUnloadCycleCount: UInt64? = nil,
+        emmc: EMMCHealth? = nil
+    ) {
+        self.temperatureCelsius = temperatureCelsius
+        self.maximumTemperatureCelsius = maximumTemperatureCelsius
+        self.percentageUsed = percentageUsed
+        self.availableSparePercent = availableSparePercent
+        self.availableSpareThresholdPercent = availableSpareThresholdPercent
+        self.powerOnHours = powerOnHours
+        self.powerCycleCount = powerCycleCount
+        self.unsafeShutdownCount = unsafeShutdownCount
+        self.mediaErrorCount = mediaErrorCount
+        self.errorLogEntryCount = errorLogEntryCount
+        self.readErrorsCorrected = readErrorsCorrected
+        self.readErrorsUncorrected = readErrorsUncorrected
+        self.writeErrorsCorrected = writeErrorsCorrected
+        self.writeErrorsUncorrected = writeErrorsUncorrected
+        self.startStopCycleCount = startStopCycleCount
+        self.loadUnloadCycleCount = loadUnloadCycleCount
+        self.emmc = emmc
+    }
 }
 
 nonisolated package struct StorageHealthReport: Hashable, Sendable {
@@ -331,6 +379,20 @@ nonisolated package struct StorageHealthVolumeReport: Hashable, Sendable {
     package let coverage: StorageHealthCoverage
     package let findings: [StorageHealthFinding]
     package let members: [StorageHealthMemberReport]
+
+    package init(
+        topology: StorageTopologyKind,
+        name: String? = nil,
+        coverage: StorageHealthCoverage,
+        findings: [StorageHealthFinding],
+        members: [StorageHealthMemberReport]
+    ) {
+        self.topology = topology
+        self.name = name
+        self.coverage = coverage
+        self.findings = findings
+        self.members = members
+    }
 
     package var state: StorageHealthState {
         let poolState = findings.reduce(StorageHealthState.unknown) { state, finding in
