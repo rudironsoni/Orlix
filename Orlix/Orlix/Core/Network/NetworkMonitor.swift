@@ -70,7 +70,7 @@ final package class NetworkMonitor: ObservableObject {
         )
     }
 
-    @Published private(set) var snapshot: Snapshot = .unknown
+    @Published package private(set) var snapshot: Snapshot = .unknown
 
     package var readiness: Readiness { snapshot.readiness }
     package var isConnected: Bool { readiness == .ready }
