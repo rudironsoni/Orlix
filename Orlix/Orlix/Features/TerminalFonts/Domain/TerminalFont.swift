@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated struct TerminalFont: Identifiable, Codable, Equatable, Sendable {
-    typealias ID = String
+nonisolated package struct TerminalFont: Identifiable, Codable, Equatable, Sendable {
+    package typealias ID = String
 
-    enum FileFormat: String, CaseIterable, Sendable {
+    package enum FileFormat: String, CaseIterable, Sendable {
         case ttf
         case otf
         case ttc
@@ -14,14 +14,14 @@ nonisolated struct TerminalFont: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
-    let familyNames: [String]
-    let originalFilename: String
-    let fileSize: Int64
-    let sha256: String
-    var updatedAt: Date
-    var deletedAt: Date?
+    package let familyNames: [String]
+    package let originalFilename: String
+    package let fileSize: Int64
+    package let sha256: String
+    package var updatedAt: Date
+    package var deletedAt: Date?
 
-    init(
+    package init(
         familyNames: [String],
         originalFilename: String,
         fileSize: Int64,
@@ -37,15 +37,15 @@ nonisolated struct TerminalFont: Identifiable, Codable, Equatable, Sendable {
         self.deletedAt = deletedAt
     }
 
-    var displayName: String {
+    package var displayName: String {
         familyNames.first ?? originalFilename
     }
 
-    var id: String {
+    package var id: String {
         sha256
     }
 
-    var isDeleted: Bool {
+    package var isDeleted: Bool {
         deletedAt != nil
     }
 }

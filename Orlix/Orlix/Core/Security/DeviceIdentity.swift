@@ -1,10 +1,10 @@
 import Foundation
 
-enum DeviceIdentity {
+package enum DeviceIdentity {
     private static let storageKey = "orlix.deviceId"
     private static let keychain = KeychainStore(service: "com.rudironsoni.orlix")
 
-    static let id: String = {
+    static package let id: String = {
         let storedValue = (try? keychain.getString(storageKey, scope: .deviceOnly)) ?? nil
         if let value = storedValue, !value.isEmpty {
             return value

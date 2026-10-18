@@ -8,6 +8,10 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+#endif
 struct ConnectionViewSegmentedPicker: UIViewRepresentable {
     @Binding var selection: ConnectionViewTabID
     let tabs: [ConnectionViewTabID]

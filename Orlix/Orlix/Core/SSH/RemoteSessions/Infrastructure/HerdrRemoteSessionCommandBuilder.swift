@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum HerdrRemoteSessionCommandBuilder {
     static let availableMarker = "__VVTERM_HERDR_OK__"
     static let missingMarker = "__VVTERM_HERDR_NO__"

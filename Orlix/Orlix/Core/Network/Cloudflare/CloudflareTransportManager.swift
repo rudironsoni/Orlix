@@ -44,7 +44,7 @@ typealias CloudflareTransportSessionFactory = @Sendable (
     any AuthProviding
 ) -> CloudflareTransportSession
 
-actor CloudflareTransportManager {
+package actor CloudflareTransportManager {
     private enum SessionState {
         case idle
         case preparing(UUID)
@@ -156,7 +156,7 @@ actor CloudflareTransportManager {
     private var metadataCache: [String: AccessMetadata] = [:]
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix", category: "CloudflareTransport")
 
-    init(
+    package init(
         makeSession: @escaping CloudflareTransportSessionFactory = { authProvider in
             let session = SessionActor(
                 authProvider: authProvider,
@@ -180,7 +180,7 @@ actor CloudflareTransportManager {
         self.makeSession = makeSession
     }
 
-    func connect(server: Server, credentials: ServerCredentials) async throws -> UInt16 {
+    package func connect(server: Server, credentials: ServerCredentials) async throws -> UInt16 {
         let operationID = UUID()
         let previousSession = sessionState.session
         sessionState = .preparing(operationID)
@@ -292,7 +292,7 @@ actor CloudflareTransportManager {
         }
     }
 
-    func disconnect() async {
+    package func disconnect() async {
         let session = sessionState.session
         sessionState = .idle
         guard let session else { return }

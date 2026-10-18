@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct WakeOnLANNetworkInterface: Equatable, Sendable {
     let address: WakeOnLANIPv4Address
     let netmask: WakeOnLANIPv4Address

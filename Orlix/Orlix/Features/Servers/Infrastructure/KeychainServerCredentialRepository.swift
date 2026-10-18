@@ -1,3 +1,6 @@
 import Foundation
 
-extension KeychainManager: ServerCredentialRepository {}
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension KeychainManager: ServerCredentialRepository {}

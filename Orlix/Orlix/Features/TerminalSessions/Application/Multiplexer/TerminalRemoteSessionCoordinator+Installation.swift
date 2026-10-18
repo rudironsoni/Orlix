@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 extension TerminalRemoteSessionCoordinator {
     private enum InstallOutcome: Sendable {

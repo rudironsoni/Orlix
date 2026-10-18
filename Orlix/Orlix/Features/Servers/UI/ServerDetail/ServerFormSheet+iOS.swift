@@ -1,14 +1,14 @@
 #if os(iOS)
 import SwiftUI
 
-extension ServerFormSheet {
-    var platformBody: some View {
+package extension ServerFormSheet {
+    package var platformBody: some View {
         formContent
     }
 }
 
-extension MoveServerSheet {
-    var platformBody: some View {
+package extension MoveServerSheet {
+    package var platformBody: some View {
         formContent
     }
 }

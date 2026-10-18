@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum StoreManagerEffect: Equatable, Sendable {
     case paywallPresented(source: PaywallSource)
     case paywallCTATapped(source: PaywallSource, productID: String)

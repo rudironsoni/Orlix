@@ -1,6 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct TerminalTabsScrollView: View {
     let tabs: [TerminalTab]
     @Binding var selectedTabId: UUID?

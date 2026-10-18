@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated struct DockerStatsCollector: Sendable {
     nonisolated static let periodicContainerLimit = 24
 
@@ -205,7 +209,7 @@ nonisolated enum DockerControlError: LocalizedError, Sendable {
 }
 
 nonisolated private extension DockerAvailability {
-    var controlFailureMessage: String {
+    package var controlFailureMessage: String {
         switch self {
         case .unknown:
             return "Docker status is unknown."

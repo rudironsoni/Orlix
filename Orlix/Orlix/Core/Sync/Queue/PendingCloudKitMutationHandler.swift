@@ -1,4 +1,4 @@
 @MainActor
-protocol PendingCloudKitMutationHandling: AnyObject {
-    func handle(_ mutation: PendingCloudKitMutation) async throws
+package protocol PendingCloudKitMutationHandling: AnyObject {
+    package func handle(_ mutation: PendingCloudKitMutation) async throws
 }

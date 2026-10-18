@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated enum RemoteFileByteCountFormatter {
+nonisolated package enum RemoteFileByteCountFormatter {
     private static let bytesPerExabyte = 1_000_000_000_000_000_000.0
 
-    static func string(from byteCount: UInt64) -> String {
+    static package func string(from byteCount: UInt64) -> String {
         if byteCount <= UInt64(Int64.max) {
             return ByteCountFormatter.string(
                 fromByteCount: Int64(byteCount),

@@ -3,18 +3,18 @@ import Foundation
 import os.log
 
 @MainActor
-extension CloudKitManager {
+package extension CloudKitManager {
     // MARK: - Account Status
 
     /// Ensures account status is checked before performing operations
-    func ensureAccountStatusChecked(for generation: UUID) async throws {
+    package func ensureAccountStatusChecked(for generation: UUID) async throws {
         try requireCurrentGeneration(generation)
         guard !isAvailable else { return }
         await checkAccountStatus(for: generation)
         try requireCurrentGeneration(generation)
     }
 
-    func checkAccountStatus(for generation: UUID) async {
+    package func checkAccountStatus(for generation: UUID) async {
         guard isCurrentGeneration(generation) else { return }
 
         let check: AccountStatusCheck
@@ -80,12 +80,12 @@ extension CloudKitManager {
         }
     }
 
-    func applySyncDisabledState() {
+    package func applySyncDisabledState() {
         statusStore.syncState.markDisabled()
         statusStore.accountState = .disabled
     }
 
-    func handleSyncToggle(_ enabled: Bool) {
+    package func handleSyncToggle(_ enabled: Bool) {
         let generation = advanceSyncGeneration()
         if enabled {
             statusStore.accountState = .checking

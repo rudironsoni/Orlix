@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
-    var schemaVersion: Int
-    var style: Style
-    var blocks: [Block]
-    var updatedAt: Date
-    var lastWriterDeviceId: String
+nonisolated package struct StatsPreferences: Codable, Equatable, Sendable {
+    package var schemaVersion: Int
+    package var style: Style
+    package var blocks: [Block]
+    package var updatedAt: Date
+    package var lastWriterDeviceId: String
 
-    init(
+    package init(
         schemaVersion: Int = Self.schemaVersion,
         style: Style,
         blocks: [Block],
@@ -21,7 +21,7 @@ nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
         self.lastWriterDeviceId = lastWriterDeviceId
     }
 
-    enum Style: String, Codable, CaseIterable, Identifiable, Sendable {
+    package enum Style: String, Codable, CaseIterable, Identifiable, Sendable {
         case cardsCompact
         case cardsDetailed
         case classic
@@ -29,7 +29,7 @@ nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
         var id: String { rawValue }
     }
 
-    enum BlockID: String, Codable, CaseIterable, Identifiable, Sendable {
+    package enum BlockID: String, Codable, CaseIterable, Identifiable, Sendable {
         case system
         case cpu
         case memory
@@ -42,7 +42,7 @@ nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
         var id: String { rawValue }
     }
 
-    struct Block: Codable, Equatable, Identifiable, Sendable {
+    package struct Block: Codable, Equatable, Identifiable, Sendable {
         var id: BlockID
         var isVisible: Bool
         var order: Int
@@ -50,17 +50,17 @@ nonisolated struct StatsPreferences: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated extension StatsPreferences {
-    nonisolated static let schemaVersion = 1
-    static let recordName = "statsPreferences.v1"
+nonisolated package extension StatsPreferences {
+    nonisolated static package let schemaVersion = 1
+    static package let recordName = "statsPreferences.v1"
 
-    static var defaultBlocks: [Block] {
+    static package var defaultBlocks: [Block] {
         BlockID.allCases.enumerated().map { index, id in
             Block(id: id, isVisible: true, order: index, updatedAt: .distantPast)
         }
     }
 
-    static func defaultValue(lastWriterDeviceId: String) -> StatsPreferences {
+    static package func defaultValue(lastWriterDeviceId: String) -> StatsPreferences {
         StatsPreferences(
             style: .cardsDetailed,
             blocks: defaultBlocks,
@@ -69,21 +69,21 @@ nonisolated extension StatsPreferences {
         )
     }
 
-    var visibleBlocks: [BlockID] {
+    package var visibleBlocks: [BlockID] {
         orderedBlocks
             .filter(\.isVisible)
             .map(\.id)
     }
 
-    var orderedBlocks: [Block] {
+    package var orderedBlocks: [Block] {
         Self.sortedBlocks(blocks)
     }
 
-    func isBlockVisible(_ id: BlockID) -> Bool {
+    package func isBlockVisible(_ id: BlockID) -> Bool {
         blocks.first(where: { $0.id == id })?.isVisible ?? true
     }
 
-    func normalized() -> StatsPreferences {
+    package func normalized() -> StatsPreferences {
         var blocksByID: [BlockID: Block] = [:]
         for block in blocks {
             if let existing = blocksByID[block.id] {
@@ -125,7 +125,7 @@ nonisolated extension StatsPreferences {
         )
     }
 
-    static func merged(local: StatsPreferences, remote: StatsPreferences) -> StatsPreferences {
+    static package func merged(local: StatsPreferences, remote: StatsPreferences) -> StatsPreferences {
         let local = local.normalized()
         let remote = remote.normalized()
         let profileWinner = local.updatedAt > remote.updatedAt ? local : remote

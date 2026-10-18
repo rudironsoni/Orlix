@@ -1,41 +1,41 @@
 import Dispatch
 import Foundation
 
-nonisolated struct Duration: Sendable, Hashable, Comparable {
-    nonisolated struct Components: Sendable, Hashable {
+nonisolated package struct Duration: Sendable, Hashable, Comparable {
+    nonisolated package struct Components: Sendable, Hashable {
         let seconds: Int64
         let attoseconds: Int64
     }
 
     fileprivate let nanoseconds: Int64
 
-    static let zero = Duration(nanoseconds: 0)
+    static package let zero = Duration(nanoseconds: 0)
 
-    static func seconds(_ value: Int) -> Duration {
+    static package func seconds(_ value: Int) -> Duration {
         seconds(Int64(value))
     }
 
-    static func seconds(_ value: Int64) -> Duration {
+    static package func seconds(_ value: Int64) -> Duration {
         Duration(nanoseconds: multipliedClamping(value, by: 1_000_000_000))
     }
 
-    static func seconds(_ value: Double) -> Duration {
+    static package func seconds(_ value: Double) -> Duration {
         fromFloatingPoint(value, scale: 1_000_000_000)
     }
 
-    static func milliseconds(_ value: Int) -> Duration {
+    static package func milliseconds(_ value: Int) -> Duration {
         milliseconds(Int64(value))
     }
 
-    static func milliseconds(_ value: Int64) -> Duration {
+    static package func milliseconds(_ value: Int64) -> Duration {
         Duration(nanoseconds: multipliedClamping(value, by: 1_000_000))
     }
 
-    static func milliseconds(_ value: Double) -> Duration {
+    static package func milliseconds(_ value: Double) -> Duration {
         fromFloatingPoint(value, scale: 1_000_000)
     }
 
-    var components: Components {
+    package var components: Components {
         let seconds = nanoseconds / 1_000_000_000
         let remainingNanoseconds = nanoseconds % 1_000_000_000
         return Components(
@@ -69,8 +69,8 @@ nonisolated struct Duration: Sendable, Hashable, Comparable {
     }
 }
 
-nonisolated struct ContinuousClock: Sendable {
-    nonisolated struct Instant: Sendable, Hashable, Comparable {
+nonisolated package struct ContinuousClock: Sendable {
+    nonisolated package struct Instant: Sendable, Hashable, Comparable {
         fileprivate let uptimeNanoseconds: UInt64
 
         static var now: Instant {
@@ -107,11 +107,11 @@ nonisolated struct ContinuousClock: Sendable {
         }
     }
 
-    static var now: Instant {
+    static package var now: Instant {
         .now
     }
 
-    var now: Instant {
+    package var now: Instant {
         Self.now
     }
 }

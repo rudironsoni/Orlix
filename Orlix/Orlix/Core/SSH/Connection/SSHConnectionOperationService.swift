@@ -1,11 +1,14 @@
-actor SSHConnectionOperationService {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package actor SSHConnectionOperationService {
     private let clientFactory: SSHClientFactory
 
-    init(clientFactory: SSHClientFactory) {
+    package init(clientFactory: SSHClientFactory) {
         self.clientFactory = clientFactory
     }
 
-    func runWithConnection<T: Sendable>(
+    package func runWithConnection<T: Sendable>(
         using client: SSHClient,
         server: Server,
         credentials: ServerCredentials,
@@ -27,7 +30,7 @@ actor SSHConnectionOperationService {
         }
     }
 
-    func withTemporaryConnection<T: Sendable>(
+    package func withTemporaryConnection<T: Sendable>(
         server: Server,
         credentials: ServerCredentials,
         operation: @escaping @Sendable (SSHClient) async throws -> T

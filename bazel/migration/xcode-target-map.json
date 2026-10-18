@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "Resolved XcodeGen target, scheme, package, setting, source, resource, dependency, and build-phase inventory.",
   "source_file": "project.yml",
-  "source_sha256": "6a1b1541f54a169784f47ee1456ca6cbf79a120926393c1ba319583d1d63a1ad",
+  "source_sha256": "24097a5d57322dc929f0ed05b465a3d0850f2f46c503d591983aedc5b019d8bf",
   "project": {
     "name": "Orlix",
     "options": {
@@ -624,6 +624,11 @@
             "SWIFT_APPROACHABLE_CONCURRENCY": true,
             "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
             "SWIFT_EMIT_LOC_STRINGS": true,
+            "OTHER_SWIFT_FLAGS": [
+              "$(inherited)",
+              "-package-name",
+              "Orlix"
+            ],
             "SWIFT_OBJC_BRIDGING_HEADER": "Orlix/Orlix/ghostty-bridging-header.h",
             "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
             "SWIFT_VERSION": "5.0",
@@ -836,6 +841,11 @@
             "SWIFT_APPROACHABLE_CONCURRENCY": true,
             "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
             "SWIFT_EMIT_LOC_STRINGS": true,
+            "OTHER_SWIFT_FLAGS": [
+              "$(inherited)",
+              "-package-name",
+              "Orlix"
+            ],
             "SWIFT_OBJC_BRIDGING_HEADER": "Orlix/Orlix/ghostty-bridging-header.h",
             "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,
             "SWIFT_VERSION": "5.0",
@@ -886,6 +896,11 @@
             "IPHONEOS_DEPLOYMENT_TARGET": "16.1",
             "PRODUCT_BUNDLE_IDENTIFIER": "com.rudironsoni.Orlix.live-activity",
             "PRODUCT_NAME": "OrlixLiveActivity",
+            "OTHER_SWIFT_FLAGS": [
+              "$(inherited)",
+              "-package-name",
+              "Orlix"
+            ],
             "SKIP_INSTALL": true,
             "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
             "SWIFT_VERSION": "5.0",
@@ -934,6 +949,11 @@
             "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp",
             "BUNDLE_LOADER": "$(TEST_HOST)",
             "STRING_CATALOG_GENERATE_SYMBOLS": false,
+            "OTHER_SWIFT_FLAGS": [
+              "$(inherited)",
+              "-package-name",
+              "Orlix"
+            ],
             "SWIFT_APPROACHABLE_CONCURRENCY": true,
             "SWIFT_EMIT_LOC_STRINGS": false,
             "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": true,

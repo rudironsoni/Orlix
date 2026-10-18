@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated struct RemoteFileBrowserPersistedState: Codable, Hashable, Sendable {
-    var lastVisitedPath: String?
-    var sort: RemoteFileSort
-    var sortDirection: RemoteFileSortDirection
-    var showHiddenFiles: Bool
-    var hasCustomizedHiddenFiles: Bool
+nonisolated package struct RemoteFileBrowserPersistedState: Codable, Hashable, Sendable {
+    package var lastVisitedPath: String?
+    package var sort: RemoteFileSort
+    package var sortDirection: RemoteFileSortDirection
+    package var showHiddenFiles: Bool
+    package var hasCustomizedHiddenFiles: Bool
 
-    init(
+    package init(
         lastVisitedPath: String? = nil,
         sort: RemoteFileSort = .name,
         sortDirection: RemoteFileSortDirection? = nil,
@@ -29,7 +29,7 @@ nonisolated struct RemoteFileBrowserPersistedState: Codable, Hashable, Sendable 
         case hasCustomizedHiddenFiles
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let sort = try container.decodeIfPresent(RemoteFileSort.self, forKey: .sort) ?? .name
         lastVisitedPath = try container.decodeIfPresent(String.self, forKey: .lastVisitedPath)

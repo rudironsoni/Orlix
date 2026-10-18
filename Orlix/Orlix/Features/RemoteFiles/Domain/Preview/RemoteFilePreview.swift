@@ -1,37 +1,37 @@
 import Foundation
 
-nonisolated struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
-    let previewKind: RemoteFilePreviewKind
-    let entry: RemoteFileEntry
-    let textPreview: String?
-    let previewFileURL: URL?
-    let isTruncated: Bool
-    let unavailableMessage: String?
-    let requiresExplicitDownload: Bool
-    let previewByteCount: UInt64?
+nonisolated package struct RemoteFileViewerPayload: Identifiable, Hashable, Sendable {
+    package let previewKind: RemoteFilePreviewKind
+    package let entry: RemoteFileEntry
+    package let textPreview: String?
+    package let previewFileURL: URL?
+    package let isTruncated: Bool
+    package let unavailableMessage: String?
+    package let requiresExplicitDownload: Bool
+    package let previewByteCount: UInt64?
 
-    var id: String { entry.id }
+    package var id: String { entry.id }
 
-    var isInlinePreviewAvailable: Bool {
+    package var isInlinePreviewAvailable: Bool {
         previewKind != .unavailable && !requiresExplicitDownload
     }
 
-    var canEditText: Bool {
+    package var canEditText: Bool {
         previewKind == .text && textPreview != nil && !isTruncated
     }
 }
 
-nonisolated enum RemoteFilePreviewKind: Hashable, Sendable {
-    case text
-    case image
-    case video
-    case unavailable
+nonisolated package enum RemoteFilePreviewKind: Hashable, Sendable {
+    package case text
+    package case image
+    package case video
+    package case unavailable
 }
 
-nonisolated enum RemoteFilePreviewDetector {
+nonisolated package enum RemoteFilePreviewDetector {
     private static let nullByte = UInt8(ascii: "\0")
 
-    static func decodeTextPreview(from data: Data) -> String? {
+    static package func decodeTextPreview(from data: Data) -> String? {
         guard isProbablyText(data) else { return nil }
 
         if let utf8 = String(data: data, encoding: .utf8) {
@@ -49,7 +49,7 @@ nonisolated enum RemoteFilePreviewDetector {
         return nil
     }
 
-    static func isProbablyText(_ data: Data) -> Bool {
+    static package func isProbablyText(_ data: Data) -> Bool {
         guard !data.isEmpty else { return true }
 
         let sample = data.prefix(1024)

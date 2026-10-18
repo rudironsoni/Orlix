@@ -2,8 +2,8 @@
 import SwiftUI
 import UIKit
 
-extension SupportSheet {
-    func openURL(_ urlString: String) {
+package extension SupportSheet {
+    package func openURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         UIApplication.shared.open(url)
     }

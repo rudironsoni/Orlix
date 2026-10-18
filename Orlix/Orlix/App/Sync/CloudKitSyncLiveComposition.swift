@@ -1,5 +1,11 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @MainActor
 struct CloudKitSyncClients {
     let serverCloud: any ServerRemoteMutationClient

@@ -10,8 +10,8 @@ nonisolated enum RemoteFileDropPlan: Equatable, Sendable {
     case copy(sourceServerID: UUID, entries: [RemoteFileEntry], destinationDirectory: String)
 }
 
-nonisolated enum RemoteFileDropPolicy {
-    static func plan(
+nonisolated package enum RemoteFileDropPolicy {
+    static package func plan(
         payloads: [RemoteFileDragPayload],
         destinationServerID: UUID,
         destinationDirectoryPath: String

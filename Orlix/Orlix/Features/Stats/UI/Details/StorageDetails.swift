@@ -2,6 +2,9 @@ import CryptoKit
 import Foundation
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum StorageVolumeEditingState: Equatable, Sendable {
     case browsing
     case editing
@@ -42,18 +45,18 @@ nonisolated enum StorageVolumePresentationPolicy {
     }
 }
 
-struct StorageDetailsSheet: View {
-    let volumes: [VolumeInfo]
-    let hiddenVolumeIDs: Set<VolumeIdentity>
-    let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
-    let setVolumeVisibility: (VolumeInfo, Bool) -> Void
-    let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
+package struct StorageDetailsSheet: View {
+    package let volumes: [VolumeInfo]
+    package let hiddenVolumeIDs: Set<VolumeIdentity>
+    package let loadStorageHealth: ((VolumeInfo) async throws -> StorageHealthResult)?
+    package let setVolumeVisibility: (VolumeInfo, Bool) -> Void
+    package let setVolumesVisibility: ([VolumeInfo], Bool) -> Void
 
     @State private var searchText = ""
     @State private var editingState: StorageVolumeEditingState = .browsing
     @State private var selectedHealthVolume: VolumeInfo?
 
-    var body: some View {
+    package var body: some View {
         StorageDetailsPlatformShell(
             searchText: $searchText,
             controls: { toolbarControl },
@@ -354,7 +357,7 @@ private struct StorageVolumeEmptyRow: View {
 }
 
 private extension VolumeKind {
-    var systemImage: String {
+    package var systemImage: String {
         switch self {
         case .physical:
             return "internaldrive"
@@ -369,7 +372,7 @@ private extension VolumeKind {
         }
     }
 
-    var tint: Color {
+    package var tint: Color {
         switch self {
         case .physical:
             return .orange
@@ -384,7 +387,7 @@ private extension VolumeKind {
 }
 
 private extension VolumeInfo {
-    var usageTint: Color {
+    package var usageTint: Color {
         if percent > 90 { return .red }
         if percent > 80 { return .orange }
         return .green

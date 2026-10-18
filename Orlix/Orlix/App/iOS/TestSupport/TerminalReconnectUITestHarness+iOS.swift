@@ -1,11 +1,19 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 import UIKit
+#if ORLIX_MODULAR_APP
+import OrlixFiles
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 
 /// Boots the production server route against a loopback SSH fixture. Only the
 /// app's root data is seeded here; terminal, reconnect, responder, and SSH work
 /// all run through the same types used by the normal iOS route.
-struct TerminalReconnectUITestHarness: View {
+package struct TerminalReconnectUITestHarness: View {
     private enum FixtureState {
         case preparing
         case ready(Server)
@@ -49,7 +57,7 @@ struct TerminalReconnectUITestHarness: View {
     @ObservedObject private var fileBrowser: RemoteFileBrowserStore
     @State private var fixtureState = FixtureState.preparing
 
-    init(
+    package init(
         tabManager: TerminalTabManager,
         serverManager: ServerManager,
         serverWakeCoordinator: ServerWakeCoordinator,
@@ -78,7 +86,7 @@ struct TerminalReconnectUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         fixtureContent
             .overlay(alignment: .topLeading) {
                 TerminalReconnectDiagnosticsLabel(

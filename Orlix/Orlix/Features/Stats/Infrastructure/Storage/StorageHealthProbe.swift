@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum StorageHealthProbe {
     private static let timeout: Duration = .seconds(12)
 

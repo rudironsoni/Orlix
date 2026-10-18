@@ -1,6 +1,9 @@
 import Foundation
 import os
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum SSHStartupStage: String, Sendable {
     case transportPreparation
     case dnsResolution

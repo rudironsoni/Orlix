@@ -9,24 +9,24 @@
 import UIKit
 import os
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
 
-    func consumePendingSystemTextInputHardwareKey() -> UIKey? {
+    package func consumePendingSystemTextInputHardwareKey() -> UIKey? {
         guard !pendingSystemTextInputHardwareKeys.isEmpty else { return nil }
         return pendingSystemTextInputHardwareKeys.removeFirst()
     }
 
-    func cancelHardwareKeyRepeatForIMEComposition() {
+    package func cancelHardwareKeyRepeatForIMEComposition() {
         cancelTrackedHardwareInput()
     }
 
-    func removeUnconsumedPendingSystemTextInputHardwareKeys(after pendingCount: Int) {
+    package func removeUnconsumedPendingSystemTextInputHardwareKeys(after pendingCount: Int) {
         guard pendingSystemTextInputHardwareKeys.count > pendingCount else { return }
         pendingSystemTextInputHardwareKeys.removeSubrange(pendingCount...)
     }
 
     @discardableResult
-    func sendInterpretedHardwareKeyText(
+    package func sendInterpretedHardwareKeyText(
         _ text: String,
         for key: UIKey,
         repeatSource: TerminalHardwareKeyRepeatSource = .systemInterpretedText
@@ -45,7 +45,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func sendResolvedInterpretedHardwareKeyText(
+    package func sendResolvedInterpretedHardwareKeyText(
         _ text: String,
         keyCode: UInt16,
         modifiers: UIKeyModifierFlags,
@@ -81,7 +81,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    func updateActiveInterpretedHardwareKeyRepeat(text: String) -> Bool {
+    package func updateActiveInterpretedHardwareKeyRepeat(text: String) -> Bool {
         guard !text.isEmpty,
               let active = activeHardwareKeyRepeat,
               systemTextInputPresses.contains(active.keyCode) else {
@@ -96,7 +96,7 @@ extension GhosttyTerminalView {
         return true
     }
 
-    var isNativeSelectionTextInputContext: Bool {
+    package var isNativeSelectionTextInputContext: Bool {
         usesNativeTouchSelection
             && (
                 isFindNavigatorActive
@@ -113,8 +113,8 @@ extension GhosttyTerminalView {
 }
 
 
-extension GhosttyTerminalView {
-    func setupInputModeObservation() {
+package extension GhosttyTerminalView {
+    package func setupInputModeObservation() {
         inputModeObserver = NotificationCenter.default.addObserver(
             forName: UITextInputMode.currentInputModeDidChangeNotification,
             object: nil,

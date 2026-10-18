@@ -2,6 +2,9 @@ import Foundation
 import Network
 import Darwin
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 final class LocalSSHDiscoveryService: NSObject {
     private let bonjourTypes = ["_ssh._tcp.", "_sftp-ssh._tcp."]

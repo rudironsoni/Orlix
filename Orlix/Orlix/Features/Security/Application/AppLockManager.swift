@@ -1,8 +1,11 @@
 import Foundation
 import Combine
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class AppLockManager: ObservableObject {
+final package class AppLockManager: ObservableObject {
     @Published private(set) var lockState: AppLockState
     @Published private(set) var authenticationState: AppLockAuthenticationState = .idle
     @Published private(set) var lastFailure: AppLockFailure?
@@ -19,13 +22,13 @@ final class AppLockManager: ObservableObject {
         }
     }
 
-    @Published var lockOnBackground: Bool {
+    @Published package var lockOnBackground: Bool {
         didSet {
             dependencies.preferences.lockOnBackground = lockOnBackground
         }
     }
 
-    @Published var authGraceSeconds: Int {
+    @Published package var authGraceSeconds: Int {
         didSet {
             let clamped = max(0, min(authGraceSeconds, 300))
             if clamped != authGraceSeconds {
@@ -36,17 +39,17 @@ final class AppLockManager: ObservableObject {
         }
     }
 
-    var isAppLocked: Bool { lockState.isLocked }
-    var isAuthenticating: Bool { authenticationState.isAuthenticating }
+    package var isAppLocked: Bool { lockState.isLocked }
+    package var isAuthenticating: Bool { authenticationState.isAuthenticating }
 
-    var isBiometryAvailable: Bool {
+    package var isBiometryAvailable: Bool {
         if case .available = biometricAvailability {
             return true
         }
         return false
     }
 
-    var biometryKind: BiometryKind {
+    package var biometryKind: BiometryKind {
         if case .available(let kind) = biometricAvailability {
             return kind
         }
@@ -56,7 +59,7 @@ final class AppLockManager: ObservableObject {
     private let dependencies: AppLockManagerDependencies
     private var unlockedServers: [UUID: Date] = [:]
 
-    init(dependencies: AppLockManagerDependencies) {
+    package init(dependencies: AppLockManagerDependencies) {
         self.dependencies = dependencies
         self.biometricAvailability = dependencies.authService.availability()
 
@@ -70,14 +73,14 @@ final class AppLockManager: ObservableObject {
             : .unlocked(at: nil)
     }
 
-    func refreshBiometryAvailability() {
+    package func refreshBiometryAvailability() {
         let nextAvailability = dependencies.authService.availability()
         if biometricAvailability != nextAvailability {
             biometricAvailability = nextAvailability
         }
     }
 
-    func requestSetFullAppLockEnabled(_ enabled: Bool) async {
+    package func requestSetFullAppLockEnabled(_ enabled: Bool) async {
         lastFailure = nil
 
         guard enabled != fullAppLockEnabled else { return }
@@ -108,7 +111,7 @@ final class AppLockManager: ObservableObject {
         lockState = .unlocked(at: dependencies.now())
     }
 
-    func ensureAppUnlocked() async -> Bool {
+    package func ensureAppUnlocked() async -> Bool {
         guard fullAppLockEnabled else { return true }
         guard case .locked(let lockGeneration) = lockState else { return true }
 
@@ -123,7 +126,7 @@ final class AppLockManager: ObservableObject {
         return true
     }
 
-    func authorizeProtectedServerAction(
+    package func authorizeProtectedServerAction(
         _ server: Server,
         action: AppLockAuthenticationState.ProtectedServerAction
     ) async -> Bool {
@@ -138,7 +141,7 @@ final class AppLockManager: ObservableObject {
         return true
     }
 
-    func canAccessServerWithoutPrompt(_ server: Server) -> Bool {
+    package func canAccessServerWithoutPrompt(_ server: Server) -> Bool {
         guard server.requiresBiometricUnlock else { return true }
         purgeExpiredUnlocks()
 
@@ -149,7 +152,7 @@ final class AppLockManager: ObservableObject {
         return hasValidGrant(unlockedServers[server.id])
     }
 
-    func ensureServerUnlocked(_ server: Server) async -> Bool {
+    package func ensureServerUnlocked(_ server: Server) async -> Bool {
         guard server.requiresBiometricUnlock else { return true }
 
         if fullAppLockEnabled, isAppLocked {
@@ -170,16 +173,16 @@ final class AppLockManager: ObservableObject {
         return true
     }
 
-    func handleSceneActivation() {
+    package func handleSceneActivation() {
         refreshBiometryAvailability()
     }
 
-    func lockIfNeededForBackground() {
+    package func lockIfNeededForBackground() {
         guard fullAppLockEnabled, lockOnBackground else { return }
         lockAppNow()
     }
 
-    func lockAppNow() {
+    package func lockAppNow() {
         guard fullAppLockEnabled else { return }
         lockState = .locked(generation: dependencies.makeID())
         invalidateAuthentication()

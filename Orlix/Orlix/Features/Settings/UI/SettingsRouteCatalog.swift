@@ -1,14 +1,17 @@
 import Foundation
 
-nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
-    case general
-    case terminal
-    case connections
-    case privacyAndData
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Sendable {
+    package case general
+    package case terminal
+    package case connections
+    package case privacyAndData
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .general:
             String(localized: "General")
@@ -22,26 +25,26 @@ nonisolated enum SettingsGroup: String, CaseIterable, Hashable, Identifiable, Se
     }
 }
 
-nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
-    case pro
-    case appearanceAndLanguage
-    case navigationAndStats
-    case terminalAppearance
-    case keyboardAndInput
-    case transcription
-    case clipboardAndPaste
-    case sessionsAndConnections
-    case sshKeys
-    case trustedHosts
-    case privacyAndAppLock
-    case iCloudSync
-    case aboutAndSupport
+nonisolated package enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Sendable {
+    package case pro
+    package case appearanceAndLanguage
+    package case navigationAndStats
+    package case terminalAppearance
+    package case keyboardAndInput
+    package case transcription
+    package case clipboardAndPaste
+    package case sessionsAndConnections
+    package case sshKeys
+    package case trustedHosts
+    package case privacyAndAppLock
+    package case iCloudSync
+    package case aboutAndSupport
 
-    static let defaultRoute = SettingsRoute.appearanceAndLanguage
+    static package let defaultRoute = SettingsRoute.appearanceAndLanguage
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var group: SettingsGroup? {
+    package var group: SettingsGroup? {
         switch self {
         case .pro:
             nil
@@ -58,7 +61,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         }
     }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .pro:
             String(localized: "Orlix Pro")
@@ -89,7 +92,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         }
     }
 
-    var icon: String {
+    package var icon: String {
         switch self {
         case .pro:
             "sparkles"
@@ -120,7 +123,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         }
     }
 
-    var searchKeywords: [String] {
+    package var searchKeywords: [String] {
         switch self {
         case .pro:
             ["subscription", "upgrade", "purchase", "billing", "restore", "plan"]
@@ -167,7 +170,7 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
         }
     }
 
-    var searchLocalizationKeys: [String] {
+    package var searchLocalizationKeys: [String] {
         switch self {
         case .pro:
             [
@@ -233,24 +236,24 @@ nonisolated enum SettingsRoute: String, CaseIterable, Hashable, Identifiable, Se
     }
 
     @MainActor
-    var localizedSearchTerms: Set<String> {
+    package var localizedSearchTerms: Set<String> {
         searchLocalizationKeys.reduce(into: Set(searchKeywords)) { terms, key in
             terms.formUnion(AppLanguage.localizedValues(for: key))
         }
     }
 }
 
-nonisolated enum SettingsRouteCatalog {
-    static let leadingRoutes: [SettingsRoute] = [.pro]
-    static let groups = SettingsGroup.allCases
-    static let trailingRoutes: [SettingsRoute] = [.aboutAndSupport]
+nonisolated package enum SettingsRouteCatalog {
+    static package let leadingRoutes: [SettingsRoute] = [.pro]
+    static package let groups = SettingsGroup.allCases
+    static package let trailingRoutes: [SettingsRoute] = [.aboutAndSupport]
 
-    static func routes(in group: SettingsGroup) -> [SettingsRoute] {
+    static package func routes(in group: SettingsGroup) -> [SettingsRoute] {
         SettingsRoute.allCases.filter { $0.group == group }
     }
 
     @MainActor
-    static func visibleRoutes(
+    static package func visibleRoutes(
         from routes: [SettingsRoute],
         matching query: String
     ) -> [SettingsRoute] {
@@ -259,7 +262,7 @@ nonisolated enum SettingsRouteCatalog {
     }
 
     @MainActor
-    static func routes(matching query: String) -> [SettingsRoute] {
+    static package func routes(matching query: String) -> [SettingsRoute] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedQuery.isEmpty else { return SettingsRoute.allCases }
 
@@ -270,7 +273,7 @@ nonisolated enum SettingsRouteCatalog {
     }
 
     @MainActor
-    static func visibleDetailRoute(
+    static package func visibleDetailRoute(
         selectedRoute: SettingsRoute,
         matching query: String
     ) -> SettingsRoute? {

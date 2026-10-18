@@ -1,4 +1,7 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 // MARK: - Pro Upgrade Sheet
 
@@ -558,8 +561,8 @@ struct ProUpgradePresentationModifier: ViewModifier {
 
 // MARK: - Source Copy
 
-extension PaywallSource {
-    var paywallTitle: String {
+package extension PaywallSource {
+    package var paywallTitle: String {
         switch self {
         case .general, .settings, .sidebarBanner:
             return String(localized: "Upgrade to Pro")
@@ -584,7 +587,7 @@ extension PaywallSource {
         }
     }
 
-    var paywallSubtitle: String {
+    package var paywallSubtitle: String {
         switch self {
         case .general, .settings, .sidebarBanner, .welcome:
             return String(localized: "Connect everywhere, without limits.")

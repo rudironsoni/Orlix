@@ -30,8 +30,8 @@ extension Logger {
     nonisolated static let crash = Logger.forCategory("CrashReporter")
 }
 
-enum DebugLogConfiguration {
-    nonisolated static func isEnabled(_ category: String) -> Bool {
+package enum DebugLogConfiguration {
+    nonisolated static package func isEnabled(_ category: String) -> Bool {
         let process = Foundation.ProcessInfo.processInfo
         let requestedCategories = requestedCategories(
             arguments: process.arguments,

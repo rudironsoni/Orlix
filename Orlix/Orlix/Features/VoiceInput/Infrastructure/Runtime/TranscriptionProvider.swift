@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct TranscriptionSettingsKeys {
     static let provider = "transcriptionProvider"
     static let mlxWhisperModelId = "mlxWhisperModelId"
@@ -31,14 +34,14 @@ nonisolated struct TranscriptionSettingsDefaults {
 }
 
 @MainActor
-final class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
+final package class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    func loadSettings() -> VoiceSettings {
+    package func loadSettings() -> VoiceSettings {
         let settings = VoiceSettings(
             provider: loadProvider(),
             whisperModelID: loadModelID(
@@ -60,7 +63,7 @@ final class UserDefaultsVoiceSettingsPersistence: VoiceSettingsPersisting {
         return settings
     }
 
-    func saveSettings(_ settings: VoiceSettings) {
+    package func saveSettings(_ settings: VoiceSettings) {
         defaults.set(settings.provider.rawValue, forKey: TranscriptionSettingsKeys.provider)
         defaults.set(settings.whisperModelID, forKey: TranscriptionSettingsKeys.mlxWhisperModelId)
         defaults.set(settings.parakeetModelID, forKey: TranscriptionSettingsKeys.mlxParakeetModelId)

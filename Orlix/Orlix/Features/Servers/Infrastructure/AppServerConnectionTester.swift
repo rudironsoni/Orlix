@@ -2,7 +2,12 @@ import ETSession
 import Foundation
 import MoshBootstrap
 
-extension KnownHostsManager: ServerHostKeyRepository {}
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
+package extension KnownHostsManager: ServerHostKeyRepository {}
 
 nonisolated protocol ServerConnectionOperationRunning: Sendable {
     func runServerConnectionTest(
@@ -19,8 +24,8 @@ nonisolated protocol ServerMoshConnectionTesting: Sendable {
     ) async throws
 }
 
-extension SSHConnectionOperationService: ServerConnectionOperationRunning {
-    func runServerConnectionTest(
+package extension SSHConnectionOperationService: ServerConnectionOperationRunning {
+    package func runServerConnectionTest(
         server: Server,
         credentials: ServerCredentials,
         operation: @escaping @Sendable (SSHClient) async throws -> Void
@@ -33,8 +38,8 @@ extension SSHConnectionOperationService: ServerConnectionOperationRunning {
     }
 }
 
-extension RemoteMoshManager: ServerMoshConnectionTesting {
-    func testServerConnection(
+package extension RemoteMoshManager: ServerMoshConnectionTesting {
+    package func testServerConnection(
         using client: SSHClient,
         portRange: ClosedRange<Int>
     ) async throws {
@@ -90,8 +95,8 @@ nonisolated enum ServerConnectionApprovalPolicy {
     }
 }
 
-extension ServerFormDependencies {
-    static func live(
+package extension ServerFormDependencies {
+    static package func live(
         credentials: any ServerCredentialRepository,
         hostKeys: any ServerHostKeyRepository,
         connectionOperations: any ServerConnectionOperationRunning,

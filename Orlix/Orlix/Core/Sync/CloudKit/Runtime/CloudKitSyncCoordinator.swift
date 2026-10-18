@@ -4,7 +4,7 @@ import Combine
 import os.log
 
 @MainActor
-final class CloudKitSyncCoordinator {
+final package class CloudKitSyncCoordinator {
     private let mutationHandler: any PendingCloudKitMutationHandling
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix",
@@ -18,7 +18,7 @@ final class CloudKitSyncCoordinator {
     private var isDraining = false
     private var shouldDrainAgain = false
 
-    init(
+    package init(
         mutationHandler: any PendingCloudKitMutationHandling,
         queue: PendingCloudKitSyncQueue,
         isSyncEnabled: @escaping () -> Bool,
@@ -34,41 +34,41 @@ final class CloudKitSyncCoordinator {
         self.makeID = makeID
     }
 
-    func snapshot() -> [PendingCloudKitMutation] {
+    package func snapshot() -> [PendingCloudKitMutation] {
         queue.snapshot()
     }
 
-    func readySnapshot() throws -> [PendingCloudKitMutation] {
+    package func readySnapshot() throws -> [PendingCloudKitMutation] {
         try queue.readySnapshot()
     }
 
-    func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
+    package func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
         queue.quarantineSnapshot()
     }
 
-    var queueSummary: PendingCloudKitQueueSummary {
+    package var queueSummary: PendingCloudKitQueueSummary {
         queue.summary
     }
 
-    var queueSummaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
+    package var queueSummaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
         queue.summaryUpdates
     }
 
-    func remove(_ mutationID: UUID) throws {
+    package func remove(_ mutationID: UUID) throws {
         try queue.remove(mutationID)
     }
 
-    func removeAll(
+    package func removeAll(
         where shouldRemove: (PendingCloudKitMutation) -> Bool
     ) throws {
         try queue.removeAll(where: shouldRemove)
     }
 
-    func enqueue(_ mutation: PendingCloudKitMutation) throws {
+    package func enqueue(_ mutation: PendingCloudKitMutation) throws {
         try queue.enqueue(mutation)
     }
 
-    func enqueue(_ payload: PendingCloudKitMutationPayload) throws {
+    package func enqueue(_ payload: PendingCloudKitMutationPayload) throws {
         try queue.enqueue(
             PendingCloudKitMutation(
                 id: makeID(),
@@ -78,11 +78,11 @@ final class CloudKitSyncCoordinator {
         )
     }
 
-    func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+    package func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
         try queue.enqueueAtomically(mutations)
     }
 
-    func drainPendingMutations() async {
+    package func drainPendingMutations() async {
         guard isSyncEnabled() else { return }
         let generation = currentGeneration()
         guard !isDraining else {

@@ -1,5 +1,11 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 nonisolated struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigrating {
     func migrate(
         recordData: Data

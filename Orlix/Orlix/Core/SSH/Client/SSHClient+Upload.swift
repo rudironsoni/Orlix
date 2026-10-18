@@ -1,8 +1,11 @@
 import Foundation
 import os.log
 
-extension SSHClient {
-    func upload(
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension SSHClient {
+    package func upload(
         _ data: Data,
         to remotePath: String,
         permissions: Int32 = 0o600,

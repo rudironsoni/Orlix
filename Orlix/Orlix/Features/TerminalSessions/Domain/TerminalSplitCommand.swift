@@ -1,65 +1,65 @@
 import Foundation
 
-nonisolated enum TerminalSplitCommand: Equatable, Sendable {
-    case splitRight
-    case splitDown
-    case closeFocusedPane
-    case toggleZoom
-    case selectPrevious
-    case selectNext
-    case selectAbove
-    case selectBelow
-    case selectLeft
-    case selectRight
-    case equalize
-    case moveDividerUp
-    case moveDividerDown
-    case moveDividerLeft
-    case moveDividerRight
+nonisolated package enum TerminalSplitCommand: Equatable, Sendable {
+    package case splitRight
+    package case splitDown
+    package case closeFocusedPane
+    package case toggleZoom
+    package case selectPrevious
+    package case selectNext
+    package case selectAbove
+    package case selectBelow
+    package case selectLeft
+    package case selectRight
+    package case equalize
+    package case moveDividerUp
+    package case moveDividerDown
+    package case moveDividerLeft
+    package case moveDividerRight
 
-    var createsPane: Bool {
+    package var createsPane: Bool {
         self == .splitRight || self == .splitDown
     }
 }
 
-enum TerminalSplitCommandOutcome: Equatable {
-    case performed
-    case unavailable
-    case requiresUpgrade
-    case requiresCloseConfirmation
+package enum TerminalSplitCommandOutcome: Equatable {
+    package case performed
+    package case unavailable
+    package case requiresUpgrade
+    package case requiresCloseConfirmation
 }
 
-nonisolated struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
-    let rawValue: UInt8
+nonisolated package struct TerminalSplitShortcutModifiers: OptionSet, Sendable {
+    package let rawValue: UInt8
 
-    static let command = Self(rawValue: 1 << 0)
-    static let shift = Self(rawValue: 1 << 1)
-    static let control = Self(rawValue: 1 << 2)
-    static let alternate = Self(rawValue: 1 << 3)
+    static package let command = Self(rawValue: 1 << 0)
+    static package let shift = Self(rawValue: 1 << 1)
+    static package let control = Self(rawValue: 1 << 2)
+    static package let alternate = Self(rawValue: 1 << 3)
 }
 
-nonisolated enum TerminalSplitShortcutKey: Equatable, Sendable {
-    case character(String)
-    case upArrow
-    case downArrow
-    case leftArrow
-    case rightArrow
+nonisolated package enum TerminalSplitShortcutKey: Equatable, Sendable {
+    package case character(String)
+    package case upArrow
+    package case downArrow
+    package case leftArrow
+    package case rightArrow
 }
 
-nonisolated enum TerminalSplitShortcutRouting {
-    static let upArrow = "\u{F700}"
-    static let downArrow = "\u{F701}"
-    static let leftArrow = "\u{F702}"
-    static let rightArrow = "\u{F703}"
+nonisolated package enum TerminalSplitShortcutRouting {
+    static package let upArrow = "\u{F700}"
+    static package let downArrow = "\u{F701}"
+    static package let leftArrow = "\u{F702}"
+    static package let rightArrow = "\u{F703}"
 
-    nonisolated static func command(
+    nonisolated static package func command(
         for input: String,
         modifiers: TerminalSplitShortcutModifiers
     ) -> TerminalSplitCommand? {
         command(for: key(for: input), modifiers: modifiers)
     }
 
-    nonisolated static func command(
+    nonisolated static package func command(
         for key: TerminalSplitShortcutKey,
         modifiers: TerminalSplitShortcutModifiers
     ) -> TerminalSplitCommand? {

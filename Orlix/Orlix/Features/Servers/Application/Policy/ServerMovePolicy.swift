@@ -1,20 +1,20 @@
 import Foundation
 
-nonisolated enum ServerMoveRestriction: Equatable, Sendable {
-    case lockedWorkspace
-    case unavailable
+nonisolated package enum ServerMoveRestriction: Equatable, Sendable {
+    package case lockedWorkspace
+    package case unavailable
 }
 
-nonisolated struct ServerMovePolicy: Sendable {
-    let workspaces: [Workspace]
-    let unlockedWorkspaceIDs: Set<UUID>
-    let hasProAccess: Bool
+nonisolated package struct ServerMovePolicy: Sendable {
+    package let workspaces: [Workspace]
+    package let unlockedWorkspaceIDs: Set<UUID>
+    package let hasProAccess: Bool
 
     private var orderedWorkspaces: [Workspace] {
         workspaces.sorted { $0.order < $1.order }
     }
 
-    func assignmentWorkspaces(for server: Server?) -> [Workspace] {
+    package func assignmentWorkspaces(for server: Server?) -> [Workspace] {
         if hasProAccess {
             return orderedWorkspaces
         }
@@ -30,17 +30,17 @@ nonisolated struct ServerMovePolicy: Sendable {
         }
     }
 
-    func moveDestinations(for server: Server) -> [Workspace] {
+    package func moveDestinations(for server: Server) -> [Workspace] {
         let destinationIDs = moveDestinationIDs(for: server)
         return orderedWorkspaces.filter { destinationIDs.contains($0.id) }
     }
 
-    func canAssign(_ server: Server, to destination: Workspace) -> Bool {
+    package func canAssign(_ server: Server, to destination: Workspace) -> Bool {
         server.workspaceId == destination.id
             || moveDestinationIDs(for: server).contains(destination.id)
     }
 
-    func restriction(
+    package func restriction(
         for server: Server,
         destination: Workspace
     ) -> ServerMoveRestriction? {

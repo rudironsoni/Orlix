@@ -2,9 +2,12 @@
 import AppKit
 import CoreText
 
-extension TerminalFontCatalog {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension TerminalFontCatalog {
     @MainActor
-    static func live(
+    static package func live(
         appOwnedFamilies: [TerminalFontFamily]
     ) -> TerminalFontCatalog {
         let fontManager = NSFontManager.shared

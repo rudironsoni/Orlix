@@ -7,6 +7,10 @@ updated: 2026-10-18
 ---
 # Orlix Knowledge Log
 
+## [2026-10-18] build | Split the app into Swift modules
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) compiles the Orlix app as separate Swift modules: shared models, SSH and remote transport, files and SFTP, statistics and telemetry, settings, terminal presentation, app composition, and a one-file entry. Cross-module declarations use `package` access. Files, models, SSH, settings, and statistics do not depend on terminal presentation, so a terminal UI edit does not recompile those features. The Xcode target stays one module and passes `-package-name Orlix`. GhosttyKit stays the pinned XCFramework. Kernel, Coreutils, Bash, and Autotools keep `no-remote-cache`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-18] build | Give compiler-rt its own Bazel rule
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) moves `OrlixCompilerRuntime` out of `orlix_mlibc_sysroot` into one rule the sysroot depends on. The recipe executes staged clang, llvm-ar, mkdir, rm, and sort, and declares the builtin sources, headers, clang resources, and tool libraries it opens. It does not call Homebrew or `xcrun`, so the action stays remotely cacheable. Kernel archive, ISA restore, Coreutils, Bash, and Autotools keep `no-remote-cache`. A disk hit, output-base hit, or ccache hit is not a BuildBuddy remote hit. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

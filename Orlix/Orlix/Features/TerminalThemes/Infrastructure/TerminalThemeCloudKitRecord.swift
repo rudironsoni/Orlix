@@ -1,6 +1,9 @@
 import CloudKit
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalThemeCloudKitRecordCodec {
     static let recordType = "TerminalTheme"
     static let recordKeys = ["name", "content", "updatedAt", "deletedAt"]
@@ -89,6 +92,6 @@ nonisolated enum TerminalThemePreferenceCloudKitRecordCodec {
     }
 }
 
-extension TerminalThemePreference {
-    nonisolated static let recordName = "terminal-theme-preference.v1"
+package extension TerminalThemePreference {
+    nonisolated static package let recordName = "terminal-theme-preference.v1"
 }

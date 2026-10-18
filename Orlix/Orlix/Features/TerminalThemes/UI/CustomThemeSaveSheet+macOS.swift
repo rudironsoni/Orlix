@@ -1,6 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension CustomThemeSaveSheet {
     func platformThemeNameField(name: Binding<String>) -> some View {
         TextField("Name", text: name, prompt: Text("Custom Theme"))

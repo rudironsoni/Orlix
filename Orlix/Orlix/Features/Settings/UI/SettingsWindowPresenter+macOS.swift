@@ -2,6 +2,12 @@
 import AppKit
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+import OrlixStats
+#endif
 @MainActor
 protocol SettingsWindowHandling: AnyObject {
     var isVisible: Bool { get }
@@ -16,13 +22,13 @@ extension NSWindow: SettingsWindowHandling {
 
 /// Owns the macOS settings window and reuses it while it remains visible.
 @MainActor
-final class SettingsWindowPresenter {
-    typealias MakeWindow = @MainActor () -> any SettingsWindowHandling
+final package class SettingsWindowPresenter {
+    package typealias MakeWindow = @MainActor () -> any SettingsWindowHandling
 
     private let makeWindow: MakeWindow
     private var settingsWindow: (any SettingsWindowHandling)?
 
-    init(
+    package init(
         appLockManager: AppLockManager,
         serverManager: ServerManager,
         terminalFontStore: TerminalFontStore,
@@ -59,11 +65,11 @@ final class SettingsWindowPresenter {
         }
     }
 
-    init(makeWindow: @escaping MakeWindow) {
+    package init(makeWindow: @escaping MakeWindow) {
         self.makeWindow = makeWindow
     }
 
-    func show() {
+    package func show() {
         if let settingsWindow, settingsWindow.isVisible {
             settingsWindow.presentSettingsWindow()
             return

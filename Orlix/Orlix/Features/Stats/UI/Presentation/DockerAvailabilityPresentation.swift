@@ -1,7 +1,10 @@
 import Foundation
 
-extension DockerAvailability {
-    var message: String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension DockerAvailability {
+    package var message: String {
         switch self {
         case .unknown:
             return String(localized: "Waiting for Docker")

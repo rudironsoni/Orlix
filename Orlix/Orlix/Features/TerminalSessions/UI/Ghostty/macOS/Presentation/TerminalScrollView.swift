@@ -9,6 +9,9 @@
 #if os(macOS)
 import AppKit
 import Combine
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 
 /// Wraps a Ghostty terminal view in an NSScrollView to provide native macOS scrollbar support.
 ///
@@ -377,9 +380,9 @@ class TerminalScrollView: NSView, NSUserInterfaceValidations {
 
 // MARK: - GhosttyTerminalView Extension
 
-extension GhosttyTerminalView {
+package extension GhosttyTerminalView {
     /// Notify the terminal of a size change (used by scroll view wrapper)
-    func sizeDidChange(_ size: CGSize) {
+    package func sizeDidChange(_ size: CGSize) {
         guard let surface = surface?.unsafeCValue else { return }
         let scaledSize = convertToBacking(size)
         guard let surfaceSize = TerminalGeometryConversion.ghosttySurfaceSize(

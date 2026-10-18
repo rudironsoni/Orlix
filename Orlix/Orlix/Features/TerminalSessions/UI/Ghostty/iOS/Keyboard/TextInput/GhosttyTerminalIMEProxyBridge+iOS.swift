@@ -8,8 +8,8 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func textInputGridMetrics() -> (cols: Int, rows: Int, cellSize: CGSize, length: Int) {
+package extension GhosttyTerminalView {
+    package func textInputGridMetrics() -> (cols: Int, rows: Int, cellSize: CGSize, length: Int) {
         let cols = max(lastReportedGrid.cols, 1)
         let rows = max(lastReportedGrid.rows, 1)
         let cellWidth: CGFloat
@@ -41,23 +41,23 @@ extension GhosttyTerminalView {
         min(max(index, 0), textInputDocumentLength())
     }
 
-    var imeProxyCanBecomeFirstResponder: Bool {
+    package var imeProxyCanBecomeFirstResponder: Bool {
         isTextInputSessionEligible && !isFindNavigatorActive
     }
 
-    var currentTextInputContextIdentifier: String? {
+    package var currentTextInputContextIdentifier: String? {
         guard isTextInputSessionEligible, !isFindNavigatorActive else { return nil }
         return Self.textInputContextID
     }
 
-    var resolvedKeyboardAppearance: UIKeyboardAppearance {
+    package var resolvedKeyboardAppearance: UIKeyboardAppearance {
         if #available(iOS 13.0, *) {
             return traitCollection.userInterfaceStyle == .dark ? .dark : .light
         }
         return .default
     }
 
-    func imeProxySnapshot() -> IMEProxySnapshot {
+    package func imeProxySnapshot() -> IMEProxySnapshot {
         IMEProxySnapshot(
             text: imeProxyTextView.text ?? "",
             selectedRange: imeProxyTextView.selectedRange,
@@ -65,7 +65,7 @@ extension GhosttyTerminalView {
         )
     }
 
-    func imeProxyMarkedRange() -> NSRange? {
+    package func imeProxyMarkedRange() -> NSRange? {
         guard let range = imeProxyTextView.markedTextRange else { return nil }
         let start = imeProxyTextView.offset(from: imeProxyTextView.beginningOfDocument, to: range.start)
         let end = imeProxyTextView.offset(from: imeProxyTextView.beginningOfDocument, to: range.end)
@@ -73,7 +73,7 @@ extension GhosttyTerminalView {
         return NSRange(location: start, length: end - start)
     }
 
-    func withSuppressedIMEProxyCallbacks<T>(_ body: () -> T) -> T {
+    package func withSuppressedIMEProxyCallbacks<T>(_ body: () -> T) -> T {
         let previous = suppressIMEProxyCallbacks
         suppressIMEProxyCallbacks = true
         defer { suppressIMEProxyCallbacks = previous }
@@ -88,7 +88,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func syncTextInputModelFromIMEProxy() {
+    package func syncTextInputModelFromIMEProxy() {
         guard !suppressIMEProxyCallbacks else { return }
         let snapshot = imeProxySnapshot()
         let effects = textInputModel.handleExternalState(
@@ -102,11 +102,11 @@ extension GhosttyTerminalView {
         }
     }
 
-    var hasLocalTextInputSession: Bool {
+    package var hasLocalTextInputSession: Bool {
         textInputModel.documentLength > 0 || textInputModel.hasActiveIMEComposition
     }
 
-    func imeProxyDidDeleteBackward(before: IMEProxySnapshot?) {
+    package func imeProxyDidDeleteBackward(before: IMEProxySnapshot?) {
         guard !suppressIMEProxyCallbacks else { return }
         let after = imeProxySnapshot()
         if before == after,
@@ -121,7 +121,7 @@ extension GhosttyTerminalView {
         syncTextInputModelFromIMEProxy()
     }
 
-    func imeProxyFocusDidChange(isFocused: Bool) {
+    package func imeProxyFocusDidChange(isFocused: Bool) {
         setSurfaceFocus(isFocused)
         if isFocused {
             // UIKit has just resolved this responder's input views. Refresh
@@ -135,24 +135,24 @@ extension GhosttyTerminalView {
         }
     }
 
-    func imeProxyCaretRect(for position: UITextPosition) -> CGRect {
+    package func imeProxyCaretRect(for position: UITextPosition) -> CGRect {
         let index = imeProxyTextView.offset(from: imeProxyTextView.beginningOfDocument, to: position)
         return textInputCaretRect(for: index)
     }
 
-    func imeProxyFirstRect(for range: UITextRange) -> CGRect {
+    package func imeProxyFirstRect(for range: UITextRange) -> CGRect {
         let index = imeProxyTextView.offset(from: imeProxyTextView.beginningOfDocument, to: range.start)
         return textInputCaretRect(for: index)
     }
 
-    func invalidateLocalTextInputSession() {
+    package func invalidateLocalTextInputSession() {
         resetIMEProxyState()
         let effects = textInputModel.invalidateSession()
         applyTerminalTextInputEffects(effects, notifiesInputDelegate: true)
         syncIMEPreedit(nil)
     }
 
-    func applyTerminalTextInputEffects(
+    package func applyTerminalTextInputEffects(
         _ effects: [TerminalTextInputModel.Effect],
         notifiesInputDelegate: Bool = false
     ) {
@@ -200,7 +200,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func textInputCaretRect(for index: Int) -> CGRect {
+    package func textInputCaretRect(for index: Int) -> CGRect {
         guard let surface = surface?.unsafeCValue else {
             let metrics = textInputGridMetrics()
             return CGRect(x: 0, y: 0, width: metrics.cellSize.width, height: metrics.cellSize.height)

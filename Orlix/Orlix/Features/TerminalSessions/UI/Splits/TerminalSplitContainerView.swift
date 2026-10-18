@@ -8,6 +8,9 @@
 import Foundation
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct ServerViewTabActions {
     let openNew: () -> Void
     let closeSelected: () -> Void
@@ -107,12 +110,12 @@ import AppKit
 
 // MARK: - Split Menu Commands
 
-struct SplitCommands: Commands {
-    @FocusedValue(\.terminalSplitActions) var splitActions
-    @FocusedValue(\.toggleZenMode) var toggleZenMode
-    @FocusedValue(\.isZenModeEnabled) var isZenModeEnabled
+package struct SplitCommands: Commands {
+    @FocusedValue(\.terminalSplitActions) package var splitActions
+    @FocusedValue(\.toggleZenMode) package var toggleZenMode
+    @FocusedValue(\.isZenModeEnabled) package var isZenModeEnabled
 
-    var body: some Commands {
+    package var body: some Commands {
         CommandMenu("Terminal") {
             Button(isZenModeEnabled == true ? String(localized: "Exit Zen Mode") : String(localized: "Enter Zen Mode")) {
                 toggleZenMode?()

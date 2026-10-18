@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
 struct ServerStateStoreDependencies {
     let localRepository: any ServerLocalRepository
@@ -19,7 +22,7 @@ nonisolated enum ServerStateStoreError: Error, Equatable, Sendable {
 }
 
 @MainActor
-final class ServerStateStore: ObservableObject {
+final package class ServerStateStore: ObservableObject {
     @Published private(set) var snapshot: ServerManagerSnapshot
 
     private let dependencies: ServerStateStoreDependencies
@@ -29,7 +32,7 @@ final class ServerStateStore: ObservableObject {
         category: "ServerStateStore"
     )
 
-    init(dependencies: ServerStateStoreDependencies) {
+    package init(dependencies: ServerStateStoreDependencies) {
         self.dependencies = dependencies
         snapshot = ServerManagerSnapshot(
             freePlanGeneration: dependencies.preferences.freePlanGeneration ?? .currentOneServer
@@ -41,25 +44,25 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    var servers: [Server] { snapshot.servers }
-    var workspaces: [Workspace] { snapshot.workspaces }
-    var loadState: ServerDataLoadState { snapshot.loadState }
-    var localStorageIssues: [ServerLocalStorageIssue] { snapshot.localStorageIssues }
-    var ambiguousCloudRecovery: AmbiguousCloudRecoveryState? {
+    package var servers: [Server] { snapshot.servers }
+    package var workspaces: [Workspace] { snapshot.workspaces }
+    package var loadState: ServerDataLoadState { snapshot.loadState }
+    package var localStorageIssues: [ServerLocalStorageIssue] { snapshot.localStorageIssues }
+    package var ambiguousCloudRecovery: AmbiguousCloudRecoveryState? {
         snapshot.ambiguousCloudRecovery
     }
-    var freePlanGeneration: FreePlanGeneration { snapshot.freePlanGeneration }
-    var isLoading: Bool { loadState.isLoading }
-    var error: String? { loadState.errorMessage }
-    var isSyncEnabled: Bool { dependencies.isSyncEnabled() }
-    var transientBootstrapWorkspaceID: UUID? { pendingBootstrapWorkspaceID }
-    var shouldForceRemoteFullFetchForBootstrap: Bool { pendingBootstrapWorkspaceID != nil }
+    package var freePlanGeneration: FreePlanGeneration { snapshot.freePlanGeneration }
+    package var isLoading: Bool { loadState.isLoading }
+    package var error: String? { loadState.errorMessage }
+    package var isSyncEnabled: Bool { dependencies.isSyncEnabled() }
+    package var transientBootstrapWorkspaceID: UUID? { pendingBootstrapWorkspaceID }
+    package var shouldForceRemoteFullFetchForBootstrap: Bool { pendingBootstrapWorkspaceID != nil }
 
-    var hasPendingServerDataMutation: Bool {
+    package var hasPendingServerDataMutation: Bool {
         (try? dependencies.localRepository.loadServerDataMutationJournal()) != nil
     }
 
-    var localCacheContainsUserData: Bool {
+    package var localCacheContainsUserData: Bool {
         if !servers.isEmpty {
             return true
         }
@@ -86,7 +89,7 @@ final class ServerStateStore: ObservableObject {
         set { dependencies.preferences.pendingBootstrapWorkspaceID = newValue }
     }
 
-    func startLoading(operationID: UUID) -> UUID {
+    package func startLoading(operationID: UUID) -> UUID {
         updateSnapshot { snapshot in
             _ = snapshot.loadState.start(operationID: operationID)
         }
@@ -94,7 +97,7 @@ final class ServerStateStore: ObservableObject {
     }
 
     @discardableResult
-    func finishLoading(operationID: UUID) -> Bool {
+    package func finishLoading(operationID: UUID) -> Bool {
         var didFinish = false
         updateSnapshot { snapshot in
             didFinish = snapshot.loadState.finish(operationID: operationID)
@@ -103,7 +106,7 @@ final class ServerStateStore: ObservableObject {
     }
 
     @discardableResult
-    func failLoading(operationID: UUID, message: String) -> Bool {
+    package func failLoading(operationID: UUID, message: String) -> Bool {
         var didFail = false
         updateSnapshot { snapshot in
             didFail = snapshot.loadState.fail(operationID: operationID, message: message)
@@ -111,15 +114,15 @@ final class ServerStateStore: ObservableObject {
         return didFail
     }
 
-    func resetLoading() {
+    package func resetLoading() {
         updateSnapshot { $0.loadState.reset() }
     }
 
-    func dismissLocalStorageIssues() {
+    package func dismissLocalStorageIssues() {
         updateSnapshot { $0.localStorageIssues.removeAll() }
     }
 
-    func automaticFullFetchNeedsRecovery(
+    package func automaticFullFetchNeedsRecovery(
         _ changes: ServerRemoteChanges,
         pendingMutations: [ServerPendingMutation]
     ) -> Bool {
@@ -154,7 +157,7 @@ final class ServerStateStore: ObservableObject {
         return hasUnexplainedServer || hasUnexplainedWorkspace
     }
 
-    func preserveAmbiguousCloudRecoveryBackup() throws {
+    package func preserveAmbiguousCloudRecoveryBackup() throws {
         let backup = AmbiguousCloudRecoveryBackup(
             servers: servers,
             workspaces: workspaces
@@ -165,12 +168,12 @@ final class ServerStateStore: ObservableObject {
         updateSnapshot { $0.ambiguousCloudRecovery = .decisionRequired }
     }
 
-    func clearAmbiguousCloudRecovery() throws {
+    package func clearAmbiguousCloudRecovery() throws {
         try dependencies.localRepository.clearAmbiguousCloudRecoveryBackup()
         updateSnapshot { $0.ambiguousCloudRecovery = nil }
     }
 
-    func persistCurrentCollections() {
+    package func persistCurrentCollections() {
         do {
             try persistCurrentCollectionsForRemoteAcceptance()
         } catch {
@@ -178,22 +181,22 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func persistCurrentCollectionsForRemoteAcceptance() throws {
+    package func persistCurrentCollectionsForRemoteAcceptance() throws {
         try dependencies.localRepository.persist(
             servers: servers,
             workspaces: workspaces
         )
     }
 
-    func restorePersistedCollections() {
+    package func restorePersistedCollections() {
         applyPersistedCollections(dependencies.localRepository.loadSnapshot())
     }
 
-    func restorePendingBootstrapWorkspaceID(_ workspaceID: UUID?) {
+    package func restorePendingBootstrapWorkspaceID(_ workspaceID: UUID?) {
         pendingBootstrapWorkspaceID = workspaceID
     }
 
-    func clearLocalDataAndState() throws {
+    package func clearLocalDataAndState() throws {
         try dependencies.localRepository.clearServerData()
         pendingBootstrapWorkspaceID = nil
         var nextSnapshot = snapshot
@@ -203,7 +206,7 @@ final class ServerStateStore: ObservableObject {
         snapshot = nextSnapshot
     }
 
-    func commitMutation(
+    package func commitMutation(
         _ command: ServerMutationCommand,
         now: Date
     ) throws -> ServerMutationCommandResult {
@@ -221,7 +224,7 @@ final class ServerStateStore: ObservableObject {
         return result
     }
 
-    func planMutation(
+    package func planMutation(
         _ command: ServerMutationCommand,
         now: Date
     ) throws -> ServerMutationCommandResult {
@@ -233,11 +236,11 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    func applyMutationResult(_ result: ServerMutationCommandResult) {
+    package func applyMutationResult(_ result: ServerMutationCommandResult) {
         replaceCollections(servers: result.servers, workspaces: result.workspaces)
     }
 
-    func makeServerDataMutationTransaction(
+    package func makeServerDataMutationTransaction(
         mutationQueue: any ServerDataMutationEnqueuing,
         credentials: any ServerMutationCredentialTransacting
     ) -> ServerDataMutationTransaction {
@@ -248,7 +251,7 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    func applyCommittedServerDataMutation(_ plan: ServerDataMutationPlan) {
+    package func applyCommittedServerDataMutation(_ plan: ServerDataMutationPlan) {
         replaceCollections(
             servers: plan.resultingServers,
             workspaces: plan.resultingWorkspaces
@@ -259,14 +262,14 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func replaceCollections(servers: [Server], workspaces: [Workspace]) {
+    package func replaceCollections(servers: [Server], workspaces: [Workspace]) {
         updateSnapshot { snapshot in
             snapshot.servers = servers
             snapshot.workspaces = workspaces
         }
     }
 
-    func applyPendingSyncOverlay(_ mutations: [ServerPendingMutation]) {
+    package func applyPendingSyncOverlay(_ mutations: [ServerPendingMutation]) {
         var updatedServers = servers
         var updatedWorkspaces = workspaces
 
@@ -302,7 +305,7 @@ final class ServerStateStore: ObservableObject {
         replaceCollections(servers: updatedServers, workspaces: updatedWorkspaces)
     }
 
-    func applyRemoteChanges(
+    package func applyRemoteChanges(
         _ changes: ServerRemoteChanges,
         canReplaceLocalState: Bool = true
     ) {
@@ -336,7 +339,7 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    func repairOrphanedServers(at date: Date) -> (workspace: Workspace?, servers: [Server]) {
+    package func repairOrphanedServers(at date: Date) -> (workspace: Workspace?, servers: [Server]) {
         let originalWorkspaceIDs = Set(workspaces.map(\.id))
         let orphanedServers = servers.filter { !originalWorkspaceIDs.contains($0.workspaceId) }
         guard !orphanedServers.isEmpty else { return (nil, []) }
@@ -369,14 +372,14 @@ final class ServerStateStore: ObservableObject {
         return (repairWorkspace, repairedServers)
     }
 
-    func updateLastConnected(for serverID: UUID, at date: Date) throws {
+    package func updateLastConnected(for serverID: UUID, at date: Date) throws {
         try requireNoPendingServerDataMutation()
         guard let index = servers.firstIndex(where: { $0.id == serverID }) else { return }
         updateSnapshot { $0.servers[index].lastConnected = date }
         persistCurrentCollections()
     }
 
-    func planWorkspaceReorder(
+    package func planWorkspaceReorder(
         from source: IndexSet,
         to destination: Int,
         at date: Date
@@ -393,7 +396,7 @@ final class ServerStateStore: ObservableObject {
         return reordered
     }
 
-    func refreshFreePlanGeneration(persistCurrentIfNeeded: Bool, reason: String) {
+    package func refreshFreePlanGeneration(persistCurrentIfNeeded: Bool, reason: String) {
         if let storedGeneration = dependencies.preferences.freePlanGeneration {
             updateSnapshot { $0.freePlanGeneration = storedGeneration }
             return
@@ -408,19 +411,19 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func promotePendingBootstrapWorkspaceIfNeeded(for workspaceID: UUID, reason: String) {
+    package func promotePendingBootstrapWorkspaceIfNeeded(for workspaceID: UUID, reason: String) {
         guard pendingBootstrapWorkspaceID == workspaceID else { return }
         pendingBootstrapWorkspaceID = nil
         logger.info("Promoted pending bootstrap workspace after \(reason)")
     }
 
-    func clearPendingBootstrapWorkspace(reason: String) {
+    package func clearPendingBootstrapWorkspace(reason: String) {
         guard pendingBootstrapWorkspaceID != nil else { return }
         pendingBootstrapWorkspaceID = nil
         logger.info("Promoted pending bootstrap workspace after \(reason)")
     }
 
-    func takePendingBootstrapWorkspaceForAuthoritativeEmptyFetch(
+    package func takePendingBootstrapWorkspaceForAuthoritativeEmptyFetch(
         _ changes: ServerRemoteChanges
     ) -> Workspace? {
         guard changes.isFullFetch,
@@ -434,7 +437,7 @@ final class ServerStateStore: ObservableObject {
     }
 
     @discardableResult
-    func reconcilePendingBootstrapWorkspaceState() -> Bool {
+    package func reconcilePendingBootstrapWorkspaceState() -> Bool {
         guard let pendingBootstrapWorkspaceID else { return false }
 
         guard workspaces.contains(where: { $0.id == pendingBootstrapWorkspaceID }) else {
@@ -451,19 +454,19 @@ final class ServerStateStore: ObservableObject {
         return refreshPendingBootstrapWorkspaceLocalizationIfNeeded()
     }
 
-    func handleAppLanguageChange() {
+    package func handleAppLanguageChange() {
         guard !hasPendingServerDataMutation else { return }
         guard refreshPendingBootstrapWorkspaceLocalizationIfNeeded() else { return }
         persistCurrentCollections()
     }
 
-    func servers(in workspace: Workspace, environment: ServerEnvironment?) -> [Server] {
+    package func servers(in workspace: Workspace, environment: ServerEnvironment?) -> [Server] {
         let workspaceServers = servers.filter { $0.workspaceId == workspace.id }
         guard let environment else { return workspaceServers }
         return workspaceServers.filter { $0.environment.id == environment.id }
     }
 
-    func recentServers(limit: Int = 5) -> [Server] {
+    package func recentServers(limit: Int = 5) -> [Server] {
         servers
             .filter { $0.lastConnected != nil }
             .sorted { ($0.lastConnected ?? .distantPast) > ($1.lastConnected ?? .distantPast) }
@@ -471,11 +474,11 @@ final class ServerStateStore: ObservableObject {
             .map { $0 }
     }
 
-    func favoriteServers() -> [Server] {
+    package func favoriteServers() -> [Server] {
         servers.filter(\.isFavorite)
     }
 
-    func searchServers(_ query: String) -> [Server] {
+    package func searchServers(_ query: String) -> [Server] {
         guard !query.isEmpty else { return servers }
         let lowercased = query.lowercased()
         return servers.filter {
@@ -486,24 +489,24 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func workspace(withID id: UUID?) -> Workspace? {
+    package func workspace(withID id: UUID?) -> Workspace? {
         guard let id else { return nil }
         return workspaces.first { $0.id == id }
     }
 
-    func server(withID id: UUID) -> Server? {
+    package func server(withID id: UUID) -> Server? {
         servers.first { $0.id == id }
     }
 
-    func assignmentWorkspaces(for server: Server?, hasProAccess: Bool) -> [Workspace] {
+    package func assignmentWorkspaces(for server: Server?, hasProAccess: Bool) -> [Workspace] {
         movePolicy(hasProAccess: hasProAccess).assignmentWorkspaces(for: server)
     }
 
-    func moveDestinations(for server: Server, hasProAccess: Bool) -> [Workspace] {
+    package func moveDestinations(for server: Server, hasProAccess: Bool) -> [Workspace] {
         movePolicy(hasProAccess: hasProAccess).moveDestinations(for: server)
     }
 
-    func resolvedEnvironment(
+    package func resolvedEnvironment(
         for server: Server,
         destination: Workspace,
         preferredEnvironment: ServerEnvironment? = nil
@@ -515,14 +518,14 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    func moveRequiresEnvironmentFallback(_ server: Server, destination: Workspace) -> Bool {
+    package func moveRequiresEnvironmentFallback(_ server: Server, destination: Workspace) -> Bool {
         ServerMoveSupport.requiresEnvironmentFallback(
             currentEnvironment: server.environment,
             destination: destination
         )
     }
 
-    func moveRestriction(
+    package func moveRestriction(
         for server: Server,
         destination: Workspace,
         hasProAccess: Bool
@@ -534,7 +537,7 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    func canAssignServer(
+    package func canAssignServer(
         _ server: Server,
         to destination: Workspace,
         hasProAccess: Bool
@@ -542,15 +545,15 @@ final class ServerStateStore: ObservableObject {
         movePolicy(hasProAccess: hasProAccess).canAssign(server, to: destination)
     }
 
-    func canAddServer(hasProAccess: Bool) -> Bool {
+    package func canAddServer(hasProAccess: Bool) -> Bool {
         freeTierPolicy.canAddServer(serverCount: servers.count, hasProAccess: hasProAccess)
     }
 
-    func canAddWorkspace(hasProAccess: Bool) -> Bool {
+    package func canAddWorkspace(hasProAccess: Bool) -> Bool {
         freeTierPolicy.canAddWorkspace(workspaceCount: workspaces.count, hasProAccess: hasProAccess)
     }
 
-    func makeWorkspaceSaveCandidate(
+    package func makeWorkspaceSaveCandidate(
         editing workspace: Workspace?,
         name: String,
         colorHex: String
@@ -570,39 +573,39 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    var freeServerLimit: Int { freeTierPolicy.serverLimit }
-    var isLegacyFreePlan: Bool { freeTierPolicy.isLegacyPlan }
+    package var freeServerLimit: Int { freeTierPolicy.serverLimit }
+    package var isLegacyFreePlan: Bool { freeTierPolicy.isLegacyPlan }
 
-    func unlockedServerIDs(hasProAccess: Bool) -> Set<UUID> {
+    package func unlockedServerIDs(hasProAccess: Bool) -> Set<UUID> {
         freeTierPolicy.unlockedServerIDs(servers: servers, hasProAccess: hasProAccess)
     }
 
-    func unlockedWorkspaceIDs(hasProAccess: Bool) -> Set<UUID> {
+    package func unlockedWorkspaceIDs(hasProAccess: Bool) -> Set<UUID> {
         freeTierPolicy.unlockedWorkspaceIDs(workspaces: workspaces, hasProAccess: hasProAccess)
     }
 
-    func isServerLocked(_ server: Server, hasProAccess: Bool) -> Bool {
+    package func isServerLocked(_ server: Server, hasProAccess: Bool) -> Bool {
         !hasProAccess && !unlockedServerIDs(hasProAccess: false).contains(server.id)
     }
 
-    func isWorkspaceLocked(_ workspace: Workspace, hasProAccess: Bool) -> Bool {
+    package func isWorkspaceLocked(_ workspace: Workspace, hasProAccess: Bool) -> Bool {
         !hasProAccess && !unlockedWorkspaceIDs(hasProAccess: false).contains(workspace.id)
     }
 
-    func lockedServersCount(hasProAccess: Bool) -> Int {
+    package func lockedServersCount(hasProAccess: Bool) -> Int {
         freeTierPolicy.lockedServerCount(serverCount: servers.count, hasProAccess: hasProAccess)
     }
 
-    func lockedWorkspacesCount(hasProAccess: Bool) -> Int {
+    package func lockedWorkspacesCount(hasProAccess: Bool) -> Int {
         freeTierPolicy.lockedWorkspaceCount(workspaceCount: workspaces.count, hasProAccess: hasProAccess)
     }
 
-    func hasLockedItems(hasProAccess: Bool) -> Bool {
+    package func hasLockedItems(hasProAccess: Bool) -> Bool {
         lockedServersCount(hasProAccess: hasProAccess) > 0
             || lockedWorkspacesCount(hasProAccess: hasProAccess) > 0
     }
 
-    func createCustomEnvironment(
+    package func createCustomEnvironment(
         name: String,
         color: String,
         hasProAccess: Bool
@@ -619,7 +622,7 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    static func shouldCreateBootstrapWorkspace(
+    static package func shouldCreateBootstrapWorkspace(
         didBootstrapDefaultWorkspace: Bool,
         hasSeenWelcome: Bool,
         hasLocalWorkspaces: Bool
@@ -627,7 +630,7 @@ final class ServerStateStore: ObservableObject {
         !(didBootstrapDefaultWorkspace || hasSeenWelcome) && !hasLocalWorkspaces
     }
 
-    static func isCanonicalDefaultWorkspaceCandidate(
+    static package func isCanonicalDefaultWorkspaceCandidate(
         _ workspace: Workspace,
         canonicalNames: Set<String>
     ) -> Bool {
@@ -640,7 +643,7 @@ final class ServerStateStore: ObservableObject {
             && workspace.lastSelectedServerId == nil
     }
 
-    static func backfillCandidates(
+    static package func backfillCandidates(
         pendingMutations: [ServerPendingMutation],
         cloudWorkspaceIDs: Set<UUID>,
         cloudServerIDs: Set<UUID>,
@@ -678,7 +681,7 @@ final class ServerStateStore: ObservableObject {
         )
     }
 
-    static func workspaceForOrphanRepair(
+    static package func workspaceForOrphanRepair(
         existingWorkspaces: [Workspace],
         servers: [Server],
         fallbackWorkspace: Workspace
@@ -724,7 +727,7 @@ final class ServerStateStore: ObservableObject {
         }
     }
 
-    func requireNoPendingServerDataMutation() throws {
+    package func requireNoPendingServerDataMutation() throws {
         guard !hasPendingServerDataMutation else {
             throw ServerDataMutationTransactionError.recoveryPending
         }

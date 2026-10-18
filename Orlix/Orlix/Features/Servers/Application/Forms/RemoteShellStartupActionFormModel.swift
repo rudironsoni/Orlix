@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct RemoteShellStartupActionFormModel: Equatable, Sendable {
     enum ValidationError: Equatable, Sendable {
         case invalidCommand

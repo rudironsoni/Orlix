@@ -2,15 +2,19 @@
 import AppKit
 import SwiftUI
 
-struct OrlixCommands: Commands {
-    let aboutWindowPresenter: AboutWindowPresenter
-    let settingsWindowPresenter: SettingsWindowPresenter
+#if ORLIX_MODULAR_APP
+import OrlixSettings
+import OrlixTerminal
+#endif
+package struct OrlixCommands: Commands {
+    package let aboutWindowPresenter: AboutWindowPresenter
+    package let settingsWindowPresenter: SettingsWindowPresenter
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.serverViewTabActions) private var serverViewTabActions
     @FocusedValue(\.openLocalSSHDiscovery) private var openLocalSSHDiscovery
     @FocusedValue(\.terminalSplitActions) private var terminalSplitActions
 
-    var body: some Commands {
+    package var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("About Orlix") {
                 aboutWindowPresenter.show()

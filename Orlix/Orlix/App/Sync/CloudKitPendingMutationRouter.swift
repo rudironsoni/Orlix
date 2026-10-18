@@ -1,5 +1,11 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSettings
+import OrlixStats
+import OrlixTerminal
+#endif
 @MainActor
 final class CloudKitPendingMutationRouter: PendingCloudKitMutationHandling {
     private let serverCloud: any ServerRemoteMutationClient

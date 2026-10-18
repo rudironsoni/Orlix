@@ -1,7 +1,10 @@
 import Foundation
 
-extension StoreError: LocalizedError {
-    nonisolated var errorDescription: String? {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension StoreError: LocalizedError {
+    nonisolated package var errorDescription: String? {
         switch self {
         case .verificationFailed:
             return String(localized: "Purchase verification failed")

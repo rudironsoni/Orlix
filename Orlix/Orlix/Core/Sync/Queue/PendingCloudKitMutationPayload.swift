@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated enum PendingCloudKitMutationOperation: String, Codable, Equatable, Sendable {
-    case upsert
-    case delete
+nonisolated package enum PendingCloudKitMutationOperation: String, Codable, Equatable, Sendable {
+    package case upsert
+    package case delete
 }
 
-nonisolated struct PendingCloudKitPayloadEnvelope: Codable, Equatable, Sendable {
-    let entityType: String
-    let entityKey: String
-    let operation: PendingCloudKitMutationOperation
-    let drainPriority: Int
-    let encodedValue: Data
+nonisolated package struct PendingCloudKitPayloadEnvelope: Codable, Equatable, Sendable {
+    package let entityType: String
+    package let entityKey: String
+    package let operation: PendingCloudKitMutationOperation
+    package let drainPriority: Int
+    package let encodedValue: Data
 
-    init<Value: Encodable>(
+    package init<Value: Encodable>(
         entityType: String,
         entityKey: String,
         operation: PendingCloudKitMutationOperation,
@@ -28,19 +28,19 @@ nonisolated struct PendingCloudKitPayloadEnvelope: Codable, Equatable, Sendable 
         self.encodedValue = try encoder.encode(value)
     }
 
-    var coalescingKey: String {
+    package var coalescingKey: String {
         "\(entityType):\(entityKey)"
     }
 
-    var isDelete: Bool {
+    package var isDelete: Bool {
         operation == .delete
     }
 
-    var description: String {
+    package var description: String {
         "\(entityType) \(operation.rawValue) \(entityKey)"
     }
 
-    func decode<Value: Decodable>(
+    package func decode<Value: Decodable>(
         _ type: Value.Type,
         entityType expectedEntityType: String,
         operation expectedOperation: PendingCloudKitMutationOperation
@@ -52,7 +52,7 @@ nonisolated struct PendingCloudKitPayloadEnvelope: Codable, Equatable, Sendable 
         return try JSONDecoder().decode(type, from: encodedValue)
     }
 
-    func validate(entityKey expectedEntityKey: String, drainPriority expectedPriority: Int) throws {
+    package func validate(entityKey expectedEntityKey: String, drainPriority expectedPriority: Int) throws {
         guard entityKey == expectedEntityKey,
               drainPriority == expectedPriority else {
             throw PendingCloudKitPayloadEnvelopeError.invalidRoutingMetadata

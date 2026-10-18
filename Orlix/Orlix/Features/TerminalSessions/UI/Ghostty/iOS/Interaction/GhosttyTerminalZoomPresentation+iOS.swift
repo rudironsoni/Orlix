@@ -8,12 +8,15 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
-    func showZoomIndicator() {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package func showZoomIndicator() {
         showZoomIndicator(fontSize: surfacePresentationOverrides.resolvedFontSize())
     }
 
-    func showZoomIndicator(fontSize: Double) {
+    package func showZoomIndicator(fontSize: Double) {
         zoomIndicatorView.update(fontSize: fontSize)
         updateZoomIndicatorLayout()
         bringSubviewToFront(zoomIndicatorView)
@@ -26,7 +29,7 @@ extension GhosttyTerminalView {
         scheduleZoomIndicatorHide(after: TerminalZoomPresentation.indicatorHideDelay)
     }
 
-    func scheduleZoomIndicatorHide(after delay: TimeInterval) {
+    package func scheduleZoomIndicatorHide(after delay: TimeInterval) {
         zoomIndicatorHideWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
@@ -40,7 +43,7 @@ extension GhosttyTerminalView {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    func updateZoomIndicatorLayout() {
+    package func updateZoomIndicatorLayout() {
         setNeedsLayout()
         layoutIfNeeded()
         zoomIndicatorView.layoutIfNeeded()

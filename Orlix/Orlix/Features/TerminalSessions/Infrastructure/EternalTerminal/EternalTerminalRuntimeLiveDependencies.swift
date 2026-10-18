@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+import OrlixStats
+#endif
 @MainActor
 extension EternalTerminalRuntimeDependencies {
     static func live(

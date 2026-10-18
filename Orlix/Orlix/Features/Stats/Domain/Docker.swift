@@ -1,63 +1,63 @@
 import Foundation
 
-nonisolated struct DockerStats: Equatable, Sendable {
-    var availability: DockerAvailability = .unknown
-    var containers: [DockerContainer] = []
-    var timestamp: Date = Date()
+nonisolated package struct DockerStats: Equatable, Sendable {
+    package var availability: DockerAvailability = .unknown
+    package var containers: [DockerContainer] = []
+    package var timestamp: Date = Date()
 
-    var isAvailable: Bool {
+    package var isAvailable: Bool {
         if case .available = availability {
             return true
         }
         return false
     }
 
-    var totalCount: Int {
+    package var totalCount: Int {
         containers.count
     }
 
-    var runningCount: Int {
+    package var runningCount: Int {
         containers.filter(\.isRunning).count
     }
 
-    var stoppedCount: Int {
+    package var stoppedCount: Int {
         containers.filter { !$0.isRunning }.count
     }
 
-    var unhealthyCount: Int {
+    package var unhealthyCount: Int {
         containers.filter { $0.health == .unhealthy }.count
     }
 
-    var restartingCount: Int {
+    package var restartingCount: Int {
         containers.filter { $0.state == .restarting }.count
     }
 
-    var aggregateCPUPercent: Double {
+    package var aggregateCPUPercent: Double {
         containers.reduce(0) { $0 + $1.cpuPercent }
     }
 
-    var memoryUsed: UInt64 {
+    package var memoryUsed: UInt64 {
         containers.reduce(0) { $0 + ($1.memoryUsed ?? 0) }
     }
 
-    var memoryLimit: UInt64 {
+    package var memoryLimit: UInt64 {
         containers.reduce(0) { $0 + ($1.memoryLimit ?? 0) }
     }
 
-    var memoryPercent: Double {
+    package var memoryPercent: Double {
         guard memoryLimit > 0 else { return 0 }
         return Double(memoryUsed) / Double(memoryLimit) * 100
     }
 
-    var networkRx: UInt64 {
+    package var networkRx: UInt64 {
         containers.reduce(0) { $0 + ($1.networkRx ?? 0) }
     }
 
-    var networkTx: UInt64 {
+    package var networkTx: UInt64 {
         containers.reduce(0) { $0 + ($1.networkTx ?? 0) }
     }
 
-    var topContainers: [DockerContainer] {
+    package var topContainers: [DockerContainer] {
         containers.sorted { lhs, rhs in
             if lhs.cpuPercent == rhs.cpuPercent {
                 return (lhs.memoryUsed ?? 0) > (rhs.memoryUsed ?? 0)
@@ -67,71 +67,71 @@ nonisolated struct DockerStats: Equatable, Sendable {
     }
 }
 
-nonisolated enum DockerAvailability: Equatable, Sendable {
-    case unknown
-    case available
-    case commandMissing
-    case daemonUnavailable(String)
-    case permissionDenied(String)
-    case unavailable(String)
+nonisolated package enum DockerAvailability: Equatable, Sendable {
+    package case unknown
+    package case available
+    package case commandMissing
+    package case daemonUnavailable(String)
+    package case permissionDenied(String)
+    package case unavailable(String)
 }
 
-nonisolated struct DockerContainer: Identifiable, Equatable, Sendable {
-    let id: String
-    let name: String
-    let image: String
-    let command: String
-    let state: DockerContainerState
-    let status: String
-    let health: DockerHealthStatus
-    let createdAt: String
-    let runningFor: String
-    let ports: String
-    let cpuPercent: Double
-    let memoryPercent: Double
-    let memoryUsed: UInt64?
-    let memoryLimit: UInt64?
-    let networkRx: UInt64?
-    let networkTx: UInt64?
-    let blockRead: UInt64?
-    let blockWrite: UInt64?
-    let pids: Int?
+nonisolated package struct DockerContainer: Identifiable, Equatable, Sendable {
+    package let id: String
+    package let name: String
+    package let image: String
+    package let command: String
+    package let state: DockerContainerState
+    package let status: String
+    package let health: DockerHealthStatus
+    package let createdAt: String
+    package let runningFor: String
+    package let ports: String
+    package let cpuPercent: Double
+    package let memoryPercent: Double
+    package let memoryUsed: UInt64?
+    package let memoryLimit: UInt64?
+    package let networkRx: UInt64?
+    package let networkTx: UInt64?
+    package let blockRead: UInt64?
+    package let blockWrite: UInt64?
+    package let pids: Int?
 
-    var shortID: String {
+    package var shortID: String {
         String(id.prefix(12))
     }
 
-    var displayName: String {
+    package var displayName: String {
         name.isEmpty ? shortID : name
     }
 
-    var isRunning: Bool {
+    package var isRunning: Bool {
         state == .running
     }
 }
 
-nonisolated enum DockerContainerState: String, Equatable, Sendable {
-    case running
-    case exited
-    case paused
-    case restarting
-    case created
-    case dead
-    case removing
-    case unknown
+nonisolated package enum DockerContainerState: String, Equatable, Sendable {
+    package case running
+    package case exited
+    package case paused
+    package case restarting
+    package case created
+    package case dead
+    package case removing
+    package case unknown
 
-    init(rawState: String) {
+    package init(rawState: String) {
         self = DockerContainerState(rawValue: rawState.lowercased()) ?? .unknown
     }
 }
 
-nonisolated enum DockerHealthStatus: String, Equatable, Sendable {
-    case healthy
-    case unhealthy
-    case starting
-    case none
+nonisolated package enum DockerHealthStatus: String, Equatable, Sendable {
+    package case healthy
+    package case unhealthy
+    package case starting
+    package case none
 
-    init(statusText: String) {
+    package init(statusText: String) {
         let lowercased = statusText.lowercased()
         if lowercased.contains("unhealthy") {
             self = .unhealthy
@@ -145,8 +145,8 @@ nonisolated enum DockerHealthStatus: String, Equatable, Sendable {
     }
 }
 
-nonisolated enum DockerContainerAction: String, Equatable, Sendable {
-    case start
-    case stop
-    case restart
+nonisolated package enum DockerContainerAction: String, Equatable, Sendable {
+    package case start
+    package case stop
+    package case restart
 }

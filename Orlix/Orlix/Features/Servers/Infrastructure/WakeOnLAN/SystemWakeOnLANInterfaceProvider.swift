@@ -1,8 +1,11 @@
 import Darwin
 import Foundation
 
-nonisolated struct SystemWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding {
-    func interfaces() throws -> [WakeOnLANNetworkInterface] {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+nonisolated package struct SystemWakeOnLANInterfaceProvider: WakeOnLANInterfaceProviding {
+    package func interfaces() throws -> [WakeOnLANNetworkInterface] {
         var interfacePointer: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&interfacePointer) == 0, let first = interfacePointer else {
             throw WakeOnLANSendError.interfaceEnumerationFailed(code: errno)

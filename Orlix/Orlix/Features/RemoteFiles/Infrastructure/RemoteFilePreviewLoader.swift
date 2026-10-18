@@ -4,6 +4,9 @@ import ImageIO
 import UniformTypeIdentifiers
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct RemoteFilePreviewLoader {
     nonisolated init() {}
 

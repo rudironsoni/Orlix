@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 extension LocalSSHDiscoveryService: LocalSSHDiscovering {}
 
 extension LocalSSHDiscoveryDependencies {

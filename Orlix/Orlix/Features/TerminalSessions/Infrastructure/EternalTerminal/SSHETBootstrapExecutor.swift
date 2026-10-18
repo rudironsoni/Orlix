@@ -1,6 +1,10 @@
 import ETBootstrap
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 nonisolated enum EternalTerminalHostCompatibility: Equatable {
     case supported
     case unsupportedNativeWindows

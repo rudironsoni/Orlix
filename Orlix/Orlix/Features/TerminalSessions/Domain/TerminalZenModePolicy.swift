@@ -1,12 +1,12 @@
-nonisolated enum TerminalZenModePolicy {
-    nonisolated static func canEnter(
+nonisolated package enum TerminalZenModePolicy {
+    nonisolated static package func canEnter(
         isTerminalSelected: Bool,
         hasActiveTerminal: Bool
     ) -> Bool {
         isTerminalSelected && hasActiveTerminal
     }
 
-    nonisolated static func resolvedEnabled(
+    nonisolated static package func resolvedEnabled(
         requested: Bool,
         hasRouteContext: Bool
     ) -> Bool {

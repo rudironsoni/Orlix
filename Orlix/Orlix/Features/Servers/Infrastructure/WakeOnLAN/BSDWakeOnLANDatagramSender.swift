@@ -1,12 +1,15 @@
 import Darwin
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated protocol WakeOnLANDatagramSending: Sendable {
     func send(_ data: Data, to address: WakeOnLANIPv4Address, port: UInt16) throws
 }
 
-nonisolated struct BSDWakeOnLANDatagramSender: WakeOnLANDatagramSending {
-    func send(_ data: Data, to address: WakeOnLANIPv4Address, port: UInt16) throws {
+nonisolated package struct BSDWakeOnLANDatagramSender: WakeOnLANDatagramSending {
+    package func send(_ data: Data, to address: WakeOnLANIPv4Address, port: UInt16) throws {
         let socketDescriptor = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard socketDescriptor >= 0 else {
             throw WakeOnLANSendError.socketCreationFailed(code: errno)

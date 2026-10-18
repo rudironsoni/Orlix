@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerMutation: Equatable, Sendable {
     case create(Server)
     case update(Server)
@@ -28,15 +31,15 @@ protocol ServerCredentialStoring: AnyObject {
 }
 
 @MainActor
-protocol ServerCredentialTransactionRepository: ServerCredentialStoring {
-    func getCredentials(for server: Server) throws -> ServerCredentials
-    func deleteCredentials(for serverID: UUID) throws
+package protocol ServerCredentialTransactionRepository: ServerCredentialStoring {
+    package func getCredentials(for server: Server) throws -> ServerCredentials
+    package func deleteCredentials(for serverID: UUID) throws
 }
 
 @MainActor
-protocol ServerCredentialRepository: ServerCredentialTransactionRepository {
-    func getStoredSSHKeys() -> [SSHKeyEntry]
-    func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)?
+package protocol ServerCredentialRepository: ServerCredentialTransactionRepository {
+    package func getStoredSSHKeys() -> [SSHKeyEntry]
+    package func getStoredSSHKeyData(for id: UUID) throws -> (key: Data, passphrase: String?)?
 }
 
 @MainActor

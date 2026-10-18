@@ -8,7 +8,10 @@
 #if os(iOS)
 import UIKit
 
-extension GhosttyTerminalView {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
     private func shouldRedirectNativeSelectionPressesToTerminalInput(_ presses: Set<UIPress>) -> Bool {
         guard isNativeSelectionTextInputContext else { return false }
         return presses.contains { press in
@@ -17,7 +20,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    override package func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         if shouldRedirectNativeSelectionPressesToTerminalInput(presses) {
             guard exitNativeSelectionTextInputContextForTerminalInput() else {
                 super.pressesBegan(presses, with: event)
@@ -39,7 +42,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    override package func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         let result = processHardwarePressesEnded(presses, event: event)
         if !result.forwardedToSystem.isEmpty {
             super.pressesEnded(result.forwardedToSystem, with: event)
@@ -50,7 +53,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    override package func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         super.pressesCancelled(presses, with: event)
         processHardwarePressesCancelled(presses)
     }
@@ -163,7 +166,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func registerHardwareKeyRepeat(
+    package func registerHardwareKeyRepeat(
         keyCode: UInt16,
         source: TerminalHardwareKeyRepeatSource,
         event: Ghostty.Input.KeyEvent,
@@ -216,7 +219,7 @@ extension GhosttyTerminalView {
         keyRepeatTimer = nil
     }
 
-    var activeHardwareKeyRepeat: TerminalHardwareKeyRepeatState<Ghostty.Input.KeyEvent>.Active? {
+    package var activeHardwareKeyRepeat: TerminalHardwareKeyRepeatState<Ghostty.Input.KeyEvent>.Active? {
         guard case .repeating(let active) = hardwareKeyRepeatState.phase else { return nil }
         return active
     }
@@ -230,7 +233,7 @@ extension GhosttyTerminalView {
             && !isShuttingDown
     }
 
-    func handleHardwareKeyRepeatTick(token: UUID) {
+    package func handleHardwareKeyRepeatTick(token: UUID) {
         guard canContinueHardwareKeyRepeat else {
             cancelTrackedHardwareInput()
             return
@@ -241,14 +244,14 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func endHardwareKeyRepeat(keyCode: UInt16) -> TerminalHardwareKeyRepeatState<Ghostty.Input.KeyEvent>.Active? {
+    package func endHardwareKeyRepeat(keyCode: UInt16) -> TerminalHardwareKeyRepeatState<Ghostty.Input.KeyEvent>.Active? {
         guard let active = hardwareKeyRepeatState.end(keyCode: keyCode) else { return nil }
         stopHardwareKeyRepeatTimer()
         logKeyboardLifecycle("hardware.repeat.ended", detail: "keyCode=\(keyCode)")
         return active
     }
 
-    func cancelTrackedHardwareInput() {
+    package func cancelTrackedHardwareInput() {
         stopHardwareKeyRepeatTimer()
         let active = hardwareKeyRepeatState.cancel()
         if let active {
@@ -276,7 +279,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func hardwareKeyEvent(
+    package func hardwareKeyEvent(
         _ event: Ghostty.Input.KeyEvent,
         action: Ghostty.Input.Action,
         text: String? = nil
@@ -450,7 +453,7 @@ extension GhosttyTerminalView {
         )
     }
 
-    func processHardwarePressesBegan(_ presses: Set<UIPress>, event _: UIPressesEvent?) -> HardwarePressResult {
+    package func processHardwarePressesBegan(_ presses: Set<UIPress>, event _: UIPressesEvent?) -> HardwarePressResult {
         guard let surface = surface, let cSurface = surface.unsafeCValue else {
             return HardwarePressResult(forwardedToSystem: presses, didHandleGhosttyInput: false)
         }
@@ -563,7 +566,7 @@ extension GhosttyTerminalView {
         return result
     }
 
-    func processHardwarePressesEnded(_ presses: Set<UIPress>, event _: UIPressesEvent?) -> HardwarePressResult {
+    package func processHardwarePressesEnded(_ presses: Set<UIPress>, event _: UIPressesEvent?) -> HardwarePressResult {
         guard let surface else {
             return HardwarePressResult(forwardedToSystem: presses, didHandleGhosttyInput: false)
         }
@@ -596,7 +599,7 @@ extension GhosttyTerminalView {
         return result
     }
 
-    func processHardwarePressesCancelled(_: Set<UIPress>) {
+    package func processHardwarePressesCancelled(_: Set<UIPress>) {
         logKeyboardLifecycle("hardware.press.cancelled")
         cancelTrackedHardwareInput()
     }

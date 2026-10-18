@@ -1,6 +1,9 @@
 import Foundation
 import UniformTypeIdentifiers
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 enum RemoteFileItemProviderAdapter {
     static let acceptedTypeIdentifiers = [
         UTType.orlixRemoteFileEntry.identifier,

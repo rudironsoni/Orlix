@@ -41,9 +41,9 @@ nonisolated enum RemoteKittyGraphicsPolicy: Equatable, Sendable {
     }
 }
 
-nonisolated enum RemoteTerminalType: String, Hashable, Sendable {
-    case xterm256Color = "xterm-256color"
-    case xtermGhostty = "xterm-ghostty"
+nonisolated package enum RemoteTerminalType: String, Hashable, Sendable {
+    package case xterm256Color = "xterm-256color"
+    package case xtermGhostty = "xterm-ghostty"
 }
 
 nonisolated enum RemoteShellLaunchPlan: Hashable, Sendable {
@@ -82,15 +82,15 @@ nonisolated enum RemoteWorkingDirectoryRestorePlan: Equatable, Sendable {
     }
 }
 
-nonisolated enum RemoteTerminalBootstrap {
-    nonisolated static let defaultTerminalType: RemoteTerminalType = .xterm256Color
-    nonisolated static let termProgram = "ghostty"
+nonisolated package enum RemoteTerminalBootstrap {
+    nonisolated static package let defaultTerminalType: RemoteTerminalType = .xterm256Color
+    nonisolated static package let termProgram = "ghostty"
 
-    nonisolated static func appVersion(bundle: Bundle = .main) -> String {
+    nonisolated static package func appVersion(bundle: Bundle = .main) -> String {
         (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
     }
 
-    nonisolated static func ghosttyTerminfoSource(bundle: Bundle = .main) -> String? {
+    nonisolated static package func ghosttyTerminfoSource(bundle: Bundle = .main) -> String? {
         let candidates = [
             bundle.url(forResource: "xterm-ghostty", withExtension: "src"),
             bundle.url(forResource: "xterm-ghostty", withExtension: "src", subdirectory: "terminfo"),
@@ -126,7 +126,7 @@ nonisolated enum RemoteTerminalBootstrap {
         return nil
     }
 
-    nonisolated static func terminalEnvironment(
+    nonisolated static package func terminalEnvironment(
         bundle: Bundle = .main,
         transport: ShellTransport = .ssh
     ) -> [RemoteTerminalEnvironmentVariable] {
@@ -141,7 +141,7 @@ nonisolated enum RemoteTerminalBootstrap {
         return environment
     }
 
-    nonisolated static func terminalProgramEnvironment(
+    nonisolated static package func terminalProgramEnvironment(
         bundle: Bundle = .main
     ) -> [RemoteTerminalEnvironmentVariable] {
         [
@@ -150,11 +150,11 @@ nonisolated enum RemoteTerminalBootstrap {
         ]
     }
 
-    nonisolated static func terminalEnvironmentNames(bundle: Bundle = .main) -> [String] {
+    nonisolated static package func terminalEnvironmentNames(bundle: Bundle = .main) -> [String] {
         terminalEnvironment(bundle: bundle).map(\.name)
     }
 
-    nonisolated static func terminalEnvironmentDictionary(
+    nonisolated static package func terminalEnvironmentDictionary(
         bundle: Bundle = .main,
         terminalType: RemoteTerminalType,
         transport: ShellTransport = .ssh
@@ -167,7 +167,7 @@ nonisolated enum RemoteTerminalBootstrap {
         return environment
     }
 
-    nonisolated static func environmentExportScript(
+    nonisolated static package func environmentExportScript(
         bundle: Bundle = .main,
         terminalType: RemoteTerminalType? = nil,
         transport: ShellTransport = .ssh
@@ -181,7 +181,7 @@ nonisolated enum RemoteTerminalBootstrap {
         return "export \(command);"
     }
 
-    nonisolated static func defaultLoginShellCommand() -> String {
+    nonisolated static package func defaultLoginShellCommand() -> String {
         """
         if [ -n "$SHELL" ]; then exec "$SHELL" -l; fi;
         if command -v bash >/dev/null 2>&1; then exec bash -l; fi;
@@ -190,7 +190,7 @@ nonisolated enum RemoteTerminalBootstrap {
         """
     }
 
-    nonisolated static func launchPlan(
+    nonisolated static package func launchPlan(
         startupCommand: String?,
         environment: RemoteEnvironment = .fallbackPOSIX,
         bundle: Bundle = .main
@@ -198,7 +198,7 @@ nonisolated enum RemoteTerminalBootstrap {
         environment.shellProfile.launchPlan(startupCommand: startupCommand, bundle: bundle)
     }
 
-    nonisolated static func moshStartupScript(
+    nonisolated static package func moshStartupScript(
         startCommand: String?,
         terminalType: RemoteTerminalType = defaultTerminalType,
         bundle: Bundle = .main
@@ -213,45 +213,45 @@ nonisolated enum RemoteTerminalBootstrap {
         )
     }
 
-    nonisolated static func wrapPOSIXShellCommand(_ script: String) -> String {
+    nonisolated static package func wrapPOSIXShellCommand(_ script: String) -> String {
         "/bin/sh -lc \(doubleQuotedShellArgument(script))"
     }
 
-    nonisolated static func wrapPowerShellCommand(_ script: String, executableName: String) -> String {
+    nonisolated static package func wrapPowerShellCommand(_ script: String, executableName: String) -> String {
         let data = script.data(using: .utf16LittleEndian) ?? Data()
         return "\(executableName) -NoLogo -NoProfile -EncodedCommand \(data.base64EncodedString())"
     }
 
-    nonisolated static func wrapCmdCommand(_ command: String) -> String {
+    nonisolated static package func wrapCmdCommand(_ command: String) -> String {
         let escaped = command.replacingOccurrences(of: "\"", with: "\"\"")
         return "cmd.exe /d /s /k \"\(escaped)\""
     }
 
-    nonisolated static func wrapCmdExecCommand(_ command: String) -> String {
+    nonisolated static package func wrapCmdExecCommand(_ command: String) -> String {
         // Use a direct `cmd /c <command>` form for non-interactive execution.
         // The quoted `/s /c "..."` form has proven unreliable for launching
         // nested PowerShell commands over Windows OpenSSH exec channels.
         "cmd.exe /d /c \(command)"
     }
 
-    nonisolated static func shellQuoted(_ value: String) -> String {
+    nonisolated static package func shellQuoted(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "'", with: "'\\''")
         return "'\(escaped)'"
     }
 
-    nonisolated static func posixPastedPath(_ path: String) -> String {
+    nonisolated static package func posixPastedPath(_ path: String) -> String {
         shellQuoted(path)
     }
 
-    nonisolated static func powerShellPastedPath(_ path: String) -> String {
+    nonisolated static package func powerShellPastedPath(_ path: String) -> String {
         powerShellQuoted(path)
     }
 
-    nonisolated static func cmdPastedPath(_ path: String) throws -> String {
+    nonisolated static package func cmdPastedPath(_ path: String) throws -> String {
         "\"\(try validatedCmdLiteralPath(path))\""
     }
 
-    nonisolated static func workingDirectoryRestorePlan(
+    nonisolated static package func workingDirectoryRestorePlan(
         for path: String,
         environment: RemoteEnvironment = .fallbackPOSIX
     ) -> RemoteWorkingDirectoryRestorePlan {
@@ -261,20 +261,20 @@ nonisolated enum RemoteTerminalBootstrap {
         )
     }
 
-    nonisolated static func posixDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static package func posixDirectoryChangeCommand(for path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\n" }
         return "cd -- \(shellQuoted(trimmed))\n"
     }
 
-    nonisolated static func powerShellDirectoryChangeCommand(for path: String) -> String {
+    nonisolated static package func powerShellDirectoryChangeCommand(for path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "\r\n" }
         let resolved = normalizedWindowsPath(from: trimmed) ?? trimmed
         return "Set-Location -LiteralPath \(powerShellQuoted(resolved))\r\n"
     }
 
-    nonisolated static func cmdWorkingDirectoryRestorePlan(
+    nonisolated static package func cmdWorkingDirectoryRestorePlan(
         for path: String,
         powerShellExecutable: String?
     ) -> RemoteWorkingDirectoryRestorePlan {
@@ -315,15 +315,15 @@ nonisolated enum RemoteTerminalBootstrap {
         return path
     }
 
-    nonisolated static func shellPathExport() -> String {
+    nonisolated static package func shellPathExport() -> String {
         "export PATH=\"\(shellPathValue())\""
     }
 
-    nonisolated static func tmuxUpdateEnvironmentVariables(bundle: Bundle = .main) -> [String] {
+    nonisolated static package func tmuxUpdateEnvironmentVariables(bundle: Bundle = .main) -> [String] {
         ["LANG", "LC_ALL", "LC_CTYPE"] + terminalEnvironmentNames(bundle: bundle)
     }
 
-    nonisolated static func tmuxArrayOptionCommands(option: String, values: [String]) -> [String] {
+    nonisolated static package func tmuxArrayOptionCommands(option: String, values: [String]) -> [String] {
         let reset = "set -gu \(option)"
         let assignments = values.enumerated().map { index, value in
             "set -g \(option)[\(index)] \"\(value)\""
@@ -331,13 +331,13 @@ nonisolated enum RemoteTerminalBootstrap {
         return [reset] + assignments
     }
 
-    nonisolated static func tmuxEnvironmentCommands(bundle: Bundle = .main) -> [String] {
+    nonisolated static package func tmuxEnvironmentCommands(bundle: Bundle = .main) -> [String] {
         terminalEnvironment(bundle: bundle).map { variable in
             "set-environment -g \(variable.name) \"\(variable.value)\""
         }
     }
 
-    nonisolated static func prefixedPOSIXScript(
+    nonisolated static package func prefixedPOSIXScript(
         for command: String,
         bundle: Bundle = .main,
         terminalType: RemoteTerminalType? = nil,
@@ -346,7 +346,7 @@ nonisolated enum RemoteTerminalBootstrap {
         "\(environmentExportScript(bundle: bundle, terminalType: terminalType, transport: transport)) \(command)"
     }
 
-    nonisolated static func prefixedPowerShellScript(for command: String, bundle: Bundle = .main) -> String {
+    nonisolated static package func prefixedPowerShellScript(for command: String, bundle: Bundle = .main) -> String {
         let environmentSetup = terminalEnvironment(bundle: bundle)
             .map { "$env:\($0.name) = \(powerShellQuoted($0.value))" }
             .joined(separator: "; ")
@@ -386,7 +386,7 @@ nonisolated enum RemoteTerminalBootstrap {
         return "\"\(escaped)\""
     }
 
-    nonisolated static func powerShellQuoted(_ value: String) -> String {
+    nonisolated static package func powerShellQuoted(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 

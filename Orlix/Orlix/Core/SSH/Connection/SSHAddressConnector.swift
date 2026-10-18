@@ -1,6 +1,9 @@
 import Darwin
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum SSHAddressFamily: String, Equatable, Sendable {
     case ipv4
     case ipv6

@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum ServerMutationCommand: Equatable, Sendable {
     case insertServer(Server)
     case updateServer(Server)

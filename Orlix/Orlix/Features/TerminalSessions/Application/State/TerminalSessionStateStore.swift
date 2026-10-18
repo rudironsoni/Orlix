@@ -2,6 +2,11 @@ import Combine
 import Foundation
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+import OrlixSettings
+#endif
 @MainActor
 enum TerminalSessionPaneRemoval {
     case closeTab(TerminalTab)
@@ -14,7 +19,7 @@ enum TerminalSessionPaneRemoval {
 
 /// Owns the durable terminal tab graph and its pane state.
 @MainActor
-final class TerminalSessionStateStore: ObservableObject {
+final package class TerminalSessionStateStore: ObservableObject {
     @Published private var tabsByServer: [UUID: [TerminalTab]] = [:] {
         didSet { schedulePersist() }
     }
@@ -33,7 +38,7 @@ final class TerminalSessionStateStore: ObservableObject {
     private var persistTask: Task<Void, Never>?
     private var isRestoring = false
 
-    init(
+    package init(
         snapshotStore: any TerminalTabSnapshotStoring,
         connectionViewSelections: ConnectionViewSelectionStore,
         remoteSessionResolver: RemoteSessionAttachResolver
@@ -44,31 +49,31 @@ final class TerminalSessionStateStore: ObservableObject {
         restoreSnapshot()
     }
 
-    var serverIdsWithTabs: Set<UUID> {
+    package var serverIdsWithTabs: Set<UUID> {
         Set(tabsByServer.compactMap { serverId, tabs in
             tabs.isEmpty ? nil : serverId
         })
     }
 
-    var selectedTabChanges: AnyPublisher<[UUID: UUID], Never> {
+    package var selectedTabChanges: AnyPublisher<[UUID: UUID], Never> {
         $selectedTabByServer
             .eraseToAnyPublisher()
     }
 
-    var paneConnectionStateChanges: AnyPublisher<[ConnectionState], Never> {
+    package var paneConnectionStateChanges: AnyPublisher<[ConnectionState], Never> {
         $paneStates
             .map { $0.values.map(\.connectionState) }
             .eraseToAnyPublisher()
     }
 
-    var navigationChanges: AnyPublisher<TerminalSessionNavigationState, Never> {
+    package var navigationChanges: AnyPublisher<TerminalSessionNavigationState, Never> {
         Publishers.CombineLatest($tabsByServer, $paneStates)
             .map(Self.makeNavigationState)
             .removeDuplicates()
             .eraseToAnyPublisher()
     }
 
-    var navigationState: TerminalSessionNavigationState {
+    package var navigationState: TerminalSessionNavigationState {
         Self.makeNavigationState(tabsByServer: tabsByServer, paneStates: paneStates)
     }
 
@@ -87,7 +92,7 @@ final class TerminalSessionStateStore: ObservableObject {
         )
     }
 
-    func changes(for serverId: UUID) -> AnyPublisher<TerminalServerSessionSnapshot, Never> {
+    package func changes(for serverId: UUID) -> AnyPublisher<TerminalServerSessionSnapshot, Never> {
         Publishers.CombineLatest3($tabsByServer, $selectedTabByServer, $paneStates)
             .map { tabsByServer, selectedTabByServer, paneStates in
                 Self.makeServerSnapshot(
@@ -101,18 +106,18 @@ final class TerminalSessionStateStore: ObservableObject {
             .eraseToAnyPublisher()
     }
 
-    func presentationChanges(for paneId: UUID) -> AnyPublisher<TerminalPanePresentationState?, Never> {
+    package func presentationChanges(for paneId: UUID) -> AnyPublisher<TerminalPanePresentationState?, Never> {
         $paneStates
             .map { $0[paneId].map(TerminalPanePresentationState.init) }
             .removeDuplicates()
             .eraseToAnyPublisher()
     }
 
-    func presentationState(for paneId: UUID) -> TerminalPanePresentationState? {
+    package func presentationState(for paneId: UUID) -> TerminalPanePresentationState? {
         paneStates[paneId].map(TerminalPanePresentationState.init)
     }
 
-    func snapshot(for serverId: UUID) -> TerminalServerSessionSnapshot {
+    package func snapshot(for serverId: UUID) -> TerminalServerSessionSnapshot {
         Self.makeServerSnapshot(
             serverId: serverId,
             tabsByServer: tabsByServer,
@@ -137,71 +142,71 @@ final class TerminalSessionStateStore: ObservableObject {
         )
     }
 
-    var paneIds: Set<UUID> {
+    package var paneIds: Set<UUID> {
         Set(paneStates.keys)
     }
 
-    var allPaneStates: [TerminalPaneState] {
+    package var allPaneStates: [TerminalPaneState] {
         Array(paneStates.values)
     }
 
-    var connectionStates: [ConnectionState] {
+    package var connectionStates: [ConnectionState] {
         paneStates.values.map(\.connectionState)
     }
 
-    var hasConnectedPanes: Bool {
+    package var hasConnectedPanes: Bool {
         paneStates.values.contains { $0.connectionState.isConnected }
     }
 
-    func tabs(for serverId: UUID) -> [TerminalTab] {
+    package func tabs(for serverId: UUID) -> [TerminalTab] {
         tabsByServer[serverId] ?? []
     }
 
-    func tab(id tabId: UUID, for serverId: UUID) -> TerminalTab? {
+    package func tab(id tabId: UUID, for serverId: UUID) -> TerminalTab? {
         tabs(for: serverId).first { $0.id == tabId }
     }
 
-    func selectedTabId(for serverId: UUID) -> UUID? {
+    package func selectedTabId(for serverId: UUID) -> UUID? {
         selectedTabByServer[serverId]
     }
 
-    func selectedTab(for serverId: UUID) -> TerminalTab? {
+    package func selectedTab(for serverId: UUID) -> TerminalTab? {
         guard let tabId = selectedTabId(for: serverId) else {
             return tabs(for: serverId).first
         }
         return tab(id: tabId, for: serverId)
     }
 
-    func paneState(for paneId: UUID) -> TerminalPaneState? {
+    package func paneState(for paneId: UUID) -> TerminalPaneState? {
         paneStates[paneId]
     }
 
-    func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
+    package func presentationOverrides(for paneId: UUID) -> TerminalPresentationOverrides {
         paneStates[paneId]?.presentationOverrides ?? .empty
     }
 
-    func containsPane(_ paneId: UUID) -> Bool {
+    package func containsPane(_ paneId: UUID) -> Bool {
         paneStates[paneId] != nil
     }
 
-    func paneStates(for paneIds: [UUID]) -> [TerminalPaneState] {
+    package func paneStates(for paneIds: [UUID]) -> [TerminalPaneState] {
         paneIds.compactMap { paneStates[$0] }
     }
 
-    func paneStates(forServer serverId: UUID) -> [TerminalPaneState] {
+    package func paneStates(forServer serverId: UUID) -> [TerminalPaneState] {
         paneStates.values.filter { $0.serverId == serverId }
     }
 
-    func firstPaneState(for serverId: UUID) -> TerminalPaneState? {
+    package func firstPaneState(for serverId: UUID) -> TerminalPaneState? {
         paneStates.values.first { $0.serverId == serverId }
     }
 
-    func canOpenNewTab(hasProAccess: Bool) -> Bool {
+    package func canOpenNewTab(hasProAccess: Bool) -> Bool {
         hasProAccess || tabsByServer.values.lazy.flatMap { $0 }.count < FreeTierLimits.maxTabs
     }
 
     @discardableResult
-    func createTab(
+    package func createTab(
         serverId: UUID,
         title: String,
         sourcePaneId: UUID?,
@@ -221,7 +226,7 @@ final class TerminalSessionStateStore: ObservableObject {
         return tab
     }
 
-    func install(
+    package func install(
         _ tab: TerminalTab,
         paneState: TerminalPaneState,
         select: Bool
@@ -239,7 +244,7 @@ final class TerminalSessionStateStore: ObservableObject {
         }
     }
 
-    func selectTab(_ tabId: UUID?, for serverId: UUID) {
+    package func selectTab(_ tabId: UUID?, for serverId: UUID) {
         guard selectedTabByServer[serverId] != tabId else { return }
         if let tabId {
             selectedTabByServer[serverId] = tabId
@@ -248,14 +253,14 @@ final class TerminalSessionStateStore: ObservableObject {
         }
     }
 
-    func selectView(_ selection: ConnectionViewTabID?, for serverId: UUID) {
+    package func selectView(_ selection: ConnectionViewTabID?, for serverId: UUID) {
         guard connectionViewSelections.selection(for: serverId) != selection else { return }
         connectionViewSelections.setSelection(selection, for: serverId)
         schedulePersist()
     }
 
     @discardableResult
-    func removeTab(_ tab: TerminalTab) -> TerminalTab? {
+    package func removeTab(_ tab: TerminalTab) -> TerminalTab? {
         guard let currentTab = self.tab(id: tab.id, for: tab.serverId),
               var serverTabs = tabsByServer[currentTab.serverId],
               let closingIndex = serverTabs.firstIndex(where: { $0.id == currentTab.id }) else {
@@ -281,7 +286,7 @@ final class TerminalSessionStateStore: ObservableObject {
         return currentTab
     }
 
-    func removeServer(_ serverId: UUID) {
+    package func removeServer(_ serverId: UUID) {
         for tab in tabs(for: serverId) {
             for paneId in tab.allPaneIds {
                 paneStates.removeValue(forKey: paneId)
@@ -292,7 +297,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func createSplitPane(
+    package func createSplitPane(
         in tab: TerminalTab,
         paneId: UUID,
         placement: TerminalSplitPlacement,
@@ -333,7 +338,7 @@ final class TerminalSessionStateStore: ObservableObject {
         return newPaneId
     }
 
-    func removePane(in tab: TerminalTab, paneId: UUID) -> TerminalSessionPaneRemoval? {
+    package func removePane(in tab: TerminalTab, paneId: UUID) -> TerminalSessionPaneRemoval? {
         guard let currentTab = self.tab(id: tab.id, for: tab.serverId) else { return nil }
         let paneExists = currentTab.layout?.findPane(paneId)
             ?? (currentTab.rootPaneId == paneId)
@@ -365,7 +370,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func replaceTab(_ tab: TerminalTab) -> Bool {
+    package func replaceTab(_ tab: TerminalTab) -> Bool {
         guard var serverTabs = tabsByServer[tab.serverId],
               let index = serverTabs.firstIndex(where: { $0.id == tab.id }) else { return false }
         serverTabs[index] = tab
@@ -374,7 +379,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func focusPane(in tab: TerminalTab, paneId: UUID) -> TerminalTab? {
+    package func focusPane(in tab: TerminalTab, paneId: UUID) -> TerminalTab? {
         guard var currentTab = self.tab(id: tab.id, for: tab.serverId),
               currentTab.allPaneIds.contains(paneId),
               currentTab.focusedPaneId != paneId else { return nil }
@@ -384,7 +389,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func updateSplitRatio(
+    package func updateSplitRatio(
         in tab: TerminalTab,
         node: TerminalSplitNode,
         ratio: Double
@@ -401,7 +406,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func equalizeSplitLayout(in tab: TerminalTab) -> TerminalTab? {
+    package func equalizeSplitLayout(in tab: TerminalTab) -> TerminalTab? {
         guard var currentTab = self.tab(id: tab.id, for: tab.serverId),
               let currentLayout = currentTab.layout else { return nil }
         currentTab.layout = currentLayout.equalized()
@@ -410,7 +415,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func selectAdjacentPane(
+    package func selectAdjacentPane(
         in tab: TerminalTab,
         paneId: UUID
     ) -> TerminalTab? {
@@ -422,7 +427,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     @discardableResult
-    func moveDivider(
+    package func moveDivider(
         in tab: TerminalTab,
         direction: TerminalSplitResizeDirection
     ) -> TerminalTab? {
@@ -437,13 +442,13 @@ final class TerminalSessionStateStore: ObservableObject {
         return currentTab
     }
 
-    func setPaneState(_ paneState: TerminalPaneState) {
+    package func setPaneState(_ paneState: TerminalPaneState) {
         guard paneStates[paneState.paneId] != paneState else { return }
         paneStates[paneState.paneId] = paneState
     }
 
     @discardableResult
-    func updatePane(
+    package func updatePane(
         _ paneId: UUID,
         persist: Bool = false,
         _ mutation: (inout TerminalPaneState) -> Void
@@ -459,7 +464,7 @@ final class TerminalSessionStateStore: ObservableObject {
         return true
     }
 
-    func setStartupActionReplayPending(
+    package func setStartupActionReplayPending(
         _ isPending: Bool,
         for paneId: UUID
     ) {
@@ -470,7 +475,7 @@ final class TerminalSessionStateStore: ObservableObject {
         persistNow()
     }
 
-    func markStartupActionCompleted(for paneId: UUID) {
+    package func markStartupActionCompleted(for paneId: UUID) {
         let didChange = updatePane(paneId) {
             $0.disconnectReason = .startupActionCompleted
             $0.startupActionReplayPending = false
@@ -479,17 +484,17 @@ final class TerminalSessionStateStore: ObservableObject {
         persistNow()
     }
 
-    func requestPersistence() {
+    package func requestPersistence() {
         schedulePersist()
     }
 
-    func persistNow() {
+    package func persistNow() {
         persistTask?.cancel()
         persistTask = nil
         persistSnapshot()
     }
 
-    func prepareForApplicationTermination() -> Set<UUID> {
+    package func prepareForApplicationTermination() -> Set<UUID> {
         persistTask?.cancel()
         persistTask = nil
         persistSnapshot()
@@ -629,7 +634,7 @@ final class TerminalSessionStateStore: ObservableObject {
     }
 
     #if DEBUG
-    func persistAndRestoreSnapshotForTesting() {
+    package func persistAndRestoreSnapshotForTesting() {
         persistTask?.cancel()
         persistTask = nil
         persistSnapshot()
@@ -637,11 +642,11 @@ final class TerminalSessionStateStore: ObservableObject {
         restoreSnapshot()
     }
 
-    func snapshotDataForTesting() throws -> Data {
+    package func snapshotDataForTesting() throws -> Data {
         try JSONEncoder().encode(makeSnapshot())
     }
 
-    func resetForTesting() {
+    package func resetForTesting() {
         persistTask?.cancel()
         persistTask = nil
         isRestoring = true

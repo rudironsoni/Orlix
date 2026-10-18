@@ -4,6 +4,9 @@ import Foundation
 import SwiftUI
 import UIKit
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum TerminalRenderingTransition: Equatable, Sendable {
     case none
     case pause

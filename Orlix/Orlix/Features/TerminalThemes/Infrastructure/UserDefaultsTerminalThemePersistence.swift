@@ -1,5 +1,8 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated struct TerminalThemeUserDefaultsKeys: Equatable, Sendable {
     let customThemes: String
     let darkTheme: String

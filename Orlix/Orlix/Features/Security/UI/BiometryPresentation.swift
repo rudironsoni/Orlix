@@ -1,7 +1,10 @@
 import Foundation
 
-extension BiometryKind {
-    var displayName: String {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension BiometryKind {
+    package var displayName: String {
         switch self {
         case .none:
             return String(localized: "Biometric Authentication")
@@ -13,8 +16,8 @@ extension BiometryKind {
     }
 }
 
-extension BiometricUnavailability {
-    var message: String {
+package extension BiometricUnavailability {
+    package var message: String {
         switch self {
         case .notEnrolled:
             return String(localized: "Biometric authentication is not set up on this device.")
@@ -30,8 +33,8 @@ extension BiometricUnavailability {
     }
 }
 
-extension BiometricAuthenticationFailure {
-    var message: String? {
+package extension BiometricAuthenticationFailure {
+    package var message: String? {
         switch self {
         case .cancelled:
             return nil
@@ -51,8 +54,8 @@ extension BiometricAuthenticationFailure {
     }
 }
 
-extension AppLockFailure {
-    var message: String? {
+package extension AppLockFailure {
+    package var message: String? {
         switch self {
         case .biometryUnavailable(let reason):
             return reason.message
@@ -62,17 +65,17 @@ extension AppLockFailure {
     }
 }
 
-extension AppLockManager {
-    var biometryDisplayName: String {
+package extension AppLockManager {
+    package var biometryDisplayName: String {
         biometryKind.displayName
     }
 
-    var biometryAvailabilityMessage: String? {
+    package var biometryAvailabilityMessage: String? {
         guard case .unavailable(let reason) = biometricAvailability else { return nil }
         return reason.message
     }
 
-    var lastErrorMessage: String? {
+    package var lastErrorMessage: String? {
         lastFailure?.message
     }
 }

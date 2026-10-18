@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct ClassicStatsContent: View {
     let serverName: String
     let stats: ServerStats

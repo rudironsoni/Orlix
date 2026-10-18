@@ -9,16 +9,19 @@
 import UIKit
 
 #if DEBUG
-extension GhosttyTerminalView {
-    var keyboardUITestInputViewReloadCount: Int {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
+    package var keyboardUITestInputViewReloadCount: Int {
         keyboardInputViewReloadCount
     }
 
-    var keyboardUITestInputSessionRebuildCount: Int {
+    package var keyboardUITestInputSessionRebuildCount: Int {
         keyboardInputSessionRebuildCount
     }
 
-    func keyboardUITestDiagnostics(keyboardVisible: Bool, keyboardHeight: CGFloat) -> String {
+    package func keyboardUITestDiagnostics(keyboardVisible: Bool, keyboardHeight: CGFloat) -> String {
         let snapshot = keyboardCoordinatorDiagnosticSnapshot()
         let accessoryAttached = keyboardToolbar?.window != nil
         let accessoryAppearance = keyboardToolbar?.diagnosticBackgroundAppearance ?? "missing"
@@ -88,12 +91,12 @@ extension GhosttyTerminalView {
         ].joined(separator: " ")
     }
 
-    func keyboardUITestMoveCursorToBottom() {
+    package func keyboardUITestMoveCursorToBottom() {
         let lines = (0..<200).map { "line-\($0)" }.joined(separator: "\r\n") + "\r\n"
         feedData(Data(lines.utf8))
     }
 
-    func keyboardUITestSetMarkedText(_ text: String) {
+    package func keyboardUITestSetMarkedText(_ text: String) {
         guard !text.isEmpty else { return }
         if !imeProxyTextView.isFirstResponder {
             _ = requestKeyboardFocus(for: .initialActivation)
@@ -105,7 +108,7 @@ extension GhosttyTerminalView {
         )
     }
 
-    func keyboardUITestBeginLayoutResolvedHardwareKeyRepeat(text: String, shifted: Bool) {
+    package func keyboardUITestBeginLayoutResolvedHardwareKeyRepeat(text: String, shifted: Bool) {
         guard !text.isEmpty, let surface else { return }
         keyboardUITestUsesManualHardwareKeyRepeatClock = true
         cancelTrackedHardwareInput()
@@ -143,12 +146,12 @@ extension GhosttyTerminalView {
         )
     }
 
-    func keyboardUITestFireHardwareKeyRepeat() {
+    package func keyboardUITestFireHardwareKeyRepeat() {
         guard let token = activeHardwareKeyRepeat?.token else { return }
         handleHardwareKeyRepeatTick(token: token)
     }
 
-    func keyboardUITestEndHardwareKeyRepeat() {
+    package func keyboardUITestEndHardwareKeyRepeat() {
         guard let active = activeHardwareKeyRepeat,
               let ended = endHardwareKeyRepeat(keyCode: active.keyCode) else { return }
         systemTextInputPresses.remove(ended.keyCode)
@@ -157,22 +160,22 @@ extension GhosttyTerminalView {
         requestRender()
     }
 
-    func keyboardUITestCancelHardwareKeyRepeat() {
+    package func keyboardUITestCancelHardwareKeyRepeat() {
         cancelTrackedHardwareInput()
     }
 
-    func keyboardUITestDeleteBackwardThroughIMEProxy() {
+    package func keyboardUITestDeleteBackwardThroughIMEProxy() {
         if !imeProxyTextView.isFirstResponder {
             _ = requestKeyboardFocus(for: .initialActivation)
         }
         imeProxyTextView.deleteBackward()
     }
 
-    func keyboardUITestCommitMarkedText() {
+    package func keyboardUITestCommitMarkedText() {
         imeProxyTextView.unmarkText()
     }
 
-    func keyboardUITestSendSoftwareShortcut(
+    package func keyboardUITestSendSoftwareShortcut(
         _ text: String,
         modifiers: TerminalAccessoryShortcutModifiers
     ) {
@@ -181,14 +184,14 @@ extension GhosttyTerminalView {
         _ = handleIMEProxyInsertText(text)
     }
 
-    func keyboardUITestSendToolbarShortcut(
+    package func keyboardUITestSendToolbarShortcut(
         _ key: TerminalKey,
         modifiers: TerminalAccessoryShortcutModifiers
     ) {
         sendToolbarKey(.modified(key, mods: modifiers.ghosttyModifiers))
     }
 
-    func keyboardUITestSendCustomShortcut(
+    package func keyboardUITestSendCustomShortcut(
         _ key: TerminalAccessoryShortcutKey,
         modifiers: TerminalAccessoryShortcutModifiers
     ) {
@@ -203,7 +206,7 @@ extension GhosttyTerminalView {
     }
 
     @discardableResult
-    func keyboardUITestSendRegisteredKeyCommand(
+    package func keyboardUITestSendRegisteredKeyCommand(
         _ input: String,
         modifiers: UIKeyModifierFlags
     ) -> Bool {
@@ -226,11 +229,11 @@ extension GhosttyTerminalView {
         )
     }
 
-    func keyboardUITestRequestHardwareKeyboardFocus() {
+    package func keyboardUITestRequestHardwareKeyboardFocus() {
         _ = requestKeyboardFocus(for: .hardwareKeyboard)
     }
 
-    func keyboardUITestSetHardwareKeyboardAttached(_ attached: Bool) {
+    package func keyboardUITestSetHardwareKeyboardAttached(_ attached: Bool) {
         keyboardUITestHardwareKeyboardOverride = attached
         let previousInputConfiguration = terminalInputConfiguration
         if setHardwareKeyboardAttached(attached) {
@@ -248,7 +251,7 @@ extension GhosttyTerminalView {
         }
     }
 
-    func keyboardUITestBeginUnexpectedSoftwareKeyboardLoss() {
+    package func keyboardUITestBeginUnexpectedSoftwareKeyboardLoss() {
         keyboardUITestSoftwareKeyboardFailure = .untilSessionRebuild
         reloadTerminalInputViewsIfActive()
     }

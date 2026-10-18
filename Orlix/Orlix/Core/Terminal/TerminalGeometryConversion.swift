@@ -1,7 +1,7 @@
 import CoreGraphics
 
-nonisolated enum TerminalGeometryConversion {
-    static func gridSize(cols: Int, rows: Int) -> (cols: Int32, rows: Int32)? {
+nonisolated package enum TerminalGeometryConversion {
+    static package func gridSize(cols: Int, rows: Int) -> (cols: Int32, rows: Int32)? {
         guard cols > 0, rows > 0,
               let wireCols = Int32(exactly: cols),
               let wireRows = Int32(exactly: rows) else {
@@ -11,7 +11,7 @@ nonisolated enum TerminalGeometryConversion {
         return (wireCols, wireRows)
     }
 
-    static func ghosttySurfaceSize(
+    static package func ghosttySurfaceSize(
         width: CGFloat,
         height: CGFloat
     ) -> (width: UInt32, height: UInt32)? {

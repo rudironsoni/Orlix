@@ -2,6 +2,10 @@
 import Combine
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixTerminal
+#endif
 @MainActor
 final class MacTerminalRecoveryUITestHarnessModel: ObservableObject {
     enum Outcome: Equatable {
@@ -164,10 +168,10 @@ private actor MacTerminalRecoveryHarnessBlocker {
     }
 }
 
-struct MacTerminalRecoveryUITestHarness: View {
+package struct MacTerminalRecoveryUITestHarness: View {
     @StateObject private var model: MacTerminalRecoveryUITestHarnessModel
 
-    init(simulatesSuccess: Bool) {
+    package init(simulatesSuccess: Bool) {
         _model = StateObject(
             wrappedValue: MacTerminalRecoveryUITestHarnessModel(
                 simulatesSuccess: simulatesSuccess
@@ -175,7 +179,7 @@ struct MacTerminalRecoveryUITestHarness: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             switch model.outcome {
             case .idle, .reconnecting:

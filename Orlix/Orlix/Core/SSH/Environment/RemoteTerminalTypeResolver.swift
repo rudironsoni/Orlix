@@ -1,6 +1,9 @@
 import Foundation
 import os
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 nonisolated enum RemoteTerminalTypeResolver {
     typealias CommandExecutor = @Sendable (_ command: String, _ timeout: Duration?) async throws -> String
 

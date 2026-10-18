@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct AppleCard<Content: View>: View {
     let style: StatsVisualStyle
     let minHeight: CGFloat?

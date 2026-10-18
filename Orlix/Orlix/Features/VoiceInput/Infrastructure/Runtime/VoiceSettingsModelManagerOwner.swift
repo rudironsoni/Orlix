@@ -1,17 +1,17 @@
 import Foundation
 
 @MainActor
-final class VoiceSettingsModelManagerOwner {
-    typealias ManagerFactory = @MainActor (
+final package class VoiceSettingsModelManagerOwner {
+    package typealias ManagerFactory = @MainActor (
         _ kind: MLXModelKind,
         _ selectedModelID: @escaping @MainActor () -> String
     ) -> MLXModelManager
 
-    let settingsStore: VoiceSettingsStore
-    let whisperManager: MLXModelManager
-    let parakeetManager: MLXModelManager
+    package let settingsStore: VoiceSettingsStore
+    package let whisperManager: MLXModelManager
+    package let parakeetManager: MLXModelManager
 
-    init(
+    package init(
         settingsStore: VoiceSettingsStore,
         makeManager: ManagerFactory
     ) {
@@ -29,26 +29,26 @@ final class VoiceSettingsModelManagerOwner {
         parakeetManager.shutdown()
     }
 
-    func selectWhisperModel(_ modelID: String) {
+    package func selectWhisperModel(_ modelID: String) {
         let previousModelID = settingsStore.settings.whisperModelID
         settingsStore.setWhisperModelID(modelID)
         guard settingsStore.settings.whisperModelID != previousModelID else { return }
         whisperManager.modelSelectionDidChange(from: previousModelID)
     }
 
-    func selectParakeetModel(_ modelID: String) {
+    package func selectParakeetModel(_ modelID: String) {
         let previousModelID = settingsStore.settings.parakeetModelID
         settingsStore.setParakeetModelID(modelID)
         guard settingsStore.settings.parakeetModelID != previousModelID else { return }
         parakeetManager.modelSelectionDidChange(from: previousModelID)
     }
 
-    func refreshStatus() {
+    package func refreshStatus() {
         whisperManager.refreshStatus()
         parakeetManager.refreshStatus()
     }
 
-    func clearAllStorage() {
+    package func clearAllStorage() {
         whisperManager.clearAllStorage()
         parakeetManager.clearAllStorage()
         refreshStatus()

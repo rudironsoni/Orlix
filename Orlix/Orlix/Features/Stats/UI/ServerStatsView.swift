@@ -1,14 +1,18 @@
 import SwiftUI
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 
 // MARK: - Server Stats View
 
-struct ServerStatsView: View {
+package struct ServerStatsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(StatsResolvedAppearance.storageKey) private var appearanceMode = "system"
 
-    let server: Server
-    let backgroundColor: Color
-    var sharedClientProvider: () -> SSHClient? = { nil }
+    package let server: Server
+    package let backgroundColor: Color
+    package var sharedClientProvider: () -> SSHClient? = { nil }
 
     @ObservedObject private var statsCollector: ServerStatsCollector
     @ObservedObject private var preferencesStore: PreferencesStore
@@ -18,7 +22,7 @@ struct ServerStatsView: View {
     @State private var isShowingAppearanceSettings = false
     @State private var isShowingDockerUpgrade = false
 
-    init(
+    package init(
         server: Server,
         backgroundColor: Color,
         sharedClientProvider: @escaping () -> SSHClient? = { nil },
@@ -37,7 +41,7 @@ struct ServerStatsView: View {
         self.isDockerUnlocked = isDockerUnlocked
     }
 
-    var body: some View {
+    package var body: some View {
         let currentPreferences = preferencesStore.preferences
         let resolvedColorScheme = StatsResolvedAppearance.colorScheme(from: appearanceMode, fallback: colorScheme)
 

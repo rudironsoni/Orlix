@@ -2,10 +2,13 @@ import Foundation
 import os.log
 import MoshCore
 
-extension SSHClient {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension SSHClient {
     // MARK: - Shell
 
-    func startShell(
+    package func startShell(
         cols: Int = 80,
         rows: Int = 24,
         pixelSize: TerminalPixelSize? = nil,
@@ -185,7 +188,7 @@ extension SSHClient {
         }
     }
 
-    func validateShellStartupSession(_ expectedSession: SSHSession) throws {
+    package func validateShellStartupSession(_ expectedSession: SSHSession) throws {
         try Task.checkCancellation()
         guard !isAborted,
               let currentSession = session,
@@ -204,7 +207,7 @@ extension SSHClient {
         }
     }
 
-    func write(_ data: Data, to shellId: UUID) async throws {
+    package func write(_ data: Data, to shellId: UUID) async throws {
         guard !isAborted else {
             throw SSHError.notConnected
         }
@@ -224,7 +227,7 @@ extension SSHClient {
         try await session.write(data, to: shellId)
     }
 
-    func resize(
+    package func resize(
         cols: Int,
         rows: Int,
         pixelSize: TerminalPixelSize? = nil,
@@ -253,7 +256,7 @@ extension SSHClient {
         )
     }
 
-    func closeShell(_ shellId: UUID) async {
+    package func closeShell(_ shellId: UUID) async {
         if let runtime = moshShells.removeValue(forKey: shellId) {
             runtime.streamTask.cancel()
             await runtime.output.cancel()

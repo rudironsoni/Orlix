@@ -1,17 +1,20 @@
 import SwiftUI
 
 #if os(iOS)
-struct RemoteFileTabsBar: View {
-    let tabs: [RemoteFileTab]
-    @Binding var selectedTabId: UUID?
-    let titleForTab: (RemoteFileTab) -> String
-    let onSelect: (RemoteFileTab) -> Void
-    let onClose: (RemoteFileTab) -> Void
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct RemoteFileTabsBar: View {
+    package let tabs: [RemoteFileTab]
+    @Binding package var selectedTabId: UUID?
+    package let titleForTab: (RemoteFileTab) -> String
+    package let onSelect: (RemoteFileTab) -> Void
+    package let onClose: (RemoteFileTab) -> Void
 
     private let minTabWidth: CGFloat = 120
     private let searchAlignedOuterHorizontalPadding: CGFloat = 24
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { proxy in
             let count = max(tabs.count, 1)
             let availableWidth = max(proxy.size.width - ServerViewTopTabBarMetrics.horizontalPadding * 2, 0)

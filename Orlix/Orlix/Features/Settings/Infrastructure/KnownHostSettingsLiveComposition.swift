@@ -1,3 +1,6 @@
+#if ORLIX_MODULAR_APP
+import OrlixSSH
+#endif
 @MainActor
 private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository {
     private let knownHosts: KnownHostsManager
@@ -26,8 +29,8 @@ private final class AppKnownHostSettingsRepository: KnownHostSettingsRepository 
 }
 
 @MainActor
-enum KnownHostSettingsLiveComposition {
-    static func makeCoordinator(
+package enum KnownHostSettingsLiveComposition {
+    static package func makeCoordinator(
         knownHosts: KnownHostsManager
     ) -> KnownHostSettingsCoordinator {
         KnownHostSettingsCoordinator(

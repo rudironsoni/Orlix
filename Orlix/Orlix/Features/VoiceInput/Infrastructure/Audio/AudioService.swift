@@ -2,8 +2,11 @@ import Foundation
 import Combine
 import os.log
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 private extension TranscriptionProvider {
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .system:
             return String(localized: "System (Apple Speech)")

@@ -1,5 +1,9 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixSSH
+#endif
 @MainActor
 final class TerminalConnectionTaskStore {
     private struct Entry {
@@ -73,8 +77,8 @@ struct TerminalSSHConnectionContext {
     let workingDirectory: @MainActor @Sendable () -> String?
 }
 
-nonisolated extension TerminalConnectionFailure {
-    static func transport(_ error: Error) -> Self {
+nonisolated package extension TerminalConnectionFailure {
+    static package func transport(_ error: Error) -> Self {
         let message = error.localizedDescription
         guard let sshError = error as? SSHError else {
             return .external(

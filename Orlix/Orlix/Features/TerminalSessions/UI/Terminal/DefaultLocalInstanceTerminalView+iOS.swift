@@ -4,8 +4,11 @@ import SwiftUI
 import UIKit
 
 #if os(iOS)
-struct DefaultLocalInstanceTerminalView: View {
-    let tabManager: TerminalTabManager
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package struct DefaultLocalInstanceTerminalView: View {
+    package let tabManager: TerminalTabManager
     @ObservedObject private var keyboardCoordinator: TerminalKeyboardCoordinator
     @EnvironmentObject private var ghosttyApp: GhosttyRuntime
     @EnvironmentObject private var terminalThemeManager: TerminalThemeManager
@@ -17,7 +20,7 @@ struct DefaultLocalInstanceTerminalView: View {
     @State private var isVisible = false
     @State private var surfaceChange: TerminalSurfaceStoreChange?
 
-    init(tabManager: TerminalTabManager) {
+    package init(tabManager: TerminalTabManager) {
         self.tabManager = tabManager
         _keyboardCoordinator = ObservedObject(wrappedValue: tabManager.keyboardCoordinator)
     }
@@ -26,7 +29,7 @@ struct DefaultLocalInstanceTerminalView: View {
         terminalThemeManager.appearanceSnapshot(for: colorScheme == .dark ? .dark : .light)
     }
 
-    var body: some View {
+    package var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.fromHex(appearance.activeTheme.palette.backgroundHex)

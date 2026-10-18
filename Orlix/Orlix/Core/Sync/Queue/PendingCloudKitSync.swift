@@ -2,16 +2,16 @@ import CloudKit
 import Combine
 import Foundation
 
-nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Sendable {
-    static let maximumRetryCount = 64
+nonisolated package struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Sendable {
+    static package let maximumRetryCount = 64
 
-    let id: UUID
-    let payload: PendingCloudKitMutationPayload
-    let createdAt: Date
+    package let id: UUID
+    package let payload: PendingCloudKitMutationPayload
+    package let createdAt: Date
     private(set) var retryCount: Int
-    var nextRetryAt: Date?
-    var lastErrorCode: String?
-    var lastErrorDescription: String?
+    package var nextRetryAt: Date?
+    package var lastErrorCode: String?
+    package var lastErrorDescription: String?
 
     private static let baseRetryDelay: TimeInterval = 30
     private static let maximumRetryDelay: TimeInterval = 3_600
@@ -27,7 +27,7 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
         case lastErrorDescription
     }
 
-    init(
+    package init(
         id: UUID = UUID(),
         payload: PendingCloudKitMutationPayload,
         createdAt: Date = Date(),
@@ -45,7 +45,7 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
         self.lastErrorDescription = lastErrorDescription
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         payload = try container.decode(PendingCloudKitMutationPayload.self, forKey: .payload)
@@ -56,11 +56,11 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
         lastErrorDescription = try container.decodeIfPresent(String.self, forKey: .lastErrorDescription)
     }
 
-    var entityKey: String { payload.entityKey }
-    var drainPriority: Int { payload.drainPriority }
-    var entityDescription: String { payload.description }
+    package var entityKey: String { payload.entityKey }
+    package var drainPriority: Int { payload.drainPriority }
+    package var entityDescription: String { payload.description }
 
-    static func drainsBefore(_ lhs: PendingCloudKitMutation, _ rhs: PendingCloudKitMutation) -> Bool {
+    static package func drainsBefore(_ lhs: PendingCloudKitMutation, _ rhs: PendingCloudKitMutation) -> Bool {
         if lhs.drainPriority != rhs.drainPriority {
             return lhs.drainPriority < rhs.drainPriority
         }
@@ -72,12 +72,12 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
-    func canAttempt(at date: Date) -> Bool {
+    package func canAttempt(at date: Date) -> Bool {
         guard let nextRetryAt else { return true }
         return nextRetryAt <= date
     }
 
-    func withFailure(error: Error, at date: Date = Date()) -> PendingCloudKitMutation {
+    package func withFailure(error: Error, at date: Date = Date()) -> PendingCloudKitMutation {
         var copy = self
         copy.retryCount = Self.boundedRetryCount(copy.retryCount)
         if copy.retryCount < Self.maximumRetryCount {
@@ -95,7 +95,7 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
         return copy
     }
 
-    static func errorCodeString(for error: Error) -> String? {
+    static package func errorCodeString(for error: Error) -> String? {
         if let ckError = error as? CKError {
             return String(describing: ckError.code)
         }
@@ -110,11 +110,11 @@ nonisolated struct PendingCloudKitMutation: Codable, Equatable, Identifiable, Se
     }
 }
 
-nonisolated enum PendingCloudKitMutationQuarantineReason: String, Codable, Equatable, Error, Sendable {
-    case unreadableLegacyRecord
-    case missingOrConflictingPayload
-    case mismatchedEntityKey
-    case unsupportedOperation
+nonisolated package enum PendingCloudKitMutationQuarantineReason: String, Codable, Equatable, Error, Sendable {
+    package case unreadableLegacyRecord
+    package case missingOrConflictingPayload
+    package case mismatchedEntityKey
+    package case unsupportedOperation
 }
 
 nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identifiable, Sendable {
@@ -125,18 +125,18 @@ nonisolated struct PendingCloudKitMutationQuarantine: Codable, Equatable, Identi
     let quarantinedAt: Date
 }
 
-nonisolated enum PendingCloudKitQueueHealth: Equatable, Sendable {
-    case ready
-    case migrationBlocked
+nonisolated package enum PendingCloudKitQueueHealth: Equatable, Sendable {
+    package case ready
+    package case migrationBlocked
 }
 
-nonisolated struct PendingCloudKitQueueSummary: Equatable, Sendable {
-    let pendingOperationCount: Int
-    let hasPendingFailure: Bool
-    let quarantinedOperationCount: Int
-    let health: PendingCloudKitQueueHealth
+nonisolated package struct PendingCloudKitQueueSummary: Equatable, Sendable {
+    package let pendingOperationCount: Int
+    package let hasPendingFailure: Bool
+    package let quarantinedOperationCount: Int
+    package let health: PendingCloudKitQueueHealth
 
-    static let empty = PendingCloudKitQueueSummary(
+    static package let empty = PendingCloudKitQueueSummary(
         pendingOperationCount: 0,
         hasPendingFailure: false,
         quarantinedOperationCount: 0,
@@ -144,7 +144,7 @@ nonisolated struct PendingCloudKitQueueSummary: Equatable, Sendable {
     )
 }
 
-nonisolated final class PendingCloudKitSyncQueue {
+nonisolated final package class PendingCloudKitSyncQueue {
     private enum State {
         case ready
         case migrationFailed(String)
@@ -161,7 +161,7 @@ nonisolated final class PendingCloudKitSyncQueue {
     private var quarantinedItems: [PendingCloudKitMutationQuarantine]
     private var state: State
 
-    init(
+    package init(
         storageKey: String = CloudKitSyncConstants.pendingCloudKitSyncQueueStorageKey,
         defaults: UserDefaults = .standard,
         legacyMigrator: (any PendingCloudKitLegacyMutationMigrating)? = nil
@@ -179,7 +179,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         publishSummary()
     }
 
-    var summary: PendingCloudKitQueueSummary {
+    package var summary: PendingCloudKitQueueSummary {
         PendingCloudKitQueueSummary(
             pendingOperationCount: items.count,
             hasPendingFailure: items.contains {
@@ -190,28 +190,28 @@ nonisolated final class PendingCloudKitSyncQueue {
         )
     }
 
-    var summaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
+    package var summaryUpdates: AnyPublisher<PendingCloudKitQueueSummary, Never> {
         summarySubject.eraseToAnyPublisher()
     }
 
-    func snapshot() -> [PendingCloudKitMutation] {
+    package func snapshot() -> [PendingCloudKitMutation] {
         items
     }
 
-    func readySnapshot() throws -> [PendingCloudKitMutation] {
+    package func readySnapshot() throws -> [PendingCloudKitMutation] {
         try requireReady()
         return items
     }
 
-    func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
+    package func quarantineSnapshot() -> [PendingCloudKitMutationQuarantine] {
         quarantinedItems
     }
 
-    func enqueue(_ mutation: PendingCloudKitMutation) throws {
+    package func enqueue(_ mutation: PendingCloudKitMutation) throws {
         try enqueueAtomically([mutation])
     }
 
-    func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
+    package func enqueueAtomically(_ mutations: [PendingCloudKitMutation]) throws {
         try requireReady()
         var updatedItems = items
         for mutation in mutations {
@@ -224,25 +224,25 @@ nonisolated final class PendingCloudKitSyncQueue {
         try persistItems(updatedItems)
     }
 
-    func remove(_ mutationID: UUID) throws {
+    package func remove(_ mutationID: UUID) throws {
         try requireReady()
         var updatedItems = items
         updatedItems.removeAll { $0.id == mutationID }
         try persistItems(updatedItems)
     }
 
-    func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) throws {
+    package func removeAll(where shouldRemove: (PendingCloudKitMutation) -> Bool) throws {
         try requireReady()
         var updatedItems = items
         updatedItems.removeAll(where: shouldRemove)
         try persistItems(updatedItems)
     }
 
-    func canAttempt(_ mutation: PendingCloudKitMutation, at date: Date) -> Bool {
+    package func canAttempt(_ mutation: PendingCloudKitMutation, at date: Date) -> Bool {
         mutation.canAttempt(at: date)
     }
 
-    func recordFailure(
+    package func recordFailure(
         for mutation: PendingCloudKitMutation,
         error: Error,
         at date: Date
@@ -336,7 +336,7 @@ nonisolated final class PendingCloudKitSyncQueue {
         )
     }
 
-    func retryMigration() throws {
+    package func retryMigration() throws {
         guard case .migrationFailed = state else { return }
         state = .ready
         load()

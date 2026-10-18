@@ -1,7 +1,10 @@
 import Foundation
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 @MainActor
-final class TerminalAccessoryResolutionChannel:
+final package class TerminalAccessoryResolutionChannel:
     TerminalAccessoryResolutionSource,
     TerminalAccessoryResolutionPublishing {
     typealias Observer = (TerminalAccessoryProfile) -> Void

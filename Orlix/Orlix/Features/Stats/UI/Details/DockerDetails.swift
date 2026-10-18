@@ -1,5 +1,8 @@
 import SwiftUI
 
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
 struct DockerDetailsSheet: View {
     let loadDockerStats: (() async throws -> DockerStats)?
     let performDockerAction: ((DockerContainerAction, DockerContainer) async throws -> DockerStats)?
@@ -582,7 +585,7 @@ private struct EmptyDockerContainerRow: View {
 }
 
 private extension DockerContainer {
-    func matches(_ query: String) -> Bool {
+    package func matches(_ query: String) -> Bool {
         let fields = [
             id,
             name,
@@ -599,7 +602,7 @@ private extension DockerContainer {
         }
     }
 
-    func hasSameIdentity(as other: DockerContainer) -> Bool {
+    package func hasSameIdentity(as other: DockerContainer) -> Bool {
         let ownKeys = Set([id, shortID, name].map { $0.lowercased() }.filter { !$0.isEmpty })
         let otherKeys = Set([other.id, other.shortID, other.name].map { $0.lowercased() }.filter { !$0.isEmpty })
         return !ownKeys.isDisjoint(with: otherKeys)
@@ -607,7 +610,7 @@ private extension DockerContainer {
 }
 
 private extension DockerStats {
-    func container(matching container: DockerContainer) -> DockerContainer? {
+    package func container(matching container: DockerContainer) -> DockerContainer? {
         containers.first { $0.hasSameIdentity(as: container) }
     }
 }

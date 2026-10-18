@@ -134,15 +134,15 @@ nonisolated struct MLXModelManagerOperations: Sendable {
 }
 
 @MainActor
-final class MLXModelManager: NSObject, ObservableObject {
-    struct DownloadProgress: Equatable {
+final package class MLXModelManager: NSObject, ObservableObject {
+    package struct DownloadProgress: Equatable {
         var fraction: Double
         var bytesDownloaded: Int64
         var totalBytes: Int64
         var estimatedSecondsRemaining: Int?
     }
 
-    enum DownloadState: Equatable {
+    package enum DownloadState: Equatable {
         case idle
         case checkingLegacyDownload
         case downloading(DownloadProgress)
@@ -155,9 +155,9 @@ final class MLXModelManager: NSObject, ObservableObject {
     @Published private(set) var localStorageBytes: Int64 = 0
     @Published private(set) var totalStorageBytes: Int64 = 0
     @Published private(set) var repoSizeBytes: Int64?
-    let kind: MLXModelKind
+    package let kind: MLXModelKind
 
-    var modelId: String { selectedModelID() }
+    package var modelId: String { selectedModelID() }
 
     private let logger = Logger.settings
     private let selectedModelID: @MainActor () -> String
@@ -178,7 +178,7 @@ final class MLXModelManager: NSObject, ObservableObject {
     private var statusOperationID: UUID?
     private var pendingLegacyCleanup: Set<URL> = []
 
-    init(
+    package init(
         kind: MLXModelKind,
         selectedModelID: @escaping @MainActor () -> String,
         storageRoot: URL,
@@ -204,7 +204,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    struct DownloadItem {
+    package struct DownloadItem {
         let url: URL
         let destination: URL
         let expectedBytes: Int64
@@ -224,7 +224,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         let continuation: CheckedContinuation<URL, Error>
     }
 
-    var modelDirectory: URL {
+    package var modelDirectory: URL {
         Self.modelDirectory(
             for: kind,
             modelId: normalizedModelId,
@@ -232,7 +232,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         )
     }
 
-    nonisolated static var modelsRoot: URL {
+    nonisolated static package var modelsRoot: URL {
         #if os(iOS)
         // On iOS, use the app's documents directory
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -248,7 +248,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         #endif
     }
 
-    var isModelAvailable: Bool {
+    package var isModelAvailable: Bool {
         Self.isModelAvailable(
             kind: kind,
             modelId: normalizedModelId,
@@ -256,7 +256,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         )
     }
 
-    func refreshStatus() {
+    package func refreshStatus() {
         guard !operationState.isShutdown else { return }
         if isModelAvailable {
             statusTask?.cancel()
@@ -306,7 +306,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    func removeModel() {
+    package func removeModel() {
         guard !operationState.isShutdown else { return }
         cancelActiveDownload()
         statusTask?.cancel()
@@ -322,7 +322,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    func removeIncompatibleDownload() {
+    package func removeIncompatibleDownload() {
         guard !operationState.isShutdown else { return }
         cancelActiveDownload()
         statusTask?.cancel()
@@ -341,12 +341,12 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    func clearAllStorage() {
+    package func clearAllStorage() {
         guard FileManager.default.fileExists(atPath: storageRoot.path) else { return }
         try? FileManager.default.removeItem(at: storageRoot)
     }
 
-    func downloadModel() async {
+    package func downloadModel() async {
         guard !operationState.isShutdown else { return }
         statusTask?.cancel()
         let modelId = normalizedModelId
@@ -440,11 +440,11 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    nonisolated static func isModelAvailable(kind: MLXModelKind, modelId: String) -> Bool {
+    nonisolated static package func isModelAvailable(kind: MLXModelKind, modelId: String) -> Bool {
         isModelAvailable(kind: kind, modelId: modelId, modelsRoot: modelsRoot)
     }
 
-    nonisolated static func isModelAvailable(
+    nonisolated static package func isModelAvailable(
         kind: MLXModelKind,
         modelId: String,
         modelsRoot: URL
@@ -470,11 +470,11 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    nonisolated static func modelDirectory(for kind: MLXModelKind, modelId: String) -> URL {
+    nonisolated static package func modelDirectory(for kind: MLXModelKind, modelId: String) -> URL {
         modelDirectory(for: kind, modelId: modelId, modelsRoot: modelsRoot)
     }
 
-    nonisolated static func modelDirectory(
+    nonisolated static package func modelDirectory(
         for kind: MLXModelKind,
         modelId: String,
         modelsRoot: URL
@@ -482,14 +482,14 @@ final class MLXModelManager: NSObject, ObservableObject {
         MLXModelStorageLayout.currentDirectory(root: modelsRoot, kind: kind, modelID: modelId)
     }
 
-    nonisolated static func weightFiles(in directory: URL, allowedExtensions: Set<String>) -> [URL] {
+    nonisolated static package func weightFiles(in directory: URL, allowedExtensions: Set<String>) -> [URL] {
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             return []
         }
         return files.filter { allowedExtensions.contains($0.pathExtension.lowercased()) }
     }
 
-    nonisolated static func allowedWeightExtensions(for kind: MLXModelKind) -> Set<String> {
+    nonisolated static package func allowedWeightExtensions(for kind: MLXModelKind) -> Set<String> {
         return Set(["safetensors", "npz"])
     }
 
@@ -497,7 +497,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         modelId.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func modelSelectionDidChange(from previousModelID: String) {
+    package func modelSelectionDidChange(from previousModelID: String) {
         guard !operationState.isShutdown else { return }
         recordPendingLegacyCleanup(for: previousModelID)
         if let activeContext, activeContext.modelID != normalizedModelId {
@@ -557,7 +557,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         return capacity
     }
 
-    func refreshStorageUsage() {
+    package func refreshStorageUsage() {
         guard !operationState.isShutdown else { return }
         storageTask?.cancel()
         let operationID = UUID()
@@ -577,7 +577,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         }
     }
 
-    func refreshRepoSize() {
+    package func refreshRepoSize() {
         guard !operationState.isShutdown else { return }
         let modelId = normalizedModelId
         repoSizeBytes = MLXModelCatalog.downloadManifest(for: modelId, kind: kind)?.expectedBytes
@@ -636,7 +636,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         logger.info("Cancelled MLX model download for \(context.modelID)")
     }
 
-    func shutdown() {
+    package func shutdown() {
         guard !operationState.isShutdown else { return }
         cancelActiveDownload()
         operationState.shutdown()
@@ -666,7 +666,7 @@ final class MLXModelManager: NSObject, ObservableObject {
         activeFile.continuation.resume(with: result)
     }
 
-    nonisolated static func addingBytes(_ lhs: Int64, _ rhs: Int64) -> Int64 {
+    nonisolated static package func addingBytes(_ lhs: Int64, _ rhs: Int64) -> Int64 {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? Int64.max : sum
     }
@@ -710,9 +710,9 @@ final class MLXModelManager: NSObject, ObservableObject {
     }
 }
 
-extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
+package extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
     @MainActor
-    func urlSession(
+    package func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
@@ -757,7 +757,7 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
     }
 
     @MainActor
-    func urlSession(
+    package func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didWriteData bytesWritten: Int64,
@@ -781,7 +781,7 @@ extension MLXModelManager: @preconcurrency URLSessionDownloadDelegate {
     }
 
     @MainActor
-    func urlSession(
+    package func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
         didCompleteWithError error: Error?

@@ -9,14 +9,17 @@
 import UIKit
 import os
 
-extension GhosttyTerminalView {
+#if ORLIX_MODULAR_APP
+import OrlixModels
+#endif
+package extension GhosttyTerminalView {
     private static let keyboardLifecycleLoggingEnabled = DebugLogConfiguration.isEnabled("keyboard")
     private static let keyboardLifecycleLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.rudironsoni.orlix",
         category: "TerminalKeyboardInput"
     )
 
-    func keyboardCoordinatorDiagnosticSnapshot() -> TerminalKeyboardCoordinatorDiagnosticSnapshot {
+    package func keyboardCoordinatorDiagnosticSnapshot() -> TerminalKeyboardCoordinatorDiagnosticSnapshot {
         let keyboardLayoutFrame: CGRect?
         let screenFrame: CGRect?
         if let window {
@@ -69,7 +72,7 @@ extension GhosttyTerminalView {
         ].joined(separator: " ")
     }
 
-    func logKeyboardLifecycle(
+    package func logKeyboardLifecycle(
         _ event: String,
         result: Bool? = nil,
         detail: String = ""

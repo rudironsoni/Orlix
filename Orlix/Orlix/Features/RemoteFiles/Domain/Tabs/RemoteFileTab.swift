@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated struct RemoteFileTab: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    let serverId: UUID
-    let createdAt: Date
-    var seedPath: String?
-    var lastKnownPath: String?
+nonisolated package struct RemoteFileTab: Identifiable, Codable, Equatable, Sendable {
+    package let id: UUID
+    package let serverId: UUID
+    package let createdAt: Date
+    package var seedPath: String?
+    package var lastKnownPath: String?
 
-    init(
+    package init(
         id: UUID = UUID(),
         serverId: UUID,
         createdAt: Date = Date(),
@@ -21,7 +21,7 @@ nonisolated struct RemoteFileTab: Identifiable, Codable, Equatable, Sendable {
         self.lastKnownPath = Self.normalizeOptionalPath(lastKnownPath)
     }
 
-    mutating func updateLastKnownPath(_ path: String?) {
+    mutating package func updateLastKnownPath(_ path: String?) {
         let normalized = Self.normalizeOptionalPath(path)
         guard let normalized else { return }
         lastKnownPath = normalized

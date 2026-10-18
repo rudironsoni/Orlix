@@ -1,7 +1,11 @@
 import SwiftUI
 
-struct PrivacyAppLockSettingsView: View {
-    let analyticsOptOutAction: AnalyticsOptOutAction
+#if ORLIX_MODULAR_APP
+import OrlixModels
+import OrlixStats
+#endif
+package struct PrivacyAppLockSettingsView: View {
+    package let analyticsOptOutAction: AnalyticsOptOutAction
 
     @AppStorage(PrivacyModeSettings.enabledKey) private var privacyModeEnabled = false
     @AppStorage(AnalyticsTracker.enabledKey) private var analyticsEnabled = false
@@ -9,7 +13,7 @@ struct PrivacyAppLockSettingsView: View {
 
     private let authGraceOptions = [0, 15, 30, 60, 120, 300]
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Toggle("Privacy Mode", isOn: $privacyModeEnabled)
