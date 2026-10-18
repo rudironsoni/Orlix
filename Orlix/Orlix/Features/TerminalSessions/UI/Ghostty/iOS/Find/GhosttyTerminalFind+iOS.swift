@@ -9,7 +9,7 @@
 import UIKit
 
 @available(iOS 16.0, *)
-package extension GhosttyTerminalView: UIFindInteractionDelegate {
+extension GhosttyTerminalView: UIFindInteractionDelegate {
     package func findInteraction(_ interaction: UIFindInteraction, sessionFor view: UIView) -> UIFindSession? {
         guard view === self, usesNativeTouchSelection else { return nil }
         refreshNativeSelectionSnapshot()
@@ -52,7 +52,7 @@ package extension GhosttyTerminalView: UIFindInteractionDelegate {
 }
 
 @available(iOS 16.0, *)
-package extension GhosttyTerminalView: UITextSearching {
+extension GhosttyTerminalView: UITextSearching {
     package var selectedTextRange: UITextRange? {
         imeProxyTextView.selectedTextRange
     }

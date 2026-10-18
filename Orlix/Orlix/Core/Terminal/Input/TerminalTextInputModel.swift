@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated struct TerminalTextInputModel: Sendable {
-    nonisolated enum SpecialKey: Equatable, Sendable {
+nonisolated package struct TerminalTextInputModel: Sendable {
+    nonisolated package enum SpecialKey: Equatable, Sendable {
         case enter
         case tab
         case backspace
     }
 
-    nonisolated enum InsertOperation: Equatable, Sendable {
+    nonisolated package enum InsertOperation: Equatable, Sendable {
         case text(String)
         case specialKey(SpecialKey)
     }
 
-    nonisolated enum Effect: Equatable, Sendable {
+    nonisolated package enum Effect: Equatable, Sendable {
         case willTextChange
         case willSelectionChange
         case didTextChange
@@ -24,29 +24,29 @@ nonisolated struct TerminalTextInputModel: Sendable {
         case sendSpecialKey(SpecialKey)
     }
 
-    nonisolated struct Range: Equatable, Sendable {
-        var location: Int
-        var length: Int
+    nonisolated package struct Range: Equatable, Sendable {
+        package var location: Int
+        package var length: Int
 
-        var end: Int { location + length }
-        var isEmpty: Bool { length == 0 }
+        package var end: Int { location + length }
+        package var isEmpty: Bool { length == 0 }
 
-        init(location: Int, length: Int) {
+        package init(location: Int, length: Int) {
             self.location = max(location, 0)
             self.length = max(length, 0)
         }
     }
 
     nonisolated private struct Projection: Equatable, Sendable {
-        var text: String
-        var cursorCharacterIndex: Int
+        package var text: String
+        package var cursorCharacterIndex: Int
     }
 
     private(set) var text: String
     private(set) var selectedRange: Range
     private(set) var markedRange: Range?
 
-    init(
+    package init(
         text: String = "",
         selectedRange: Range = Range(location: 0, length: 0),
         markedRange: Range? = nil
@@ -57,7 +57,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         clampState()
     }
 
-    init(committedTextBeforeCursor: String = "", cursorIndex: Int = 0) {
+    package init(committedTextBeforeCursor: String = "", cursorIndex: Int = 0) {
         let normalized = committedTextBeforeCursor.precomposedStringWithCanonicalMapping
         let clampedCursor = min(max(cursorIndex, 0), (normalized as NSString).length)
         self.init(
@@ -67,49 +67,49 @@ nonisolated struct TerminalTextInputModel: Sendable {
         )
     }
 
-    var documentLength: Int {
+    package var documentLength: Int {
         (text as NSString).length
     }
 
-    var cursorIndex: Int {
+    package var cursorIndex: Int {
         selectedRange.end
     }
 
-    var hasActiveIMEComposition: Bool {
+    package var hasActiveIMEComposition: Bool {
         markedRange != nil
     }
 
-    var markedTextStartIndex: Int? {
+    package var markedTextStartIndex: Int? {
         markedRange?.location
     }
 
-    var markedText: String {
+    package var markedText: String {
         guard let markedRange else { return "" }
         return substring(in: markedRange) ?? ""
     }
 
-    var markedSelectionLocation: Int {
+    package var markedSelectionLocation: Int {
         guard let markedRange else { return 0 }
         return max(selectedRange.location - markedRange.location, 0)
     }
 
-    var markedSelectionLength: Int {
+    package var markedSelectionLength: Int {
         guard markedRange != nil else { return 0 }
         return selectedRange.length
     }
 
-    var committedTextBeforeCursor: String {
+    package var committedTextBeforeCursor: String {
         let projection = committedProjection()
         let chars = Array(projection.text)
         let end = min(max(projection.cursorCharacterIndex, 0), chars.count)
         return String(chars.prefix(end))
     }
 
-    var committedCursorCharacterIndex: Int {
+    package var committedCursorCharacterIndex: Int {
         committedProjection().cursorCharacterIndex
     }
 
-    static func insertOperation(for text: String, fromIMEComposition _: Bool) -> InsertOperation {
+    static package func insertOperation(for text: String, fromIMEComposition _: Bool) -> InsertOperation {
         if text == "\n" || text == "\r" {
             return .specialKey(.enter)
         }
@@ -127,7 +127,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return .text(text)
     }
 
-    mutating func handleSetSelection(location: Int, length: Int = 0) -> [Effect] {
+    mutating package func handleSetSelection(location: Int, length: Int = 0) -> [Effect] {
         let oldProjection = committedProjection()
         let oldRange = selectedRange
         let newRange = clamp(range: Range(location: location, length: length))
@@ -142,7 +142,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    mutating func handleExternalState(text: String, selectedRange: Range, markedRange: Range?) -> [Effect] {
+    mutating package func handleExternalState(text: String, selectedRange: Range, markedRange: Range?) -> [Effect] {
         let oldText = self.text
         let oldSelection = self.selectedRange
         let oldMarkedRange = self.markedRange
@@ -183,7 +183,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    mutating func handleMoveCursorLeft() -> [Effect] {
+    mutating package func handleMoveCursorLeft() -> [Effect] {
         let targetLocation: Int
         if !selectedRange.isEmpty {
             targetLocation = selectedRange.location
@@ -195,7 +195,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return handleSetSelection(location: targetLocation, length: 0)
     }
 
-    mutating func handleMoveCursorRight() -> [Effect] {
+    mutating package func handleMoveCursorRight() -> [Effect] {
         let targetLocation: Int
         if !selectedRange.isEmpty {
             targetLocation = selectedRange.end
@@ -207,15 +207,15 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return handleSetSelection(location: targetLocation, length: 0)
     }
 
-    mutating func handleMoveCursorToStart() -> [Effect] {
+    mutating package func handleMoveCursorToStart() -> [Effect] {
         handleSetSelection(location: 0, length: 0)
     }
 
-    mutating func handleMoveCursorToEnd() -> [Effect] {
+    mutating package func handleMoveCursorToEnd() -> [Effect] {
         handleSetSelection(location: documentLength, length: 0)
     }
 
-    mutating func invalidateSession() -> [Effect] {
+    mutating package func invalidateSession() -> [Effect] {
         guard !text.isEmpty || markedRange != nil || !selectedRange.isEmpty || selectedRange.location != 0 else {
             return []
         }
@@ -234,16 +234,16 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    func textInputActualContextRange() -> (start: Int, text: String)? {
+    package func textInputActualContextRange() -> (start: Int, text: String)? {
         guard !text.isEmpty else { return nil }
         return (start: 0, text: text)
     }
 
-    func substring(rangeStart: Int, rangeEnd: Int) -> String? {
+    package func substring(rangeStart: Int, rangeEnd: Int) -> String? {
         substring(in: clamp(range: Range(location: min(rangeStart, rangeEnd), length: abs(rangeEnd - rangeStart))))
     }
 
-    func committedContextSubstring(rangeStart: Int, rangeEnd: Int) -> String? {
+    package func committedContextSubstring(rangeStart: Int, rangeEnd: Int) -> String? {
         let query = clamp(range: Range(location: min(rangeStart, rangeEnd), length: abs(rangeEnd - rangeStart)))
         if let markedRange, rangesOverlap(query, markedRange) {
             return nil
@@ -251,7 +251,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return substring(in: query)
     }
 
-    mutating func handleInsert(_ operation: InsertOperation) -> [Effect] {
+    mutating package func handleInsert(_ operation: InsertOperation) -> [Effect] {
         switch operation {
         case let .specialKey(key):
             return handleSpecialInsert(key: key)
@@ -279,7 +279,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         }
     }
 
-    mutating func handleDeleteBackward() -> [Effect] {
+    mutating package func handleDeleteBackward() -> [Effect] {
         let oldProjection = committedProjection()
         if let markedRange {
             let deletionRange: Range
@@ -333,7 +333,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    mutating func handleReplace(rangeStart: Int?, rangeEnd: Int? = nil, text replacementText: String) -> [Effect] {
+    mutating package func handleReplace(rangeStart: Int?, rangeEnd: Int? = nil, text replacementText: String) -> [Effect] {
         let replacementRange: Range
         if let rangeStart {
             let end = rangeEnd ?? rangeStart
@@ -362,7 +362,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    mutating func handleSetMarkedText(_ text: String?, selectedRangeLocation: Int, selectedRangeLength: Int = 0) -> [Effect] {
+    mutating package func handleSetMarkedText(_ text: String?, selectedRangeLocation: Int, selectedRangeLength: Int = 0) -> [Effect] {
         let oldProjection = committedProjection()
         let oldMarkedText = markedText
         let oldSelection = selectedRange
@@ -402,7 +402,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    mutating func handleUnmarkText() -> [Effect] {
+    mutating package func handleUnmarkText() -> [Effect] {
         guard markedRange != nil else {
             return [.syncPreedit(nil)]
         }
@@ -424,7 +424,7 @@ nonisolated struct TerminalTextInputModel: Sendable {
         return compactEffects(effects)
     }
 
-    func committedCharacterIndex(forDocumentOffset offset: Int) -> Int {
+    package func committedCharacterIndex(forDocumentOffset offset: Int) -> Int {
         let clampedOffset = min(max(offset, 0), documentLength)
         if let markedRange {
             if clampedOffset <= markedRange.location {

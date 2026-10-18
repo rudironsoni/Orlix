@@ -4,8 +4,8 @@ import Metal
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-enum MLXAudioSupport {
-    static var isSupported: Bool {
+package enum MLXAudioSupport {
+    static package var isSupported: Bool {
         #if arch(arm64)
         #if os(iOS) || os(tvOS)
         guard #available(iOS 16.0, tvOS 16.0, *) else { return false }
@@ -25,7 +25,7 @@ enum MLXAudioSupport {
         #endif
     }
 
-    nonisolated static var unavailableDescription: String {
+    nonisolated static package var unavailableDescription: String {
         String(localized: "On-device MLX transcription isn't supported on this device. Apple Speech will be used instead.")
     }
 }

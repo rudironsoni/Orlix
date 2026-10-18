@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-extension SyncSettingsStatusHero {
-    var platformBody: some View {
+package extension SyncSettingsStatusHero {
+    package var platformBody: some View {
         StatusHeroLayout(
             state: state,
             lastSuccessfulSyncDate: lastSuccessfulSyncDate,
@@ -15,12 +15,12 @@ extension SyncSettingsStatusHero {
 private struct StatusHeroLayout: View {
     @ScaledMetric(relativeTo: .largeTitle) private var iconSize = 58.0
 
-    let state: SyncSettingsUserState
-    let lastSuccessfulSyncDate: Date?
-    let primaryAction: SyncSettingsPrimaryAction?
-    let onPrimaryAction: () -> Void
+    package let state: SyncSettingsUserState
+    package let lastSuccessfulSyncDate: Date?
+    package let primaryAction: SyncSettingsPrimaryAction?
+    package let onPrimaryAction: () -> Void
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
                 Image(systemName: state.statusHeroSystemImage)

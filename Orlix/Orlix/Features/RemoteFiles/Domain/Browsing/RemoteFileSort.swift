@@ -51,8 +51,8 @@ nonisolated package enum RemoteFileSortDirection: String, Codable, Sendable {
     }
 }
 
-nonisolated extension Array where Element == RemoteFileEntry {
-    func sortedForBrowser(using sort: RemoteFileSort, direction: RemoteFileSortDirection) -> [RemoteFileEntry] {
+nonisolated package extension Array where Element == RemoteFileEntry {
+    package func sortedForBrowser(using sort: RemoteFileSort, direction: RemoteFileSortDirection) -> [RemoteFileEntry] {
         sorted { lhs, rhs in
             let lhsDirectoryRank = lhs.type == .directory ? 0 : 1
             let rhsDirectoryRank = rhs.type == .directory ? 0 : 1

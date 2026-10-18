@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum RemoteTmuxCommandBuilder {
-    static func attachCommand(
+nonisolated package enum RemoteTmuxCommandBuilder {
+    static package func attachCommand(
         themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
         workingDirectory: String,
@@ -22,7 +22,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return body
     }
 
-    static func attachExistingCommand(
+    static package func attachExistingCommand(
         themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
         ownership: RemoteSessionOwnership,
@@ -44,7 +44,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return body
     }
 
-    static func sessionPresenceProbeCommand(
+    static package func sessionPresenceProbeCommand(
         sessionName: String,
         backend: RemoteTmuxBackend = .unixTmux,
         existsMarker: String,
@@ -78,7 +78,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return "sh -lc \(RemoteTerminalBootstrap.shellQuoted(body))"
     }
 
-    static func installAndAttachScript(
+    static package func installAndAttachScript(
         themeStyle: RemoteSessionThemeStyle,
         sessionName: String,
         workingDirectory: String,
@@ -506,7 +506,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return parts.joined(separator: " ")
     }
 
-    static func tmuxAvailabilityProbeCommand(okMarker: String) -> String {
+    static package func tmuxAvailabilityProbeCommand(okMarker: String) -> String {
         let body = """
         \(RemoteTerminalBootstrap.shellPathExport());
         VVTERM_TMUX_BIN="";
@@ -531,7 +531,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return "sh -c \(RemoteTerminalBootstrap.shellQuoted(body))"
     }
 
-    static func windowsPowerShellExecutable(
+    static package func windowsPowerShellExecutable(
         for environment: RemoteEnvironment
     ) -> String? {
         if let executable = environment.powerShellExecutable, !executable.isEmpty {
@@ -545,7 +545,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return executable
     }
 
-    static func windowsPsmuxAvailabilityProbeCommand(
+    static package func windowsPsmuxAvailabilityProbeCommand(
         commandName: String,
         backend: RemoteTmuxBackend,
         requirePsmuxExtension: Bool
@@ -576,7 +576,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return windowsShellCommand(powerShellScript: script, backend: backend)
     }
 
-    static func listSessionCommands(backend: RemoteTmuxBackend) -> [String] {
+    static package func listSessionCommands(backend: RemoteTmuxBackend) -> [String] {
         switch backend.variant {
         case .unixTmux:
             let tmux = tmuxCommand(includeUTF8: false, backend: backend)
@@ -613,7 +613,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         )
     }
 
-    static func killSessionCommand(named sessionName: String, backend: RemoteTmuxBackend) -> String {
+    static package func killSessionCommand(named sessionName: String, backend: RemoteTmuxBackend) -> String {
         switch backend.variant {
         case .unixTmux:
             let quoted = RemoteTerminalBootstrap.shellQuoted(sessionName)
@@ -628,7 +628,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         }
     }
 
-    static func currentPathCommand(sessionName: String, backend: RemoteTmuxBackend) -> String {
+    static package func currentPathCommand(sessionName: String, backend: RemoteTmuxBackend) -> String {
         switch backend.variant {
         case .unixTmux:
             let quotedSession = RemoteTerminalBootstrap.shellQuoted(sessionName)
@@ -941,7 +941,7 @@ nonisolated enum RemoteTmuxCommandBuilder {
         return lines
     }
 
-    static func windowsConfigWriteCommand(
+    static package func windowsConfigWriteCommand(
         terminalType: RemoteTerminalType,
         themeStyle: RemoteSessionThemeStyle,
         backend: RemoteTmuxBackend

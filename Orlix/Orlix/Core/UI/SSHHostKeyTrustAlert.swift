@@ -1,16 +1,16 @@
 import SwiftUI
 
 private struct SSHHostKeyTrustAlertModifier: ViewModifier {
-    let request: ServerSecurityApprovalRequest?
-    @Binding var isPresented: Bool
-    let onCancel: (ServerSecurityApprovalRequest) -> Void
-    let onApprove: (ServerSecurityApprovalRequest) -> Void
+    package let request: ServerSecurityApprovalRequest?
+    @Binding package var isPresented: Bool
+    package let onCancel: (ServerSecurityApprovalRequest) -> Void
+    package let onApprove: (ServerSecurityApprovalRequest) -> Void
 
     private var presentation: SSHHostKeyTrustPresentation? {
         request.map(SSHHostKeyTrustPresentation.init)
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content.alert(
             presentation?.title ?? String(localized: "Trust SSH Host?"),
             isPresented: $isPresented,
@@ -40,8 +40,8 @@ private struct SSHHostKeyTrustAlertModifier: ViewModifier {
     }
 }
 
-extension View {
-    func sshHostKeyTrustAlert(
+package extension View {
+    package func sshHostKeyTrustAlert(
         request: ServerSecurityApprovalRequest?,
         isPresented: Binding<Bool>,
         onCancel: @escaping (ServerSecurityApprovalRequest) -> Void,

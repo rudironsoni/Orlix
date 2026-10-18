@@ -5,8 +5,8 @@ import os.log
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated enum EternalTerminalStatePolicy {
-    static func connectionState(
+nonisolated package enum EternalTerminalStatePolicy {
+    static package func connectionState(
         for state: EternalTerminalSessionState,
         host: String,
         port: Int
@@ -34,8 +34,8 @@ nonisolated enum EternalTerminalStatePolicy {
     }
 }
 
-nonisolated enum EternalTerminalFailureAnalytics {
-    static func analyticsCategory(for failure: EternalTerminalSessionFailure) -> String {
+nonisolated package enum EternalTerminalFailureAnalytics {
+    static package func analyticsCategory(for failure: EternalTerminalSessionFailure) -> String {
         switch failure {
         case .bootstrapSSH, .bootstrapResponse, .malformedBootstrapCredentials:
             return "bootstrap"
@@ -51,12 +51,12 @@ nonisolated enum EternalTerminalFailureAnalytics {
     }
 }
 
-nonisolated enum EternalTerminalStartupCommand {
-    static func remoteScriptPath(token: UUID) -> String {
+nonisolated package enum EternalTerminalStartupCommand {
+    static package func remoteScriptPath(token: UUID) -> String {
         "/tmp/orlix-et-start-\(token.uuidString.lowercased()).sh"
     }
 
-    static func script(
+    static package func script(
         for plan: TerminalShellStartupPlan,
         remotePath: String
     ) -> String? {
@@ -67,13 +67,13 @@ nonisolated enum EternalTerminalStartupCommand {
         """
     }
 
-    static func invocation(remotePath: String) -> String {
+    static package func invocation(remotePath: String) -> String {
         "exec /bin/sh \(RemoteTerminalBootstrap.shellQuoted(remotePath))"
     }
 }
 
-nonisolated enum EternalTerminalResumePolicy {
-    static func shouldDiscardCredentials(
+nonisolated package enum EternalTerminalResumePolicy {
+    static package func shouldDiscardCredentials(
         after failure: EternalTerminalSessionFailure
     ) -> Bool {
         return switch failure {
@@ -89,7 +89,7 @@ nonisolated enum EternalTerminalResumePolicy {
     }
 }
 
-nonisolated struct EternalTerminalRecoveryProbe {
+nonisolated package struct EternalTerminalRecoveryProbe {
     private enum State: Equatable, Sendable {
         case idle
         case pending(UUID)
@@ -98,63 +98,63 @@ nonisolated struct EternalTerminalRecoveryProbe {
 
     private var state = State.idle
 
-    mutating func begin() -> UUID {
+    mutating package func begin() -> UUID {
         let id = UUID()
         state = .pending(id)
         return id
     }
 
-    var pendingID: UUID? {
+    package var pendingID: UUID? {
         guard case .pending(let id) = state else { return nil }
         return id
     }
 
-    mutating func recordConnected(eventProbeID: UUID?) {
+    mutating package func recordConnected(eventProbeID: UUID?) {
         guard case .pending(let pendingID) = state,
               eventProbeID == pendingID else { return }
         state = .completed(pendingID)
     }
 
-    func didComplete(_ id: UUID) -> Bool {
+    package func didComplete(_ id: UUID) -> Bool {
         state == .completed(id)
     }
 
-    mutating func reset() {
+    mutating package func reset() {
         state = .idle
     }
 }
 
 @MainActor
-struct EternalTerminalRuntimeOwnerAccess {
-    let isCurrent: @MainActor @Sendable (_ paneId: UUID, _ runtimeToken: UUID) -> Bool
-    let startupPlan: @MainActor @Sendable (
+package struct EternalTerminalRuntimeOwnerAccess {
+    package let isCurrent: @MainActor @Sendable (_ paneId: UUID, _ runtimeToken: UUID) -> Bool
+    package let startupPlan: @MainActor @Sendable (
         _ paneId: UUID,
         _ serverId: UUID,
         _ client: SSHClient,
         _ runtimeToken: UUID
     ) async throws -> TerminalShellStartupPlan
-    let resumeContext: @MainActor @Sendable (UUID) -> RemoteSessionLifecycleContext?
-    let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
-    let startupActionReplayPending: @MainActor @Sendable (UUID) -> Bool
-    let setStartupActionReplayPending: @MainActor @Sendable (UUID, Bool) -> Void
-    let remoteSessionAttached: @MainActor @Sendable (UUID) -> Void
-    let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
-    let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
-    let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
-    let unregister: @MainActor @Sendable (UUID, UUID) async -> Void
+    package let resumeContext: @MainActor @Sendable (UUID) -> RemoteSessionLifecycleContext?
+    package let setResumeContext: @MainActor @Sendable (UUID, RemoteSessionLifecycleContext?) -> Void
+    package let startupActionReplayPending: @MainActor @Sendable (UUID) -> Bool
+    package let setStartupActionReplayPending: @MainActor @Sendable (UUID, Bool) -> Void
+    package let remoteSessionAttached: @MainActor @Sendable (UUID) -> Void
+    package let updateConnectionState: @MainActor @Sendable (UUID, ConnectionState) -> Void
+    package let markEternalTerminalTransport: @MainActor @Sendable (UUID) -> Void
+    package let handleShellEnd: @MainActor @Sendable (UUID, UUID, TerminalShellEndReason) -> Void
+    package let unregister: @MainActor @Sendable (UUID, UUID) async -> Void
 }
 
 @MainActor
-final class EternalTerminalRuntime {
+final package class EternalTerminalRuntime {
     private struct ConnectedStateWork {
-        let recoveryProbeID: UUID?
-        let cols: Int
-        let rows: Int
-        let pixelSize: TerminalPixelSize?
+        package let recoveryProbeID: UUID?
+        package let cols: Int
+        package let rows: Int
+        package let pixelSize: TerminalPixelSize?
     }
 
-    let paneId: UUID
-    let identityToken = UUID()
+    package let paneId: UUID
+    package let identityToken = UUID()
 
     private let server: Server
     private let sessionRequest: EternalTerminalSessionRequest
@@ -179,7 +179,7 @@ final class EternalTerminalRuntime {
         category: "EternalTerminal"
     )
 
-    init(
+    package init(
         paneId: UUID,
         server: Server,
         credentials: ServerCredentials,
@@ -197,13 +197,13 @@ final class EternalTerminalRuntime {
         )
     }
 
-    var isStartInFlight: Bool { connectTask != nil }
+    package var isStartInFlight: Bool { connectTask != nil }
 
     private var isCurrentOwner: Bool {
         ownerAccess.isCurrent(paneId, identityToken)
     }
 
-    func abortConnection() {
+    package func abortConnection() {
         outputSink = nil
         networkRecoveryProbe.reset()
         if let session = detachActiveSession() {
@@ -211,11 +211,11 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func attach(to outputSink: any TerminalOutputSink) {
+    package func attach(to outputSink: any TerminalOutputSink) {
         self.outputSink = outputSink
     }
 
-    func startIfNeeded() {
+    package func startIfNeeded() {
         guard connectTask == nil, stateTask == nil else { return }
 
         let attemptID = UUID()
@@ -280,7 +280,7 @@ final class EternalTerminalRuntime {
         ownerAccess.markEternalTerminalTransport(paneId)
     }
 
-    func send(_ data: Data) {
+    package func send(_ data: Data) {
         guard let session else { return }
         Task(priority: .userInitiated) { [logger] in
             do {
@@ -291,21 +291,21 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func sendInteractiveScript(_ script: String) async throws {
+    package func sendInteractiveScript(_ script: String) async throws {
         let payload = script.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
         guard let data = payload.data(using: .utf8) else { return }
         guard let session else { throw EternalTerminalSessionFailure.connectionClosed }
         try await session.send(data)
     }
 
-    func withBootstrapSSHClient<Result: Sendable>(
+    package func withBootstrapSSHClient<Result: Sendable>(
         _ operation: @Sendable (SSHClient) async throws -> Result
     ) async throws -> Result {
         guard let session else { throw EternalTerminalSessionFailure.connectionClosed }
         return try await session.withBootstrapSSHClient(operation)
     }
 
-    func killManagedRemoteSession(_ identifier: RemoteSessionIdentifier) async {
+    package func killManagedRemoteSession(_ identifier: RemoteSessionIdentifier) async {
         do {
             try await withBootstrapSSHClient { [dependencies] client in
                 await dependencies.killRemoteSession(identifier, using: client)
@@ -315,7 +315,7 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func resize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
+    package func resize(cols: Int, rows: Int, pixelSize: TerminalPixelSize?) {
         guard cols > 0, rows > 0 else { return }
         guard cols != lastTerminalSize.cols
                 || rows != lastTerminalSize.rows
@@ -336,7 +336,7 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func beginNetworkRecoveryProbe() async -> UUID? {
+    package func beginNetworkRecoveryProbe() async -> UUID? {
         guard let session,
               isCurrentOwner else {
             return nil
@@ -349,15 +349,15 @@ final class EternalTerminalRuntime {
         return probeID
     }
 
-    func notifyNetworkPathChanged() async {
+    package func notifyNetworkPathChanged() async {
         await session?.notifyNetworkPathChanged()
     }
 
-    func completedNetworkRecoveryProbe(_ probeID: UUID) -> Bool {
+    package func completedNetworkRecoveryProbe(_ probeID: UUID) -> Bool {
         isCurrentOwner && networkRecoveryProbe.didComplete(probeID)
     }
 
-    func persistCheckpoint() async {
+    package func persistCheckpoint() async {
         guard let session else { return }
         do {
             try await session.persistCheckpoint { [weak self] in
@@ -372,7 +372,7 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func prepareForApplicationBackground() async {
+    package func prepareForApplicationBackground() async {
         guard let session else { return }
         do {
             try await session.prepareForApplicationBackground { [weak self] in
@@ -387,11 +387,11 @@ final class EternalTerminalRuntime {
         }
     }
 
-    func resumeFromApplicationBackground() async {
+    package func resumeFromApplicationBackground() async {
         await session?.resumeFromApplicationBackground()
     }
 
-    func close() async {
+    package func close() async {
         let session = detachActiveSession()
         outputSink = nil
         await session?.close()

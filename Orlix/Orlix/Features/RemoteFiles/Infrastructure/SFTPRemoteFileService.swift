@@ -4,34 +4,34 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-struct SFTPRemoteFileService: RemoteFileService {
-    let client: SSHClient
+package struct SFTPRemoteFileService: RemoteFileService {
+    package let client: SSHClient
 
-    func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [RemoteFileEntry] {
+    package func listDirectory(at path: String, maxEntries: Int? = nil) async throws -> [RemoteFileEntry] {
         try await mapErrors {
             try await client.listDirectory(at: path, maxEntries: maxEntries).map(Self.mapEntry)
         }
     }
 
-    func stat(at path: String) async throws -> RemoteFileEntry {
+    package func stat(at path: String) async throws -> RemoteFileEntry {
         try await mapErrors { Self.mapEntry(try await client.stat(at: path)) }
     }
 
-    func lstat(at path: String) async throws -> RemoteFileEntry {
+    package func lstat(at path: String) async throws -> RemoteFileEntry {
         try await mapErrors { Self.mapEntry(try await client.lstat(at: path)) }
     }
 
-    func readFile(at path: String, maxBytes: Int) async throws -> Data {
+    package func readFile(at path: String, maxBytes: Int) async throws -> Data {
         try await mapErrors { try await client.readFile(at: path, maxBytes: maxBytes) }
     }
 
-    func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
+    package func downloadFile(at path: String, to localURL: URL, maxBytes: UInt64) async throws {
         try await mapErrors {
             try await client.downloadFile(at: path, to: localURL, maxBytes: maxBytes)
         }
     }
 
-    func upload(
+    package func upload(
         _ data: Data,
         to remotePath: String,
         permissions: Int32,
@@ -47,7 +47,7 @@ struct SFTPRemoteFileService: RemoteFileService {
         }
     }
 
-    func upload(
+    package func upload(
         fileAt localURL: URL,
         to remotePath: String,
         expectedBytes: UInt64,
@@ -63,31 +63,31 @@ struct SFTPRemoteFileService: RemoteFileService {
         }
     }
 
-    func createDirectory(at path: String, permissions: Int32) async throws {
+    package func createDirectory(at path: String, permissions: Int32) async throws {
         try await mapErrors { try await client.createDirectory(at: path, permissions: permissions) }
     }
 
-    func renameItem(at sourcePath: String, to destinationPath: String) async throws {
+    package func renameItem(at sourcePath: String, to destinationPath: String) async throws {
         try await mapErrors { try await client.renameItem(at: sourcePath, to: destinationPath) }
     }
 
-    func deleteFile(at path: String) async throws {
+    package func deleteFile(at path: String) async throws {
         try await mapErrors { try await client.deleteFile(at: path) }
     }
 
-    func deleteDirectory(at path: String) async throws {
+    package func deleteDirectory(at path: String) async throws {
         try await mapErrors { try await client.deleteDirectory(at: path) }
     }
 
-    func setPermissions(at path: String, permissions: UInt32) async throws {
+    package func setPermissions(at path: String, permissions: UInt32) async throws {
         try await mapErrors { try await client.setPermissions(at: path, permissions: permissions) }
     }
 
-    func resolveHomeDirectory() async throws -> String {
+    package func resolveHomeDirectory() async throws -> String {
         try await mapErrors { try await client.resolveHomeDirectory() }
     }
 
-    func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
+    package func fileSystemCapacity(at path: String) async throws -> RemoteFileFilesystemCapacity {
         try await mapErrors {
             switch try await client.fileSystemCapacity(at: path) {
             case .known(let status):
@@ -113,7 +113,7 @@ struct SFTPRemoteFileService: RemoteFileService {
         }
     }
 
-    static func mapEntry(_ entry: SFTPFileEntry) -> RemoteFileEntry {
+    static package func mapEntry(_ entry: SFTPFileEntry) -> RemoteFileEntry {
         RemoteFileEntry(
             name: entry.name,
             path: entry.path,
@@ -125,7 +125,7 @@ struct SFTPRemoteFileService: RemoteFileService {
         )
     }
 
-    static func mapType(_ type: SFTPFileType) -> RemoteFileType {
+    static package func mapType(_ type: SFTPFileType) -> RemoteFileType {
         switch type {
         case .file: return .file
         case .directory: return .directory
@@ -134,7 +134,7 @@ struct SFTPRemoteFileService: RemoteFileService {
         }
     }
 
-    static func mapError(_ error: SFTPTransportError) -> RemoteFileBrowserError {
+    static package func mapError(_ error: SFTPTransportError) -> RemoteFileBrowserError {
         switch error {
         case .permissionDenied: return .permissionDenied
         case .pathNotFound: return .pathNotFound

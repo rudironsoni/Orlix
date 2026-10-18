@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated struct TerminalOutputStream: AsyncSequence, Sendable {
-    typealias Element = Data
+nonisolated package struct TerminalOutputStream: AsyncSequence, Sendable {
+    package typealias Element = Data
 
-    struct AsyncIterator: AsyncIteratorProtocol {
-        let channel: TerminalOutputChannel
+    package struct AsyncIterator: AsyncIteratorProtocol {
+        package let channel: TerminalOutputChannel
 
-        mutating func next() async -> Data? {
+        mutating package func next() async -> Data? {
             let channel = channel
             return await withTaskCancellationHandler {
                 await channel.nextValue()
@@ -18,23 +18,23 @@ nonisolated struct TerminalOutputStream: AsyncSequence, Sendable {
         }
     }
 
-    let channel: TerminalOutputChannel
+    package let channel: TerminalOutputChannel
 
-    func makeAsyncIterator() -> AsyncIterator {
+    package func makeAsyncIterator() -> AsyncIterator {
         AsyncIterator(channel: channel)
     }
 }
 
-actor TerminalOutputChannel {
-    enum OverflowPolicy: Equatable, Sendable {
+package actor TerminalOutputChannel {
+    package enum OverflowPolicy: Equatable, Sendable {
         case suspendProducer
         case rejectNewData
     }
 
-    struct Snapshot: Equatable, Sendable {
-        let queuedBytes: Int
-        let queuedItems: Int
-        let pendingSends: Int
+    package struct Snapshot: Equatable, Sendable {
+        package let queuedBytes: Int
+        package let queuedItems: Int
+        package let pendingSends: Int
     }
 
     private enum State: Equatable {
@@ -44,14 +44,14 @@ actor TerminalOutputChannel {
     }
 
     private struct PendingSend {
-        let id: UUID
-        let data: Data
-        let continuation: CheckedContinuation<Bool, Never>
+        package let id: UUID
+        package let data: Data
+        package let continuation: CheckedContinuation<Bool, Never>
     }
 
-    static let standardMaximumQueuedBytes = 1024 * 1024
-    static let standardMaximumQueuedItems = 256
-    static let standardMaximumItemBytes = 64 * 1024
+    static package let standardMaximumQueuedBytes = 1024 * 1024
+    static package let standardMaximumQueuedItems = 256
+    static package let standardMaximumItemBytes = 64 * 1024
 
     private let maximumQueuedBytes: Int
     private let maximumQueuedItems: Int
@@ -63,7 +63,7 @@ actor TerminalOutputChannel {
     private var pendingSend: PendingSend?
     private var waitingConsumer: CheckedContinuation<Data?, Never>?
 
-    init(
+    package init(
         maximumQueuedBytes: Int = standardMaximumQueuedBytes,
         maximumQueuedItems: Int = standardMaximumQueuedItems,
         maximumItemBytes: Int = standardMaximumItemBytes,
@@ -75,7 +75,7 @@ actor TerminalOutputChannel {
         self.overflowPolicy = overflowPolicy
     }
 
-    func send(_ data: Data) async -> Bool {
+    package func send(_ data: Data) async -> Bool {
         guard !data.isEmpty else { return state == .open }
         guard overflowPolicy != .rejectNewData || data.count <= maximumQueuedBytes else {
             return false
@@ -92,7 +92,7 @@ actor TerminalOutputChannel {
         return true
     }
 
-    func nextValue() async -> Data? {
+    package func nextValue() async -> Data? {
         if !queue.isEmpty {
             let data = queue.removeFirst()
             queuedBytes -= data.count
@@ -106,7 +106,7 @@ actor TerminalOutputChannel {
         }
     }
 
-    func finish() {
+    package func finish() {
         guard state == .open else { return }
         state = .finished
         rejectPendingSends()
@@ -116,7 +116,7 @@ actor TerminalOutputChannel {
         }
     }
 
-    func cancel() {
+    package func cancel() {
         guard state != .cancelled else { return }
         state = .cancelled
         queue.removeAll(keepingCapacity: false)
@@ -126,7 +126,7 @@ actor TerminalOutputChannel {
         waitingConsumer = nil
     }
 
-    func snapshot() -> Snapshot {
+    package func snapshot() -> Snapshot {
         Snapshot(
             queuedBytes: queuedBytes,
             queuedItems: queue.count,

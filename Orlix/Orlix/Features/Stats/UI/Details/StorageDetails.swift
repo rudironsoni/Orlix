@@ -5,15 +5,15 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum StorageVolumeEditingState: Equatable, Sendable {
+nonisolated package enum StorageVolumeEditingState: Equatable, Sendable {
     case browsing
     case editing
 
-    var isEditing: Bool { self == .editing }
+    package var isEditing: Bool { self == .editing }
 }
 
-nonisolated enum StorageVolumeListPolicy {
-    static func matchingVolumes(
+nonisolated package enum StorageVolumeListPolicy {
+    static package func matchingVolumes(
         _ volumes: [VolumeInfo],
         searchText: String
     ) -> [VolumeInfo] {
@@ -29,8 +29,8 @@ nonisolated enum StorageVolumeListPolicy {
     }
 }
 
-nonisolated enum StorageVolumePresentationPolicy {
-    static func visibleVolumes(
+nonisolated package enum StorageVolumePresentationPolicy {
+    static package func visibleVolumes(
         from volumes: [VolumeInfo],
         hiddenVolumeIDs: Set<VolumeIdentity>
     ) -> [VolumeInfo] {
@@ -40,7 +40,7 @@ nonisolated enum StorageVolumePresentationPolicy {
         )
     }
 
-    static func cardVolumes(from visibleVolumes: [VolumeInfo], limit: Int) -> [VolumeInfo] {
+    static package func cardVolumes(from visibleVolumes: [VolumeInfo], limit: Int) -> [VolumeInfo] {
         Array(visibleVolumes.prefix(max(0, limit)))
     }
 }
@@ -267,10 +267,10 @@ package struct StorageDetailsSheet: View {
 }
 
 private struct StorageVolumeSummaryRow: View {
-    let volume: VolumeInfo
-    let isHidden: Bool
+    package let volume: VolumeInfo
+    package let isHidden: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: volume.kind.systemImage)
                 .font(.headline)
@@ -323,10 +323,10 @@ private struct StorageVolumeSummaryRow: View {
 }
 
 private struct StorageVolumeEmptyRow: View {
-    let hasVolumes: Bool
-    let isFiltered: Bool
+    package let hasVolumes: Bool
+    package let isFiltered: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isFiltered ? "line.3.horizontal.decrease.circle" : "internaldrive")
                 .font(.title3)

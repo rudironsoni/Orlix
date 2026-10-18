@@ -4,12 +4,12 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension ThemeBuilderSheet {
-    func platformThemeNameField(name: Binding<String>) -> some View {
+package extension ThemeBuilderSheet {
+    package func platformThemeNameField(name: Binding<String>) -> some View {
         TextField("Name", text: name, prompt: Text("Custom Theme"))
     }
 
-    func platformColorField<Swatch: View>(
+    package func platformColorField<Swatch: View>(
         _ label: String,
         text: Binding<String>,
         placeholder: String,
@@ -23,7 +23,7 @@ extension ThemeBuilderSheet {
         }
     }
 
-    var platformBody: some View {
+    package var platformBody: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: LocalizedStringKey(title)) {
                 dismiss()

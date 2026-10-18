@@ -2,8 +2,8 @@ import SwiftUI
 
 // MARK: - Offline Banner
 
-struct OfflineBanner: View {
-    @ObservedObject var networkMonitor: NetworkMonitor = .shared
+package struct OfflineBanner: View {
+    @ObservedObject package var networkMonitor: NetworkMonitor = .shared
 
     private var noticeItem: NoticeItem {
         NoticeItem(
@@ -16,7 +16,7 @@ struct OfflineBanner: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         if networkMonitor.isOffline {
             NoticeBannerView(item: noticeItem)
                 .frame(maxWidth: .infinity)
@@ -29,10 +29,10 @@ struct OfflineBanner: View {
 
 // MARK: - Compact Offline Indicator
 
-struct CompactOfflineIndicator: View {
-    @ObservedObject var networkMonitor: NetworkMonitor = .shared
+package struct CompactOfflineIndicator: View {
+    @ObservedObject package var networkMonitor: NetworkMonitor = .shared
 
-    var body: some View {
+    package var body: some View {
         if networkMonitor.isOffline {
             HStack(spacing: 4) {
                 Image(systemName: "wifi.slash")
@@ -50,11 +50,11 @@ struct CompactOfflineIndicator: View {
 
 // MARK: - Network Status Indicator
 
-struct NetworkStatusIndicator: View {
-    @ObservedObject var networkMonitor: NetworkMonitor = .shared
-    var showLabel: Bool = true
+package struct NetworkStatusIndicator: View {
+    @ObservedObject package var networkMonitor: NetworkMonitor = .shared
+    package var showLabel: Bool = true
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(networkMonitor.isConnected ? Color.green : (networkMonitor.isOffline ? Color.orange : Color.secondary))
@@ -71,11 +71,11 @@ struct NetworkStatusIndicator: View {
 
 // MARK: - Network Aware View Modifier
 
-struct NetworkAwareModifier: ViewModifier {
-    @ObservedObject var networkMonitor: NetworkMonitor = .shared
-    let showBanner: Bool
+package struct NetworkAwareModifier: ViewModifier {
+    @ObservedObject package var networkMonitor: NetworkMonitor = .shared
+    package let showBanner: Bool
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         VStack(spacing: 0) {
             if showBanner {
                 OfflineBanner()
@@ -86,21 +86,21 @@ struct NetworkAwareModifier: ViewModifier {
     }
 }
 
-extension View {
-    func networkAware(showBanner: Bool = true) -> some View {
+package extension View {
+    package func networkAware(showBanner: Bool = true) -> some View {
         modifier(NetworkAwareModifier(showBanner: showBanner))
     }
 }
 
 // MARK: - Offline-Safe Button
 
-struct OfflineSafeButton<Label: View>: View {
-    @ObservedObject var networkMonitor: NetworkMonitor = .shared
-    let requiresNetwork: Bool
-    let action: () -> Void
-    let label: () -> Label
+package struct OfflineSafeButton<Label: View>: View {
+    @ObservedObject package var networkMonitor: NetworkMonitor = .shared
+    package let requiresNetwork: Bool
+    package let action: () -> Void
+    package let label: () -> Label
 
-    init(
+    package init(
         requiresNetwork: Bool = true,
         action: @escaping () -> Void,
         @ViewBuilder label: @escaping () -> Label
@@ -110,7 +110,7 @@ struct OfflineSafeButton<Label: View>: View {
         self.label = label
     }
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             HStack {
                 label()

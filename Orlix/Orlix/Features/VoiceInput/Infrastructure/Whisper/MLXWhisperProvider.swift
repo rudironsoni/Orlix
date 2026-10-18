@@ -1,13 +1,13 @@
 import Foundation
 
-final class MLXWhisperProvider {
-    static var isSupported: Bool {
+final package class MLXWhisperProvider {
+    static package var isSupported: Bool {
         MLXAudioSupport.isSupported
     }
 
-    init() {}
+    package init() {}
 
-    func transcribe(
+    package func transcribe(
         samples: [Float],
         modelID: String,
         languageCode: String
@@ -153,8 +153,8 @@ import MLXNN
 
 /// MLX model loading and inference are serialized by `lock`. No model value
 /// escapes this object, so the lock is the complete mutable-state boundary.
-nonisolated final class WhisperModelLoader: @unchecked Sendable {
-    static let shared = WhisperModelLoader()
+nonisolated final package class WhisperModelLoader: @unchecked Sendable {
+    static package let shared = WhisperModelLoader()
 
     private var cachedModel: WhisperModel?
     private var cachedModelURL: URL?
@@ -162,7 +162,7 @@ nonisolated final class WhisperModelLoader: @unchecked Sendable {
 
     private init() {}
 
-    func transcribe(
+    package func transcribe(
         samples: [Float],
         modelDirectory: URL,
         modelID: String,

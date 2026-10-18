@@ -4,13 +4,13 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated struct DockerStatsCollector: Sendable {
-    nonisolated static let periodicContainerLimit = 24
+nonisolated package struct DockerStatsCollector: Sendable {
+    nonisolated static package let periodicContainerLimit = 24
 
     private let collectionTimeout: Duration = .seconds(8)
     private let actionTimeout: Duration = .seconds(120)
 
-    func collect(
+    package func collect(
         client: SSHClient,
         platform: RemotePlatform,
         limit: Int? = periodicContainerLimit,
@@ -70,7 +70,7 @@ nonisolated struct DockerStatsCollector: Sendable {
         }
     }
 
-    func perform(
+    package func perform(
         _ action: DockerContainerAction,
         container: DockerContainer,
         client: SSHClient,
@@ -194,11 +194,11 @@ nonisolated struct DockerStatsCollector: Sendable {
     }
 }
 
-nonisolated enum DockerControlError: LocalizedError, Sendable {
+nonisolated package enum DockerControlError: LocalizedError, Sendable {
     case missingContainerID
     case commandFailed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .missingContainerID:
             return String(localized: "Container ID is missing.")
@@ -226,7 +226,7 @@ nonisolated private extension DockerAvailability {
 }
 
 nonisolated private extension String {
-    var firstLine: String {
+    package var firstLine: String {
         components(separatedBy: .newlines)
             .first?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? self

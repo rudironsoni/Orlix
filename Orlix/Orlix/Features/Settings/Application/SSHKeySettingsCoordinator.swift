@@ -4,20 +4,20 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct ImportedSSHKeyRequest: Equatable {
-    let name: String
-    let privateKey: Data
-    let passphrase: String?
+nonisolated package struct ImportedSSHKeyRequest: Equatable {
+    package let name: String
+    package let privateKey: Data
+    package let passphrase: String?
 }
 
-nonisolated struct GeneratedSSHKeyRequest: Equatable {
-    let name: String
-    let comment: String
-    let passphrase: String?
-    let keyType: SSHKeyType
+nonisolated package struct GeneratedSSHKeyRequest: Equatable {
+    package let name: String
+    package let comment: String
+    package let passphrase: String?
+    package let keyType: SSHKeyType
 }
 
-nonisolated enum SSHKeySettingsFailure: Error, Equatable, Sendable {
+nonisolated package enum SSHKeySettingsFailure: Error, Equatable, Sendable {
     case keychain(status: Int32)
     case keychainEncodingFailed
     case keychainDecodingFailed
@@ -32,7 +32,7 @@ nonisolated enum SSHKeySettingsFailure: Error, Equatable, Sendable {
 }
 
 @MainActor
-protocol SSHKeySettingsRepository: AnyObject {
+package protocol SSHKeySettingsRepository: AnyObject {
     func loadKeys() -> [SSHKeyEntry]
     func storeImportedKey(_ request: ImportedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry
     func generateAndStoreKey(_ request: GeneratedSSHKeyRequest) throws(SSHKeySettingsFailure) -> SSHKeyEntry

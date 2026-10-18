@@ -3,8 +3,8 @@ import Foundation
 
 nonisolated package struct Duration: Sendable, Hashable, Comparable {
     nonisolated package struct Components: Sendable, Hashable {
-        let seconds: Int64
-        let attoseconds: Int64
+        package let seconds: Int64
+        package let attoseconds: Int64
     }
 
     fileprivate let nanoseconds: Int64
@@ -73,11 +73,11 @@ nonisolated package struct ContinuousClock: Sendable {
     nonisolated package struct Instant: Sendable, Hashable, Comparable {
         fileprivate let uptimeNanoseconds: UInt64
 
-        static var now: Instant {
+        static package var now: Instant {
             Instant(uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds)
         }
 
-        func advanced(by duration: Duration) -> Instant {
+        package func advanced(by duration: Duration) -> Instant {
             if duration.nanoseconds >= 0 {
                 let delta = UInt64(duration.nanoseconds)
                 let value = uptimeNanoseconds.addingReportingOverflow(delta)
@@ -89,7 +89,7 @@ nonisolated package struct ContinuousClock: Sendable {
             return Instant(uptimeNanoseconds: uptimeNanoseconds > delta ? uptimeNanoseconds - delta : 0)
         }
 
-        func duration(to other: Instant) -> Duration {
+        package func duration(to other: Instant) -> Duration {
             if other.uptimeNanoseconds >= uptimeNanoseconds {
                 let delta = other.uptimeNanoseconds - uptimeNanoseconds
                 return Duration(nanoseconds: delta > UInt64(Int64.max) ? .max : Int64(delta))
@@ -116,8 +116,8 @@ nonisolated package struct ContinuousClock: Sendable {
     }
 }
 
-extension Task where Success == Never, Failure == Never {
-    static func sleep(for duration: Duration) async throws {
+package extension Task where Success == Never, Failure == Never {
+    static package func sleep(for duration: Duration) async throws {
         guard duration.nanoseconds > 0 else {
             try Task.checkCancellation()
             return

@@ -2,7 +2,7 @@
 import OrlixModels
 #endif
 nonisolated package protocol WakeOnLANMACAddressResolving: Sendable {
-    package func resolveMACAddress(
+    func resolveMACAddress(
         for server: Server,
         credentials: ServerCredentials
     ) async throws -> WakeOnLANMACAddress

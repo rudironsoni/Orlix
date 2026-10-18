@@ -23,27 +23,27 @@ package struct RemoteFileBrowserScreen: View {
     @StateObject package var noticeHost = NoticeHostModel()
 
     package struct Snapshot {
-        let currentPath: String
-        let breadcrumbs: [RemoteFileBreadcrumb]
-        let entries: [RemoteFileEntry]
-        let selectedEntry: RemoteFileEntry?
-        let viewerPayload: RemoteFileViewerPayload?
-        let directoryError: RemoteFileBrowserError?
-        let viewerError: RemoteFileBrowserError?
-        let isLoadingDirectory: Bool
-        let isLoadingViewer: Bool
-        let sort: RemoteFileSort
-        let sortDirection: RemoteFileSortDirection
-        let showHiddenFiles: Bool
-        let isTruncated: Bool
-        let selectedPath: String?
-        let filesystemStatus: RemoteFileFilesystemStatus?
+        package let currentPath: String
+        package let breadcrumbs: [RemoteFileBreadcrumb]
+        package let entries: [RemoteFileEntry]
+        package let selectedEntry: RemoteFileEntry?
+        package let viewerPayload: RemoteFileViewerPayload?
+        package let directoryError: RemoteFileBrowserError?
+        package let viewerError: RemoteFileBrowserError?
+        package let isLoadingDirectory: Bool
+        package let isLoadingViewer: Bool
+        package let sort: RemoteFileSort
+        package let sortDirection: RemoteFileSortDirection
+        package let showHiddenFiles: Bool
+        package let isTruncated: Bool
+        package let selectedPath: String?
+        package let filesystemStatus: RemoteFileFilesystemStatus?
     }
 
     package struct EmptyStateContent {
-        let icon: String
-        let title: String
-        let message: String
+        package let icon: String
+        package let title: String
+        package let message: String
     }
 
     package init(

@@ -19,20 +19,20 @@ import AppKit
 import OrlixModels
 import OrlixTerminal
 #endif
-extension NSToolbarItem.Identifier {
-    static let vvViewPicker = NSToolbarItem.Identifier("orlix.viewPicker")
-    static let vvTabStrip = NSToolbarItem.Identifier("orlix.tabStrip")
-    static let vvFilesMenu = NSToolbarItem.Identifier("orlix.filesMenu")
-    static let vvEnterZen = NSToolbarItem.Identifier("orlix.enterZen")
-    static let vvServerMenu = NSToolbarItem.Identifier("orlix.serverMenu")
-    static let vvZenControls = NSToolbarItem.Identifier("orlix.zenControls")
+package extension NSToolbarItem.Identifier {
+    static package let vvViewPicker = NSToolbarItem.Identifier("orlix.viewPicker")
+    static package let vvTabStrip = NSToolbarItem.Identifier("orlix.tabStrip")
+    static package let vvFilesMenu = NSToolbarItem.Identifier("orlix.filesMenu")
+    static package let vvEnterZen = NSToolbarItem.Identifier("orlix.enterZen")
+    static package let vvServerMenu = NSToolbarItem.Identifier("orlix.serverMenu")
+    static package let vvZenControls = NSToolbarItem.Identifier("orlix.zenControls")
 }
 
 /// Hosts the SwiftUI tab strip and re-renders as tabs/selection/view change.
 private struct MacTabStripHost: View {
-    @ObservedObject var bridge = MacToolbarBridge.shared
+    @ObservedObject package var bridge = MacToolbarBridge.shared
 
-    var body: some View {
+    package var body: some View {
         bridge.makeTabStripView()
             .frame(
                 maxWidth: .infinity,
@@ -44,9 +44,9 @@ private struct MacTabStripHost: View {
 
 /// Hosts the SwiftUI zen panel inside the zen controls popover.
 private struct MacZenControlHost: View {
-    @ObservedObject var bridge = MacToolbarBridge.shared
+    @ObservedObject package var bridge = MacToolbarBridge.shared
 
-    var body: some View {
+    package var body: some View {
         bridge.makeZenPanelView()
     }
 }
@@ -392,7 +392,7 @@ final package class MacConnectionToolbarController: NSObject, NSToolbarDelegate,
 
 /// Boxes a typed command for storage in NSMenuItem.representedObject.
 private final class MenuActionBox {
-    let command: MacToolbarCommandID
-    init(_ command: MacToolbarCommandID) { self.command = command }
+    package let command: MacToolbarCommandID
+    package init(_ command: MacToolbarCommandID) { self.command = command }
 }
 #endif

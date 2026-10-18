@@ -4,7 +4,7 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-final class UserDefaultsServerVolumeVisibilityPersistence:
+final package class UserDefaultsServerVolumeVisibilityPersistence:
     ServerVolumeVisibilityPreferencesPersisting {
     static let storageKey = "stats.serverVolumeVisibility.v1"
 

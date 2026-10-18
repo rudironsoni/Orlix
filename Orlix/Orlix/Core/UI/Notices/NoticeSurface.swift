@@ -6,17 +6,17 @@ import AppKit
 #endif
 
 private struct NoticeSurfaceModifier: ViewModifier {
-    let style: NoticeSurfaceStyle
-    let prominence: NoticeSurfaceProminence
-    let cornerRadius: CGFloat
-    let shadowRadius: CGFloat
-    let shadowY: CGFloat
+    package let style: NoticeSurfaceStyle
+    package let prominence: NoticeSurfaceProminence
+    package let cornerRadius: CGFloat
+    package let shadowRadius: CGFloat
+    package let shadowY: CGFloat
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @ViewBuilder
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         if reduceTransparency {
@@ -129,8 +129,8 @@ private struct NoticeSurfaceModifier: ViewModifier {
     }
 }
 
-extension View {
-    func noticeSurface(
+package extension View {
+    package func noticeSurface(
         style: NoticeSurfaceStyle,
         prominence: NoticeSurfaceProminence = .regular,
         cornerRadius: CGFloat = NoticeMetrics.cornerRadius,
@@ -149,7 +149,7 @@ extension View {
     }
 
     @ViewBuilder
-    func noticePrimaryButtonStyle() -> some View {
+    package func noticePrimaryButtonStyle() -> some View {
         if #available(iOS 26, macOS 26, *) {
             self.buttonStyle(.glassProminent)
         } else {
@@ -158,7 +158,7 @@ extension View {
     }
 
     @ViewBuilder
-    func noticeSecondaryButtonStyle() -> some View {
+    package func noticeSecondaryButtonStyle() -> some View {
         if #available(iOS 26, macOS 26, *) {
             self.buttonStyle(SwiftUI.GlassButtonStyle())
         } else {
@@ -167,22 +167,22 @@ extension View {
     }
 }
 
-enum NoticeSurfaceProminence: Equatable {
+package enum NoticeSurfaceProminence: Equatable {
     case regular
     case emphasized
 }
 
-struct NoticeGlassGroup<Content: View>: View {
-    let spacing: CGFloat
-    let content: Content
+package struct NoticeGlassGroup<Content: View>: View {
+    package let spacing: CGFloat
+    package let content: Content
 
-    init(spacing: CGFloat, @ViewBuilder content: () -> Content) {
+    package init(spacing: CGFloat, @ViewBuilder content: () -> Content) {
         self.spacing = spacing
         self.content = content()
     }
 
     @ViewBuilder
-    var body: some View {
+    package var body: some View {
         if #available(iOS 26, macOS 26, *) {
             GlassEffectContainer(spacing: spacing) {
                 content

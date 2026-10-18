@@ -9,7 +9,7 @@
 import AppKit
 
 /// NSTextInputClient protocol conformance for IME (Input Method Editor) support
-package extension GhosttyTerminalView: NSTextInputClient {
+extension GhosttyTerminalView: NSTextInputClient {
     package func insertText(_ string: Any, replacementRange: NSRange) {
         imeHandler.insertText(string, replacementRange: replacementRange)
     }

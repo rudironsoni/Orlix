@@ -210,7 +210,7 @@ package extension TerminalAccessoryShortcutModifiers {
 }
 
 private extension TerminalKey {
-    var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
+    package var terminalSplitShortcutKey: TerminalSplitShortcutKey? {
         switch self {
         case .enter:
             return .character("\r")

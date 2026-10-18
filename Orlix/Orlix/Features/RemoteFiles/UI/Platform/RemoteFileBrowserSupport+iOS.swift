@@ -7,10 +7,10 @@ import UIKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct RemoteFileRow: View {
-    let entry: RemoteFileEntry
+package struct RemoteFileRow: View {
+    package let entry: RemoteFileEntry
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             Image(systemName: entry.iconName)
                 .font(.system(size: 22, weight: .medium))
@@ -64,15 +64,15 @@ struct RemoteFileRow: View {
     }
 }
 
-struct RemoteFileShareSheet: UIViewControllerRepresentable {
-    let item: RemoteFileShareItem
-    let onComplete: () -> Void
+package struct RemoteFileShareSheet: UIViewControllerRepresentable {
+    package let item: RemoteFileShareItem
+    package let onComplete: () -> Void
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(onComplete: onComplete)
     }
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
+    package func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(
             activityItems: [item.sourceURL],
             applicationActivities: nil
@@ -83,17 +83,17 @@ struct RemoteFileShareSheet: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    package func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 
-    final class Coordinator {
+    final package class Coordinator {
         private let onComplete: () -> Void
         private var didFinish = false
 
-        init(onComplete: @escaping () -> Void) {
+        package init(onComplete: @escaping () -> Void) {
             self.onComplete = onComplete
         }
 
-        func finish() {
+        package func finish() {
             guard !didFinish else { return }
             didFinish = true
             onComplete()
@@ -101,14 +101,14 @@ struct RemoteFileShareSheet: UIViewControllerRepresentable {
     }
 }
 
-struct RemoteFileImportPicker: UIViewControllerRepresentable {
-    let onComplete: (Result<[URL], Error>) -> Void
+package struct RemoteFileImportPicker: UIViewControllerRepresentable {
+    package let onComplete: (Result<[URL], Error>) -> Void
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(onComplete: onComplete)
     }
 
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+    package func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let controller = UIDocumentPickerViewController(
             forOpeningContentTypes: [.item, .folder],
             asCopy: true
@@ -118,21 +118,21 @@ struct RemoteFileImportPicker: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    package func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
 
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+    final package class Coordinator: NSObject, UIDocumentPickerDelegate {
         private let onComplete: (Result<[URL], Error>) -> Void
         private var didFinish = false
 
-        init(onComplete: @escaping (Result<[URL], Error>) -> Void) {
+        package init(onComplete: @escaping (Result<[URL], Error>) -> Void) {
             self.onComplete = onComplete
         }
 
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        package func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             finish(.success(urls))
         }
 
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        package func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
             finish(.success([]))
         }
 

@@ -142,7 +142,7 @@ nonisolated package enum RemoteFileViewerPhase: Equatable, Sendable {
 }
 
 nonisolated private extension UInt64 {
-    func saturatingMultiply(_ other: UInt64) -> UInt64 {
+    package func saturatingMultiply(_ other: UInt64) -> UInt64 {
         let result = multipliedReportingOverflow(by: other)
         return result.overflow ? .max : result.partialValue
     }

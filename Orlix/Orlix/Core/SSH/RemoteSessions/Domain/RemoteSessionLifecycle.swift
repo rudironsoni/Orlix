@@ -66,21 +66,21 @@ nonisolated package struct RemoteSessionLifecycleEnvelope: Codable, Hashable, Se
     }
 }
 
-nonisolated enum RemoteSessionLifecycleObservation: Hashable, Sendable {
+nonisolated package enum RemoteSessionLifecycleObservation: Hashable, Sendable {
     case current(
         envelope: RemoteSessionLifecycleEnvelope,
         presenceProbe: RemoteSessionPresenceProbe
     )
     case legacyTmux(markerToken: String)
 
-    init(legacyTmuxMarkerToken: String) throws {
+    package init(legacyTmuxMarkerToken: String) throws {
         guard RemoteSessionLifecycleEnvelope.isValidToken(legacyTmuxMarkerToken) else {
             throw RemoteSessionLifecycleEnvelope.ValidationError.invalidToken
         }
         self = .legacyTmux(markerToken: legacyTmuxMarkerToken)
     }
 
-    var presenceProbe: RemoteSessionPresenceProbe? {
+    package var presenceProbe: RemoteSessionPresenceProbe? {
         switch self {
         case .current(_, let presenceProbe):
             presenceProbe
@@ -90,18 +90,18 @@ nonisolated enum RemoteSessionLifecycleObservation: Hashable, Sendable {
     }
 }
 
-nonisolated enum RemoteSessionLifecycleMarker {
+nonisolated package enum RemoteSessionLifecycleMarker {
     private static let prefix = "\u{001B}]777;orlix-session-v1;"
     private static let legacyTmuxPrefix = "\u{001B}]777;orlix-tmux;"
     private static let bellTerminator = "\u{0007}"
     private static let stringTerminator = "\u{001B}\\"
 
-    enum Terminator: Sendable {
+    package enum Terminator: Sendable {
         case bell
         case string
     }
 
-    static func sequence(
+    static package func sequence(
         envelope: RemoteSessionLifecycleEnvelope,
         event: RemoteSessionEvent,
         terminator: Terminator = .bell
@@ -113,7 +113,7 @@ nonisolated enum RemoteSessionLifecycleMarker {
         return "\(prefix)\(envelope.token);\(envelope.operationID.uuidString.lowercased());\(event.rawValue)\(suffix)"
     }
 
-    static func legacyTmuxSequence(token: String, event: RemoteSessionEvent) -> String? {
+    static package func legacyTmuxSequence(token: String, event: RemoteSessionEvent) -> String? {
         let legacyEvent: String? = switch event {
         case .detached:
             "detached"
@@ -130,8 +130,8 @@ nonisolated enum RemoteSessionLifecycleMarker {
 
 nonisolated package struct RemoteSessionLifecycleStreamParser: Sendable {
     package struct Result: Equatable, Sendable {
-        let output: Data
-        let events: [RemoteSessionEvent]
+        package let output: Data
+        package let events: [RemoteSessionEvent]
     }
 
     private let markers: [(event: RemoteSessionEvent, data: Data)]

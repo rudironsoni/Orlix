@@ -6,15 +6,15 @@ import MLX
 // MARK: - Multi-Head Attention
 
 @preconcurrency nonisolated public class MultiHeadAttention: Module {
-    let nHeads: Int
-    let nFeat: Int
-    let headDim: Int
-    let scale: Float
+    package let nHeads: Int
+    package let nFeat: Int
+    package let headDim: Int
+    package let scale: Float
 
-    let linearQ: Linear
-    let linearK: Linear
-    let linearV: Linear
-    let linearOut: Linear
+    package let linearQ: Linear
+    package let linearK: Linear
+    package let linearV: Linear
+    package let linearOut: Linear
 
     public init(nHeads: Int, nFeat: Int, bias: Bool = true) {
         self.nHeads = nHeads
@@ -67,7 +67,7 @@ import MLX
 // MARK: - Relative Position Multi-Head Attention
 
 @preconcurrency nonisolated public class RelPositionMultiHeadAttention: MultiHeadAttention {
-    var linearPos: Linear
+    package var linearPos: Linear
     public var posBiasU: MLXArray
     public var posBiasV: MLXArray
 
@@ -187,7 +187,7 @@ import MLX
 // MARK: - Local Relative Position Multi-Head Attention
 
 @preconcurrency nonisolated public class RelPositionMultiHeadLocalAttention: RelPositionMultiHeadAttention {
-    var contextSize: (Int, Int)
+    package var contextSize: (Int, Int)
 
     public init(
         nHeads: Int,

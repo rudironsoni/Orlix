@@ -6,8 +6,8 @@ import OrlixSettings
 import OrlixStats
 import OrlixTerminal
 #endif
-nonisolated struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigrating {
-    func migrate(
+nonisolated package struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyMutationMigrating {
+    package func migrate(
         recordData: Data
     ) -> Result<PendingCloudKitMutation, PendingCloudKitMutationQuarantineReason>? {
         guard let object = try? JSONSerialization.jsonObject(with: recordData),
@@ -152,14 +152,14 @@ nonisolated struct CloudKitPendingMutationLegacyMigrator: PendingCloudKitLegacyM
 }
 
 nonisolated private struct LegacyMetadata: Decodable, Sendable {
-    let id: UUID
-    let createdAt: Date
-    let retryCount: Int
-    let nextRetryAt: Date?
-    let lastErrorCode: String?
-    let lastErrorDescription: String?
+    package let id: UUID
+    package let createdAt: Date
+    package let retryCount: Int
+    package let nextRetryAt: Date?
+    package let lastErrorCode: String?
+    package let lastErrorDescription: String?
 
-    func mutation(payload: PendingCloudKitMutationPayload) -> PendingCloudKitMutation {
+    package func mutation(payload: PendingCloudKitMutationPayload) -> PendingCloudKitMutation {
         PendingCloudKitMutation(
             id: id,
             payload: payload,
@@ -173,7 +173,7 @@ nonisolated private struct LegacyMetadata: Decodable, Sendable {
 }
 
 nonisolated private struct LegacyUnionRoute: Sendable {
-    static let payloadFields = [
+    static package let payloadFields = [
         "server",
         "workspace",
         "terminalTheme",
@@ -182,6 +182,6 @@ nonisolated private struct LegacyUnionRoute: Sendable {
         "statsPreferences"
     ]
 
-    let field: String
-    let kind: String
+    package let field: String
+    package let kind: String
 }

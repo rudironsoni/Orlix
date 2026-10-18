@@ -11,14 +11,14 @@ import OSLog
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension GhosttyRenderingSetup {
+package extension GhosttyRenderingSetup {
     // MARK: - Layer Setup
 
     /// Configure the Metal-backed layer for terminal rendering (macOS)
     ///
     /// CRITICAL: Must set layer property BEFORE setting wantsLayer = true
     /// This ensures Metal rendering works correctly
-    func setupLayer(for view: NSView) {
+    package func setupLayer(for view: NSView) {
         // Create Metal layer
         let metalLayer = CAMetalLayer()
         metalLayer.device = MTLCreateSystemDefaultDevice()
@@ -47,7 +47,7 @@ extension GhosttyRenderingSetup {
     ///   - paneId: Optional pane identifier
     ///   - command: Optional command to execute
     ///   - useCustomIO: If true, uses callback backend for custom I/O (SSH clients)
-    func setupSurface(
+    package func setupSurface(
         view: NSView,
         ghosttyApp: ghostty_app_t,
         callbackContext: Ghostty.CallbackContext<GhosttyTerminalView>,
@@ -136,7 +136,7 @@ extension GhosttyRenderingSetup {
 
     /// Setup observation for system appearance changes (light/dark mode) - macOS
     /// Implementation copied from Ghostty's SurfaceView_AppKit.swift
-    func setupAppearanceObservation(for view: NSView, surface: Ghostty.Surface?) -> NSKeyValueObservation? {
+    package func setupAppearanceObservation(for view: NSView, surface: Ghostty.Surface?) -> NSKeyValueObservation? {
         return view.observe(\.effectiveAppearance, options: [.new, .initial]) { view, change in
             guard let appearance = change.newValue else { return }
             guard let surface = surface?.unsafeCValue else { return }
@@ -161,7 +161,7 @@ extension GhosttyRenderingSetup {
     // MARK: - Scale and Size Updates
 
     /// Update Metal layer content scale and surface scale factors (macOS)
-    func updateBackingProperties(view: NSView, surface: ghostty_surface_t?, window: NSWindow?) {
+    package func updateBackingProperties(view: NSView, surface: ghostty_surface_t?, window: NSWindow?) {
         guard let surface = surface else { return }
 
         // Update Metal layer content scale
@@ -190,7 +190,7 @@ extension GhosttyRenderingSetup {
     }
 
     /// Update Metal layer frame and Ghostty surface size (macOS)
-    func updateLayout(view: NSView, metalLayer: CAMetalLayer?, surface: ghostty_surface_t?, lastSize: inout CGSize) -> Bool {
+    package func updateLayout(view: NSView, metalLayer: CAMetalLayer?, surface: ghostty_surface_t?, lastSize: inout CGSize) -> Bool {
         // Update Metal layer frame to match view bounds
         if let metalLayer = metalLayer {
             metalLayer.frame = view.bounds

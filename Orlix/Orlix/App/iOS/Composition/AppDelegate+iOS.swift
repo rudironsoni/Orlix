@@ -6,8 +6,8 @@ import OrlixModels
 import OrlixSettings
 import OrlixTerminal
 #endif
-nonisolated enum AppSceneLifecyclePolicy {
-    static func shouldHandleBackgroundTransition(
+nonisolated package enum AppSceneLifecyclePolicy {
+    static package func shouldHandleBackgroundTransition(
         connectedSceneStates: [UIScene.ActivationState]
     ) -> Bool {
         !connectedSceneStates.contains { state in

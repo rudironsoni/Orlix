@@ -3,18 +3,18 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ZmxRemoteSessionParser {
-    static let maximumOutputBytes = 32 * 1_024
-    static let maximumSessionCount = 256
-    static let maximumAttachedClientCount = 4_096
+nonisolated package enum ZmxRemoteSessionParser {
+    static package let maximumOutputBytes = 32 * 1_024
+    static package let maximumSessionCount = 256
+    static package let maximumAttachedClientCount = 4_096
 
-    struct ProbeResult: Equatable, Sendable {
-        let executable: RemoteSessionExecutable
-        let rawVersion: String
-        let semanticVersion: RemoteSessionSemanticVersion
+    package struct ProbeResult: Equatable, Sendable {
+        package let executable: RemoteSessionExecutable
+        package let rawVersion: String
+        package let semanticVersion: RemoteSessionSemanticVersion
     }
 
-    static func parseProbe(_ output: String) -> ProbeResult? {
+    static package func parseProbe(_ output: String) -> ProbeResult? {
         let lines = output.split(whereSeparator: \.isNewline).map(String.init)
         guard lines.contains(ZmxRemoteSessionCommandBuilder.availableMarker),
               let pathLine = lines.first(where: {
@@ -37,7 +37,7 @@ nonisolated enum ZmxRemoteSessionParser {
         )
     }
 
-    static func parseSessionList(_ output: String) throws -> [RemoteSessionDescriptor] {
+    static package func parseSessionList(_ output: String) throws -> [RemoteSessionDescriptor] {
         guard output.utf8.count <= maximumOutputBytes else {
             throw SSHError.outputLimitExceeded
         }
@@ -97,7 +97,7 @@ nonisolated enum ZmxRemoteSessionParser {
         )
     }
 
-    static func parseWorkingDirectory(
+    static package func parseWorkingDirectory(
         for identifier: RemoteSessionIdentifier,
         in output: String
     ) -> String? {

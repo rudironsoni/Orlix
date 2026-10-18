@@ -5,8 +5,8 @@ import OrlixModels
 import OrlixSSH
 import OrlixSettings
 #endif
-struct TerminalSessionsConnectionsSettingsView: View {
-    let backends: [RemoteSessionBackendMetadata]
+package struct TerminalSessionsConnectionsSettingsView: View {
+    package let backends: [RemoteSessionBackendMetadata]
 
     @AppStorage(TerminalRemoteSessionDefaults.enabledKey) private var remoteSessionEnabledDefault = true
     @AppStorage(TerminalRemoteSessionDefaults.backendIdentifierKey)
@@ -44,7 +44,7 @@ struct TerminalSessionsConnectionsSettingsView: View {
         )
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             TerminalSessionPlatformSettingsSection()
 

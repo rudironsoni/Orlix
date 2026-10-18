@@ -8,7 +8,7 @@
 import Foundation
 
 /// Special keys that can be sent to the terminal
-enum TerminalSpecialKey {
+package enum TerminalSpecialKey {
     case escape
     case tab
     case enter
@@ -25,8 +25,8 @@ enum TerminalSpecialKey {
 }
 
 /// Utility to get the escape sequence for a special key
-enum TerminalSpecialKeySequence {
-    static func escapeSequence(for key: TerminalSpecialKey) -> String {
+package enum TerminalSpecialKeySequence {
+    static package func escapeSequence(for key: TerminalSpecialKey) -> String {
         switch key {
         case .escape:
             return "\u{1B}"
@@ -59,9 +59,9 @@ enum TerminalSpecialKeySequence {
 }
 
 /// Utility to compute the control character for a given letter (Ctrl+A = 0x01, Ctrl+Z = 0x1A)
-enum TerminalControlKey {
+package enum TerminalControlKey {
     /// Returns the control character for the given letter, or nil if not A-Z
-    static func controlCharacter(for char: Character) -> Character? {
+    static package func controlCharacter(for char: Character) -> Character? {
         let asciiValue = char.uppercased().first?.asciiValue ?? 0
         if asciiValue >= 65 && asciiValue <= 90 {
             return Character(UnicodeScalar(asciiValue - 64))
@@ -71,7 +71,7 @@ enum TerminalControlKey {
 }
 
 /// Keys emitted by the iOS terminal keyboard and accessory controls.
-indirect enum TerminalKey {
+indirect package enum TerminalKey {
     case escape, tab, enter, backspace, delete, insert
     case arrowUp, arrowDown, arrowLeft, arrowRight
     case home, end, pageUp, pageDown
@@ -79,19 +79,19 @@ indirect enum TerminalKey {
     case ctrlC, ctrlD, ctrlZ, ctrlL, ctrlA, ctrlE, ctrlK, ctrlU
     case modified(TerminalKey, mods: Ghostty.Input.Mods)
 
-    func withCtrl() -> TerminalKey {
+    package func withCtrl() -> TerminalKey {
         withModifier(.ctrl)
     }
 
-    func withAlt() -> TerminalKey {
+    package func withAlt() -> TerminalKey {
         withModifier(.alt)
     }
 
-    func withShift() -> TerminalKey {
+    package func withShift() -> TerminalKey {
         withModifier(.shift)
     }
 
-    func withCommand() -> TerminalKey {
+    package func withCommand() -> TerminalKey {
         withModifier(.super)
     }
 
@@ -104,7 +104,7 @@ indirect enum TerminalKey {
         }
     }
 
-    var ansiSequence: Data {
+    package var ansiSequence: Data {
         switch self {
         case .escape: return Data([0x1B])
         case .tab: return Data([0x09])

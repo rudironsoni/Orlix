@@ -453,14 +453,14 @@ package struct ContentView: View {
 
 #if os(macOS)
 private struct MainWindowChromeBridge: NSViewRepresentable {
-    let windowTitle: String
-    let backgroundColor: Color
+    package let windowTitle: String
+    package let backgroundColor: Color
 
-    func makeNSView(context: Context) -> NSView {
+    package func makeNSView(context: Context) -> NSView {
         WindowObserverView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         guard let view = nsView as? WindowObserverView else { return }
         view.windowTitle = windowTitle
         view.backgroundColor = backgroundColor
@@ -490,23 +490,23 @@ private struct MainWindowChromeBridge: NSViewRepresentable {
         window.contentView?.superview?.layer?.backgroundColor = nsBackgroundColor.cgColor
     }
 
-    final class WindowObserverView: NSView {
-        var windowTitle = ""
-        var backgroundColor: Color = .clear
+    final package class WindowObserverView: NSView {
+        package var windowTitle = ""
+        package var backgroundColor: Color = .clear
 
-        override var intrinsicContentSize: NSSize { .zero }
+        override package var intrinsicContentSize: NSSize { .zero }
 
-        override func viewDidMoveToWindow() {
+        override package func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             applyIfPossible()
         }
 
-        override func viewDidMoveToSuperview() {
+        override package func viewDidMoveToSuperview() {
             super.viewDidMoveToSuperview()
             applyIfPossible()
         }
 
-        func applyIfPossible() {
+        package func applyIfPossible() {
             guard let window else { return }
             MainWindowChromeBridge.configure(
                 window,

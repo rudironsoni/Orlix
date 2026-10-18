@@ -11,95 +11,95 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct ServerViewTabActions {
-    let openNew: () -> Void
-    let closeSelected: () -> Void
-    let selectPrevious: () -> Void
-    let selectNext: () -> Void
+package struct ServerViewTabActions {
+    package let openNew: () -> Void
+    package let closeSelected: () -> Void
+    package let selectPrevious: () -> Void
+    package let selectNext: () -> Void
     /// Select the tab at a zero-based index (Cmd+1…9). No-op if out of range.
-    let selectIndex: (Int) -> Void
+    package let selectIndex: (Int) -> Void
 }
 
 // MARK: - Split Actions
 
 /// Actions that can be performed on a terminal split layout
-struct TerminalSplitActions {
-    let perform: (TerminalSplitCommand) -> Void
-    let isEnabled: (TerminalSplitCommand) -> Bool
-    let isZoomed: () -> Bool
+package struct TerminalSplitActions {
+    package let perform: (TerminalSplitCommand) -> Void
+    package let isEnabled: (TerminalSplitCommand) -> Bool
+    package let isZoomed: () -> Bool
 }
 
 // MARK: - Focused Values
 
-struct ActiveServerIdKey: FocusedValueKey {
-    typealias Value = UUID
+package struct ActiveServerIdKey: FocusedValueKey {
+    package typealias Value = UUID
 }
 
-struct ActivePaneIdKey: FocusedValueKey {
-    typealias Value = UUID
+package struct ActivePaneIdKey: FocusedValueKey {
+    package typealias Value = UUID
 }
 
-struct TerminalSplitActionsKey: FocusedValueKey {
-    typealias Value = TerminalSplitActions
+package struct TerminalSplitActionsKey: FocusedValueKey {
+    package typealias Value = TerminalSplitActions
 }
 
-struct OpenTerminalTabActionKey: FocusedValueKey {
-    typealias Value = () -> Void
+package struct OpenTerminalTabActionKey: FocusedValueKey {
+    package typealias Value = () -> Void
 }
 
-struct ServerViewTabActionsKey: FocusedValueKey {
-    typealias Value = ServerViewTabActions
+package struct ServerViewTabActionsKey: FocusedValueKey {
+    package typealias Value = ServerViewTabActions
 }
 
-struct OpenLocalSSHDiscoveryActionKey: FocusedValueKey {
-    typealias Value = () -> Void
+package struct OpenLocalSSHDiscoveryActionKey: FocusedValueKey {
+    package typealias Value = () -> Void
 }
 
-struct ToggleZenModeActionKey: FocusedValueKey {
-    typealias Value = () -> Void
+package struct ToggleZenModeActionKey: FocusedValueKey {
+    package typealias Value = () -> Void
 }
 
-struct ZenModeEnabledKey: FocusedValueKey {
-    typealias Value = Bool
+package struct ZenModeEnabledKey: FocusedValueKey {
+    package typealias Value = Bool
 }
 
-extension FocusedValues {
-    var activeServerId: UUID? {
+package extension FocusedValues {
+    package var activeServerId: UUID? {
         get { self[ActiveServerIdKey.self] }
         set { self[ActiveServerIdKey.self] = newValue }
     }
 
-    var activePaneId: UUID? {
+    package var activePaneId: UUID? {
         get { self[ActivePaneIdKey.self] }
         set { self[ActivePaneIdKey.self] = newValue }
     }
 
-    var terminalSplitActions: TerminalSplitActions? {
+    package var terminalSplitActions: TerminalSplitActions? {
         get { self[TerminalSplitActionsKey.self] }
         set { self[TerminalSplitActionsKey.self] = newValue }
     }
 
-    var openTerminalTab: (() -> Void)? {
+    package var openTerminalTab: (() -> Void)? {
         get { self[OpenTerminalTabActionKey.self] }
         set { self[OpenTerminalTabActionKey.self] = newValue }
     }
 
-    var serverViewTabActions: ServerViewTabActions? {
+    package var serverViewTabActions: ServerViewTabActions? {
         get { self[ServerViewTabActionsKey.self] }
         set { self[ServerViewTabActionsKey.self] = newValue }
     }
 
-    var openLocalSSHDiscovery: (() -> Void)? {
+    package var openLocalSSHDiscovery: (() -> Void)? {
         get { self[OpenLocalSSHDiscoveryActionKey.self] }
         set { self[OpenLocalSSHDiscoveryActionKey.self] = newValue }
     }
 
-    var toggleZenMode: (() -> Void)? {
+    package var toggleZenMode: (() -> Void)? {
         get { self[ToggleZenModeActionKey.self] }
         set { self[ToggleZenModeActionKey.self] = newValue }
     }
 
-    var isZenModeEnabled: Bool? {
+    package var isZenModeEnabled: Bool? {
         get { self[ZenModeEnabledKey.self] }
         set { self[ZenModeEnabledKey.self] = newValue }
     }

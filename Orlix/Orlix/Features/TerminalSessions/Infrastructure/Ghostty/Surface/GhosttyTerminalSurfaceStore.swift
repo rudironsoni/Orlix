@@ -104,13 +104,13 @@ final package class GhosttyTerminalSurfaceStore: TerminalSurfaceStoring {
     }
 }
 
-extension TerminalSurfaceStoring {
-    func ghosttySurface(for paneId: UUID) -> GhosttyTerminalView? {
+package extension TerminalSurfaceStoring {
+    package func ghosttySurface(for paneId: UUID) -> GhosttyTerminalView? {
         surface(for: paneId) as? GhosttyTerminalView
     }
 }
 
-package extension GhosttyTerminalView: TerminalSurface {
+extension GhosttyTerminalView: TerminalSurface {
     package var terminalGeometry: TerminalSurfaceGeometry? {
         guard let size = terminalSize() else { return nil }
         let columns = Int(size.columns)

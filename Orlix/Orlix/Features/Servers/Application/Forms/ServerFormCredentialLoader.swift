@@ -4,40 +4,40 @@ import Foundation
 import OrlixModels
 #endif
 @MainActor
-protocol ServerFormCredentialLoading: AnyObject {
+package protocol ServerFormCredentialLoading: AnyObject {
     func loadFormCredentials(for server: Server?) async throws -> ServerFormCredentialLoad
     func loadStoredKey(_ entry: SSHKeyEntry) async throws -> ServerFormStoredKeyLoad
 }
 
 @MainActor
-struct ServerFormCredentialLoad {
-    enum SavedCredentials {
+package struct ServerFormCredentialLoad {
+    package enum SavedCredentials {
         case notRequested
         case loaded(ServerCredentials, selectedStoredKeyID: UUID?)
         case failed(message: String)
     }
 
-    let storedKeys: [SSHKeyEntry]
-    let savedCredentials: SavedCredentials
+    package let storedKeys: [SSHKeyEntry]
+    package let savedCredentials: SavedCredentials
 }
 
 @MainActor
-struct ServerFormStoredKeyLoad {
-    let id: UUID
-    let privateKey: String?
-    let passphrase: String?
-    let publicKey: String
+package struct ServerFormStoredKeyLoad {
+    package let id: UUID
+    package let privateKey: String?
+    package let passphrase: String?
+    package let publicKey: String
 }
 
 @MainActor
-final class ServerFormCredentialLoader: ServerFormCredentialLoading {
+final package class ServerFormCredentialLoader: ServerFormCredentialLoading {
     private let repository: any ServerCredentialRepository
 
-    init(repository: any ServerCredentialRepository) {
+    package init(repository: any ServerCredentialRepository) {
         self.repository = repository
     }
 
-    func loadFormCredentials(for server: Server?) async throws -> ServerFormCredentialLoad {
+    package func loadFormCredentials(for server: Server?) async throws -> ServerFormCredentialLoad {
         await Task.yield()
         try Task.checkCancellation()
 
@@ -74,7 +74,7 @@ final class ServerFormCredentialLoader: ServerFormCredentialLoading {
         }
     }
 
-    func loadStoredKey(_ entry: SSHKeyEntry) async throws -> ServerFormStoredKeyLoad {
+    package func loadStoredKey(_ entry: SSHKeyEntry) async throws -> ServerFormStoredKeyLoad {
         await Task.yield()
         try Task.checkCancellation()
         let keyData = try repository.getStoredSSHKeyData(for: entry.id)

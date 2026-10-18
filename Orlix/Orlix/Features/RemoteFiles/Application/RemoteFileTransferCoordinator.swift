@@ -8,17 +8,17 @@ import OrlixSSH
 #endif
 package extension RemoteFileBrowserStore {
     package struct LocalUploadItemInfo: Sendable {
-        let name: String
-        let identity: LocalFileIdentity
-        let kind: LocalUploadPlanNode.Kind
+        package let name: String
+        package let identity: LocalFileIdentity
+        package let kind: LocalUploadPlanNode.Kind
     }
 
     final package class TransferProgressTracker {
         private(set) var completedUnitCount = 0
-        let totalUnitCount: Int
-        let onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
+        package let totalUnitCount: Int
+        package let onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
 
-        init(
+        package init(
             totalUnitCount: Int,
             onProgress: (@MainActor @Sendable (TransferProgress) -> Void)?
         ) {
@@ -27,7 +27,7 @@ package extension RemoteFileBrowserStore {
         }
 
         @MainActor
-        func reportCurrentItem(_ currentItemName: String) {
+        package func reportCurrentItem(_ currentItemName: String) {
             onProgress?(
                 TransferProgress(
                     completedUnitCount: min(completedUnitCount, totalUnitCount),
@@ -38,7 +38,7 @@ package extension RemoteFileBrowserStore {
         }
 
         @MainActor
-        func advance(currentItemName: String) {
+        package func advance(currentItemName: String) {
             completedUnitCount += 1
             onProgress?(
                 TransferProgress(

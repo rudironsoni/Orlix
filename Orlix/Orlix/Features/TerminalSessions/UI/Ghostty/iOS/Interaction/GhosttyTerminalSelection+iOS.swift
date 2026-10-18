@@ -13,7 +13,7 @@ import OrlixModels
 
 // MARK: - Native Text Selection
 
-package extension GhosttyTerminalView: UITextInteractionDelegate {
+extension GhosttyTerminalView: UITextInteractionDelegate {
     package func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
         guard hasActiveSelectionInteraction else { return false }
         nativeSelectionLifecycle.prepare(restoreTerminalInput: isTerminalTextInputActive)

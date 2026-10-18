@@ -3,24 +3,24 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ZellijRemoteSessionParser {
-    static let maximumOutputBytes = 64 * 1_024
-    static let maximumProbeOutputBytes = 8 * 1_024
-    static let maximumMutationOutputBytes = 8 * 1_024
-    static let maximumSessionCount = 256
-    static let maximumAttachedClientCount = 4_096
+nonisolated package enum ZellijRemoteSessionParser {
+    static package let maximumOutputBytes = 64 * 1_024
+    static package let maximumProbeOutputBytes = 8 * 1_024
+    static package let maximumMutationOutputBytes = 8 * 1_024
+    static package let maximumSessionCount = 256
+    static package let maximumAttachedClientCount = 4_096
 
-    struct ProbeResult: Equatable, Sendable {
-        let executable: RemoteSessionExecutable
-        let rawVersion: String
-        let semanticVersion: RemoteSessionSemanticVersion
+    package struct ProbeResult: Equatable, Sendable {
+        package let executable: RemoteSessionExecutable
+        package let rawVersion: String
+        package let semanticVersion: RemoteSessionSemanticVersion
     }
 
     private struct Pane: Decodable {
-        let isPlugin: Bool
-        let isFocused: Bool
-        let paneCwd: String?
-        let exited: Bool?
+        package let isPlugin: Bool
+        package let isFocused: Bool
+        package let paneCwd: String?
+        package let exited: Bool?
 
         private enum CodingKeys: String, CodingKey {
             case isPlugin = "is_plugin"
@@ -30,7 +30,7 @@ nonisolated enum ZellijRemoteSessionParser {
         }
     }
 
-    static func parseProbe(_ output: String) -> ProbeResult? {
+    static package func parseProbe(_ output: String) -> ProbeResult? {
         guard output.utf8.count <= maximumProbeOutputBytes else { return nil }
         let lines = output.split(whereSeparator: \.isNewline).map(String.init)
         guard lines.contains(ZellijRemoteSessionCommandBuilder.availableMarker),
@@ -56,7 +56,7 @@ nonisolated enum ZellijRemoteSessionParser {
         )
     }
 
-    static func parseSessionList(_ output: String) throws -> [RemoteSessionDescriptor] {
+    static package func parseSessionList(_ output: String) throws -> [RemoteSessionDescriptor] {
         guard output.utf8.count <= maximumOutputBytes else {
             throw SSHError.outputLimitExceeded
         }
@@ -109,7 +109,7 @@ nonisolated enum ZellijRemoteSessionParser {
         }
     }
 
-    static func parseWorkingDirectory(_ output: String) -> String? {
+    static package func parseWorkingDirectory(_ output: String) -> String? {
         guard output.utf8.count <= maximumOutputBytes,
               let data = output.data(using: .utf8),
               let panes = try? JSONDecoder().decode([Pane].self, from: data),
@@ -122,7 +122,7 @@ nonisolated enum ZellijRemoteSessionParser {
         return candidates.compactMap(\.paneCwd).first(where: isBoundedAbsolutePath)
     }
 
-    static func isValidSessionName(_ name: String) -> Bool {
+    static package func isValidSessionName(_ name: String) -> Bool {
         name != "."
             && name != ".."
             && !name.contains("/")

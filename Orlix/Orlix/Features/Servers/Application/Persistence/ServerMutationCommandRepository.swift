@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum ServerMutationCommand: Equatable, Sendable {
+nonisolated package enum ServerMutationCommand: Equatable, Sendable {
     case insertServer(Server)
     case updateServer(Server)
     case deleteServer(UUID)
@@ -11,20 +11,20 @@ nonisolated enum ServerMutationCommand: Equatable, Sendable {
     case updateWorkspace(Workspace)
 }
 
-nonisolated enum ServerMutationEffect: Equatable, Sendable {
+nonisolated package enum ServerMutationEffect: Equatable, Sendable {
     case serverUpsert(Server)
     case serverDelete(Server)
     case workspaceUpsert(Workspace)
 }
 
-nonisolated struct ServerMutationCommandResult: Equatable, Sendable {
-    let servers: [Server]
-    let workspaces: [Workspace]
-    let effect: ServerMutationEffect
+nonisolated package struct ServerMutationCommandResult: Equatable, Sendable {
+    package let servers: [Server]
+    package let workspaces: [Workspace]
+    package let effect: ServerMutationEffect
 }
 
-nonisolated struct ServerMutationCommandRepository: Sendable {
-    func execute(
+nonisolated package struct ServerMutationCommandRepository: Sendable {
+    package func execute(
         _ command: ServerMutationCommand,
         servers: [Server],
         workspaces: [Workspace],
@@ -101,14 +101,14 @@ nonisolated struct ServerMutationCommandRepository: Sendable {
         }
     }
 
-    func existingServerIndex(for id: UUID, in servers: [Server]) throws -> Int {
+    package func existingServerIndex(for id: UUID, in servers: [Server]) throws -> Int {
         guard let index = servers.firstIndex(where: { $0.id == id }) else {
             throw OrlixError.serverNotFound
         }
         return index
     }
 
-    func existingWorkspaceIndex(for id: UUID, in workspaces: [Workspace]) throws -> Int {
+    package func existingWorkspaceIndex(for id: UUID, in workspaces: [Workspace]) throws -> Int {
         guard let index = workspaces.firstIndex(where: { $0.id == id }) else {
             throw OrlixError.workspaceNotFound
         }

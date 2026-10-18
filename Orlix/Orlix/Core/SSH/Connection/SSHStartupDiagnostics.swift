@@ -4,7 +4,7 @@ import os
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum SSHStartupStage: String, Sendable {
+nonisolated package enum SSHStartupStage: String, Sendable {
     case transportPreparation
     case dnsResolution
     case tcpAddressAttempt
@@ -24,18 +24,18 @@ nonisolated enum SSHStartupStage: String, Sendable {
     case connectionDeadline
 }
 
-nonisolated final class SSHStartupTrace: @unchecked Sendable {
-    struct Event: Equatable, Sendable {
-        let stage: SSHStartupStage
-        let stageMilliseconds: Int
-        let totalMilliseconds: Int
-        let outcome: String
-        let detail: String
+nonisolated final package class SSHStartupTrace: @unchecked Sendable {
+    package struct Event: Equatable, Sendable {
+        package let stage: SSHStartupStage
+        package let stageMilliseconds: Int
+        package let totalMilliseconds: Int
+        package let outcome: String
+        package let detail: String
     }
 
-    struct Token: Sendable {
-        let stage: SSHStartupStage
-        let startedAt: ContinuousClock.Instant
+    package struct Token: Sendable {
+        package let stage: SSHStartupStage
+        package let startedAt: ContinuousClock.Instant
     }
 
     private let logger: Logger
@@ -46,7 +46,7 @@ nonisolated final class SSHStartupTrace: @unchecked Sendable {
     private let eventsLock = NSLock()
     private var events = [Event]()
 
-    init(
+    package init(
         logger: Logger,
         eventHandler: (@Sendable (Event) -> Void)? = nil
     ) {
@@ -54,11 +54,11 @@ nonisolated final class SSHStartupTrace: @unchecked Sendable {
         self.eventHandler = eventHandler
     }
 
-    func begin(_ stage: SSHStartupStage) -> Token {
+    package func begin(_ stage: SSHStartupStage) -> Token {
         Token(stage: stage, startedAt: .now)
     }
 
-    func end(
+    package func end(
         _ token: Token,
         outcome: String = "ok",
         detail: String = "none"
@@ -71,7 +71,7 @@ nonisolated final class SSHStartupTrace: @unchecked Sendable {
         )
     }
 
-    func recordOnce(
+    package func recordOnce(
         _ stage: SSHStartupStage,
         outcome: String = "ok",
         detail: String = "none"
@@ -83,7 +83,7 @@ nonisolated final class SSHStartupTrace: @unchecked Sendable {
         record(stage, stageMilliseconds: 0, outcome: outcome, detail: detail)
     }
 
-    func record(
+    package func record(
         _ stage: SSHStartupStage,
         stageMilliseconds: Int,
         outcome: String,
@@ -104,7 +104,7 @@ nonisolated final class SSHStartupTrace: @unchecked Sendable {
         eventHandler?(event)
     }
 
-    func snapshot() -> [Event] {
+    package func snapshot() -> [Event] {
         eventsLock.withLock { events }
     }
 

@@ -61,14 +61,14 @@ nonisolated package struct SFTPFileEntry: Hashable, Sendable {
     }
 }
 
-nonisolated struct SFTPFilesystemStatus: Hashable, Sendable {
-    let blockSize: UInt64
-    let totalBlocks: UInt64
-    let freeBlocks: UInt64
-    let availableBlocks: UInt64
+nonisolated package struct SFTPFilesystemStatus: Hashable, Sendable {
+    package let blockSize: UInt64
+    package let totalBlocks: UInt64
+    package let freeBlocks: UInt64
+    package let availableBlocks: UInt64
 }
 
-nonisolated enum SFTPFilesystemCapacity: Hashable, Sendable {
+nonisolated package enum SFTPFilesystemCapacity: Hashable, Sendable {
     case known(SFTPFilesystemStatus)
     case unavailable
 }
@@ -93,8 +93,8 @@ nonisolated package enum SFTPTransportError: LocalizedError, Equatable, Sendable
     }
 }
 
-nonisolated enum SFTPRemotePath {
-    static func normalize(_ path: String) -> String {
+nonisolated package enum SFTPRemotePath {
+    static package func normalize(_ path: String) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "/" }
 
@@ -111,7 +111,7 @@ nonisolated enum SFTPRemotePath {
         return "/" + normalized.joined(separator: "/")
     }
 
-    static func appending(_ name: String, to directoryPath: String) throws -> String {
+    static package func appending(_ name: String, to directoryPath: String) throws -> String {
         guard isValidLeaf(name) else { throw SFTPTransportError.invalidEntryName }
         let directory = normalize(directoryPath)
         return directory == "/" ? "/" + name : directory + "/" + name

@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum GhosttyProgressState {
+package enum GhosttyProgressState {
     case remove
     case set
     case error
@@ -13,7 +13,7 @@ enum GhosttyProgressState {
     case pause
     case unknown
 
-    init(cState: ghostty_action_progress_report_state_e) {
+    package init(cState: ghostty_action_progress_report_state_e) {
         switch cState {
         case GHOSTTY_PROGRESS_STATE_REMOVE: self = .remove
         case GHOSTTY_PROGRESS_STATE_SET: self = .set

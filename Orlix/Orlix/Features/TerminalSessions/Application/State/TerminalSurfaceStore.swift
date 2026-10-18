@@ -4,31 +4,31 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalSurfaceStoreChange: Equatable, Sendable {
+nonisolated package enum TerminalSurfaceStoreChange: Equatable, Sendable {
     case registered(paneId: UUID, surfaceIdentity: ObjectIdentifier)
     case replaced(paneId: UUID, surfaceIdentity: ObjectIdentifier)
     case removed(paneId: UUID, surfaceIdentity: ObjectIdentifier)
     case drained(surfaceIdentitiesByPane: [UUID: ObjectIdentifier])
 }
 
-nonisolated struct TerminalSurfaceGeometry: Equatable, Sendable {
-    let columns: Int
-    let rows: Int
-    let pixelSize: TerminalPixelSize?
+nonisolated package struct TerminalSurfaceGeometry: Equatable, Sendable {
+    package let columns: Int
+    package let rows: Int
+    package let pixelSize: TerminalPixelSize?
 }
 
 #if os(iOS)
 @MainActor
-struct TerminalSurfaceLifecycleCallbacks {
-    let windowAttachmentChanged: (Bool) -> Void
-    let directTouch: (_ isFocusTap: Bool) -> Void
-    let keyboardAccessoryHideRequested: () -> Void
-    let findNavigatorVisibilityChanged: (Bool) -> Void
+package struct TerminalSurfaceLifecycleCallbacks {
+    package let windowAttachmentChanged: (Bool) -> Void
+    package let directTouch: (_ isFocusTap: Bool) -> Void
+    package let keyboardAccessoryHideRequested: () -> Void
+    package let findNavigatorVisibilityChanged: (Bool) -> Void
 }
 #endif
 
 @MainActor
-protocol TerminalSurface: AnyObject, TerminalOutputSink, Sendable {
+package protocol TerminalSurface: AnyObject, TerminalOutputSink, Sendable {
     var terminalGeometry: TerminalSurfaceGeometry? { get }
     var isHostingSceneActive: Bool? { get }
 
@@ -49,7 +49,7 @@ protocol TerminalSurface: AnyObject, TerminalOutputSink, Sendable {
 }
 
 @MainActor
-protocol TerminalSurfaceStoring: AnyObject {
+package protocol TerminalSurfaceStoring: AnyObject {
     var latestChange: TerminalSurfaceStoreChange? { get }
     var changes: AnyPublisher<TerminalSurfaceStoreChange, Never> { get }
 

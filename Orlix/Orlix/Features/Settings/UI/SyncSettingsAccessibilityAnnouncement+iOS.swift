@@ -1,8 +1,8 @@
 #if os(iOS)
 import UIKit
 
-enum SyncSettingsAccessibilityAnnouncement {
-    static func post(_ message: String) {
+package enum SyncSettingsAccessibilityAnnouncement {
+    static package func post(_ message: String) {
         guard UIAccessibility.isVoiceOverRunning else { return }
         UIAccessibility.post(notification: .announcement, argument: message)
     }

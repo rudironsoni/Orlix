@@ -4,7 +4,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum WakeOnLANSendError: Error, Equatable, Sendable {
+nonisolated package enum WakeOnLANSendError: Error, Equatable, Sendable {
     case localNetworkAccessDenied
     case interfaceEnumerationFailed(code: Int32)
     case noEligibleNetworkInterface
@@ -15,7 +15,7 @@ nonisolated enum WakeOnLANSendError: Error, Equatable, Sendable {
     case incompleteDatagram(address: String, expected: Int, actual: Int)
 }
 
-nonisolated protocol WakeOnLANPacketSending: Sendable {
+nonisolated package protocol WakeOnLANPacketSending: Sendable {
     func send(configuration: WakeOnLANConfiguration) async throws
 }
 
@@ -28,19 +28,19 @@ package struct ServerWakeDependencies {
     package let makeID: @Sendable () -> UUID
 }
 
-nonisolated enum ServerWakeFailure: Equatable, Sendable {
+nonisolated package enum ServerWakeFailure: Equatable, Sendable {
     case macAddressUnavailable
     case send(WakeOnLANSendError)
     case unexpected
 }
 
-nonisolated enum ServerWakePhase: Equatable, Sendable {
+nonisolated package enum ServerWakePhase: Equatable, Sendable {
     case idle
     case sending(id: UUID)
     case succeeded(id: UUID)
     case failed(id: UUID, ServerWakeFailure)
 
-    var operationID: UUID? {
+    package var operationID: UUID? {
         switch self {
         case .idle:
             return nil

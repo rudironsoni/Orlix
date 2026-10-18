@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-package extension TerminalThemeValidationError: LocalizedError {
+extension TerminalThemeValidationError: LocalizedError {
     nonisolated package var errorDescription: String? {
         switch self {
         case .emptyContent:

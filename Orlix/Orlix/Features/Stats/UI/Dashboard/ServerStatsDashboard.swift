@@ -4,20 +4,20 @@ import SwiftUI
 import OrlixModels
 import OrlixSSH
 #endif
-struct ServerStatsDashboard: View {
-    let server: Server
-    let backgroundColor: Color
-    var sharedClientProvider: () -> SSHClient?
-    @ObservedObject var statsCollector: ServerStatsCollector
-    let preferences: StatsPreferences
-    @ObservedObject var volumeVisibilityStore: ServerVolumeVisibilityStore
-    let securityApprovalActions: ServerStatsSecurityApprovalActions
-    let isDockerUnlocked: Bool
-    let showAppearanceSettings: () -> Void
-    let showDockerUpgrade: () -> Void
+package struct ServerStatsDashboard: View {
+    package let server: Server
+    package let backgroundColor: Color
+    package var sharedClientProvider: () -> SSHClient?
+    @ObservedObject package var statsCollector: ServerStatsCollector
+    package let preferences: StatsPreferences
+    @ObservedObject package var volumeVisibilityStore: ServerVolumeVisibilityStore
+    package let securityApprovalActions: ServerStatsSecurityApprovalActions
+    package let isDockerUnlocked: Bool
+    package let showAppearanceSettings: () -> Void
+    package let showDockerUpgrade: () -> Void
     @State private var approvalRequestInFlight: ServerSecurityApprovalRequest?
 
-    var body: some View {
+    package var body: some View {
         let style = StatsVisualStyle(preferencesStyle: preferences.style)
         let snapshot = statsCollector.presentationSnapshot
         let storageVolumes = VolumeVisibilityPolicy.normalized(snapshot.stats.volumes)

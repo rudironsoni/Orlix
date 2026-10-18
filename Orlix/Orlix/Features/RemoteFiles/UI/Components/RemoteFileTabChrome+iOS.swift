@@ -84,13 +84,13 @@ package struct RemoteFileTabsBar: View {
 }
 
 private struct RemoteFileTabButton: View {
-    let title: String
-    let isSelected: Bool
-    let fixedWidth: CGFloat?
-    let onSelect: () -> Void
-    let onClose: () -> Void
+    package let title: String
+    package let isSelected: Bool
+    package let fixedWidth: CGFloat?
+    package let onSelect: () -> Void
+    package let onClose: () -> Void
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "folder")
                 .font(.system(size: 12, weight: .semibold))

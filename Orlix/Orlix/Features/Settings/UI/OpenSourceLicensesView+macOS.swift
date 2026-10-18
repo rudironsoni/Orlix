@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-extension OpenSourceLicensesView {
-    var platformBody: some View {
+package extension OpenSourceLicensesView {
+    package var platformBody: some View {
         NavigationView {
             OpenSourceLicensesContent(documents: documents)
                 .navigationTitle(Text("Open Source & Licenses"))
@@ -21,10 +21,10 @@ extension OpenSourceLicensesView {
     }
 }
 
-struct OpenSourceAcknowledgementHero: View {
+package struct OpenSourceAcknowledgementHero: View {
     @ScaledMetric(relativeTo: .title2) private var iconSize = 34.0
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 14) {
             Image(systemName: "heart.fill")
                 .font(.system(size: iconSize, weight: .regular))

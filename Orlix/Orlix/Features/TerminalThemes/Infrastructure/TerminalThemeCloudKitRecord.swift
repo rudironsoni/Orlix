@@ -4,11 +4,11 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum TerminalThemeCloudKitRecordCodec {
-    static let recordType = "TerminalTheme"
-    static let recordKeys = ["name", "content", "updatedAt", "deletedAt"]
+nonisolated package enum TerminalThemeCloudKitRecordCodec {
+    static package let recordType = "TerminalTheme"
+    static package let recordKeys = ["name", "content", "updatedAt", "deletedAt"]
 
-    static func theme(from record: CKRecord) -> TerminalTheme? {
+    static package func theme(from record: CKRecord) -> TerminalTheme? {
         guard
             let id = UUID(uuidString: record.recordID.recordName),
             let name = record["name"] as? String,
@@ -27,7 +27,7 @@ nonisolated enum TerminalThemeCloudKitRecordCodec {
         )
     }
 
-    static func record(for theme: TerminalTheme, in zoneID: CKRecordZone.ID) -> CKRecord {
+    static package func record(for theme: TerminalTheme, in zoneID: CKRecordZone.ID) -> CKRecord {
         let recordID = CKRecord.ID(
             recordName: theme.id.uuidString,
             zoneID: zoneID
@@ -41,14 +41,14 @@ nonisolated enum TerminalThemeCloudKitRecordCodec {
     }
 }
 
-nonisolated enum TerminalThemePreferenceCloudKitRecordCodec {
-    static let recordType = "TerminalThemePreference"
-    static let recordName = TerminalThemePreference.recordName
-    static let recordKeys = [
+nonisolated package enum TerminalThemePreferenceCloudKitRecordCodec {
+    static package let recordType = "TerminalThemePreference"
+    static package let recordName = TerminalThemePreference.recordName
+    static package let recordKeys = [
         "darkThemeName", "lightThemeName", "usePerAppearanceTheme", "updatedAt"
     ]
 
-    static func preference(from record: CKRecord) -> TerminalThemePreference? {
+    static package func preference(from record: CKRecord) -> TerminalThemePreference? {
         guard
             let darkThemeName = record["darkThemeName"] as? String,
             let lightThemeName = record["lightThemeName"] as? String,
@@ -71,11 +71,11 @@ nonisolated enum TerminalThemePreferenceCloudKitRecordCodec {
         )
     }
 
-    static func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
+    static package func recordID(in zoneID: CKRecordZone.ID) -> CKRecord.ID {
         CKRecord.ID(recordName: recordName, zoneID: zoneID)
     }
 
-    static func record(
+    static package func record(
         for preference: TerminalThemePreference,
         in zoneID: CKRecordZone.ID
     ) -> CKRecord {

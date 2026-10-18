@@ -3,15 +3,15 @@ import Foundation
 /// Preserves the order in which terminal input reaches an asynchronous
 /// transport, even when an individual write suspends.
 @MainActor
-final class TerminalTransportWriteQueue {
+final package class TerminalTransportWriteQueue {
     private struct Entry {
-        let task: Task<Void, Never>
+        package let task: Task<Void, Never>
     }
 
     private var entries: [UUID: Entry] = [:]
     private var tail: Task<Void, Never>?
 
-    func enqueue(_ operation: @escaping @MainActor @Sendable () async -> Void) {
+    package func enqueue(_ operation: @escaping @MainActor @Sendable () async -> Void) {
         let id = UUID()
         let previousWrite = tail
         let task = Task(priority: .userInitiated) { [weak self] in
@@ -25,7 +25,7 @@ final class TerminalTransportWriteQueue {
         tail = task
     }
 
-    func cancel() {
+    package func cancel() {
         let tasks = entries.values.map(\.task)
         entries.removeAll()
         tail = nil
@@ -34,7 +34,7 @@ final class TerminalTransportWriteQueue {
         }
     }
 
-    func waitForPendingWrites() async {
+    package func waitForPendingWrites() async {
         await tail?.value
     }
 

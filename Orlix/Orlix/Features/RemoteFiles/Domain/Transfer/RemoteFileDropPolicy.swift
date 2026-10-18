@@ -1,9 +1,9 @@
 import Foundation
 
-nonisolated enum RemoteFileDropPlan: Equatable, Sendable {
-    struct Move: Equatable, Sendable {
-        let entry: RemoteFileEntry
-        let destinationPath: String
+nonisolated package enum RemoteFileDropPlan: Equatable, Sendable {
+    package struct Move: Equatable, Sendable {
+        package let entry: RemoteFileEntry
+        package let destinationPath: String
     }
 
     case move([Move])

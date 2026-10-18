@@ -3,7 +3,7 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixSSH
 #endif
-nonisolated enum ServerStatsSecurityApprovalOutcome: Equatable, Sendable {
+nonisolated package enum ServerStatsSecurityApprovalOutcome: Equatable, Sendable {
     case approved
     case failed(ServerSecurityApprovalError)
 }

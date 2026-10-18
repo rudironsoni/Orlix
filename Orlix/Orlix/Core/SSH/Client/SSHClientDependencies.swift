@@ -4,29 +4,29 @@ import MoshBootstrap
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct SSHHostKeyCandidate: Equatable, Sendable {
-    let host: String
-    let port: Int
-    let fingerprint: String
-    let keyType: Int
-    let keyTypeName: String
+nonisolated package struct SSHHostKeyCandidate: Equatable, Sendable {
+    package let host: String
+    package let port: Int
+    package let fingerprint: String
+    package let keyType: Int
+    package let keyTypeName: String
 }
 
-nonisolated enum SSHHostKeyVerificationDecision: Equatable, Sendable {
+nonisolated package enum SSHHostKeyVerificationDecision: Equatable, Sendable {
     case trusted
     case approvalRequired
 }
 
-nonisolated protocol SSHHostKeyVerifying: Sendable {
+nonisolated package protocol SSHHostKeyVerifying: Sendable {
     func verify(_ candidate: SSHHostKeyCandidate) -> SSHHostKeyVerificationDecision
 }
 
-typealias SSHMoshCommandExecutor = @Sendable (
+package typealias SSHMoshCommandExecutor = @Sendable (
     _ command: String,
     _ timeout: Duration
 ) async throws -> String
 
-nonisolated protocol SSHMoshBootstrapping: Sendable {
+nonisolated package protocol SSHMoshBootstrapping: Sendable {
     func bootstrapConnectInfo(
         terminalType: RemoteTerminalType,
         startCommand: String?,
@@ -70,11 +70,11 @@ nonisolated package struct SSHClientFactory: Sendable {
 private nonisolated final class SSHRuntimeSettingsSource: @unchecked Sendable {
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults) {
+    package init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
-    func current() -> SSHRuntimeSettings {
+    package func current() -> SSHRuntimeSettings {
         SSHRuntimeSettings(defaults: defaults)
     }
 }
@@ -96,7 +96,7 @@ nonisolated package enum SSHClientLiveComposition {
     }
 }
 
-package extension KnownHostsManager: SSHHostKeyVerifying {
+extension KnownHostsManager: SSHHostKeyVerifying {
     nonisolated package func verify(
         _ candidate: SSHHostKeyCandidate
     ) -> SSHHostKeyVerificationDecision {
@@ -115,7 +115,7 @@ package extension KnownHostsManager: SSHHostKeyVerifying {
     }
 }
 
-package extension RemoteMoshManager: SSHMoshBootstrapping {}
+extension RemoteMoshManager: SSHMoshBootstrapping {}
 
 #if DEBUG
 package extension SSHClientFactory {
@@ -154,14 +154,14 @@ package extension SSHClient {
     }
 }
 
-nonisolated struct TestingSSHHostKeyVerifier: SSHHostKeyVerifying {
-    func verify(_ candidate: SSHHostKeyCandidate) -> SSHHostKeyVerificationDecision {
+nonisolated package struct TestingSSHHostKeyVerifier: SSHHostKeyVerifying {
+    package func verify(_ candidate: SSHHostKeyCandidate) -> SSHHostKeyVerificationDecision {
         .trusted
     }
 }
 
-actor TestingSSHMoshBootstrap: SSHMoshBootstrapping {
-    func bootstrapConnectInfo(
+package actor TestingSSHMoshBootstrap: SSHMoshBootstrapping {
+    package func bootstrapConnectInfo(
         terminalType: RemoteTerminalType,
         startCommand: String?,
         portRange: ClosedRange<Int>,
@@ -170,7 +170,7 @@ actor TestingSSHMoshBootstrap: SSHMoshBootstrapping {
         throw SSHError.moshBootstrapFailed("Unavailable in this test")
     }
 
-    func terminateMoshServer(
+    package func terminateMoshServer(
         pid: Int32,
         execute: @escaping SSHMoshCommandExecutor
     ) async {}

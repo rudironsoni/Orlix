@@ -15,8 +15,8 @@ final package class SSHSFTPAdapter {
     }
 
     private struct ClientRegistration {
-        let client: SSHClient
-        let ownership: ClientOwnership
+        package let client: SSHClient
+        package let ownership: ClientOwnership
     }
 
     private var clients: [UUID: ClientRegistration] = [:]

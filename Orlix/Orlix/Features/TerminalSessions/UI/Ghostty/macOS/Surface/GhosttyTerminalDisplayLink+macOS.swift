@@ -117,17 +117,17 @@ package extension GhosttyTerminalView {
 // MARK: - Weak Reference Wrapper for CVDisplayLink callback
 
 /// Thread-safe weak reference wrapper for use in C callbacks
-final class DisplayLinkCallbackContext: @unchecked Sendable {
+final package class DisplayLinkCallbackContext: @unchecked Sendable {
     private let lock = NSLock()
     private let weakViewTable = NSHashTable<GhosttyTerminalView>.weakObjects()
 
-    init(view: GhosttyTerminalView) {
+    package init(view: GhosttyTerminalView) {
         lock.lock()
         weakViewTable.add(view)
         lock.unlock()
     }
 
-    var view: GhosttyTerminalView? {
+    package var view: GhosttyTerminalView? {
         lock.lock()
         defer { lock.unlock() }
         return weakViewTable.allObjects.first

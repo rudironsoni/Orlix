@@ -3,14 +3,14 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated enum LocalSSHDiscoverySourceStatus: Sendable {
+nonisolated package enum LocalSSHDiscoverySourceStatus: Sendable {
     case bonjourStarted
     case bonjourFinished
     case probeStarted
     case probeFinished
 }
 
-nonisolated enum LocalSSHDiscoveryEvent: Sendable {
+nonisolated package enum LocalSSHDiscoveryEvent: Sendable {
     case scanningStarted
     case sourceStatus(LocalSSHDiscoverySourceStatus)
     case hostFound(DiscoveredSSHHost)
@@ -18,19 +18,19 @@ nonisolated enum LocalSSHDiscoveryEvent: Sendable {
     case scanningFinished
 }
 
-nonisolated enum LocalSSHDiscoveryNetworkAvailability: Equatable, Sendable {
+nonisolated package enum LocalSSHDiscoveryNetworkAvailability: Equatable, Sendable {
     case supported
     case unsupported
 }
 
-nonisolated struct LocalSSHDiscoveryStopRequest: Sendable {
+nonisolated package struct LocalSSHDiscoveryStopRequest: Sendable {
     private let stop: @MainActor @Sendable () -> Void
 
-    init(stop: @escaping @MainActor @Sendable () -> Void) {
+    package init(stop: @escaping @MainActor @Sendable () -> Void) {
         self.stop = stop
     }
 
-    func perform() {
+    package func perform() {
         Task { @MainActor in
             stop()
         }
@@ -38,7 +38,7 @@ nonisolated struct LocalSSHDiscoveryStopRequest: Sendable {
 }
 
 @MainActor
-protocol LocalSSHDiscovering: AnyObject {
+package protocol LocalSSHDiscovering: AnyObject {
     var ownerReleaseStopRequest: LocalSSHDiscoveryStopRequest { get }
 
     func startScan() -> AsyncStream<LocalSSHDiscoveryEvent>
@@ -46,8 +46,8 @@ protocol LocalSSHDiscovering: AnyObject {
 }
 
 @MainActor
-struct LocalSSHDiscoveryDependencies {
-    let service: any LocalSSHDiscovering
-    let networkAvailability: () -> LocalSSHDiscoveryNetworkAvailability
-    let makeScanID: () -> UUID
+package struct LocalSSHDiscoveryDependencies {
+    package let service: any LocalSSHDiscovering
+    package let networkAvailability: () -> LocalSSHDiscoveryNetworkAvailability
+    package let makeScanID: () -> UUID
 }

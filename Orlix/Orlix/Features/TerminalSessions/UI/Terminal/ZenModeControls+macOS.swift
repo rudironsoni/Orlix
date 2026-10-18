@@ -6,43 +6,43 @@ import Foundation
 import OrlixModels
 import OrlixSettings
 #endif
-struct ZenModePanel: View {
-    let width: CGFloat
-    let serverName: String
-    let statusText: String
-    let statusColor: Color
-    let selectedView: ConnectionViewTabID
-    let selectedViewBinding: Binding<ConnectionViewTabID>
-    let viewTabs: [ConnectionViewTabID]
-    let terminalTabs: [TerminalTab]
-    let selectedTerminalTabId: Binding<UUID?>
-    let terminalTabTitle: (TerminalTab) -> String
-    let paneState: (TerminalTab) -> TerminalPaneState?
-    let fileTabs: [RemoteFileTab]
-    let selectedFileTabId: Binding<UUID?>
-    let fileTabTitle: (RemoteFileTab) -> String
-    let onPreviousTab: () -> Void
-    let onNextTab: () -> Void
-    let onNewTerminalTab: () -> Void
-    let onCloseTerminalTab: (TerminalTab) -> Void
-    let onNewFileTab: () -> Void
-    let onCloseFileTab: (RemoteFileTab) -> Void
-    let onSelectFileTab: (RemoteFileTab) -> Void
-    let onSplitRight: () -> Void
-    let onSplitDown: () -> Void
-    let onClosePane: () -> Void
-    let canSplit: Bool
-    let canClosePane: Bool
-    let isSidebarVisible: Bool
-    let onToggleSidebar: () -> Void
-    let onDisconnect: () -> Void
-    let canFilesGoUp: Bool
-    let filesShowHiddenBinding: Binding<Bool>
-    let onFilesGoUp: () -> Void
-    let onFilesRefresh: () -> Void
-    let onExitZen: () -> Void
+package struct ZenModePanel: View {
+    package let width: CGFloat
+    package let serverName: String
+    package let statusText: String
+    package let statusColor: Color
+    package let selectedView: ConnectionViewTabID
+    package let selectedViewBinding: Binding<ConnectionViewTabID>
+    package let viewTabs: [ConnectionViewTabID]
+    package let terminalTabs: [TerminalTab]
+    package let selectedTerminalTabId: Binding<UUID?>
+    package let terminalTabTitle: (TerminalTab) -> String
+    package let paneState: (TerminalTab) -> TerminalPaneState?
+    package let fileTabs: [RemoteFileTab]
+    package let selectedFileTabId: Binding<UUID?>
+    package let fileTabTitle: (RemoteFileTab) -> String
+    package let onPreviousTab: () -> Void
+    package let onNextTab: () -> Void
+    package let onNewTerminalTab: () -> Void
+    package let onCloseTerminalTab: (TerminalTab) -> Void
+    package let onNewFileTab: () -> Void
+    package let onCloseFileTab: (RemoteFileTab) -> Void
+    package let onSelectFileTab: (RemoteFileTab) -> Void
+    package let onSplitRight: () -> Void
+    package let onSplitDown: () -> Void
+    package let onClosePane: () -> Void
+    package let canSplit: Bool
+    package let canClosePane: Bool
+    package let isSidebarVisible: Bool
+    package let onToggleSidebar: () -> Void
+    package let onDisconnect: () -> Void
+    package let canFilesGoUp: Bool
+    package let filesShowHiddenBinding: Binding<Bool>
+    package let onFilesGoUp: () -> Void
+    package let onFilesRefresh: () -> Void
+    package let onExitZen: () -> Void
 
-    var body: some View {
+    package var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 panelContent

@@ -3,8 +3,8 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension RemoteFileOperationCoordinator {
-    func upload(
+package extension RemoteFileOperationCoordinator {
+    package func upload(
         urls: [URL],
         to destinationPath: String,
         initialMessage: String,
@@ -29,7 +29,7 @@ extension RemoteFileOperationCoordinator {
         }
     }
 
-    func transferDroppedItems(
+    package func transferDroppedItems(
         to destinationPath: String,
         browser: RemoteFileBrowserStore,
         tab: RemoteFileTab,
@@ -53,7 +53,7 @@ extension RemoteFileOperationCoordinator {
         }
     }
 
-    func createFolder(
+    package func createFolder(
         named proposedName: String,
         in destinationPath: String,
         browser: RemoteFileBrowserStore,
@@ -75,7 +75,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func createUniqueFolder(
+    package func createUniqueFolder(
         in proposedDirectory: String,
         browser: RemoteFileBrowserStore,
         tab: RemoteFileTab,
@@ -105,7 +105,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func rename(
+    package func rename(
         _ entry: RemoteFileEntry,
         to proposedName: String,
         browser: RemoteFileBrowserStore,
@@ -137,7 +137,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func move(
+    package func move(
         _ entry: RemoteFileEntry,
         to proposedDirectory: String,
         browser: RemoteFileBrowserStore,
@@ -170,7 +170,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func delete(
+    package func delete(
         _ entries: [RemoteFileEntry],
         browser: RemoteFileBrowserStore,
         tab: RemoteFileTab,
@@ -194,7 +194,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func changePermissions(
+    package func changePermissions(
         for entry: RemoteFileEntry,
         draft: RemoteFilePermissionDraft,
         preservedBits: UInt32,
@@ -220,7 +220,7 @@ extension RemoteFileOperationCoordinator {
         )
     }
 
-    func download(
+    package func download(
         _ entry: RemoteFileEntry,
         to destinationURL: URL,
         browser: RemoteFileBrowserStore,
@@ -242,7 +242,7 @@ extension RemoteFileOperationCoordinator {
     }
 
     @discardableResult
-    func prepareFile(
+    package func prepareFile(
         _ entry: RemoteFileEntry,
         purpose: PreparedFilePurpose,
         browser: RemoteFileBrowserStore,
@@ -310,5 +310,5 @@ private func uniqueFolderName(in entries: [RemoteFileEntry]) -> String {
 
 @MainActor
 private final class PreparedFileBox {
-    var file: RemoteFileOperationCoordinator.PreparedFile?
+    package var file: RemoteFileOperationCoordinator.PreparedFile?
 }

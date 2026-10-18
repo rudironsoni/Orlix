@@ -79,7 +79,7 @@ nonisolated package enum TerminalClipboardConfirmationDecision: Equatable, Senda
     case allow
 }
 
-nonisolated enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
+nonisolated package enum TerminalClipboardPresentationRetryAction: Equatable, Sendable {
     case retry(nextAttempt: Int)
     case cancel
 }
@@ -98,8 +98,8 @@ final package class TerminalClipboardConfirmationQueue {
     static package let maximumRequestCount = 8
 
     package struct Request: Identifiable {
-        let id: UUID
-        let kind: TerminalClipboardConfirmationKind
+        package let id: UUID
+        package let kind: TerminalClipboardConfirmationKind
         fileprivate let completion: (TerminalClipboardConfirmationDecision) -> Void
     }
 

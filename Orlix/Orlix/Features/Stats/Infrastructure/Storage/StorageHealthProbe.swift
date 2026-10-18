@@ -4,22 +4,22 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated enum StorageHealthProbe {
+nonisolated package enum StorageHealthProbe {
     private static let timeout: Duration = .seconds(12)
 
     private enum Marker {
-        static let smartBegin = "__VVTERM_SMARTCTL_BEGIN__"
-        static let smartEnd = "__VVTERM_SMARTCTL_END__"
-        static let smartMissing = "__VVTERM_SMARTCTL_TOOL_MISSING__"
-        static let emmcBegin = "__VVTERM_EMMC_BEGIN__"
-        static let emmcEnd = "__VVTERM_EMMC_END__"
-        static let emmcMissing = "__VVTERM_EMMC_TOOL_MISSING__"
-        static let nativeBegin = "__VVTERM_STORAGE_NATIVE_BEGIN__"
-        static let nativeEnd = "__VVTERM_STORAGE_NATIVE_END__"
-        static let nativeMissing = "__VVTERM_STORAGE_NATIVE_TOOL_MISSING__"
+        static package let smartBegin = "__VVTERM_SMARTCTL_BEGIN__"
+        static package let smartEnd = "__VVTERM_SMARTCTL_END__"
+        static package let smartMissing = "__VVTERM_SMARTCTL_TOOL_MISSING__"
+        static package let emmcBegin = "__VVTERM_EMMC_BEGIN__"
+        static package let emmcEnd = "__VVTERM_EMMC_END__"
+        static package let emmcMissing = "__VVTERM_EMMC_TOOL_MISSING__"
+        static package let nativeBegin = "__VVTERM_STORAGE_NATIVE_BEGIN__"
+        static package let nativeEnd = "__VVTERM_STORAGE_NATIVE_END__"
+        static package let nativeMissing = "__VVTERM_STORAGE_NATIVE_TOOL_MISSING__"
     }
 
-    static func collect(
+    static package func collect(
         client: SSHClient,
         target: StorageHealthProbeTarget
     ) async throws -> StorageDeviceHealthResult {
@@ -81,7 +81,7 @@ nonisolated enum StorageHealthProbe {
         }
     }
 
-    static func linuxCommand(devicePath: String, isEMMC: Bool) -> String {
+    static package func linuxCommand(devicePath: String, isEMMC: Bool) -> String {
         let device = RemoteTerminalBootstrap.shellQuoted(devicePath)
         var script = basePOSIXScript(device: device)
         if isEMMC {
@@ -99,7 +99,7 @@ nonisolated enum StorageHealthProbe {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func darwinCommand(
+    static package func darwinCommand(
         nativeIdentifier: String,
         smartctlDevicePath: String?
     ) -> String {
@@ -122,7 +122,7 @@ nonisolated enum StorageHealthProbe {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func bsdCommand(platform: BSDPlatform, devicePath: String) -> String {
+    static package func bsdCommand(platform: BSDPlatform, devicePath: String) -> String {
         let device = RemoteTerminalBootstrap.shellQuoted(devicePath)
         let nativeCommand: String
         let nativeTool: String
@@ -152,7 +152,7 @@ nonisolated enum StorageHealthProbe {
         return RemoteTerminalBootstrap.wrapPOSIXShellCommand(script)
     }
 
-    static func windowsScript(diskNumber: UInt32) -> String {
+    static package func windowsScript(diskNumber: UInt32) -> String {
         """
         $ErrorActionPreference = 'Stop'
         Write-Output '\(Marker.nativeBegin)'
@@ -205,7 +205,7 @@ nonisolated enum StorageHealthProbe {
         """
     }
 
-    nonisolated enum BSDPlatform: Hashable, Sendable {
+    nonisolated package enum BSDPlatform: Hashable, Sendable {
         case freeBSD
         case openBSD
         case netBSD

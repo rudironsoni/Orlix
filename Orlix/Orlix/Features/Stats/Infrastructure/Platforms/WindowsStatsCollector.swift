@@ -8,7 +8,7 @@ import OrlixSSH
 
 /// Stats collector for Windows systems via OpenSSH.
 /// Prefers cmd.exe-friendly probes on cmd-hosted sessions and PowerShell on PowerShell-hosted sessions.
-nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
+nonisolated package struct WindowsStatsCollector: PlatformStatsCollector {
     private let shellInfoTimeout: Duration = .seconds(5)
     private let cpuTimeout: Duration = .seconds(8)
     private let memoryTimeout: Duration = .seconds(8)
@@ -20,7 +20,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
     private let gpuTimeout: Duration = .seconds(8)
     private let periodicProcessLimit = 24
 
-    func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
+    package func getSystemInfo(client: SSHClient) async throws -> (hostname: String, osInfo: String, cpuCores: Int) {
         let environment = await client.remoteEnvironment()
         let hostname = ((try? await executeCMD("hostname", using: client, timeout: shellInfoTimeout))?
             .trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
@@ -55,7 +55,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         return (hostname, osInfo, cpuCoresCMD)
     }
 
-    func collectProfile(client: SSHClient) async throws -> HardwareProfile {
+    package func collectProfile(client: SSHClient) async throws -> HardwareProfile {
         let systemInfo = try await getSystemInfo(client: client)
 
         let cpuOutput = (try? await executePowerShell(
@@ -120,7 +120,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         )
     }
 
-    func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
+    package func collectStats(client: SSHClient, context: StatsCollectionContext) async throws -> ServerStats {
         var stats = ServerStats()
         let environment = await client.remoteEnvironment()
         let preferCMD = environment.shellProfile.family == .cmd
@@ -306,7 +306,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         return stats
     }
 
-    func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
+    package func collectProcesses(client: SSHClient, context: StatsCollectionContext) async throws -> [ProcessInfo] {
         if let processOutput = try? await executePowerShell(
             using: client,
             script: powerShellProcessScript(limit: nil),
@@ -552,7 +552,7 @@ nonisolated struct WindowsStatsCollector: PlatformStatsCollector {
         try await client.execute(command, timeout: timeout)
     }
 
-    func volumeMetadata(
+    package func volumeMetadata(
         client: SSHClient,
         context: StatsCollectionContext
     ) async -> [String: VolumeCollectionMetadata] {

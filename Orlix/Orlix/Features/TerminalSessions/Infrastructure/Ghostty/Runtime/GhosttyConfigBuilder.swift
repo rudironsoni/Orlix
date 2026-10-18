@@ -22,7 +22,7 @@ package extension Ghostty {
             "U+30000-U+323AF"
         ]
 
-        static func sanitizedFontFamilies(_ candidates: [String]) -> [String] {
+        static package func sanitizedFontFamilies(_ candidates: [String]) -> [String] {
             var seen = Set<String>()
             var families: [String] = []
 
@@ -36,7 +36,7 @@ package extension Ghostty {
             return families
         }
 
-        static func escapedFontFamilyValue(_ family: String) -> String {
+        static package func escapedFontFamilyValue(_ family: String) -> String {
             family
                 .replacingOccurrences(of: "\r", with: "")
                 .replacingOccurrences(of: "\n", with: "")
@@ -44,13 +44,13 @@ package extension Ghostty {
                 .replacingOccurrences(of: "\"", with: "\\\"")
         }
 
-        static func fontFamilyLines(_ families: [String]) -> String {
+        static package func fontFamilyLines(_ families: [String]) -> String {
             sanitizedFontFamilies(families)
                 .map { "font-family = \"\(escapedFontFamilyValue($0))\"" }
                 .joined(separator: "\n")
         }
 
-        static func fontCodepointMapLine(cjkFamily: String?) -> String {
+        static package func fontCodepointMapLine(cjkFamily: String?) -> String {
             guard let cjkFamily else { return "" }
             let family = cjkFamily.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !family.isEmpty else { return "" }
@@ -59,7 +59,7 @@ package extension Ghostty {
             return "font-codepoint-map = \"\(ranges)=\(escapedFontFamilyValue(family))\""
         }
 
-        static func optionAsAltConfigValue(_ mode: TerminalOptionAsAltMode) -> String {
+        static package func optionAsAltConfigValue(_ mode: TerminalOptionAsAltMode) -> String {
             switch mode {
             case .none: "false"
             case .left: "left"
@@ -68,7 +68,7 @@ package extension Ghostty {
             }
         }
 
-        static func configContent(
+        static package func configContent(
             fontSelection: TerminalFontRuntimeSelection,
             fontSize: Double,
             contentPadding: TerminalContentPadding = .defaultValue,

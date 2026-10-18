@@ -12,19 +12,19 @@ import OrlixSettings
 #endif
 // MARK: - Environment Filter Menu
 
-struct EnvironmentFilterMenu: View {
-    @Binding var selected: ServerEnvironment?
-    let environments: [ServerEnvironment]
-    let serverCounts: [UUID: Int]
-    let onCreateCustom: () -> Void
-    let onEditCustom: (ServerEnvironment) -> Void
-    let onDeleteCustom: (ServerEnvironment) -> Void
+package struct EnvironmentFilterMenu: View {
+    @Binding package var selected: ServerEnvironment?
+    package let environments: [ServerEnvironment]
+    package let serverCounts: [UUID: Int]
+    package let onCreateCustom: () -> Void
+    package let onEditCustom: (ServerEnvironment) -> Void
+    package let onDeleteCustom: (ServerEnvironment) -> Void
 
     private var totalCount: Int {
         serverCounts.values.reduce(0, +)
     }
 
-    var body: some View {
+    package var body: some View {
         Menu {
             // Built-in environments
             ForEach(ServerEnvironment.builtInEnvironments) { env in

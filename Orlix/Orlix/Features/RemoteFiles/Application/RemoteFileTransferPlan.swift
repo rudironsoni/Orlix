@@ -3,18 +3,18 @@ import Foundation
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-nonisolated struct RemoteFileTransferLimits: Sendable {
-    let maxDepth: Int
-    let maxEntries: Int
-    let maxEntriesPerDirectory: Int
-    let maxFileBytes: UInt64
-    let maxAggregateBytes: UInt64
-    let maxElapsed: Duration
-    let minimumFreeBytes: UInt64
+nonisolated package struct RemoteFileTransferLimits: Sendable {
+    package let maxDepth: Int
+    package let maxEntries: Int
+    package let maxEntriesPerDirectory: Int
+    package let maxFileBytes: UInt64
+    package let maxAggregateBytes: UInt64
+    package let maxElapsed: Duration
+    package let minimumFreeBytes: UInt64
 
     // Int64.max is a representation safety ceiling, not a product file-size limit.
     // It keeps byte counts compatible with Foundation and POSIX file APIs.
-    static let standard = RemoteFileTransferLimits(
+    static package let standard = RemoteFileTransferLimits(
         maxDepth: 64,
         maxEntries: 1_000_000,
         maxEntriesPerDirectory: 100_000,
@@ -25,7 +25,7 @@ nonisolated struct RemoteFileTransferLimits: Sendable {
     )
 }
 
-nonisolated enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
+nonisolated package enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
     case depthLimit(maximum: Int)
     case entryLimit(maximum: Int)
     case directoryEntryLimit(maximum: Int)
@@ -35,7 +35,7 @@ nonisolated enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
     case insufficientCapacity(requiredBytes: UInt64, availableBytes: UInt64)
     case byteCountOverflow
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .depthLimit(let maximum):
             return String(
@@ -80,48 +80,48 @@ nonisolated enum RemoteFileTransferError: LocalizedError, Equatable, Sendable {
     }
 }
 
-nonisolated struct RemoteFileTransferPlanNode: Sendable {
-    let entry: RemoteFileEntry
-    let children: [RemoteFileTransferPlanNode]
+nonisolated package struct RemoteFileTransferPlanNode: Sendable {
+    package let entry: RemoteFileEntry
+    package let children: [RemoteFileTransferPlanNode]
 
-    var unitCount: Int {
+    package var unitCount: Int {
         children.reduce(1) { $0 + $1.unitCount }
     }
 }
 
-nonisolated struct LocalFileIdentity: Hashable, Sendable {
-    let device: UInt64
-    let inode: UInt64
+nonisolated package struct LocalFileIdentity: Hashable, Sendable {
+    package let device: UInt64
+    package let inode: UInt64
 }
 
-nonisolated struct LocalUploadPlanNode: Sendable {
-    enum Kind: Sendable {
+nonisolated package struct LocalUploadPlanNode: Sendable {
+    package enum Kind: Sendable {
         case regularFile(byteCount: UInt64)
         case directory
     }
 
-    let sourceURL: URL
-    let name: String
-    let identity: LocalFileIdentity
-    let kind: Kind
-    let children: [LocalUploadPlanNode]
+    package let sourceURL: URL
+    package let name: String
+    package let identity: LocalFileIdentity
+    package let kind: Kind
+    package let children: [LocalUploadPlanNode]
 
-    var unitCount: Int {
+    package var unitCount: Int {
         children.reduce(1) { $0 + $1.unitCount }
     }
 }
 
-nonisolated struct RemoteFileTraversalBudget: Sendable {
+nonisolated package struct RemoteFileTraversalBudget: Sendable {
     private(set) var admittedEntries = 0
-    let limits: RemoteFileTransferLimits
+    package let limits: RemoteFileTransferLimits
     private let deadline: ContinuousClock.Instant
 
-    init(limits: RemoteFileTransferLimits = .standard) {
+    package init(limits: RemoteFileTransferLimits = .standard) {
         self.limits = limits
         deadline = ContinuousClock.now.advanced(by: limits.maxElapsed)
     }
 
-    mutating func admit(depth: Int) throws {
+    mutating package func admit(depth: Int) throws {
         try checkTime()
         guard depth <= limits.maxDepth else {
             throw RemoteFileTransferError.depthLimit(maximum: limits.maxDepth)
@@ -132,7 +132,7 @@ nonisolated struct RemoteFileTraversalBudget: Sendable {
         admittedEntries += 1
     }
 
-    mutating func directoryReadLimit() throws -> Int {
+    mutating package func directoryReadLimit() throws -> Int {
         try checkTime()
         let remaining = limits.maxEntries - admittedEntries
         guard remaining > 0 else {
@@ -141,22 +141,22 @@ nonisolated struct RemoteFileTraversalBudget: Sendable {
         return min(remaining, limits.maxEntriesPerDirectory)
     }
 
-    mutating func checkTime() throws {
+    mutating package func checkTime() throws {
         guard ContinuousClock.now < deadline else {
             throw RemoteFileTransferError.elapsedTimeLimit
         }
     }
 }
 
-nonisolated struct RemoteFileTransferByteBudget: Sendable {
+nonisolated package struct RemoteFileTransferByteBudget: Sendable {
     private(set) var consumedBytes: UInt64 = 0
-    let limits: RemoteFileTransferLimits
+    package let limits: RemoteFileTransferLimits
 
-    init(limits: RemoteFileTransferLimits = .standard) {
+    package init(limits: RemoteFileTransferLimits = .standard) {
         self.limits = limits
     }
 
-    func downloadLimit(
+    package func downloadLimit(
         reportedBytes: UInt64?,
         availableCapacity: UInt64
     ) throws -> UInt64 {
@@ -194,7 +194,7 @@ nonisolated struct RemoteFileTransferByteBudget: Sendable {
         return limit
     }
 
-    mutating func record(_ byteCount: UInt64) throws {
+    mutating package func record(_ byteCount: UInt64) throws {
         guard byteCount <= limits.maxFileBytes else {
             throw RemoteFileTransferError.fileSizeLimit(maximumBytes: limits.maxFileBytes)
         }
@@ -205,7 +205,7 @@ nonisolated struct RemoteFileTransferByteBudget: Sendable {
         consumedBytes += byteCount
     }
 
-    func validateUploadCapacity(_ capacity: RemoteFileFilesystemCapacity) throws {
+    package func validateUploadCapacity(_ capacity: RemoteFileFilesystemCapacity) throws {
         guard case .known(let status) = capacity else { return }
         let usableBytes = status.availableBytes > limits.minimumFreeBytes
             ? status.availableBytes - limits.minimumFreeBytes

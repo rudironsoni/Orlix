@@ -9,7 +9,7 @@
 import UIKit
 
 @available(iOS 16.0, *)
-package extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
+extension GhosttyTerminalView: UIEditMenuInteractionDelegate {
     package func editMenuInteraction(
         _ interaction: UIEditMenuInteraction,
         menuFor configuration: UIEditMenuConfiguration,

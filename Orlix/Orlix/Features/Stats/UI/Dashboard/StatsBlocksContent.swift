@@ -3,10 +3,10 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct StatsAppearancePreviewContent: View {
-    let preferences: StatsPreferences
+package struct StatsAppearancePreviewContent: View {
+    package let preferences: StatsPreferences
 
-    var body: some View {
+    package var body: some View {
         let snapshot = StatsPreviewFixture.presentationSnapshot
 
         StatsBlocksContent(
@@ -36,8 +36,8 @@ struct StatsAppearancePreviewContent: View {
     }
 }
 
-nonisolated enum StatsGridLayoutPolicy {
-    static func minimumGridWidth(
+nonisolated package enum StatsGridLayoutPolicy {
+    static package func minimumGridWidth(
         for columnCount: Int,
         minimumColumnWidth: CGFloat,
         spacing: CGFloat
@@ -47,7 +47,7 @@ nonisolated enum StatsGridLayoutPolicy {
             + CGFloat(safeColumnCount - 1) * max(0, spacing)
     }
 
-    static func columnCount(
+    static package func columnCount(
         for availableWidth: CGFloat,
         minimumColumnWidth: CGFloat,
         spacing: CGFloat
@@ -73,19 +73,19 @@ nonisolated enum StatsGridLayoutPolicy {
 
 @available(iOS 16.0, macOS 13.0, *)
 private struct StatsCardsGridLayout: Layout {
-    let minimumColumnWidth: CGFloat
-    let spacing: CGFloat
-    let preferredColumnSpans: [Int]
+    package let minimumColumnWidth: CGFloat
+    package let spacing: CGFloat
+    package let preferredColumnSpans: [Int]
 
-    func makeCache(subviews: Subviews) -> Cache {
+    package func makeCache(subviews: Subviews) -> Cache {
         Cache()
     }
 
-    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+    package func updateCache(_ cache: inout Cache, subviews: Subviews) {
         cache.measurement = nil
     }
 
-    func sizeThatFits(
+    package func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
         cache: inout Cache
@@ -95,7 +95,7 @@ private struct StatsCardsGridLayout: Layout {
         return measurement.size
     }
 
-    func placeSubviews(
+    package func placeSubviews(
         in bounds: CGRect,
         proposal: ProposedViewSize,
         subviews: Subviews,
@@ -186,25 +186,25 @@ private struct StatsCardsGridLayout: Layout {
         return max(0, proposedWidth)
     }
 
-    struct Item {
-        let index: Int
-        let row: Int
-        let column: Int
-        let columnSpan: Int
+    package struct Item {
+        package let index: Int
+        package let row: Int
+        package let column: Int
+        package let columnSpan: Int
     }
 
-    struct Cache {
-        var measurement: Measurement?
+    package struct Cache {
+        package var measurement: Measurement?
     }
 
-    struct Measurement {
-        let size: CGSize
-        let columnWidth: CGFloat
-        let items: [Item]
-        let rowHeights: [CGFloat]
-        let spacing: CGFloat
+    package struct Measurement {
+        package let size: CGSize
+        package let columnWidth: CGFloat
+        package let items: [Item]
+        package let rowHeights: [CGFloat]
+        package let spacing: CGFloat
 
-        func width(forColumnSpan span: Int) -> CGFloat {
+        package func width(forColumnSpan span: Int) -> CGFloat {
             columnWidth * CGFloat(span) + spacing * CGFloat(span - 1)
         }
     }

@@ -4,8 +4,8 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-nonisolated extension WindowsStatsCollector {
-    func powerShellProcessScript(limit: Int?) -> String {
+nonisolated package extension WindowsStatsCollector {
+    package func powerShellProcessScript(limit: Int?) -> String {
         let limitClause = limit.map { " | Select-Object -First \($0)" } ?? ""
         return """
         $os = Get-CimInstance Win32_OperatingSystem;
@@ -26,7 +26,7 @@ nonisolated extension WindowsStatsCollector {
         """
     }
 
-    func periodicStatsPowerShellScript() -> String {
+    package func periodicStatsPowerShellScript() -> String {
         """
         try {
           $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop;
@@ -52,7 +52,7 @@ nonisolated extension WindowsStatsCollector {
         """
     }
 
-    func nvidiaSMIQueryScript(fields: String) -> String {
+    package func nvidiaSMIQueryScript(fields: String) -> String {
         """
         $nvidia = Get-Command nvidia-smi -ErrorAction SilentlyContinue;
         if ($nvidia) {
@@ -61,7 +61,7 @@ nonisolated extension WindowsStatsCollector {
         """
     }
 
-    func windowsGPUCounterScript() -> String {
+    package func windowsGPUCounterScript() -> String {
         """
         $rows = @{};
         function Ensure-Row([string]$phys) {
@@ -109,7 +109,7 @@ nonisolated extension WindowsStatsCollector {
         """
     }
 
-    func powerShellCommand(using client: SSHClient, script: String) async throws -> String {
+    package func powerShellCommand(using client: SSHClient, script: String) async throws -> String {
         let environment = await client.remoteEnvironment()
         if environment.shellProfile.family == .powershell {
             return script

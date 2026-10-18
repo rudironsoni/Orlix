@@ -16,10 +16,10 @@ nonisolated package struct OpenSourceAttribution: Decodable, Equatable, Identifi
     }
 
     package struct Document: Equatable, Identifiable, Sendable {
-        let attribution: OpenSourceAttribution
-        let legalText: String
+        package let attribution: OpenSourceAttribution
+        package let legalText: String
 
-        var id: String { attribution.id }
+        package var id: String { attribution.id }
     }
 
     package let id: String

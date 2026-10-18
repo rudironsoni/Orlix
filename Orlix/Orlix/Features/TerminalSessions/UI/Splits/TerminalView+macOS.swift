@@ -6,8 +6,8 @@ import AppKit
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-extension View {
-    func terminalCommandFocusValues(
+package extension View {
+    package func terminalCommandFocusValues(
         activeServerId: UUID?,
         activePaneId: UUID?,
         splitActions: TerminalSplitActions?
@@ -18,7 +18,7 @@ extension View {
             .focusedSceneValue(\.terminalSplitActions, splitActions)
     }
 
-    func terminalKeyboardAvoidance(
+    package func terminalKeyboardAvoidance(
         focusedPaneId: UUID?,
         paneIds: [UUID],
         terminalSurfaceChange: TerminalSurfaceStoreChange?,
@@ -31,19 +31,19 @@ extension View {
 // MARK: - SSH Terminal Pane Wrapper
 
 /// Wraps a remote connection and Ghostty terminal for a pane.
-struct RemoteTerminalPaneWrapper: NSViewRepresentable {
-    let paneId: UUID
-    let server: Server
-    let credentials: ServerCredentials
-    let tabManager: TerminalTabManager
-    let isActive: Bool
-    let terminalContextMenuActions: TerminalContextMenuActions
-    let onProcessExit: () -> Void
-    let onReady: () -> Void
+package struct RemoteTerminalPaneWrapper: NSViewRepresentable {
+    package let paneId: UUID
+    package let server: Server
+    package let credentials: ServerCredentials
+    package let tabManager: TerminalTabManager
+    package let isActive: Bool
+    package let terminalContextMenuActions: TerminalContextMenuActions
+    package let onProcessExit: () -> Void
+    package let onReady: () -> Void
 
-    @EnvironmentObject var ghosttyApp: GhosttyRuntime
+    @EnvironmentObject package var ghosttyApp: GhosttyRuntime
 
-    func makeNSView(context: Context) -> NSView {
+    package func makeNSView(context: Context) -> NSView {
         // Ensure Ghostty app is ready
         guard let app = ghosttyApp.app else {
             return NSView(frame: .zero)
@@ -162,7 +162,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         }
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         if let scrollView = nsView as? TerminalScrollView {
             scrollView.shouldOwnFirstResponder = isActive
             let terminalView = scrollView.surfaceView
@@ -174,7 +174,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         }
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: TerminalPaneConnectionCoordinator) {
+    static package func dismantleNSView(_ nsView: NSView, coordinator: TerminalPaneConnectionCoordinator) {
         guard let scrollView = nsView as? TerminalScrollView else { return }
         let terminal = scrollView.surfaceView
         let paneStillExists = coordinator.tabManager.sessionState
@@ -192,7 +192,7 @@ struct RemoteTerminalPaneWrapper: NSViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> TerminalPaneConnectionCoordinator {
+    package func makeCoordinator() -> TerminalPaneConnectionCoordinator {
         TerminalPaneConnectionCoordinator(
             paneId: paneId,
             server: server,

@@ -6,12 +6,12 @@ import OrlixSettings
 
 // MARK: - Workspace Switcher Sheet
 
-struct WorkspaceSwitcherSheet: View {
+package struct WorkspaceSwitcherSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var storeManager: StoreManager
-    let serverManager: ServerManager
+    package let serverManager: ServerManager
     @ObservedObject private var stateStore: ServerStateStore
-    @Binding var selectedWorkspace: Workspace?
+    @Binding package var selectedWorkspace: Workspace?
 
     @State private var hoveredWorkspace: Workspace?
     @State private var showingCreateWorkspace = false
@@ -20,7 +20,7 @@ struct WorkspaceSwitcherSheet: View {
     @State private var workspaceToManageServers: Workspace?
     @State private var lockedWorkspaceAlert: Workspace?
 
-    init(
+    package init(
         serverManager: ServerManager,
         selectedWorkspace: Binding<Workspace?>
     ) {
@@ -29,7 +29,7 @@ struct WorkspaceSwitcherSheet: View {
         _selectedWorkspace = selectedWorkspace
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             DialogSheetHeader(title: "Workspaces") {
                 dismiss()
@@ -168,17 +168,17 @@ struct WorkspaceSwitcherSheet: View {
 
 // MARK: - Workspace Switcher Row
 
-struct WorkspaceSwitcherRow: View {
-    let workspace: Workspace
-    let isSelected: Bool
-    let isHovered: Bool
-    var isLocked: Bool = false
-    let serverCount: Int
-    let onSelect: () -> Void
-    let onEdit: () -> Void
-    var onLockedTap: (() -> Void)? = nil
-    var onManageServers: (() -> Void)? = nil
-    let onDeleteRequest: () -> Void
+package struct WorkspaceSwitcherRow: View {
+    package let workspace: Workspace
+    package let isSelected: Bool
+    package let isHovered: Bool
+    package var isLocked: Bool = false
+    package let serverCount: Int
+    package let onSelect: () -> Void
+    package let onEdit: () -> Void
+    package var onLockedTap: (() -> Void)? = nil
+    package var onManageServers: (() -> Void)? = nil
+    package let onDeleteRequest: () -> Void
 
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
@@ -194,7 +194,7 @@ struct WorkspaceSwitcherRow: View {
     }
     #endif
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 12) {
             // Icon or color indicator
             if isLocked {

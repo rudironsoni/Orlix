@@ -3,24 +3,24 @@ import SwiftUI
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct OpenSourceLicensesView: View {
-    @Environment(\.dismiss) var dismiss
+package struct OpenSourceLicensesView: View {
+    @Environment(\.dismiss) package var dismiss
 
-    let documents: [OpenSourceAttribution.Document]
+    package let documents: [OpenSourceAttribution.Document]
 
-    init(documents: [OpenSourceAttribution.Document] = OpenSourceAttributionCatalog.bundled) {
+    package init(documents: [OpenSourceAttribution.Document] = OpenSourceAttributionCatalog.bundled) {
         self.documents = documents
     }
 
-    var body: some View {
+    package var body: some View {
         platformBody
     }
 }
 
-struct OpenSourceLicensesContent: View {
-    let documents: [OpenSourceAttribution.Document]
+package struct OpenSourceLicensesContent: View {
+    package let documents: [OpenSourceAttribution.Document]
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 OpenSourceAcknowledgementHero()
@@ -53,9 +53,9 @@ struct OpenSourceLicensesContent: View {
 }
 
 private struct OpenSourceAttributionRow: View {
-    let document: OpenSourceAttribution.Document
+    package let document: OpenSourceAttribution.Document
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(document.attribution.name)
                 .foregroundStyle(.primary)
@@ -71,8 +71,8 @@ private struct OpenSourceAttributionRow: View {
     }
 }
 
-extension OpenSourceAttribution.Role {
-    var localizedTitle: String {
+package extension OpenSourceAttribution.Role {
+    package var localizedTitle: String {
         switch self {
         case .terminalEngine:
             String(localized: "Terminal engine")

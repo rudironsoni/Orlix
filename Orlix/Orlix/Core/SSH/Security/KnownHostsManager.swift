@@ -5,30 +5,30 @@ nonisolated final package class KnownHostsManager: @unchecked Sendable {
     static package let shared = KnownHostsManager()
 
     package struct Entry: Codable, Sendable {
-        let host: String
-        let port: Int
-        let fingerprint: String
-        let keyType: Int
-        let addedAt: Date
-        var lastSeenAt: Date
+        package let host: String
+        package let port: Int
+        package let fingerprint: String
+        package let keyType: Int
+        package let addedAt: Date
+        package var lastSeenAt: Date
 
-        var id: String { "\(host):\(port)" }
+        package var id: String { "\(host):\(port)" }
     }
 
     package struct Challenge: Identifiable, Equatable, Sendable {
-        enum Kind: Equatable, Sendable {
+        package enum Kind: Equatable, Sendable {
             case firstUse
             case changed(previousFingerprint: String)
         }
 
-        let id: UUID
-        let host: String
-        let port: Int
-        let fingerprint: String
-        let keyType: Int
-        let keyTypeName: String
-        let kind: Kind
-        let createdAt: Date
+        package let id: UUID
+        package let host: String
+        package let port: Int
+        package let fingerprint: String
+        package let keyType: Int
+        package let keyTypeName: String
+        package let kind: Kind
+        package let createdAt: Date
     }
 
     package enum VerificationResult: Equatable, Sendable {

@@ -46,7 +46,7 @@ nonisolated package struct TerminalTheme: Identifiable, Codable, Equatable, Send
     }
 }
 
-nonisolated enum TerminalThemeValidationState: Equatable, Sendable {
+nonisolated package enum TerminalThemeValidationState: Equatable, Sendable {
     case ready(normalizedContent: String)
     case needsRepair
 }

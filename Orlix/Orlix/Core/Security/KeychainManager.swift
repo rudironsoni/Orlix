@@ -21,16 +21,16 @@ final package class KeychainManager {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "Keychain")
 
     private struct CredentialBundle: Codable, Equatable {
-        let serverID: UUID
-        let binding: ServerCredentialBinding
-        let password: String?
-        let privateKey: Data?
-        let publicKey: Data?
-        let passphrase: String?
-        let cloudflareClientID: String?
-        let cloudflareClientSecret: String?
+        package let serverID: UUID
+        package let binding: ServerCredentialBinding
+        package let password: String?
+        package let privateKey: Data?
+        package let publicKey: Data?
+        package let passphrase: String?
+        package let cloudflareClientID: String?
+        package let cloudflareClientSecret: String?
 
-        init(credentials: ServerCredentials, server: Server) {
+        package init(credentials: ServerCredentials, server: Server) {
             serverID = server.id
             binding = ServerCredentialBinding(server: server)
             password = credentials.password
@@ -43,14 +43,14 @@ final package class KeychainManager {
     }
 
     private struct StagedServerCredentialTransaction: Codable {
-        struct Previous: Codable {
-            let bundle: CredentialBundle
-            let scope: KeychainStorageScope
+        package struct Previous: Codable {
+            package let bundle: CredentialBundle
+            package let scope: KeychainStorageScope
         }
 
-        let previous: Previous?
-        let replacement: CredentialBundle
-        let replacementScope: KeychainStorageScope
+        package let previous: Previous?
+        package let replacement: CredentialBundle
+        package let replacementScope: KeychainStorageScope
     }
 
     package init(
@@ -581,8 +581,8 @@ final package class KeychainManager {
     }
 
     private struct CredentialStorageResolution {
-        let scope: KeychainStorageScope
-        let bindingMatches: Bool
+        package let scope: KeychainStorageScope
+        package let bindingMatches: Bool
     }
 
     private var preferredStorageScope: KeychainStorageScope {
@@ -1221,11 +1221,11 @@ final package class KeychainManager {
     }
 }
 
-nonisolated struct ServerCredentialTransactionCommitError: Error, Sendable {
-    let originalErrorDescription: String
-    let rollbackErrorDescription: String
+nonisolated package struct ServerCredentialTransactionCommitError: Error, Sendable {
+    package let originalErrorDescription: String
+    package let rollbackErrorDescription: String
 
-    init(originalError: Error, rollbackError: Error) {
+    package init(originalError: Error, rollbackError: Error) {
         originalErrorDescription = String(describing: originalError)
         rollbackErrorDescription = String(describing: rollbackError)
     }

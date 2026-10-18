@@ -1,13 +1,13 @@
 import Foundation
 
-typealias VoiceInputRuntimeFactory = @MainActor () -> VoiceInputRuntimeOwner
+package typealias VoiceInputRuntimeFactory = @MainActor () -> VoiceInputRuntimeOwner
 
 @MainActor
-final class VoiceInputRuntimeOwner {
-    let audioService: AudioService
-    let recordingOperation: VoiceRecordingOperationCoordinator
+final package class VoiceInputRuntimeOwner {
+    package let audioService: AudioService
+    package let recordingOperation: VoiceRecordingOperationCoordinator
 
-    init(
+    package init(
         audioService: AudioService,
         recordingOperation: VoiceRecordingOperationCoordinator
     ) {
@@ -15,7 +15,7 @@ final class VoiceInputRuntimeOwner {
         self.recordingOperation = recordingOperation
     }
 
-    func cancel() {
+    package func cancel() {
         recordingOperation.cancel()
         audioService.cancelRecording()
     }

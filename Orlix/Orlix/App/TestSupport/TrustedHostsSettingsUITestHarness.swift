@@ -20,15 +20,15 @@ private final class TrustedHostsSettingsUITestRepository: KnownHostSettingsRepos
         ),
     ]
 
-    func loadKnownHosts() -> [KnownHostSettingsItem] {
+    package func loadKnownHosts() -> [KnownHostSettingsItem] {
         knownHosts
     }
 
-    func removeKnownHost(host: String, port: Int) {
+    package func removeKnownHost(host: String, port: Int) {
         knownHosts.removeAll { $0.host == host && $0.port == port }
     }
 
-    func removeAllKnownHosts() {
+    package func removeAllKnownHosts() {
         knownHosts.removeAll()
     }
 }

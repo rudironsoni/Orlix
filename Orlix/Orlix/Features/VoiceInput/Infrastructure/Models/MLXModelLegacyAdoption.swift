@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum MLXModelIDResolution: Equatable, Sendable {
+nonisolated package enum MLXModelIDResolution: Equatable, Sendable {
     case supported(String)
     case migrated(from: String, to: String)
     case unsupported(String)
 
-    var modelID: String {
+    package var modelID: String {
         switch self {
         case .supported(let modelID), .unsupported(let modelID):
             return modelID
@@ -17,8 +17,8 @@ nonisolated enum MLXModelIDResolution: Equatable, Sendable {
 
 /// Temporary, one-time upgrade rules. Remove this type and its tests after
 /// supported releases have migrated their saved IDs and legacy directories.
-nonisolated enum MLXModelLegacyMigration {
-    static func resolveModelID(_ modelID: String, kind: MLXModelKind) -> MLXModelIDResolution {
+nonisolated package enum MLXModelLegacyMigration {
+    static package func resolveModelID(_ modelID: String, kind: MLXModelKind) -> MLXModelIDResolution {
         let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate = trimmed.isEmpty ? MLXModelCatalog.defaultModelID(for: kind) : trimmed
         if MLXModelCatalog.option(for: candidate, kind: kind) != nil {
@@ -30,7 +30,7 @@ nonisolated enum MLXModelLegacyMigration {
         return .unsupported(candidate)
     }
 
-    static func sourceModelIDs(for modelID: String, kind: MLXModelKind) -> [String] {
+    static package func sourceModelIDs(for modelID: String, kind: MLXModelKind) -> [String] {
         var ids = [modelID]
         for (legacyID, targetID) in modelIDMigrations[kind] ?? [:]
             where targetID == modelID {
@@ -54,14 +54,14 @@ nonisolated enum MLXModelLegacyMigration {
     ]
 }
 
-nonisolated enum MLXLegacyModelAdoptionResult: Equatable, Sendable {
+nonisolated package enum MLXLegacyModelAdoptionResult: Equatable, Sendable {
     case noLegacyDownload
     case adopted
     case updateRequired
 }
 
-extension MLXModelStorageLayout {
-    nonisolated static func legacyDirectories(
+package extension MLXModelStorageLayout {
+    nonisolated static package func legacyDirectories(
         root: URL,
         kind: MLXModelKind,
         modelID: String
@@ -90,8 +90,8 @@ extension MLXModelStorageLayout {
     }
 }
 
-nonisolated enum MLXModelLegacyAdopter {
-    static func adoptIfPossible(
+nonisolated package enum MLXModelLegacyAdopter {
+    static package func adoptIfPossible(
         root: URL,
         kind: MLXModelKind,
         modelID: String,
@@ -134,7 +134,7 @@ nonisolated enum MLXModelLegacyAdopter {
         return foundLegacyDirectory ? .updateRequired : .noLegacyDownload
     }
 
-    static func removeIncompatibleDownloads(
+    static package func removeIncompatibleDownloads(
         root: URL,
         kind: MLXModelKind,
         modelID: String,

@@ -1,16 +1,16 @@
 import Foundation
 
 @MainActor
-protocol AppLockPreferences: AnyObject {
+package protocol AppLockPreferences: AnyObject {
     var fullAppLockEnabled: Bool? { get set }
     var lockOnBackground: Bool? { get set }
     var authGraceSeconds: Int? { get set }
 }
 
 @MainActor
-struct AppLockManagerDependencies {
-    let preferences: any AppLockPreferences
-    let authService: any BiometricAuthServing
-    let now: () -> Date
-    let makeID: () -> UUID
+package struct AppLockManagerDependencies {
+    package let preferences: any AppLockPreferences
+    package let authService: any BiometricAuthServing
+    package let now: () -> Date
+    package let makeID: () -> UUID
 }

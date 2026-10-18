@@ -7,23 +7,23 @@ import OrlixSSH
 /// Shared Unix process telemetry with one cross-platform contract:
 /// CPU is the share of total machine capacity during the latest interval and
 /// memory is resident physical memory as bytes and a percentage of physical RAM.
-nonisolated enum UnixProcessTelemetry {
-    struct ProcessRow {
-        let pid: Int
-        let user: String
-        let cumulativeCPUTime: TimeInterval
-        let rawCPUPercent: Double
-        let residentBytes: UInt64
-        let name: String
-        let command: String
+nonisolated package enum UnixProcessTelemetry {
+    package struct ProcessRow {
+        package let pid: Int
+        package let user: String
+        package let cumulativeCPUTime: TimeInterval
+        package let rawCPUPercent: Double
+        package let residentBytes: UInt64
+        package let name: String
+        package let command: String
     }
 
-    struct Collection {
-        let processes: [ProcessInfo]
-        let totalCount: Int
+    package struct Collection {
+        package let processes: [ProcessInfo]
+        package let totalCount: Int
     }
 
-    static func collect(
+    static package func collect(
         client: SSHClient,
         context: StatsCollectionContext,
         platform: RemotePlatform,
@@ -77,7 +77,7 @@ nonisolated enum UnixProcessTelemetry {
         )
     }
 
-    static func processDetailsCommand(
+    static package func processDetailsCommand(
         platform: RemotePlatform,
         limit: Int?,
         pids: [Int]?
@@ -98,7 +98,7 @@ nonisolated enum UnixProcessTelemetry {
         return "\(base) | sort -k4 -nr | head -n \(limit)"
     }
 
-    static func parseProcessRows(_ output: String) -> [ProcessRow] {
+    static package func parseProcessRows(_ output: String) -> [ProcessRow] {
         output.components(separatedBy: .newlines).compactMap { rawLine in
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { return nil }
@@ -128,7 +128,7 @@ nonisolated enum UnixProcessTelemetry {
         }
     }
 
-    static func makeProcesses(
+    static package func makeProcesses(
         from rows: [ProcessRow],
         intervalCPUPercentages: [Int: Double],
         memoryTotal: UInt64
@@ -165,7 +165,7 @@ nonisolated enum UnixProcessTelemetry {
         }
     }
 
-    static func parseCPUTime(_ value: String) -> TimeInterval? {
+    static package func parseCPUTime(_ value: String) -> TimeInterval? {
         let dayParts = value.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
         let days: Double
         let clock: Substring

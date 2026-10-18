@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated extension ServerStatsCollectionState {
-    var errorMessage: String? {
+nonisolated package extension ServerStatsCollectionState {
+    package var errorMessage: String? {
         switch phase {
         case .approvalRequired:
             return String(localized: "SSH host key approval is required before authentication.")
@@ -13,8 +13,8 @@ nonisolated extension ServerStatsCollectionState {
     }
 }
 
-nonisolated extension ServerStatsCollectionFailure {
-    var errorMessage: String {
+nonisolated package extension ServerStatsCollectionFailure {
+    package var errorMessage: String {
         switch self {
         case .securityApprovalCancelled:
             String(localized: "Security approval was cancelled.")
@@ -35,8 +35,8 @@ package extension ServerStatsCollector {
     }
 }
 
-nonisolated extension ProcessControlError: LocalizedError {
-    var errorDescription: String? {
+nonisolated package extension ProcessControlError: LocalizedError {
+    package var errorDescription: String? {
         switch self {
         case .notConnected:
             return String(localized: "Stats is not connected to the server.")

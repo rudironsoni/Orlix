@@ -4,11 +4,11 @@ import OSLog
 #if ORLIX_MODULAR_APP
 import OrlixModels
 #endif
-struct RemoteClipboardUpload: Sendable {
-    let remotePath: String
-    let pastedPathToken: String
-    let mimeType: String
-    let sizeBytes: Int
+package struct RemoteClipboardUpload: Sendable {
+    package let remotePath: String
+    package let pastedPathToken: String
+    package let mimeType: String
+    package let sizeBytes: Int
 }
 
 package struct RichPasteUploadResult: Sendable, Equatable {
@@ -17,14 +17,14 @@ package struct RichPasteUploadResult: Sendable, Equatable {
     package let seededRemoteClipboard: Bool
 }
 
-enum TerminalRichPasteError: LocalizedError {
+package enum TerminalRichPasteError: LocalizedError {
     case imageTooLarge(maxBytes: Int)
     case unsupportedRemoteShell
     case remoteTempFileCreationFailed
     case unsafeRemotePath
     case remoteUploadFailed(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .imageTooLarge(let maxBytes):
             let formatter = ByteCountFormatter()

@@ -24,7 +24,7 @@ nonisolated package enum StorageHealthUnavailableReason: String, Hashable, Senda
     case invalidResponse
 }
 
-nonisolated enum StorageHealthCapability: Hashable, Sendable {
+nonisolated package enum StorageHealthCapability: Hashable, Sendable {
     case supported
     case unavailable(StorageHealthUnavailableReason)
 }
@@ -52,14 +52,14 @@ nonisolated package enum StorageHealthFindingSeverity: Int, Hashable, Sendable {
     case critical = 2
 }
 
-nonisolated enum StorageHealthFindingTiming: Hashable, Sendable {
+nonisolated package enum StorageHealthFindingTiming: Hashable, Sendable {
     case current
     case historical
 }
 
 /// Closed set of evidence that can explain a non-healthy storage state.
 /// Associated values are bounded, privacy-safe supporting values only.
-nonisolated enum StorageHealthFindingKind: Hashable, Sendable {
+nonisolated package enum StorageHealthFindingKind: Hashable, Sendable {
     case sourceReportedHealth(String)
     case smartOverallFailure
     case smartCurrentPrefailThreshold
@@ -76,7 +76,7 @@ nonisolated enum StorageHealthFindingKind: Hashable, Sendable {
     case missingMember
     case partialCoverage
 
-    var stableID: String {
+    package var stableID: String {
         switch self {
         case .sourceReportedHealth(let value): "source-health:\(value.lowercased())"
         case .smartOverallFailure: "smart-overall-failure"
@@ -159,7 +159,7 @@ nonisolated package enum EMMCPreEOLStatus: UInt8, Hashable, Sendable {
 
 /// JEDEC reports lifetime consumption as a coarse bucket, not an exact
 /// remaining-life percentage.
-nonisolated enum EMMCLifetimeBucket: Hashable, Sendable {
+nonisolated package enum EMMCLifetimeBucket: Hashable, Sendable {
     case unknown
     case estimatedUsage(lowerPercent: Int, upperPercent: Int)
     case exceededMaximumEstimate

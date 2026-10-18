@@ -4,7 +4,7 @@ import Foundation
 import OrlixModels
 import OrlixSSH
 #endif
-package extension TerminalTabOpeningError: LocalizedError {
+extension TerminalTabOpeningError: LocalizedError {
     nonisolated package var errorDescription: String? {
         switch self {
         case .alreadyOpening:
@@ -163,13 +163,13 @@ package enum TerminalConnectionStatusPresentation: Hashable {
     }
 }
 
-struct TerminalConnectionStatusPresentationIdentity: Hashable {
-    let presentation: TerminalConnectionStatusPresentation
-    let connectionAttemptID: UUID
+package struct TerminalConnectionStatusPresentationIdentity: Hashable {
+    package let presentation: TerminalConnectionStatusPresentation
+    package let connectionAttemptID: UUID
 }
 
-enum TerminalConnectionStatusDismissalPolicy {
-    static func identity(
+package enum TerminalConnectionStatusDismissalPolicy {
+    static package func identity(
         for presentation: TerminalConnectionStatusPresentation,
         connectionAttemptID: UUID
     ) -> TerminalConnectionStatusPresentationIdentity? {
@@ -184,7 +184,7 @@ enum TerminalConnectionStatusDismissalPolicy {
         }
     }
 
-    static func shouldPresent(
+    static package func shouldPresent(
         identity: TerminalConnectionStatusPresentationIdentity?,
         dismissedIdentity: TerminalConnectionStatusPresentationIdentity?,
         isActive: Bool
@@ -192,7 +192,7 @@ enum TerminalConnectionStatusDismissalPolicy {
         isActive && identity != nil && identity != dismissedIdentity
     }
 
-    static func retainedDismissedIdentity(
+    static package func retainedDismissedIdentity(
         currentIdentity: TerminalConnectionStatusPresentationIdentity?,
         dismissedIdentity: TerminalConnectionStatusPresentationIdentity?
     ) -> TerminalConnectionStatusPresentationIdentity? {
@@ -200,8 +200,8 @@ enum TerminalConnectionStatusDismissalPolicy {
     }
 }
 
-enum TerminalConnectionPresentationPolicy {
-    static func usesReconnectBanner(
+package enum TerminalConnectionPresentationPolicy {
+    static package func usesReconnectBanner(
         connectionState: ConnectionState,
         hasEstablishedConnection: Bool,
         automaticReconnectAllowed: Bool,
@@ -230,8 +230,8 @@ enum TerminalConnectionPresentationPolicy {
     }
 }
 
-enum TerminalConnectionWatchdogPolicy {
-    static func shouldMonitor(
+package enum TerminalConnectionWatchdogPolicy {
+    static package func shouldMonitor(
         connectionState: ConnectionState,
         isReady: Bool,
         terminalExists: Bool,
@@ -244,8 +244,8 @@ enum TerminalConnectionWatchdogPolicy {
     }
 }
 
-enum TerminalConnectionStartPolicy {
-    static func shouldStart(connectionState: ConnectionState) -> Bool {
+package enum TerminalConnectionStartPolicy {
+    static package func shouldStart(connectionState: ConnectionState) -> Bool {
         switch connectionState {
         case .connecting, .reconnecting, .connected:
             return true
@@ -255,8 +255,8 @@ enum TerminalConnectionStartPolicy {
     }
 }
 
-enum TerminalSceneActivityPolicy {
-    static func isActive(
+package enum TerminalSceneActivityPolicy {
+    static package func isActive(
         environmentIsActive: Bool,
         windowSceneIsActive: Bool?
     ) -> Bool {
@@ -264,8 +264,8 @@ enum TerminalSceneActivityPolicy {
     }
 }
 
-enum RemoteSessionInstallPromptPolicy {
-    static func shouldPresent(
+package enum RemoteSessionInstallPromptPolicy {
+    static package func shouldPresent(
         for status: RemoteSessionStatus?,
         installation: RemoteSessionBackendMetadata.Installation?
     ) -> Bool {

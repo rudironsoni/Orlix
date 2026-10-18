@@ -5,12 +5,12 @@ import LocalAuthentication
 import OrlixModels
 #endif
 @MainActor
-final class BiometricAuthService: BiometricAuthServing {
-    static let shared = BiometricAuthService()
+final package class BiometricAuthService: BiometricAuthServing {
+    static package let shared = BiometricAuthService()
 
     private init() {}
 
-    func availability() -> BiometricAvailability {
+    package func availability() -> BiometricAvailability {
         let context = LAContext()
         var error: NSError?
 
@@ -21,7 +21,7 @@ final class BiometricAuthService: BiometricAuthServing {
         return .unavailable(Self.unavailability(for: error))
     }
 
-    func authenticate(
+    package func authenticate(
         reason: BiometricAuthenticationReason,
         allowPasscodeFallback: Bool = true
     ) async throws {
@@ -40,7 +40,7 @@ final class BiometricAuthService: BiometricAuthServing {
         }
     }
 
-    static func localizedReason(for reason: BiometricAuthenticationReason) -> String {
+    static package func localizedReason(for reason: BiometricAuthenticationReason) -> String {
         switch reason {
         case .enableAppLock(let biometry):
             return String(
@@ -102,7 +102,7 @@ final class BiometricAuthService: BiometricAuthServing {
         }
     }
 
-    static func unavailability(for error: NSError?) -> BiometricUnavailability {
+    static package func unavailability(for error: NSError?) -> BiometricUnavailability {
         guard let error else {
             return .notAvailable
         }
@@ -126,7 +126,7 @@ final class BiometricAuthService: BiometricAuthServing {
         return .system(message: error.localizedDescription)
     }
 
-    static func authenticationFailure(for error: Error) -> BiometricAuthenticationFailure {
+    static package func authenticationFailure(for error: Error) -> BiometricAuthenticationFailure {
         if error is CancellationError {
             return .cancelled
         }
