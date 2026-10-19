@@ -277,6 +277,27 @@ jobs:
             echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
           } >> "$GITHUB_ENV"
 
+      - name: Save iOS 15.5 runtime archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-runtime
+          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
+
+      - name: Save iOS 26.5 runtime archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios26-runtime
+          key: orlix-ios-runtime-26.5-arm64
+
+      - name: Save installed simulator runtimes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
+          key: orlix-installed-simruntimes-15.5-26.5
+
       - name: Select the component mode
         id: component-mode
         env:
@@ -510,27 +531,6 @@ jobs:
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
           key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
-
-      - name: Save iOS 15.5 runtime archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/ios15-runtime
-          key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
-
-      - name: Save iOS 26.5 runtime archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/ios26-runtime
-          key: orlix-ios-runtime-26.5-arm64
-
-      - name: Save installed simulator runtimes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
-          key: orlix-installed-simruntimes-15.5-26.5
 
       - name: Save cached Xcode archive
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true'
