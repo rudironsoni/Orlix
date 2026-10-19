@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Record jq's configure line with stable paths
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) writes `src/config_opts.inc` after configure and before gmake when the Makefile names that file. The text is `config.status --config` with the package work root replaced by `.` and the tool bin replaced by `/orlix/tools`. jq compiles that line into `JQ_CONFIG`. The make rule has no prerequisites, so it does not regenerate the file. `CC` and `LDFLAGS` stay absolute for the real compile. `compare_trees` still compares `base.ext4`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Skip brew bundle when pinned tools are installed
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `brew bundle` when every formula in the selected Brewfile is already installed at its pinned version. The check reads the Homebrew prefix and does not run `brew info` once per formula. A missing compiler or build tool still runs `brew bundle`. `/opt/homebrew/opt/llvm/bin/clang` is the pinned clang. Unlinked `llvm@20` on the macOS 26 runner is not that keg. Ordinary Bazel CI no longer restores or saves Homebrew source bottles. Those bottles were only formulae built from source, so they did not skip bottle installs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
