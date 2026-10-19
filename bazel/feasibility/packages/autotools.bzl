@@ -337,7 +337,7 @@ if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
     # do, before that string is compiled. CC and LDFLAGS stay absolute so the
     # real compile still finds the toolchain.
     if [ -f Makefile ] && /usr/bin/grep -q 'src/config_opts.inc' Makefile; then
-      /usr/bin/mkdir -p src
+      /bin/mkdir -p src
       ./config.status --config | PYTHONPATH="$exec_root" /usr/bin/python3 -B -c 'from bazel.feasibility.packages.jq_config import write_config_opts; import sys; write_config_opts(sys.stdin.read(), sys.argv[1], sys.argv[2], "src/config_opts.inc")' "$work" "$tool_bin"
     fi
   fi

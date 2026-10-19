@@ -47,4 +47,6 @@ class JqConfigTests(unittest.TestCase):
         self.assertLess(configure, write)
         self.assertLess(write, gmake)
         self.assertIn("write_config_opts", text)
+        self.assertIn("/bin/mkdir -p src", text)
+        self.assertNotIn("/usr/bin/mkdir -p src", text)
         self.assertNotIn("llvm-objcopy", text)
