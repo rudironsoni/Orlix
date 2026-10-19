@@ -11,6 +11,10 @@ updated: 2026-10-19
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saves one sudo tar of the installed iOS 15.5 simulator, including `private/var/mobile`, as `orlix-ios15-simruntime-bootable-v1`. Later jobs extract that tar before `prepare-runtime`. A bootable restored bundle skips `xcodes runtimes install`. A partial tree is not uploaded. iOS 26.5 stays the runner image runtime. A job that restored the bootable archive does not restore or save the iOS 15.5 DMG. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
+## [2026-10-19] build | Pin ext4 discard, inode tables, and cache-equivalence ids
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds `base.ext4` with `nodiscard` and `lazy_itable_init=0`, so inode-table blocks are written even when discard claims to zero the image. Before `mke2fs -d`, a `cache-equivalence` directory id is rewritten to `cache-equivalence.pinned`. The superblock UUID, hash seed, mount count, and error times are pinned with `kbytes_written`. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Pin ext4 inode generation and bytes written
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) sets `generation` to 0 on every inode `build_ext4` already rewrites, including `/lost+found` and inode 8, and sets `kbytes_written` to 0. Directory pins run leaf-first, then a temporary directory entry is created and removed so the directory checksum matches generation 0. macOS `mke2fs -d` copies the host inode generation into `i_generation`, and the write counter changes between output directories. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
