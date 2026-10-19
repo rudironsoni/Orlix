@@ -788,16 +788,20 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("orlix-installed-simruntimes-15.5-complete", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
-            self.assertIn('boot-simulator --udid "$current_id"', text, name)
-            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
             self.assertNotIn("stage-runtime --version 26.5", text, name)
-            self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
             self.assertNotIn("sudo xcodes runtimes install", text, name)
             self.assertNotIn('.version == "15.5"', text, name)
+            if name == "bazel-ci.yml":
+                self.assertNotIn("boot-simulator", text, name)
+                self.assertNotIn("orlix-ios-runtime-26.5-arm64", text, name)
+                continue
+            self.assertIn('boot-simulator --udid "$current_id"', text, name)
+            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
+            self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
         ci = workflow_text("bazel-ci.yml")
-        self.assertGreater(
-            ci.index("stage-runtime --version 15.5"),
-            ci.index('boot-simulator --udid "$ios15_id"'),
+        self.assertIn(
+            '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]',
+            ci,
         )
         self.assertGreater(ci.index("simruntime-present"), ci.index("stage-runtime --version 15.5"))
 
@@ -844,7 +848,6 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         apple = text.index("name: Run the Make-owned Apple CI operation")
         names = (
             "Save iOS 15.5 runtime archive",
-            "Save iOS 26.5 runtime archive",
             "Save installed simulator runtimes",
         )
         previous = prepare
@@ -854,8 +857,9 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertGreater(found, previous, name)
             self.assertLess(found, apple, name)
             previous = found
+        self.assertNotIn("Save iOS 26.5 runtime archive", text)
+        self.assertNotIn("Restore iOS 26.5 runtime archive", text)
         ios15 = text.split("name: Save iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
-        ios26 = text.split("name: Save iOS 26.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
         installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn(
             "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'",
@@ -863,12 +867,7 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         )
         self.assertIn("path: ~/Library/Caches/Orlix/ios15-runtime", ios15)
         self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'",
-            ios26,
-        )
-        self.assertIn("path: ~/Library/Caches/Orlix/ios26-runtime", ios26)
-        self.assertIn(
-            "(github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
             installed,
         )
         self.assertIn("path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes", installed)
@@ -876,16 +875,9 @@ class WorkflowSetupCacheTests(unittest.TestCase):
     def test_pull_requests_do_not_publish_setup_caches(self) -> None:
         text = workflow_text("bazel-ci.yml")
         main_only = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-        installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn(
-            "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
-            installed,
-        )
-        self.assertIn("steps.installed-runtimes.outputs.cache-hit != 'true'", installed)
-        self.assertIn("steps.runtimes.outputs.simruntime == 'true'", installed)
         for name in (
             "Save iOS 15.5 runtime archive",
-            "Save iOS 26.5 runtime archive",
+            "Save installed simulator runtimes",
             "Save Bazel repository cache",
             "Save cached Xcode archive",
             "Save Homebrew source bottles",
@@ -894,6 +886,9 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             block = text.split(f"name: {name}", 1)[1].split("\n      - name:", 1)[0]
             self.assertIn(main_only, block, name)
             self.assertNotIn("pull_request", block, name)
+        installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("steps.installed-runtimes.outputs.cache-hit != 'true'", installed)
+        self.assertIn("steps.runtimes.outputs.simruntime == 'true'", installed)
         proof = workflow_text("bazel-promoted-consumer-proof.yml")
         self.assertNotIn("actions/cache/save@", proof)
 

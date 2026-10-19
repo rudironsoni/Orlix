@@ -139,13 +139,6 @@ jobs:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
-      - name: Restore iOS 26.5 runtime archive
-        if: steps.installed-runtimes.outputs.cache-hit != 'true'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/ios26-runtime
-          key: orlix-ios-runtime-26.5-arm64
-
       - name: Restore Homebrew source bottles
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -247,11 +240,6 @@ jobs:
           else
             echo "ios15_archive=false" >> "$GITHUB_OUTPUT"
           fi
-          if python3 bazel/ci/setup_cache.py archive-present --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"; then
-            echo "ios26_archive=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ios26_archive=false" >> "$GITHUB_OUTPUT"
-          fi
           current_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)"
           ios15_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)"
           test -n "$current_runtime_id"
@@ -262,12 +250,13 @@ jobs:
           ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
           test -n "$current_id"
           test -n "$ios15_id"
-          python3 bazel/ci/setup_cache.py boot-simulator --udid "$current_id"
-          python3 bazel/ci/setup_cache.py boot-simulator --udid "$ios15_id"
           # iOS 26.5 is the runner image runtime. Do not copy it into the
-          # directory simctl scans. The iOS 15.5 bundle simctl booted is
-          # stored after boot, and only when every entry was archived.
-          python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          # directory simctl scans. Store the installed iOS 15.5 bundle only
+          # on main, the only ref that can fill the shared cache. Proofs boot
+          # one simulator at a time after the app build.
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          fi
           if python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"; then
             echo "simruntime=true" >> "$GITHUB_OUTPUT"
           else
@@ -286,15 +275,8 @@ jobs:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
-      - name: Save iOS 26.5 runtime archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/ios26-runtime
-          key: orlix-ios-runtime-26.5-arm64
-
       - name: Save installed simulator runtimes
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
