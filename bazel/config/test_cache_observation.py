@@ -97,6 +97,40 @@ class CacheObservationTests(unittest.TestCase):
             self.assertEqual(reported["counters"]["buildbuddy_remote_cache_hits"], 1)
             self.assertEqual(reported["shared_ccache_directory"]["misses"], 0)
 
+    def test_coreutils_misses_include_direct_cache_miss(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            execution = root / "execution.json"
+            bep = root / "bep.json"
+            execution.write_text(json.dumps({"runner": "remote cache hit", "cacheHit": True}))
+            bep.write_text(json.dumps({"buildMetrics": {
+                "actionSummary": {"actionsCreated": "1", "actionsExecuted": "1"},
+                "timingMetrics": {"wallTimeInMs": "1"},
+            }}) + "\n")
+            log = (
+                "INFO: From Building GNU Coreutils with incremental Make state:\n"
+                "{\n"
+                '  "cache_miss": 0,\n'
+                '  "direct_cache_hit": 879,\n'
+                '  "direct_cache_miss": 173,\n'
+                '  "preprocessed_cache_hit": 1,\n'
+                '  "preprocessed_cache_miss": 131\n'
+                "}\n"
+            )
+            action = cache_observation.coreutils_action_counters(log)
+            self.assertIsNotNone(action)
+            assert action is not None
+            self.assertEqual(action["direct_hits"], 879)
+            self.assertEqual(action["preprocessed_hits"], 1)
+            self.assertEqual(action["misses"], 173)
+            reported = cache_observation.observe(execution, bep, "read", None, action, True)
+            self.assertEqual(reported["ccache"]["misses"], 173)
+            self.assertEqual(reported["ccache"]["source"], "coreutils-action-log")
+            self.assertFalse(reported["ccache"]["fresh_runner"])
+            self.assertEqual(reported["counters"]["ccache_hits"], 880)
+            self.assertEqual(reported["counters"]["bazel_disk_cache_hits"], 0)
+            self.assertEqual(reported["counters"]["buildbuddy_remote_cache_hits"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
