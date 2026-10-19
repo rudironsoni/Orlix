@@ -231,7 +231,9 @@ class SignTests(unittest.TestCase):
                     )
                 message = str(raised.exception)
                 self.assertTrue(
-                    "oras failed" in message or "ghcr.io" in message,
+                    "oras failed" in message
+                    or "ghcr.io" in message
+                    or "cosign is required to sign; refusing to invent a signature" in message,
                     message,
                 )
                 self.assertNotIn('"signed": true', message)
