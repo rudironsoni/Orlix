@@ -835,7 +835,23 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("xcode-selected", text, name)
             self.assertIn("steps.xcode-present.outputs.installed == 'true'", text, name)
             self.assertIn("steps.xcode-present.outputs.installed != 'true'", text, name)
-            self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
+            if name == "bazel-ci.yml":
+                self.assertIn("bundle-satisfied --brewfile bazel/ci/Brewfile", text, name)
+                self.assertIn("brew bundle --file bazel/ci/Brewfile", text, name)
+                self.assertNotIn("bundle-satisfied --brewfile Brewfile", text, name)
+                self.assertNotIn("brew bundle --file Brewfile", text, name)
+                promoted = text.split("brew list cosign", 1)[1].split("\n      - name:", 1)[0]
+                self.assertIn("brew list oras", promoted)
+                local = (ROOT / "Brewfile").read_text(encoding="utf-8")
+                ci_brew = (ROOT / "bazel/ci/Brewfile").read_text(encoding="utf-8")
+                for formula in ("actionlint", "zizmor", "cosign", "oras"):
+                    self.assertIn(f'brew "{formula}"', local)
+                    self.assertNotIn(f'brew "{formula}"', ci_brew)
+                for formula in ("llvm", "lld", "zig", "autoconf", "automake", "libtool"):
+                    self.assertIn(f'brew "{formula}"', local)
+                    self.assertIn(f'brew "{formula}"', ci_brew)
+            else:
+                self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
             self.assertIn("skipping brew bundle", text, name)
         for name in WORKFLOWS:
             if name in RUNTIME_WORKFLOWS:
