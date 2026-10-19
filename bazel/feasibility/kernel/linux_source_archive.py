@@ -126,7 +126,7 @@ def pack(root: Path, archive: Path) -> None:
 
 def extract(archive: Path, destination: Path) -> None:
     """Unpack one linux source archive. Rejects paths that leave destination."""
-    destination.mkdir(parents=True)
+    destination.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:") as tar:
         for member in tar.getmembers():
             name = member.name

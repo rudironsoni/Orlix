@@ -71,6 +71,19 @@ class LinuxSourceArchiveTests(unittest.TestCase):
         files = configured_source_files(build)
         self.assertEqual(files, ["linux-source.tar"])
 
+    def test_extract_into_existing_directory_keeps_the_archive_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "linux"
+            _populate(source, b"int fork_state;\n")
+            archive = root / "linux-source.tar"
+            pack(source, archive)
+            destination = root / "orlix-linux-uapi" / "linux"
+            destination.mkdir(parents=True)
+            extract(archive, destination)
+            self.assertEqual((destination / "Makefile").read_text(encoding="utf-8"), "VERSION = 6\n")
+            self.assertEqual((destination / "kernel/fork.c").read_bytes(), b"int fork_state;\n")
+
     def test_one_byte_source_change_changes_revision_and_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
