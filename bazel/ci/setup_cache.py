@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import plistlib
 import shutil
 import stat
@@ -326,6 +327,10 @@ def expose_restored_runtimes(runtime_dir: Path, profiles_dir: Path | None = None
     profiles = user_runtime_profiles() if profiles_dir is None else profiles_dir
     linked = []
     for bundle in simruntime_bundles(runtime_dir):
+        if any(bundle.name == f"iOS {version}.simruntime" for version in IMAGE_SIMRUNTIME_VERSIONS):
+            continue
+        if not simruntime_bootable(bundle):
+            continue
         if profiles.resolve() == bundle.parent.resolve():
             linked.append(bundle)
             continue
@@ -396,6 +401,12 @@ def listed_bundle_path(version: str) -> Path | None:
 
 
 IMAGE_SIMRUNTIME_VERSIONS = frozenset({"26.5"})
+BOOTABLE_SIMRUNTIME_VERSION = "15.5"
+BOOTABLE_SIMRUNTIME_ARCHIVE_NAME = "iOS-15.5.simruntime.tar"
+BOOTABLE_SIMRUNTIME_CACHE_KEY = "orlix-ios15-simruntime-bootable-v1"
+IOS15_DMG_CACHE_KEY = (
+    "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
+)
 
 
 def simruntime_bootable(bundle: Path) -> bool:
@@ -436,6 +447,124 @@ def simruntime_present(runtime_dir: Path) -> bool:
         if simruntime_bootable(runtime_dir / f"iOS {version}.simruntime"):
             return True
     return False
+
+
+def bootable_archive_file(archive_dir: Path) -> Path:
+    return archive_dir / BOOTABLE_SIMRUNTIME_ARCHIVE_NAME
+
+
+def bootable_archive_ready(archive_dir: Path) -> bool:
+    """True when the sudo tar of a bootable iOS 15.5 bundle is readable and non-empty."""
+    archive = bootable_archive_file(archive_dir)
+    try:
+        return archive.is_file() and archive.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def ios15_cache_plan(*, bootable_archive: bool, dmg_archive: bool, bundle_bootable: bool) -> dict[str, str]:
+    """Choose the iOS 15.5 installer and which cache object this job may touch.
+
+    A restored bootable archive skips ``xcodes`` and leaves the DMG key alone.
+    A missing archive with a restored DMG installs from that DMG. A partial
+    tree is not ``bundle_bootable`` and is not saved.
+    """
+    if bootable_archive:
+        return {"xcodes": "skip", "dmg": "leave", "save_bootable_archive": "no"}
+    if bundle_bootable:
+        return {"xcodes": "skip", "dmg": "leave", "save_bootable_archive": "yes"}
+    if dmg_archive:
+        return {"xcodes": "install-local", "dmg": "restore", "save_bootable_archive": "after-install"}
+    return {"xcodes": "download", "dmg": "restore", "save_bootable_archive": "after-install"}
+
+
+def bootable_archive_save_allowed(bundle: Path, *, already_cached: bool) -> bool:
+    """A tree that failed the mobile-directory check is not uploaded."""
+    if already_cached:
+        return False
+    expected = f"iOS {BOOTABLE_SIMRUNTIME_VERSION}.simruntime"
+    return bundle.name == expected and simruntime_bootable(bundle)
+
+
+def bootable_tar_create_command(bundle: Path, destination: Path) -> list[str]:
+    """Archive one bundle with root privileges so ``private/var/mobile`` is included.
+
+    Symlinks stay symlinks. ``-h`` would expand them into a second copy of the tree.
+    """
+    return ["sudo", "tar", "-C", str(bundle.parent), "-cf", str(destination), bundle.name]
+
+
+def bootable_tar_extract_command(archive: Path, runtime_dir: Path) -> list[str]:
+    """Extract only the iOS 15.5 member into the directory simctl scans."""
+    return [
+        "sudo", "tar", "-C", str(runtime_dir), "-xf", str(archive),
+        f"iOS {BOOTABLE_SIMRUNTIME_VERSION}.simruntime",
+    ]
+
+
+def write_bootable_tar(bundle: Path, archive_dir: Path) -> bool:
+    """Write one runner-readable tar. A partial bundle writes nothing."""
+    if not bootable_archive_save_allowed(bundle, already_cached=False):
+        return False
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    destination = bootable_archive_file(archive_dir)
+    partial = destination.with_suffix(destination.suffix + ".partial")
+    partial.unlink(missing_ok=True)
+    try:
+        run_checked(bootable_tar_create_command(bundle, partial))
+        run_checked(["sudo", "chown", f"{os.getuid()}:{os.getgid()}", str(partial)])
+        run_checked(["sudo", "chmod", "644", str(partial)])
+    except SystemExit:
+        partial.unlink(missing_ok=True)
+        raise
+    try:
+        if not partial.is_file() or partial.stat().st_size <= 0:
+            partial.unlink(missing_ok=True)
+            return False
+    except OSError:
+        partial.unlink(missing_ok=True)
+        return False
+    partial.replace(destination)
+    return bootable_archive_ready(archive_dir)
+
+
+def installed_bootable_bundle(version: str, runtime_dir: Path | None) -> Path | None:
+    """Return the bootable iOS 15.5 bundle, preferring the directory simctl scans."""
+    if version != BOOTABLE_SIMRUNTIME_VERSION:
+        return None
+    if runtime_dir is not None:
+        candidate = runtime_dir / f"iOS {version}.simruntime"
+        if bootable_archive_save_allowed(candidate, already_cached=False):
+            return candidate
+    listed = listed_bundle_path(version)
+    if listed is not None and bootable_archive_save_allowed(listed, already_cached=False):
+        return listed
+    return None
+
+
+def archive_installed_simruntime(version: str, archive_dir: Path, runtime_dir: Path | None = None) -> bool:
+    """Tar a bootable iOS 15.5 bundle. An existing archive and a partial tree stay put."""
+    if version in IMAGE_SIMRUNTIME_VERSIONS or version != BOOTABLE_SIMRUNTIME_VERSION:
+        return False
+    if bootable_archive_ready(archive_dir):
+        return True
+    bundle = installed_bootable_bundle(version, runtime_dir)
+    if bundle is None:
+        return False
+    return write_bootable_tar(bundle, archive_dir)
+
+
+def extract_bootable_simruntime(archive_dir: Path, runtime_dir: Path) -> bool:
+    """Extract the restored tar into the bundle location simctl boots.
+
+    Only the iOS 15.5 member is extracted. iOS 26.5 stays the runner image runtime.
+    """
+    if not bootable_archive_ready(archive_dir):
+        return False
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    run_checked(bootable_tar_extract_command(bootable_archive_file(archive_dir), runtime_dir))
+    bundle = runtime_dir / f"iOS {BOOTABLE_SIMRUNTIME_VERSION}.simruntime"
+    return simruntime_bootable(bundle)
 
 
 def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> bool:
@@ -717,19 +846,17 @@ def runtime_already_installed(version: str, runtime_dir: Path | None = None) -> 
 def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = None) -> str:
     """Install a simulator runtime only when simctl does not already list it.
 
-    iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 is not
-    installed when simctl does not list it. A restored download archive is
-    not an installed runtime and is not copied into a protected directory.
-    A listed bundle is not copied here. ``~/Library/Developer/CoreSimulator/Profiles/Runtimes``
-    is scanned by simctl, and a partial copy is preferred over the image runtime.
-    That is what ``simctl boot`` then starts. The cache copy runs after boot.
-    ``simruntime-present`` is true only when that directory contains a real bundle.
+    iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 skips
+    ``xcodes`` when the restored bundle is ``simruntime_bootable``. That check
+    does not read the download archive. A restored DMG is not an installed
+    runtime and is not copied into a protected directory. iOS 26.5 is not
+    copied into the directory simctl scans. A partial iOS 15.5 tree is removed
+    before any installer runs.
     """
     try:
-        if runtime_dir is not None:
-            expose_restored_runtimes(runtime_dir)
+        if runtime_dir is not None and version not in IMAGE_SIMRUNTIME_VERSIONS:
             bundle = runtime_dir / f"iOS {version}.simruntime"
-            if version not in IMAGE_SIMRUNTIME_VERSIONS and (bundle.is_symlink() or bundle.exists()) and not simruntime_bootable(bundle):
+            if (bundle.is_symlink() or bundle.exists()) and not simruntime_bootable(bundle):
                 print(
                     f"removing partial iOS {version} runtime from {runtime_dir}; "
                     "a copy that skipped unreadable entries is not booted by simctl",
@@ -739,6 +866,17 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
                     bundle.unlink()
                 else:
                     shutil.rmtree(bundle, ignore_errors=True)
+            if simruntime_bootable(bundle):
+                decision = ios15_cache_plan(
+                    bootable_archive=False, dmg_archive=False, bundle_bootable=True,
+                )
+                if decision["xcodes"] != "skip" or decision["dmg"] != "leave":
+                    raise RuntimeError("a bootable iOS 15.5 bundle must skip xcodes and leave the DMG")
+                expose_restored_runtimes(runtime_dir)
+                print(runtime_message("skip", version, archive_dir), flush=True)
+                return "skip"
+        if runtime_dir is not None:
+            expose_restored_runtimes(runtime_dir)
         if runtime_already_installed(version, runtime_dir):
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
@@ -831,6 +969,18 @@ def main(argv: list[str] | None = None) -> int:
     stage.add_argument("--version", required=True)
     stage.add_argument("--runtime-dir", required=True, type=Path)
 
+    extract = commands.add_parser("extract-bootable-runtime")
+    extract.add_argument("--archive-dir", required=True, type=Path)
+    extract.add_argument("--runtime-dir", required=True, type=Path)
+
+    archive_bootable = commands.add_parser("archive-bootable-runtime")
+    archive_bootable.add_argument("--version", required=True)
+    archive_bootable.add_argument("--archive-dir", required=True, type=Path)
+    archive_bootable.add_argument("--runtime-dir", type=Path)
+
+    bootable_present = commands.add_parser("bootable-archive-present")
+    bootable_present.add_argument("--archive-dir", required=True, type=Path)
+
     satisfied = commands.add_parser("bundle-satisfied")
     satisfied.add_argument("--brewfile", required=True, type=Path)
 
@@ -870,6 +1020,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "stage-runtime":
         stage_listed_simruntime(args.version, args.runtime_dir)
         return 0
+    if args.command == "extract-bootable-runtime":
+        if extract_bootable_simruntime(args.archive_dir, args.runtime_dir):
+            return 0
+        print("restored iOS 15.5 archive is not a bootable simulator bundle", file=sys.stderr)
+        return 1
+    if args.command == "archive-bootable-runtime":
+        if archive_installed_simruntime(args.version, args.archive_dir, args.runtime_dir):
+            return 0
+        print(
+            f"not saving iOS {args.version}; the bundle failed the mobile-directory check or is not installed",
+            file=sys.stderr,
+        )
+        return 1
+    if args.command == "bootable-archive-present":
+        return 0 if bootable_archive_ready(args.archive_dir) else 1
     if args.command == "runtime-identifier":
         found = simctl_runtime_identifier(args.version, read_simctl_runtimes())
         if found is None:

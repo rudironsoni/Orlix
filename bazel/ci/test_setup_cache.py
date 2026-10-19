@@ -30,6 +30,13 @@ def workflow_text(name: str) -> str:
     return (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
 
+def write_bootable_bundle(bundle: Path) -> None:
+    mobile = bundle / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+    mobile.mkdir(parents=True)
+    (bundle / "Contents" / "Info.plist").write_bytes(b"plist")
+    (bundle / "Contents" / "Resources" / "RuntimeRoot" / "usr").mkdir()
+
+
 def cache_blocks(text: str) -> list[str]:
     blocks = []
     marker = "uses: actions/cache/"
@@ -478,14 +485,135 @@ class SetupCacheDecisionTests(unittest.TestCase):
     def test_restored_simruntime_is_linked_without_an_install_command(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            bundle = root / "cache" / "iOS 15.5.simruntime" / "Contents"
-            bundle.mkdir(parents=True)
-            (bundle / "Info.plist").write_bytes(b"plist")
+            partial = root / "partial" / "iOS 15.5.simruntime" / "Contents"
+            partial.mkdir(parents=True)
+            (partial / "Info.plist").write_bytes(b"plist")
             profiles = root / "Profiles" / "Runtimes"
+            self.assertEqual(setup_cache.expose_restored_runtimes(root / "partial", profiles), [])
+            self.assertFalse((profiles / "iOS 15.5.simruntime").exists())
+            write_bootable_bundle(root / "cache" / "iOS 15.5.simruntime")
+            write_bootable_bundle(root / "cache" / "iOS 26.5.simruntime")
             linked = setup_cache.expose_restored_runtimes(root / "cache", profiles)
             self.assertEqual(linked, [profiles / "iOS 15.5.simruntime"])
             self.assertTrue((profiles / "iOS 15.5.simruntime").is_symlink())
+            self.assertFalse((profiles / "iOS 26.5.simruntime").exists())
             self.assertEqual(setup_cache.runtime_commands("skip", "15.5", root / "cache"), [])
+
+    def test_bootable_archive_skips_xcodes_and_leaves_the_dmg(self) -> None:
+        plan = setup_cache.ios15_cache_plan(bootable_archive=True, dmg_archive=True, bundle_bootable=True)
+        self.assertEqual(plan["xcodes"], "skip")
+        self.assertEqual(plan["dmg"], "leave")
+        self.assertEqual(plan["save_bootable_archive"], "no")
+        self.assertEqual(setup_cache.BOOTABLE_SIMRUNTIME_CACHE_KEY, "orlix-ios15-simruntime-bootable-v1")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_dir = root / "Runtimes"
+            write_bootable_bundle(runtime_dir / "iOS 15.5.simruntime")
+            archive = root / "ios15-runtime"
+            archive.mkdir()
+            (archive / "runtime.dmg").write_bytes(b"dmg")
+            with mock.patch.object(setup_cache, "user_runtime_profiles", return_value=runtime_dir):
+                with mock.patch.object(setup_cache, "archive_complete", side_effect=AssertionError("dmg")):
+                    with mock.patch.object(setup_cache.subprocess, "run", side_effect=AssertionError("run")):
+                        result = setup_cache.prepare_runtime("15.5", archive, runtime_dir)
+            self.assertEqual(result, "skip")
+            self.assertEqual((archive / "runtime.dmg").read_bytes(), b"dmg")
+
+    def test_dmg_without_bootable_archive_installs_locally(self) -> None:
+        plan = setup_cache.ios15_cache_plan(bootable_archive=False, dmg_archive=True, bundle_bootable=False)
+        self.assertEqual(plan["xcodes"], "install-local")
+        self.assertEqual(plan["dmg"], "restore")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "ios15-runtime"
+            archive.mkdir()
+            (archive / "runtime.dmg").write_bytes(b"dmg")
+            calls: list[list[str]] = []
+
+            def fake_run(command, **kwargs):
+                calls.append(list(command))
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["sudo", "xcodes", "runtimes", "install"]:
+                    return subprocess.CompletedProcess(command, 0)
+                raise AssertionError(command)
+
+            with mock.patch.object(setup_cache, "user_runtime_profiles", return_value=root / "profiles"):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    result = setup_cache.prepare_runtime("15.5", archive, root / "Runtimes")
+            self.assertEqual(result, "install-local")
+            self.assertEqual(calls[-1][:4], ["sudo", "xcodes", "runtimes", "install"])
+            self.assertIn(str(archive), calls[-1])
+            self.assertFalse(any(command[:2] == ["sudo", "tar"] for command in calls))
+
+    def test_partial_tree_is_not_saved(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "Runtimes" / "iOS 15.5.simruntime"
+            (bundle / "Contents" / "Resources" / "RuntimeRoot" / "usr").mkdir(parents=True)
+            (bundle / "Contents" / "Info.plist").write_bytes(b"partial")
+            archive_dir = root / "bootable"
+            self.assertFalse(setup_cache.simruntime_bootable(bundle))
+            self.assertFalse(setup_cache.bootable_archive_save_allowed(bundle, already_cached=False))
+            with mock.patch.object(setup_cache, "listed_bundle_path", return_value=None):
+                with mock.patch.object(setup_cache, "run_checked", side_effect=AssertionError("tar")):
+                    saved = setup_cache.archive_installed_simruntime("15.5", archive_dir, bundle.parent)
+            self.assertFalse(saved)
+            self.assertFalse(setup_cache.bootable_archive_ready(archive_dir))
+            self.assertFalse(archive_dir.exists())
+
+    def test_bootable_bundle_is_archived_with_sudo_tar(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_dir = root / "Runtimes"
+            write_bootable_bundle(runtime_dir / "iOS 15.5.simruntime")
+            write_bootable_bundle(runtime_dir / "iOS 26.5.simruntime")
+            archive_dir = root / "bootable"
+            calls: list[list[str]] = []
+
+            def fake_run(command):
+                calls.append(list(command))
+                if command[:2] == ["sudo", "tar"] and "-cf" in command:
+                    destination = Path(command[command.index("-cf") + 1])
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(b"archive")
+
+            with mock.patch.object(setup_cache, "run_checked", fake_run):
+                self.assertFalse(setup_cache.archive_installed_simruntime("26.5", archive_dir, runtime_dir))
+                self.assertTrue(setup_cache.archive_installed_simruntime("15.5", archive_dir, runtime_dir))
+                self.assertTrue(setup_cache.archive_installed_simruntime("15.5", archive_dir, runtime_dir))
+            create = next(command for command in calls if command[:2] == ["sudo", "tar"])
+            self.assertNotIn("-h", create)
+            self.assertNotIn("--dereference", create)
+            self.assertIn("iOS 15.5.simruntime", create)
+            self.assertNotIn("iOS 26.5.simruntime", create)
+            self.assertEqual(calls.count(create), 1)
+            self.assertEqual(calls[1][:2], ["sudo", "chown"])
+            self.assertTrue(setup_cache.bootable_archive_ready(archive_dir))
+
+    def test_extract_restores_only_the_ios15_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_dir = root / "bootable"
+            archive_dir.mkdir()
+            setup_cache.bootable_archive_file(archive_dir).write_bytes(b"archive")
+            runtime_dir = root / "Runtimes"
+            calls: list[list[str]] = []
+
+            def fake_run(command):
+                calls.append(list(command))
+                self.assertEqual(command[:2], ["sudo", "tar"])
+                self.assertIn("-xf", command)
+                self.assertNotIn("iOS 26.5.simruntime", command)
+                write_bootable_bundle(runtime_dir / command[-1])
+
+            with mock.patch.object(setup_cache, "run_checked", fake_run):
+                self.assertTrue(setup_cache.extract_bootable_simruntime(archive_dir, runtime_dir))
+            self.assertEqual(calls[0][-1], "iOS 15.5.simruntime")
+            self.assertTrue(setup_cache.simruntime_bootable(runtime_dir / "iOS 15.5.simruntime"))
+            self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
 
     def test_brewfile_formulae_keep_the_pinned_xcodes_tap(self) -> None:
         text = (ROOT / "Brewfile").read_text(encoding="utf-8")
@@ -584,7 +712,17 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn('prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"', text, name)
             self.assertIn('prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"', text, name)
             self.assertIn('--runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"', text, name)
-            self.assertIn("orlix-installed-simruntimes-15.5-complete", text, name)
+            self.assertIn("orlix-ios15-simruntime-bootable-v1", text, name)
+            self.assertIn("extract-bootable-runtime", text, name)
+            self.assertLess(
+                text.index("name: Restore bootable iOS 15.5 simulator runtime"),
+                text.index("name: Restore iOS 15.5 runtime archive"),
+                name,
+            )
+            self.assertLess(text.index("extract-bootable-runtime"), text.index("prepare-runtime --version 15.5"), name)
+            self.assertIn("steps.ios15-bootable.outputs.cache-hit != 'true'", text, name)
+            self.assertNotIn("orlix-installed-simruntimes-15.5-complete", text, name)
+            self.assertNotIn("orlix-installed-simruntimes-15.5-26.5", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
             self.assertNotIn("stage-runtime --version 26.5", text, name)
@@ -593,7 +731,7 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             if name == "bazel-ci.yml":
                 self.assertNotIn("boot-simulator", text, name)
                 self.assertNotIn("orlix-ios-runtime-26.5-arm64", text, name)
-                self.assertNotIn("orlix-installed-simruntimes-15.5-26.5", text, name)
+                self.assertNotIn("stage-runtime", text, name)
                 continue
             self.assertIn('boot-simulator --udid "$current_id"', text, name)
             self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
@@ -604,11 +742,14 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         self.assertLess(prepare.index('prepare-runtime --version 15.5'), prepare.index(main_only))
         self.assertLess(prepare.index('simctl create "Orlix iOS 15.5 CI"'), prepare.index(main_only))
         guarded = prepare.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
+        self.assertLess(prepare.index("extract-bootable-runtime"), prepare.index("prepare-runtime --version 15.5"))
         self.assertNotIn("prepare-runtime --version 15.5", guarded)
         self.assertNotIn('simctl create "Orlix iOS 15.5 CI"', guarded)
-        self.assertIn("stage-runtime --version 15.5", guarded)
+        self.assertNotIn("boot-simulator", prepare)
+        self.assertIn("archive-bootable-runtime --version 15.5", guarded)
+        self.assertNotIn("stage-runtime", guarded)
         self.assertIn("ORLIX_IOS15_SIMULATOR_ID=$ios15_id", prepare)
-        self.assertGreater(ci.index("simruntime-present"), ci.index("stage-runtime --version 15.5"))
+        self.assertGreater(prepare.index("bootable-archive-present"), prepare.index("archive-bootable-runtime"))
 
     def test_every_installer_workflow_skips_xcode_and_homebrew_when_present(self) -> None:
         for name in WORKFLOWS + (
@@ -667,8 +808,8 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         prepare = text.index("name: Prepare both simulator runtimes")
         apple = text.index("name: Run the Make-owned Apple CI operation")
         names = (
+            "Save bootable iOS 15.5 simulator runtime",
             "Save iOS 15.5 runtime archive",
-            "Save installed simulator runtimes",
         )
         previous = prepare
         for name in names:
@@ -679,18 +820,21 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             previous = found
         self.assertNotIn("Save iOS 26.5 runtime archive", text)
         self.assertNotIn("Restore iOS 26.5 runtime archive", text)
+        self.assertNotIn("Save installed simulator runtimes", text)
+        self.assertNotIn("orlix-installed-simruntimes-15.5-26.5", text)
+        bootable = text.split("name: Save bootable iOS 15.5 simulator runtime", 1)[1].split("\n      - name:", 1)[0]
         ios15 = text.split("name: Save iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
-        installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'",
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.ios15-bootable.outputs.cache-hit != 'true' && steps.runtimes.outputs.bootable_archive == 'true'",
+            bootable,
+        )
+        self.assertIn("path: ~/Library/Caches/Orlix/ios15-simruntime-bootable/iOS-15.5.simruntime.tar", bootable)
+        self.assertIn("key: orlix-ios15-simruntime-bootable-v1", bootable)
+        self.assertIn(
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.ios15-bootable.outputs.cache-hit != 'true' && steps.runtimes.outputs.ios15_archive == 'true' && steps.runtimes.outputs.bootable_archive != 'true'",
             ios15,
         )
         self.assertIn("path: ~/Library/Caches/Orlix/ios15-runtime", ios15)
-        self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
-            installed,
-        )
-        self.assertIn("path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes", installed)
 
     def test_pull_requests_do_not_publish_setup_caches(self) -> None:
         text = workflow_text("bazel-ci.yml")
