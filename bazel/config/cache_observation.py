@@ -116,10 +116,17 @@ def coreutils_action_counters(text: str) -> dict[str, int] | None:
             search_from = brace + 1
             continue
         if isinstance(payload, dict) and all(isinstance(payload.get(name), int) for name in required):
+            # `cache_miss` is ccache's final miss. `direct_cache_miss` is a
+            # separate direct-mode lookup miss. A zero final miss does not
+            # erase those lookup misses.
+            direct_misses = payload.get("direct_cache_miss")
+            misses = payload["cache_miss"]
+            if isinstance(direct_misses, int):
+                misses += direct_misses
             return {
                 "direct_hits": payload["direct_cache_hit"],
                 "preprocessed_hits": payload["preprocessed_cache_hit"],
-                "misses": payload["cache_miss"],
+                "misses": misses,
                 "called_for_link": int(payload.get("called_for_link") or 0),
             }
         search_from = brace + 1
