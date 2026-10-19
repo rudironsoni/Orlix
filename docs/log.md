@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Record compiler-object cache statistics
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) reads ccache's direct hits, preprocessed hits, misses, called-for-link count, and cache size from the executed compiler environment. A `CCACHE_DIR` directory is not a hit. Those counters stay separate from Bazel disk-cache hits and BuildBuddy remote-cache hits. Statistics files and ccache timestamps are not action inputs. One proof deletes a compiled object, keeps `CCACHE_DIR`, and requires the rebuilt object bytes to match on a ccache hit. `object_differs` stays false when the bytes match. A same-runner hit is not a fresh-runner pass. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Skip brew bundle when pinned tools are installed
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `brew bundle` when every formula in the selected Brewfile is already installed at its pinned version. The check reads the Homebrew prefix and does not run `brew info` once per formula. A missing compiler or build tool still runs `brew bundle`. `/opt/homebrew/opt/llvm/bin/clang` is the pinned clang. Unlinked `llvm@20` on the macOS 26 runner is not that keg. Ordinary Bazel CI no longer restores or saves Homebrew source bottles. Those bottles were only formulae built from source, so they did not skip bottle installs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

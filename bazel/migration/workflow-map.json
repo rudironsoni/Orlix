@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "c1860a087bed4a8794c787057ce48934c9470d56660cffa04ca84bfb6d289cfe",
+      "source_sha256": "3858438aba72f13569fab928338ab3e8d0a0bccd84b38f8980f885c02efc2d34",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -393,11 +393,16 @@
               },
               {
                 "name": "Restore local compiler object cache",
+                "id": "ccache-restore",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
                   "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
                 }
+              },
+              {
+                "name": "Record restored compiler-object cache statistics",
+                "run": "set -euo pipefail\npython3 bazel/compiler_cache.py --statistics \\\n  --cache-dir \"$HOME/Library/Caches/Orlix/ccache\" \\\n  --cache-key \"orlix-ccache-${{ steps.compiler.outputs.digest }}\" \\\n  --restored \"${{ steps.ccache-restore.outputs.cache-hit }}\" \\\n  --label restored \\\n  --zero-after\n"
               },
               {
                 "name": "Capture the toolchain manifest before simulator preparation",

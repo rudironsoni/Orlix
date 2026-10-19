@@ -186,10 +186,21 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Restore local compiler object cache
+        id: ccache-restore
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache
           key: orlix-ccache-${{ steps.compiler.outputs.digest }}
+
+      - name: Record restored compiler-object cache statistics
+        run: |
+          set -euo pipefail
+          python3 bazel/compiler_cache.py --statistics \
+            --cache-dir "$HOME/Library/Caches/Orlix/ccache" \
+            --cache-key "orlix-ccache-${{ steps.compiler.outputs.digest }}" \
+            --restored "${{ steps.ccache-restore.outputs.cache-hit }}" \
+            --label restored \
+            --zero-after
 
       - name: Capture the toolchain manifest before simulator preparation
         run: |

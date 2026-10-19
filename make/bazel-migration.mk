@@ -147,7 +147,11 @@ __bazel-buildbuddy-cleanup:
 
 __bazel-cache-observation:
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"
-	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m cache_observation --execution "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/execution.json" --bep "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/build-events.json" --access "$(or $(ORLIX_BUILDBUDDY_ACCESS),off)" --out "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json"
+	@set -euo pipefail; \
+	stats="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/ccache-statistics.json"; \
+	python3 "$(CURDIR)/bazel/compiler_cache.py" --statistics --cache-dir "$(CCACHE_DIR)" --label executed --out "$$stats"; \
+	PYTHONPATH="$(CURDIR)/bazel/config" python3 -m cache_observation --execution "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/execution.json" --bep "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/build-events.json" --access "$(or $(ORLIX_BUILDBUDDY_ACCESS),off)" --ccache-statistics "$$stats" --out "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json"; \
+	python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); c=p["counters"]; s=p["ccache"]; print("ccache_hits=%s" % c["ccache_hits"]); print("bazel_disk_cache_hits=%s" % c["bazel_disk_cache_hits"]); print("buildbuddy_remote_cache_hits=%s" % c["buildbuddy_remote_cache_hits"]); print("ccache_direct_hits=%s" % s["direct_hits"]); print("ccache_preprocessed_hits=%s" % s["preprocessed_hits"]); print("ccache_misses=%s" % s["misses"]); print("ccache_called_for_link=%s" % s["called_for_link"]); print("ccache_cache_size_kibibytes=%s" % s["cache_size_kibibytes"])' "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json"
 	@if [ -n "$${GITHUB_STEP_SUMMARY:-}" ]; then printf '\nCache observation:\n```json\n' >> "$$GITHUB_STEP_SUMMARY"; cat "$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/cache-observation.json" >> "$$GITHUB_STEP_SUMMARY"; printf '```\n' >> "$$GITHUB_STEP_SUMMARY"; fi
 
 __bazel-apple-smoke: __bazel-feasibility-bootstrap
@@ -841,6 +845,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@python3 -m unittest bazel.feasibility.kernel.test_uapi_inputs bazel.feasibility.mlibc.test_build_state bazel.feasibility.mlibc.test_rule_text bazel.feasibility.packages.test_action_inputs bazel.feasibility.native.test_ssh_archive_pin bazel.feasibility.native.test_ssh_archive_inputs bazel.feasibility.rootfs.test_ext4_bytes bazel.product.test_app_modules
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/packages" python3 -m unittest test_build_state
+	@PYTHONPATH="$(CURDIR)" python3 -m unittest bazel.feasibility.test_compiler_cache_action
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_stage_v2_product
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_sbom
