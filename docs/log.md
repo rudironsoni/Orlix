@@ -11,6 +11,10 @@ updated: 2026-10-19
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `brew bundle` when every formula in the selected Brewfile is already installed at its pinned version. The check reads the Homebrew prefix and does not run `brew info` once per formula. A missing compiler or build tool still runs `brew bundle`. `/opt/homebrew/opt/llvm/bin/clang` is the pinned clang. Unlinked `llvm@20` on the macOS 26 runner is not that keg. Ordinary Bazel CI no longer restores or saves Homebrew source bottles. Those bottles were only formulae built from source, so they did not skip bottle installs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
+## [2026-10-19] build | Rewrite a read-only cache-equivalence id in rootfs files
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) adds user write permission before it replaces `cache-equivalence.<id>` with `cache-equivalence.pinned`, then restores the original mode. A mode 0555 file such as `usr/bin/jq` is rewritten. Skipping it would leave the embedded id in `base.ext4`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Cache a bootable iOS 15.5 simulator archive
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) saves one sudo tar of the installed iOS 15.5 simulator, including `private/var/mobile`, as `orlix-ios15-simruntime-bootable-v1`. Later jobs extract that tar before `prepare-runtime`. A bootable restored bundle skips `xcodes runtimes install`. A partial tree is not uploaded. iOS 26.5 stays the runner image runtime. A job that restored the bootable archive does not restore or save the iOS 15.5 DMG. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
