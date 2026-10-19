@@ -771,7 +771,14 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             )
             self.assertIn('test "$(xcodes version)" = "2.1.0"', text, name)
             self.assertIn("install-bottles", text, name)
-            self.assertIn("capture-bottles", text, name)
+            if name == "bazel-ci.yml":
+                tools = text.split("name: Install declared build tools", 1)[1].split("\n      - name:", 1)[0]
+                main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
+                guarded = tools.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
+                self.assertIn("capture-bottles", guarded)
+                self.assertNotIn("capture-bottles", tools.split(main_only, 1)[0])
+            else:
+                self.assertIn("capture-bottles", text, name)
             self.assertNotIn('test "$(xcodes version)" = "2.0.3"', text, name)
             for block in cache_blocks(text):
                 self.assertNotIn("output-base", block, name)

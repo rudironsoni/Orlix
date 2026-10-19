@@ -162,7 +162,9 @@ jobs:
           fi
           test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
           test "$(xcodes version)" = "2.1.0"
-          python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles" --brewfile Brewfile
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir "$HOME/Library/Caches/Orlix/homebrew-bottles" --brewfile Brewfile
+          fi
           if compgen -G "$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz" > /dev/null; then
             echo "bottles=true" >> "$GITHUB_OUTPUT"
           else
