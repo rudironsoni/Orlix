@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "5d5ad0f51ddd34dfacc03d276c412f903e276a705b13889f5c74d085ec8fa36b",
+      "source_sha256": "992f49c6367a07f7b57cc7e0bbab2db89064b3cb0c0600f793b9554841e69cb7",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -370,15 +370,6 @@
                 }
               },
               {
-                "name": "Restore iOS 26.5 runtime archive",
-                "if": "steps.installed-runtimes.outputs.cache-hit != 'true'",
-                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/ios26-runtime",
-                  "key": "orlix-ios-runtime-26.5-arm64"
-                }
-              },
-              {
                 "name": "Restore Homebrew source bottles",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
@@ -389,7 +380,7 @@
               {
                 "name": "Install declared build tools",
                 "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\npython3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile Brewfile\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file bazel/ci/Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\nif [ \"$GITHUB_EVENT_NAME\" = push ] && [ \"$GITHUB_REF\" = refs/heads/main ]; then\n  python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile bazel/ci/Brewfile\nfi\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -451,7 +442,7 @@
               {
                 "name": "Prepare both simulator runtimes",
                 "id": "runtimes",
-                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"; then\n  echo \"ios15_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios15_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\"; then\n  echo \"ios26_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios26_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\ncurrent_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)\"\nios15_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\npython3 bazel/ci/setup_cache.py boot-simulator --udid \"$current_id\"\npython3 bazel/ci/setup_cache.py boot-simulator --udid \"$ios15_id\"\n# iOS 26.5 is the runner image runtime. Do not copy it into the\n# directory simctl scans. The installed iOS 15.5 bundle is copied\n# only after boot, and only if that tree is still bootable.\npython3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\nif python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"; then\n  echo \"simruntime=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"simruntime=false\" >> \"$GITHUB_OUTPUT\"\nfi\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\npython3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\npython3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir \"$HOME/Library/Caches/Orlix/ios26-runtime\" --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\nif python3 bazel/ci/setup_cache.py archive-present --archive-dir \"$HOME/Library/Caches/Orlix/ios15-runtime\"; then\n  echo \"ios15_archive=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ios15_archive=false\" >> \"$GITHUB_OUTPUT\"\nfi\ncurrent_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)\"\nios15_runtime_id=\"$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)\"\ntest -n \"$current_runtime_id\"\ntest -n \"$ios15_runtime_id\"\ndevice_type=\"com.apple.CoreSimulator.SimDeviceType.iPhone-13\"\nxcrun simctl list devicetypes -j | jq -e --arg identifier \"$device_type\" '.devicetypes[] | select(.identifier == $identifier)' >/dev/null\ncurrent_id=\"$(xcrun simctl create \"Orlix current CI\" \"$device_type\" \"$current_runtime_id\")\"\nios15_id=\"$(xcrun simctl create \"Orlix iOS 15.5 CI\" \"$device_type\" \"$ios15_runtime_id\")\"\ntest -n \"$current_id\"\ntest -n \"$ios15_id\"\n# iOS 26.5 is the runner image runtime. Do not copy it into the\n# directory simctl scans. Store the installed iOS 15.5 bundle only\n# on main, the only ref that can fill the shared cache. Proofs boot\n# one simulator at a time after the app build.\nif [ \"$GITHUB_EVENT_NAME\" = push ] && [ \"$GITHUB_REF\" = refs/heads/main ]; then\n  python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"\nfi\nif python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir \"$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes\"; then\n  echo \"simruntime=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"simruntime=false\" >> \"$GITHUB_OUTPUT\"\nfi\n{\n  echo \"ORLIX_CURRENT_SIMULATOR_ID=$current_id\"\n  echo \"ORLIX_CURRENT_SIMULATOR_VERSION=26.5\"\n  echo \"ORLIX_IOS15_SIMULATOR_ID=$ios15_id\"\n} >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Save iOS 15.5 runtime archive",
@@ -460,15 +451,6 @@
                 "with": {
                   "path": "~/Library/Caches/Orlix/ios15-runtime",
                   "key": "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
-                }
-              },
-              {
-                "name": "Save iOS 26.5 runtime archive",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/ios26-runtime",
-                  "key": "orlix-ios-runtime-26.5-arm64"
                 }
               },
               {

@@ -563,7 +563,14 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             )
             self.assertIn('test "$(xcodes version)" = "2.1.0"', text, name)
             self.assertIn("install-bottles", text, name)
-            self.assertIn("capture-bottles", text, name)
+            if name == "bazel-ci.yml":
+                tools = text.split("name: Install declared build tools", 1)[1].split("\n      - name:", 1)[0]
+                main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
+                guarded = tools.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
+                self.assertIn("capture-bottles", guarded)
+                self.assertNotIn("capture-bottles", tools.split(main_only, 1)[0])
+            else:
+                self.assertIn("capture-bottles", text, name)
             self.assertNotIn('test "$(xcodes version)" = "2.0.3"', text, name)
             for block in cache_blocks(text):
                 self.assertNotIn("output-base", block, name)
@@ -580,17 +587,27 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("orlix-installed-simruntimes-15.5-complete", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
-            self.assertIn('boot-simulator --udid "$current_id"', text, name)
-            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
             self.assertNotIn("stage-runtime --version 26.5", text, name)
-            self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
             self.assertNotIn("sudo xcodes runtimes install", text, name)
             self.assertNotIn('.version == "15.5"', text, name)
+            if name == "bazel-ci.yml":
+                self.assertNotIn("boot-simulator", text, name)
+                self.assertNotIn("orlix-ios-runtime-26.5-arm64", text, name)
+                self.assertNotIn("orlix-installed-simruntimes-15.5-26.5", text, name)
+                continue
+            self.assertIn('boot-simulator --udid "$current_id"', text, name)
+            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
+            self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
         ci = workflow_text("bazel-ci.yml")
-        self.assertGreater(
-            ci.index("stage-runtime --version 15.5"),
-            ci.index('boot-simulator --udid "$ios15_id"'),
-        )
+        main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
+        prepare = ci.split("name: Prepare both simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertLess(prepare.index('prepare-runtime --version 15.5'), prepare.index(main_only))
+        self.assertLess(prepare.index('simctl create "Orlix iOS 15.5 CI"'), prepare.index(main_only))
+        guarded = prepare.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
+        self.assertNotIn("prepare-runtime --version 15.5", guarded)
+        self.assertNotIn('simctl create "Orlix iOS 15.5 CI"', guarded)
+        self.assertIn("stage-runtime --version 15.5", guarded)
+        self.assertIn("ORLIX_IOS15_SIMULATOR_ID=$ios15_id", prepare)
         self.assertGreater(ci.index("simruntime-present"), ci.index("stage-runtime --version 15.5"))
 
     def test_every_installer_workflow_skips_xcode_and_homebrew_when_present(self) -> None:
@@ -605,7 +622,22 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("xcode-selected", text, name)
             self.assertIn("steps.xcode-present.outputs.installed == 'true'", text, name)
             self.assertIn("steps.xcode-present.outputs.installed != 'true'", text, name)
-            self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
+            if name == "bazel-ci.yml":
+                self.assertIn("bundle-satisfied --brewfile bazel/ci/Brewfile", text, name)
+                self.assertIn("brew bundle --file bazel/ci/Brewfile", text, name)
+                self.assertNotIn("brew bundle --file Brewfile", text, name)
+                promoted = text.split("brew list cosign", 1)[1].split("\n      - name:", 1)[0]
+                self.assertIn("brew list oras", promoted)
+                local = (ROOT / "Brewfile").read_text(encoding="utf-8")
+                ci_brew = (ROOT / "bazel/ci/Brewfile").read_text(encoding="utf-8")
+                for formula in ("actionlint", "zizmor", "cosign", "oras"):
+                    self.assertIn(f'brew "{formula}"', local)
+                    self.assertNotIn(f'brew "{formula}"', ci_brew)
+                for formula in ("llvm", "lld", "zig", "autoconf", "automake", "libtool"):
+                    self.assertIn(f'brew "{formula}"', local)
+                    self.assertIn(f'brew "{formula}"', ci_brew)
+            else:
+                self.assertIn("bundle-satisfied --brewfile Brewfile", text, name)
             self.assertIn("skipping brew bundle", text, name)
         for name in WORKFLOWS:
             if name in RUNTIME_WORKFLOWS:
@@ -636,7 +668,6 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         apple = text.index("name: Run the Make-owned Apple CI operation")
         names = (
             "Save iOS 15.5 runtime archive",
-            "Save iOS 26.5 runtime archive",
             "Save installed simulator runtimes",
         )
         previous = prepare
@@ -646,19 +677,15 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertGreater(found, previous, name)
             self.assertLess(found, apple, name)
             previous = found
+        self.assertNotIn("Save iOS 26.5 runtime archive", text)
+        self.assertNotIn("Restore iOS 26.5 runtime archive", text)
         ios15 = text.split("name: Save iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
-        ios26 = text.split("name: Save iOS 26.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
         installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn(
             "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'",
             ios15,
         )
         self.assertIn("path: ~/Library/Caches/Orlix/ios15-runtime", ios15)
-        self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'",
-            ios26,
-        )
-        self.assertIn("path: ~/Library/Caches/Orlix/ios26-runtime", ios26)
         self.assertIn(
             "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
             installed,
