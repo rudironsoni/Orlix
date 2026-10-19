@@ -49,13 +49,12 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertNotIn("TMPDIR", text, name)
             self.assertNotIn("source-input.sha256", text, name)
             self.assertNotIn("DEVELOPER_DIR", text, name)
-            if name in {"coreutils.bzl", "bash.bzl"}:
-                self.assertIn('if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then', text, name)
-                self.assertIn('[ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"', text, name)
-                self.assertIn('export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"', text, name)
-                self.assertIn('launcher="$tool_bin/ccache"', text, name)
-            else:
-                self.assertNotIn("CCACHE_DIR", text, name)
+            self.assertIn('if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then', text, name)
+            self.assertIn('[ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"', text, name)
+            self.assertIn('export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"', text, name)
+            self.assertIn('launcher="$tool_bin/ccache"', text, name)
+            self.assertIn('export ORLIX_COMPILER_LAUNCHER="$launcher"', text, name)
+            self.assertIn("compiler_cache_env(", text, name)
             self.assertNotIn("/opt/homebrew", text, name)
             self.assertIn("no-remote-exec", text, name)
         for name in ("local.bzl", "package.bzl"):

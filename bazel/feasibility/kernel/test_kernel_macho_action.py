@@ -28,9 +28,7 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertIn("use_default_shell_env = False", archive)
         self.assertNotIn("use_default_shell_env = True", self.rule)
         self.assertNotIn("TMPDIR", self.rule)
-        self.assertNotIn('shell.get("CCACHE_DIR")', self.rule)
-        self.assertNotIn('env["CCACHE_DIR"]', self.rule)
-        self.assertIn('shell.get("CCACHE_DISABLE")', self.rule)
+        self.assertIn("compiler_cache_env(shell)", self.rule)
         self.assertNotIn("env[\"TMPDIR\"]", self.rule)
         self.assertNotIn("CCACHE_DIR is required", self.rule)
 
@@ -45,6 +43,9 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         disabled = "set -euo pipefail\nunset CCACHE_DIR\nexport CCACHE_DISABLE=1\nexport HOME=/var/empty\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test -z "${ORLIX_COMPILER_LAUNCHER}"\n'
         result = subprocess.run(["bash"], input=disabled, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        configured = "set -euo pipefail\nunset CCACHE_DISABLE\nunset ORLIX_COMPILER_LAUNCHER\nexport CCACHE_DIR=/var/cache/orlix-compiler\nexport HOME=/var/empty\nccache_staged=/staged/ccache\n" + snippet + 'test "$ORLIX_COMPILER_LAUNCHER" = "$ccache_staged"\ntest "$CCACHE_DIR" = /var/cache/orlix-compiler\n'
+        result = subprocess.run(["bash"], input=configured, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unread_extra_inputs_are_gone(self) -> None:

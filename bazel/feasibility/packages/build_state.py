@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from bazel import build_state as state
+from bazel.compiler_cache import apply_action_environment
 from bazel.feasibility.mlibc.header_digest import followed_tree_digest
 
 _TREES = ("src", "build", "inputs")
@@ -142,19 +143,18 @@ def prepare(root: Path, arguments: list[str], *, in_tree: bool = False, extra_tr
 
 
 def _tool_environment(environment: dict[str, str], tool_bin: str) -> None:
-    """Run staged tools and keep absolute cache and Xcode paths out of the process."""
+    """Run staged tools. Drop absolute Xcode paths and keep a configured compiler cache."""
     binary = Path(tool_bin)
     if not binary.is_absolute():
         binary = Path.cwd() / binary
     binary = binary.resolve()
     tools = binary.parent
     root = tools.parent
-    environment.pop("CCACHE_DIR", None)
     environment.pop("DEVELOPER_DIR", None)
     environment.pop("TMPDIR", None)
     environment.pop("SDKROOT", None)
     environment.pop("ORLIX_PINNED_DEVELOPER_DIR", None)
-    environment["ORLIX_COMPILER_LAUNCHER"] = ""
+    apply_action_environment(environment)
     environment["ORLIX_PACKAGE_TOOL_BIN"] = str(tools)
     environment["ORLIX_PACKAGE_SDK"] = str(root / "sdk")
     environment["PATH"] = str(tools) + ":/usr/bin:/bin"

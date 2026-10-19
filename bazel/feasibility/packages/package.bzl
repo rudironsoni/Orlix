@@ -1,15 +1,21 @@
 """Autotools/upstream-Make guest package from OrlixMLibC sysroot only."""
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 load(":source_key.bzl", "declare_source_key", "declare_tree_tar")
 
-def _pinned_env(_ctx):
-    return {
+def _pinned_env(ctx):
+    env = {
         "HOME": "/var/empty",
         "PATH": "/usr/bin:/bin",
+        "CCACHE_CONFIGPATH": "/dev/null",
+        "CCACHE_COMPILERCHECK": "content",
+        "CCACHE_MAXSIZE": "20G",
     }
+    env.update(compiler_cache_env(ctx.configuration.default_shell_env))
+    return env
 
 def _extract():
     # filter= exists only when tarfile.data_filter does (Python 3.12+).
@@ -76,7 +82,19 @@ src="$sources/$(/usr/bin/dirname "$configure_rel")"
 configure_name="$(/usr/bin/basename "$configure_rel")"
 /bin/chmod +x "$src/$configure_name"
 cd "$src"
-CC="$clang" \
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
+  launcher=""
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  launcher="$tool_bin/ccache"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  launcher="$tool_bin/ccache"
+else
+  launcher=""
+fi
+export ORLIX_COMPILER_LAUNCHER="$launcher"
+export CCACHE_BASEDIR="$work"
+CC="${launcher:+$launcher }$clang" \
 CFLAGS="--target=aarch64-linux-gnu -isystem $headers -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map=$work=. -ffile-prefix-map=$tool_bin=/orlix/tools" \
 LDFLAGS="--target=aarch64-linux-gnu -fuse-ld=$tool_bin/ld.lld -nostdlib -static-pie -Wl,-z,max-page-size=0x4000 $libraries/crt1.o $libraries/crti.o -Wl,--start-group $libraries/libc.a $runtime -Wl,--end-group $libraries/crtn.o" \
     "./$configure_name" --host=aarch64-linux-gnu --prefix=/usr
