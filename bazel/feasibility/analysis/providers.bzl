@@ -149,6 +149,22 @@ variant_stamp_test = analysistest.make(
     },
 )
 
+def _linux_source_archives(files):
+    """Paths of the one Linux archive, in whatever configuration spelled them.
+
+    Bzlmod paths look like ``external/+native_sources+orlix_linux_source/linux-source.tar``.
+    A slash before ``orlix_linux_source`` is not part of that name.
+    """
+    found = []
+    for item in files:
+        if item.basename != "linux-source.tar":
+            continue
+        if "orlix_linux_source" not in item.path and "orlix_linux_source" not in item.short_path:
+            continue
+        chosen = item.short_path if item.short_path.endswith("linux-source.tar") else item.path
+        found.append(chosen)
+    return found
+
 def _no_wrapper_makefile_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
@@ -158,7 +174,7 @@ def _no_wrapper_makefile_test_impl(ctx):
             found = True
             argv = " ".join(action.argv)
             paths = [f.path for f in action.inputs.to_list()]
-            linux_package = [path for path in paths if "/orlix_linux_source/" in path]
+            linux_package = _linux_source_archives(action.inputs.to_list())
             unrelated = [path for path in paths if path.endswith("/kernel/fork.c") or path.endswith("/mm/page_alloc.c")]
             saw_patch = False
             for path in paths:
@@ -170,7 +186,8 @@ def _no_wrapper_makefile_test_impl(ctx):
             asserts.true(env, "orlix_linux_source" in argv)
             asserts.true(env, "linux_source_archive.py" in argv)
             asserts.equals(env, 1, len(linux_package), "linux source inputs: %s" % linux_package)
-            asserts.true(env, linux_package[0].endswith("/linux-source.tar"), linux_package)
+            if len(linux_package) == 1:
+                asserts.true(env, linux_package[0].endswith("linux-source.tar"), linux_package)
             asserts.true(env, saw_patch, "headers_install is missing kernel patches")
             asserts.true(env, len(unrelated) == 0, "headers_install inputs include unrelated kernel sources: %s" % unrelated)
     asserts.true(env, found)
@@ -206,9 +223,11 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
             asserts.false(env, "OrlixKernel/Makefile" in script)
             asserts.false(env, "ORLIX_TCTI_ISA_PREPARED" in action.env)
             asserts.false(env, "../../../../OrlixKernel/orlix-tcti-isa" in argv)
-            linux_package = [f.path for f in action.inputs.to_list() if "/orlix_linux_source/" in f.path]
+            linux_package = _linux_source_archives(action.inputs.to_list())
             asserts.equals(env, 1, len(linux_package), "linux source inputs: %s" % linux_package)
-            asserts.true(env, linux_package[0].endswith("/linux-source.tar"), linux_package)
+            if len(linux_package) == 1:
+                asserts.true(env, linux_package[0].endswith("linux-source.tar"), linux_package)
+                asserts.true(env, "orlix_linux_source" in linux_package[0], linux_package)
             asserts.true(env, "linux-source.tar" in script)
             asserts.true(env, "linux_source_archive.py" in script)
             asserts.true(env, "tcti_isa" in inputs)

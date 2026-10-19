@@ -57,6 +57,14 @@ def _revision(linux: Path, work: Path) -> str:
 
 
 class LinuxSourceArchiveTests(unittest.TestCase):
+    def test_analysis_reads_the_archive_without_indexing_an_empty_list(self) -> None:
+        text = (ROOT / "bazel/feasibility/analysis/providers.bzl").read_text(encoding="utf-8")
+        self.assertIn('item.basename != "linux-source.tar"', text)
+        self.assertIn("item.short_path", text)
+        self.assertNotIn('linux_package[0].endswith("/linux-source.tar")', text)
+        self.assertEqual(text.count("if len(linux_package) == 1:"), 2)
+        self.assertEqual(text.count("linux_package[0]"), 3)
+
     def test_source_package_configures_one_archive(self) -> None:
         build = package_build(["Makefile", "usr/gen_init_cpio.c"])
         self.assertNotIn("glob(", build)
