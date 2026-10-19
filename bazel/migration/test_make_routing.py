@@ -133,6 +133,24 @@ class MakeRoutingTests(unittest.TestCase):
             apple.index("__bazel-ios15-simulator-gate"),
         )
 
+    def test_config_build_keeps_product_apple_flags(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        bootstrap = makefile.split("__bazel-feasibility-bootstrap:", 1)[1].split(
+            "__bazel-buildbuddy-policy:", 1
+        )[0]
+        config = next(line for line in bootstrap.splitlines() if " build //bazel/config:all " in line)
+        app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        app_build = next(line for line in app.splitlines() if " build $(ORLIX_BAZEL_APP_TARGETS) " in line)
+        for flag in (
+            "--compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE)",
+            "--apple_platform_type=ios",
+            "--ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU)",
+            '--output_base="$(ORLIX_BAZEL_OUTPUT_BASE)"',
+        ):
+            self.assertIn(flag, config)
+            self.assertIn(flag, app_build)
+        self.assertNotIn("cquery //Orlix:Orlix", app)
+
     def test_source_app_does_not_reconstruct_promoted_components(self) -> None:
         output = _dry_run(
             "__bazel-orlix-app", "ORLIX_BAZEL_COMPONENT_MODE=source",
