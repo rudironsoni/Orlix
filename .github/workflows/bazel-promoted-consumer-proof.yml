@@ -89,22 +89,22 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
-      - name: Restore installed simulator runtimes
-        id: installed-runtimes
+      - name: Restore bootable iOS 15.5 simulator runtime
+        id: ios15-bootable
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
-          key: orlix-installed-simruntimes-15.5-complete
+          path: ~/Library/Caches/Orlix/ios15-simruntime-bootable/iOS-15.5.simruntime.tar
+          key: orlix-ios15-simruntime-bootable-v1
 
       - name: Restore iOS 15.5 runtime archive
-        if: steps.installed-runtimes.outputs.cache-hit != 'true'
+        if: steps.ios15-bootable.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
       - name: Restore iOS 26.5 runtime archive
-        if: steps.installed-runtimes.outputs.cache-hit != 'true'
+        if: steps.ios15-bootable.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios26-runtime
@@ -180,6 +180,10 @@ jobs:
       - name: Prepare both simulator runtimes
         run: |
           set -euo pipefail
+          bootable_dir="$HOME/Library/Caches/Orlix/ios15-simruntime-bootable"
+          if [ -f "$bootable_dir/iOS-15.5.simruntime.tar" ]; then
+            python3 bazel/ci/setup_cache.py extract-bootable-runtime --archive-dir "$bootable_dir" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          fi
           python3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           python3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           current_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)"

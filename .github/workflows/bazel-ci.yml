@@ -125,15 +125,15 @@ jobs:
           restore-keys: |
             orlix-bazel-repos-
 
-      - name: Restore installed simulator runtimes
-        id: installed-runtimes
+      - name: Restore bootable iOS 15.5 simulator runtime
+        id: ios15-bootable
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
-          key: orlix-installed-simruntimes-15.5-complete
+          path: ~/Library/Caches/Orlix/ios15-simruntime-bootable/iOS-15.5.simruntime.tar
+          key: orlix-ios15-simruntime-bootable-v1
 
       - name: Restore iOS 15.5 runtime archive
-        if: steps.installed-runtimes.outputs.cache-hit != 'true'
+        if: steps.ios15-bootable.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
@@ -235,6 +235,10 @@ jobs:
         id: runtimes
         run: |
           set -euo pipefail
+          bootable_dir="$HOME/Library/Caches/Orlix/ios15-simruntime-bootable"
+          if [ -f "$bootable_dir/iOS-15.5.simruntime.tar" ]; then
+            python3 bazel/ci/setup_cache.py extract-bootable-runtime --archive-dir "$bootable_dir" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          fi
           python3 bazel/ci/setup_cache.py prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           python3 bazel/ci/setup_cache.py prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           if python3 bazel/ci/setup_cache.py archive-present --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"; then
@@ -253,16 +257,17 @@ jobs:
           test -n "$current_id"
           test -n "$ios15_id"
           # iOS 26.5 is the runner image runtime. Do not copy it into the
-          # directory simctl scans. Store the installed iOS 15.5 bundle only
-          # on main, the only ref that can fill the shared cache. Proofs boot
-          # one simulator at a time after the app build.
+          # directory simctl scans. Proofs boot one simulator at a time after
+          # the app build. On main, sudo-tar the installed iOS 15.5 bundle so
+          # private/var/mobile is in the one bootable archive. A partial tree
+          # is not archived.
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
-            python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+            python3 bazel/ci/setup_cache.py archive-bootable-runtime --version 15.5 --archive-dir "$bootable_dir" --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           fi
-          if python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"; then
-            echo "simruntime=true" >> "$GITHUB_OUTPUT"
+          if python3 bazel/ci/setup_cache.py bootable-archive-present --archive-dir "$bootable_dir"; then
+            echo "bootable_archive=true" >> "$GITHUB_OUTPUT"
           else
-            echo "simruntime=false" >> "$GITHUB_OUTPUT"
+            echo "bootable_archive=false" >> "$GITHUB_OUTPUT"
           fi
           {
             echo "ORLIX_CURRENT_SIMULATOR_ID=$current_id"
@@ -270,19 +275,19 @@ jobs:
             echo "ORLIX_IOS15_SIMULATOR_ID=$ios15_id"
           } >> "$GITHUB_ENV"
 
+      - name: Save bootable iOS 15.5 simulator runtime
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.ios15-bootable.outputs.cache-hit != 'true' && steps.runtimes.outputs.bootable_archive == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ios15-simruntime-bootable/iOS-15.5.simruntime.tar
+          key: orlix-ios15-simruntime-bootable-v1
+
       - name: Save iOS 15.5 runtime archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.ios15-bootable.outputs.cache-hit != 'true' && steps.runtimes.outputs.ios15_archive == 'true' && steps.runtimes.outputs.bootable_archive != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
-
-      - name: Save installed simulator runtimes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
-          key: orlix-installed-simruntimes-15.5-complete
 
       - name: Select the component mode
         id: component-mode
