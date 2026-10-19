@@ -157,7 +157,7 @@ jobs:
         if: steps.toolchain-pin.outputs.ready == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar
+          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz
           key: orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}
 
       - name: Install declared build tools
@@ -170,7 +170,7 @@ jobs:
           set -euo pipefail
           # The elapsed time is the measurement for this step. It is not a budget.
           install_started=$SECONDS
-          archive="$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar"
+          archive="$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz"
           restored=false
           if [ "$ORLIX_TOOLCHAIN_READY" = true ] && [ -f "$archive" ]; then
             if python3 bazel/ci/setup_cache.py restore-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"; then
@@ -201,24 +201,18 @@ jobs:
           test "$(xcodes version)" = "2.1.0"
           if [ -f "$archive" ]; then
             bytes=$(stat -f%z "$archive")
-            # About 2GB is the cap beside the 5GB bootable iOS 15.5 runtime.
-            if [ "$bytes" -gt 2000000000 ]; then
-              echo "not saving CI toolchain archive; $bytes bytes is above 2000000000"
-              rm -f "$archive"
-              bytes=0
-            fi
-          else
-            bytes=0
-          fi
-          if [ -f "$archive" ]; then
             echo "toolchain=true" >> "$GITHUB_OUTPUT"
-            echo "bytes=$bytes" >> "$GITHUB_OUTPUT"
             echo "toolchain archive bytes=$bytes"
           else
+            bytes=0
             echo "toolchain=false" >> "$GITHUB_OUTPUT"
-            echo "bytes=0" >> "$GITHUB_OUTPUT"
             echo "toolchain archive bytes=0"
           fi
+          echo "bytes=$bytes" >> "$GITHUB_OUTPUT"
+          # ccache is 97654617 bytes and the Bazel repository cache is
+          # 571396067 bytes. Drop one of those, not this archive or the
+          # 5126954916-byte iOS 15.5 runtime, if the sum would pass 10GB.
+          python3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes "$bytes" >> "$GITHUB_OUTPUT"
           elapsed=$((SECONDS - install_started))
           echo "seconds=$elapsed" >> "$GITHUB_OUTPUT"
           echo "declared build tools took ${elapsed}s"
@@ -227,7 +221,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.toolchain-pin.outputs.ready == 'true' && steps.ci-toolchain.outputs.cache-hit != 'true' && steps.tools.outputs.toolchain == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar
+          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz
           key: orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}
 
       - name: Install the requested Xcode from the cache or Apple
@@ -494,7 +488,7 @@ jobs:
           fi
 
       - name: Save Bazel repository cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true' && steps.tools.outputs.drop_repository != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
@@ -508,7 +502,7 @@ jobs:
           key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
 
       - name: Save local compiler object cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache

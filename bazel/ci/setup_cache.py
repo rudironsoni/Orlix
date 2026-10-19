@@ -410,17 +410,23 @@ BOOTABLE_SIMRUNTIME_CACHE_KEY = "orlix-ios15-simruntime-bootable-v1"
 IOS15_DMG_CACHE_KEY = (
     "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
 )
-CI_TOOLCHAIN_ARCHIVE_NAME = "ci-toolchain.tar"
+CI_TOOLCHAIN_ARCHIVE_NAME = "ci-toolchain.tar.gz"
 CI_TOOLCHAIN_MANIFEST_NAME = "orlix-toolchain-manifest.json"
 CI_TOOLCHAIN_CACHE_KEY_PREFIX = "orlix-ci-toolchain"
 PINNED_CI_CLANG = "/opt/homebrew/opt/llvm/bin/clang"
 EXCLUDED_TOOLCHAIN_FORMULAE = frozenset({"llvm@20"})
-# Run 39305085161 restored orlix-ios15-simruntime-bootable-v1 at
-# BOOTABLE_SIMRUNTIME_CACHE_BYTES. That hit is what lets the job skip xcodes.
-# A packed toolchain larger than about 2GB is not stored beside it.
+# Actions cache quota is about 10GB. Run 39305085161 restored the bootable
+# iOS 15.5 runtime at BOOTABLE_SIMRUNTIME_CACHE_BYTES. The CI bottle HEAD
+# total is CI_TOOLCHAIN_BOTTLE_BYTES and the installed members are
+# CI_TOOLCHAIN_MEMBER_BYTES. Those members plus the runtime are about 7.5GB.
+# ccache and the Bazel repository cache are the other live keys. They are
+# dropped before the toolchain or the iOS runtime if the sum would pass 10GB.
 ACTIONS_CACHE_QUOTA_BYTES = 10_000_000_000
 BOOTABLE_SIMRUNTIME_CACHE_BYTES = 5_126_954_916
-CI_TOOLCHAIN_ARCHIVE_BUDGET_BYTES = 2_000_000_000
+CCACHE_CACHE_BYTES = 97_654_617
+BAZEL_REPOSITORY_CACHE_BYTES = 571_396_067
+CI_TOOLCHAIN_BOTTLE_BYTES = 582_115_184
+CI_TOOLCHAIN_MEMBER_BYTES = 2_349_225_560
 TOOLCHAIN_LINK_ROOTS = ("bin", "sbin", "lib", "include", "share", "etc", "libexec", "opt")
 _KEG_REL = re.compile(r"^Cellar/([^/]+)/([^/]+)$")
 _CACHE_KEY_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]*$")
@@ -1313,7 +1319,7 @@ def write_toolchain_archive(
     partial.unlink(missing_ok=True)
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
     try:
-        with tarfile.open(partial, "w", format=tarfile.PAX_FORMAT) as bundle:
+        with tarfile.open(partial, "w:gz", format=tarfile.PAX_FORMAT, compresslevel=6) as bundle:
             info = tarfile.TarInfo(CI_TOOLCHAIN_MANIFEST_NAME)
             info.size = len(payload)
             info.mtime = 0
@@ -1332,8 +1338,9 @@ def write_toolchain_archive(
 def extract_toolchain_archive(archive: Path, prefix: Path) -> None:
     """Extract pinned kegs into the prefix. This does not replace ``/opt/homebrew``."""
     prefix.mkdir(parents=True, exist_ok=True)
+    flags = "-xzf" if archive.name.endswith(".gz") else "-xf"
     completed = subprocess.run(
-        ["tar", "-C", str(prefix), "-xf", str(archive), f"--exclude={CI_TOOLCHAIN_MANIFEST_NAME}"],
+        ["tar", "-C", str(prefix), flags, str(archive), f"--exclude={CI_TOOLCHAIN_MANIFEST_NAME}"],
         check=False,
     )
     stray = prefix / CI_TOOLCHAIN_MANIFEST_NAME
@@ -1386,64 +1393,34 @@ def pinned_clang_bytes_match(prefix: Path, manifest: dict) -> bool:
     return True
 
 
-def toolchain_archive_budget() -> int:
-    """Largest toolchain archive saved beside the bootable iOS 15.5 runtime.
+def cache_plan(toolchain_bytes: int) -> dict[str, str]:
+    """Decide which optional Actions caches to drop.
 
-    About 2GB. A larger pack is not uploaded. ``brew bundle`` still installs
-    the tools when the archive is missing.
+    The bootable iOS 15.5 runtime and this toolchain stay. ccache and the
+    Bazel repository cache are dropped, smallest sufficient cut first, only
+    when keeping them would pass the 10GB quota.
     """
-    return CI_TOOLCHAIN_ARCHIVE_BUDGET_BYTES
-
-
-def directory_bytes(path: Path) -> int:
-    """Byte size of a keg without following symlinks out of it."""
-    total = 0
-    try:
-        total += path.lstat().st_size
-    except OSError:
-        return total
-    for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
-        current = Path(dirpath)
-        for name in dirnames:
-            child = current / name
-            if child.is_symlink():
-                try:
-                    total += child.lstat().st_size
-                except OSError:
-                    pass
-        for name in filenames:
-            child = current / name
-            try:
-                total += child.lstat().st_size
-            except OSError:
-                pass
-    return total
-
-
-def kegs_within_budget(
-    selected: list[tuple[str, Path]], budget: int,
-) -> tuple[list[tuple[str, Path]], list[tuple[str, int]]]:
-    """Drop the largest kegs until the set fits. ``llvm@20`` is already absent."""
-    sized = [(short, keg, directory_bytes(keg)) for short, keg in selected]
-    omitted: list[tuple[str, int]] = []
-    while sum(size for _short, _keg, size in sized) > budget and sized:
-        index = max(range(len(sized)), key=lambda item: sized[item][2])
-        short, _keg, size = sized.pop(index)
-        omitted.append((short, size))
-    return [(short, keg) for short, keg, _size in sized], omitted
-
-
-def _report_omitted_toolchain(omitted: list[tuple[str, int]]) -> None:
-    print(
-        "not saving the CI toolchain archive; "
-        f"a pack above {CI_TOOLCHAIN_ARCHIVE_BUDGET_BYTES} bytes is not stored beside "
-        f"{BOOTABLE_SIMRUNTIME_CACHE_KEY}"
-    )
-    for short, size in omitted:
-        print(f"omitted {short} {size}")
-    names = ",".join(short for short, _size in omitted) or "none"
-    print("toolchain archive bytes=0")
-    print(f"toolchain archive omitted={names}")
+    kept = BOOTABLE_SIMRUNTIME_CACHE_BYTES + max(toolchain_bytes, 0)
+    ccache = CCACHE_CACHE_BYTES
+    repository = BAZEL_REPOSITORY_CACHE_BYTES
+    quota = ACTIONS_CACHE_QUOTA_BYTES
+    drop_ccache = False
+    drop_repository = False
+    if kept > quota:
+        drop_ccache = True
+        drop_repository = True
+    elif kept + ccache + repository > quota:
+        if kept + repository <= quota:
+            drop_ccache = True
+        elif kept + ccache <= quota:
+            drop_repository = True
+        else:
+            drop_ccache = True
+            drop_repository = True
+    return {
+        "drop_ccache": "true" if drop_ccache else "false",
+        "drop_repository": "true" if drop_repository else "false",
+    }
 
 
 def pack_toolchain(
@@ -1453,13 +1430,13 @@ def pack_toolchain(
     *,
     pin: str,
     dependencies: list[str] | None = None,
-    budget: int | None = None,
 ) -> bool:
     """Pack the CI Brewfile kegs and the symlinks that point into them.
 
-    The archive is one file under the Orlix cache directory. It is not a tar
-    of ``/opt/homebrew``. ``llvm@20`` is never a member. A pack that does not
-    fit beside the bootable iOS 15.5 runtime is not written.
+    The archive is one gzip file under the Orlix cache directory. It is not a
+    tar of ``/opt/homebrew``. ``llvm@20`` is never a member. The bootable iOS
+    15.5 runtime stays in the Actions cache. ccache or the Bazel repository
+    cache is dropped first if the sum would pass 10GB.
     """
     try:
         record = pinned_tool_versions(brewfile, prefix)
@@ -1476,12 +1453,6 @@ def pack_toolchain(
     selected = _selected_kegs(brewfile, prefix, dependencies)
     if selected is None:
         return False
-    limit = toolchain_archive_budget() if budget is None else budget
-    selected, omitted = kegs_within_budget(selected, limit)
-    if omitted:
-        _report_omitted_toolchain(omitted)
-        archive.unlink(missing_ok=True)
-        return True
     kegs = [keg for _short, keg in selected]
     links = toolchain_links(prefix, set(kegs))
     if "opt/llvm" not in links:
@@ -1528,13 +1499,21 @@ def pack_toolchain(
         print("not packing the CI toolchain; opt/llvm does not point at the pinned keg", file=sys.stderr)
         return False
     size = archive.stat().st_size
-    if size > limit:
+    if BOOTABLE_SIMRUNTIME_CACHE_BYTES + size > ACTIONS_CACHE_QUOTA_BYTES:
         archive.unlink(missing_ok=True)
-        _report_omitted_toolchain([(short, directory_bytes(keg)) for short, keg in selected])
-        print(f"toolchain archive was {size} bytes before it was discarded")
+        print(
+            "not saving the CI toolchain archive; "
+            f"{size} bytes plus {BOOTABLE_SIMRUNTIME_CACHE_KEY} exceeds "
+            f"{ACTIONS_CACHE_QUOTA_BYTES}"
+        )
+        print("toolchain archive bytes=0")
+        print("toolchain archive omitted=toolchain")
         return True
+    plan = cache_plan(size)
     print(f"toolchain archive bytes={size}")
     print("toolchain archive omitted=none")
+    print(f"drop_ccache={plan['drop_ccache']}")
+    print(f"drop_repository={plan['drop_repository']}")
     print(f"packed CI toolchain {archive}")
     return True
 
@@ -1572,6 +1551,17 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
     print(f"restored clang is not {PINNED_CI_CLANG} at the recorded identity", file=sys.stderr)
     remove_restored_tools(prefix, manifest)
     return False
+
+
+def emit_cache_plan(toolchain_bytes: int) -> int:
+    plan = cache_plan(toolchain_bytes)
+    print(f"drop_ccache={plan['drop_ccache']}")
+    print(f"drop_repository={plan['drop_repository']}")
+    print(f"ccache_bytes={CCACHE_CACHE_BYTES}")
+    print(f"repository_bytes={BAZEL_REPOSITORY_CACHE_BYTES}")
+    print(f"bootable_bytes={BOOTABLE_SIMRUNTIME_CACHE_BYTES}")
+    print(f"toolchain_bytes={toolchain_bytes}")
+    return 0
 
 
 def emit_toolchain_cache_key(brewfile: Path, prefix: Path) -> int:
@@ -1771,6 +1761,9 @@ def main(argv: list[str] | None = None) -> int:
     pack.add_argument("--pin", required=True)
     pack.add_argument("--prefix", type=Path)
 
+    retention = commands.add_parser("cache-retention")
+    retention.add_argument("--toolchain-bytes", required=True, type=int)
+
     args = parser.parse_args(argv)
     if args.command == "xcode-present":
         found = xcode_present(args.version)
@@ -1840,6 +1833,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "pack-toolchain":
         root = args.prefix if args.prefix is not None else homebrew_prefix()
         return 0 if pack_toolchain(args.brewfile, args.archive, root, pin=args.pin) else 1
+    if args.command == "cache-retention":
+        return emit_cache_plan(args.toolchain_bytes)
     raise AssertionError(args.command)
 
 
