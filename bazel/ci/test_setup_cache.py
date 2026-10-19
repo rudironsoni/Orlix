@@ -432,6 +432,41 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertNotIn("Orlix/ccache", other, name)
             self.assertNotIn("CCACHE_MAXSIZE", other, name)
 
+    def test_runtime_saves_stay_before_the_apple_ci_operation(self) -> None:
+        text = workflow_text("bazel-ci.yml")
+        prepare = text.index("name: Prepare both simulator runtimes")
+        apple = text.index("name: Run the Make-owned Apple CI operation")
+        names = (
+            "Save iOS 15.5 runtime archive",
+            "Save iOS 26.5 runtime archive",
+            "Save installed simulator runtimes",
+        )
+        previous = prepare
+        for name in names:
+            found = text.index(f"name: {name}")
+            self.assertEqual(text.count(f"name: {name}"), 1, name)
+            self.assertGreater(found, previous, name)
+            self.assertLess(found, apple, name)
+            previous = found
+        ios15 = text.split("name: Save iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
+        ios26 = text.split("name: Save iOS 26.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
+        installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn(
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios15_archive == 'true'",
+            ios15,
+        )
+        self.assertIn("path: ~/Library/Caches/Orlix/ios15-runtime", ios15)
+        self.assertIn(
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runtimes.outputs.ios26_archive == 'true'",
+            ios26,
+        )
+        self.assertIn("path: ~/Library/Caches/Orlix/ios26-runtime", ios26)
+        self.assertIn(
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
+            installed,
+        )
+        self.assertIn("path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes", installed)
+
     def test_pull_requests_do_not_publish_setup_caches(self) -> None:
         text = workflow_text("bazel-ci.yml")
         save = text.split("Save Bazel repository cache", 1)[1]
