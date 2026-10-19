@@ -5,6 +5,7 @@ import plistlib
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -264,15 +265,12 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 self.assertTrue(setup_cache.xcode_selected("26.6", developer))
 
     def test_brewfile_permission_error_is_not_unsatisfied(self) -> None:
-        def fake_run(command, **kwargs):
-            self.assertEqual(command[:3], ["brew", "bundle", "check"])
-            return subprocess.CompletedProcess(command, 1, stdout="", stderr="Error: Permission denied")
-
         with tempfile.TemporaryDirectory() as temporary:
             brewfile = Path(temporary) / "Brewfile"
             brewfile.write_text('brew "xcodesorg/made/xcodes"\n', encoding="utf-8")
-            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
-                self.assertTrue(setup_cache.bundle_satisfied(brewfile))
+            prefix = Path(temporary) / "homebrew"
+            with mock.patch.object(setup_cache, "declared_tool_status", side_effect=PermissionError("Permission denied")):
+                self.assertTrue(setup_cache.bundle_satisfied(brewfile, prefix))
 
     def test_listed_runtime_is_not_reinstalled_after_the_archive_restores(self) -> None:
         payload = json.dumps({
@@ -670,6 +668,116 @@ class SetupCacheDecisionTests(unittest.TestCase):
             )
             self.assertEqual(digest, expected)
 
+    def test_ci_brewfile_pins_xcodes_from_the_comment(self) -> None:
+        entries = dict(setup_cache.brewfile_entries((ROOT / "bazel/ci/Brewfile").read_text(encoding="utf-8")))
+        self.assertEqual(entries["xcodesorg/made/xcodes"], "2.1.0")
+        self.assertIsNone(entries["llvm"])
+        self.assertNotIn("actionlint", entries)
+        self.assertNotIn("cosign", entries)
+
+    def test_formula_version_reads_the_llvm_archive_url(self) -> None:
+        text = (
+            "class Llvm < Formula\n"
+            '  head "https://github.com/llvm/llvm-project.git", branch: "main"\n'
+            "  stable do\n"
+            '    url "https://github.com/llvm/llvm-project/releases/download/'
+            'llvmorg-23.1.3/llvm-project-23.1.3.src.tar.xz"\n'
+            "  end\n"
+            "  bottle do\n"
+            "  end\n"
+            "end\n"
+        )
+        self.assertEqual(setup_cache.formula_declared_version(text), "23.1.3")
+        self.assertTrue(setup_cache.formula_version_matches("23.1.3_1", "23.1.3"))
+        self.assertFalse(setup_cache.formula_version_matches("20.1.8", "23.1.3"))
+
+    def test_pinned_tools_skip_brew_without_spawning_brew(self) -> None:
+        brewfile_text = (ROOT / "bazel/ci/Brewfile").read_text(encoding="utf-8")
+        entries = setup_cache.brewfile_entries(brewfile_text)
+
+        def forbid_brew(*_args, **_kwargs):
+            raise AssertionError("brew must not run when the pinned kegs are installed")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            brewfile = prefix / "Brewfile"
+            brewfile.write_text(brewfile_text, encoding="utf-8")
+            for name, pinned in entries:
+                version = pinned or "23.1.3"
+                write_formula(prefix, name, version)
+                write_keg(prefix, name, version, clang=setup_cache.formula_short_name(name) == "llvm")
+            started = time.perf_counter()
+            with mock.patch.object(setup_cache.subprocess, "run", forbid_brew):
+                satisfied = setup_cache.bundle_satisfied(brewfile, prefix)
+            elapsed = time.perf_counter() - started
+        self.assertTrue(satisfied)
+        self.assertLess(elapsed, 1.0, f"pinned tool check took {elapsed:.4f}s")
+
+    def test_missing_compiler_still_requires_brew_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            brewfile = prefix / "Brewfile"
+            brewfile.write_text('brew "llvm"\nbrew "make"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_formula(prefix, "make", "4.4.1")
+            write_keg(prefix, "make", "4.4.1")
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+
+    def test_runner_llvm20_does_not_replace_the_pinned_clang(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            brewfile = prefix / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(
+                prefix,
+                "llvm",
+                "23.1.3",
+                url=(
+                    '  url "https://github.com/llvm/llvm-project/releases/download/'
+                    'llvmorg-23.1.3/llvm-project-23.1.3.src.tar.xz"\n'
+                ),
+            )
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+            aliased = prefix / "opt" / "llvm"
+            aliased.symlink_to(Path("..") / "Cellar" / "llvm@20" / "20.1.8")
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+            write_keg(prefix, "llvm", "20.1.8", clang=True)
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            self.assertTrue(setup_cache.bundle_satisfied(brewfile, prefix))
+
+
+def write_formula(prefix: Path, name: str, version: str, *, url: str | None = None) -> None:
+    short = name.rsplit("/", 1)[-1]
+    if name.count("/") == 2:
+        user, repo, _formula = name.split("/")
+        path = prefix / "Library" / "Taps" / user / f"homebrew-{repo}" / "Formula" / f"{short}.rb"
+    else:
+        path = (
+            prefix / "Library" / "Taps" / "homebrew" / "homebrew-core" / "Formula"
+            / short[:1].lower() / f"{short}.rb"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if url is None:
+        body = f'class FormulaStub < Formula\n  version "{version}"\nend\n'
+    else:
+        body = f"class FormulaStub < Formula\n{url}end\n"
+    path.write_text(body, encoding="utf-8")
+
+
+def write_keg(prefix: Path, name: str, version: str, *, clang: bool = False) -> None:
+    short = name.rsplit("/", 1)[-1]
+    keg = prefix / "Cellar" / short / version
+    (keg / "bin").mkdir(parents=True, exist_ok=True)
+    if clang:
+        (keg / "bin" / "clang").write_bytes(b"clang")
+    opt = prefix / "opt" / short
+    opt.parent.mkdir(parents=True, exist_ok=True)
+    if opt.is_symlink() or opt.exists():
+        opt.unlink()
+    opt.symlink_to(Path("..") / "Cellar" / short / version)
+
 
 class WorkflowSetupCacheTests(unittest.TestCase):
     def test_tool_workflows_cache_xcode_and_homebrew_without_the_output_base(self) -> None:
@@ -684,20 +792,22 @@ class WorkflowSetupCacheTests(unittest.TestCase):
                 text,
                 name,
             )
-            self.assertIn(
-                "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2",
-                text,
-                name,
-            )
             self.assertIn('test "$(xcodes version)" = "2.1.0"', text, name)
-            self.assertIn("install-bottles", text, name)
             if name == "bazel-ci.yml":
+                self.assertNotIn("homebrew-bottles", text, name)
+                self.assertNotIn("install-bottles", text, name)
+                self.assertNotIn("capture-bottles", text, name)
+                self.assertNotIn("Save Homebrew source bottles", text, name)
                 tools = text.split("name: Install declared build tools", 1)[1].split("\n      - name:", 1)[0]
-                main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
-                guarded = tools.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
-                self.assertIn("capture-bottles", guarded)
-                self.assertNotIn("capture-bottles", tools.split(main_only, 1)[0])
+                self.assertLess(tools.index("bundle-satisfied"), tools.index("brew tap xcodesorg/made"), name)
+                self.assertLess(tools.index("brew bundle --file bazel/ci/Brewfile"), tools.index('test "$(xcodes version)"'), name)
             else:
+                self.assertIn(
+                    "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2",
+                    text,
+                    name,
+                )
+                self.assertIn("install-bottles", text, name)
                 self.assertIn("capture-bottles", text, name)
             self.assertNotIn('test "$(xcodes version)" = "2.0.3"', text, name)
             for block in cache_blocks(text):
@@ -841,7 +951,8 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         save = text.split("Save Bazel repository cache", 1)[1]
         self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", save)
         self.assertIn("Save local compiler object cache", save)
-        self.assertIn("Save Homebrew source bottles", save)
+        self.assertNotIn("Save Homebrew source bottles", text)
+        self.assertNotIn("homebrew-bottles", text)
         proof = workflow_text("bazel-promoted-consumer-proof.yml")
         self.assertNotIn("actions/cache/save@", proof)
 
