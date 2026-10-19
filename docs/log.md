@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Discard corrupt disk-cache blobs before reuse
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) deletes a Bazel disk-cache blob whose bytes differ from its content-addressed name when the toolchain identity check runs. Bazel 9.2 copies that path into the action output without hashing it. After deletion the action misses and runs again. A missing disk cache stays absent. Lookup of a missing or corrupt promoted object returns no hit. Cache observation counts a BuildBuddy remote hit only for the runner `remote cache hit`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Record jq's configure line with stable paths
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) writes `src/config_opts.inc` after configure and before gmake when the Makefile names that file. The text is `config.status --config` with the package work root replaced by `.` and the tool bin replaced by `/orlix/tools`. jq compiles that line into `JQ_CONFIG`. The make rule has no prerequisites, so it does not regenerate the file. `CC` and `LDFLAGS` stay absolute for the real compile. `compare_trees` still compares `base.ext4`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
