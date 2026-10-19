@@ -379,6 +379,50 @@ def publish_installed_runtime(version: str, payload: dict, runtime_dir: Path) ->
     return path_probe(source) in {"present", "permission"}
 
 
+def listed_bundle_path(version: str) -> Path | None:
+    """Return a readable bundle path from ``list runtimes`` or ``runtime list``."""
+    try:
+        for reader in (read_simctl_runtimes, read_simctl_runtime_images):
+            payload = reader()
+            if not simctl_runtime_listed(version, payload):
+                continue
+            source = simctl_bundle_path(version, payload)
+            if source is not None and path_probe(source) == "present":
+                return source
+    except (RuntimeProbeDenied, PermissionError):
+        return None
+    return None
+
+
+def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
+    """Link the bundle simctl reports into the directory the cache save uploads.
+
+    ``simruntime-present`` only looks at that directory. A listed runtime whose
+    bundle lives somewhere else would leave the save skipped. ``shutil.copytree``
+    is not used: it walks ``RuntimeRoot`` and raises ``PermissionError``. A
+    directory link does not walk the bundle. A bundle already in the directory
+    is left in place and is not installed again.
+    """
+    directory = user_runtime_profiles() if runtime_dir is None else runtime_dir
+    destination = directory / f"iOS {version}.simruntime"
+    if destination.is_symlink() or path_probe(destination) in {"present", "permission"}:
+        return
+    source = listed_bundle_path(version)
+    if source is None:
+        return
+    try:
+        resolved = source.resolve()
+    except OSError:
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    if destination.exists() or destination.is_symlink():
+        return
+    try:
+        destination.symlink_to(resolved, target_is_directory=True)
+    except OSError:
+        return
+
+
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
     """Return skip, install-local, or download.
 
@@ -569,6 +613,8 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 is not
     installed when simctl does not list it. A restored download archive is
     not an installed runtime and is not copied into a protected directory.
+    A listed bundle is linked into the runtime directory so ``simruntime-present``
+    is true and the cache save uploads that directory.
     """
     try:
         if runtime_dir is not None:
@@ -581,15 +627,18 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
                     check=False,
                 )
         if runtime_already_installed(version, runtime_dir):
+            stage_listed_simruntime(version, runtime_dir)
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
     except (RuntimeProbeDenied, PermissionError):
         print(runtime_message("skip", version, archive_dir), flush=True)
         return "skip"
     # Ask simctl again immediately before any installer. A runtime that is
-    # listed now must not fall through to xcodes, and must not be copied.
+    # listed now must not fall through to xcodes. The download archive is not
+    # copied; the listed bundle is linked into the runtime directory.
     try:
         if simctl_runtime_listed(version, read_simctl_runtimes()) or simctl_runtime_listed(version, read_simctl_runtime_images()):
+            stage_listed_simruntime(version, runtime_dir)
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
     except (RuntimeProbeDenied, PermissionError):
@@ -601,6 +650,10 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     archive_dir.mkdir(parents=True, exist_ok=True)
     for command in runtime_commands(plan, version, archive_dir):
         run_checked(command)
+    try:
+        stage_listed_simruntime(version, runtime_dir)
+    except (RuntimeProbeDenied, PermissionError):
+        pass
     return plan
 
 
