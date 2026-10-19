@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "8fb9fc42e2e4279d3c704e2fb234fd28303a6ceeace95e976e171a5511194856",
+      "source_sha256": "421c1a58a652f2d70664026a2339f73899f3b4249be77a9145e9225527e3e91e",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -473,7 +473,7 @@
               },
               {
                 "name": "Save installed simulator runtimes",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
+                "if": "(github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",

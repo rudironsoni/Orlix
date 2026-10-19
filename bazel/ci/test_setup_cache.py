@@ -868,17 +868,32 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         )
         self.assertIn("path: ~/Library/Caches/Orlix/ios26-runtime", ios26)
         self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
+            "(github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && steps.installed-runtimes.outputs.cache-hit != 'true' && steps.runtimes.outputs.simruntime == 'true'",
             installed,
         )
         self.assertIn("path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes", installed)
 
     def test_pull_requests_do_not_publish_setup_caches(self) -> None:
         text = workflow_text("bazel-ci.yml")
-        save = text.split("Save Bazel repository cache", 1)[1]
-        self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", save)
-        self.assertIn("Save local compiler object cache", save)
-        self.assertIn("Save Homebrew source bottles", save)
+        main_only = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+        installed = text.split("name: Save installed simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn(
+            "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
+            installed,
+        )
+        self.assertIn("steps.installed-runtimes.outputs.cache-hit != 'true'", installed)
+        self.assertIn("steps.runtimes.outputs.simruntime == 'true'", installed)
+        for name in (
+            "Save iOS 15.5 runtime archive",
+            "Save iOS 26.5 runtime archive",
+            "Save Bazel repository cache",
+            "Save cached Xcode archive",
+            "Save Homebrew source bottles",
+            "Save local compiler object cache",
+        ):
+            block = text.split(f"name: {name}", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn(main_only, block, name)
+            self.assertNotIn("pull_request", block, name)
         proof = workflow_text("bazel-promoted-consumer-proof.yml")
         self.assertNotIn("actions/cache/save@", proof)
 
