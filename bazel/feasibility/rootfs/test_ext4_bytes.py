@@ -102,6 +102,18 @@ build_ext4 {tree} {image} ORLIXROOT
         )
 
 
+def _assert_stat(image: Path, target: str = "/bin/tool") -> None:
+    completed = subprocess.run(
+        [_tool("debugfs"), "-R", f"stat {target}", str(image)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{completed.stdout}\n{completed.stderr}"
+    if completed.returncode != 0 or "checksum does not match" in output or "Inode:" not in completed.stdout:
+        raise AssertionError(f"debugfs stat {target} failed ({completed.returncode})\n{output}")
+
+
 def _first_difference(left: bytes, right: bytes) -> str:
     if len(left) != len(right):
         return f"length {len(left)} != {len(right)}"
@@ -125,6 +137,8 @@ class Ext4ByteTests(unittest.TestCase):
             time.sleep(1.1)
             _stamp(tree, 1_800_000_000, 333_333_333)
             _build(function, tree, second, root / "work-second")
+            _assert_stat(first)
+            _assert_stat(second)
             left = first.read_bytes()
             right = second.read_bytes()
             self.assertEqual(left, right, _first_difference(left, right))

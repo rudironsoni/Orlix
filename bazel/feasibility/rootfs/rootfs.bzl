@@ -166,7 +166,9 @@ build_ext4() {
       'set_super_value mkfs_time 1' \
       'set_super_value wtime 1' \
       'set_super_value lastcheck 1' \
-      'set_super_value mtime 1'
+      'set_super_value mtime 1' \
+      'set_super_value last_mounted /' \
+      'set_super_value journal_uuid 00000000-0000-0000-0000-000000000001'
   } > "$work/owners"
   SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$debugfs" -w -f "$work/owners" "$image" > "$work/owners.out" 2> "$work/owners.err"
   if /usr/bin/grep -Ev '^(debugfs [0-9].*|[[:space:]]*)$' "$work/owners.err"; then exit 1; fi
