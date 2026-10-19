@@ -13,6 +13,7 @@ import hashlib
 import json
 import plistlib
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -379,6 +380,141 @@ def publish_installed_runtime(version: str, payload: dict, runtime_dir: Path) ->
     return path_probe(source) in {"present", "permission"}
 
 
+def listed_bundle_path(version: str) -> Path | None:
+    """Return a readable bundle path from ``list runtimes`` or ``runtime list``."""
+    try:
+        for reader in (read_simctl_runtimes, read_simctl_runtime_images):
+            payload = reader()
+            if not simctl_runtime_listed(version, payload):
+                continue
+            source = simctl_bundle_path(version, payload)
+            if source is not None and path_probe(source) == "present":
+                return source
+    except (RuntimeProbeDenied, PermissionError):
+        return None
+    return None
+
+
+IMAGE_SIMRUNTIME_VERSIONS = frozenset({"26.5"})
+
+
+def simruntime_bootable(bundle: Path) -> bool:
+    """True when a real bundle has the pieces simctl boots after a restore.
+
+    A symlink is not bootable. Unreadable ``private/var/mobile`` entries may be
+    absent. ``RuntimeRoot`` itself must still be present and readable.
+    """
+    if bundle.is_symlink():
+        return False
+    info = bundle / "Contents" / "Info.plist"
+    root = bundle / "Contents" / "Resources" / "RuntimeRoot"
+    if path_probe(info) != "present" or path_probe(root) != "present":
+        return False
+    try:
+        return any(True for _ in root.iterdir())
+    except OSError:
+        return False
+
+
+def simruntime_present(runtime_dir: Path) -> bool:
+    """True only when the cache directory contains a real bootable bundle.
+
+    iOS 26.5 is the runner image runtime. A second copy in this directory is
+    what simctl prefers, so that version does not count. ``simctl runtime list``
+    and a symlink do not count either.
+    """
+    for version in ("15.5", "26.5"):
+        if version in IMAGE_SIMRUNTIME_VERSIONS:
+            continue
+        if simruntime_bootable(runtime_dir / f"iOS {version}.simruntime"):
+            return True
+    return False
+
+
+def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> None:
+    """Copy a listed bundle, skipping entries that cannot be read.
+
+    ``shutil.copytree`` raises ``PermissionError`` on
+    ``RuntimeRoot/private/var/mobile``. Those entries are omitted and the copy
+    continues. The destination is a real directory, not a symlink to ``source``.
+    """
+    if seen is None:
+        seen = set()
+    try:
+        info = source.lstat()
+    except OSError:
+        return
+    if stat.S_ISLNK(info.st_mode):
+        try:
+            copy_simruntime_bundle(source.resolve(), destination, seen)
+        except OSError:
+            return
+        return
+    try:
+        resolved = source.resolve()
+    except OSError:
+        resolved = source
+    if resolved in seen:
+        return
+    seen.add(resolved)
+    if stat.S_ISDIR(info.st_mode):
+        try:
+            children = list(source.iterdir())
+        except OSError:
+            return
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+        for child in children:
+            copy_simruntime_bundle(child, destination / child.name, seen)
+        return
+    if not stat.S_ISREG(info.st_mode):
+        return
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination, follow_symlinks=False)
+    except OSError:
+        return
+
+
+def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
+    """Copy a non-image runtime into the directory the cache save uploads.
+
+    iOS 26.5 is already on the runner image. A second copy in the directory
+    simctl scans is preferred over that image runtime on the next job, so it
+    is not staged. The iOS 15.5 copy is the bundle simctl reports, and it is
+    kept only when that tree is still bootable after unreadable entries are
+    skipped. A symlink is never the staged result.
+    """
+    if version in IMAGE_SIMRUNTIME_VERSIONS:
+        return
+    directory = user_runtime_profiles() if runtime_dir is None else runtime_dir
+    destination = directory / f"iOS {version}.simruntime"
+    source = listed_bundle_path(version)
+    if destination.is_symlink():
+        try:
+            destination.unlink()
+        except OSError:
+            return
+    try:
+        if source is not None and destination.exists() and source.resolve() == destination.resolve():
+            return
+    except OSError:
+        pass
+    if simruntime_bootable(destination):
+        return
+    if destination.exists():
+        shutil.rmtree(destination, ignore_errors=True)
+    if source is None:
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    print(f"copying iOS {version} simulator bundle into {directory}", flush=True)
+    copy_simruntime_bundle(source, destination)
+    if not simruntime_bootable(destination):
+        shutil.rmtree(destination, ignore_errors=True)
+
+
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
     """Return skip, install-local, or download.
 
@@ -569,17 +705,14 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 is not
     installed when simctl does not list it. A restored download archive is
     not an installed runtime and is not copied into a protected directory.
+    A listed bundle is not copied here. ``~/Library/Developer/CoreSimulator/Profiles/Runtimes``
+    is scanned by simctl, and a partial copy is preferred over the image runtime.
+    That is what ``simctl boot`` then starts. The cache copy runs after boot.
+    ``simruntime-present`` is true only when that directory contains a real bundle.
     """
     try:
         if runtime_dir is not None:
             expose_restored_runtimes(runtime_dir)
-            if simruntime_bundles(runtime_dir):
-                # Select Xcode may have started CoreSimulator before the cache
-                # restore. Restart it so the restored bundle is listed.
-                subprocess.run(
-                    ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"],
-                    check=False,
-                )
         if runtime_already_installed(version, runtime_dir):
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
@@ -587,7 +720,8 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
         print(runtime_message("skip", version, archive_dir), flush=True)
         return "skip"
     # Ask simctl again immediately before any installer. A runtime that is
-    # listed now must not fall through to xcodes, and must not be copied.
+    # listed now must not fall through to xcodes. The download archive is not
+    # an installed runtime; the listed bundle is copied into the runtime directory.
     try:
         if simctl_runtime_listed(version, read_simctl_runtimes()) or simctl_runtime_listed(version, read_simctl_runtime_images()):
             print(runtime_message("skip", version, archive_dir), flush=True)
@@ -602,6 +736,41 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     for command in runtime_commands(plan, version, archive_dir):
         run_checked(command)
     return plan
+
+
+def simulator_already_booted(detail: str) -> bool:
+    return "current state: booted" in detail.lower()
+
+
+def command_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    if completed.stderr:
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
+    return f"{completed.stderr or ''}\n{completed.stdout or ''}"
+
+
+def boot_simulator(identifier: str) -> None:
+    """Boot one simulator once.
+
+    A missing runtime fails on this attempt. Copying a runtime into the
+    profiles directory before this call makes simctl boot that copy instead of
+    the image runtime, so the copy happens only after boot returns.
+    """
+    boot = subprocess.run(
+        ["xcrun", "simctl", "boot", identifier],
+        check=False, capture_output=True, text=True,
+    )
+    boot_detail = command_detail(boot)
+    if boot.returncode != 0 and not simulator_already_booted(boot_detail):
+        raise SystemExit(boot.returncode or 1)
+    status = subprocess.run(
+        ["xcrun", "simctl", "bootstatus", identifier, "-b"],
+        check=False, capture_output=True, text=True,
+    )
+    command_detail(status)
+    if status.returncode != 0:
+        raise SystemExit(status.returncode or 1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -628,6 +797,13 @@ def main(argv: list[str] | None = None) -> int:
 
     identifier = commands.add_parser("runtime-identifier")
     identifier.add_argument("--version", required=True)
+
+    boot = commands.add_parser("boot-simulator")
+    boot.add_argument("--udid", required=True)
+
+    stage = commands.add_parser("stage-runtime")
+    stage.add_argument("--version", required=True)
+    stage.add_argument("--runtime-dir", required=True, type=Path)
 
     satisfied = commands.add_parser("bundle-satisfied")
     satisfied.add_argument("--brewfile", required=True, type=Path)
@@ -661,7 +837,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "archive-present":
         return 0 if archive_complete(args.archive_dir) else 1
     if args.command == "simruntime-present":
-        return 0 if simruntime_bundles(args.runtime_dir) else 1
+        return 0 if simruntime_present(args.runtime_dir) else 1
+    if args.command == "boot-simulator":
+        boot_simulator(args.udid)
+        return 0
+    if args.command == "stage-runtime":
+        stage_listed_simruntime(args.version, args.runtime_dir)
+        return 0
     if args.command == "runtime-identifier":
         found = simctl_runtime_identifier(args.version, read_simctl_runtimes())
         if found is None:

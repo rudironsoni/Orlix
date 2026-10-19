@@ -252,11 +252,6 @@ jobs:
           else
             echo "ios26_archive=false" >> "$GITHUB_OUTPUT"
           fi
-          if python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"; then
-            echo "simruntime=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "simruntime=false" >> "$GITHUB_OUTPUT"
-          fi
           current_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 26.5)"
           ios15_runtime_id="$(python3 bazel/ci/setup_cache.py runtime-identifier --version 15.5)"
           test -n "$current_runtime_id"
@@ -267,10 +262,17 @@ jobs:
           ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
           test -n "$current_id"
           test -n "$ios15_id"
-          xcrun simctl boot "$current_id"
-          xcrun simctl boot "$ios15_id"
-          xcrun simctl bootstatus "$current_id" -b
-          xcrun simctl bootstatus "$ios15_id" -b
+          python3 bazel/ci/setup_cache.py boot-simulator --udid "$current_id"
+          python3 bazel/ci/setup_cache.py boot-simulator --udid "$ios15_id"
+          # iOS 26.5 is the runner image runtime. Do not copy it into the
+          # directory simctl scans. The installed iOS 15.5 bundle is copied
+          # only after boot, and only if that tree is still bootable.
+          python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
+          if python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"; then
+            echo "simruntime=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "simruntime=false" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo "ORLIX_CURRENT_SIMULATOR_ID=$current_id"
             echo "ORLIX_CURRENT_SIMULATOR_VERSION=26.5"
