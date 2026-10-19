@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import sysconfig
@@ -25,6 +26,11 @@ LOCAL_RULES = ("local.bzl", "package.bzl", "source_key.bzl")
 
 def _execution_requirements(text: str) -> list[str]:
     return re.findall(r"execution_requirements\s*=\s*\{([^}]*)\}", text)
+
+
+def _declared_output_writes(text: str, variable: str) -> list[str]:
+    suffix = f'> "${variable}"'
+    return [line.strip() for line in text.splitlines() if line.strip().endswith(suffix)]
 
 
 def _starlark_extract_command(text: str) -> str:
@@ -128,6 +134,71 @@ class PackageActionKeyTests(unittest.TestCase):
         self.assertIn('name = "true_configure_directory"', build)
         self.assertIn('configure_directory = ":true_configure_directory"', build)
         self.assertIn('glob(["true/**"])', build)
+
+    def test_local_and_package_manifests_omit_execroot_and_mktemp(self) -> None:
+        relative_manifest = '(cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"'
+        for name in ("local.bzl", "package.bzl"):
+            text = (PACKAGES / name).read_text(encoding="utf-8")
+            manifest_writes = _declared_output_writes(text, "file_manifest")
+            license_writes = _declared_output_writes(text, "license_manifest")
+            metadata_writes = _declared_output_writes(text, "metadata")
+            self.assertEqual(manifest_writes, [relative_manifest], name)
+            self.assertEqual(len(license_writes), 1, name)
+            self.assertEqual(len(metadata_writes), 1, name)
+            for line in (*license_writes, *metadata_writes):
+                self.assertNotIn("$install_out", line, name)
+                self.assertNotIn("$exec_root", line, name)
+                self.assertNotIn("$PWD", line, name)
+                self.assertNotIn("$work", line, name)
+                self.assertNotIn("/tmp/orlix-", line, name)
+            mktemp_lines = [line.strip() for line in text.splitlines() if "/tmp/orlix-" in line]
+            self.assertEqual(len(mktemp_lines), 1, name)
+            self.assertIn("mktemp -d", mktemp_lines[0], name)
+            for token in ("file_manifest", "license_manifest", "metadata", "install_out"):
+                self.assertNotIn(token, mktemp_lines[0], name)
+            with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory(prefix="orlix-", dir="/tmp") as mktemp_work:
+                base = Path(temporary)
+                execroot = base / "output-base" / "execroot" / "_main"
+                install = execroot / "bazel-out" / "pkg" / "install"
+                (install / "usr" / "bin").mkdir(parents=True)
+                (install / "usr" / "share").mkdir()
+                (install / "usr" / "bin" / "true").write_text("guest\n", encoding="utf-8")
+                (install / "usr" / "share" / "doc.txt").write_text("doc\n", encoding="utf-8")
+                (execroot / "outside.txt").write_text("outside\n", encoding="utf-8")
+                work = Path(mktemp_work)
+                self.assertTrue(str(work).startswith("/tmp/orlix-"), str(work))
+                (work / "leaked.txt").write_text("mktemp\n", encoding="utf-8")
+                manifest = base / "file-manifest.txt"
+                license_manifest = base / "license-manifest.txt"
+                metadata = base / "package-metadata.txt"
+                script = "\n".join(
+                    [
+                        "set -euo pipefail",
+                        f"exec_root={shlex.quote(str(execroot))}",
+                        'PWD="$exec_root"',
+                        'cd "$PWD"',
+                        f"install_out={shlex.quote(str(install))}",
+                        f"file_manifest={shlex.quote(str(manifest))}",
+                        f"license_manifest={shlex.quote(str(license_manifest))}",
+                        f"metadata={shlex.quote(str(metadata))}",
+                        f"work={shlex.quote(str(work))}",
+                        "package_name=true",
+                        "package_version=0",
+                        manifest_writes[0],
+                        license_writes[0],
+                        metadata_writes[0],
+                    ]
+                )
+                subprocess.run(["/bin/bash", "-c", script], check=True)
+                for output in (manifest, license_manifest, metadata):
+                    body = output.read_text(encoding="utf-8")
+                    self.assertNotIn(str(execroot), body, f"{name} {output.name}")
+                    self.assertNotIn(str(base), body, f"{name} {output.name}")
+                    self.assertNotIn(str(work), body, f"{name} {output.name}")
+                    self.assertNotIn("/tmp/orlix-", body, f"{name} {output.name}")
+                    self.assertNotIn("outside.txt", body, f"{name} {output.name}")
+                    self.assertNotIn("leaked.txt", body, f"{name} {output.name}")
+                self.assertEqual(manifest.read_text(encoding="utf-8"), "./usr/bin/true\n./usr/share/doc.txt\n")
 
     def test_local_extraction_runs_without_data_filter(self) -> None:
         command = _starlark_extract_command((PACKAGES / "local.bzl").read_text(encoding="utf-8"))

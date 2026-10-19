@@ -107,7 +107,7 @@ if [ -n "$root_init_source" ]; then
 fi
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
-/usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
+(cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=GPL-2.0-or-later' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=local-c\n' "$package_name" "$package_version" > "$metadata"
 """.replace("__EXTRACT__", _extract()),

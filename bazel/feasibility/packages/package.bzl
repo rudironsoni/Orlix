@@ -85,7 +85,7 @@ DESTDIR="$work/dest" "$tool_bin/gmake" -j1 install
 test -x "$work/dest/usr/bin/true"
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
-/usr/bin/find "$install_out" -type f -print | /usr/bin/sort > "$file_manifest"
+(cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
 /usr/bin/printf '%s\n' 'license=unlicense-feasibility-true' > "$license_manifest"
 /usr/bin/printf 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$package_name" "$package_version" > "$metadata"
 """.replace("__EXTRACT__", _extract()),
