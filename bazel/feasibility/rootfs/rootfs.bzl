@@ -130,7 +130,34 @@ build_ext4() {
   tree="$1"
   image="$2"
   label="$3"
-  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001,no_copy_xattrs -d "$tree" "$image"
+  # Package builds record the cache-equivalence directory name. The id is six
+  # characters, so replacing it does not move ELF offsets. nodiscard keeps the
+  # zeroed image, and lazy_itable_init=0 writes every inode-table block.
+  /usr/bin/python3 -B - "$tree" << 'PY'
+import os
+import re
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+text_pattern = re.compile(r"cache-equivalence\.[A-Za-z0-9]{6}")
+byte_pattern = re.compile(rb"cache-equivalence\.[A-Za-z0-9]{6}")
+replacement = "cache-equivalence.pinned"
+for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+    if path.is_symlink():
+        target = os.readlink(path)
+        updated = text_pattern.sub(replacement, target)
+        if updated != target:
+            path.unlink()
+            path.symlink_to(updated)
+        continue
+    if not path.is_file():
+        continue
+    data = path.read_bytes()
+    updated = byte_pattern.sub(replacement.encode(), data)
+    if updated != data:
+        path.write_bytes(updated)
+PY
+  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001,no_copy_xattrs,nodiscard,lazy_itable_init=0 -d "$tree" "$image"
   (cd "$tree" && /usr/bin/find . -print | /usr/bin/sort) > "$work/paths"
   {
     /usr/bin/printf '%s\n' \
@@ -194,6 +221,12 @@ build_ext4() {
       'set_super_value mtime 1' \
       'set_super_value last_mounted /' \
       'set_super_value journal_uuid 00000000-0000-0000-0000-000000000001' \
+      'set_super_value uuid 00000000-0000-0000-0000-000000000000' \
+      'set_super_value hash_seed 00000000-0000-0000-0000-000000000001' \
+      'set_super_value mnt_count 0' \
+      'set_super_value error_count 0' \
+      'set_super_value first_error_time 0' \
+      'set_super_value last_error_time 0' \
       'set_super_value kbytes_written 0'
   } > "$work/owners"
   SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$debugfs" -n -w -f "$work/owners" "$image" > "$work/owners.out" 2> "$work/owners.err"

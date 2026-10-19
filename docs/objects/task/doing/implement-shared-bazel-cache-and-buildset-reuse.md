@@ -103,6 +103,11 @@ cannot justify removing those directories from the full-tree comparison.
 Rootfs uses its existing filesystem images as the cacheable product outputs.
 The producing action owns temporary assembly trees and validates their
 contents in the images. The provider and app consumers share this image boundary.
+`mke2fs` uses `nodiscard` and `lazy_itable_init=0`, so a discard that claims
+to zero the image cannot skip the inode tables. A `cache-equivalence`
+directory id in the copied tree is rewritten to `cache-equivalence.pinned`
+before the image is built. The superblock UUID, hash seed, mount count, and
+error times stay pinned with `kbytes_written`.
 
 GitHub Actions caches the slow setup that is outside Bazel action results. `prepare-runtime` asks `xcrun simctl list runtimes` and `xcrun simctl runtime list` before it installs anything. A runtime either command already lists is not installed again. iOS 26.5 on the runner image is that skip. iOS 15.5 is not installed when simctl does not list it. A restored download archive is not an installed runtime and is not copied into a protected directory. A permission error while reading a listed bundle is not a missing runtime and does not run `xcodes runtimes install`. The installed `.simruntime` bundle is cached on its own and linked where simctl scans, so the next job lists it and skips `xcodes runtimes install`. Every workflow that selects Xcode skips the download when that Xcode is already selected or `.xcode-version` is already on the runner. Every workflow that runs Homebrew skips `brew bundle` when `brew bundle check` already passes, including when that check fails with a permission error. Homebrew source bottles stay cached, and the xcodes assertion stays `2.1.0`. `~/Library/Caches/Orlix/ccache` is cached with the pinned compiler identity on the product workflow. That directory is a local compiler-object cache, not a BuildBuddy remote action-cache hit. The Bazel output base stays out of `actions/cache`. The kernel archive executes staged `tools/bin` binaries and their declared dylibs, so that action is remote-cacheable and keeps `no-remote-exec`. ISA restore executes staged gmake, awk, and Python, declares the libraries and Python home they open, and hashes those files in `resume()`, so that action is remote-cacheable and keeps `no-remote-exec`.
 
