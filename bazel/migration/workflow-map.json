@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "5d5ad0f51ddd34dfacc03d276c412f903e276a705b13889f5c74d085ec8fa36b",
+      "source_sha256": "8fb9fc42e2e4279d3c704e2fb234fd28303a6ceeace95e976e171a5511194856",
       "workflow": {
         "name": "Bazel CI",
         "on": {
