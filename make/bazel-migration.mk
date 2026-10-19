@@ -1067,8 +1067,10 @@ __bazel-apple-ci: __bazel-matrix-check
 	test -x "$$app/Orlix" || { echo "canonical simulator app is missing" >&2; exit 1; }; \
 	$(MAKE) __bazel-current-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
 	$(MAKE) __bazel-ios15-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
-	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION="$(ORLIX_CURRENT_SIMULATOR_VERSION)" ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_CURRENT_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=current ORLIX_CANONICAL_APP_PATH="$$app"; \
-	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION=15.5 ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=ios15 ORLIX_CANONICAL_APP_PATH="$$app"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:OrlixUITests --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --execution_log_compact_file= --output=files > "$$evidence_dir/cquery-outputs.txt"; \
+	test_bundle="$$(PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --resolve-test-bundle --exec-root "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main" --outputs-file "$$evidence_dir/cquery-outputs.txt" --work-dir "$$evidence_dir/xctest-bundle")"; \
+	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION="$(ORLIX_CURRENT_SIMULATOR_VERSION)" ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_CURRENT_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=current ORLIX_CANONICAL_APP_PATH="$$app" ORLIX_XCTEST_BUNDLE="$$test_bundle"; \
+	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION=15.5 ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=ios15 ORLIX_CANONICAL_APP_PATH="$$app" ORLIX_XCTEST_BUNDLE="$$test_bundle"; \
 	python3 -c 'import json,sys; from pathlib import Path; root=Path(sys.argv[1]).parent; [None if ((root/label/"xctest-passed.log").is_file() and (root/label/"xctest-app-identity.txt").read_text().strip() == sys.argv[3]) else (_ for _ in ()).throw(AssertionError("xctest evidence mismatch for "+label)) for label in ("current","ios15")]; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":{"version":"15.5","result":"PASS"},"same_application_path":sys.argv[3],"xctest_current_runtime":{"version":sys.argv[2],"result":"PASS"},"xctest_ios_15_5_runtime":{"version":"15.5","result":"PASS"},"xctest_app_path":sys.argv[3]},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app"; \
 	$(MAKE) __bazel-cache-observation
 
@@ -1084,7 +1086,9 @@ __bazel-simulator-runtime-proof:
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "runtime-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_SIMULATOR_VERSION) simulator=$(ORLIX_SIMULATOR_ID) app=$(ORLIX_BAZEL_APP_PATH)" | tee "$$evidence_dir/input.log"; \
-	xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
+	if [ "$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')" != Booted ]; then \
+		xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
+	fi; \
 	xcrun simctl terminate "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	xcrun simctl install "$(ORLIX_SIMULATOR_ID)" "$(ORLIX_BAZEL_APP_PATH)"; \
@@ -1116,9 +1120,11 @@ __bazel-xctest-runtime-proof:
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "xctest-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_XCTEST_SIMULATOR_VERSION) simulator=$(ORLIX_XCTEST_SIMULATOR_ID) app=$(ORLIX_CANONICAL_APP_PATH)" | tee "$$evidence_dir/xctest-input.log"; \
-	xcrun simctl bootstatus "$(ORLIX_XCTEST_SIMULATOR_ID)" -b; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --output_base="$(ORLIX_BAZEL_OUTPUT_BASE)" cquery //Orlix:OrlixUITests --compilation_mode=dbg --config=$(PROFILE) --config=$(ORLIX_BAZEL_COMPONENT_MODE) --apple_platform_type=ios --ios_multi_cpus=sim_arm64 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --execution_log_compact_file= --output=files > "$$evidence_dir/cquery-outputs.txt"; \
-	test_bundle="$$(PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --resolve-test-bundle --exec-root "$(ORLIX_BAZEL_OUTPUT_BASE)/execroot/_main" --outputs-file "$$evidence_dir/cquery-outputs.txt" --work-dir "$$evidence_dir/xctest-bundle")"; \
+	if [ "$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_XCTEST_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')" != Booted ]; then \
+		xcrun simctl bootstatus "$(ORLIX_XCTEST_SIMULATOR_ID)" -b; \
+	fi; \
+	test -d "$(ORLIX_XCTEST_BUNDLE)" || { echo "ORLIX_XCTEST_BUNDLE must name the built OrlixUITests bundle" >&2; exit 1; }; \
+	test_bundle="$(ORLIX_XCTEST_BUNDLE)"; \
 	echo "$$test_bundle" > "$$evidence_dir/xctest-bundle.txt"; \
 	app_bundle_id="$$(python3 -c 'import plistlib,sys; print(plistlib.loads(open(sys.argv[1],"rb").read())["CFBundleIdentifier"])' "$(ORLIX_CANONICAL_APP_PATH)/Info.plist")"; \
 	PYTHONPATH="$(CURDIR)/make" python3 "$(CURDIR)/make/xctestrun.py" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" --test-bundle "$$test_bundle" --app "$(ORLIX_CANONICAL_APP_PATH)" --app-bundle-id "$$app_bundle_id" --product-module OrlixUITests --only "AppLaunchSmokeUITests/testLaunchCapturesScreenshot" --out "$$evidence_dir/test.xctestrun"; \

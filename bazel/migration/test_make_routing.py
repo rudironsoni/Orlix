@@ -262,6 +262,10 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn('kill -0 "$$launch_pid"', runtime)
         self.assertIn("DiagnosticReports", runtime)
         self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
+        self.assertIn("xcrun simctl list devices -j", runtime)
+        self.assertIn("!= Booted", runtime)
+        self.assertIn('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b', runtime)
+        self.assertLess(runtime.index("!= Booted"), runtime.index('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b'))
 
     def test_cache_equivalence_empty_cache_flags_survive_nounset(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
@@ -351,9 +355,21 @@ test "$1" = --remote_upload_local_results=true
         proof = makefile.split("__bazel-xctest-runtime-proof:", 1)[1].split(
             "__bazel-hostadapter:", 1
         )[0]
+        apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        self.assertEqual(apple_ci.count("cquery //Orlix:OrlixUITests "), 1)
+        self.assertIn('xctestrun.py" --resolve-test-bundle', apple_ci)
+        self.assertIn("cquery-outputs.txt", apple_ci)
+        self.assertEqual(apple_ci.count('ORLIX_XCTEST_BUNDLE="$$test_bundle"'), 2)
         self.assertIn('test -d "$(ORLIX_CANONICAL_APP_PATH)"', proof)
-        self.assertIn('xctestrun.py" --resolve-test-bundle', proof)
-        self.assertIn("cquery-outputs.txt", proof)
+        self.assertIn('test -d "$(ORLIX_XCTEST_BUNDLE)"', proof)
+        self.assertIn('test_bundle="$(ORLIX_XCTEST_BUNDLE)"', proof)
+        self.assertNotIn("cquery //Orlix:OrlixUITests", proof)
+        self.assertNotIn("--resolve-test-bundle", proof)
+        self.assertIn("xcrun simctl list devices -j", proof)
+        self.assertIn("!= Booted", proof)
+        self.assertLess(proof.index("!= Booted"), proof.index('simctl bootstatus "$(ORLIX_XCTEST_SIMULATOR_ID)" -b'))
         self.assertIn('xctestrun.py" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)"', proof)
         self.assertIn('--only "AppLaunchSmokeUITests/testLaunchCapturesScreenshot"', proof)
         self.assertIn("test.xctestrun", proof)
