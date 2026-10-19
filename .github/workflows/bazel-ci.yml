@@ -412,6 +412,72 @@ jobs:
           ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
         run: make __bazel-apple-ci
 
+      # The product build has already filled these caches. Save that result
+      # before the seed so a failed or cancelled seed does not drop it. Skip a
+      # cache that still has no files. Simulator runtime saves stay with
+      # preparation, before this build.
+      - name: Record setup caches filled by the product build
+        id: setup-caches
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          cache_has_files() {
+            dir="$1"
+            if [ ! -d "$dir" ]; then
+              return 1
+            fi
+            found="$(find "$dir" -type f -size +0c -print -quit)"
+            [ -n "$found" ]
+          }
+          if cache_has_files "$HOME/Library/Caches/Orlix/Bazel/repository-cache"; then
+            echo "repository=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "repository=false" >> "$GITHUB_OUTPUT"
+          fi
+          if cache_has_files "$HOME/Library/Application Support/com.robotsandpencils.xcodes"; then
+            echo "xcode=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "xcode=false" >> "$GITHUB_OUTPUT"
+          fi
+          if compgen -G "$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz" > /dev/null; then
+            echo "bottles=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bottles=false" >> "$GITHUB_OUTPUT"
+          fi
+          if cache_has_files "$HOME/Library/Caches/Orlix/ccache"; then
+            echo "ccache=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ccache=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Bazel repository cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+
+      - name: Save cached Xcode archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true' && steps.setup-caches.outputs.xcode == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: "~/Library/Application Support/com.robotsandpencils.xcodes"
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
+
+      - name: Save Homebrew source bottles
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true' && steps.setup-caches.outputs.bottles == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/homebrew-bottles
+          key: orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+
+      - name: Save local compiler object cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ccache
+          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
+
       # Pull requests stay on the read credential configured above. This step
       # runs only after a push of refs/heads/main, which is the only context
       # that selects the write credential.
@@ -526,34 +592,6 @@ jobs:
             ${{ runner.temp }}/orlix-promoted-proof/warm-component-actions.json
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Save Bazel repository cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/Bazel/repository-cache
-          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
-
-      - name: Save cached Xcode archive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: "~/Library/Application Support/com.robotsandpencils.xcodes"
-          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
-
-      - name: Save Homebrew source bottles
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/homebrew-bottles
-          key: orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
-
-      - name: Save local compiler object cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Orlix/ccache
-          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
 
       - name: Remove BuildBuddy credentials
         if: always()

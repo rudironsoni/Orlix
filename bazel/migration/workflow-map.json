@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "14886d843f0516da0f35b3a5caba6432f0065f4d7fcd24e86b2094fa75c69633",
+      "source_sha256": "170741969e81d854f36f30e31ed995ab8a25bfd0377400c9c5de516a4ee8b832",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -509,6 +509,48 @@
                 "run": "make __bazel-apple-ci"
               },
               {
+                "name": "Record setup caches filled by the product build",
+                "id": "setup-caches",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+                "run": "set -euo pipefail\ncache_has_files() {\n  dir=\"$1\"\n  if [ ! -d \"$dir\" ]; then\n    return 1\n  fi\n  found=\"$(find \"$dir\" -type f -size +0c -print -quit)\"\n  [ -n \"$found\" ]\n}\nif cache_has_files \"$HOME/Library/Caches/Orlix/Bazel/repository-cache\"; then\n  echo \"repository=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"repository=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Application Support/com.robotsandpencils.xcodes\"; then\n  echo \"xcode=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"xcode=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  echo \"ccache=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ccache=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
+                "name": "Save Bazel repository cache",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
+                  "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
+                }
+              },
+              {
+                "name": "Save cached Xcode archive",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true' && steps.setup-caches.outputs.xcode == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                }
+              },
+              {
+                "name": "Save Homebrew source bottles",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true' && steps.setup-caches.outputs.bottles == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/homebrew-bottles",
+                  "key": "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2"
+                }
+              },
+              {
+                "name": "Save local compiler object cache",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ccache",
+                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
+                }
+              },
+              {
                 "name": "Publish the cache-equivalence seed",
                 "if": "steps.buildbuddy.outputs.access == 'write'",
                 "env": {
@@ -534,42 +576,6 @@
                   "path": "${{ runner.temp }}/orlix-promoted-proof/proof.json\n${{ runner.temp }}/orlix-promoted-proof/cold-acquisition.json\n${{ runner.temp }}/orlix-promoted-proof/warm-acquisition.json\n${{ runner.temp }}/orlix-promoted-proof/cold-component-actions.json\n${{ runner.temp }}/orlix-promoted-proof/warm-component-actions.json\n",
                   "if-no-files-found": "warn",
                   "retention-days": 14
-                }
-              },
-              {
-                "name": "Save Bazel repository cache",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
-                  "key": "orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}"
-                }
-              },
-              {
-                "name": "Save cached Xcode archive",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.xcode-present.outputs.installed != 'true'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
-                }
-              },
-              {
-                "name": "Save Homebrew source bottles",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/homebrew-bottles",
-                  "key": "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2"
-                }
-              },
-              {
-                "name": "Save local compiler object cache",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
                 }
               },
               {
