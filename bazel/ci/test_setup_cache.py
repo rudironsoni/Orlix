@@ -387,6 +387,57 @@ class SetupCacheDecisionTests(unittest.TestCase):
             )
             self.assertTrue(setup_cache.simruntime_present(runtime_dir))
 
+    def test_launchd_sim_boot_is_retried_and_a_missing_runtime_fails(self) -> None:
+        launchd = (
+            "Unable to boot the Simulator.\n"
+            "Interrupted system call\n"
+            "Failed to start launchd_sim: could not bind to session, "
+            "launchd_sim may have crashed or quit responding\n"
+        )
+        missing = "Unable to find a runtime matching the device\n"
+        calls: list[list[str]] = []
+
+        def flaky(command, **kwargs):
+            calls.append(command)
+            boots = [item for item in calls if item[:3] == ["xcrun", "simctl", "boot"]]
+            if command[:4] == ["xcrun", "simctl", "boot", "device"]:
+                if len(boots) == 1:
+                    return subprocess.CompletedProcess(command, 1, stdout="", stderr=launchd)
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+            if command[:5] == ["xcrun", "simctl", "bootstatus", "device", "-b"]:
+                return subprocess.CompletedProcess(command, 0, stdout="Device booted.\n", stderr="")
+            raise AssertionError(command)
+
+        with mock.patch.object(setup_cache.time, "sleep") as sleep:
+            with mock.patch.object(setup_cache.subprocess, "run", flaky):
+                setup_cache.boot_simulator("device", attempts=3)
+        self.assertEqual(sleep.call_count, 1)
+        self.assertEqual(
+            [command[:3] for command in calls],
+            [["xcrun", "simctl", "boot"], ["xcrun", "simctl", "boot"], ["xcrun", "simctl", "bootstatus"]],
+        )
+
+        missing_calls: list[list[str]] = []
+
+        def missing_runtime(command, **kwargs):
+            missing_calls.append(command)
+            return subprocess.CompletedProcess(command, 2, stdout="", stderr=missing)
+
+        with mock.patch.object(setup_cache.subprocess, "run", missing_runtime):
+            with self.assertRaises(SystemExit) as raised:
+                setup_cache.boot_simulator("device", attempts=3)
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(len(missing_calls), 1)
+
+        def stuck(command, **kwargs):
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr=launchd)
+
+        with mock.patch.object(setup_cache.time, "sleep"):
+            with mock.patch.object(setup_cache.subprocess, "run", stuck):
+                with self.assertRaises(SystemExit) as raised:
+                    setup_cache.boot_simulator("device", attempts=3)
+        self.assertEqual(raised.exception.code, 1)
+
     def test_restored_simruntime_is_linked_without_an_install_command(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -492,6 +543,8 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("orlix-installed-simruntimes-15.5-26.5", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
+            self.assertIn('boot-simulator --udid "$current_id"', text, name)
+            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
             self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
             self.assertNotIn("sudo xcodes runtimes install", text, name)
             self.assertNotIn('.version == "15.5"', text, name)

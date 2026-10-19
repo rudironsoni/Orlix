@@ -267,10 +267,8 @@ jobs:
           ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
           test -n "$current_id"
           test -n "$ios15_id"
-          xcrun simctl boot "$current_id"
-          xcrun simctl boot "$ios15_id"
-          xcrun simctl bootstatus "$current_id" -b
-          xcrun simctl bootstatus "$ios15_id" -b
+          python3 bazel/ci/setup_cache.py boot-simulator --udid "$current_id"
+          python3 bazel/ci/setup_cache.py boot-simulator --udid "$ios15_id"
           {
             echo "ORLIX_CURRENT_SIMULATOR_ID=$current_id"
             echo "ORLIX_CURRENT_SIMULATOR_VERSION=26.5"

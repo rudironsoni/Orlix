@@ -16,6 +16,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ARCHIVE_SUFFIXES = {".dmg", ".pkg", ".ipsw", ".aea", ".zip"}
@@ -719,6 +720,56 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     return plan
 
 
+def launchd_sim_failed(detail: str) -> bool:
+    return "launchd_sim" in detail.lower()
+
+
+def simulator_already_booted(detail: str) -> bool:
+    return "current state: booted" in detail.lower()
+
+
+def command_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    if completed.stderr:
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
+    return f"{completed.stderr or ''}\n{completed.stdout or ''}"
+
+
+def boot_simulator(identifier: str, attempts: int = 3) -> None:
+    """Boot one simulator, retrying only when launchd_sim fails to bind.
+
+    A missing runtime or any other simctl error fails on the first attempt.
+    """
+    if attempts < 1:
+        raise ValueError(f"attempts must be positive: {attempts}")
+    for attempt in range(1, attempts + 1):
+        boot = subprocess.run(
+            ["xcrun", "simctl", "boot", identifier],
+            check=False, capture_output=True, text=True,
+        )
+        boot_detail = command_detail(boot)
+        if boot.returncode != 0 and not simulator_already_booted(boot_detail):
+            if launchd_sim_failed(boot_detail) and attempt < attempts:
+                print(f"launchd_sim did not boot {identifier}; retrying", flush=True)
+                time.sleep(2)
+                continue
+            raise SystemExit(boot.returncode or 1)
+        status = subprocess.run(
+            ["xcrun", "simctl", "bootstatus", identifier, "-b"],
+            check=False, capture_output=True, text=True,
+        )
+        status_detail = command_detail(status)
+        if status.returncode == 0:
+            return
+        if launchd_sim_failed(status_detail) and attempt < attempts:
+            print(f"launchd_sim did not report {identifier} booted; retrying", flush=True)
+            time.sleep(2)
+            continue
+        raise SystemExit(status.returncode or 1)
+    raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -743,6 +794,9 @@ def main(argv: list[str] | None = None) -> int:
 
     identifier = commands.add_parser("runtime-identifier")
     identifier.add_argument("--version", required=True)
+
+    boot = commands.add_parser("boot-simulator")
+    boot.add_argument("--udid", required=True)
 
     satisfied = commands.add_parser("bundle-satisfied")
     satisfied.add_argument("--brewfile", required=True, type=Path)
@@ -777,6 +831,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if archive_complete(args.archive_dir) else 1
     if args.command == "simruntime-present":
         return 0 if simruntime_present(args.runtime_dir) else 1
+    if args.command == "boot-simulator":
+        boot_simulator(args.udid)
+        return 0
     if args.command == "runtime-identifier":
         found = simctl_runtime_identifier(args.version, read_simctl_runtimes())
         if found is None:
