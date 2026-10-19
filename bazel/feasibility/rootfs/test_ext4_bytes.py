@@ -47,8 +47,10 @@ def _build_ext4_function() -> str:
         'set_inode_field "%s" mtime 1',
         'set_inode_field "%s" crtime 1',
         'set_inode_field "%s" generation 0',
-        'set_inode_field "/lost+found" generation 0',
+        "1\\t/lost+found",
         "set_inode_field <8> generation 0",
+        ".orlix-csum",
+        '"$debugfs" -n -w',
         "set_super_value mkfs_time 1",
         "set_super_value wtime 1",
         "set_super_value lastcheck 1",
@@ -284,10 +286,14 @@ class Ext4ByteTests(unittest.TestCase):
             self.assertEqual(left, right, _first_difference(left, right))
             _assert_stat(images[0])
             _assert_stat(images[1])
-            self.assertEqual(_generation(images[0]), "0")
-            self.assertEqual(_generation(images[1]), "0")
-            self.assertEqual(_kbytes_written(images[0]), "0")
-            self.assertEqual(_kbytes_written(images[1]), "0")
+            for image in images:
+                _assert_stat(image, "/")
+                _assert_stat(image, "/empty")
+                _assert_stat(image, "/lost+found")
+                self.assertEqual(_generation(image), "0")
+                self.assertEqual(_generation(image, "/"), "0")
+                self.assertEqual(_generation(image, "/lost+found"), "0")
+                self.assertEqual(_kbytes_written(image), "0")
 
     def test_distinct_source_generations_do_not_change_ext4_bytes(self) -> None:
         function = _build_ext4_function()
@@ -306,12 +312,13 @@ class Ext4ByteTests(unittest.TestCase):
             left = images[0].read_bytes()
             right = images[1].read_bytes()
             self.assertEqual(left, right, _first_difference(left, right))
-            _assert_stat(images[0])
-            _assert_stat(images[1])
-            self.assertEqual(_generation(images[0]), "0")
-            self.assertEqual(_generation(images[1]), "0")
-            self.assertEqual(_generation(images[0], "/"), "0")
-            self.assertEqual(_kbytes_written(images[0]), "0")
+            for image in images:
+                _assert_stat(image, "/")
+                _assert_stat(image, "/empty")
+                _assert_stat(image, "/lost+found")
+                self.assertEqual(_generation(image), "0")
+                self.assertEqual(_generation(image, "/lost+found"), "0")
+                self.assertEqual(_kbytes_written(image), "0")
 
 
 if __name__ == "__main__":
