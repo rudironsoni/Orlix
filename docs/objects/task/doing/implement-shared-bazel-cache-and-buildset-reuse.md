@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-10-18
+updated: 2026-10-19
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -89,8 +89,11 @@ remote accept. Full component-tree comparison covers paths, modes, symlinks,
 and file contents. That comparison includes the UAPI directory and
 `kbuild-archive.tar`, the mlibc sysroot directory, and the rootfs images
 `initramfs.cpio.gz`, `base.ext4`, and `state.ext4` with their manifest and
-digest. Empty directories stay inside those images. Digest marker equality
-alone cannot satisfy this gate. `compare_trees` still decides equality.
+digest. Host command files and dependency files in `kbuild-archive.tar` record
+the Bazel output base. The archive rewrites that prefix, and its real path, to
+`/orlix/output-base`. Empty directories stay inside those images. Digest
+marker equality alone cannot satisfy this gate. `compare_trees` still decides
+equality.
 The gate produces verification evidence without publishing artifacts or
 changing the signed buildset lock.
 

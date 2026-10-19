@@ -165,8 +165,15 @@ test -s "$work/hdr/include/asm/unistd.h"
 /bin/mkdir -p "$headers_out"
 /bin/cp -R -L "$work/hdr/include" "$headers_out/include"
 work_real="$(/usr/bin/python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$work")"
+case "$exec_root" in
+  */execroot/*) output_base="${exec_root%/execroot/*}" ;;
+  *) printf '%s\n' "kernel UAPI execroot is not inside an output base: $exec_root" >&2; exit 1 ;;
+esac
+output_base_real="$(/usr/bin/python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$output_base")"
 replace_args=(--replace "$work=/orlix/linux-uapi-work")
 if [ "$work_real" != "$work" ]; then replace_args+=(--replace "$work_real=/orlix/linux-uapi-work"); fi
+replace_args+=(--replace "$output_base=/orlix/output-base")
+if [ "$output_base_real" != "$output_base" ]; then replace_args+=(--replace "$output_base_real=/orlix/output-base"); fi
 /usr/bin/python3 "$archive_py" stabilize "$headers_out" "${replace_args[@]}"
 /usr/bin/python3 "$archive_py" archive "$work/linux/.orlix-uapi-build" "$archive_out" "${replace_args[@]}"
 /usr/sbin/chown -R "$(/usr/bin/id -u):$(/usr/bin/id -g)" "$headers_out" 2>/dev/null || true
