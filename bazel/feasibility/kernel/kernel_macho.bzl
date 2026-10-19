@@ -250,8 +250,12 @@ gmake="$gmake_staged"
 clang="$guest_clang_staged"
 linux_src="$(/usr/bin/dirname "$linux_makefile")"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
-if [ -z "${CCACHE_DIR:-}" ]; then
+if [ -n "${CCACHE_DISABLE:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER=
+elif [ -z "${CCACHE_DIR:-}" ]; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  /bin/mkdir -p "$CCACHE_DIR"
+  export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
 else
   export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
 fi

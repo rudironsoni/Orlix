@@ -34,11 +34,14 @@ class KernelMachOActionTests(unittest.TestCase):
         self.assertNotIn("env[\"TMPDIR\"]", self.rule)
         self.assertNotIn("CCACHE_DIR is required", self.rule)
 
-    def test_unset_ccache_dir_compiles_directly(self) -> None:
-        start = self.rule.index('if [ -z "${CCACHE_DIR:-}" ]; then')
+    def test_unset_ccache_dir_uses_default_cache(self) -> None:
+        start = self.rule.index('if [ -n "${CCACHE_DISABLE:-}" ]; then')
         snippet = self.rule[start:self.rule.index("fi\n", start) + 3]
-        script = "set -euo pipefail\nunset CCACHE_DIR\nunset ORLIX_COMPILER_LAUNCHER\n" + snippet + '\ntest -z "${ORLIX_COMPILER_LAUNCHER}"\n'
+        script = "set -euo pipefail\nunset CCACHE_DIR\nunset CCACHE_DISABLE\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test "$ORLIX_COMPILER_LAUNCHER" = "$ccache_staged"\ntest "$CCACHE_DIR" = "$HOME/Library/Caches/Orlix/ccache"\n'
         result = subprocess.run(["bash"], input=script, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        disabled = "set -euo pipefail\nunset CCACHE_DIR\nexport CCACHE_DISABLE=1\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test -z "${ORLIX_COMPILER_LAUNCHER}"\n'
+        result = subprocess.run(["bash"], input=disabled, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unread_extra_inputs_are_gone(self) -> None:
