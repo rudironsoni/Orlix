@@ -77,28 +77,25 @@ def _kernel_uapi_impl(ctx):
     sdkroot = sdk_marker[0].dirname
     libdir = ctx.files.tool_libs[0].dirname if ctx.files.tool_libs else "none"
     pinned_inputs = [
-        ctx.file.linux_makefile,
+        ctx.file.linux_source,
+        ctx.file.source_archive_tool,
         ctx.file.archive_tool,
         ctx.file.header_digest,
         ctx.file.toolchain_identity,
         ctx.file.clang,
         patch_list,
     ]
-    seen = {}
-    for item in pinned_inputs + patch_files:
-        seen[item.path] = True
-    linux_inputs = []
-    for file in _headers_install_sources(ctx.files.linux_source):
-        if file.path not in seen:
-            linux_inputs.append(file)
-            seen[file.path] = True
+    # headers_install reads the filtered subset inside the unpacked archive.
+    # The action input is that one archive, so analysis does not configure
+    # one target per Linux file. _headers_install_sources still names the
+    # subset a kernel .c edit does not belong to.
     ctx.actions.run_shell(
         mnemonic = "OrlixLinuxHeadersInstall",
         progress_message = "Installing upstream Linux arm64 UAPI headers",
         command = r"""
 set -euo pipefail
 exec_root="$PWD"
-linux_makefile="$exec_root/$1"
+linux_archive="$exec_root/$1"
 headers_out="$exec_root/$2"
 archive_out="$exec_root/$3"
 manifest_out="$exec_root/$4"
@@ -133,15 +130,15 @@ hostcc="$clang"
 test -s "$sdkroot/SDKSettings.json"
 if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir"; fi
 export PATH="${clang%/*}:$PATH"
-case "$linux_makefile" in
-  *orlix_linux_source*/Makefile) ;;
-  *) echo "kernel UAPI must invoke upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
+case "$linux_archive" in
+  *orlix_linux_source*/linux-source.tar) ;;
+  *) echo "kernel UAPI must consume the upstream Linux source archive, got $linux_archive" >&2; exit 1 ;;
 esac
-linux_src="$(/usr/bin/dirname "$linux_makefile")"
 work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/orlix-linux-uapi.XXXXXX")"
 trap '/bin/rm -rf "$work"' EXIT
 /bin/mkdir -p "$work/linux" "$work/hdr"
-/bin/cp -R "$linux_src/." "$work/linux"
+/usr/bin/python3 -B "$exec_root/bazel/feasibility/kernel/linux_source_archive.py" extract "$linux_archive" "$work/linux"
+test -s "$work/linux/Makefile"
 /bin/chmod -R u+w "$work/linux"
 while IFS= read -r patch || [ -n "$patch" ]; do
   case "$patch" in
@@ -190,7 +187,7 @@ digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"
     '}' > "$manifest_out"
 """,
         arguments = [
-            ctx.file.linux_makefile.path,
+            ctx.file.linux_source.path,
             headers.path,
             archive.path,
             manifest.path,
@@ -203,7 +200,7 @@ digest="$(/usr/bin/python3 "$header_digest" "$headers_out/include")"
             sdkroot,
             libdir,
         ],
-        inputs = depset(direct = pinned_inputs + patch_files + linux_inputs + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.macos_sdk),
+        inputs = depset(direct = pinned_inputs + patch_files + ctx.files.tool_libs + ctx.files.clang_resources + ctx.files.macos_sdk),
         outputs = [headers, archive, manifest, digest],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
@@ -279,8 +276,11 @@ test -s "$out/include/linux/unistd.h"
 orlix_kernel_uapi = rule(
     implementation = _kernel_uapi_impl,
     attrs = {
-        "linux_source": attr.label(mandatory = True),
-        "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
+        "linux_source": attr.label(mandatory = True, allow_single_file = True),
+        "source_archive_tool": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/kernel:linux_source_archive.py"),
+        ),
         "archive_tool": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/kernel:kbuild_persist.py")),
         "digest_tool": attr.label(allow_single_file = True, default = Label("//bazel:content_digest.py")),
         "header_digest": attr.label(allow_single_file = True, default = Label("//bazel/feasibility/mlibc:header_digest.py")),

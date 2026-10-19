@@ -149,6 +149,22 @@ variant_stamp_test = analysistest.make(
     },
 )
 
+def _linux_source_archives(files):
+    """Paths of the one Linux archive, in whatever configuration spelled them.
+
+    Bzlmod paths look like ``external/+native_sources+orlix_linux_source/linux-source.tar``.
+    A slash before ``orlix_linux_source`` is not part of that name.
+    """
+    found = []
+    for item in files:
+        if item.basename != "linux-source.tar":
+            continue
+        if "orlix_linux_source" not in item.path and "orlix_linux_source" not in item.short_path:
+            continue
+        chosen = item.short_path if item.short_path.endswith("linux-source.tar") else item.path
+        found.append(chosen)
+    return found
+
 def _no_wrapper_makefile_test_impl(ctx):
     env = analysistest.begin(ctx)
     target = analysistest.target_under_test(env)
@@ -158,53 +174,20 @@ def _no_wrapper_makefile_test_impl(ctx):
             found = True
             argv = " ".join(action.argv)
             paths = [f.path for f in action.inputs.to_list()]
-            unrelated = []
-            saw_uapi = False
-            saw_arch_uapi = False
-            saw_unifdef = False
-            saw_headers_script = False
-            saw_syscall_table = False
-            saw_syscalls_make = False
-            saw_makefile = False
+            linux_package = _linux_source_archives(action.inputs.to_list())
+            unrelated = [path for path in paths if path.endswith("/kernel/fork.c") or path.endswith("/mm/page_alloc.c")]
             saw_patch = False
             for path in paths:
-                compiled = path.endswith(".c") or path.endswith(".S")
-                host_or_uapi = (
-                    "/scripts/" in path or
-                    "/arch/arm64/tools/" in path or
-                    "/include/uapi/" in path or
-                    "/arch/arm64/include/uapi/" in path
-                )
-                if compiled and not host_or_uapi:
-                    if len(unrelated) < 3:
-                        unrelated.append(path)
-                if "/include/uapi/" in path and path.endswith(".h"):
-                    saw_uapi = True
-                if "/arch/arm64/include/uapi/" in path:
-                    saw_arch_uapi = True
-                if path.endswith("/scripts/unifdef.c"):
-                    saw_unifdef = True
-                if path.endswith("/scripts/headers_install.sh") or path.endswith("/scripts/Makefile.headersinst"):
-                    saw_headers_script = True
-                if path.endswith("/arch/arm64/tools/syscall_64.tbl"):
-                    saw_syscall_table = True
-                if path.endswith("/arch/arm64/kernel/Makefile.syscalls"):
-                    saw_syscalls_make = True
-                if path.endswith("/orlix_linux_source/Makefile") or path.endswith("orlix_linux_source/Makefile"):
-                    saw_makefile = True
                 if path.endswith(".patch"):
                     saw_patch = True
             asserts.false(env, "OrlixKernel/" in argv)
             asserts.true(env, "headers_install" in argv)
             asserts.true(env, "ARCH=arm64" in argv)
             asserts.true(env, "orlix_linux_source" in argv)
-            asserts.true(env, saw_uapi, "headers_install is missing include/uapi headers")
-            asserts.true(env, saw_arch_uapi, "headers_install is missing arm64 UAPI")
-            asserts.true(env, saw_unifdef, "headers_install is missing scripts/unifdef.c")
-            asserts.true(env, saw_headers_script, "headers_install is missing the header install script")
-            asserts.true(env, saw_syscall_table, "headers_install is missing the arm64 syscall table")
-            asserts.true(env, saw_syscalls_make, "headers_install is missing Makefile.syscalls")
-            asserts.true(env, saw_makefile, "headers_install is missing the Linux Makefile")
+            asserts.true(env, "linux_source_archive.py" in argv)
+            asserts.equals(env, 1, len(linux_package), "linux source inputs: %s" % linux_package)
+            if len(linux_package) == 1:
+                asserts.true(env, linux_package[0].endswith("linux-source.tar"), linux_package)
             asserts.true(env, saw_patch, "headers_install is missing kernel patches")
             asserts.true(env, len(unrelated) == 0, "headers_install inputs include unrelated kernel sources: %s" % unrelated)
     asserts.true(env, found)
@@ -240,6 +223,13 @@ def _macho_no_wrapper_makefile_test_impl(ctx):
             asserts.false(env, "OrlixKernel/Makefile" in script)
             asserts.false(env, "ORLIX_TCTI_ISA_PREPARED" in action.env)
             asserts.false(env, "../../../../OrlixKernel/orlix-tcti-isa" in argv)
+            linux_package = _linux_source_archives(action.inputs.to_list())
+            asserts.equals(env, 1, len(linux_package), "linux source inputs: %s" % linux_package)
+            if len(linux_package) == 1:
+                asserts.true(env, linux_package[0].endswith("linux-source.tar"), linux_package)
+                asserts.true(env, "orlix_linux_source" in linux_package[0], linux_package)
+            asserts.true(env, "linux-source.tar" in script)
+            asserts.true(env, "linux_source_archive.py" in script)
             asserts.true(env, "tcti_isa" in inputs)
             asserts.false(env, "prepared-tables.tar.gz" in inputs)
             asserts.false(env, "prepared-tables.sha256" in inputs)

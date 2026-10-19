@@ -8,6 +8,26 @@ def _archive_repository_impl(ctx):
     )
     if ctx.attr.patch:
         ctx.patch(ctx.attr.patch, strip = 1)
+    if ctx.attr.single_archive:
+        # One tar, not glob(["**"]). Analysis configures this archive instead
+        # of one target per Linux source file. The macho action unpacks it.
+        tool = ctx.path(ctx.attr.archive_tool)
+        packed = ctx.execute([
+            "/usr/bin/python3",
+            "-B",
+            str(tool),
+            "pack",
+            ".",
+            "linux-source.tar",
+        ])
+        if packed.return_code:
+            fail("linux source archive pack failed:\n%s\n%s" % (packed.stdout, packed.stderr))
+        exports = [ctx.attr.marker] + list(ctx.attr.extra_exports)
+        built = ctx.execute(["/usr/bin/python3", "-B", str(tool), "package-build"] + exports)
+        if built.return_code:
+            fail("linux source package build failed:\n%s\n%s" % (built.stdout, built.stderr))
+        ctx.file("BUILD.bazel", built.stdout)
+        return
     export_patterns = [ctx.attr.marker] + list(ctx.attr.extra_exports)
     quoted = ", ".join(['"%s"' % pattern for pattern in export_patterns])
     ctx.file("BUILD.bazel", """
@@ -31,6 +51,11 @@ _archive_repository = repository_rule(
         "marker": attr.string(mandatory = True),
         "extra_exports": attr.string_list(),
         "patch": attr.label(allow_single_file = True),
+        "single_archive": attr.bool(default = False),
+        "archive_tool": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/kernel:linux_source_archive.py"),
+        ),
     },
 )
 
@@ -327,6 +352,7 @@ def _native_sources_impl(_ctx):
         strip_prefix = "linux-6.12.105",
         marker = "Makefile",
         extra_exports = ["usr/gen_init_cpio.c"],
+        single_archive = True,
     )
     _archive_repository(
         name = "orlix_mlibc_source",
