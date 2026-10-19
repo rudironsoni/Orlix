@@ -49,6 +49,8 @@ class NativeSourceHashTests(unittest.TestCase):
         self.assertIn("linux-6.12.105", text)
         self.assertIn('name = "orlix_linux_source"', text)
         self.assertIn('extra_exports = ["usr/gen_init_cpio.c"]', text)
+        linux_call = text.split('name = "orlix_linux_source"', 1)[1].split('name = "orlix_mlibc_source"', 1)[0]
+        self.assertIn("single_archive = True", linux_call)
         self.assertIn("headers_install", Path(__file__).resolve().parents[1].joinpath("feasibility/kernel/kernel_uapi.bzl").read_text(encoding="utf-8"))
 
     def test_coreutils_archive_has_sha256_and_gnulib_pin(self) -> None:

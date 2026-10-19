@@ -166,7 +166,7 @@ def _kernel_macho_impl(ctx):
     ctx.actions.write(script, r"""
 set -euo pipefail
 exec_root="$PWD"
-linux_makefile="$exec_root/$1"
+linux_archive="$exec_root/$1"
 archive_out="$exec_root/$2"
 symbols_out="$exec_root/$3"
 digest_out="$exec_root/$4"
@@ -239,13 +239,12 @@ test -s "$sdkroot/SDKSettings.json"
 test -s "$sdkroot/SDKSettings.plist"
 bison_share="$tool_root/share/bison"
 test -s "$bison_share/m4sugar/m4sugar.m4"
-case "$linux_makefile" in
-  *orlix_linux_source*/Makefile) ;;
-  *) echo "kernel Mach-O must consume upstream Linux Makefile, got $linux_makefile" >&2; exit 1 ;;
+case "$linux_archive" in
+  *orlix_linux_source*/linux-source.tar) ;;
+  *) echo "kernel Mach-O must consume the upstream Linux source archive, got $linux_archive" >&2; exit 1 ;;
 esac
 gmake="$gmake_staged"
 clang="$guest_clang_staged"
-linux_src="$(/usr/bin/dirname "$linux_makefile")"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
 if [ -n "${CCACHE_DISABLE:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER=
@@ -264,6 +263,9 @@ export ORLIX_KERNEL_AR="$llvm_ar_staged"
 export ORLIX_KERNEL_NM="$llvm_nm_staged"
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
+linux_src="$work/upstream-linux"
+/usr/bin/python3 -B "$exec_root/bazel/feasibility/kernel/linux_source_archive.py" extract "$linux_archive" "$linux_src"
+test -s "$linux_src/Makefile"
 export PYTHONPATH="$exec_root:$exec_root/OrlixKernel/Sources/ports/orlix/kbuild"
 provenance="$exec_root/make/tcti-proof-registry-provenance.mk"
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.resume(Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]])' "$work" "$toolchain_identity" "$0" "${engine_paths[@]}" "$gmake_staged" "$sed_staged" "$llvm_ar_staged" "$lld_staged" "$llvm_nm_staged" "$guest_clang_staged" "$ccache_staged" "$readlink_staged" "$find_staged" "$host_clang" "$provenance" "$tool_lib" "$guest_lib" "$sdkroot" "$bison_share"
@@ -369,7 +371,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         command = "PYTHONPATH=.:OrlixKernel/Sources/ports/orlix/kbuild /usr/bin/python3 -B -c 'import source_state,sys; raise SystemExit(source_state.run_locked(sys.argv[1],sys.argv[2:]))' \"$@\"",
         arguments = [
             script.path,
-            ctx.file.linux_makefile.path,
+            ctx.file.linux_source.path,
             archive.path,
             symbols.path,
             digest.path,
@@ -400,7 +402,8 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         inputs = depset(
             direct = [
                 script,
-                ctx.file.linux_makefile,
+                ctx.file.linux_source,
+                ctx.file.source_archive_tool,
                 isa_tree,
                 ctx.file.toolchain_identity,
                 ctx.file.compiler_identity,
@@ -416,7 +419,6 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
                 ctx.file.gnu_find,
                 ctx.file.host_clang,
             ] + overlay_files + patch_files + config_files + engine_files + ctx.files.tool_libs + ctx.files.guest_clang_support + ctx.files.clang_resources + ctx.files.macos_sdk + ctx.files.bison_share + [ctx.file.sdk_settings_plist],
-            transitive = [ctx.attr.linux_source[DefaultInfo].files],
         ),
         outputs = [archive, symbols, digest, manifest, release_dtb, development_dtb, product],
         env = _pinned_env(ctx),
@@ -477,8 +479,11 @@ orlix_kernel_macho_archive = rule(
     attrs = {
         "profile": attr.string(mandatory = True, values = ["release", "development"]),
         "destination": attr.string(mandatory = True, values = ["iphoneos", "iphonesimulator"]),
-        "linux_source": attr.label(mandatory = True),
-        "linux_makefile": attr.label(allow_single_file = True, mandatory = True),
+        "linux_source": attr.label(mandatory = True, allow_single_file = True),
+        "source_archive_tool": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/kernel:linux_source_archive.py"),
+        ),
         "overlay": attr.label(mandatory = True, allow_files = True),
         "patches": attr.label(mandatory = True, allow_files = True),
         "configs": attr.label(mandatory = True, allow_files = True),

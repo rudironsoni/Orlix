@@ -6,7 +6,12 @@ from pathlib import Path
 import subprocess
 import unittest
 
+from bazel.feasibility.kernel.test_linux_source_archive import LinuxSourceArchiveTests
 from bazel.feasibility.kernel.uapi_inputs import EXACT, TREE_PREFIXES, headers_install_source
+
+# make/bazel-migration.mk already runs this module. The import collects
+# LinuxSourceArchiveTests here without editing that file.
+assert issubclass(LinuxSourceArchiveTests, unittest.TestCase)
 
 ROOT = Path(__file__).resolve().parents[3]
 UAPI = ROOT / "bazel/feasibility/kernel/kernel_uapi.bzl"
@@ -49,7 +54,9 @@ class UapiInputTests(unittest.TestCase):
         action = text[text.index('mnemonic = "OrlixLinuxHeadersInstall"'):]
         self.assertNotIn("linux_source[DefaultInfo].files", text)
         self.assertIn("_headers_install_sources", text)
-        self.assertIn("linux_inputs", action)
+        self.assertIn("linux-source.tar", action)
+        self.assertIn("linux_source_archive.py", action)
+        self.assertNotIn("linux_inputs", action)
         self.assertIn("patch_files", action)
         self.assertIn("ARCH=arm64", action)
         self.assertIn("headers_install", action)
