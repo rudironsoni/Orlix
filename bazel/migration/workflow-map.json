@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "fac579f743e6ebd164795eeaa3e57aeffa04a5a9f52984e364fb93cf3b841d32",
+      "source_sha256": "c1860a087bed4a8794c787057ce48934c9470d56660cffa04ca84bfb6d289cfe",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -370,17 +370,8 @@
                 }
               },
               {
-                "name": "Restore Homebrew source bottles",
-                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/homebrew-bottles",
-                  "key": "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2"
-                }
-              },
-              {
                 "name": "Install declared build tools",
-                "id": "tools",
-                "run": "set -euo pipefail\nxcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\nbrew tap xcodesorg/made\ngit -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\ngit -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\nbrew trust --formula xcodesorg/made/xcodes\npython3 bazel/ci/setup_cache.py install-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\"\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file bazel/ci/Brewfile\nfi\ntest \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\ntest \"$(xcodes version)\" = \"2.1.0\"\nif [ \"$GITHUB_EVENT_NAME\" = push ] && [ \"$GITHUB_REF\" = refs/heads/main ]; then\n  python3 bazel/ci/setup_cache.py capture-bottles --bottle-dir \"$HOME/Library/Caches/Orlix/homebrew-bottles\" --brewfile bazel/ci/Brewfile\nfi\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\n# Source bottles only record formulae built from source. They do not\n# skip the bottle install brew bundle runs for the pinned toolchain.\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then\n  echo \"Homebrew packages are already installed at the pinned versions; skipping brew bundle\"\nelse\n  xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\n  brew tap xcodesorg/made\n  git -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\n  git -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\n  brew trust --formula xcodesorg/made/xcodes\n  brew bundle --file bazel/ci/Brewfile\n  test \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\nfi\ntest \"$(xcodes version)\" = \"2.1.0\"\n"
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -494,7 +485,7 @@
                 "name": "Record setup caches filled by the product build",
                 "id": "setup-caches",
                 "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "run": "set -euo pipefail\ncache_has_files() {\n  dir=\"$1\"\n  if [ ! -d \"$dir\" ]; then\n    return 1\n  fi\n  found=\"$(find \"$dir\" -type f -size +0c -print -quit)\"\n  [ -n \"$found\" ]\n}\nif cache_has_files \"$HOME/Library/Caches/Orlix/Bazel/repository-cache\"; then\n  echo \"repository=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"repository=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Application Support/com.robotsandpencils.xcodes\"; then\n  echo \"xcode=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"xcode=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif compgen -G \"$HOME/Library/Caches/Orlix/homebrew-bottles/*.bottle.tar.gz\" > /dev/null; then\n  echo \"bottles=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"bottles=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  echo \"ccache=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ccache=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\ncache_has_files() {\n  dir=\"$1\"\n  if [ ! -d \"$dir\" ]; then\n    return 1\n  fi\n  found=\"$(find \"$dir\" -type f -size +0c -print -quit)\"\n  [ -n \"$found\" ]\n}\nif cache_has_files \"$HOME/Library/Caches/Orlix/Bazel/repository-cache\"; then\n  echo \"repository=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"repository=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Application Support/com.robotsandpencils.xcodes\"; then\n  echo \"xcode=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"xcode=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  echo \"ccache=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ccache=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Save Bazel repository cache",
@@ -512,15 +503,6 @@
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
                   "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
-                }
-              },
-              {
-                "name": "Save Homebrew source bottles",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true' && steps.setup-caches.outputs.bottles == 'true'",
-                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
-                "with": {
-                  "path": "~/Library/Caches/Orlix/homebrew-bottles",
-                  "key": "orlix-homebrew-${{ hashFiles('Brewfile') }}-xcodes-2.1.0-6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2"
                 }
               },
               {

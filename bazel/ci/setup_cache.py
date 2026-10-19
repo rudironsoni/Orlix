@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import plistlib
+import re
 import shutil
 import stat
 import subprocess
@@ -706,19 +707,198 @@ def runtime_message(plan: str, version: str, archive_dir: Path) -> str:
     raise ValueError(f"unknown runtime plan: {plan}")
 
 
-def brewfile_formulae(text: str) -> list[str]:
-    formulae = []
+_BREWFILE_PIN = re.compile(r"#\s+(\S+)\s+(\d+\.\d+(?:\.\d+)*)\b")
+_FORMULA_VERSION = re.compile(r'^\s*version\s+"([^"]+)"', re.M)
+_FORMULA_URL = re.compile(r'^\s*url\s+"([^"]+)"', re.M)
+_VERSION_TOKEN = re.compile(r"(\d+\.\d+(?:\.\d+)*)")
+
+
+def brewfile_entries(text: str) -> list[tuple[str, str | None]]:
+    """Formula names and a version pin carried by the comment above the entry.
+
+    ``# xcodes 2.1.0 from tap ...`` pins the following ``brew`` line. Other
+    entries keep a null pin and take the version from the formula file.
+    """
+    entries: list[tuple[str, str | None]] = []
+    pending_name: str | None = None
+    pending_version: str | None = None
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
+            pending_name = None
+            pending_version = None
+            continue
+        if stripped.startswith("#"):
+            match = _BREWFILE_PIN.match(stripped)
+            if match:
+                pending_name, pending_version = match.group(1), match.group(2)
             continue
         if not stripped.startswith("brew "):
+            pending_name = None
+            pending_version = None
             continue
         quoted = stripped.split('"', 2)
         if len(quoted) < 3 or not quoted[1]:
             continue
-        formulae.append(quoted[1])
-    return formulae
+        name = quoted[1]
+        short = name.rsplit("/", 1)[-1]
+        version = pending_version if pending_name in {short, name} else None
+        entries.append((name, version))
+        pending_name = None
+        pending_version = None
+    return entries
+
+
+def brewfile_formulae(text: str) -> list[str]:
+    return [name for name, _version in brewfile_entries(text)]
+
+
+def homebrew_prefix() -> Path:
+    for candidate in (Path("/opt/homebrew"), Path("/usr/local")):
+        if (candidate / "bin" / "brew").is_file():
+            return candidate
+    return Path("/opt/homebrew")
+
+
+def formula_short_name(name: str) -> str:
+    return name.rsplit("/", 1)[-1]
+
+
+def formula_source(prefix: Path, name: str) -> Path | None:
+    short = formula_short_name(name)
+    if name.count("/") == 2:
+        user, repo, _formula = name.split("/")
+        roots = [prefix / "Library" / "Taps" / user / f"homebrew-{repo}"]
+    else:
+        roots = [prefix / "Library" / "Taps" / "homebrew" / "homebrew-core"]
+    for root in roots:
+        for candidate in (
+            root / "Formula" / short[:1].lower() / f"{short}.rb",
+            root / "Formula" / f"{short}.rb",
+        ):
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def formula_declared_version(text: str) -> str | None:
+    """Stable version from a formula file, without loading Homebrew.
+
+    A ``head`` spec before ``stable do`` is not the pin. LLVM's formula is
+    written that way.
+    """
+    stable_at = text.find("\n  stable do\n")
+    if stable_at == -1 and text.startswith("  stable do\n"):
+        stable_at = 0
+    if stable_at != -1:
+        rest = text[stable_at:]
+        end = rest.find("\n  end\n")
+        body = rest if end == -1 else rest[:end]
+    else:
+        bottle_at = text.find("\n  bottle do")
+        body = text if bottle_at == -1 else text[:bottle_at]
+        head_at = body.find("\n  head ")
+        if head_at == -1:
+            head_at = body.find("\n  head do")
+        if head_at != -1:
+            body = body[:head_at]
+    explicit = _FORMULA_VERSION.search(body)
+    if explicit:
+        return explicit.group(1)
+    url_match = _FORMULA_URL.search(body)
+    if url_match is None:
+        return None
+    archive = url_match.group(1).rstrip("/").rsplit("/", 1)[-1]
+    tokens = _VERSION_TOKEN.findall(archive) or _VERSION_TOKEN.findall(url_match.group(1))
+    if not tokens:
+        return None
+    return tokens[-1]
+
+
+def formula_version_matches(installed: str, declared: str) -> bool:
+    """True when the active keg is the declared upstream version.
+
+    Homebrew appends ``_1`` for a bottle revision. That revision is the same
+    compiler. A different upstream version is not.
+    """
+    return installed.split("_", 1)[0] == declared.split("_", 1)[0]
+
+
+def active_keg(prefix: Path, name: str) -> Path | None:
+    """The Cellar directory ``opt/<formula>`` currently selects.
+
+    ``opt/llvm@20`` does not satisfy ``llvm``. The build invokes
+    ``opt/llvm/bin/clang``.
+    """
+    short = formula_short_name(name)
+    opt = prefix / "opt" / short
+    if not opt.is_symlink() and not opt.exists():
+        return None
+    resolved = opt.resolve()
+    if resolved.parent.name != short or resolved.parent.parent.name != "Cellar":
+        return None
+    return resolved
+
+
+def pinned_llvm_clang(prefix: Path, keg: Path) -> bool:
+    """True when the clang the build runs is inside the pinned llvm keg."""
+    clang = prefix / "opt" / "llvm" / "bin" / "clang"
+    if not clang.is_symlink() and not clang.is_file():
+        return False
+    resolved = clang.resolve()
+    if not resolved.is_file():
+        return False
+    try:
+        resolved.relative_to(keg)
+    except ValueError:
+        return False
+    return True
+
+
+def declared_tool_status(brewfile: Path, prefix: Path) -> tuple[bool, str]:
+    entries = brewfile_entries(brewfile.read_text(encoding="utf-8"))
+    if not entries:
+        return False, f"{brewfile} declares no Homebrew formulae"
+    mismatches: list[str] = []
+    for name, pinned in entries:
+        version = pinned if pinned is not None else formula_version_from_prefix(prefix, name)
+        short = formula_short_name(name)
+        if version is None:
+            mismatches.append(f"{name} has no readable pinned version")
+            continue
+        keg = active_keg(prefix, name)
+        if keg is None:
+            if short == "llvm" and _llvm_alias_present(prefix):
+                mismatches.append(
+                    "llvm is not installed at opt/llvm; "
+                    "llvm@20 on the runner is not the pinned clang"
+                )
+            else:
+                mismatches.append(f"{name} {version} is not the active keg")
+            continue
+        if not formula_version_matches(keg.name, version):
+            mismatches.append(f"{name} active keg {keg.name} is not pinned {version}")
+            continue
+        if short == "llvm" and not pinned_llvm_clang(prefix, keg):
+            mismatches.append(
+                f"pinned llvm clang is not {keg}/bin/clang; "
+                "the macOS runner llvm@20 keg is not this pin"
+            )
+    if mismatches:
+        return False, "Homebrew pin is not installed: " + "; ".join(mismatches)
+    return True, "pinned Homebrew formulae are already installed"
+
+
+def formula_version_from_prefix(prefix: Path, name: str) -> str | None:
+    path = formula_source(prefix, name)
+    if path is None:
+        return None
+    return formula_declared_version(path.read_text(encoding="utf-8"))
+
+
+def _llvm_alias_present(prefix: Path) -> bool:
+    alias = prefix / "opt" / "llvm@20"
+    return alias.is_symlink() or alias.exists()
 
 
 def formula_was_source_built(payload: dict) -> bool:
@@ -807,23 +987,23 @@ def capture_bottles(directory: Path, brewfile: Path) -> None:
             print(f"could not bottle {formula}", file=sys.stderr)
 
 
-def bundle_satisfied(brewfile: Path) -> bool:
-    """True when the Brewfile is already satisfied.
+def bundle_satisfied(brewfile: Path, prefix: Path | None = None) -> bool:
+    """True when every declared formula is already installed at its pin.
 
-    A permission error from ``brew bundle check`` is not an unsatisfied Brewfile.
+    The check reads the Homebrew prefix. It does not run ``brew bundle check``
+    and it does not spawn ``brew info`` per formula. A permission error is not
+    an unsatisfied Brewfile. A missing keg, including the pinned ``llvm``
+    clang at ``opt/llvm/bin/clang``, is unsatisfied so ``brew bundle`` still
+    installs it. ``opt/llvm@20`` is not that pin.
     """
-    completed = subprocess.run(
-        ["brew", "bundle", "check", "--file", str(brewfile)],
-        check=False, capture_output=True, text=True,
-    )
-    if completed.stdout:
-        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
-    if completed.stderr:
-        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
-    if completed.returncode == 0:
+    root = prefix if prefix is not None else homebrew_prefix()
+    try:
+        ok, detail = declared_tool_status(brewfile, root)
+    except PermissionError:
+        print("Homebrew prefix is not readable; not treating the Brewfile as unsatisfied")
         return True
-    detail = f"{completed.stderr or ''}\n{completed.stdout or ''}".lower()
-    return "permission denied" in detail or "operation not permitted" in detail
+    print(detail)
+    return ok
 
 
 def runtime_already_installed(version: str, runtime_dir: Path | None = None) -> bool:
