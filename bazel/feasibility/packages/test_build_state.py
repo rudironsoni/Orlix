@@ -270,7 +270,7 @@ class PackageStateTests(unittest.TestCase):
                 self.assertFalse((root / "build/Makefile").exists())
                 self.assertEqual((root / "src/leaf.c").read_bytes(), (source / "leaf.c").read_bytes())
 
-    def test_staged_tools_drop_absolute_cache_and_xcode_paths(self) -> None:
+    def test_staged_tools_keep_configured_compiler_cache(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _source, arguments = self._package_arguments(base)
@@ -286,6 +286,7 @@ class PackageStateTests(unittest.TestCase):
             with patch.object(Path, "cwd", return_value=base / "execroot/_main"), \
                  patch.dict(os.environ, {
                      "CCACHE_DIR": "/var/folders/cache",
+                     "CCACHE_DISABLE": "",
                      "DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer",
                      "ORLIX_COMPILER_LAUNCHER": "/opt/homebrew/bin/ccache",
                  }, clear=False), \
@@ -298,9 +299,9 @@ class PackageStateTests(unittest.TestCase):
                     0,
                 )
             env = seen["env"]
-            self.assertNotIn("CCACHE_DIR", env)
+            self.assertEqual(env["CCACHE_DIR"], "/var/folders/cache")
             self.assertNotIn("DEVELOPER_DIR", env)
-            self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], "")
+            self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], "/opt/homebrew/bin/ccache")
             self.assertEqual(
                 os.path.realpath(env["ORLIX_PACKAGE_TOOL_BIN"]),
                 os.path.realpath(tool.parent),

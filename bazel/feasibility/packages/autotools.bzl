@@ -1,6 +1,7 @@
 """Pinned Autotools guest packages from OrlixMLibC sysroot and UAPI."""
 
 load(":action_inputs.bzl", "guest_configure_inputs")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
@@ -20,9 +21,9 @@ def _pinned_env(ctx):
         "CCACHE_MAXSIZE": "20G",
         "PATH": "/usr/bin:/bin",
     }
-    for name in ("CCACHE_DISABLE", "ORLIX_PACKAGE_INCREMENTAL"):
-        if name in shell:
-            env[name] = shell[name]
+    if "ORLIX_PACKAGE_INCREMENTAL" in shell:
+        env["ORLIX_PACKAGE_INCREMENTAL"] = shell["ORLIX_PACKAGE_INCREMENTAL"]
+    env.update(compiler_cache_env(shell))
     return env
 
 def declare_orlix_package_interface(ctx, package_trees, paths_by_package):
@@ -210,6 +211,7 @@ elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}
 else
   launcher=""
 fi
+export ORLIX_COMPILER_LAUNCHER="$launcher"
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
 export CCACHE_STATSLOG="$work/compiler-cache.log"

@@ -227,6 +227,8 @@ fi
             os.environ["TMPDIR"] = "/tmp/client"
             os.environ["DEVELOPER_DIR"] = "/Applications/Xcode.app/Contents/Developer"
             os.environ["SDKROOT"] = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+            os.environ.pop("CCACHE_DIR", None)
+            os.environ.pop("CCACHE_DISABLE", None)
             os.environ["ORLIX_COMPILER_LAUNCHER"] = "/opt/homebrew/bin/ccache"
             try:
                 status = build_state.run(
@@ -239,6 +241,8 @@ fi
                 else:
                     os.environ["TMPDIR"] = previous
                 os.environ.pop("ORLIX_COMPILER_LAUNCHER", None)
+                os.environ.pop("CCACHE_DIR", None)
+                os.environ.pop("CCACHE_DISABLE", None)
                 os.environ.pop("DEVELOPER_DIR", None)
                 os.environ.pop("SDKROOT", None)
             self.assertEqual(status, 0)

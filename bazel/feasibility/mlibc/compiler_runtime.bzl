@@ -1,6 +1,7 @@
 """Linux compiler-rt archive. The sysroot depends on this rule and not the builtin sources."""
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 
 OrlixCompilerRuntimeInfo = provider(
     doc = "Linux compiler-rt archive the sysroot links and does not rebuild.",
@@ -48,13 +49,18 @@ _COMPILER_RT_SOURCES = [
     "udivti3.c",
 ]
 
-def _pinned_env(_ctx):
-    return {
+def _pinned_env(ctx):
+    env = {
         "HOME": "/var/empty",
         "LC_ALL": "C",
         "PATH": "/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "CCACHE_CONFIGPATH": "/dev/null",
+        "CCACHE_COMPILERCHECK": "content",
+        "CCACHE_MAXSIZE": "20G",
     }
+    env.update(compiler_cache_env(ctx.configuration.default_shell_env))
+    return env
 
 def _compiler_runtime_impl(ctx):
     runtime = ctx.actions.declare_file(ctx.label.name + "/libcompiler_rt.a")
@@ -79,6 +85,7 @@ if [ "$5" != none ]; then libdir="$exec_root/$5"; fi
 mkdir_bin="$exec_root/$6"
 rm_bin="$exec_root/$7"
 sort_bin="$exec_root/$8"
+ccache_bin="$exec_root/$9"
 if [ -n "$libdir" ]; then export DYLD_LIBRARY_PATH="$libdir"; fi
 export PATH="${clang%/*}"
 test -x "$clang"
@@ -111,14 +118,28 @@ tool_root="${tool_root%/*}"
 work="$exec_root/compiler-rt-objects"
 "$rm_bin" -rf "$work"
 "$mkdir_bin" -p "$work"
-shift 8
+shift 9
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$ccache_bin" ]; then
+  launcher=""
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  launcher="$ccache_bin"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && "$mkdir_bin" -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  launcher="$ccache_bin"
+else
+  launcher=""
+fi
+export ORLIX_COMPILER_LAUNCHER="$launcher"
+export CCACHE_BASEDIR="$exec_root"
 objects=()
 for relative in "$@"; do
     source="$exec_root/$relative"
     source_name="${source#"$builtins/"}"
     object_name="${source_name//\//-}"
     object="$work/${object_name%.c}.o"
-    "$clang" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -nostdlibinc -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" "-ffile-prefix-map=$tool_root=/orlix/tools" -I"$builtins" -c "$source" -o "$object"
+    compile=("$clang")
+    if [ -n "$launcher" ]; then compile=("$launcher" "$clang"); fi
+    "${compile[@]}" --target=aarch64-linux-gnu -ffreestanding -fno-builtin -nostdlibinc -ffixed-x18 -O2 "-ffile-prefix-map=$builtins=/orlix/compiler-rt" "-ffile-prefix-map=$work=/orlix/compiler-rt-obj" "-ffile-prefix-map=$tool_root=/orlix/tools" -I"$builtins" -c "$source" -o "$object"
     objects+=("$object")
 done
 (
@@ -142,6 +163,7 @@ test -s "$runtime_out"
             ctx.file.mkdir.path,
             ctx.file.rm.path,
             ctx.file.sort.path,
+            ctx.file.ccache.path,
         ] + [f.path for f in selected],
         inputs = depset(selected + headers + [
             ctx.file.runtime_toolchain_identity,
@@ -150,11 +172,14 @@ test -s "$runtime_out"
             ctx.file.mkdir,
             ctx.file.rm,
             ctx.file.sort,
+            ctx.file.ccache,
         ] + ctx.files.tool_libs + ctx.files.clang_resources),
         outputs = [runtime],
         env = _pinned_env(ctx),
         use_default_shell_env = False,
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1"},
+        # The cache directory is external storage, not an action input. The
+        # action still runs on the Mac so ccache can read and write it.
+        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     identity = declare_artifact_identity(
         ctx,
@@ -178,6 +203,7 @@ orlix_compiler_runtime = rule(
         "compiler_rt": attr.label(allow_single_file = True, mandatory = True),
         "runtime_toolchain_identity": attr.label(allow_single_file = True, mandatory = True),
         "clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
+        "ccache": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ccache")),
         "llvm_ar": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-ar")),
         "mkdir": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/mkdir")),
         "rm": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/rm")),

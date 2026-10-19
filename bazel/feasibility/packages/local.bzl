@@ -1,16 +1,22 @@
 """Orlix-local C programs against OrlixMLibC sysroot and UAPI."""
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:package_info.bzl", "OrlixPackageTreeInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 load(":source_key.bzl", "declare_source_key", "declare_tree_tar")
 
-def _pinned_env(_ctx):
-    return {
+def _pinned_env(ctx):
+    env = {
         "HOME": "/var/empty",
         "PATH": "/usr/bin:/bin",
+        "CCACHE_CONFIGPATH": "/dev/null",
+        "CCACHE_COMPILERCHECK": "content",
+        "CCACHE_MAXSIZE": "20G",
     }
+    env.update(compiler_cache_env(ctx.configuration.default_shell_env))
+    return env
 
 def _extract():
     # filter= exists only when tarfile.data_filter does (Python 3.12+).
@@ -82,6 +88,20 @@ objdump_bin="$tool_bin/llvm-objdump"
 test -x "$clang"
 test -x "$strip_bin"
 test -x "$objdump_bin"
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
+  launcher=""
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  launcher="$tool_bin/ccache"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  launcher="$tool_bin/ccache"
+else
+  launcher=""
+fi
+export ORLIX_COMPILER_LAUNCHER="$launcher"
+export CCACHE_BASEDIR="$work"
+compile=("$clang")
+if [ -n "$launcher" ]; then compile=("$launcher" "$clang"); fi
 test -s "$libraries/libc.a"
 libm="$libraries/libc.a"
 libpthread="$libraries/libc.a"
@@ -96,7 +116,7 @@ out="$1"
 shift
 /bin/mkdir -p "$(/usr/bin/dirname "$out")"
 # shellcheck disable=SC2086
-"$clang" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -ffile-prefix-map="$tool_bin"=/orlix/tools -static-pie -fuse-ld="$tool_bin/ld.lld" -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" "$@" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
+"${compile[@]}" --target=aarch64-linux-gnu -isystem "$headers" -isystem "$uapi_headers/include" $inc -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -ffile-prefix-map="$work"=. -ffile-prefix-map="$tool_bin"=/orlix/tools -static-pie -fuse-ld="$tool_bin/ld.lld" -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$libraries/crt1.o" "$libraries/crti.o" "$@" -Wl,--start-group "$libraries/libc.a" "$libm" "$libpthread" "$libssp_ns" "$libssp" "$runtime" -Wl,--end-group "$libraries/crtn.o" -o "$out"
 "$strip_bin" "$out"
 /usr/bin/file "$out" | /usr/bin/grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { /usr/bin/file "$out" >&2; exit 1; }
 "$objdump_bin" -p "$out" | /usr/bin/awk '/^[[:space:]]*LOAD[[:space:]]/ && $0 !~ /align 2\*\*14/ { print "PT_LOAD is not 16 KiB aligned: " $0 > "/dev/stderr"; bad=1 } END { exit bad }'

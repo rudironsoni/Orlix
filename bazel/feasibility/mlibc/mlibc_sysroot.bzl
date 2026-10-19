@@ -2,11 +2,12 @@
 
 load(":compiler_runtime.bzl", "OrlixCompilerRuntimeInfo")
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 load("//bazel/providers:kernel_info.bzl", "OrlixInstalledUapiInfo")
 load("//bazel/providers:sysroot_info.bzl", "OrlixLibcSysrootInfo")
 
-def _pinned_env(_ctx):
-    return {
+def _pinned_env(ctx):
+    env = {
         "HOME": "/var/empty",
         "PATH": "/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
@@ -14,6 +15,8 @@ def _pinned_env(_ctx):
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
     }
+    env.update(compiler_cache_env(ctx.configuration.default_shell_env))
+    return env
 
 def _mlibc_sysroot_impl(ctx):
     uapi = ctx.attr.uapi[OrlixInstalledUapiInfo]
@@ -87,8 +90,22 @@ export MESON_PACKAGE_CACHE_DIR="$work/inputs/subprojects"
 /bin/mkdir -p "$work/arch"
 /usr/bin/printf '%s\n' '#ifndef MLIBC_ARCH_DEFS_HPP' '#define MLIBC_ARCH_DEFS_HPP' '' '#include <stddef.h>' '' 'namespace mlibc {' '' 'inline constexpr size_t page_size = 16384;' '' '} // namespace mlibc' '' '#endif' > "$work/arch/arch-defs.hpp.new"
 if ! /usr/bin/cmp -s "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; then /bin/mv "$work/arch/arch-defs.hpp.new" "$work/arch/arch-defs.hpp"; fi
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$guest_clang', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = ['$guest_clangxx', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
-/usr/bin/printf '%s\n' '[binaries]' "c = ['$clang', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = ['$clangxx', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" > "$work/native.ini"
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
+  launcher=""
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  launcher="$tool_bin/ccache"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  launcher="$tool_bin/ccache"
+else
+  launcher=""
+fi
+export ORLIX_COMPILER_LAUNCHER="$launcher"
+export CCACHE_BASEDIR="$work"
+compiler_prefix=""
+if [ -n "$launcher" ]; then compiler_prefix="'$launcher', "; fi
+/usr/bin/printf '%s\n' '[binaries]' "c = [${compiler_prefix}'$guest_clang', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = [${compiler_prefix}'$guest_clangxx', '--target=aarch64-linux-gnu', '-ffile-prefix-map=$tool_root=/orlix/tools']" "c_ld = '$lld'" "cpp_ld = '$lld'" "ar = '$ar'" "strip = '$strip'" '' '[host_machine]' "system = 'linux'" "cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" '' '[properties]' 'needs_exe_wrapper = true' '' '[built-in options]' "c_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "cpp_args = ['-ffile-prefix-map=$work=/orlix', '-ffile-prefix-map=$tool_root=/orlix/tools', '-ffile-prefix-map=../mlibc=/orlix/mlibc', '-include', '$work/arch/arch-defs.hpp', '-ffixed-x18', '-ffunction-sections', '-fdata-sections']" "c_link_args = ['-fuse-ld=$lld', '$runtime_in']" "cpp_link_args = ['-fuse-ld=$lld', '$runtime_in']" > "$work/cross.ini"
+/usr/bin/printf '%s\n' '[binaries]' "c = [${compiler_prefix}'$clang', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" "cpp = [${compiler_prefix}'$clangxx', '-isysroot', '$sdkroot', '-ffile-prefix-map=$sdkroot=/orlix/macos-sdk', '-ffile-prefix-map=$tool_root=/orlix/tools']" > "$work/native.ini"
 plan="$(/usr/bin/python3 -B -c 'from bazel.feasibility.mlibc.build_state import meson_setup_plan; import pathlib,sys; print(meson_setup_plan(pathlib.Path(sys.argv[1]).read_text(), pathlib.Path(sys.argv[2]).is_file()))' "$work/inputs/configure-cache" "$work/build/build.ninja")"
 if [ "$plan" != skip ]; then
   configure_args=()
@@ -205,6 +222,7 @@ test "${#sysroot_digest}" -eq 64
                 ctx.file.header_digest,
                 runtime,
                 ctx.file.clang,
+                ctx.file.ccache,
                 ctx.file.clangxx,
                 ctx.file.guest_clang,
                 ctx.file.guest_clangxx,
@@ -324,6 +342,7 @@ orlix_mlibc_sysroot = rule(
         "bragi_source": attr.label(mandatory = True),
         "bragi": attr.label(allow_single_file = True, mandatory = True),
         "clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),
+        "ccache": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ccache")),
         "clangxx": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang++")),
         "guest_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang")),
         "guest_clangxx": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang++")),

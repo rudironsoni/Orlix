@@ -1,6 +1,7 @@
 """Mach-O OrlixKernel.a from Kbuild product compile. Does not invoke OrlixKernel/Makefile."""
 
 load("//bazel:artifact_identity.bzl", "declare_artifact_identity")
+load("//bazel:compiler_cache.bzl", "compiler_cache_env")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("//bazel/providers:kernel_info.bzl", "OrlixLinuxArchiveInfo")
 
@@ -23,11 +24,7 @@ def _pinned_env(ctx):
         "PROFILE": ctx.attr.profile,
         "ORLIX_KERNEL_ARCHIVE_PLATFORMS": ctx.attr.destination,
     }
-    ccache_disable = shell.get("CCACHE_DISABLE")
-    if ccache_disable:
-        env["CCACHE_DISABLE"] = ccache_disable
-    if "ORLIX_COMPILER_LAUNCHER" in shell:
-        env["ORLIX_COMPILER_LAUNCHER"] = shell["ORLIX_COMPILER_LAUNCHER"]
+    env.update(compiler_cache_env(shell))
     if "ORLIX_KERNEL_INCREMENTAL" in shell:
         env["ORLIX_KERNEL_INCREMENTAL"] = shell["ORLIX_KERNEL_INCREMENTAL"]
     return env

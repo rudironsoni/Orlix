@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 
 from bazel import build_state as state
+from bazel.compiler_cache import apply_action_environment
 from bazel.feasibility.mlibc.header_digest import followed_tree_digest
 
 _TREES = ("mlibc", "build", "inputs", "arch")
@@ -229,11 +230,10 @@ def _tool_environment(tool_bin: str, sdk: str) -> dict[str, str]:
         sdk_root = Path.cwd() / sdk_root
     environment = dict(os.environ)
     environment.pop("TMPDIR", None)
-    environment.pop("CCACHE_DIR", None)
     environment.pop("DEVELOPER_DIR", None)
     environment.pop("SDKROOT", None)
     environment.pop("ORLIX_PINNED_DEVELOPER_DIR", None)
-    environment["ORLIX_COMPILER_LAUNCHER"] = ""
+    apply_action_environment(environment)
     environment["ORLIX_MLIBC_TOOL_BIN"] = str(tools)
     environment["ORLIX_MLIBC_TOOL_LIB"] = str((tools.parent / "lib").resolve())
     environment["ORLIX_MLIBC_GUEST_LIB"] = str((tools.parent / "llvm" / "lib").resolve())
