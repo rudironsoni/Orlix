@@ -169,6 +169,21 @@ class KernelStateTests(unittest.TestCase):
             self.assertEqual(list(redirected.iterdir()), [])
 
 
+    def test_same_bytes_with_an_older_mtime_keep_the_kbuild_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            identity = root / "toolchain"
+            identity.write_text("compiler flags and build rules\n")
+            source_state.resume(root, [identity])
+            output = root / "OrlixKernel/build/release/kernel.o"
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b"correct object\n")
+            source_state.record(root)
+            past = output.stat().st_mtime_ns - 3600 * 10**9
+            os.utime(output, ns=(past, past))
+            source_state.resume(root, [identity])
+            self.assertEqual(output.read_bytes(), b"correct object\n")
+
     def test_resume_hashes_tool_directories(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
