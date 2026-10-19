@@ -130,7 +130,7 @@ build_ext4() {
   tree="$1"
   image="$2"
   label="$3"
-  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001 -d "$tree" "$image"
+  SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001,no_copy_xattrs -d "$tree" "$image"
   (cd "$tree" && /usr/bin/find . -print | /usr/bin/sort) > "$work/paths"
   {
     /usr/bin/printf '%s\n' \
