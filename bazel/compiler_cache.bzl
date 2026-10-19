@@ -9,19 +9,21 @@ Keep this control flow matched with `forward_shell_env` in
 `bazel/compiler_cache.py`.
 """
 
-def compiler_cache_env(shell):
-    """Return CCACHE_DIR and the launcher when the cache is configured.
+def compiler_cache_env(shell, include_directory = True):
+    """Return cache switches an action may copy into its fixed environment.
 
-    `CCACHE_DISABLE` wins. The returned dict is the only cache state an action
-    may copy into `env` while `use_default_shell_env` stays false.
+    `CCACHE_DISABLE` wins. Guest packages pass `include_directory = False` so
+    `CCACHE_DIR` stays an inherited client variable and is not an action key.
+    The statistics log is not an action input.
     """
     disabled = shell.get("CCACHE_DISABLE")
     if disabled:
         return {"CCACHE_DISABLE": disabled}
     env = {}
-    cache = shell.get("CCACHE_DIR")
-    if cache:
-        env["CCACHE_DIR"] = cache
+    if include_directory:
+        cache = shell.get("CCACHE_DIR")
+        if cache:
+            env["CCACHE_DIR"] = cache
     launcher = shell.get("ORLIX_COMPILER_LAUNCHER")
     if launcher:
         env["ORLIX_COMPILER_LAUNCHER"] = launcher

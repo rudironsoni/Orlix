@@ -23,7 +23,8 @@ def _pinned_env(ctx):
     }
     if "ORLIX_PACKAGE_INCREMENTAL" in shell:
         env["ORLIX_PACKAGE_INCREMENTAL"] = shell["ORLIX_PACKAGE_INCREMENTAL"]
-    env.update(compiler_cache_env(shell))
+    # CCACHE_DIR is inherited from the client. It is not a fixed action env.
+    env.update(compiler_cache_env(shell, False))
     return env
 
 def declare_orlix_package_interface(ctx, package_trees, paths_by_package):
@@ -204,9 +205,6 @@ if [ -n "$extra_tree" ]; then extra_tree="$work/inputs/extra"; fi
 if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
   launcher=""
 elif [ -n "${CCACHE_DIR:-}" ]; then
-  launcher="$tool_bin/ccache"
-elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
-  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
   launcher="$tool_bin/ccache"
 else
   launcher=""
@@ -453,7 +451,10 @@ done
 (cd "$install_out" && "$tool_bin/find" . -type f -print | "$tool_bin/sort") > "$file_manifest"
 "$tool_bin/printf" '%s\n' 'license=GPL-compatible' > "$license_manifest"
 "$tool_bin/printf" 'name=%s\nversion=%s\nengine=configure-make-destdir\n' "$PACKAGE_NAME" "$PACKAGE_VERSION" > "$metadata"
-if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
+if [ -n "$launcher" ]; then
+  printf 'ccache_directory=%s\n' "$CCACHE_DIR"
+  "$launcher" --print-log-stats --format=json
+fi
 """.replace("__COMPILER_IDENTITY__", ctx.file.compiler_identity.path))
     ctx.actions.run_shell(
         mnemonic = "OrlixGuestPackage",
@@ -499,7 +500,8 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        # Inherited CCACHE_DIR is the shared directory and is not an action key.
+        use_default_shell_env = True,
         # Staged tools/bin provides clang and the autotools binaries. Their
         # dylibs, clang resources, macOS SDK, and share trees are inputs.
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},

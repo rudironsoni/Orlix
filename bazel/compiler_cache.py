@@ -60,15 +60,16 @@ _REQUIRED_STATS = (
 )
 
 
-def forward_shell_env(shell: Mapping[str, str]) -> dict[str, str]:
+def forward_shell_env(shell: Mapping[str, str], include_directory: bool = True) -> dict[str, str]:
     """Match `compiler_cache_env` in `bazel/compiler_cache.bzl`."""
     disabled = shell.get("CCACHE_DISABLE")
     if disabled:
         return {"CCACHE_DISABLE": disabled}
     env: dict[str, str] = {}
-    cache = shell.get("CCACHE_DIR")
-    if cache:
-        env["CCACHE_DIR"] = cache
+    if include_directory:
+        cache = shell.get("CCACHE_DIR")
+        if cache:
+            env["CCACHE_DIR"] = cache
     launcher = shell.get("ORLIX_COMPILER_LAUNCHER")
     if launcher:
         env["ORLIX_COMPILER_LAUNCHER"] = launcher
