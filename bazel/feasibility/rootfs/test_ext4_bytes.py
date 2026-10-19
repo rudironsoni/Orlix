@@ -74,14 +74,33 @@ def _populate(tree: Path) -> None:
     (tree / "empty").mkdir()
 
 
+def _set_xattr(path: Path, name: str, payload: bytes) -> None:
+    if hasattr(os, "setxattr"):
+        os.setxattr(path, name, payload)
+        return
+    tool = shutil.which("xattr")
+    if tool is None:
+        raise AssertionError("missing xattr")
+    completed = subprocess.run(
+        [tool, "-w", name, payload.decode("utf-8"), str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            f"xattr -w failed ({completed.returncode})\n{completed.stdout}\n{completed.stderr}"
+        )
+
+
 def _mark_output_base(tree: Path, output_base: Path) -> None:
     """Store the output-base path in host xattrs on the tree mke2fs reads."""
     payload = str(output_base).encode()
-    os.setxattr(tree, "user.output_base", payload)
+    _set_xattr(tree, "user.output_base", payload)
     for path in tree.rglob("*"):
         if path.is_symlink():
             continue
-        os.setxattr(path, "user.output_base", payload)
+        _set_xattr(path, "user.output_base", payload)
 
 
 def _build(function: str, tree: Path, image: Path, work: Path) -> None:
