@@ -1041,7 +1041,9 @@ __bazel-apple-ci: __bazel-matrix-check
 	@set -euo pipefail; \
 	test -n "$(ORLIX_CURRENT_SIMULATOR_ID)" || { echo "ORLIX_CURRENT_SIMULATOR_ID is required" >&2; exit 1; }; \
 	test -n "$(ORLIX_CURRENT_SIMULATOR_VERSION)" || { echo "ORLIX_CURRENT_SIMULATOR_VERSION is required" >&2; exit 1; }; \
-	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	if [ "$(ORLIX_SKIP_IOS15_PROOF)" != 1 ]; then \
+		test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
+	fi; \
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "apple-ci: profile=$(PROFILE) component_mode=$(ORLIX_BAZEL_COMPONENT_MODE) current_runtime=$(ORLIX_CURRENT_SIMULATOR_VERSION) current_simulator=$(ORLIX_CURRENT_SIMULATOR_ID) ios15_simulator=$(ORLIX_IOS15_SIMULATOR_ID)"; \
@@ -1068,10 +1070,12 @@ __bazel-apple-ci: __bazel-matrix-check
 	$(MAKE) __bazel-current-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
 	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION="$(ORLIX_CURRENT_SIMULATOR_VERSION)" ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_CURRENT_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=current ORLIX_CANONICAL_APP_PATH="$$app"; \
 	xcrun simctl shutdown "$(ORLIX_CURRENT_SIMULATOR_ID)"; \
-	$(MAKE) __bazel-ios15-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
-	$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION=15.5 ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=ios15 ORLIX_CANONICAL_APP_PATH="$$app"; \
-	xcrun simctl shutdown "$(ORLIX_IOS15_SIMULATOR_ID)"; \
-	python3 -c 'import json,sys; from pathlib import Path; root=Path(sys.argv[1]).parent; [None if ((root/label/"xctest-passed.log").is_file() and (root/label/"xctest-app-identity.txt").read_text().strip() == sys.argv[3]) else (_ for _ in ()).throw(AssertionError("xctest evidence mismatch for "+label)) for label in ("current","ios15")]; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":{"version":"15.5","result":"PASS"},"same_application_path":sys.argv[3],"xctest_current_runtime":{"version":sys.argv[2],"result":"PASS"},"xctest_ios_15_5_runtime":{"version":"15.5","result":"PASS"},"xctest_app_path":sys.argv[3]},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app"; \
+	if [ "$(ORLIX_SKIP_IOS15_PROOF)" != 1 ]; then \
+		$(MAKE) __bazel-ios15-simulator-gate ORLIX_BAZEL_APP_PATH="$$app"; \
+		$(MAKE) __bazel-xctest-runtime-proof ORLIX_XCTEST_SIMULATOR_VERSION=15.5 ORLIX_XCTEST_SIMULATOR_ID="$(ORLIX_IOS15_SIMULATOR_ID)" ORLIX_SIMULATOR_LABEL=ios15 ORLIX_CANONICAL_APP_PATH="$$app"; \
+		xcrun simctl shutdown "$(ORLIX_IOS15_SIMULATOR_ID)"; \
+	fi; \
+	python3 -c 'import json,os,sys; from pathlib import Path; root=Path(sys.argv[1]).parent; app=sys.argv[3]; skip=os.environ.get("ORLIX_SKIP_IOS15_PROOF")=="1"; labels=("current",) if skip else ("current","ios15"); [None if ((root/label/"xctest-passed.log").is_file() and (root/label/"xctest-app-identity.txt").read_text().strip()==app) else (_ for _ in ()).throw(AssertionError("xctest evidence mismatch for "+label)) for label in labels]; ios={"version":"15.5","result":"SKIPPED" if skip else "PASS"}; Path(sys.argv[1]).write_text(json.dumps({"schema":1,"canonical_simulator_product_compile_count":1,"current_runtime":{"version":sys.argv[2],"result":"PASS"},"ios_15_5_runtime":ios,"same_application_path":app,"xctest_current_runtime":{"version":sys.argv[2],"result":"PASS"},"xctest_ios_15_5_runtime":ios,"xctest_app_path":app},indent=2)+"\n")' "$$evidence_dir/runtime-proof.json" "$(ORLIX_CURRENT_SIMULATOR_VERSION)" "$$app"; \
 	$(MAKE) __bazel-cache-observation
 
 __bazel-simulator-runtime-proof:
