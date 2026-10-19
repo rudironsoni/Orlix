@@ -89,8 +89,44 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertIn(str(archive), command)
         self.assertIn("--keep-archive", command)
         message = setup_cache.runtime_message("install-local", "15.5", archive)
+        self.assertIn("not installed", message)
+        self.assertIn("not an installed runtime", message)
         self.assertIn("without downloading", message)
+        self.assertIn("without copying", message)
         self.assertNotIn("downloading it", message)
+
+    def test_restored_download_archive_is_not_an_installed_runtime(self) -> None:
+        """iOS 15.5 stays uninstalled when simctl does not list it.
+
+        The restored download archive does not skip ``xcodes`` and is not copied.
+        """
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+            if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+            if command[:4] == ["sudo", "xcodes", "runtimes", "install"]:
+                return subprocess.CompletedProcess(command, 0)
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / "ios15-runtime"
+            archive.mkdir()
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            runtime_dir = Path(temporary) / "Runtimes"
+            runtime_dir.mkdir()
+            with mock.patch.object(setup_cache.shutil, "copytree", side_effect=AssertionError("copy")):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    plan = setup_cache.prepare_runtime("15.5", archive, runtime_dir)
+        self.assertEqual(plan, "install-local")
+        self.assertIn(
+            ["sudo", "xcodes", "runtimes", "install", "iOS 15.5"],
+            [command[:5] for command in calls],
+        )
+        self.assertNotIn("skip", plan)
 
     def test_missing_runtime_downloads_into_the_archive_directory(self) -> None:
         archive = Path("/Users/runner/Library/Caches/Orlix/ios26-runtime")
@@ -141,6 +177,38 @@ class SetupCacheDecisionTests(unittest.TestCase):
             with mock.patch.object(setup_cache, "runtime_bundle_installed", side_effect=PermissionError("Permission denied")):
                 with mock.patch.object(setup_cache.subprocess, "run", fake_run):
                     plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
+        self.assertEqual(plan, "skip")
+        self.assertEqual(setup_cache.runtime_commands("skip", "15.5", archive), [])
+
+    def test_runtime_list_image_is_not_installed_again(self) -> None:
+        """``simctl runtime list`` counts even when ``list runtimes`` omits it."""
+        images = json.dumps({
+            "runtimes": [{
+                "version": "15.5",
+                "state": "Ready",
+                "name": "iOS 15.5 (19F70)",
+                "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                "bundlePath": "/Library/Developer/CoreSimulator/Volumes/iOS_19F70/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 15.5.simruntime",
+            }],
+        })
+        self.assertTrue(setup_cache.simctl_runtime_listed("15.5", json.loads(images)))
+        self.assertTrue(setup_cache.runtime_name_matches("iOS 15.5 (19F70)", "15.5"))
+        self.assertFalse(setup_cache.runtime_name_matches("iOS 15.50", "15.5"))
+
+        def fake_run(command, **kwargs):
+            if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+            if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
+                return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary)
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            with mock.patch.object(setup_cache.shutil, "copytree", side_effect=AssertionError("copy")):
+                with mock.patch.object(setup_cache, "runtime_bundle_installed", return_value=False):
+                    with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                        plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
         self.assertEqual(plan, "skip")
         self.assertEqual(setup_cache.runtime_commands("skip", "15.5", archive), [])
 
