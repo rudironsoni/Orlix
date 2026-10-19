@@ -112,6 +112,27 @@ class MakeRoutingTests(unittest.TestCase):
         output = _dry_run("build", "type=product")
         self.assertIn("__bazel-orlix-app", output)
 
+    def test_analysis_test_uses_its_own_output_base(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        self.assertIn(
+            "ORLIX_BAZEL_ANALYSIS_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/analysis-output-base",
+            makefile,
+        )
+        matrix = makefile.split("__bazel-matrix-check:", 1)[1].split("__bazel-orlixos:", 1)[0]
+        command = next(line for line in matrix.splitlines() if " test //bazel/feasibility/analysis:all " in line)
+        self.assertIn('--output_base="$(ORLIX_BAZEL_ANALYSIS_OUTPUT_BASE)"', command)
+        self.assertNotIn("$(ORLIX_BAZEL_OUTPUT_BASE)", command)
+        app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        self.assertNotIn("cquery //Orlix:Orlix", app)
+        apple = makefile.split("__bazel-apple-ci:", 1)[1].split("__bazel-simulator-runtime-proof:", 1)[0]
+        self.assertNotIn("cquery ", apple)
+        self.assertIn("__bazel-current-simulator-gate", apple)
+        self.assertIn("__bazel-ios15-simulator-gate", apple)
+        self.assertLess(
+            apple.index('simctl shutdown "$(ORLIX_CURRENT_SIMULATOR_ID)"'),
+            apple.index("__bazel-ios15-simulator-gate"),
+        )
+
     def test_source_app_does_not_reconstruct_promoted_components(self) -> None:
         output = _dry_run(
             "__bazel-orlix-app", "ORLIX_BAZEL_COMPONENT_MODE=source",
@@ -124,7 +145,9 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("--compilation_mode=opt", command)
         self.assertIn("--ios_multi_cpus=arm64", command)
         self.assertNotIn("bazel/promotion/reconstruct.py", output)
-        self.assertIn(" cquery //Orlix:Orlix ", output)
+        self.assertNotIn(" cquery //Orlix:Orlix ", output)
+        self.assertIn("orlix-ipa-path.txt", output)
+        self.assertIn("--show_result=100", output)
 
     def test_test_routes_to_matrix_check(self) -> None:
         output = _dry_run("test")
@@ -372,9 +395,10 @@ test "$1" = --remote_upload_local_results=true
         apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
             "__bazel-simulator-runtime-proof:", 1
         )[0]
-        self.assertEqual(apple_ci.count("cquery //Orlix:OrlixUITests "), 1)
+        self.assertNotIn("cquery //Orlix:Orlix", apple_ci)
         self.assertIn('xctestrun.py" --resolve-test-bundle', apple_ci)
-        self.assertIn("cquery-outputs.txt", apple_ci)
+        self.assertIn("orlix-ipa-path.txt", apple_ci)
+        self.assertIn("orlix-uitest-outputs.txt", apple_ci)
         self.assertEqual(apple_ci.count('ORLIX_XCTEST_BUNDLE="$$test_bundle"'), 2)
         self.assertIn('test -d "$(ORLIX_CANONICAL_APP_PATH)"', proof)
         self.assertIn('test -d "$(ORLIX_XCTEST_BUNDLE)"', proof)
