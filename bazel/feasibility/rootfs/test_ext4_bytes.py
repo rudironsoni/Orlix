@@ -61,6 +61,7 @@ def _build_ext4_function() -> str:
         "nodiscard",
         "lazy_itable_init=0",
         "cache-equivalence.pinned",
+        "mode | 0o200",
         "set_super_value uuid 00000000-0000-0000-0000-000000000000",
         "set_super_value mnt_count 0",
         "set_super_value error_count 0",
@@ -356,6 +357,33 @@ class Ext4ByteTests(unittest.TestCase):
             self.assertIn(b"cache-equivalence.pinned", left)
             _assert_stat(images[0], "/usr/bin/marker")
             _assert_stat(images[1], "/usr/bin/marker")
+
+    def test_read_only_cache_equivalence_id_is_rewritten(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tree = root / "tree"
+            _populate(tree)
+            jq = tree / "usr/bin" / "jq"
+            payload = b"cache-equivalence.ABCDEF/uncached/output-base\n"
+            jq.write_bytes(payload)
+            jq.chmod(0o555)
+            image = root / "base.ext4"
+            _build(function, tree, image, root / "work")
+            self.assertEqual(jq.stat().st_mode & 0o777, 0o555)
+            self.assertEqual(jq.read_bytes(), b"cache-equivalence.pinned/uncached/output-base\n")
+            image_bytes = image.read_bytes()
+            self.assertNotIn(b"cache-equivalence.ABCDEF", image_bytes)
+            self.assertIn(b"cache-equivalence.pinned", image_bytes)
+            completed = subprocess.run(
+                [_tool("debugfs"), "-R", "stat /usr/bin/jq", str(image)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = f"{completed.stdout}\n{completed.stderr}"
+            self.assertIn("Mode:  0555", output)
+            _assert_stat(image, "/usr/bin/jq")
 
     def test_inode_tables_are_written_when_the_image_is_not_zero(self) -> None:
         function = _build_ext4_function()
