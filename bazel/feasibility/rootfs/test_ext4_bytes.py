@@ -58,6 +58,14 @@ def _build_ext4_function() -> str:
         "-O ^orphan_file -U clear",
         "hash_seed=00000000-0000-0000-0000-000000000001",
         "no_copy_xattrs",
+        "nodiscard",
+        "lazy_itable_init=0",
+        "cache-equivalence.pinned",
+        "set_super_value uuid 00000000-0000-0000-0000-000000000000",
+        "set_super_value mnt_count 0",
+        "set_super_value error_count 0",
+        "set_super_value first_error_time 0",
+        "set_super_value last_error_time 0",
         "root_owner=0:0",
     ):
         if required not in body:
@@ -323,6 +331,76 @@ class Ext4ByteTests(unittest.TestCase):
                 self.assertEqual(_generation(image), "0")
                 self.assertEqual(_generation(image, "/lost+found"), "0")
                 self.assertEqual(_kbytes_written(image), "0")
+
+    def test_cache_equivalence_ids_do_not_change_ext4_bytes(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            images = []
+            for token in ("AAAAAA", "BBBBBB"):
+                tree = root / token / "tree"
+                _populate(tree)
+                marker = tree / "usr/bin" / "marker"
+                marker.write_bytes(
+                    f"cache-equivalence.{token}/uncached/output-base/execroot\n".encode()
+                )
+                marker.chmod(0o755)
+                image = root / token / "base.ext4"
+                _build(function, tree, image, root / token / "work")
+                images.append(image)
+            left = images[0].read_bytes()
+            right = images[1].read_bytes()
+            self.assertEqual(left, right, _first_difference(left, right))
+            self.assertNotIn(b"cache-equivalence.AAAAAA", left)
+            self.assertNotIn(b"cache-equivalence.BBBBBB", right)
+            self.assertIn(b"cache-equivalence.pinned", left)
+            _assert_stat(images[0], "/usr/bin/marker")
+            _assert_stat(images[1], "/usr/bin/marker")
+
+    def test_inode_tables_are_written_when_the_image_is_not_zero(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tree = root / "tree"
+            _populate(tree)
+            image = root / "base.ext4"
+            image.write_bytes(b"\xA5" * (8 * 1024 * 1024))
+            work = root / "work"
+            work.mkdir()
+            script = f"""
+set -euo pipefail
+umask 022
+mke2fs={_tool("mke2fs")!s}
+debugfs={_tool("debugfs")!s}
+work={work}
+{function}
+build_ext4 {tree} {image} ORLIXROOT
+"""
+            completed = subprocess.run(["bash", "-c", script], check=False, capture_output=True, text=True)
+            if completed.returncode != 0:
+                owners = work / "owners.err"
+                detail = owners.read_text(encoding="utf-8", errors="replace") if owners.exists() else ""
+                raise AssertionError(
+                    f"build_ext4 failed ({completed.returncode})\n{completed.stdout}\n{completed.stderr}\n{detail}"
+                )
+            listed = subprocess.run(
+                [_tool("dumpe2fs"), str(image)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            inode_table = None
+            for line in listed.stdout.splitlines():
+                if "Inode table at " not in line:
+                    continue
+                inode_table = int(line.split("Inode table at ", 1)[1].split("-", 1)[0])
+                break
+            if inode_table is None:
+                raise AssertionError(listed.stdout + listed.stderr)
+            # Used inodes occupy the first blocks. A later block is unused table.
+            unused = image.read_bytes()[(inode_table + 8) * 4096 : (inode_table + 9) * 4096]
+            self.assertEqual(unused, b"\x00" * 4096)
+            _assert_stat(image)
 
 
 if __name__ == "__main__":
