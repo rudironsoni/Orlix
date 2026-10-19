@@ -293,9 +293,10 @@ class SetupCacheDecisionTests(unittest.TestCase):
     def test_listed_simruntime_is_staged_for_the_cache_save(self) -> None:
         """A runtime simctl lists is not installed again.
 
-        ``simctl runtime list`` makes ``simruntime-present`` true, and the
-        reported bundle is linked into the Profiles directory the cache save
-        uploads. A restored Profiles bundle is left in place and does not run
+        The reported bundle is copied into the Profiles directory the cache
+        save uploads. ``simruntime-present`` stays false until those bytes are
+        in that directory. A symlink to the simctl path is not enough. A
+        restored Profiles bundle is left in place and does not run
         ``xcodes runtimes install``.
         """
         with tempfile.TemporaryDirectory() as temporary:
@@ -303,6 +304,9 @@ class SetupCacheDecisionTests(unittest.TestCase):
             source = root / "system" / "iOS 15.5.simruntime"
             (source / "Contents").mkdir(parents=True)
             (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            blocked = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            blocked.mkdir(parents=True)
+            (blocked / "secret").write_bytes(b"unreadable")
             runtime_dir = root / "Library" / "Developer" / "CoreSimulator" / "Profiles" / "Runtimes"
             archive = root / "ios15-runtime"
             archive.mkdir()
@@ -316,6 +320,7 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 }],
             })
             calls = []
+            real_iterdir = Path.iterdir
 
             def fake_run(command, **kwargs):
                 calls.append(command)
@@ -325,16 +330,28 @@ class SetupCacheDecisionTests(unittest.TestCase):
                     return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
                 raise AssertionError(command)
 
+            def guarded_iterdir(self):
+                if self.name == "mobile":
+                    raise PermissionError(self)
+                return real_iterdir(self)
+
             with mock.patch.object(setup_cache.subprocess, "run", fake_run):
                 with mock.patch.object(setup_cache.shutil, "copytree", side_effect=AssertionError("copy")):
-                    self.assertTrue(setup_cache.simruntime_present(runtime_dir))
-                    plan = setup_cache.prepare_runtime("15.5", archive, runtime_dir)
+                    with mock.patch.object(Path, "iterdir", guarded_iterdir):
+                        self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+                        plan = setup_cache.prepare_runtime("15.5", archive, runtime_dir)
             self.assertEqual(plan, "skip")
             self.assertFalse(any(command[:4] == ["sudo", "xcodes", "runtimes", "install"] for command in calls))
             staged = runtime_dir / "iOS 15.5.simruntime"
-            self.assertTrue(staged.is_symlink())
-            self.assertEqual(staged.resolve(), source.resolve())
-            self.assertEqual((staged / "Contents" / "Info.plist").read_bytes(), b"runtime")
+            self.assertFalse(staged.is_symlink())
+            self.assertTrue(staged.is_dir())
+            self.assertNotEqual(staged.resolve(), source.resolve())
+            staged_plist = staged / "Contents" / "Info.plist"
+            source_plist = source / "Contents" / "Info.plist"
+            self.assertFalse(staged_plist.is_symlink())
+            self.assertEqual(staged_plist.read_bytes(), b"runtime")
+            self.assertNotEqual(staged_plist.stat().st_ino, source_plist.stat().st_ino)
+            self.assertFalse((staged / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile").exists())
             self.assertTrue(setup_cache.simruntime_present(runtime_dir))
 
         with tempfile.TemporaryDirectory() as temporary:

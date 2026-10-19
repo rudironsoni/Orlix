@@ -13,6 +13,7 @@ import hashlib
 import json
 import plistlib
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -395,44 +396,92 @@ def listed_bundle_path(version: str) -> Path | None:
 
 
 def simruntime_present(runtime_dir: Path) -> bool:
-    """True when ``simctl runtime list`` shows 15.5 or 26.5, or the profiles dir has them.
+    """True only when the cache directory contains a real 15.5 or 26.5 bundle.
 
-    The workflow save runs only when this is true. A restored
-    ``~/Library/Developer/CoreSimulator/Profiles/Runtimes`` bundle counts even
-    when simctl has not listed it yet.
+    ``simctl runtime list`` on this machine is not enough. The save uploads
+    this directory, and a symlink to a runner-local bundle is not that bundle.
     """
     for version in ("15.5", "26.5"):
         bundle = runtime_dir / f"iOS {version}.simruntime"
-        if bundle.is_symlink() or path_probe(bundle) in {"present", "permission"}:
+        if bundle.is_symlink():
+            continue
+        if path_probe(bundle) in {"present", "permission"}:
             return True
+    return False
+
+
+def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> None:
+    """Copy a listed bundle, skipping entries that cannot be read.
+
+    ``shutil.copytree`` raises ``PermissionError`` on
+    ``RuntimeRoot/private/var/mobile``. Those entries are omitted and the copy
+    continues. The destination is a real directory, not a symlink to ``source``.
+    """
+    if seen is None:
+        seen = set()
     try:
-        images = read_simctl_runtime_images()
-    except (RuntimeProbeDenied, PermissionError):
-        return False
-    return any(simctl_runtime_listed(version, images) for version in ("15.5", "26.5"))
+        info = source.lstat()
+    except OSError:
+        return
+    if stat.S_ISLNK(info.st_mode):
+        try:
+            copy_simruntime_bundle(source.resolve(), destination, seen)
+        except OSError:
+            return
+        return
+    try:
+        resolved = source.resolve()
+    except OSError:
+        resolved = source
+    if resolved in seen:
+        return
+    seen.add(resolved)
+    if stat.S_ISDIR(info.st_mode):
+        try:
+            children = list(source.iterdir())
+        except OSError:
+            return
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+        for child in children:
+            copy_simruntime_bundle(child, destination / child.name, seen)
+        return
+    if not stat.S_ISREG(info.st_mode):
+        return
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination, follow_symlinks=False)
+    except OSError:
+        return
 
 
 def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
-    """Symlink the bundle simctl reports into the directory the cache save uploads.
+    """Copy the bundle simctl reports into the directory the cache save uploads.
 
-    ``shutil.copytree`` walks ``RuntimeRoot`` and raises ``PermissionError``.
-    A directory symlink does not walk the bundle. A bundle already in the
-    directory is left in place and is not installed again.
+    A bundle already in that directory is left in place and is not installed
+    again. A symlink at the destination is not a restored bundle.
     """
     directory = user_runtime_profiles() if runtime_dir is None else runtime_dir
     destination = directory / f"iOS {version}.simruntime"
-    if destination.is_symlink() or path_probe(destination) in {"present", "permission"}:
+    if destination.is_symlink():
+        try:
+            destination.unlink()
+        except OSError:
+            return
+    elif path_probe(destination) in {"present", "permission"}:
         return
     source = listed_bundle_path(version)
     if source is None:
         return
-    directory.mkdir(parents=True, exist_ok=True)
-    if destination.exists() or destination.is_symlink():
-        return
     try:
-        destination.symlink_to(source, target_is_directory=True)
+        if destination.exists() and source.resolve() == destination.resolve():
+            return
     except OSError:
-        return
+        pass
+    directory.mkdir(parents=True, exist_ok=True)
+    copy_simruntime_bundle(source, destination)
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
@@ -625,9 +674,9 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 is not
     installed when simctl does not list it. A restored download archive is
     not an installed runtime and is not copied into a protected directory.
-    A listed bundle is linked into the runtime directory so the cache save
-    uploads it. ``simruntime-present`` is also true when ``simctl runtime list``
-    already shows iOS 15.5 or 26.5.
+    A listed bundle is copied into the runtime directory so the cache save
+    uploads the bundle bytes. ``simruntime-present`` is true only when that
+    directory contains the bundle.
     """
     try:
         if runtime_dir is not None:
@@ -648,7 +697,7 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
         return "skip"
     # Ask simctl again immediately before any installer. A runtime that is
     # listed now must not fall through to xcodes. The download archive is not
-    # copied; the listed bundle is linked into the runtime directory.
+    # an installed runtime; the listed bundle is copied into the runtime directory.
     try:
         if simctl_runtime_listed(version, read_simctl_runtimes()) or simctl_runtime_listed(version, read_simctl_runtime_images()):
             stage_listed_simruntime(version, runtime_dir)
