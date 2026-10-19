@@ -311,6 +311,29 @@ test "${{compile[1]}}" = /staged/clang
         self.assertTrue(observed["disabled_object_matches_flagged"])
 
 
+def _require_arm64_optimization_difference(compiler: str, root: Path, source: Path) -> None:
+    """Fail if -O2 would not change this translation unit on Apple arm64.
+
+    The CI host is arm64. A constant return is identical at -O0 and -O2 there,
+    which makes a real miss look like the unoptimized object was reused.
+    """
+    objects = []
+    for extra in ([], ["-O2"]):
+        output = root / ("arm64" + ("-O2" if extra else "") + ".o")
+        result = subprocess.run(
+            [
+                compiler, "--target=arm64-apple-macosx15.0.0", "-c", str(source),
+                "-I", str(root), "-o", str(output), *extra,
+            ],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            return
+        objects.append(output.read_bytes())
+    if len(objects) == 2 and objects[0] == objects[1]:
+        raise AssertionError("changed -O flag did not change arm64 object bytes")
+
+
 def observe_compiler_cache() -> dict[str, object] | None:
     """Compile through ccache and return the counters this action observed.
 
@@ -327,7 +350,21 @@ def observe_compiler_cache() -> dict[str, object] | None:
         source = root / "leaf.c"
         header = root / "leaf.h"
         header.write_text("#define LEAF_VALUE 1\n", encoding="utf-8")
-        source.write_text('#include "leaf.h"\nint leaf(void) { return LEAF_VALUE; }\n', encoding="utf-8")
+        # AArch64 clang, including Apple clang, emits one `mov`/`ret` for
+        # `return LEAF_VALUE` at both -O0 and -O2. Those objects compare equal,
+        # so a changed -O flag would look like it returned the other compile.
+        # The loop is different code at -O0 and -O2 on arm64 and x86-64, and
+        # the header value remains in both objects.
+        source.write_text(
+            '#include "leaf.h"\n'
+            "int leaf(int n) {\n"
+            "  int sum = LEAF_VALUE;\n"
+            "  for (int i = 0; i < n; ++i) sum += i;\n"
+            "  return sum;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        _require_arm64_optimization_difference(compiler, root, source)
         env = {
             "PATH": os.environ["PATH"],
             "HOME": str(root),
