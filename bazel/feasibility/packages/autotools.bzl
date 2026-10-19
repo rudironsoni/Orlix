@@ -200,7 +200,16 @@ libraries="$work/inputs/libraries"
 runtime="$work/inputs/runtime/libcompiler_rt.a"
 if [ -n "$extra_tree" ]; then extra_tree="$work/inputs/extra"; fi
 /bin/mkdir -p "$work/build" "$work/dest" "$work/toolchain"
-launcher=""
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
+  launcher=""
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  launcher="$tool_bin/ccache"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+  launcher="$tool_bin/ccache"
+else
+  launcher=""
+fi
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
 export CCACHE_STATSLOG="$work/compiler-cache.log"
