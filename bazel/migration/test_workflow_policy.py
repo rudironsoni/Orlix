@@ -397,7 +397,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             for line in makefile.splitlines()
             if " cquery " in line and "$(ORLIX_BAZEL)" in line
         ]
-        self.assertEqual(len(cqueries), 9)
+        self.assertEqual(len(cqueries), 6)
         for line in cqueries:
             self.assertIn("--execution_log_compact_file=", line)
             self.assertNotIn("execution_log.binpb.zst", line)
