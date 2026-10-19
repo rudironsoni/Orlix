@@ -241,6 +241,50 @@ class KbuildArchiveTests(unittest.TestCase):
                 self.assertEqual(archive.getmember("source").linkname, "/orlix/linux-uapi-work/linux")
                 self.assertEqual(archive.getmember("later.h").mode & 0o777, 0o644)
 
+    def test_archive_bytes_ignore_output_base_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            seed_base = "/private/var/tmp/cache-equivalence.aaa/seed/output-base"
+            uncached_base = "/var/folders/zz/cache-equivalence.bbbb/uncached/output-base"
+
+            def fill(name: str, output_base: str) -> Path:
+                root = base / name
+                commands = root / "scripts" / "basic"
+                commands.mkdir(parents=True)
+                # HOSTCC is recorded under execroot/_main. SDK headers are
+                # recorded at their real path under output-base/external.
+                (commands / ".fixdep.cmd").write_bytes(
+                    f"cmd_scripts/basic/fixdep := {output_base}/execroot/_main/external/orlix_kernel_toolchain/tools/bin/clang -c fixdep.c\n".encode()
+                )
+                (commands / ".fixdep.d").write_bytes(
+                    f"fixdep.o: {output_base}/external/orlix_kernel_toolchain/macos-sdk/usr/include/stdio.h\n".encode()
+                )
+                return root
+
+            first_root = fill("seed", seed_base)
+            second_root = fill("uncached", uncached_base)
+            self.assertNotEqual(
+                (first_root / "scripts/basic/.fixdep.cmd").read_bytes(),
+                (second_root / "scripts/basic/.fixdep.cmd").read_bytes(),
+            )
+            first, second = base / "first.tar", base / "second.tar"
+            persist.write_archive(str(first_root), str(first), [(seed_base, "/orlix/output-base")])
+            persist.write_archive(str(second_root), str(second), [(uncached_base, "/orlix/output-base")])
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with tarfile.open(first) as archive:
+                command = archive.extractfile("scripts/basic/.fixdep.cmd").read()
+                dependency = archive.extractfile("scripts/basic/.fixdep.d").read()
+            self.assertEqual(
+                command,
+                b"cmd_scripts/basic/fixdep := /orlix/output-base/execroot/_main/external/orlix_kernel_toolchain/tools/bin/clang -c fixdep.c\n",
+            )
+            self.assertEqual(
+                dependency,
+                b"fixdep.o: /orlix/output-base/external/orlix_kernel_toolchain/macos-sdk/usr/include/stdio.h\n",
+            )
+            self.assertNotIn(seed_base.encode(), first.read_bytes())
+            self.assertNotIn(uncached_base.encode(), second.read_bytes())
+
     def test_publish_and_extract_cli_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "source"
