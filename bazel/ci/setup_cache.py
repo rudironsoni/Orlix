@@ -736,10 +736,30 @@ def command_detail(completed: subprocess.CompletedProcess[str]) -> str:
     return f"{completed.stderr or ''}\n{completed.stdout or ''}"
 
 
+def restart_core_simulator() -> None:
+    """Shut every simulator down and restart CoreSimulatorService.
+
+    Calling ``simctl boot`` again does not recover a wedged launchd_sim.
+    """
+    shutdown = subprocess.run(
+        ["xcrun", "simctl", "shutdown", "all"],
+        check=False, capture_output=True, text=True,
+    )
+    command_detail(shutdown)
+    service = subprocess.run(
+        ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"],
+        check=False, capture_output=True, text=True,
+    )
+    command_detail(service)
+    time.sleep(2)
+
+
 def boot_simulator(identifier: str, attempts: int = 3) -> None:
     """Boot one simulator, retrying only when launchd_sim fails to bind.
 
-    A missing runtime or any other simctl error fails on the first attempt.
+    Between retries every simulator is shut down and CoreSimulatorService is
+    restarted. A missing runtime or any other simctl error fails on the first
+    attempt.
     """
     if attempts < 1:
         raise ValueError(f"attempts must be positive: {attempts}")
@@ -751,8 +771,8 @@ def boot_simulator(identifier: str, attempts: int = 3) -> None:
         boot_detail = command_detail(boot)
         if boot.returncode != 0 and not simulator_already_booted(boot_detail):
             if launchd_sim_failed(boot_detail) and attempt < attempts:
-                print(f"launchd_sim did not boot {identifier}; retrying", flush=True)
-                time.sleep(2)
+                print(f"launchd_sim did not boot {identifier}; restarting CoreSimulator", flush=True)
+                restart_core_simulator()
                 continue
             raise SystemExit(boot.returncode or 1)
         status = subprocess.run(
@@ -763,8 +783,8 @@ def boot_simulator(identifier: str, attempts: int = 3) -> None:
         if status.returncode == 0:
             return
         if launchd_sim_failed(status_detail) and attempt < attempts:
-            print(f"launchd_sim did not report {identifier} booted; retrying", flush=True)
-            time.sleep(2)
+            print(f"launchd_sim did not report {identifier} booted; restarting CoreSimulator", flush=True)
+            restart_core_simulator()
             continue
         raise SystemExit(status.returncode or 1)
     raise SystemExit(1)

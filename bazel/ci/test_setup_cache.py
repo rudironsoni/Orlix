@@ -399,6 +399,10 @@ class SetupCacheDecisionTests(unittest.TestCase):
 
         def flaky(command, **kwargs):
             calls.append(command)
+            if command[:4] == ["xcrun", "simctl", "shutdown", "all"]:
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+            if command[:3] == ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"]:
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
             boots = [item for item in calls if item[:3] == ["xcrun", "simctl", "boot"]]
             if command[:4] == ["xcrun", "simctl", "boot", "device"]:
                 if len(boots) == 1:
@@ -413,8 +417,14 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 setup_cache.boot_simulator("device", attempts=3)
         self.assertEqual(sleep.call_count, 1)
         self.assertEqual(
-            [command[:3] for command in calls],
-            [["xcrun", "simctl", "boot"], ["xcrun", "simctl", "boot"], ["xcrun", "simctl", "bootstatus"]],
+            calls,
+            [
+                ["xcrun", "simctl", "boot", "device"],
+                ["xcrun", "simctl", "shutdown", "all"],
+                ["killall", "-9", "com.apple.CoreSimulator.CoreSimulatorService"],
+                ["xcrun", "simctl", "boot", "device"],
+                ["xcrun", "simctl", "bootstatus", "device", "-b"],
+            ],
         )
 
         missing_calls: list[list[str]] = []
