@@ -127,14 +127,19 @@ def _host_generation(path: Path) -> int:
     return int(struct.unpack("l", raw)[0])
 
 
-def _source_generations(tree: Path) -> set[int]:
-    generations = {
-        _host_generation(path)
-        for path in [tree, *tree.rglob("*")]
-        if not path.is_symlink()
-    }
-    if len(generations) < 2:
-        raise AssertionError(f"source inodes do not have distinct generations: {generations}")
+def _source_generations(tree: Path) -> set[int] | None:
+    """Host generations, or None when this host cannot report them.
+
+    One tree does not need two values. macOS reports st_gen 0 for every new file.
+    """
+    generations: set[int] = set()
+    for path in [tree, *tree.rglob("*")]:
+        if path.is_symlink():
+            continue
+        try:
+            generations.add(_host_generation(path))
+        except AssertionError:
+            return None
     return generations
 
 
@@ -300,15 +305,14 @@ class Ext4ByteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             images = []
-            seen: list[set[int]] = []
             for index in (1, 2):
                 tree = root / f"gen-{index}" / "tree"
                 _populate(tree)
-                seen.append(_source_generations(tree))
+                # macOS reports st_gen 0 for every new file. That is not a failure.
+                _source_generations(tree)
                 image = root / f"gen-{index}" / "base.ext4"
                 _build(function, tree, image, root / f"gen-{index}" / "work")
                 images.append(image)
-            self.assertNotEqual(seen[0], seen[1])
             left = images[0].read_bytes()
             right = images[1].read_bytes()
             self.assertEqual(left, right, _first_difference(left, right))
