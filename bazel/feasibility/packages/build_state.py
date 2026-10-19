@@ -167,7 +167,7 @@ def run(package: str, script: str, toolchain: str, compiler: str, arguments: lis
     environment = dict(os.environ)
     if tool_bin:
         _tool_environment(environment, tool_bin)
-    identity = [Path(script), Path(toolchain), Path(compiler), Path(__file__), Path(state.__file__)]
+    identity = [Path(script), Path(toolchain), Path(compiler), Path(__file__), Path(state.__file__), Path(__file__).with_name("jq_config.py")]
     if configuration:
         identity.append(Path(configuration))
     compatibility = {"package": package, "target": "aarch64-linux-gnu"}

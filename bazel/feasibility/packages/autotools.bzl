@@ -331,6 +331,15 @@ if [ "$(/bin/cat "$work/inputs/configure-required")" = 1 ]; then
       esac
     fi
     "$conf" $CONFIGURE_ARGS $maintainer_mode
+    # jq compiles config.status --config into src/config_opts.inc. That make
+    # rule has no prerequisites, so an existing file is not regenerated.
+    # Rewrite the output-base prefixes the same way the compiler prefix maps
+    # do, before that string is compiled. CC and LDFLAGS stay absolute so the
+    # real compile still finds the toolchain.
+    if [ -f Makefile ] && /usr/bin/grep -q 'src/config_opts.inc' Makefile; then
+      /bin/mkdir -p src
+      ./config.status --config | PYTHONPATH="$exec_root" /usr/bin/python3 -B -c 'from bazel.feasibility.packages.jq_config import write_config_opts; import sys; write_config_opts(sys.stdin.read(), sys.argv[1], sys.argv[2], "src/config_opts.inc")' "$work" "$tool_bin"
+    fi
   fi
 fi
 gmake_bin="$tool_bin/gmake"
@@ -477,6 +486,7 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
                 ctx.file.toolchain_identity,
                 ctx.file.compiler_identity,
                 ctx.file.build_state,
+                ctx.file.jq_config,
                 ctx.file.shared_state,
                 ctx.file.configure,
                 recipe,
@@ -529,6 +539,7 @@ orlix_autotools_package = rule(
     implementation = _autotools_package_impl,
     attrs = {
         "build_state": attr.label(allow_single_file = True, default = ":build_state.py"),
+        "jq_config": attr.label(allow_single_file = True, default = ":jq_config.py"),
         "shared_state": attr.label(allow_single_file = True, default = "//bazel:build_state.py"),
         "toolchain_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:autotools-identity.json"),
         "compiler_identity": attr.label(allow_single_file = True, default = "@orlix_kernel_toolchain//:guest-compiler-identity.json"),
