@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Pin ext4 inode generation and bytes written
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) sets `generation` to 0 on every inode `build_ext4` already rewrites, including `/lost+found` and inode 8, and sets `kbytes_written` to 0. Directory pins run leaf-first, then a temporary directory entry is created and removed so the directory checksum matches generation 0. macOS `mke2fs -d` copies the host inode generation into `i_generation`, and the write counter changes between output directories. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Leave host xattrs out of rootfs ext4 images
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) passes `no_copy_xattrs` when `mke2fs -d` builds `base.ext4` and `state.ext4`. Inode times stay pinned. A host xattr that records the output base is not guest file content and no longer changes the image. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

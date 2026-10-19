@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ctypes
+import fcntl
 import os
 import shutil
+import struct
 import subprocess
 import tempfile
 import time
@@ -43,9 +46,15 @@ def _build_ext4_function() -> str:
         'set_inode_field "%s" ctime 1',
         'set_inode_field "%s" mtime 1',
         'set_inode_field "%s" crtime 1',
+        'set_inode_field "%s" generation 0',
+        "1\\t/lost+found",
+        "set_inode_field <8> generation 0",
+        ".orlix-csum",
+        '"$debugfs" -n -w',
         "set_super_value mkfs_time 1",
         "set_super_value wtime 1",
         "set_super_value lastcheck 1",
+        "set_super_value kbytes_written 0",
         "-O ^orphan_file -U clear",
         "hash_seed=00000000-0000-0000-0000-000000000001",
         "no_copy_xattrs",
@@ -91,6 +100,78 @@ def _set_xattr(path: Path, name: str, payload: bytes) -> None:
         raise AssertionError(
             f"xattr -w failed ({completed.returncode})\n{completed.stdout}\n{completed.stderr}"
         )
+
+
+def _ioctl_getversion() -> int:
+    """FS_IOC_GETVERSION: _IOR('v', 1, long)."""
+    size = ctypes.sizeof(ctypes.c_long)
+    direction = 2
+    return (direction << 30) | (size << 16) | (ord("v") << 8) | 1
+
+
+def _host_generation(path: Path) -> int:
+    """Host inode generation. macOS exposes st_gen; Linux exposes FS_IOC_GETVERSION."""
+    stat = path.stat(follow_symlinks=False)
+    generation = getattr(stat, "st_gen", None)
+    if generation is not None:
+        return int(generation)
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        raw = fcntl.ioctl(fd, _ioctl_getversion(), struct.pack("l", 0))
+    except OSError as error:
+        raise AssertionError(f"cannot read inode generation on {path}: {error}") from error
+    finally:
+        os.close(fd)
+    if not isinstance(raw, bytes):
+        raise AssertionError(f"inode generation ioctl returned {raw!r}")
+    return int(struct.unpack("l", raw)[0])
+
+
+def _source_generations(tree: Path) -> set[int] | None:
+    """Host generations, or None when this host cannot report them.
+
+    One tree does not need two values. macOS reports st_gen 0 for every new file.
+    """
+    generations: set[int] = set()
+    for path in [tree, *tree.rglob("*")]:
+        if path.is_symlink():
+            continue
+        try:
+            generations.add(_host_generation(path))
+        except AssertionError:
+            return None
+    return generations
+
+
+def _generation(image: Path, target: str = "/bin/tool") -> str:
+    completed = subprocess.run(
+        [_tool("debugfs"), "-R", f"stat {target}", str(image)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{completed.stdout}\n{completed.stderr}"
+    for line in output.splitlines():
+        if line.startswith("Generation:"):
+            return line.split()[1]
+    raise AssertionError(f"debugfs stat {target} has no generation\n{output}")
+
+
+def _kbytes_written(image: Path) -> str:
+    completed = subprocess.run(
+        [_tool("dumpe2fs"), "-h", str(image)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{completed.stdout}\n{completed.stderr}"
+    for line in output.splitlines():
+        if "Lifetime writes" in line:
+            return line.split(":")[-1].strip()
+    if completed.returncode != 0:
+        raise AssertionError(f"dumpe2fs failed ({completed.returncode})\n{output}")
+    # e2fsprogs prints this counter only when it is non-zero.
+    return "0"
 
 
 def _mark_output_base(tree: Path, output_base: Path) -> None:
@@ -193,6 +274,55 @@ class Ext4ByteTests(unittest.TestCase):
             self.assertEqual(left, right, _first_difference(left, right))
             self.assertNotIn(b"seed-output-base", left)
             self.assertNotIn(b"uncached-output-base", right)
+
+    def test_two_directories_build_the_same_ext4_bytes(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            images = []
+            for name in ("seed-output-base", "uncached-output-base"):
+                tree = root / name / "execroot" / "tree"
+                _populate(tree)
+                image = root / name / "base.ext4"
+                _build(function, tree, image, root / name / "work")
+                images.append(image)
+            left = images[0].read_bytes()
+            right = images[1].read_bytes()
+            self.assertEqual(left, right, _first_difference(left, right))
+            _assert_stat(images[0])
+            _assert_stat(images[1])
+            for image in images:
+                _assert_stat(image, "/")
+                _assert_stat(image, "/empty")
+                _assert_stat(image, "/lost+found")
+                self.assertEqual(_generation(image), "0")
+                self.assertEqual(_generation(image, "/"), "0")
+                self.assertEqual(_generation(image, "/lost+found"), "0")
+                self.assertEqual(_kbytes_written(image), "0")
+
+    def test_distinct_source_generations_do_not_change_ext4_bytes(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            images = []
+            for index in (1, 2):
+                tree = root / f"gen-{index}" / "tree"
+                _populate(tree)
+                # macOS reports st_gen 0 for every new file. That is not a failure.
+                _source_generations(tree)
+                image = root / f"gen-{index}" / "base.ext4"
+                _build(function, tree, image, root / f"gen-{index}" / "work")
+                images.append(image)
+            left = images[0].read_bytes()
+            right = images[1].read_bytes()
+            self.assertEqual(left, right, _first_difference(left, right))
+            for image in images:
+                _assert_stat(image, "/")
+                _assert_stat(image, "/empty")
+                _assert_stat(image, "/lost+found")
+                self.assertEqual(_generation(image), "0")
+                self.assertEqual(_generation(image, "/lost+found"), "0")
+                self.assertEqual(_kbytes_written(image), "0")
 
 
 if __name__ == "__main__":
