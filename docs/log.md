@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Cache the ordinary CI toolchain bundle
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) restores one archive of the CI Brewfile tools before `brew bundle`. The archive is not a copy of `/opt/homebrew`. The cache key is the CI Brewfile hash plus the recorded formula versions. `/opt/homebrew/opt/llvm/bin/clang` must resolve inside the pinned `llvm` keg. Unlinked `llvm@20` 20.1.8 is not that pin. A miss or a failed identity check runs `brew bundle`, and only main saves a new archive after that install. The archive is not saved when the pack is above about 2GB, so it is not stored beside `orlix-ios15-simruntime-bootable-v1` (5126954916 bytes on run 39305085161). The install step records its elapsed time. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Skip brew bundle when pinned tools are installed
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) skips `brew bundle` when every formula in the selected Brewfile is already installed at its pinned version. The check reads the Homebrew prefix and does not run `brew info` once per formula. A missing compiler or build tool still runs `brew bundle`. `/opt/homebrew/opt/llvm/bin/clang` is the pinned clang. Unlinked `llvm@20` on the macOS 26 runner is not that keg. Ordinary Bazel CI no longer restores or saves Homebrew source bottles. Those bottles were only formulae built from source, so they did not skip bottle installs. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
