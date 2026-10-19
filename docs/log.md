@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Cache the booted iOS 15.5 simulator bundle
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) archives the iOS 15.5 `.simruntime` bundle simctl booted, including entries the runner cannot read. `simruntime-present` is true only when that archive kept every entry. The next job restores the bundle, skips `xcodes runtimes install`, and still boots. A copy that skips an entry is not saved. The download archive stays cached. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Leave host xattrs out of rootfs ext4 images
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) passes `no_copy_xattrs` when `mke2fs -d` builds `base.ext4` and `state.ext4`. Inode times stay pinned. A host xattr that records the output base is not guest file content and no longer changes the image. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

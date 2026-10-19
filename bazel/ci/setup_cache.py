@@ -11,11 +11,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import plistlib
 import shutil
 import stat
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 ARCHIVE_SUFFIXES = {".dmg", ".pkg", ".ipsw", ".aea", ".zip"}
@@ -423,111 +425,399 @@ def simruntime_bootable(bundle: Path) -> bool:
         return False
 
 
-def simruntime_present(runtime_dir: Path) -> bool:
-    """True only when the cache directory contains a real bootable bundle.
+def bundle_name(version: str) -> str:
+    return f"iOS {version}.simruntime"
 
-    iOS 26.5 is the runner image runtime. A second copy in this directory is
-    what simctl prefers, so that version does not count. ``simctl runtime list``
-    and a symlink do not count either.
+
+def marker_path(runtime_dir: Path, version: str) -> Path:
+    return runtime_dir / f"{bundle_name(version)}.orlix-complete"
+
+
+def archive_candidates(runtime_dir: Path, version: str) -> tuple[Path, Path]:
+    name = bundle_name(version)
+    return (
+        runtime_dir / f"{name}.orlix.zip",
+        runtime_dir / f"{name}.orlix.tar",
+    )
+
+
+def find_archive(runtime_dir: Path, version: str) -> Path | None:
+    for path in archive_candidates(runtime_dir, version):
+        try:
+            if path.is_file() and path.stat().st_size > 0:
+                return path
+        except OSError:
+            continue
+    return None
+
+
+def marker_is_complete(runtime_dir: Path, version: str) -> bool:
+    path = marker_path(runtime_dir, version)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return text.strip() == "complete"
+
+
+def simruntime_present(runtime_dir: Path) -> bool:
+    """True only for a booted bundle whose stored copy skipped no entries.
+
+    iOS 26.5 is the runner image runtime and does not count. A symlink does
+    not count. A tree or archive that dropped an unreadable entry does not
+    count, because that is not the bundle simctl booted.
     """
     for version in ("15.5", "26.5"):
         if version in IMAGE_SIMRUNTIME_VERSIONS:
             continue
-        if simruntime_bootable(runtime_dir / f"iOS {version}.simruntime"):
+        if not marker_is_complete(runtime_dir, version):
+            continue
+        bundle = runtime_dir / bundle_name(version)
+        if simruntime_bootable(bundle):
+            return True
+        archive = find_archive(runtime_dir, version)
+        if archive is not None:
             return True
     return False
 
 
-def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> bool:
-    """Copy a bundle. Return True when an entry was skipped because it could not be read.
+def sudo_noninteractive() -> bool:
+    if shutil.which("sudo") is None:
+        return False
+    completed = subprocess.run(
+        ["sudo", "-n", "true"],
+        check=False, capture_output=True, text=True,
+    )
+    return completed.returncode == 0
 
-    ``shutil.copytree`` raises ``PermissionError`` on
-    ``RuntimeRoot/private/var/mobile``. A skipped entry means this tree is not
-    a runtime simctl can boot, so the caller must not leave it in the scan
-    directory. The destination is a real directory, not a symlink to ``source``.
+
+def remove_path(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        try:
+            path.unlink()
+        except OSError:
+            if sudo_noninteractive():
+                subprocess.run(["sudo", "rm", "-f", str(path)], check=False)
+        return
+    if not path.exists():
+        return
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        if sudo_noninteractive():
+            subprocess.run(["sudo", "rm", "-rf", str(path)], check=False)
+
+
+def clear_stored_archive(runtime_dir: Path, version: str) -> None:
+    marker = marker_path(runtime_dir, version)
+    if marker.exists() or marker.is_symlink():
+        remove_path(marker)
+    for archive in archive_candidates(runtime_dir, version):
+        if archive.exists() or archive.is_symlink():
+            remove_path(archive)
+
+
+def write_marker(runtime_dir: Path, version: str) -> None:
+    marker_path(runtime_dir, version).write_text("complete\n", encoding="utf-8")
+
+
+def slash_entry(value: str) -> str:
+    text = value.replace("\\", "/").strip()
+    if text.startswith("./"):
+        text = text[2:]
+    return text.rstrip("/")
+
+
+def walk_entries(bundle: Path) -> set[str]:
+    """Relative entries, including the bundle directory. Raise if any entry cannot be listed."""
+    found = {bundle.name}
+
+    def raise_error(error: OSError) -> None:
+        raise error
+
+    for dirpath, dirnames, filenames in os.walk(bundle, followlinks=False, onerror=raise_error):
+        for name in dirnames + filenames:
+            full = Path(dirpath) / name
+            found.add(slash_entry(str(Path(bundle.name) / full.relative_to(bundle))))
+    return found
+
+
+def entries_from_find(bundle: Path) -> set[str] | None:
+    completed = subprocess.run(
+        ["sudo", "find", "-P", str(bundle)],
+        check=False, capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    prefix = str(bundle.parent) + os.sep
+    found = set()
+    for line in completed.stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        found.add(slash_entry(line[len(prefix):]))
+    if bundle.name not in found:
+        return None
+    return found
+
+
+def entries_from_archive(archive: Path) -> set[str] | None:
+    if archive.suffix == ".zip":
+        try:
+            with zipfile.ZipFile(archive) as zipped:
+                names = zipped.namelist()
+        except (OSError, zipfile.BadZipFile):
+            return None
+        return {slash_entry(name) for name in names if slash_entry(name)}
+    completed = subprocess.run(
+        ["tar", "-tf", str(archive)],
+        check=False, capture_output=True, text=True,
+    )
+    if completed.returncode != 0 and sudo_noninteractive():
+        completed = subprocess.run(
+            ["sudo", "tar", "-tf", str(archive)],
+            check=False, capture_output=True, text=True,
+        )
+    if completed.returncode != 0:
+        return None
+    return {slash_entry(line) for line in completed.stdout.splitlines() if slash_entry(line)}
+
+
+def cache_readable_file(path: Path) -> bool:
+    try:
+        if path.stat().st_size <= 0:
+            return False
+        with path.open("rb") as stream:
+            stream.read(1)
+    except OSError:
+        return False
+    return True
+
+
+def cache_readable_tree(bundle: Path) -> bool:
+    try:
+        for dirpath, _dirnames, filenames in os.walk(bundle, followlinks=False, onerror=_raise_walk):
+            for name in filenames:
+                file_path = Path(dirpath) / name
+                if file_path.is_symlink():
+                    continue
+                with file_path.open("rb") as stream:
+                    stream.read(1)
+    except OSError:
+        return False
+    return True
+
+
+def _raise_walk(error: OSError) -> None:
+    raise error
+
+
+def same_readable_entries(source: Path, destination: Path) -> bool:
+    try:
+        return walk_entries(source) == walk_entries(destination)
+    except OSError:
+        return False
+
+
+def copy_without_skipping(source: Path, destination: Path, seen: set[Path] | None = None) -> None:
+    """Copy every entry. Raise when an entry cannot be read or stored.
+
+    This does not drop unreadable files. The caller removes ``destination``
+    when this raises, so a partial tree is not left for simctl or actions/cache.
     """
     if seen is None:
         seen = set()
-    try:
-        info = source.lstat()
-    except OSError:
-        return True
+    info = source.lstat()
     if stat.S_ISLNK(info.st_mode):
-        try:
-            return copy_simruntime_bundle(source.resolve(), destination, seen)
-        except OSError:
-            return True
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() or destination.is_symlink():
+            destination.unlink()
+        destination.symlink_to(os.readlink(source))
+        return
     try:
         resolved = source.resolve()
     except OSError:
         resolved = source
     if resolved in seen:
-        return False
+        return
     seen.add(resolved)
     if stat.S_ISDIR(info.st_mode):
-        try:
-            children = list(source.iterdir())
-        except OSError:
-            return True
-        try:
-            destination.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            return True
-        skipped = False
-        for child in children:
-            if copy_simruntime_bundle(child, destination / child.name, seen):
-                skipped = True
-        return skipped
+        destination.mkdir(parents=True, exist_ok=True)
+        for child in source.iterdir():
+            copy_without_skipping(child, destination / child.name, seen)
+        return
     if not stat.S_ISREG(info.st_mode):
-        return False
+        raise OSError(f"unsupported simulator bundle entry: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination, follow_symlinks=False)
+
+
+def store_readable_directory(source: Path, destination: Path) -> bool:
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination, follow_symlinks=False)
+        copy_without_skipping(source, destination)
     except OSError:
-        return True
-    return False
+        remove_path(destination)
+        return False
+    if not same_readable_entries(source, destination) or not cache_readable_tree(destination):
+        remove_path(destination)
+        return False
+    if not simruntime_bootable(destination):
+        remove_path(destination)
+        return False
+    return True
+
+
+def store_privileged_archive(source: Path, runtime_dir: Path, version: str) -> bool:
+    """Archive the booted bundle without dropping unreadable entries.
+
+    ``sudo`` reads the files actions/cache cannot. The archive itself is then
+    owned by the current user, so the cache save can store those bytes. The
+    archive is deleted when its listing is not the full bundle.
+    """
+    if not sudo_noninteractive():
+        return False
+    if shutil.which("ditto"):
+        archive = runtime_dir / f"{bundle_name(version)}.orlix.zip"
+        create = [
+            "sudo", "ditto", "-c", "-k", "--keepParent", "--rsrc",
+            str(source), str(archive),
+        ]
+    else:
+        archive = runtime_dir / f"{bundle_name(version)}.orlix.tar"
+        create = ["sudo", "tar", "-C", str(source.parent), "-cf", str(archive), source.name]
+    remove_path(archive)
+    created = subprocess.run(create, check=False, capture_output=True, text=True)
+    if created.returncode != 0:
+        remove_path(archive)
+        return False
+    owned = subprocess.run(
+        ["sudo", "chown", f"{os.getuid()}:{os.getgid()}", str(archive)],
+        check=False, capture_output=True, text=True,
+    )
+    if owned.returncode != 0 or not cache_readable_file(archive):
+        remove_path(archive)
+        return False
+    archived = entries_from_archive(archive)
+    found = entries_from_find(source)
+    if archived is None or found is None or not archive_covers(found, archived):
+        remove_path(archive)
+        return False
+    return True
+
+
+def archive_covers(found: set[str], archived: set[str]) -> bool:
+    """True when every booted-bundle entry was stored.
+
+    A directory counts as stored when the archive lists it or lists a path
+    inside it. A file that was skipped is not covered by a parent directory.
+    """
+    for entry in found:
+        if entry in archived:
+            continue
+        prefix = entry + "/"
+        if any(item.startswith(prefix) for item in archived):
+            continue
+        return False
+    return True
+
+
+def extract_archive(archive: Path, runtime_dir: Path) -> bool:
+    if archive.suffix == ".zip":
+        command = ["sudo", "ditto", "-x", "-k", str(archive), str(runtime_dir)]
+    else:
+        command = ["sudo", "tar", "-C", str(runtime_dir), "-xf", str(archive)]
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    return completed.returncode == 0
+
+
+def restore_booted_bundle(version: str, runtime_dir: Path) -> None:
+    """Put the archived booted bundle back where simctl scans.
+
+    A partial directory is removed first. It must not be the runtime that
+    boots. Extraction uses the archive that kept every entry.
+    """
+    if version in IMAGE_SIMRUNTIME_VERSIONS:
+        return
+    bundle = runtime_dir / bundle_name(version)
+    if (bundle.exists() or bundle.is_symlink()) and not (
+        marker_is_complete(runtime_dir, version) and simruntime_bootable(bundle)
+    ):
+        print(
+            f"removing partial iOS {version} runtime from {runtime_dir}; "
+            "a copy that skipped unreadable entries is not booted by simctl",
+            flush=True,
+        )
+        remove_path(bundle)
+    if marker_is_complete(runtime_dir, version) and simruntime_bootable(bundle):
+        return
+    archive = find_archive(runtime_dir, version)
+    if archive is None or not marker_is_complete(runtime_dir, version):
+        return
+    print(f"restoring the booted iOS {version} simulator bundle from {archive}", flush=True)
+    if not extract_archive(archive, runtime_dir) or not simruntime_bootable(bundle):
+        remove_path(bundle)
+        print(
+            f"not using iOS {version} from {archive}; "
+            "the restored bundle is not complete, so xcodes runtimes install stays",
+            flush=True,
+        )
+
+
+def full_copy_failed(version: str, directory: Path) -> None:
+    print(
+        f"not keeping iOS {version} in {directory}; "
+        "a full copy of the booted bundle was not possible, so xcodes runtimes install stays",
+        flush=True,
+    )
 
 
 def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
-    """Copy a non-image runtime into the directory the cache save uploads.
+    """Store the bundle simctl booted, without dropping unreadable entries.
 
-    iOS 26.5 is already on the runner image. A second copy in the directory
-    simctl scans is preferred over that image runtime on the next job, so it
-    is not staged. The iOS 15.5 copy is the bundle simctl reports, and it is
-    kept only when that tree is still bootable after unreadable entries are
-    skipped. A symlink is never the staged result.
+    iOS 26.5 is already on the runner image and is not stored. The iOS 15.5
+    result is a complete archive of the installed bundle. A directory copy is
+    kept only when every entry is readable by actions/cache. A partial tree
+    is removed.
     """
     if version in IMAGE_SIMRUNTIME_VERSIONS:
         return
     directory = user_runtime_profiles() if runtime_dir is None else runtime_dir
-    destination = directory / f"iOS {version}.simruntime"
+    destination = directory / bundle_name(version)
     source = listed_bundle_path(version)
+    directory.mkdir(parents=True, exist_ok=True)
+    clear_stored_archive(directory, version)
     if destination.is_symlink():
         try:
             destination.unlink()
         except OSError:
-            return
-    try:
-        if source is not None and destination.exists() and source.resolve() == destination.resolve():
-            return
-    except OSError:
-        pass
-    if simruntime_bootable(destination):
+            remove_path(destination)
+    same = False
+    if source is not None and destination.exists():
+        try:
+            same = source.resolve() == destination.resolve()
+        except OSError:
+            same = False
+    if source is None:
+        if destination.exists() and not simruntime_bootable(destination):
+            remove_path(destination)
+        return
+    print(f"storing the booted iOS {version} simulator bundle into {directory}", flush=True)
+    if store_privileged_archive(source, directory, version):
+        if destination.exists() and not same:
+            remove_path(destination)
+        write_marker(directory, version)
+        print(f"stored the booted iOS {version} simulator bundle in {directory}", flush=True)
+        return
+    if same:
+        full_copy_failed(version, directory)
         return
     if destination.exists():
-        shutil.rmtree(destination, ignore_errors=True)
-    if source is None:
+        remove_path(destination)
+    if store_readable_directory(source, destination):
+        write_marker(directory, version)
+        print(f"stored the booted iOS {version} simulator bundle in {directory}", flush=True)
         return
-    directory.mkdir(parents=True, exist_ok=True)
-    print(f"copying iOS {version} simulator bundle into {directory}", flush=True)
-    skipped = copy_simruntime_bundle(source, destination)
-    if skipped or not simruntime_bootable(destination):
-        shutil.rmtree(destination, ignore_errors=True)
-        print(
-            f"not keeping iOS {version} in {directory}; "
-            "the copy skipped unreadable entries and simctl must not boot that tree",
-            flush=True,
-        )
+    remove_path(destination)
+    full_copy_failed(version, directory)
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
@@ -720,25 +1010,15 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     iOS 26.5 skips ``xcodes`` when simctl already lists it. iOS 15.5 is not
     installed when simctl does not list it. A restored download archive is
     not an installed runtime and is not copied into a protected directory.
-    A listed bundle is not copied here. ``~/Library/Developer/CoreSimulator/Profiles/Runtimes``
-    is scanned by simctl, and a partial copy is preferred over the image runtime.
-    That is what ``simctl boot`` then starts. The cache copy runs after boot.
-    ``simruntime-present`` is true only when that directory contains a real bundle.
+    A complete archive of the bundle simctl booted is extracted into the
+    directory simctl scans before this check. A partial copy is removed and
+    does not skip the install. ``simruntime-present`` is true only for a
+    bundle that did not skip entries.
     """
     try:
         if runtime_dir is not None:
+            restore_booted_bundle(version, runtime_dir)
             expose_restored_runtimes(runtime_dir)
-            bundle = runtime_dir / f"iOS {version}.simruntime"
-            if version not in IMAGE_SIMRUNTIME_VERSIONS and (bundle.is_symlink() or bundle.exists()) and not simruntime_bootable(bundle):
-                print(
-                    f"removing partial iOS {version} runtime from {runtime_dir}; "
-                    "a copy that skipped unreadable entries is not booted by simctl",
-                    flush=True,
-                )
-                if bundle.is_symlink() or bundle.is_file():
-                    bundle.unlink()
-                else:
-                    shutil.rmtree(bundle, ignore_errors=True)
         if runtime_already_installed(version, runtime_dir):
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
@@ -747,7 +1027,7 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
         return "skip"
     # Ask simctl again immediately before any installer. A runtime that is
     # listed now must not fall through to xcodes. The download archive is not
-    # an installed runtime; the listed bundle is copied into the runtime directory.
+    # an installed runtime.
     try:
         if simctl_runtime_listed(version, read_simctl_runtimes()) or simctl_runtime_listed(version, read_simctl_runtime_images()):
             print(runtime_message("skip", version, archive_dir), flush=True)

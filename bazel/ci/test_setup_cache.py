@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import plistlib
 import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -294,11 +296,10 @@ class SetupCacheDecisionTests(unittest.TestCase):
     def test_listed_simruntime_is_staged_for_the_cache_save(self) -> None:
         """A runtime simctl lists is not installed again.
 
-        The reported bundle is copied into the Profiles directory the cache
-        save uploads. ``simruntime-present`` stays false until those bytes are
-        in that directory. A symlink to the simctl path is not enough. A
-        restored Profiles bundle is left in place and does not run
-        ``xcodes runtimes install``.
+        The booted bundle is stored for the cache save, including entries the
+        runner cannot read. ``simruntime-present`` stays false until that
+        complete copy is in the directory. A symlink is not enough. A partial
+        tree is not kept.
         """
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -321,14 +322,30 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 }],
             })
             calls = []
+            real_run = subprocess.run
             real_iterdir = Path.iterdir
 
             def fake_run(command, **kwargs):
-                calls.append(command)
+                calls.append(list(command))
                 if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
                     return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
                 if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
                     return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                if command[:3] == ["sudo", "-n", "true"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:2] == ["sudo", "chown"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:2] == ["sudo", "tar"] and "-cf" in command:
+                    parent = command[command.index("-C") + 1]
+                    archive_path = command[command.index("-cf") + 1]
+                    return real_run(
+                        ["tar", "-C", parent, "-cf", archive_path, command[-1]],
+                        capture_output=True, text=True,
+                    )
+                if command[:2] == ["sudo", "find"]:
+                    return real_run(["find", *command[2:]], capture_output=True, text=True)
+                if command[:2] == ["tar", "-tf"] or command[:3] == ["sudo", "tar", "-tf"]:
+                    return real_run(["tar", "-tf", command[-1]], capture_output=True, text=True)
                 raise AssertionError(command)
 
             def guarded_iterdir(self):
@@ -349,7 +366,12 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
             staged = runtime_dir / "iOS 15.5.simruntime"
             self.assertFalse(staged.exists())
-            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+            stored = runtime_dir / "iOS 15.5.simruntime.orlix.tar"
+            self.assertTrue(stored.is_file())
+            listing = real_run(["tar", "-tf", str(stored)], capture_output=True, text=True, check=False)
+            self.assertIn("private/var/mobile/secret", listing.stdout)
+            self.assertEqual((runtime_dir / "iOS 15.5.simruntime.orlix-complete").read_text(encoding="utf-8"), "complete\n")
+            self.assertTrue(setup_cache.simruntime_present(runtime_dir))
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -369,6 +391,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
             })
 
             def fake_run(command, **kwargs):
+                if command[:3] == ["sudo", "-n", "true"]:
+                    return subprocess.CompletedProcess(command, 1, stdout="", stderr="sudo: a password is required")
                 if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
                     return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
                 if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
@@ -459,6 +483,190 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 setup_cache.stage_listed_simruntime("26.5", runtime_dir)
             self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
             self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+    def test_failed_full_copy_does_not_keep_a_partial_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "system" / "iOS 15.5.simruntime"
+            mobile = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            mobile.mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            (mobile / "secret").write_bytes(b"unreadable")
+            runtime_dir = root / "Runtimes"
+            images = json.dumps({
+                "runtimes": [{
+                    "version": "15.5",
+                    "bundlePath": str(source),
+                    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                }],
+            })
+            real_iterdir = Path.iterdir
+
+            def fake_run(command, **kwargs):
+                if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                if command[:3] == ["sudo", "-n", "true"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:2] == ["sudo", "tar"]:
+                    return subprocess.CompletedProcess(command, 1, stdout="", stderr="tar failed")
+                raise AssertionError(command)
+
+            def guarded_iterdir(self):
+                if self.name == "mobile":
+                    raise PermissionError(self)
+                return real_iterdir(self)
+
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                with mock.patch.object(Path, "iterdir", guarded_iterdir):
+                    setup_cache.stage_listed_simruntime("15.5", runtime_dir)
+            self.assertFalse((runtime_dir / "iOS 15.5.simruntime").exists())
+            self.assertFalse((runtime_dir / "iOS 15.5.simruntime.orlix.tar").exists())
+            self.assertFalse((runtime_dir / "iOS 15.5.simruntime.orlix.zip").exists())
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+    def test_restored_booted_bundle_skips_xcodes_install(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "system" / "iOS 15.5.simruntime"
+            mobile = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            mobile.mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            (mobile / "secret").write_bytes(b"unreadable")
+            runtime_dir = root / "Runtimes"
+            runtime_dir.mkdir()
+            stored = runtime_dir / "iOS 15.5.simruntime.orlix.tar"
+            subprocess.run(
+                ["tar", "-C", str(source.parent), "-cf", str(stored), source.name],
+                check=True,
+            )
+            (runtime_dir / "iOS 15.5.simruntime.orlix-complete").write_text("complete\n", encoding="utf-8")
+            download = root / "ios15-runtime"
+            download.mkdir()
+            (download / "runtime.dmg").write_bytes(b"restored-download")
+            calls = []
+            real_run = subprocess.run
+
+            def fake_run(command, **kwargs):
+                calls.append(list(command))
+                if command[:3] == ["sudo", "tar", "-C"] and "-xf" in command:
+                    return real_run(
+                        ["tar", "-C", command[3], "-xf", command[command.index("-xf") + 1]],
+                        capture_output=True, text=True,
+                    )
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["sudo", "xcodes", "runtimes", "install"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                raise AssertionError(command)
+
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                plan = setup_cache.prepare_runtime("15.5", download, runtime_dir)
+            bundle = runtime_dir / "iOS 15.5.simruntime"
+            self.assertEqual(plan, "skip")
+            self.assertFalse(any(command[:4] == ["sudo", "xcodes", "runtimes", "install"] for command in calls))
+            self.assertEqual((bundle / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile" / "secret").read_bytes(), b"unreadable")
+            self.assertTrue(setup_cache.simruntime_bootable(bundle))
+            self.assertTrue(setup_cache.simruntime_present(runtime_dir))
+
+    def test_partial_bundle_without_marker_is_installed_again(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_dir = root / "Runtimes"
+            bundle = runtime_dir / "iOS 15.5.simruntime"
+            mobile = bundle / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            mobile.mkdir(parents=True)
+            (bundle / "Contents" / "Info.plist").write_bytes(b"partial")
+            (mobile / "secret").write_bytes(b"kept")
+            download = root / "ios15-runtime"
+            download.mkdir()
+            (download / "runtime.dmg").write_bytes(b"restored-download")
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(list(command))
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["sudo", "xcodes", "runtimes", "install"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                raise AssertionError(command)
+
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                plan = setup_cache.prepare_runtime("15.5", download, runtime_dir)
+            self.assertEqual(plan, "install-local")
+            self.assertFalse(bundle.exists())
+            self.assertIn(["sudo", "xcodes", "runtimes", "install", "iOS 15.5"], [command[:5] for command in calls])
+
+    def test_ditto_archives_every_booted_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "system" / "iOS 15.5.simruntime"
+            mobile = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            mobile.mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            (mobile / "secret").write_bytes(b"unreadable")
+            runtime_dir = root / "Runtimes"
+            images = json.dumps({
+                "runtimes": [{
+                    "version": "15.5",
+                    "bundlePath": str(source),
+                    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                }],
+            })
+            real_which = setup_cache.shutil.which
+            real_run = subprocess.run
+            real_iterdir = Path.iterdir
+
+            def which(name: str) -> str | None:
+                if name in {"ditto", "sudo"}:
+                    return f"/usr/bin/{name}"
+                return real_which(name)
+
+            def fake_run(command, **kwargs):
+                if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                if command[:3] == ["sudo", "-n", "true"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:2] == ["sudo", "chown"]:
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:3] == ["sudo", "ditto", "-c"]:
+                    self.assertIn("--keepParent", command)
+                    self.assertIn("--rsrc", command)
+                    archive_path = Path(command[-1])
+                    with zipfile.ZipFile(archive_path, "w") as zipped:
+                        zipped.writestr(f"{source.name}/", "")
+                        for dirpath, dirnames, filenames in os.walk(source):
+                            relative = Path(dirpath).relative_to(source)
+                            prefix = source.name if relative == Path(".") else f"{source.name}/{relative.as_posix()}"
+                            for name in dirnames:
+                                zipped.writestr(f"{prefix}/{name}/", "")
+                            for name in filenames:
+                                zipped.write(Path(dirpath) / name, f"{prefix}/{name}")
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+                if command[:2] == ["sudo", "find"]:
+                    return real_run(["find", *command[2:]], capture_output=True, text=True)
+                raise AssertionError(command)
+
+            def guarded_iterdir(self):
+                if self.name == "mobile":
+                    raise PermissionError(self)
+                return real_iterdir(self)
+
+            with mock.patch.object(setup_cache.shutil, "which", which):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    with mock.patch.object(Path, "iterdir", guarded_iterdir):
+                        setup_cache.stage_listed_simruntime("15.5", runtime_dir)
+            self.assertFalse((runtime_dir / "iOS 15.5.simruntime").exists())
+            self.assertTrue((runtime_dir / "iOS 15.5.simruntime.orlix.zip").is_file())
+            self.assertTrue(setup_cache.simruntime_present(runtime_dir))
 
     def test_missing_runtime_boot_fails_on_the_first_attempt(self) -> None:
         calls: list[list[str]] = []

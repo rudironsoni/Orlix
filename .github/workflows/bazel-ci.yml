@@ -265,8 +265,8 @@ jobs:
           python3 bazel/ci/setup_cache.py boot-simulator --udid "$current_id"
           python3 bazel/ci/setup_cache.py boot-simulator --udid "$ios15_id"
           # iOS 26.5 is the runner image runtime. Do not copy it into the
-          # directory simctl scans. The installed iOS 15.5 bundle is copied
-          # only after boot, and only if that tree is still bootable.
+          # directory simctl scans. The iOS 15.5 bundle simctl booted is
+          # stored after boot, and only when every entry was archived.
           python3 bazel/ci/setup_cache.py stage-runtime --version 15.5 --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"
           if python3 bazel/ci/setup_cache.py simruntime-present --runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"; then
             echo "simruntime=true" >> "$GITHUB_OUTPUT"
