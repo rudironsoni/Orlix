@@ -232,6 +232,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
         def fake_run(command, **kwargs):
             if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
                 return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+            if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
             raise AssertionError(command)
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -277,6 +279,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
         def fake_run(command, **kwargs):
             if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
                 return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+            if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
             raise AssertionError(command)
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -285,6 +289,160 @@ class SetupCacheDecisionTests(unittest.TestCase):
             with mock.patch.object(setup_cache.subprocess, "run", fake_run):
                 plan = setup_cache.prepare_runtime("15.5", archive, Path(temporary) / "runtimes")
         self.assertEqual(plan, "skip")
+
+    def test_listed_simruntime_is_staged_for_the_cache_save(self) -> None:
+        """A runtime simctl lists is not installed again.
+
+        The reported bundle is copied into the Profiles directory the cache
+        save uploads. ``simruntime-present`` stays false until those bytes are
+        in that directory. A symlink to the simctl path is not enough. A
+        restored Profiles bundle is left in place and does not run
+        ``xcodes runtimes install``.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "system" / "iOS 15.5.simruntime"
+            (source / "Contents").mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            blocked = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            blocked.mkdir(parents=True)
+            (blocked / "secret").write_bytes(b"unreadable")
+            runtime_dir = root / "Library" / "Developer" / "CoreSimulator" / "Profiles" / "Runtimes"
+            archive = root / "ios15-runtime"
+            archive.mkdir()
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            images = json.dumps({
+                "runtimes": [{
+                    "version": "15.5",
+                    "state": "Ready",
+                    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                    "bundlePath": str(source),
+                }],
+            })
+            calls = []
+            real_iterdir = Path.iterdir
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:5] == ["xcrun", "simctl", "list", "runtimes", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:5] == ["xcrun", "simctl", "runtime", "list", "-j"]:
+                    return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                raise AssertionError(command)
+
+            def guarded_iterdir(self):
+                if self.name == "mobile":
+                    raise PermissionError(self)
+                return real_iterdir(self)
+
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                with mock.patch.object(setup_cache.shutil, "copytree", side_effect=AssertionError("copy")):
+                    plan = setup_cache.prepare_runtime("15.5", archive, runtime_dir)
+                    self.assertFalse((runtime_dir / "iOS 15.5.simruntime").exists())
+                    self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+                    with mock.patch.object(Path, "iterdir", guarded_iterdir):
+                        setup_cache.stage_listed_simruntime("15.5", runtime_dir)
+                        setup_cache.stage_listed_simruntime("26.5", runtime_dir)
+            self.assertEqual(plan, "skip")
+            self.assertFalse(any(command[:4] == ["sudo", "xcodes", "runtimes", "install"] for command in calls))
+            self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
+            staged = runtime_dir / "iOS 15.5.simruntime"
+            self.assertFalse(staged.is_symlink())
+            self.assertTrue(staged.is_dir())
+            self.assertNotEqual(staged.resolve(), source.resolve())
+            staged_plist = staged / "Contents" / "Info.plist"
+            source_plist = source / "Contents" / "Info.plist"
+            self.assertFalse(staged_plist.is_symlink())
+            self.assertEqual(staged_plist.read_bytes(), b"runtime")
+            self.assertNotEqual(staged_plist.stat().st_ino, source_plist.stat().st_ino)
+            self.assertFalse((staged / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile").exists())
+            self.assertTrue(setup_cache.simruntime_present(runtime_dir))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_dir = root / "Runtimes"
+            restored = runtime_dir / "iOS 26.5.simruntime" / "Contents"
+            restored.mkdir(parents=True)
+            (restored / "Info.plist").write_bytes(b"restored")
+            archive = root / "ios26-runtime"
+            archive.mkdir()
+            (archive / "runtime.dmg").write_bytes(b"restored-download")
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["killall", "-9"]:
+                    return subprocess.CompletedProcess(command, 0)
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                raise AssertionError(command)
+
+            with mock.patch.object(setup_cache, "user_runtime_profiles", return_value=root / "profiles"):
+                with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                    plan = setup_cache.prepare_runtime("26.5", archive, runtime_dir)
+            self.assertEqual(plan, "skip")
+            self.assertFalse(any(command[:4] == ["sudo", "xcodes", "runtimes", "install"] for command in calls))
+            self.assertFalse(any(command[:1] == ["killall"] for command in calls))
+            self.assertFalse((runtime_dir / "iOS 26.5.simruntime").is_symlink())
+            self.assertEqual(
+                (runtime_dir / "iOS 26.5.simruntime" / "Contents" / "Info.plist").read_bytes(),
+                b"restored",
+            )
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_dir = root / "Profiles" / "Runtimes"
+            runtime_dir.mkdir(parents=True)
+            link = runtime_dir / "iOS 15.5.simruntime"
+            link.symlink_to(root / "missing-image-runtime", target_is_directory=True)
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+    def test_image_runtime_is_not_copied_into_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "Volumes" / "iOS_26.5.simruntime"
+            (source / "Contents" / "Resources" / "RuntimeRoot").mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"image")
+            (source / "Contents" / "Resources" / "RuntimeRoot" / "usr").mkdir()
+            runtime_dir = root / "Library" / "Developer" / "CoreSimulator" / "Profiles" / "Runtimes"
+            images = json.dumps({
+                "runtimes": [{
+                    "version": "26.5",
+                    "state": "Ready",
+                    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+                    "bundlePath": str(source),
+                }],
+            })
+
+            def fake_run(command, **kwargs):
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                raise AssertionError(command)
+
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                setup_cache.stage_listed_simruntime("26.5", runtime_dir)
+            self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+    def test_missing_runtime_boot_fails_on_the_first_attempt(self) -> None:
+        calls: list[list[str]] = []
+
+        def missing_runtime(command, **kwargs):
+            calls.append(list(command))
+            return subprocess.CompletedProcess(
+                command, 2, stdout="", stderr="Unable to find a runtime matching the device\n",
+            )
+
+        with mock.patch.object(setup_cache.subprocess, "run", missing_runtime):
+            with self.assertRaises(SystemExit) as raised:
+                setup_cache.boot_simulator("device")
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(calls, [["xcrun", "simctl", "boot", "device"]])
 
     def test_restored_simruntime_is_linked_without_an_install_command(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -391,9 +549,18 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("orlix-installed-simruntimes-15.5-26.5", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
+            self.assertIn('boot-simulator --udid "$current_id"', text, name)
+            self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
+            self.assertNotIn("stage-runtime --version 26.5", text, name)
             self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
             self.assertNotIn("sudo xcodes runtimes install", text, name)
             self.assertNotIn('.version == "15.5"', text, name)
+        ci = workflow_text("bazel-ci.yml")
+        self.assertGreater(
+            ci.index("stage-runtime --version 15.5"),
+            ci.index('boot-simulator --udid "$ios15_id"'),
+        )
+        self.assertGreater(ci.index("simruntime-present"), ci.index("stage-runtime --version 15.5"))
 
     def test_every_installer_workflow_skips_xcode_and_homebrew_when_present(self) -> None:
         for name in WORKFLOWS + (
