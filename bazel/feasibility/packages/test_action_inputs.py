@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -40,6 +43,135 @@ def configure_accepts(package: str, path: str) -> bool:
     return True
 
 
+class ConfigureInputRejected(Exception):
+    """The guest configure action refuses this path instead of keying it."""
+
+
+def rule_markers() -> dict[str, str]:
+    """Read the production package markers. A copied name list is not the rule."""
+    text = (PACKAGES / "action_inputs.bzl").read_text(encoding="utf-8")
+    start = text.index("_PACKAGE_SOURCE_MARKERS = {")
+    body = text[start:text.index("}", start)]
+    parsed = dict(re.findall(r'"([^"]+)": "([^"]+)"', body))
+    if parsed != MARKERS:
+        raise AssertionError((sorted(parsed), sorted(MARKERS)))
+    return parsed
+
+
+def fail_closed_configure_inputs(package_name: str, paths: list[str]) -> list[str]:
+    """Apply `guest_configure_inputs`: the first foreign path fails the action."""
+    markers = rule_markers()
+    if package_name not in markers:
+        raise ConfigureInputRejected(f"unknown guest package configure owner: {package_name}")
+    selected: list[str] = []
+    for path in paths:
+        if path.endswith("assembly_policy.txt"):
+            raise ConfigureInputRejected(
+                f"rootfs policy is not a {package_name} configure input: {path}"
+            )
+        for other, marker in markers.items():
+            if other != package_name and marker in path:
+                raise ConfigureInputRejected(
+                    f"foreign package source is not a {package_name} configure input: {path}"
+                )
+        selected.append(path)
+    return selected
+
+
+def observe_unrelated_package_action_key() -> dict[str, object]:
+    """Key one package's accepted inputs and show a foreign source stays out.
+
+    The stamp is the declared-byte action key from `source_key.py`. A path
+    list without that invocation is not a result.
+    """
+    package = "bash"
+    owned_name = "external/+native_sources+orlix_bash_source/shell.c"
+    foreign_name = "external/+native_sources+orlix_grep_source/src/grep.c"
+    policy_name = "bazel/feasibility/rootfs/assembly_policy.txt"
+    candidates = [owned_name, foreign_name, policy_name]
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        owned = root / owned_name
+        foreign = root / foreign_name
+        policy = root / policy_name
+        owned.parent.mkdir(parents=True)
+        foreign.parent.mkdir(parents=True)
+        policy.parent.mkdir(parents=True)
+        owned_bytes = b"int shell(void) { return 1; }\n"
+        foreign_bytes = b"int grep_main(void) { return 2; }\n"
+        owned.write_bytes(owned_bytes)
+        foreign.write_bytes(foreign_bytes)
+        policy.write_bytes(b"copy_bin usr/bin/bash bin/bash\n")
+        selected: list[str] = []
+        rejected: list[str] = []
+        selector_calls = 0
+        for path in candidates:
+            selector_calls += 1
+            try:
+                fail_closed_configure_inputs(package, [path])
+            except ConfigureInputRejected:
+                rejected.append(path)
+            else:
+                selected.append(path)
+            if configure_accepts(package, path) != (path in selected):
+                raise AssertionError(f"configure filter drifted for {path}")
+        selector_calls += 1
+        try:
+            fail_closed_configure_inputs(package, candidates)
+        except ConfigureInputRejected as error:
+            fail_closed = foreign_name in str(error)
+        else:
+            fail_closed = False
+        invocations = 0
+
+        def stamp_for(names: list[str]) -> str:
+            nonlocal invocations
+            invocations += 1
+            archive = root / f"sources-{invocations}.tar"
+            stamp = root / f"sources-{invocations}.stamp"
+            command = [
+                sys.executable,
+                "-B",
+                str(PACKAGES / "source_key.py"),
+                "files",
+                str(archive),
+                str(stamp),
+            ]
+            for name in names:
+                command.extend([name, str(root / name)])
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+            if completed.returncode != 0:
+                raise AssertionError(completed.stderr)
+            return stamp.read_text(encoding="utf-8")
+
+        action_stamp = stamp_for(selected)
+        action_digest = hashlib.sha256(action_stamp.encode()).hexdigest()
+        observed_paths = [line.split("  ", 1)[1] for line in action_stamp.splitlines() if line]
+        foreign_digest = hashlib.sha256(foreign_bytes).hexdigest()
+        owned_digest = hashlib.sha256(owned_bytes).hexdigest()
+        foreign.write_bytes(b"int grep_main(void) { return 9; }\n")
+        after_foreign = stamp_for(selected)
+        mixed = stamp_for(sorted([*selected, foreign_name]))
+        foreign.write_bytes(b"int grep_main(void) { return 10; }\n")
+        mixed_after = stamp_for(sorted([*selected, foreign_name]))
+        owned.write_bytes(b"int shell(void) { return 4; }\n")
+        after_owned = stamp_for(selected)
+        return {
+            "source_key_invocations": invocations,
+            "selector_calls": selector_calls,
+            "expected_paths": ",".join(sorted(selected)),
+            "observed_paths": ",".join(observed_paths),
+            "rejected_paths": ",".join(rejected),
+            "fail_closed": fail_closed,
+            "foreign_digest_in_stamp": foreign_digest in action_stamp,
+            "owned_digest_in_stamp": owned_digest in action_stamp,
+            "foreign_edit_changes_action_key": after_foreign != action_stamp,
+            "owned_edit_changes_action_key": after_owned != action_stamp,
+            "included_foreign_changes_key": mixed != action_stamp and mixed_after != mixed,
+            "stamp_sha256": action_digest,
+        }
+
+
 def _package_blocks(text: str) -> list[str]:
     parts = re.split(r"\n(?=orlix_(?:autotools|bash|coreutils)_package\()", text)
     return [part for part in parts if part.startswith("orlix_")]
@@ -67,6 +199,26 @@ class PackageRootfsInputTests(unittest.TestCase):
             text = (PACKAGES / name).read_text(encoding="utf-8")
             self.assertIn("guest_configure_inputs(ctx.attr.package_name,", text, name)
             self.assertNotIn("assembly_policy", text, name)
+
+    def test_unrelated_package_input_is_outside_the_action_key(self) -> None:
+        observed = observe_unrelated_package_action_key()
+        self.assertGreaterEqual(observed["source_key_invocations"], 3)
+        self.assertGreaterEqual(observed["selector_calls"], 1)
+        self.assertTrue(observed["fail_closed"])
+        self.assertEqual(observed["observed_paths"], observed["expected_paths"])
+        self.assertEqual(
+            observed["expected_paths"],
+            "external/+native_sources+orlix_bash_source/shell.c",
+        )
+        self.assertNotIn("orlix_grep_source/", str(observed["observed_paths"]))
+        self.assertNotIn("assembly_policy.txt", str(observed["observed_paths"]))
+        self.assertIn("orlix_grep_source/", str(observed["rejected_paths"]))
+        self.assertFalse(observed["foreign_digest_in_stamp"])
+        self.assertTrue(observed["owned_digest_in_stamp"])
+        self.assertFalse(observed["foreign_edit_changes_action_key"])
+        self.assertTrue(observed["owned_edit_changes_action_key"])
+        self.assertTrue(observed["included_foreign_changes_key"])
+        self.assertEqual(len(str(observed["stamp_sha256"])), 64)
 
     def test_each_guest_package_has_its_own_source_repo(self) -> None:
         blocks = _package_blocks((PACKAGES / "BUILD.bazel").read_text(encoding="utf-8"))
