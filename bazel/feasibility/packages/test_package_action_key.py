@@ -45,7 +45,8 @@ class PackageActionKeyTests(unittest.TestCase):
             self.assertNotIn("DEVELOPER_DIR", text, name)
             if name in {"coreutils.bzl", "bash.bzl"}:
                 self.assertIn('if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then', text, name)
-                self.assertIn('export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"', text, name)
+                self.assertIn('[ "$HOME" != "/var/empty" ] && /bin/mkdir -p "$HOME/Library/Caches/Orlix/ccache"', text, name)
+                self.assertIn('export CCACHE_DIR="$HOME/Library/Caches/Orlix/ccache"', text, name)
                 self.assertIn('launcher="$tool_bin/ccache"', text, name)
             else:
                 self.assertNotIn("CCACHE_DIR", text, name)
@@ -61,7 +62,8 @@ class PackageActionKeyTests(unittest.TestCase):
         self.assertNotIn("no-remote-cache", autotools_text)
         self.assertNotIn("DEVELOPER_DIR", autotools_text)
         self.assertIn('if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then', autotools_text)
-        self.assertIn('export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"', autotools_text)
+        self.assertIn('[ "$HOME" != "/var/empty" ] && /bin/mkdir -p "$HOME/Library/Caches/Orlix/ccache"', autotools_text)
+        self.assertIn('export CCACHE_DIR="$HOME/Library/Caches/Orlix/ccache"', autotools_text)
         self.assertIn('launcher="$tool_bin/ccache"', autotools_text)
         self.assertNotIn("xcrun", autotools_text)
         for name in ("coreutils.bzl", "bash.bzl", "autotools.bzl"):

@@ -252,12 +252,13 @@ linux_src="$(/usr/bin/dirname "$linux_makefile")"
 ORLIX_KERNEL_INCREMENTAL="${ORLIX_KERNEL_INCREMENTAL:-1}"
 if [ -n "${CCACHE_DISABLE:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER=
-elif [ -z "${CCACHE_DIR:-}" ]; then
-  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
-  /bin/mkdir -p "$CCACHE_DIR"
+elif [ -n "${CCACHE_DIR:-}" ]; then
+  export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "$HOME/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="$HOME/Library/Caches/Orlix/ccache"
   export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
 else
-  export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
+  export ORLIX_COMPILER_LAUNCHER=
 fi
 export LINUX_MAKE="$gmake_staged"
 export LINUX_SED="$sed_staged"

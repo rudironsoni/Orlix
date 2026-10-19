@@ -37,10 +37,13 @@ class KernelMachOActionTests(unittest.TestCase):
     def test_unset_ccache_dir_uses_default_cache(self) -> None:
         start = self.rule.index('if [ -n "${CCACHE_DISABLE:-}" ]; then')
         snippet = self.rule[start:self.rule.index("fi\n", start) + 3]
-        script = "set -euo pipefail\nunset CCACHE_DIR\nunset CCACHE_DISABLE\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test "$ORLIX_COMPILER_LAUNCHER" = "$ccache_staged"\ntest "$CCACHE_DIR" = "$HOME/Library/Caches/Orlix/ccache"\n'
-        result = subprocess.run(["bash"], input=script, text=True, capture_output=True, check=False)
+        empty_home = "set -euo pipefail\nunset CCACHE_DIR\nunset CCACHE_DISABLE\nunset ORLIX_COMPILER_LAUNCHER\nexport HOME=/var/empty\nccache_staged=/staged/ccache\n" + snippet + 'test -z "${ORLIX_COMPILER_LAUNCHER}"\ntest -z "${CCACHE_DIR:-}"\n'
+        result = subprocess.run(["bash"], input=empty_home, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        disabled = "set -euo pipefail\nunset CCACHE_DIR\nexport CCACHE_DISABLE=1\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test -z "${ORLIX_COMPILER_LAUNCHER}"\n'
+        writable = "set -euo pipefail\nunset CCACHE_DIR\nunset CCACHE_DISABLE\nunset ORLIX_COMPILER_LAUNCHER\nexport HOME=\"$(/usr/bin/mktemp -d)\"\nccache_staged=/staged/ccache\n" + snippet + 'test "$ORLIX_COMPILER_LAUNCHER" = "$ccache_staged"\ntest "$CCACHE_DIR" = "$HOME/Library/Caches/Orlix/ccache"\ntest -d "$CCACHE_DIR"\n'
+        result = subprocess.run(["bash"], input=writable, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        disabled = "set -euo pipefail\nunset CCACHE_DIR\nexport CCACHE_DISABLE=1\nexport HOME=/var/empty\nunset ORLIX_COMPILER_LAUNCHER\nccache_staged=/staged/ccache\n" + snippet + 'test -z "${ORLIX_COMPILER_LAUNCHER}"\n'
         result = subprocess.run(["bash"], input=disabled, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
