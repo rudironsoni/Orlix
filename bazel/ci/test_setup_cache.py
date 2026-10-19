@@ -806,7 +806,7 @@ class SetupCacheDecisionTests(unittest.TestCase):
             write_keg(prefix, "zstd", "1.5.7")
             write_keg(prefix, "llvm@20", "20.1.8", clang=True)
             write_keg(prefix, "git", "2.50.1")
-            archive = root / "ci-toolchain.tar"
+            archive = root / "ci-toolchain.tar.gz"
             pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
             started = time.perf_counter()
             self.assertTrue(setup_cache.pack_toolchain(
@@ -844,7 +844,7 @@ class SetupCacheDecisionTests(unittest.TestCase):
             write_formula(prefix, "llvm", "23.1.3")
             write_keg(prefix, "llvm", "23.1.3", clang=True)
             write_keg(prefix, "llvm@20", "20.1.8", clang=True)
-            archive = root / "ci-toolchain.tar"
+            archive = root / "ci-toolchain.tar.gz"
             pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
             self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
             replace_tar_bytes(archive, "Cellar/llvm/23.1.3/bin/clang", b"not-the-pinned-clang")
@@ -863,7 +863,7 @@ class SetupCacheDecisionTests(unittest.TestCase):
             write_formula(prefix, "llvm", "23.1.3")
             write_keg(prefix, "llvm", "23.1.3", clang=True)
             write_keg(prefix, "llvm@20", "20.1.8", clang=True)
-            archive = root / "ci-toolchain.tar"
+            archive = root / "ci-toolchain.tar.gz"
             pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
             self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
             append_tar_member(archive, "Cellar/git/2.50.1/README", b"unrelated")
@@ -875,11 +875,23 @@ class SetupCacheDecisionTests(unittest.TestCase):
     def test_toolchain_budget_keeps_the_bootable_runtime(self) -> None:
         self.assertEqual(setup_cache.BOOTABLE_SIMRUNTIME_CACHE_BYTES, 5126954916)
         self.assertEqual(setup_cache.BOOTABLE_SIMRUNTIME_CACHE_KEY, "orlix-ios15-simruntime-bootable-v1")
-        self.assertEqual(setup_cache.toolchain_archive_budget(), 2_000_000_000)
-        self.assertLess(
-            setup_cache.BOOTABLE_SIMRUNTIME_CACHE_BYTES + setup_cache.toolchain_archive_budget(),
-            setup_cache.ACTIONS_CACHE_QUOTA_BYTES,
-        )
+        members = setup_cache.CI_TOOLCHAIN_MEMBER_BYTES
+        bottles = setup_cache.CI_TOOLCHAIN_BOTTLE_BYTES
+        runtime = setup_cache.BOOTABLE_SIMRUNTIME_CACHE_BYTES
+        self.assertEqual(members, 2_349_225_560)
+        self.assertEqual(bottles, 582_115_184)
+        self.assertLess(runtime + members, setup_cache.ACTIONS_CACHE_QUOTA_BYTES)
+        plan = setup_cache.cache_plan(members)
+        self.assertEqual(plan["drop_ccache"], "false")
+        self.assertEqual(plan["drop_repository"], "false")
+        self.assertEqual(setup_cache.CCACHE_CACHE_BYTES, 97_654_617)
+        self.assertEqual(setup_cache.BAZEL_REPOSITORY_CACHE_BYTES, 571_396_067)
+        crowded = setup_cache.cache_plan(4_300_000_000)
+        self.assertEqual(crowded["drop_ccache"], "true")
+        self.assertEqual(crowded["drop_repository"], "false")
+        tighter = setup_cache.cache_plan(4_500_000_000)
+        self.assertEqual(tighter["drop_ccache"], "false")
+        self.assertEqual(tighter["drop_repository"], "true")
 
     def test_archive_over_the_bootable_budget_is_not_saved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -893,21 +905,14 @@ class SetupCacheDecisionTests(unittest.TestCase):
             (prefix / "Cellar" / "llvm" / "23.1.3" / "bin" / "clang").write_bytes(b"x" * 64)
             write_keg(prefix, "make", "4.4.1")
             (prefix / "Cellar" / "make" / "4.4.1" / "bin" / "gmake").write_bytes(b"m")
-            archive = root / "ci-toolchain.tar"
+            archive = root / "ci-toolchain.tar.gz"
             pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output):
-                saved = setup_cache.pack_toolchain(
-                    brewfile, archive, prefix, pin=pin, dependencies=[], budget=0,
-                )
-            text = output.getvalue()
-            self.assertTrue(saved)
-            self.assertFalse(archive.exists())
-            self.assertIn("not saving the CI toolchain archive", text)
-            self.assertIn("orlix-ios15-simruntime-bootable-v1", text)
-            self.assertIn("omitted llvm", text)
-            self.assertIn("toolchain archive bytes=0", text)
-            self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3" / "bin" / "clang").is_file())
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            self.assertTrue(archive.is_file())
+            with tarfile.open(archive, "r:gz") as bundle:
+                names = [setup_cache.normalize_tar_name(member.name) for member in bundle.getmembers()]
+            self.assertIn("Cellar/llvm/23.1.3/bin/clang", names)
+            self.assertIn("Cellar/make/4.4.1", names)
 
 
 CI_TOOLCHAIN_MANIFEST = "orlix-toolchain-manifest.json"
@@ -922,7 +927,7 @@ def replace_tar_bytes(archive: Path, member_name: str, payload: bytes) -> None:
                 extracted = source.extractfile(member)
                 payloads[member.name] = b"" if extracted is None else extracted.read()
     rewritten = archive.with_name(archive.name + ".rewritten")
-    with tarfile.open(rewritten, "w", format=tarfile.PAX_FORMAT) as bundle:
+    with tarfile.open(rewritten, "w:gz", format=tarfile.PAX_FORMAT) as bundle:
         for member in members:
             info = tarfile.TarInfo(member.name)
             info.type = member.type
@@ -944,12 +949,33 @@ def replace_tar_bytes(archive: Path, member_name: str, payload: bytes) -> None:
 
 
 def append_tar_member(archive: Path, member_name: str, payload: bytes) -> None:
-    with tarfile.open(archive, "a") as bundle:
-        info = tarfile.TarInfo(member_name)
-        info.size = len(payload)
-        info.mtime = 0
-        info.mode = 0o644
-        bundle.addfile(info, io.BytesIO(payload))
+    with tarfile.open(archive, "r:*") as source:
+        members = source.getmembers()
+        payloads = {}
+        for member in members:
+            if member.isfile():
+                extracted = source.extractfile(member)
+                payloads[member.name] = b"" if extracted is None else extracted.read()
+    rewritten = archive.with_name(archive.name + ".rewritten")
+    with tarfile.open(rewritten, "w:gz", format=tarfile.PAX_FORMAT) as bundle:
+        for member in members:
+            info = tarfile.TarInfo(member.name)
+            info.type = member.type
+            info.linkname = member.linkname
+            info.mode = member.mode
+            info.mtime = member.mtime
+            if member.isfile():
+                data = payloads[member.name]
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+            else:
+                bundle.addfile(info)
+        extra = tarfile.TarInfo(member_name)
+        extra.size = len(payload)
+        extra.mtime = 0
+        extra.mode = 0o644
+        bundle.addfile(extra, io.BytesIO(payload))
+    rewritten.replace(archive)
 
 
 def write_formula(prefix: Path, name: str, version: str, *, url: str | None = None) -> None:
@@ -1182,7 +1208,13 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         save = text.split("name: Save CI toolchain bundle", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", save)
         self.assertIn("steps.ci-toolchain.outputs.cache-hit != 'true'", save)
-        self.assertIn("path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar", save)
+        self.assertIn("path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz", save)
+        self.assertIn("cache-retention --toolchain-bytes", tools)
+        self.assertIn("97654617", tools)
+        self.assertIn("571396067", tools)
+        self.assertIn("steps.tools.outputs.drop_ccache != 'true'", text)
+        self.assertIn("steps.tools.outputs.drop_repository != 'true'", text)
+        self.assertNotIn("2000000000", text)
         for block in cache_blocks(text):
             self.assertNotIn("/opt/homebrew", block)
             self.assertNotIn("path: /opt/homebrew", block)
