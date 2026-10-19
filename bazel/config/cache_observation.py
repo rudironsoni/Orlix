@@ -39,7 +39,74 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
+_CCACHE_COUNTERS = (
+    "direct_hits",
+    "preprocessed_hits",
+    "misses",
+    "called_for_link",
+    "cache_size_kibibytes",
+)
+
+
+def _ccache_record(payload: dict[str, Any] | None) -> dict[str, Any]:
+    empty = {
+        "statistics_read": False,
+        "direct_hits": None,
+        "preprocessed_hits": None,
+        "misses": None,
+        "called_for_link": None,
+        "cache_size_kibibytes": None,
+        "ccache_hits": None,
+    }
+    if payload is None:
+        return empty
+    if payload.get("statistics_read") is not True:
+        if payload.get("ccache_hits") is not None:
+            raise ValueError("unread ccache statistics cannot report a hit")
+        return empty
+    for key in _CCACHE_COUNTERS:
+        if not isinstance(payload.get(key), int):
+            raise ValueError(f"ccache statistics missing {key}")
+    hits = payload["direct_hits"] + payload["preprocessed_hits"]
+    if payload.get("ccache_hits") != hits:
+        raise ValueError("ccache hits must be direct hits plus preprocessed hits")
+    return {
+        "statistics_read": True,
+        "direct_hits": payload["direct_hits"],
+        "preprocessed_hits": payload["preprocessed_hits"],
+        "misses": payload["misses"],
+        "called_for_link": payload["called_for_link"],
+        "cache_size_kibibytes": payload["cache_size_kibibytes"],
+        "ccache_hits": hits,
+    }
+
+
+def _labeled_counters(runners: list[str], ccache: dict[str, Any]) -> dict[str, Any]:
+    """Three caches. A ccache hit is not a Bazel disk hit or a BuildBuddy hit."""
+    return {
+        "ccache_hits": ccache["ccache_hits"],
+        "bazel_disk_cache_hits": runners.count("disk cache hit"),
+        "buildbuddy_remote_cache_hits": runners.count("remote cache hit"),
+    }
+
+
+def load_ccache_statistics(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if not path.is_file():
+        raise ValueError(f"ccache statistics are missing: {path}")
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict):
+        raise ValueError("ccache statistics file is not a statistics record")
+    return _ccache_record(payload)
+
+
+def observe(
+    execution: Path,
+    bep: Path,
+    access: str,
+    ccache_statistics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     actions = _records(execution)
     metrics = next(
         (record["buildMetrics"] for record in reversed(_records(bep)) if "buildMetrics" in record),
@@ -48,6 +115,7 @@ def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
     summary = metrics.get("actionSummary", {})
     timing = metrics.get("timingMetrics", {})
     runners = [action.get("runner", "") for action in actions]
+    ccache = _ccache_record(ccache_statistics)
     return {
         "schema": 1,
         "buildbuddy_access": access,
@@ -58,6 +126,8 @@ def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
         "uploaded_bytes": None,
         "downloaded_bytes": None,
         "local_cache_hits": runners.count("disk cache hit"),
+        "counters": _labeled_counters(runners, ccache),
+        "ccache": ccache,
         "elapsed_ms": int(timing.get("wallTimeInMs", 0)),
         "actions_created": int(summary.get("actionsCreated", 0)),
         "actions_executed": int(summary.get("actionsExecuted", 0)),
@@ -207,6 +277,7 @@ def reduce_scenario(
     disk_cache: Path | None = None,
     repository_cache: Path | None = None,
     ccache_dir: Path | None = None,
+    ccache_statistics: dict[str, Any] | None = None,
     product: Path | None = None,
     previous: Path | None = None,
 ) -> dict[str, Any]:
@@ -231,6 +302,9 @@ def reduce_scenario(
     remote_bytes = None
     if access != "off":
         remote_bytes = remote_grpc.stat().st_size if remote_grpc is not None and remote_grpc.is_file() else 0
+    actions = _records(execution)
+    runners = [str(action.get("runner") or "") for action in actions]
+    ccache = _ccache_record(ccache_statistics)
     return {
         "schema": 1,
         "kind": "scenario-row",
@@ -238,7 +312,9 @@ def reduce_scenario(
         "wallTimeInMs": wall,
         "critical_path_ms": critical_ms,
         "slow_phases": phases if wall > _SLOW_WALL_MS else [],
-        "execution": _execution_fields(_records(execution)),
+        "execution": _execution_fields(actions),
+        "counters": _labeled_counters(runners, ccache),
+        "ccache": ccache,
         "remote_grpc_bytes": remote_bytes,
         "orlixcc_lines": _orlixcc_lines(orlixcc_log),
         "ninja_compiler_edges": _ninja_compiler_edges(ninja_log),
@@ -278,9 +354,11 @@ def main() -> int:
     parser.add_argument("--disk-cache", type=Path)
     parser.add_argument("--repository-cache", type=Path)
     parser.add_argument("--ccache-dir", type=Path)
+    parser.add_argument("--ccache-statistics", type=Path)
     parser.add_argument("--product", type=Path)
     parser.add_argument("--previous", type=Path)
     args = parser.parse_args()
+    ccache_statistics = load_ccache_statistics(args.ccache_statistics)
     if args.scenario:
         result = reduce_scenario(
             scenario=args.scenario,
@@ -296,11 +374,12 @@ def main() -> int:
             disk_cache=args.disk_cache,
             repository_cache=args.repository_cache,
             ccache_dir=args.ccache_dir,
+            ccache_statistics=ccache_statistics,
             product=args.product,
             previous=args.previous,
         )
     else:
-        result = observe(args.execution, args.bep, args.access)
+        result = observe(args.execution, args.bep, args.access, ccache_statistics)
     args.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, sort_keys=True))
     return 0

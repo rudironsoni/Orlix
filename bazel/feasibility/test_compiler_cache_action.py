@@ -8,14 +8,26 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import re
-import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from bazel.compiler_cache import apply_action_environment, forward_shell_env
+from bazel.compiler_cache import (
+    COMPILER_OBJECT_UNIT,
+    apply_action_environment,
+    compiler_environment,
+    compiler_for_proof,
+    ccache_binary,
+    compile_object,
+    forward_shell_env,
+    object_differs,
+    parse_ccache_statistics,
+    prove_wiped_foreign_output,
+    read_ccache_statistics,
+    unread_statistics,
+)
 from bazel.feasibility.mlibc import build_state as mlibc_state
 from bazel.feasibility.packages import build_state as package_state
 
@@ -63,17 +75,17 @@ def _package_arguments(base: Path) -> list[str]:
     return arguments
 
 
-def _cache_counts(text: str) -> tuple[int, int]:
-    hits = re.search(r"^\s*Hits:\s+(\d+)", text, re.M)
-    misses = re.search(r"^\s*Misses:\s+(\d+)", text, re.M)
-    if hits and misses:
-        return int(hits.group(1)), int(misses.group(1))
-    direct = re.search(r"cache hit \(direct\)\s+(\d+)", text)
-    preprocessed = re.search(r"cache hit \(preprocessed\)\s+(\d+)", text)
-    miss = re.search(r"cache miss\s+(\d+)", text)
-    if direct and preprocessed and miss:
-        return int(direct.group(1)) + int(preprocessed.group(1)), int(miss.group(1))
-    raise AssertionError(text)
+def _input_blocks(text: str) -> str:
+    blocks = []
+    start = 0
+    while True:
+        found = text.find("inputs =", start)
+        if found < 0:
+            break
+        outputs = text.find("outputs", found)
+        blocks.append(text[found:outputs if outputs >= 0 else found + 800])
+        start = found + len("inputs =")
+    return "\n".join(blocks)
 
 
 class CompilerCacheActionTests(unittest.TestCase):
@@ -83,6 +95,9 @@ class CompilerCacheActionTests(unittest.TestCase):
         self.assertIn('env["ORLIX_COMPILER_LAUNCHER"] = launcher', helper)
         self.assertIn('return {"CCACHE_DISABLE": disabled}', helper)
         self.assertNotIn("inputs", helper)
+        self.assertNotIn("compiler-cache.log", helper)
+        self.assertNotIn("stats_updated_timestamp", helper)
+        self.assertNotIn("stats_zeroed_timestamp", helper)
         configured = forward_shell_env({
             "CCACHE_DIR": "/var/cache/orlix-compiler",
             "ORLIX_COMPILER_LAUNCHER": "/staged/ccache",
@@ -102,6 +117,11 @@ class CompilerCacheActionTests(unittest.TestCase):
             self.assertIn("compiler_cache_env(", text, relative)
             self.assertIn("use_default_shell_env = False", text, relative)
             self.assertNotIn("use_default_shell_env = True", text, relative)
+            inputs = _input_blocks(text)
+            self.assertNotIn("CCACHE_DIR", inputs, relative)
+            self.assertNotIn("compiler-cache.log", inputs, relative)
+            self.assertNotIn("stats_updated_timestamp", inputs, relative)
+            self.assertNotIn("stats_zeroed_timestamp", inputs, relative)
 
     def test_action_scripts_keep_directory_and_launcher(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -275,90 +295,122 @@ test "${{compile[1]}}" = /staged/clang
             self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], "")
         self.assertNotIn("DEVELOPER_DIR", env)
 
-    def test_second_compile_is_a_compiler_cache_hit(self) -> None:
-        ccache = shutil.which("ccache")
-        compiler = shutil.which("clang") or shutil.which("gcc") or shutil.which("cc")
+    def test_object_differs_rejects_equal_bytes(self) -> None:
+        blob = b"\x7fELF-same-object"
+        self.assertFalse(object_differs(blob, blob))
+        self.assertFalse(object_differs(b"", b"abc"))
+        self.assertFalse(object_differs(b"abc", b""))
+        self.assertTrue(object_differs(b"aaa", b"bbb"))
+        self.assertNotIn("return LEAF_VALUE", COMPILER_OBJECT_UNIT)
+
+    def test_statistics_come_from_ccache_counters(self) -> None:
+        printed = """\
+direct_cache_hit\t1
+preprocessed_cache_hit\t2
+cache_miss\t3
+called_for_link\t4
+cache_size_kibibyte\t16
+stats_updated_timestamp\t1792443436
+stats_zeroed_timestamp\t1792443436
+"""
+        stats = parse_ccache_statistics(printed)
+        self.assertEqual(stats["direct_hits"], 1)
+        self.assertEqual(stats["preprocessed_hits"], 2)
+        self.assertEqual(stats["misses"], 3)
+        self.assertEqual(stats["called_for_link"], 4)
+        self.assertEqual(stats["cache_size_kibibytes"], 16)
+        self.assertEqual(stats["ccache_hits"], 3)
+        self.assertNotIn("stats_updated_timestamp", stats)
+        self.assertNotIn("stats_zeroed_timestamp", stats)
+        human = """\
+cache hit (direct)                     4
+cache hit (preprocessed)               1
+cache miss                             2
+called for link                        0
+cache size                             8.0 kB
+"""
+        legacy = parse_ccache_statistics(human)
+        self.assertEqual(legacy["ccache_hits"], 5)
+        self.assertEqual(legacy["cache_size_kibibytes"], 8)
+        with self.assertRaises(ValueError):
+            parse_ccache_statistics("total 8\n-rw-r--r-- ccache\n")
+        empty = Path("/tmp")
+        self.assertTrue(empty.is_dir())
+        unread = unread_statistics()
+        self.assertIsNone(unread["ccache_hits"])
+        self.assertFalse(unread["statistics_read"])
+
+    def test_wiped_foreign_output_is_a_ccache_hit(self) -> None:
+        ccache = ccache_binary()
+        if sys.platform == "darwin":
+            self.assertTrue(
+                Path("/opt/homebrew/opt/llvm/bin/clang").is_file(),
+                "pinned clang stays /opt/homebrew/opt/llvm/bin/clang",
+            )
+        compiler = compiler_for_proof()
         if not ccache or not compiler:
-            self.skipTest("local ccache and C compiler are not installed")
+            self.skipTest("ccache and a C compiler are required")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             cache = root / "ccache"
-            source = root / "leaf.c"
+            proof = prove_wiped_foreign_output(
+                compiler=compiler, ccache=ccache, cache_dir=cache, work=root,
+            )
+            stats = proof["ccache"]
+            self.assertGreaterEqual(stats["ccache_hits"], 1)
+            self.assertGreaterEqual(stats["direct_hits"] + stats["preprocessed_hits"], 1)
+            self.assertGreaterEqual(stats["misses"], 2)
+            self.assertEqual(stats["called_for_link"], 0)
+            self.assertGreaterEqual(stats["cache_size_kibibytes"], 1)
+            self.assertTrue(proof["object_bytes_match"])
+            self.assertTrue(proof["object_differs"])
+            self.assertTrue(proof["same_runner"])
+            self.assertFalse(proof["fresh_runner"])
+            self.assertIsNone(proof["bazel_disk_cache_hits"])
+            self.assertIsNone(proof["buildbuddy_remote_cache_hits"])
+            print(
+                "compiler-cache-proof "
+                f"direct_hits={stats['direct_hits']} "
+                f"preprocessed_hits={stats['preprocessed_hits']} "
+                f"misses={stats['misses']} "
+                f"called_for_link={stats['called_for_link']} "
+                f"cache_size_kibibytes={stats['cache_size_kibibytes']} "
+                f"ccache_hits={stats['ccache_hits']} "
+                "bazel_disk_cache_hits=not_this_proof "
+                "buildbuddy_remote_cache_hits=not_this_proof "
+                "object_bytes_match=true object_differs=true "
+                "same_runner=true fresh_runner=false"
+            )
+            env = compiler_environment(cache, root)
             header = root / "leaf.h"
-            header.write_text("#define LEAF_VALUE 1\n", encoding="utf-8")
-            source.write_text('#include "leaf.h"\nint leaf(void) { return LEAF_VALUE; }\n', encoding="utf-8")
-            env = {
-                "PATH": os.environ["PATH"],
-                "HOME": str(root),
-                "CCACHE_DIR": str(cache),
-                "CCACHE_COMPILERCHECK": "content",
-                "CCACHE_CONFIGPATH": "/dev/null",
-                "CCACHE_MAXSIZE": "1G",
-                "ORLIX_COMPILER_LAUNCHER": ccache,
-            }
-            apply_action_environment(env)
-            self.assertEqual(env["CCACHE_DIR"], str(cache))
-            self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], ccache)
-            launcher = env["ORLIX_COMPILER_LAUNCHER"]
-
-            def compile_to(name: str, extra: list[str] | None = None) -> bytes:
-                output = root / name
-                command = [launcher, compiler, "-c", str(source), "-I", str(root), "-o", str(output)]
-                if extra:
-                    command.extend(extra)
-                result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                return output.read_bytes()
-
-            def stats() -> tuple[int, int]:
-                result = subprocess.run([ccache, "--show-stats"], env=env, text=True, capture_output=True, check=False)
-                if result.returncode != 0:
-                    result = subprocess.run([ccache, "-s"], env=env, text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                return _cache_counts(result.stdout)
-
-            zero = subprocess.run([ccache, "--zero-stats"], env=env, check=False)
-            if zero.returncode != 0:
-                subprocess.run([ccache, "-z"], env=env, check=True)
-            first = compile_to("first.o")
-            hits, misses = stats()
-            self.assertEqual(hits, 0, "a cold compiler cache must compile")
-            self.assertGreaterEqual(misses, 1)
-            second = compile_to("second.o")
-            hits, misses = stats()
-            self.assertEqual(second, first)
-            self.assertGreaterEqual(hits, 1, "an unchanged compile must be a compiler-cache hit")
-            header.write_text("#define LEAF_VALUE 2\n", encoding="utf-8")
-            changed = compile_to("changed.o")
-            hits_after_header, misses_after_header = stats()
-            self.assertNotEqual(changed, first)
-            self.assertGreater(misses_after_header, misses, "a changed header must miss the compiler cache")
-            flagged = compile_to("flag.o", ["-O2"])
-            _hits_after_flag, misses_after_flag = stats()
-            self.assertNotEqual(flagged, changed)
-            self.assertGreater(misses_after_flag, misses_after_header, "a changed flag must miss the compiler cache")
-            self.assertEqual(hits_after_header, hits)
-            other = root / "other.c"
-            other.write_text("int other(void) { return 3; }\n", encoding="utf-8")
-            concurrent = [
-                subprocess.Popen(
-                    [launcher, compiler, "-c", str(src), "-I", str(root), "-o", str(root / name)],
-                    env=env,
-                )
-                for name, src in (("left.o", source), ("right.o", other))
-            ]
-            self.assertTrue(all(proc.wait() == 0 for proc in concurrent))
+            header.write_text("static int mix(int n) { return n ^ 17; }\n", encoding="utf-8")
+            source = root / "leaf.c"
+            source.write_text('#include "leaf.h"\nint leaf(int n) { return mix(n) + mix(n ^ 15); }\n', encoding="utf-8")
+            before = read_ccache_statistics(ccache, env)
+            changed = compile_object(
+                compiler=compiler, ccache=ccache, source=source, output=root / "changed.o",
+                environment=env, flags=["-I", str(root), "-O2"],
+            )
+            self.assertTrue(object_differs(changed, (root / "restored.o").read_bytes()))
+            after_header = read_ccache_statistics(ccache, env)
+            self.assertGreater(after_header["misses"], before["misses"])
             blobs = [
                 path for path in cache.rglob("*")
                 if path.is_file() and path.parent != cache and path.stat().st_size > 8
             ]
             self.assertTrue(blobs, "compiler cache stored no object to corrupt")
             blobs[0].write_bytes(b"corrupt-compiler-cache")
-            rebuilt = compile_to("rebuilt.o")
+            rebuilt = compile_object(
+                compiler=compiler, ccache=ccache, source=source, output=root / "rebuilt.o",
+                environment=env, flags=["-I", str(root), "-O2"],
+            )
             self.assertEqual(rebuilt, changed)
             missing = root / "missing-cache"
             env["CCACHE_DIR"] = str(missing)
-            from_missing = compile_to("from-missing.o")
+            from_missing = compile_object(
+                compiler=compiler, ccache=ccache, source=source, output=root / "from-missing.o",
+                environment=env, flags=["-I", str(root), "-O2"],
+            )
             self.assertEqual(from_missing, changed)
             self.assertTrue(missing.is_dir())
             cold = dict(env)
@@ -374,7 +426,7 @@ test "${{compile[1]}}" = /staged/clang
                 env=cold, text=True, capture_output=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(direct.read_bytes(), flagged)
+            self.assertEqual(direct.read_bytes(), changed)
 
 
 if __name__ == "__main__":

@@ -906,6 +906,15 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         self.assertNotIn("remote cache hit", restore)
         self.assertNotIn("BuildBuddy", restore)
         self.assertNotIn("buildbuddy", restore.lower())
+        self.assertIn("id: ccache-restore", restore)
+        recorded = text.split("Record restored compiler-object cache statistics", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("steps.ccache-restore.outputs.cache-hit", recorded)
+        self.assertIn("--zero-after", recorded)
+        self.assertNotIn("remote cache hit", recorded)
+        self.assertNotIn("BuildBuddy", recorded)
+        self.assertIn("Prepare both simulator runtimes", text)
+        self.assertIn("--version 15.5", text)
+        self.assertIn("/opt/homebrew/opt/llvm/bin/clang", (ROOT / "bazel/ci/setup_cache.py").read_text(encoding="utf-8"))
         for name in WORKFLOWS:
             if name == "bazel-ci.yml":
                 continue

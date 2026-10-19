@@ -613,6 +613,18 @@ class RoutingContractTests(unittest.TestCase):
         self.assertIn("--action_env=ORLIX_PINNED_DEVELOPER_DIR=", mk)
         app = mk.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
         self.assertIn('--action_env=CCACHE_DIR="$(CCACHE_DIR)"', app)
+        observation = mk.split("__bazel-cache-observation:", 1)[1].split("__bazel-apple-smoke:", 1)[0]
+        self.assertIn("bazel/compiler_cache.py", observation)
+        self.assertIn("ccache_hits=%s", observation)
+        self.assertIn("bazel_disk_cache_hits=%s", observation)
+        self.assertIn("buildbuddy_remote_cache_hits=%s", observation)
+        self.assertIn("ccache_direct_hits=%s", observation)
+        self.assertIn("ccache_preprocessed_hits=%s", observation)
+        self.assertIn("ccache_called_for_link=%s", observation)
+        self.assertIn("ccache_cache_size_kibibytes=%s", observation)
+        self.assertIn("bazel.feasibility.test_compiler_cache_action", mk)
+        self.assertIn("__bazel-ios15-simulator-gate", mk)
+        self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text(encoding="utf-8"))
         xcodeproj = mk.split("__bazel-feasibility-xcodeproj:", 1)[1].split(
             "__bazel-xcode-cloud-project-check:", 1
         )[0]
