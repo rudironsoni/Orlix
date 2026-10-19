@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "170741969e81d854f36f30e31ed995ab8a25bfd0377400c9c5de516a4ee8b832",
+      "source_sha256": "5d5ad0f51ddd34dfacc03d276c412f903e276a705b13889f5c74d085ec8fa36b",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -357,7 +357,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
-                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                  "key": "orlix-installed-simruntimes-15.5-complete"
                 }
               },
               {
@@ -477,7 +477,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
-                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                  "key": "orlix-installed-simruntimes-15.5-complete"
                 }
               },
               {
@@ -1009,7 +1009,7 @@
       }
     },
     ".github/workflows/bazel-promoted-consumer-proof.yml": {
-      "source_sha256": "a228660037ab991fe57afe817057a05ce0df03c166320fcd6738c86e535c44e1",
+      "source_sha256": "60103f2e220c31de2c098e8375fac803167be9a9abb9ae25227281b11f41a1a5",
       "workflow": {
         "name": "Promoted consumer proof",
         "on": {
@@ -1088,7 +1088,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Developer/CoreSimulator/Profiles/Runtimes",
-                  "key": "orlix-installed-simruntimes-15.5-26.5"
+                  "key": "orlix-installed-simruntimes-15.5-complete"
                 }
               },
               {

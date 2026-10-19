@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -347,16 +348,46 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertFalse(any(command[:4] == ["sudo", "xcodes", "runtimes", "install"] for command in calls))
             self.assertFalse((runtime_dir / "iOS 26.5.simruntime").exists())
             staged = runtime_dir / "iOS 15.5.simruntime"
+            self.assertFalse(staged.exists())
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "installed" / "iOS 15.5.simruntime"
+            mobile = source / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile"
+            mobile.mkdir(parents=True)
+            (source / "Contents" / "Info.plist").write_bytes(b"runtime")
+            (source / "Contents" / "Resources" / "RuntimeRoot" / "usr").mkdir()
+            runtime_dir = root / "Profiles" / "Runtimes"
+            images = json.dumps({
+                "runtimes": [{
+                    "version": "15.5",
+                    "state": "Ready",
+                    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-15-5",
+                    "bundlePath": str(source),
+                }],
+            })
+
+            def fake_run(command, **kwargs):
+                if command[:4] == ["xcrun", "simctl", "list", "runtimes"]:
+                    return subprocess.CompletedProcess(command, 0, stdout='{"runtimes":[]}', stderr="")
+                if command[:4] == ["xcrun", "simctl", "runtime", "list"]:
+                    return subprocess.CompletedProcess(command, 0, stdout=images, stderr="")
+                raise AssertionError(command)
+
+            with mock.patch.object(setup_cache.subprocess, "run", fake_run):
+                setup_cache.stage_listed_simruntime("15.5", runtime_dir)
+            staged = runtime_dir / "iOS 15.5.simruntime"
+            plist = staged / "Contents" / "Info.plist"
             self.assertFalse(staged.is_symlink())
             self.assertTrue(staged.is_dir())
-            self.assertNotEqual(staged.resolve(), source.resolve())
-            staged_plist = staged / "Contents" / "Info.plist"
-            source_plist = source / "Contents" / "Info.plist"
-            self.assertFalse(staged_plist.is_symlink())
-            self.assertEqual(staged_plist.read_bytes(), b"runtime")
-            self.assertNotEqual(staged_plist.stat().st_ino, source_plist.stat().st_ino)
-            self.assertFalse((staged / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile").exists())
+            self.assertEqual(plist.read_bytes(), b"runtime")
+            self.assertNotEqual(plist.stat().st_ino, (source / "Contents" / "Info.plist").stat().st_ino)
+            self.assertTrue((staged / "Contents" / "Resources" / "RuntimeRoot" / "private" / "var" / "mobile").is_dir())
             self.assertTrue(setup_cache.simruntime_present(runtime_dir))
+            shutil.rmtree(staged)
+            staged.symlink_to(source, target_is_directory=True)
+            self.assertFalse(setup_cache.simruntime_present(runtime_dir))
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -546,7 +577,7 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn('prepare-runtime --version 15.5 --archive-dir "$HOME/Library/Caches/Orlix/ios15-runtime"', text, name)
             self.assertIn('prepare-runtime --version 26.5 --archive-dir "$HOME/Library/Caches/Orlix/ios26-runtime"', text, name)
             self.assertIn('--runtime-dir "$HOME/Library/Developer/CoreSimulator/Profiles/Runtimes"', text, name)
-            self.assertIn("orlix-installed-simruntimes-15.5-26.5", text, name)
+            self.assertIn("orlix-installed-simruntimes-15.5-complete", text, name)
             self.assertIn("runtime-identifier --version 15.5", text, name)
             self.assertIn("runtime-identifier --version 26.5", text, name)
             self.assertIn('boot-simulator --udid "$current_id"', text, name)
