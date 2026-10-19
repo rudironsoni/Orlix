@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Leave host xattrs out of rootfs ext4 images
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) passes `no_copy_xattrs` when `mke2fs -d` builds `base.ext4` and `state.ext4`. Inode times stay pinned. A host xattr that records the output base is not guest file content and no longer changes the image. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Rewrite the UAPI output base inside kbuild-archive.tar
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) rewrites the Bazel output base, and its real path, to `/orlix/output-base` when it archives the headers_install tree. Host command files record `execroot/_main` and dependency files record `external/` under that base. Seed and uncached output bases no longer change `kbuild-archive.tar`. `compare_trees` still compares those bytes. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

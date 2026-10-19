@@ -48,6 +48,7 @@ def _build_ext4_function() -> str:
         "set_super_value lastcheck 1",
         "-O ^orphan_file -U clear",
         "hash_seed=00000000-0000-0000-0000-000000000001",
+        "no_copy_xattrs",
         "root_owner=0:0",
     ):
         if required not in body:
@@ -63,13 +64,43 @@ def _stamp(tree: Path, seconds: int, nanos: int) -> None:
 
 
 def _populate(tree: Path) -> None:
-    binary = tree / "bin"
-    binary.mkdir(parents=True)
-    tool = binary / "tool"
-    tool.write_bytes(b"#!/bin/sh\necho orlix\n")
-    tool.chmod(0o755)
+    for directory in ("bin", "sbin", "usr/bin"):
+        binary = tree / directory
+        binary.mkdir(parents=True)
+        tool = binary / "tool"
+        tool.write_bytes(b"#!/bin/sh\necho orlix\n")
+        tool.chmod(0o755)
+        (binary / "tool-link").symlink_to("tool")
     (tree / "empty").mkdir()
-    (binary / "tool-link").symlink_to("tool")
+
+
+def _set_xattr(path: Path, name: str, payload: bytes) -> None:
+    if hasattr(os, "setxattr"):
+        os.setxattr(path, name, payload)
+        return
+    tool = shutil.which("xattr")
+    if tool is None:
+        raise AssertionError("missing xattr")
+    completed = subprocess.run(
+        [tool, "-w", name, payload.decode("utf-8"), str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            f"xattr -w failed ({completed.returncode})\n{completed.stdout}\n{completed.stderr}"
+        )
+
+
+def _mark_output_base(tree: Path, output_base: Path) -> None:
+    """Store the output-base path in host xattrs on the tree mke2fs reads."""
+    payload = str(output_base).encode()
+    _set_xattr(tree, "user.output_base", payload)
+    for path in tree.rglob("*"):
+        if path.is_symlink():
+            continue
+        _set_xattr(path, "user.output_base", payload)
 
 
 def _build(function: str, tree: Path, image: Path, work: Path) -> None:
@@ -142,6 +173,26 @@ class Ext4ByteTests(unittest.TestCase):
             left = first.read_bytes()
             right = second.read_bytes()
             self.assertEqual(left, right, _first_difference(left, right))
+
+    def test_output_base_xattrs_do_not_change_ext4_bytes(self) -> None:
+        function = _build_ext4_function()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            images = []
+            for side, seconds in (("seed-output-base", 1_700_000_000), ("uncached-output-base", 1_800_000_000)):
+                base = root / side / "execroot" / "_main"
+                tree = base / "rootfs-work" / "base-tree"
+                _populate(tree)
+                _mark_output_base(tree, base)
+                _stamp(tree, seconds, 111_111_111)
+                image = base / "base.ext4"
+                _build(function, tree, image, base / "work")
+                images.append(image)
+            left = images[0].read_bytes()
+            right = images[1].read_bytes()
+            self.assertEqual(left, right, _first_difference(left, right))
+            self.assertNotIn(b"seed-output-base", left)
+            self.assertNotIn(b"uncached-output-base", right)
 
 
 if __name__ == "__main__":
