@@ -94,7 +94,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/CoreSimulator/Profiles/Runtimes
-          key: orlix-installed-simruntimes-15.5-26.5
+          key: orlix-installed-simruntimes-15.5-complete
 
       - name: Restore iOS 15.5 runtime archive
         if: steps.installed-runtimes.outputs.cache-hit != 'true'

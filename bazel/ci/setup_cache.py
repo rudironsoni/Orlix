@@ -399,17 +399,24 @@ IMAGE_SIMRUNTIME_VERSIONS = frozenset({"26.5"})
 
 
 def simruntime_bootable(bundle: Path) -> bool:
-    """True when a real bundle has the pieces simctl boots after a restore.
+    """True when a real bundle still has the entries a restore must boot.
 
-    A symlink is not bootable. Unreadable ``private/var/mobile`` entries may be
-    absent. ``RuntimeRoot`` itself must still be present and readable.
+    A symlink is not bootable. A copy that skipped unreadable entries omits
+    ``RuntimeRoot/private/var/mobile`` and must not be treated as present.
     """
     if bundle.is_symlink():
         return False
     info = bundle / "Contents" / "Info.plist"
     root = bundle / "Contents" / "Resources" / "RuntimeRoot"
-    if path_probe(info) != "present" or path_probe(root) != "present":
+    mobile = root / "private" / "var" / "mobile"
+    if path_probe(info) not in {"present", "permission"}:
         return False
+    if path_probe(root) not in {"present", "permission"}:
+        return False
+    if path_probe(mobile) == "missing":
+        return False
+    if path_probe(root) == "permission":
+        return True
     try:
         return any(True for _ in root.iterdir())
     except OSError:
@@ -431,51 +438,54 @@ def simruntime_present(runtime_dir: Path) -> bool:
     return False
 
 
-def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> None:
-    """Copy a listed bundle, skipping entries that cannot be read.
+def copy_simruntime_bundle(source: Path, destination: Path, seen: set[Path] | None = None) -> bool:
+    """Copy a bundle. Return True when an entry was skipped because it could not be read.
 
     ``shutil.copytree`` raises ``PermissionError`` on
-    ``RuntimeRoot/private/var/mobile``. Those entries are omitted and the copy
-    continues. The destination is a real directory, not a symlink to ``source``.
+    ``RuntimeRoot/private/var/mobile``. A skipped entry means this tree is not
+    a runtime simctl can boot, so the caller must not leave it in the scan
+    directory. The destination is a real directory, not a symlink to ``source``.
     """
     if seen is None:
         seen = set()
     try:
         info = source.lstat()
     except OSError:
-        return
+        return True
     if stat.S_ISLNK(info.st_mode):
         try:
-            copy_simruntime_bundle(source.resolve(), destination, seen)
+            return copy_simruntime_bundle(source.resolve(), destination, seen)
         except OSError:
-            return
-        return
+            return True
     try:
         resolved = source.resolve()
     except OSError:
         resolved = source
     if resolved in seen:
-        return
+        return False
     seen.add(resolved)
     if stat.S_ISDIR(info.st_mode):
         try:
             children = list(source.iterdir())
         except OSError:
-            return
+            return True
         try:
             destination.mkdir(parents=True, exist_ok=True)
         except OSError:
-            return
+            return True
+        skipped = False
         for child in children:
-            copy_simruntime_bundle(child, destination / child.name, seen)
-        return
+            if copy_simruntime_bundle(child, destination / child.name, seen):
+                skipped = True
+        return skipped
     if not stat.S_ISREG(info.st_mode):
-        return
+        return False
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination, follow_symlinks=False)
     except OSError:
-        return
+        return True
+    return False
 
 
 def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
@@ -510,9 +520,14 @@ def stage_listed_simruntime(version: str, runtime_dir: Path | None) -> None:
         return
     directory.mkdir(parents=True, exist_ok=True)
     print(f"copying iOS {version} simulator bundle into {directory}", flush=True)
-    copy_simruntime_bundle(source, destination)
-    if not simruntime_bootable(destination):
+    skipped = copy_simruntime_bundle(source, destination)
+    if skipped or not simruntime_bootable(destination):
         shutil.rmtree(destination, ignore_errors=True)
+        print(
+            f"not keeping iOS {version} in {directory}; "
+            "the copy skipped unreadable entries and simctl must not boot that tree",
+            flush=True,
+        )
 
 
 def runtime_plan(*, available: bool, archive_ready: bool) -> str:
@@ -713,6 +728,17 @@ def prepare_runtime(version: str, archive_dir: Path, runtime_dir: Path | None = 
     try:
         if runtime_dir is not None:
             expose_restored_runtimes(runtime_dir)
+            bundle = runtime_dir / f"iOS {version}.simruntime"
+            if version not in IMAGE_SIMRUNTIME_VERSIONS and (bundle.is_symlink() or bundle.exists()) and not simruntime_bootable(bundle):
+                print(
+                    f"removing partial iOS {version} runtime from {runtime_dir}; "
+                    "a copy that skipped unreadable entries is not booted by simctl",
+                    flush=True,
+                )
+                if bundle.is_symlink() or bundle.is_file():
+                    bundle.unlink()
+                else:
+                    shutil.rmtree(bundle, ignore_errors=True)
         if runtime_already_installed(version, runtime_dir):
             print(runtime_message("skip", version, archive_dir), flush=True)
             return "skip"
