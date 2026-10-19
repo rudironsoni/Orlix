@@ -254,8 +254,8 @@ if [ -n "${CCACHE_DISABLE:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER=
 elif [ -n "${CCACHE_DIR:-}" ]; then
   export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
-elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "$HOME/Library/Caches/Orlix/ccache"; then
-  export CCACHE_DIR="$HOME/Library/Caches/Orlix/ccache"
+elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
+  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
   export ORLIX_COMPILER_LAUNCHER="$ccache_staged"
 else
   export ORLIX_COMPILER_LAUNCHER=
