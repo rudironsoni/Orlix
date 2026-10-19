@@ -154,8 +154,14 @@ for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
         continue
     data = path.read_bytes()
     updated = byte_pattern.sub(replacement.encode(), data)
-    if updated != data:
+    if updated == data:
+        continue
+    mode = path.stat().st_mode & 0o777
+    path.chmod(mode | 0o200)
+    try:
         path.write_bytes(updated)
+    finally:
+        path.chmod(mode)
 PY
   SOURCE_DATE_EPOCH=1 E2FSPROGS_FAKE_TIME=1 "$mke2fs" -q -t ext4 -F -m 0 -O ^orphan_file -U clear -L "$label" -E root_owner=0:0,hash_seed=00000000-0000-0000-0000-000000000001,no_copy_xattrs,nodiscard,lazy_itable_init=0 -d "$tree" "$image"
   (cd "$tree" && /usr/bin/find . -print | /usr/bin/sort) > "$work/paths"
