@@ -75,7 +75,15 @@ uapi_headers="$work/inputs/uapi"
 libraries="$work/inputs/libraries"
 runtime="$work/inputs/runtime/libcompiler_rt.a"
 /bin/mkdir -p "$work/build" "$work/dest/usr/bin"
-launcher=""
+if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
+  launcher=""
+else
+  if [ -z "${CCACHE_DIR:-}" ]; then
+    export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
+    /bin/mkdir -p "$CCACHE_DIR"
+  fi
+  launcher="$tool_bin/ccache"
+fi
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$exec_root/__COMPILER_IDENTITY__"
 export CCACHE_STATSLOG="$work/compiler-cache.log"
