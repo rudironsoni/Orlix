@@ -32,7 +32,8 @@ def _pinned_env(ctx):
     }
     if "ORLIX_PACKAGE_INCREMENTAL" in shell:
         env["ORLIX_PACKAGE_INCREMENTAL"] = shell["ORLIX_PACKAGE_INCREMENTAL"]
-    env.update(compiler_cache_env(shell))
+    # CCACHE_DIR is inherited from the client. It is not a fixed action env.
+    env.update(compiler_cache_env(shell, False))
     return env
 
 def _coreutils_package_impl(ctx):
@@ -114,9 +115,6 @@ if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
   launcher=""
 elif [ -n "${CCACHE_DIR:-}" ]; then
   launcher="$tool_bin/ccache"
-elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
-  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
-  launcher="$tool_bin/ccache"
 else
   launcher=""
 fi
@@ -186,7 +184,10 @@ while IFS= read -r program; do
   }
 done < "$programs_file"
 for program in chcon runcon; do test -x "$work/dest/usr/bin/$program"; done
-if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
+if [ -n "$launcher" ]; then
+  printf 'ccache_directory=%s\n' "$CCACHE_DIR"
+  "$launcher" --print-log-stats --format=json
+fi
 /bin/mkdir -p "$install_out"
 /bin/cp -R "$work/dest/." "$install_out/"
 (cd "$install_out" && /usr/bin/find . -type f -print | /usr/bin/sort) > "$file_manifest"
@@ -237,7 +238,8 @@ if [ -n "$launcher" ]; then "$launcher" --print-log-stats --format=json; fi
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        # Inherited CCACHE_DIR is the shared directory and is not an action key.
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(

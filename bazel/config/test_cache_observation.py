@@ -66,6 +66,36 @@ class CacheObservationTests(unittest.TestCase):
             unread.write_text('{"statistics_read": false, "ccache_hits": 1}\n', encoding="utf-8")
             with self.assertRaises(ValueError):
                 cache_observation.load_ccache_statistics(unread)
+            shared_zero = {
+                "statistics_read": True,
+                "direct_hits": 0,
+                "preprocessed_hits": 0,
+                "misses": 0,
+                "called_for_link": 0,
+                "cache_size_kibibytes": 124172,
+                "ccache_hits": 0,
+            }
+            log = (
+                "INFO: From Building GNU Coreutils with incremental Make state:\n"
+                "{\n"
+                '  "cache_miss": 870,\n'
+                '  "direct_cache_hit": 2,\n'
+                '  "preprocessed_cache_hit": 8,\n'
+                '  "called_for_link": 454\n'
+                "}\n"
+            )
+            action = cache_observation.coreutils_action_counters(log)
+            reported = cache_observation.observe(
+                execution, bep, "read", shared_zero, action, True,
+            )
+            self.assertEqual(reported["ccache"]["direct_hits"], 2)
+            self.assertEqual(reported["ccache"]["preprocessed_hits"], 8)
+            self.assertEqual(reported["ccache"]["misses"], 870)
+            self.assertEqual(reported["ccache"]["source"], "coreutils-action-log")
+            self.assertFalse(reported["ccache"]["fresh_runner"])
+            self.assertEqual(reported["counters"]["ccache_hits"], 10)
+            self.assertEqual(reported["counters"]["buildbuddy_remote_cache_hits"], 1)
+            self.assertEqual(reported["shared_ccache_directory"]["misses"], 0)
 
 
 if __name__ == "__main__":

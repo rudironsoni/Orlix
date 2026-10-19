@@ -43,6 +43,13 @@ ACTIONS = (
     "bazel/feasibility/packages/local.bzl",
     "bazel/feasibility/packages/package.bzl",
 )
+INHERITED_CACHE = {
+    "bazel/feasibility/packages/coreutils.bzl",
+    "bazel/feasibility/packages/bash.bzl",
+    "bazel/feasibility/packages/autotools.bzl",
+    "bazel/feasibility/packages/local.bzl",
+    "bazel/feasibility/packages/package.bzl",
+}
 
 
 def _snippet(text: str) -> str:
@@ -106,6 +113,11 @@ class CompilerCacheActionTests(unittest.TestCase):
             "CCACHE_DIR": "/var/cache/orlix-compiler",
             "ORLIX_COMPILER_LAUNCHER": "/staged/ccache",
         })
+        inherited = forward_shell_env({
+            "CCACHE_DIR": "/var/cache/orlix-compiler",
+            "ORLIX_COMPILER_LAUNCHER": "/staged/ccache",
+        }, include_directory=False)
+        self.assertEqual(inherited, {"ORLIX_COMPILER_LAUNCHER": "/staged/ccache"})
         disabled = forward_shell_env({
             "CCACHE_DIR": "/var/cache/orlix-compiler",
             "CCACHE_DISABLE": "1",
@@ -115,8 +127,13 @@ class CompilerCacheActionTests(unittest.TestCase):
         for relative in ACTIONS:
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("compiler_cache_env(", text, relative)
-            self.assertIn("use_default_shell_env = False", text, relative)
-            self.assertNotIn("use_default_shell_env = True", text, relative)
+            if relative in INHERITED_CACHE:
+                self.assertIn("use_default_shell_env = True", text, relative)
+                self.assertIn("compiler_cache_env(", text, relative)
+                self.assertNotIn('export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"', text, relative)
+            else:
+                self.assertIn("use_default_shell_env = False", text, relative)
+                self.assertNotIn("use_default_shell_env = True", text, relative)
             inputs = _input_blocks(text)
             self.assertNotIn("CCACHE_DIR", inputs, relative)
             self.assertNotIn("compiler-cache.log", inputs, relative)

@@ -15,7 +15,8 @@ def _pinned_env(ctx):
         "CCACHE_COMPILERCHECK": "content",
         "CCACHE_MAXSIZE": "20G",
     }
-    env.update(compiler_cache_env(ctx.configuration.default_shell_env))
+    # CCACHE_DIR is inherited from the client. It is not a fixed action env.
+    env.update(compiler_cache_env(ctx.configuration.default_shell_env, False))
     return env
 
 def _extract():
@@ -92,9 +93,6 @@ if [ -n "${CCACHE_DISABLE:-}" ] || [ ! -x "$tool_bin/ccache" ]; then
   launcher=""
 elif [ -n "${CCACHE_DIR:-}" ]; then
   launcher="$tool_bin/ccache"
-elif [ -n "${HOME:-}" ] && [ "$HOME" != "/var/empty" ] && /bin/mkdir -p "${HOME}/Library/Caches/Orlix/ccache"; then
-  export CCACHE_DIR="${HOME}/Library/Caches/Orlix/ccache"
-  launcher="$tool_bin/ccache"
 else
   launcher=""
 fi
@@ -161,7 +159,8 @@ fi
         ),
         outputs = [install_tree, file_manifest, license_manifest, metadata],
         env = _pinned_env(ctx),
-        use_default_shell_env = False,
+        # Inherited CCACHE_DIR is the shared directory and is not an action key.
+        use_default_shell_env = True,
         execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
     )
     artifact_identity = declare_artifact_identity(

@@ -7,6 +7,10 @@ updated: 2026-10-19
 ---
 # Orlix Knowledge Log
 
+## [2026-10-19] build | Inherit the shared compiler cache in guest packages
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps `CCACHE_DIR` as an inherited client variable for guest packages, so the shared directory is not a fixed action environment. The package statistics log stays out of the action inputs. The CI summary reports the Coreutils action's direct hits, preprocessed hits, and misses. A zeroed shared-directory counter is not that result. Those hits are not a fresh-runner pass. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-19] build | Record compiler-object cache statistics
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) reads ccache's direct hits, preprocessed hits, misses, called-for-link count, and cache size from the executed compiler environment. A `CCACHE_DIR` directory is not a hit. Those counters stay separate from Bazel disk-cache hits and BuildBuddy remote-cache hits. Statistics files and ccache timestamps are not action inputs. One proof deletes a compiled object, keeps `CCACHE_DIR`, and requires the rebuilt object bytes to match on a ccache hit. `object_differs` stays false when the bytes match. A same-runner hit is not a fresh-runner pass. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
