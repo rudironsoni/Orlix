@@ -228,19 +228,22 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("__bazel-current-simulator-gate", apple_ci)
         self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
         self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
+        self.assertNotIn("ORLIX_SKIP_IOS15_PROOF", apple_ci)
+        self.assertIn('test -n "$(ORLIX_IOS15_SIMULATOR_ID)"', apple_ci)
         self.assertLess(
             apple_ci.index("__bazel-current-simulator-gate"),
+            apple_ci.index('simctl shutdown "$(ORLIX_CURRENT_SIMULATOR_ID)"'),
+        )
+        self.assertLess(
+            apple_ci.index('simctl shutdown "$(ORLIX_CURRENT_SIMULATOR_ID)"'),
             apple_ci.index("__bazel-ios15-simulator-gate"),
         )
-        skip = '[ "$(ORLIX_SKIP_IOS15_PROOF)" != 1 ]'
-        self.assertEqual(apple_ci.count(skip), 2)
-        ios15 = apple_ci.split(skip, 2)[2]
-        self.assertIn("__bazel-ios15-simulator-gate", ios15)
-        self.assertIn("ORLIX_XCTEST_SIMULATOR_VERSION=15.5", ios15)
-        self.assertIn('simctl shutdown "$(ORLIX_IOS15_SIMULATOR_ID)"', ios15)
-        current = apple_ci.split(skip, 2)[1]
-        self.assertIn("__bazel-current-simulator-gate", current)
-        self.assertIn("ORLIX_SIMULATOR_LABEL=current", current)
+        self.assertLess(
+            apple_ci.index("__bazel-ios15-simulator-gate"),
+            apple_ci.index('simctl shutdown "$(ORLIX_IOS15_SIMULATOR_ID)"'),
+        )
+        self.assertIn("ORLIX_XCTEST_SIMULATOR_VERSION=15.5", apple_ci)
+        self.assertIn("ORLIX_SIMULATOR_LABEL=current", apple_ci)
         self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 0)
         self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", apple_ci)
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(

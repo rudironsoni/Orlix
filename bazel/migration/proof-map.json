@@ -1161,7 +1161,7 @@
     {
       "name": "__bazel-simulator-runtime-proof",
       "source": "make/bazel-migration.mk",
-      "line": 1081,
+      "line": 1077,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1173,7 +1173,7 @@
     {
       "name": "__bazel-current-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1108,
+      "line": 1104,
       "classification": "private",
       "phony": true,
       "prerequisites": [
@@ -1185,7 +1185,7 @@
     {
       "name": "__bazel-ios15-simulator-gate",
       "source": "make/bazel-migration.mk",
-      "line": 1111,
+      "line": 1107,
       "classification": "private",
       "phony": true,
       "prerequisites": [

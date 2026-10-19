@@ -799,23 +799,21 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn('boot-simulator --udid "$ios15_id"', text, name)
             self.assertIn("orlix-ios-runtime-26.5-arm64", text, name)
         ci = workflow_text("bazel-ci.yml")
-        prepare = ci.split("name: Prepare both simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
         main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
-        self.assertIn(main_only, prepare)
-        guarded = prepare.split(main_only, 1)[1].split("skip_ios15=0", 1)[0]
-        self.assertIn('prepare-runtime --version 15.5', guarded)
-        self.assertIn('simctl create "Orlix iOS 15.5 CI"', guarded)
+        self.assertIn(main_only, ci)
+        prepare = ci.split("name: Prepare both simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertLess(prepare.index('prepare-runtime --version 15.5'), prepare.index(main_only))
+        self.assertLess(prepare.index('simctl create "Orlix iOS 15.5 CI"'), prepare.index(main_only))
+        guarded = prepare.split(main_only, 1)[1].split("\n          fi\n", 1)[0]
+        self.assertNotIn("prepare-runtime --version 15.5", guarded)
+        self.assertNotIn('simctl create "Orlix iOS 15.5 CI"', guarded)
         self.assertIn("stage-runtime --version 15.5", guarded)
-        self.assertLess(prepare.index('prepare-runtime --version 26.5'), prepare.index(main_only))
-        self.assertIn("ORLIX_SKIP_IOS15_PROOF=$skip_ios15", prepare)
-        self.assertIn('if [ "$skip_ios15" = 0 ]; then', prepare)
-        self.assertGreater(prepare.index("ORLIX_IOS15_SIMULATOR_ID=$ios15_id"), prepare.index('if [ "$skip_ios15" = 0 ]; then'))
-        restore = ci.split("name: Restore iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn(
-            "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.installed-runtimes.outputs.cache-hit != 'true'",
-            restore,
-        )
+        self.assertIn("ORLIX_IOS15_SIMULATOR_ID=$ios15_id", prepare)
+        self.assertNotIn("ORLIX_SKIP_IOS15_PROOF", ci)
         self.assertNotIn("orlix-installed-simruntimes-15.5-26.5", ci)
+        restore = ci.split("name: Restore iOS 15.5 runtime archive", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("steps.installed-runtimes.outputs.cache-hit != 'true'", restore)
+        self.assertNotIn("github.ref == 'refs/heads/main'", restore)
         self.assertGreater(ci.index("simruntime-present"), ci.index("stage-runtime --version 15.5"))
 
     def test_every_installer_workflow_skips_xcode_and_homebrew_when_present(self) -> None:
