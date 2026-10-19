@@ -102,6 +102,11 @@ def _build_content(root: Path, trees: tuple[str, ...]) -> dict:
     return result
 
 
+def _mode_and_hash(files: dict) -> dict:
+    """Identity is file mode and hashed bytes. A past mtime is not a content change."""
+    return {name: entry[:2] for name, entry in files.items()}
+
+
 def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...], *, compatibility: dict | None = None) -> bool:
     identity = hashlib.sha256()
     for path in identity_inputs:
@@ -119,7 +124,14 @@ def resume(root: Path, identity_inputs: list[Path], trees: tuple[str, ...], *, c
                 raise RuntimeError(f"package state mismatch: {owner} != {compatibility.get('package')}")
         current = _build_content(root, trees)
         checked_at = time.time_ns()
-        valid = isinstance(previous, dict) and previous["identity"] == expected and previous["files"] == current and all(entry[2] <= checked_at for entry in current.values())
+        recorded = previous["files"] if isinstance(previous, dict) else None
+        valid = (
+            isinstance(previous, dict)
+            and previous["identity"] == expected
+            and isinstance(recorded, dict)
+            and _mode_and_hash(recorded) == _mode_and_hash(current)
+            and all(entry[2] <= checked_at for entry in current.values())
+        )
         if compatibility is not None:
             valid = valid and previous.get("compatibility") == compatibility
     except (OSError, ValueError, KeyError, TypeError):
