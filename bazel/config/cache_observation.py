@@ -81,12 +81,26 @@ def _ccache_record(payload: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _labeled_counters(runners: list[str], ccache: dict[str, Any]) -> dict[str, Any]:
+def _buildbuddy_remote_hits(actions: list[dict[str, Any]]) -> int:
+    """A BuildBuddy remote action-cache hit needs both fields.
+
+    The runner must be exactly "remote cache hit" and cacheHit must be true.
+    A false cacheHit, a disk-cache hit, and a ccache hit stay out of this count.
+    """
+    return sum(
+        1
+        for action in actions
+        if action.get("cacheHit") is True and action.get("runner") == "remote cache hit"
+    )
+
+
+def _labeled_counters(actions: list[dict[str, Any]], ccache: dict[str, Any]) -> dict[str, Any]:
     """Three caches. A ccache hit is not a Bazel disk hit or a BuildBuddy hit."""
+    runners = [str(action.get("runner") or "") for action in actions]
     return {
         "ccache_hits": ccache["ccache_hits"],
         "bazel_disk_cache_hits": runners.count("disk cache hit"),
-        "buildbuddy_remote_cache_hits": runners.count("remote cache hit"),
+        "buildbuddy_remote_cache_hits": _buildbuddy_remote_hits(actions),
     }
 
 
@@ -189,20 +203,21 @@ def observe(
     )
     summary = metrics.get("actionSummary", {})
     timing = metrics.get("timingMetrics", {})
-    runners = [action.get("runner", "") for action in actions]
+    runners = [str(action.get("runner") or "") for action in actions]
     shared = _ccache_record(ccache_statistics)
     ccache = _reported_ccache(shared, action_ccache, build_log_provided=build_log_provided)
+    remote_hits = _buildbuddy_remote_hits(actions)
     return {
         "schema": 1,
         "buildbuddy_access": access,
-        "remote_hits": runners.count("remote cache hit"),
+        "remote_hits": remote_hits,
         "remote_misses": None,
         "remote_uploads": None,
         "remote_downloads": None,
         "uploaded_bytes": None,
         "downloaded_bytes": None,
         "local_cache_hits": runners.count("disk cache hit"),
-        "counters": _labeled_counters(runners, ccache),
+        "counters": _labeled_counters(actions, ccache),
         "ccache": ccache,
         "shared_ccache_directory": shared,
         "elapsed_ms": int(timing.get("wallTimeInMs", 0)),
@@ -270,7 +285,7 @@ def _execution_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         "cacheHit": hits,
         "label": sorted(set(labels)),
         "mnemonic": dict(sorted(mnemonics.items())),
-        "remote_cache_hits": runners.get("remote cache hit", 0),
+        "remote_cache_hits": _buildbuddy_remote_hits(actions),
         "runner": dict(sorted(runners.items())),
     }
 
@@ -380,7 +395,6 @@ def reduce_scenario(
     if access != "off":
         remote_bytes = remote_grpc.stat().st_size if remote_grpc is not None and remote_grpc.is_file() else 0
     actions = _records(execution)
-    runners = [str(action.get("runner") or "") for action in actions]
     ccache = _ccache_record(ccache_statistics)
     return {
         "schema": 1,
@@ -390,7 +404,7 @@ def reduce_scenario(
         "critical_path_ms": critical_ms,
         "slow_phases": phases if wall > _SLOW_WALL_MS else [],
         "execution": _execution_fields(actions),
-        "counters": _labeled_counters(runners, ccache),
+        "counters": _labeled_counters(actions, ccache),
         "ccache": ccache,
         "remote_grpc_bytes": remote_bytes,
         "orlixcc_lines": _orlixcc_lines(orlixcc_log),

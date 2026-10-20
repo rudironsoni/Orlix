@@ -131,6 +131,42 @@ class CacheObservationTests(unittest.TestCase):
             self.assertEqual(reported["counters"]["bazel_disk_cache_hits"], 0)
             self.assertEqual(reported["counters"]["buildbuddy_remote_cache_hits"], 1)
 
+    def test_false_cache_hit_does_not_increment_buildbuddy_remote_hits(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            execution = root / "execution.json"
+            bep = root / "bep.json"
+            execution.write_text(
+                "".join(
+                    json.dumps(action)
+                    for action in (
+                        {"runner": "remote cache hit", "cacheHit": False},
+                        {"runner": "disk cache hit", "cacheHit": True},
+                        {"runner": "remote cache", "cacheHit": True},
+                        {"runner": "remote cache hit", "cacheHit": True},
+                    )
+                ),
+                encoding="utf-8",
+            )
+            bep.write_text(json.dumps({"buildMetrics": {
+                "actionSummary": {"actionsCreated": "4", "actionsExecuted": "4"},
+                "timingMetrics": {"wallTimeInMs": "1"},
+            }}) + "\n")
+            result = cache_observation.observe(execution, bep, "read")
+            self.assertEqual(result["counters"]["buildbuddy_remote_cache_hits"], 1)
+            self.assertEqual(result["remote_hits"], 1)
+            self.assertEqual(result["counters"]["bazel_disk_cache_hits"], 1)
+            self.assertIsNone(result["counters"]["ccache_hits"])
+            self.assertFalse(result["ccache"]["fresh_runner"])
+            row = cache_observation.reduce_scenario(
+                scenario="kernel-tcti",
+                execution=execution,
+                bep=bep,
+            )
+            self.assertEqual(row["counters"]["buildbuddy_remote_cache_hits"], 1)
+            self.assertEqual(row["execution"]["remote_cache_hits"], 1)
+            self.assertEqual(row["counters"]["bazel_disk_cache_hits"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

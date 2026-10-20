@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 # Orlix Knowledge Log
+
+## [2026-10-20] build | Count a BuildBuddy hit only when both fields match
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) counts a BuildBuddy remote action-cache hit only when `cacheHit` is true and `runner` is exactly `remote cache hit`. A false `cacheHit` does not increment `buildbuddy_remote_cache_hits`. A disk-cache hit and a ccache hit stay in their own counters. `fresh_runner` stays false. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-19] build | Count direct ccache misses in the Coreutils summary
 
