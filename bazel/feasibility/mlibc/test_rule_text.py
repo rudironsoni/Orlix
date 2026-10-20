@@ -1,9 +1,11 @@
 """Linux rule-text proof for UAPI inputs and mlibc cache tags."""
 
-from pathlib import Path
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 UAPI = ROOT / "bazel/feasibility/kernel/kernel_uapi.bzl"
@@ -208,6 +210,58 @@ printf '%s\n' "${meson_setup[@]}"
             flagged.stdout.splitlines()[:4],
             ["meson", "setup", "--reconfigure", "--clearcache"],
         )
+
+    def test_product_action_writes_regular_sysroot_bytes(self) -> None:
+        product = action_text(SYSROOT.read_text(encoding="utf-8"), "OrlixPromotedMlibcProduct")
+        self.assertIn('/bin/cp -R -L "$sysroot/." "$out/"', product)
+        self.assertNotIn('/bin/cp -R "$sysroot/." "$out/"', product)
+        self.assertIn("mlibc product must be regular files", product)
+        self.assertIn('/usr/bin/find "$out" -type l -print', product)
+
+
+def _rebuild_without_symlinks(source: Path, dest: Path) -> None:
+    """Keep only regular files, the way a tree artifact drops a link-only directory."""
+    dest.mkdir()
+    for path in sorted(source.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        relative = path.relative_to(source)
+        target = dest / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
+
+
+class MlibcProductTreeTests(unittest.TestCase):
+    def test_dereferenced_sysroot_copy_keeps_include_when_symlink_copy_does_not(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload = root / "bytes" / "stdio.h"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("stdio\n", encoding="utf-8")
+            sysroot = root / "sysroot"
+            header = sysroot / "usr" / "include" / "stdio.h"
+            header.parent.mkdir(parents=True)
+            header.symlink_to(payload)
+            library = sysroot / "usr" / "lib" / "libc.so"
+            library.parent.mkdir(parents=True)
+            library.write_text("libc\n", encoding="utf-8")
+            linked = root / "linked-product"
+            copied = root / "copied-product"
+            linked.mkdir()
+            copied.mkdir()
+            subprocess.run(["/bin/cp", "-R", f"{sysroot}/.", f"{linked}/"], check=True)
+            subprocess.run(["/bin/cp", "-R", "-L", f"{sysroot}/.", f"{copied}/"], check=True)
+            linked_tree = root / "linked-tree"
+            copied_tree = root / "copied-tree"
+            _rebuild_without_symlinks(linked, linked_tree)
+            _rebuild_without_symlinks(copied, copied_tree)
+            self.assertFalse((linked_tree / "usr" / "include").exists())
+            restored = copied_tree / "usr" / "include" / "stdio.h"
+            self.assertTrue(restored.is_file())
+            self.assertFalse(restored.is_symlink())
+            self.assertEqual(restored.read_text(encoding="utf-8"), "stdio\n")
+            self.assertFalse(os.path.islink(copied / "usr"))
+            self.assertEqual((copied / "usr" / "lib" / "libc.so").read_text(encoding="utf-8"), "libc\n")
 
 
 if __name__ == "__main__":
