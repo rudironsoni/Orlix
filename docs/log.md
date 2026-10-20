@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 # Orlix Knowledge Log
+
+## [2026-10-20] build | Discard corrupt disk-cache blobs before reuse
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) deletes a Bazel disk-cache blob whose bytes differ from its content-addressed name when the toolchain identity check runs. Bazel 9.2 copies that path into the action output without hashing it. After deletion the action misses and runs again. A missing disk cache stays absent. Lookup of a missing or corrupt promoted object returns no hit. Cache observation counts a BuildBuddy remote hit only for the runner `remote cache hit`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-19] build | Record jq's configure line with stable paths
 

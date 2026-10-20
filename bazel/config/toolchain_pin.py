@@ -11,6 +11,8 @@ import shutil
 import time
 from pathlib import Path
 
+from disk_cache_integrity import DiskCacheIntegrityError, discard_corrupt_entries
+
 PIN_PATH = Path(__file__).with_name("toolchain-pin.json")
 OBSERVE_TIMEOUT_SECONDS = 30
 OBSERVE_MAX_ATTEMPTS = 2
@@ -53,6 +55,10 @@ def require_identity(version: str, build: str, disk_cache: str, data: dict | Non
         raise PinError(
             f"disk cache {disk_cache} is not namespaced as {expected}"
         )
+    try:
+        discard_corrupt_entries(Path(disk_cache))
+    except DiskCacheIntegrityError as error:
+        raise PinError(str(error)) from error
 
 
 def _observe_failure(command: tuple[str, ...], context: dict, reason: str, elapsed: list[float]) -> PinError:
