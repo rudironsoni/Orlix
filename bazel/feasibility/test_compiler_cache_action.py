@@ -426,14 +426,33 @@ def observe_compiler_cache() -> dict[str, object] | None:
         ]
         if not all(proc.wait() == 0 for proc in concurrent):
             raise AssertionError("concurrent compiler-cache compiles failed")
-        blobs = [
-            path for path in cache.rglob("*")
-            if path.is_file() and path.parent != cache and path.stat().st_size > 8
-        ]
-        if not blobs:
-            raise AssertionError("compiler cache stored no object to corrupt")
-        blobs[0].write_bytes(b"corrupt-compiler-cache")
+        log = root / "ccache.log"
+        env["CCACHE_LOGFILE"] = str(log)
+        log.write_text("", encoding="utf-8")
+        probe = subprocess.run(
+            [launcher, compiler, "-c", str(source), "-I", str(root), "-o", str(root / "probe.o")],
+            env=env, text=True, capture_output=True, check=False,
+        )
+        if probe.returncode != 0:
+            raise AssertionError(probe.stderr)
+        stored = re.findall(
+            r"Retrieved \S+ from local storage \((.+R)\)",
+            log.read_text(encoding="utf-8", errors="replace"),
+        )
+        if not stored:
+            raise AssertionError("compiler cache log has no result entry")
+        entry = Path(stored[-1])
+        original = entry.read_bytes()
+        entry.write_bytes(b"corrupt-compiler-cache")
+        _hits_before, misses_before = stats()
         rebuilt = compile_to("rebuilt.o", "corrupt")
+        _hits_after, misses_after = stats()
+        updated = entry.read_bytes() if entry.is_file() else b""
+        entry_rewritten = (
+            misses_after > misses_before
+            and updated == original
+            and updated != b"corrupt-compiler-cache"
+        )
         missing = root / "missing-cache"
         env["CCACHE_DIR"] = str(missing)
         from_missing = compile_to("from-missing.o", "missing")
@@ -474,7 +493,7 @@ def observe_compiler_cache() -> dict[str, object] | None:
                 "compiler_cache_corrupt_entry": {
                     "invocations": invocations["corrupt"],
                     "object_matches": rebuilt == changed,
-                    "entry_rewritten": True,
+                    "entry_rewritten": entry_rewritten,
                 },
                 "compiler_cache_missing_cache": {
                     "invocations": invocations["missing"],

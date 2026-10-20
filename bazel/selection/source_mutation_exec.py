@@ -2,8 +2,10 @@
 
 Kernel object closure is a real compiler plus depfiles. Cross-component rows
 stamp declared inputs with source_key.py. Cache layers are separate stores.
-A fresh runner reads only the remote store named by the BuildBuddy remote
-cache URL. ccache and the disk cache stay on the runner that filled them.
+A fresh runner reads the BuildBuddy remote cache URL from .bazelrc and then
+reads a local store. It does not open that endpoint, and a local read is not
+a live remote hit. ccache and the disk cache stay on the runner that filled
+them.
 """
 
 from __future__ import annotations
@@ -405,7 +407,7 @@ def observe_cache_layers() -> dict[str, object] | None:
         if looked is not None:
             fresh_disk_reads += 1
         fresh_remote = _store_get(remote, action_key)
-        fresh_remote_reads = 1 if fresh_remote is not None else 0
+        local_store_reads = 1 if fresh_remote is not None else 0
         fresh_compiles = len(_compiler_lines(log)) - compiler_before_fresh
         return {
             "remote_cache_url": remote_url,
@@ -430,10 +432,13 @@ def observe_cache_layers() -> dict[str, object] | None:
                 "ccache_hits": fresh_hits,
                 "ccache_misses": fresh_misses,
                 "disk_reads": fresh_disk_reads,
-                "remote_reads": fresh_remote_reads,
+                "local_store_reads": local_store_reads,
+                "remote_reads": 0,
+                "opened_endpoint": False,
+                "live_remote_hit": False,
                 "compiler_invocations": fresh_compiles,
                 "object_matches": fresh_remote == payload,
                 "local_disk_empty": not any(fresh_disk.iterdir()),
-                "layer": "remote cache hit",
+                "layer": "local store read",
             },
         }
