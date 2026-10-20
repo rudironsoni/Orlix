@@ -831,6 +831,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_toolchain_pin
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_cache_gc
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_cache_observation
+	@PYTHONPATH="$(CURDIR)/bazel/config" python3 -m unittest test_disk_cache_integrity
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_apple_build_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_prove_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/migration" python3 -m unittest test_workflow_policy
