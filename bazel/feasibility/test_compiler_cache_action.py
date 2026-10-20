@@ -334,6 +334,23 @@ test "${{compile[1]}}" = /staged/clang
         with self.assertRaises(AssertionError):
             _local_result_entry("Result key: abc\nRetrieved abc from remote storage (/cache/abc)\n")
 
+    def test_restored_result_keeps_payload_when_creation_time_changes(self) -> None:
+        def entry(creation_time: int, payload: bytes, checksum: bytes) -> bytes:
+            version = b"4.14"
+            header = bytearray((0xCCAC).to_bytes(2, "big"))
+            header += bytes([1, 0, 1, 1, 1])
+            header += creation_time.to_bytes(8, "big")
+            header += bytes([len(version)]) + version + bytes([0])
+            header += (0).to_bytes(8, "big")
+            return bytes(header) + payload + checksum
+
+        payload = b"result-payload"
+        original = entry(1, payload, b"a" * 16)
+        restored = entry(2, payload, b"b" * 16)
+        self.assertTrue(_result_was_restored(original, restored))
+        self.assertFalse(_result_was_restored(original, entry(2, b"other-payload", b"c" * 16)))
+        self.assertFalse(_result_was_restored(original, b"corrupt-compiler-cache"))
+
 
 def _local_result_entry(log_text: str) -> Path:
     """Return the local result file named by a ccache log.
@@ -352,6 +369,43 @@ def _local_result_entry(log_text: str) -> Path:
     if not stored:
         raise AssertionError("compiler cache log has no result entry")
     return Path(stored[-1])
+
+
+_CORRUPT_RESULT = b"corrupt-compiler-cache"
+_RESULT_MAGIC = 0xCCAC
+_CHECKSUM_SIZE = 16
+
+
+def _stored_result_payload(entry: bytes) -> bytes | None:
+    """Return the result payload, excluding creation time and checksum.
+
+    ccache records the creation time in the header and a checksum over that
+    header. A restored result keeps the payload and replaces those fields.
+    """
+    if len(entry) < 15 + _CHECKSUM_SIZE or int.from_bytes(entry[:2], "big") != _RESULT_MAGIC:
+        return None
+    cursor = 15
+    version_length = entry[cursor]
+    cursor += 1 + version_length
+    if cursor >= len(entry):
+        return None
+    namespace_length = entry[cursor]
+    cursor += 1 + namespace_length + 8
+    payload_end = len(entry) - _CHECKSUM_SIZE
+    if cursor > payload_end:
+        return None
+    payload = entry[cursor:payload_end]
+    if not payload:
+        return None
+    return payload
+
+
+def _result_was_restored(original: bytes, updated: bytes) -> bool:
+    if updated == _CORRUPT_RESULT:
+        return False
+    payload = _stored_result_payload(original)
+    restored = _stored_result_payload(updated)
+    return payload is not None and payload == restored
 
 
 def _require_arm64_optimization_difference(compiler: str, root: Path, source: Path) -> None:
@@ -480,16 +534,12 @@ def observe_compiler_cache() -> dict[str, object] | None:
             raise AssertionError(probe.stderr)
         entry = _local_result_entry(log.read_text(encoding="utf-8", errors="replace"))
         original = entry.read_bytes()
-        entry.write_bytes(b"corrupt-compiler-cache")
+        entry.write_bytes(_CORRUPT_RESULT)
         _hits_before, misses_before = stats()
         rebuilt = compile_to("rebuilt.o", "corrupt")
         _hits_after, misses_after = stats()
         updated = entry.read_bytes() if entry.is_file() else b""
-        entry_rewritten = (
-            misses_after > misses_before
-            and updated == original
-            and updated != b"corrupt-compiler-cache"
-        )
+        entry_rewritten = misses_after > misses_before and _result_was_restored(original, updated)
         missing = root / "missing-cache"
         env["CCACHE_DIR"] = str(missing)
         from_missing = compile_to("from-missing.o", "missing")
