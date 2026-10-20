@@ -3,7 +3,9 @@
 Bazel 9.2 stores a CAS object at ``cas/<hash[:2]>/<hash>`` and copies that
 file on a hit without hashing it. A blob that is missing is already a miss.
 A blob that is present with different bytes would otherwise become the action
-output, so this check deletes it and the action runs again.
+output, so this check deletes it and the action runs again. A symlink used as
+``cas``, as a digest directory, or as a nested ``cas`` is removed and not
+followed. The cache root itself is never a symlink.
 
 Within one ``ORLIX_BAZEL_RUN_ID``, a blob whose size and mtime are unchanged
 since that run's hash is not read again. A new run hashes every blob.
@@ -43,24 +45,37 @@ def _remove(path: Path) -> None:
         raise DiskCacheIntegrityError(f"cannot remove disk cache object {path}") from error
 
 
-def _cas_roots(root: Path) -> list[Path]:
+def _cas_roots(root: Path) -> tuple[list[Path], int]:
+    """Real CAS directories. Symlinks in those positions are removed."""
     found: list[Path] = []
+    removed = 0
     direct = root / "cas"
-    if not direct.is_symlink() and direct.is_dir():
+    if direct.is_symlink():
+        _remove(direct)
+        removed += 1
+    elif direct.is_dir():
         found.append(direct)
     try:
         children = list(root.iterdir())
     except OSError as error:
         raise DiskCacheIntegrityError(f"cannot read disk cache {root}") from error
     for child in children:
-        if child.is_symlink() or not child.is_dir():
-            continue
         if child.name in {"ac", "cas", "tmp"} or child.name.startswith("."):
             continue
+        if child.is_symlink():
+            _remove(child)
+            removed += 1
+            continue
+        if not child.is_dir():
+            continue
         nested = child / "cas"
-        if not nested.is_symlink() and nested.is_dir():
+        if nested.is_symlink():
+            _remove(nested)
+            removed += 1
+            continue
+        if nested.is_dir():
             found.append(nested)
-    return found
+    return found, removed
 
 
 def _load_trusted(root: Path, run_id: str) -> dict[str, tuple[int, int]]:
@@ -179,9 +194,9 @@ def discard_corrupt_entries(root: Path) -> dict[str, int | bool]:
     run_id = os.environ.get("ORLIX_BAZEL_RUN_ID", "")
     trusted = _load_trusted(root, run_id)
     survivors: dict[str, tuple[int, int]] = {}
+    cas_roots, removed = _cas_roots(root)
     checked = 0
-    removed = 0
-    for cas in _cas_roots(root):
+    for cas in cas_roots:
         tree_checked, tree_removed = _discard_tree(root, cas, trusted, survivors)
         checked += tree_checked
         removed += tree_removed
