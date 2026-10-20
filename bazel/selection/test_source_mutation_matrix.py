@@ -7,6 +7,7 @@ import unittest
 
 from bazel.selection.source_mutation_matrix import (
     COMPILER_CACHE_ROWS,
+    EDIT_ROWS,
     UNVERIFIED_ROWS,
     format_report,
     run_source_mutation_matrix,
@@ -21,6 +22,11 @@ _PASS_EVIDENCE = {
     "compiler_cache_corrupt_entry": ("invocations", "object_matches"),
     "compiler_cache_missing_cache": ("invocations", "object_matches", "cache_created"),
     "guest_package_unrelated_input": ("invocations", "stamp_sha256", "observed_paths"),
+    "kernel_c_closure": ("invocations", "rebuilt", "kept_objects"),
+    "swift_unrelated_edit": ("invocations", "compiler_invocations", "kernel_key_changed"),
+    "mlibc_edit_keeps_kernel": ("invocations", "compiler_invocations", "kernel_key_changed"),
+    "guest_package_edit_keeps_kernel_and_mlibc": ("invocations", "compiler_invocations", "kernel_key_changed"),
+    "fresh_runner_buildbuddy_hit": ("invocations", "fresh_layer", "ccache_layer", "disk_layer"),
 }
 
 
@@ -37,6 +43,8 @@ class SourceMutationMatrixTests(unittest.TestCase):
         expected = [
             *COMPILER_CACHE_ROWS,
             "guest_package_unrelated_input",
+            *EDIT_ROWS,
+            "fresh_runner_buildbuddy_hit",
             *[row_id for row_id, _reason in UNVERIFIED_ROWS],
         ]
         self.assertEqual([row["id"] for row in self.rows], expected)
@@ -62,6 +70,51 @@ class SourceMutationMatrixTests(unittest.TestCase):
                 self.assertFalse(row["foreign_digest_in_stamp"])
                 self.assertFalse(row["foreign_edit_changes_action_key"])
                 self.assertTrue(row["owned_edit_changes_action_key"])
+
+    def test_required_rows_record_closures_and_cache_layers(self) -> None:
+        kernel = self.by_id["kernel_c_closure"]
+        swift = self.by_id["swift_unrelated_edit"]
+        mlibc = self.by_id["mlibc_edit_keeps_kernel"]
+        guest = self.by_id["guest_package_edit_keeps_kernel_and_mlibc"]
+        remote = self.by_id["fresh_runner_buildbuddy_hit"]
+        for row in (kernel, swift, mlibc, guest, remote):
+            self.assertEqual(row["status"], "PASS", self.report)
+        self.assertIn("changed.c", str(kernel["rebuilt"]))
+        self.assertNotIn("dependent.c", str(kernel["rebuilt"]))
+        self.assertNotIn("unrelated.c", str(kernel["rebuilt"]))
+        self.assertEqual(kernel["leaked"], "")
+        self.assertIn("dependent.o", str(kernel["kept_objects"]))
+        self.assertIn("unrelated.o", str(kernel["kept_objects"]))
+        self.assertTrue(kernel["kernel_key_changed"])
+        self.assertFalse(kernel["mlibc_key_changed"])
+        self.assertFalse(kernel["guest_key_changed"])
+        self.assertFalse(kernel["ssh_key_changed"])
+        self.assertEqual(swift["compiler_invocations"], 0)
+        self.assertTrue(swift["swift_key_changed"])
+        self.assertFalse(swift["kernel_key_changed"])
+        self.assertFalse(swift["mlibc_key_changed"])
+        self.assertFalse(swift["guest_key_changed"])
+        self.assertFalse(swift["ssh_key_changed"])
+        self.assertEqual(mlibc["compiler_invocations"], 0)
+        self.assertTrue(mlibc["mlibc_key_changed"])
+        self.assertFalse(mlibc["kernel_key_changed"])
+        self.assertEqual(guest["compiler_invocations"], 0)
+        self.assertTrue(guest["guest_key_changed"])
+        self.assertFalse(guest["kernel_key_changed"])
+        self.assertFalse(guest["mlibc_key_changed"])
+        self.assertEqual(remote["fresh_layer"], "remote cache hit")
+        self.assertEqual(remote["ccache_layer"], "ccache")
+        self.assertEqual(remote["disk_layer"], "disk cache hit")
+        self.assertTrue(remote["layers_distinct"])
+        self.assertTrue(remote["fresh_runner"])
+        self.assertEqual(remote["fresh_ccache_hits"], 0)
+        self.assertEqual(remote["fresh_disk_reads"], 0)
+        self.assertGreaterEqual(int(remote["fresh_remote_reads"]), 1)
+        self.assertEqual(remote["fresh_compiler_invocations"], 0)
+        self.assertEqual(remote["ccache_compiler_invocations_on_hit"], 0)
+        self.assertEqual(remote["disk_compiler_invocations"], 0)
+        self.assertEqual(remote["disk_remote_reads"], 0)
+        self.assertIn("buildbuddy", str(remote["remote_cache_url"]))
 
     def test_named_rows_stay_unverified_without_timings(self) -> None:
         for row_id, reason in UNVERIFIED_ROWS:
