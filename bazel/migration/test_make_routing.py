@@ -407,7 +407,7 @@ test "$1" = --remote_upload_local_results=true
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_cache_equivalence_prints_bep_transfer_after_observation(self) -> None:
+    def test_cache_equivalence_prints_cas_transfer_after_observation(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         for line in makefile.splitlines():
             if line.lstrip().startswith("#"):
@@ -415,30 +415,54 @@ test "$1" = --remote_upload_local_results=true
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
-        before_print, printer = equivalence.split("bep_transfer_bytes", 1)
+        before_print, printer = equivalence.split("cas_transfer_bytes", 1)
         self.assertIn('if [ "$$side" = seed ]; then continue; fi', before_print)
         self.assertIn("> \"$$proof/$$side/cache-observation.json\"", before_print)
+        self.assertIn('--remote_grpc_log="$$proof/$$side/remote-grpc.log"', equivalence)
         self.assertLess(printer.index("write_text"), printer.index("print(json.dumps"))
         self.assertIn('"side":sys.argv[3],"transfer":transfer', printer)
-        self.assertIn('"$$proof/$$side/build-events.json" "$$side"', printer)
+        self.assertIn('"$$proof/$$side/remote-grpc.log" "$$side"', printer)
+        self.assertNotIn("bep_transfer_bytes", equivalence)
+        self.assertNotIn("systemNetworkStats", equivalence)
         self.assertNotIn("profile_transfer_bytes", equivalence)
         program = re.search(r"python3 -c '([^']+)'", equivalence).group(1)
         self.assertNotRegex(program, r"downloaded_bytes\"\s*:\s*\d")
         self.assertNotRegex(program, r"uploaded_bytes\"\s*:\s*\d")
         self.assertNotIn("actionCacheStatistics", program)
         self.assertNotIn("sizeInBytes", program)
+        self.assertNotIn("bytesRecv", program)
+        self.assertNotIn("bytesSent", program)
 
-        def printed(events: list[dict], side: str) -> dict:
+        def varint(value: int) -> bytes:
+            encoded = bytearray()
+            while True:
+                piece = value & 0x7F
+                value >>= 7
+                if value:
+                    encoded.append(piece | 0x80)
+                else:
+                    encoded.append(piece)
+                    return bytes(encoded)
+
+        def message(field: int, payload: bytes) -> bytes:
+            return varint((field << 3) | 2) + varint(len(payload)) + payload
+
+        def entry(details: bytes) -> bytes:
+            body = message(4, details)
+            return varint(len(body)) + body
+
+        def printed(log: bytes | None, side: str) -> dict:
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 observation = root / "cache-observation.json"
                 observation.write_text("[]\n", encoding="utf-8")
-                bep = root / "build-events.json"
-                bep.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+                grpc_log = root / "remote-grpc.log"
+                if log is not None:
+                    grpc_log.write_bytes(log)
                 env = os.environ.copy()
                 env["PYTHONPATH"] = str(ROOT / "bazel" / "config")
                 result = subprocess.run(
-                    ["python3", "-c", program, str(observation), str(bep), side],
+                    ["python3", "-c", program, str(observation), str(grpc_log), side],
                     check=False,
                     capture_output=True,
                     text=True,
@@ -452,23 +476,21 @@ test "$1" = --remote_upload_local_results=true
                 self.assertEqual(payload["transfer"], stored["transfer"])
                 return payload
 
+        read_details = varint((3 << 3) | 0) + varint(4096)
+        write_details = varint((3 << 3) | 0) + varint(128)
+        action_cache = message(8, varint((3 << 3) | 0) + varint(999))
         counted = printed(
-            [{
-                "buildMetrics": {
-                    "actionSummary": {"actionCacheStatistics": {"sizeInBytes": "999"}},
-                    "networkMetrics": {"systemNetworkStats": {
-                        "bytesRecv": "139074560",
-                        "bytesSent": "5031936",
-                    }},
-                }
-            }],
+            entry(message(5, read_details)) + entry(message(6, write_details)) + entry(action_cache),
             "cached",
         )
-        self.assertEqual(counted["transfer"]["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
-        self.assertEqual(counted["transfer"]["downloaded_bytes"], 139074560)
-        self.assertEqual(counted["transfer"]["uploaded_bytes"], 5031936)
-        absent = printed([], "uncached")
-        self.assertEqual(absent["transfer"]["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
+        self.assertEqual(
+            counted["transfer"]["byte_source"],
+            "remote_execution_log.LogEntry.details.read.bytes_read"
+            "+remote_execution_log.LogEntry.details.write.bytes_sent",
+        )
+        self.assertEqual(counted["transfer"]["downloaded_bytes"], 4096)
+        self.assertEqual(counted["transfer"]["uploaded_bytes"], 128)
+        absent = printed(None, "uncached")
         self.assertIsNone(absent["transfer"]["downloaded_bytes"])
         self.assertIsNone(absent["transfer"]["uploaded_bytes"])
 

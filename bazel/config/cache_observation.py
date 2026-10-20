@@ -295,6 +295,134 @@ def bep_transfer_bytes(bep: Path) -> dict[str, Any]:
     return system_network_transfer(metrics)
 
 
+_CAS_BYTE_SOURCE = (
+    "remote_execution_log.LogEntry.details.read.bytes_read"
+    "+remote_execution_log.LogEntry.details.write.bytes_sent"
+)
+_READ_DETAILS_FIELD = 5
+_WRITE_DETAILS_FIELD = 6
+_BYTES_FIELD = 3
+
+
+def _varint(data: bytes, index: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    while True:
+        if index >= len(data):
+            raise ValueError("truncated varint in remote grpc log")
+        byte = data[index]
+        index += 1
+        value |= (byte & 0x7F) << shift
+        if byte < 0x80:
+            return value, index
+        shift += 7
+        if shift > 63:
+            raise ValueError("remote grpc log varint is too wide")
+
+
+def _protobuf_fields(data: bytes) -> list[tuple[int, int, bytes | int]]:
+    fields: list[tuple[int, int, bytes | int]] = []
+    index = 0
+    limit = len(data)
+    while index < limit:
+        key, index = _varint(data, index)
+        field = key >> 3
+        wire = key & 7
+        if field == 0:
+            raise ValueError("remote grpc log field number is zero")
+        if wire == 0:
+            value, index = _varint(data, index)
+            fields.append((field, wire, value))
+        elif wire == 1:
+            end = index + 8
+            if end > limit:
+                raise ValueError("truncated fixed64 in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        elif wire == 2:
+            size, index = _varint(data, index)
+            end = index + size
+            if end > limit:
+                raise ValueError("truncated length-delimited field in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        elif wire == 5:
+            end = index + 4
+            if end > limit:
+                raise ValueError("truncated fixed32 in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        else:
+            raise ValueError(f"unsupported wire type in remote grpc log: {wire}")
+    return fields
+
+
+def _delimited_messages(data: bytes) -> list[bytes]:
+    messages: list[bytes] = []
+    index = 0
+    limit = len(data)
+    while index < limit:
+        size, index = _varint(data, index)
+        end = index + size
+        if end > limit:
+            raise ValueError("truncated LogEntry in remote grpc log")
+        messages.append(data[index:end])
+        index = end
+    return messages
+
+
+def _last_varint(message: bytes, field_number: int) -> int:
+    found = 0
+    seen = False
+    for field, wire, value in _protobuf_fields(message):
+        if field == field_number and wire == 0 and isinstance(value, int):
+            found = value
+            seen = True
+    return found if seen else 0
+
+
+def _bytestream_payload_bytes(details: bytes) -> tuple[int, int]:
+    downloaded = 0
+    uploaded = 0
+    for field, wire, value in _protobuf_fields(details):
+        if wire != 2 or not isinstance(value, bytes):
+            continue
+        if field == _READ_DETAILS_FIELD:
+            downloaded += _last_varint(value, _BYTES_FIELD)
+        elif field == _WRITE_DETAILS_FIELD:
+            uploaded += _last_varint(value, _BYTES_FIELD)
+    return downloaded, uploaded
+
+
+def cas_transfer_bytes(grpc_log: Path) -> dict[str, Any]:
+    """Sum ByteStream payload sizes from Bazel's remote execution log.
+
+    ReadDetails.bytes_read and WriteDetails.bytes_sent count CAS ByteStream
+    data on the remote cache channel. BES uses a different channel and is
+    not in this log. A missing log stays null. An empty log is zero.
+    """
+    if not grpc_log.is_file():
+        return {
+            "byte_source": _CAS_BYTE_SOURCE,
+            "downloaded_bytes": None,
+            "uploaded_bytes": None,
+        }
+    downloaded = 0
+    uploaded = 0
+    for entry in _delimited_messages(grpc_log.read_bytes()):
+        for field, wire, value in _protobuf_fields(entry):
+            if field != 4 or wire != 2 or not isinstance(value, bytes):
+                continue
+            read_bytes, write_bytes = _bytestream_payload_bytes(value)
+            downloaded += read_bytes
+            uploaded += write_bytes
+    return {
+        "byte_source": _CAS_BYTE_SOURCE,
+        "downloaded_bytes": downloaded,
+        "uploaded_bytes": uploaded,
+    }
+
+
 def _load_profile(path: Path) -> Any:
     raw = path.read_bytes()
     if path.suffix == ".gz" or raw.startswith(b"\x1f\x8b"):
