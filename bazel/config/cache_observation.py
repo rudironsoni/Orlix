@@ -64,6 +64,55 @@ def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
     }
 
 
+def profile_transfer_bytes(profile: Path) -> dict[str, Any]:
+    """Sum Bazel profile counter events. Absent counters stay absent."""
+    downloaded = None
+    uploaded = None
+    if profile.is_file():
+        payload = _load_profile(profile)
+        events = payload.get("traceEvents", []) if isinstance(payload, dict) else payload
+        if isinstance(events, list):
+            down = 0
+            up = 0
+            saw_down = False
+            saw_up = False
+            for event in events:
+                if not isinstance(event, dict) or event.get("ph") != "C":
+                    continue
+                name = str(event.get("name") or "").lower()
+                args = event.get("args")
+                if not isinstance(args, dict):
+                    continue
+                total = 0
+                saw_int = False
+                for value in args.values():
+                    if isinstance(value, bool):
+                        continue
+                    if isinstance(value, int):
+                        total += value
+                        saw_int = True
+                    elif isinstance(value, str) and value.isdigit():
+                        total += int(value)
+                        saw_int = True
+                if not saw_int:
+                    continue
+                if "download" in name:
+                    down += total
+                    saw_down = True
+                elif "upload" in name:
+                    up += total
+                    saw_up = True
+            if saw_down:
+                downloaded = down
+            if saw_up:
+                uploaded = up
+    return {
+        "byte_source": "bazel-profile",
+        "downloaded_bytes": downloaded,
+        "uploaded_bytes": uploaded,
+    }
+
+
 def _load_profile(path: Path) -> Any:
     raw = path.read_bytes()
     if path.suffix == ".gz" or raw.startswith(b"\x1f\x8b"):
