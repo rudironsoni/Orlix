@@ -316,25 +316,27 @@ def _cache_layer_row() -> dict[str, object]:
         and disk["layer"] == "disk cache hit"
         and fresh["ccache_hits"] == 0
         and fresh["disk_reads"] == 0
-        and fresh["remote_reads"] == 1
+        and fresh["local_store_reads"] == 1
+        and fresh["remote_reads"] == 0
+        and fresh["opened_endpoint"] is False
+        and fresh["live_remote_hit"] is False
         and fresh["compiler_invocations"] == 0
         and fresh["object_matches"] is True
         and fresh["local_disk_empty"] is True
-        and fresh["layer"] == "remote cache hit"
+        and fresh["layer"] == "local store read"
         and len(set(layers)) == 3
         and "buildbuddy" in str(observed["remote_cache_url"])
     )
     row: dict[str, object] = {
         "id": row_id,
         "status": "PASS" if passed else "FAIL",
-        "invocations": int(fresh["remote_reads"]) + int(disk["reads"]) + int(ccache["hits"]),
+        "invocations": int(fresh["local_store_reads"]) + int(disk["reads"]) + int(ccache["hits"]),
         "remote_cache_url": observed["remote_cache_url"],
         "fresh_layer": fresh["layer"],
-        "fresh_runner": (
-            fresh["local_disk_empty"] is True
-            and fresh["ccache_hits"] == 0
-            and fresh["remote_reads"] == 1
-        ),
+        "fresh_runner": False,
+        "live_remote_hit": fresh["live_remote_hit"],
+        "opened_endpoint": fresh["opened_endpoint"],
+        "local_store_reads": fresh["local_store_reads"],
         "fresh_ccache_hits": fresh["ccache_hits"],
         "fresh_disk_reads": fresh["disk_reads"],
         "fresh_remote_reads": fresh["remote_reads"],
