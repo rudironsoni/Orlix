@@ -310,6 +310,49 @@ test "${{compile[1]}}" = /staged/clang
         self.assertEqual(disabled["ORLIX_COMPILER_LAUNCHER"], "")
         self.assertTrue(observed["disabled_object_matches_flagged"])
 
+    def test_result_entry_path_accepts_current_and_legacy_logs(self) -> None:
+        current = (
+            "Retrieved aabb from local storage (/cache/a/a/aabb)\n"
+            "Result key: be0405c47b841fa47dd82f98641292d6a16bfd64\n"
+            "Retrieved be0405c47b841fa47dd82f98641292d6a16bfd64 from local storage "
+            "(/cache/b/e/0405c47b841fa47dd82f98641292d6a16bfd64)\n"
+        )
+        legacy = (
+            "Retrieved 075fi5jt7j06njrmrua72u0jlmc9ngdlg from local storage (/cache/0/7/5fi5M)\n"
+            "Result key: c6a0io68hkc3lpjm5j9u55npbttfq67au\n"
+            "Retrieved c6a0io68hkc3lpjm5j9u55npbttfq67au from local storage "
+            "(/cache/c/6/a0io68hkc3lpjm5j9u55npbttfq67auR)\n"
+        )
+        self.assertEqual(
+            _local_result_entry(current),
+            Path("/cache/b/e/0405c47b841fa47dd82f98641292d6a16bfd64"),
+        )
+        self.assertEqual(
+            _local_result_entry(legacy),
+            Path("/cache/c/6/a0io68hkc3lpjm5j9u55npbttfq67auR"),
+        )
+        with self.assertRaises(AssertionError):
+            _local_result_entry("Result key: abc\nRetrieved abc from remote storage (/cache/abc)\n")
+
+
+def _local_result_entry(log_text: str) -> Path:
+    """Return the local result file named by a ccache log.
+
+    ccache 4.14 stores that file at the bare result key. Older ccache appends
+    an R suffix. The manifest retrieval is a different key and is not the
+    result entry.
+    """
+    keys = re.findall(r"Result key: (\S+)", log_text)
+    if not keys:
+        raise AssertionError("compiler cache log has no result entry")
+    stored = re.findall(
+        rf"Retrieved {re.escape(keys[-1])} from local storage \(([^\n)]+)\)",
+        log_text,
+    )
+    if not stored:
+        raise AssertionError("compiler cache log has no result entry")
+    return Path(stored[-1])
+
 
 def _require_arm64_optimization_difference(compiler: str, root: Path, source: Path) -> None:
     """Fail if -O2 would not change this translation unit on Apple arm64.
@@ -435,13 +478,7 @@ def observe_compiler_cache() -> dict[str, object] | None:
         )
         if probe.returncode != 0:
             raise AssertionError(probe.stderr)
-        stored = re.findall(
-            r"Retrieved \S+ from local storage \((.+R)\)",
-            log.read_text(encoding="utf-8", errors="replace"),
-        )
-        if not stored:
-            raise AssertionError("compiler cache log has no result entry")
-        entry = Path(stored[-1])
+        entry = _local_result_entry(log.read_text(encoding="utf-8", errors="replace"))
         original = entry.read_bytes()
         entry.write_bytes(b"corrupt-compiler-cache")
         _hits_before, misses_before = stats()
