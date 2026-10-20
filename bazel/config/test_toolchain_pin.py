@@ -100,6 +100,25 @@ class ToolchainPinTests(unittest.TestCase):
                 "/cache/bazel-9.2.0-xcode-27A5252f",
             )
 
+    def test_require_identity_discards_corrupt_blobs_and_leaves_a_missing_cache_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cache = root / "bazel-9.2.0-xcode-17F113"
+            payload = b"action-output"
+            name = hashlib.sha256(payload).hexdigest()
+            good = cache / "cas" / name[:2] / name
+            good.parent.mkdir(parents=True)
+            good.write_bytes(payload)
+            corrupt = cache / "cas" / "ab" / ("ab" * 32)
+            corrupt.parent.mkdir(parents=True, exist_ok=True)
+            corrupt.write_bytes(b"corrupt")
+            pin.require_identity("26.6", "17F113", str(cache))
+            self.assertEqual(good.read_bytes(), payload)
+            self.assertFalse(corrupt.exists())
+            missing = root / "missing" / "bazel-9.2.0-xcode-17F113"
+            pin.require_identity("26.6", "17F113", str(missing))
+            self.assertFalse(missing.exists())
+
     def _manifest_fixture(self, root: Path):
         binary = root / "tool"
         binary.write_bytes(b"compiler")
