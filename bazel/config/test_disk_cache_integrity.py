@@ -88,6 +88,63 @@ class DiskCacheIntegrityTests(unittest.TestCase):
                 integrity.discard_corrupt_entries(root)
             self.assertFalse(path.exists())
 
+    def test_symlinked_cas_directory_is_removed_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "cache"
+            root.mkdir()
+            outside = base / "outside"
+            blob = outside / "ab" / ("ab" * 32)
+            blob.parent.mkdir(parents=True)
+            blob.write_bytes(b"corrupt")
+            link = root / "cas"
+            link.symlink_to(outside, target_is_directory=True)
+            result = integrity.discard_corrupt_entries(root)
+            self.assertFalse(link.exists())
+            self.assertFalse(link.is_symlink())
+            self.assertEqual(blob.read_bytes(), b"corrupt")
+            self.assertEqual(result["removed"], 1)
+            self.assertEqual(result["checked"], 0)
+
+    def test_symlinked_digest_root_is_removed_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "cache"
+            root.mkdir()
+            outside = base / "outside"
+            blob = outside / "cas" / "ab" / ("ab" * 32)
+            blob.parent.mkdir(parents=True)
+            blob.write_bytes(b"corrupt")
+            link = root / "sha256"
+            link.symlink_to(outside, target_is_directory=True)
+            result = integrity.discard_corrupt_entries(root)
+            self.assertFalse(link.exists())
+            self.assertFalse(link.is_symlink())
+            self.assertEqual(blob.read_bytes(), b"corrupt")
+            self.assertEqual(result["removed"], 1)
+            self.assertEqual(result["checked"], 0)
+
+    def test_symlinked_nested_cas_is_removed_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "cache"
+            root.mkdir()
+            outside = base / "outside"
+            blob = outside / "ab" / ("ab" * 32)
+            blob.parent.mkdir(parents=True)
+            blob.write_bytes(b"corrupt")
+            digest = root / "sha256"
+            digest.mkdir()
+            link = digest / "cas"
+            link.symlink_to(outside, target_is_directory=True)
+            result = integrity.discard_corrupt_entries(root)
+            self.assertTrue(digest.is_dir())
+            self.assertFalse(link.exists())
+            self.assertFalse(link.is_symlink())
+            self.assertEqual(blob.read_bytes(), b"corrupt")
+            self.assertEqual(result["removed"], 1)
+            self.assertEqual(result["checked"], 0)
+
     def test_symlink_root_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
