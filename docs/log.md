@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 # Orlix Knowledge Log
+
+## [2026-10-20] build | Cache the ordinary CI toolchain bundle
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) restores one archive of the CI Brewfile tools before `brew bundle`. The archive is not a copy of `/opt/homebrew`. The cache key is the CI Brewfile hash plus the recorded formula versions. `/opt/homebrew/opt/llvm/bin/clang` must resolve inside the pinned `llvm` keg. Unlinked `llvm@20` 20.1.8 is not that pin. A miss or a failed identity check runs `brew bundle`, and only main saves a new archive after that install. Main saves one gzip archive of the installed CI kegs. The bottle HEAD total is 582115184 bytes and the installed members are 2349225560 bytes. That pack plus `orlix-ios15-simruntime-bootable-v1` (5126954916 bytes on run 39305085161) is about 7.5GB of the 10GB Actions quota. ccache is 97654617 bytes and the Bazel repository cache is 571396067 bytes. One of those is dropped before the toolchain or the iOS runtime if the sum would pass 10GB. The install step records its elapsed time. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-19] build | Record jq's configure line with stable paths
 
