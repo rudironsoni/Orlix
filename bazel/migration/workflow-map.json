@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "c1860a087bed4a8794c787057ce48934c9470d56660cffa04ca84bfb6d289cfe",
+      "source_sha256": "ae2ba1fb43ec83c3afcc1809a42c1592ee718142dfb3994d972f51d2ba9e5adc",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -518,9 +518,10 @@
                 "name": "Publish the cache-equivalence seed",
                 "if": "steps.buildbuddy.outputs.access == 'write'",
                 "env": {
-                  "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}"
+                  "ORLIX_BUILDBUDDY_ACCESS": "read",
+                  "BUILDBUDDY_API_KEY": "${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}"
                 },
-                "run": "make __bazel-cache-equivalence"
+                "run": "set -euo pipefail\nwrite_rc=\"$(readlink .bazelrc.local)\"\numask 077\nseed_key=\"$RUNNER_TEMP/orlix-buildbuddy-seed-key\"\nsed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' \"$write_rc\" > \"$seed_key\"\nchmod 600 \"$seed_key\"\ntest -s \"$seed_key\"\nunlink .bazelrc.local\nunlink \"$write_rc\"\nmake __bazel-buildbuddy-configure\nif [ -n \"${GITHUB_ENV:-}\" ]; then printf '%s\\n' \"ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key\" >> \"$GITHUB_ENV\"; fi\nmake __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE=\"$seed_key\"\n"
               },
               {
                 "name": "Promoted-consumer proof (cold then warm)",

@@ -447,8 +447,21 @@ jobs:
       - name: Publish the cache-equivalence seed
         if: steps.buildbuddy.outputs.access == 'write'
         env:
-          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
-        run: make __bazel-cache-equivalence
+          ORLIX_BUILDBUDDY_ACCESS: read
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
+        run: |
+          set -euo pipefail
+          write_rc="$(readlink .bazelrc.local)"
+          umask 077
+          seed_key="$RUNNER_TEMP/orlix-buildbuddy-seed-key"
+          sed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' "$write_rc" > "$seed_key"
+          chmod 600 "$seed_key"
+          test -s "$seed_key"
+          unlink .bazelrc.local
+          unlink "$write_rc"
+          make __bazel-buildbuddy-configure
+          if [ -n "${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key" >> "$GITHUB_ENV"; fi
+          make __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE="$seed_key"
 
       # Manual promoted proof: two passes in one job. Each pass starts with a
       # cleared Bazel output base, reconstruction tree, proof output, promotion

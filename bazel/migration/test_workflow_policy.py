@@ -427,7 +427,6 @@ class WorkflowPolicyTests(unittest.TestCase):
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
-        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", workflow)
         self.assertNotIn("Stage cache-equivalence seed upload credential", workflow)
         publish = workflow.split("Publish the cache-equivalence seed", 1)[1].split(
             "Promoted-consumer proof", 1
@@ -435,7 +434,15 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("steps.buildbuddy.outputs.access == 'write'", publish)
         self.assertNotIn("access == 'read'", publish)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", publish)
+        self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", publish)
+        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", publish)
         self.assertIn("make __bazel-cache-equivalence", publish)
+        self.assertNotIn(
+            "ORLIX_BUILDBUDDY_SEED_KEY_FILE",
+            workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+                "Publish the cache-equivalence seed", 1
+            )[0],
+        )
         apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
             "Publish the cache-equivalence seed", 1
         )[0]
