@@ -7,6 +7,10 @@ updated: 2026-10-20
 ---
 # Orlix Knowledge Log
 
+## [2026-10-20] build | Cache the ordinary CI toolchain bundle
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) restores `~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz` before `brew bundle`. The archive is not a copy of `/opt/homebrew`. The cache key is the CI Brewfile hash plus the recorded formula versions. `/opt/homebrew/opt/llvm/bin/clang` must match the pinned `llvm` keg by byte identity. Unlinked `llvm@20` 20.1.8 is not that pin. A miss or a failed identity check runs `brew bundle`, and only main saves a new archive after that install. Main saves one gzip archive of the installed CI kegs beside the iOS 15.5 runtime. The bottle HEAD total is 582115184 bytes and the installed members are 2349225560 bytes. That pack plus `orlix-ios15-simruntime-bootable-v1` (5126954916 bytes on run 39305085161) is about 7.5GB of the 10GB Actions quota. ccache is 97654617 bytes and the Bazel repository cache is 571396067 bytes. One of those is dropped before the toolchain or the iOS runtime if the sum would pass 10GB. The install step records its elapsed time. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-20] build | Keep ccache counters apart from disk and BuildBuddy hits
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) reads `direct_cache_hit`, `direct_cache_miss`, `preprocessed_cache_hit`, and `cache_miss` from the Coreutils action log. Those four counters stay separate from Bazel disk-cache hits and BuildBuddy remote-cache hits. `ccache_misses` adds `direct_cache_miss` to `cache_miss`, so a zero final miss does not hide a direct-mode lookup miss. `buildbuddy_remote_cache_hits` still requires `cacheHit` true and runner exactly `remote cache hit`. `fresh_runner` stays false. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
