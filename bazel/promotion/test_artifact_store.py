@@ -438,6 +438,16 @@ class ArtifactStoreTests(unittest.TestCase):
             self.assertEqual(found["artifact_identity"], identity)
             self.assertFalse(found["needs_reverify"])
 
+    def test_missing_promoted_object_is_not_a_warm_hit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            previous = root / "previously-generated"
+            previous.write_bytes(b"previously generated")
+            store = artifact_store.ArtifactStore(root / "store")
+            self.assertIsNone(store.lookup("uapi", ENTRY, VERIFICATION))
+            self.assertEqual(previous.read_bytes(), b"previously generated")
+            self.assertFalse(any(store.root.rglob("verification.json")))
+
 
 if __name__ == "__main__":
     unittest.main()
