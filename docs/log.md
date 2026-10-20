@@ -9,11 +9,11 @@ updated: 2026-10-20
 
 ## [2026-10-20] build | Remove symlinked disk-cache CAS directories
 
-The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) removes a symlink that stands in for the disk-cache `cas` directory, a digest directory, or a nested `cas` in `require_identity` before the product build. The link is not followed, so bytes behind it are not reused. A symlinked cache root still fails closed. `profile_transfer_bytes` is unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) removes a symlink that stands in for the disk-cache `cas` directory, a digest directory, or a nested `cas` in `require_identity` before the product build. The link is not followed, so bytes behind it are not reused. A symlinked cache root still fails closed. Cache-equivalence transfer bytes stay on `bep_transfer_bytes` from BEP `systemNetworkStats`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-20] build | Discard corrupt disk-cache blobs before reuse
 
-The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) deletes a Bazel disk-cache blob whose bytes differ from its content-addressed name in `require_identity` before the product build. A matching blob stays. A missing disk cache stays absent. Bazel 9.2 copies a CAS path into the action output without hashing it, so the deleted blob misses and the action runs again. ccache counters stay separate from disk and BuildBuddy hits. `profile_transfer_bytes` is unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) deletes a Bazel disk-cache blob whose bytes differ from its content-addressed name in `require_identity` before the product build. A matching blob stays. A missing disk cache stays absent. Bazel 9.2 copies a CAS path into the action output without hashing it, so the deleted blob misses and the action runs again. ccache counters stay separate from disk and BuildBuddy hits. Cache-equivalence transfer bytes stay on `bep_transfer_bytes` from BEP `systemNetworkStats`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-20] build | Keep ccache counters apart from disk and BuildBuddy hits
 
