@@ -3,9 +3,17 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 # Orlix Knowledge Log
+
+## [2026-10-20] build | Keep ccache counters apart from disk and BuildBuddy hits
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) reads `direct_cache_hit`, `direct_cache_miss`, `preprocessed_cache_hit`, and `cache_miss` from the Coreutils action log. Those four counters stay separate from Bazel disk-cache hits and BuildBuddy remote-cache hits. `ccache_misses` adds `direct_cache_miss` to `cache_miss`, so a zero final miss does not hide a direct-mode lookup miss. `buildbuddy_remote_cache_hits` still requires `cacheHit` true and runner exactly `remote cache hit`. `fresh_runner` stays false. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
+## [2026-10-20] build | Count a BuildBuddy hit only when both fields match
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) counts `buildbuddy_remote_cache_hits` only when `cacheHit` is true and `runner` is exactly `remote cache hit`. A false `cacheHit` does not increment that counter. A disk-cache hit stays in the disk counter. `fresh_runner` stays false. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-19] build | Record jq's configure line with stable paths
 
