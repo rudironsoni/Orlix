@@ -1039,7 +1039,9 @@ def bundle_satisfied(brewfile: Path, prefix: Path | None = None) -> bool:
     and it does not spawn ``brew info`` per formula. A permission error is not
     an unsatisfied Brewfile. A missing keg, including the pinned ``llvm``
     clang at ``opt/llvm/bin/clang``, is unsatisfied so ``brew bundle`` still
-    installs it. ``opt/llvm@20`` is not that pin.
+    installs it. ``opt/llvm@20`` is not that pin. ``etc/mke2fs.conf`` is not a
+    keg member, and a missing file is unsatisfied so the workflow does not
+    skip ``brew bundle``.
     """
     root = prefix if prefix is not None else homebrew_prefix()
     try:
@@ -1048,7 +1050,13 @@ def bundle_satisfied(brewfile: Path, prefix: Path | None = None) -> bool:
         print("Homebrew prefix is not readable; not treating the Brewfile as unsatisfied")
         return True
     print(detail)
-    return ok
+    if not ok:
+        return False
+    conf = root / "etc" / "mke2fs.conf"
+    if not conf.is_file():
+        print(f"Homebrew pin is not installed: {conf} is not a file")
+        return False
+    return True
 
 
 def brewfile_digest(brewfile: Path) -> str:
@@ -1447,7 +1455,7 @@ def pack_toolchain(
     if pin != expected:
         print("not packing the CI toolchain; the recorded pin does not match this prefix", file=sys.stderr)
         return False
-    if not bundle_satisfied(brewfile, prefix):
+    if not _pinned_formulae_ready(brewfile, prefix):
         print("not packing the CI toolchain; brew bundle has not satisfied the pin", file=sys.stderr)
         return False
     selected = _selected_kegs(brewfile, prefix, dependencies)
@@ -1518,6 +1526,21 @@ def pack_toolchain(
     return True
 
 
+def _pinned_formulae_ready(brewfile: Path, prefix: Path) -> bool:
+    """True when the Brewfile kegs match their pins.
+
+    This does not require ``etc/mke2fs.conf``. ``restore_toolchain`` links that
+    file after the keg check. ``bundle_satisfied`` still reports it missing.
+    """
+    try:
+        ok, detail = declared_tool_status(brewfile, prefix)
+    except PermissionError:
+        print("Homebrew prefix is not readable; not treating the Brewfile as unsatisfied")
+        return True
+    print(detail)
+    return ok
+
+
 def ensure_mke2fs_conf(prefix: Path) -> bool:
     """Keep ``etc/mke2fs.conf`` or link it from the restored e2fsprogs keg."""
     conf = prefix / "etc" / "mke2fs.conf"
@@ -1543,8 +1566,8 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
     outside the recorded kegs, including a tar of the Homebrew prefix or
     ``llvm@20``, are rejected without being extracted. ``etc/mke2fs.conf`` is
     not a keg member. ``ensure_mke2fs_conf`` keeps a regular file or links one
-    from the e2fsprogs keg. A missing source returns false and removes the
-    restored kegs.
+    from the e2fsprogs keg. A missing source returns false and leaves the
+    restored kegs in place.
     """
     try:
         manifest, members = read_toolchain_manifest(archive)
@@ -1566,9 +1589,8 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
         print(str(error), file=sys.stderr)
         remove_restored_tools(prefix, manifest)
         return False
-    if pinned_clang_bytes_match(prefix, manifest) and bundle_satisfied(brewfile, prefix):
+    if pinned_clang_bytes_match(prefix, manifest) and _pinned_formulae_ready(brewfile, prefix):
         if not ensure_mke2fs_conf(prefix):
-            remove_restored_tools(prefix, manifest)
             return False
         print(f"restored pinned clang {PINNED_CI_CLANG}")
         return True

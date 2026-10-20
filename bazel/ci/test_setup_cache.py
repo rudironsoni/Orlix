@@ -721,6 +721,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 version = pinned or "23.1.3"
                 write_formula(prefix, name, version)
                 write_keg(prefix, name, version, clang=setup_cache.formula_short_name(name) == "llvm")
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
             started = time.perf_counter()
             with mock.patch.object(setup_cache.subprocess, "run", forbid_brew):
                 satisfied = setup_cache.bundle_satisfied(brewfile, prefix)
@@ -760,6 +762,9 @@ class SetupCacheDecisionTests(unittest.TestCase):
             write_keg(prefix, "llvm", "20.1.8", clang=True)
             self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
             write_keg(prefix, "llvm", "23.1.3", clang=True)
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
             self.assertTrue(setup_cache.bundle_satisfied(brewfile, prefix))
 
     def test_recorded_versions_are_the_toolchain_cache_key_suffix(self) -> None:
@@ -858,8 +863,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertFalse(restored)
             self.assertIn("restored CI toolchain has no mke2fs.conf", detail)
             self.assertNotIn("restored clang is not", detail)
-            self.assertFalse((prefix / "Cellar" / "llvm" / "23.1.3").exists())
-            self.assertFalse((prefix / "opt" / "llvm").exists())
+            self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3").is_dir())
+            self.assertTrue((prefix / "opt" / "llvm" / "bin" / "clang").is_file())
             self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
             self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
 
@@ -1246,6 +1251,10 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         tools = text.split("name: Install declared build tools", 1)[1].split("\n      - name:", 1)[0]
         self.assertLess(tools.index("restore-toolchain"), tools.index("brew bundle --file bazel/ci/Brewfile"))
         self.assertLess(tools.index("bundle-satisfied"), tools.index("brew tap xcodesorg/made"))
+        self.assertLess(tools.index("brew bundle --file bazel/ci/Brewfile"), tools.index("brew reinstall e2fsprogs"))
+        self.assertLess(tools.index("brew reinstall e2fsprogs"), tools.index('test "$(xcodes version)"'))
+        self.assertIn("[ ! -f /opt/homebrew/etc/mke2fs.conf ]", tools)
+        self.assertIn("brew install e2fsprogs", tools)
         self.assertIn("pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle", tools)
         self.assertIn("declared build tools took", tools)
         self.assertIn("toolchain archive bytes=", tools)

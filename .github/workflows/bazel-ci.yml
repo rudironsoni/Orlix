@@ -198,6 +198,14 @@ jobs:
               fi
             fi
           fi
+          if [ ! -f /opt/homebrew/etc/mke2fs.conf ]; then
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            if brew list --formula e2fsprogs >/dev/null 2>&1; then
+              brew reinstall e2fsprogs
+            else
+              brew install e2fsprogs
+            fi
+          fi
           test "$(xcodes version)" = "2.1.0"
           if [ -f "$archive" ]; then
             bytes=$(stat -f%z "$archive")
