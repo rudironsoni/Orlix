@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import plistlib
@@ -18,6 +19,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 ARCHIVE_SUFFIXES = {".dmg", ".pkg", ".ipsw", ".aea", ".zip"}
@@ -408,6 +410,26 @@ BOOTABLE_SIMRUNTIME_CACHE_KEY = "orlix-ios15-simruntime-bootable-v1"
 IOS15_DMG_CACHE_KEY = (
     "orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150"
 )
+CI_TOOLCHAIN_ARCHIVE_NAME = "ci-toolchain.tar.gz"
+CI_TOOLCHAIN_MANIFEST_NAME = "orlix-toolchain-manifest.json"
+CI_TOOLCHAIN_CACHE_KEY_PREFIX = "orlix-ci-toolchain"
+PINNED_CI_CLANG = "/opt/homebrew/opt/llvm/bin/clang"
+EXCLUDED_TOOLCHAIN_FORMULAE = frozenset({"llvm@20"})
+# Actions cache quota is about 10GB. Run 39305085161 restored the bootable
+# iOS 15.5 runtime at BOOTABLE_SIMRUNTIME_CACHE_BYTES. The CI bottle HEAD
+# total is CI_TOOLCHAIN_BOTTLE_BYTES and the installed members are
+# CI_TOOLCHAIN_MEMBER_BYTES. Those members plus the runtime are about 7.5GB.
+# ccache and the Bazel repository cache are the other live keys. They are
+# dropped before the toolchain or the iOS runtime if the sum would pass 10GB.
+ACTIONS_CACHE_QUOTA_BYTES = 10_000_000_000
+BOOTABLE_SIMRUNTIME_CACHE_BYTES = 5_126_954_916
+CCACHE_CACHE_BYTES = 97_654_617
+BAZEL_REPOSITORY_CACHE_BYTES = 571_396_067
+CI_TOOLCHAIN_BOTTLE_BYTES = 582_115_184
+CI_TOOLCHAIN_MEMBER_BYTES = 2_349_225_560
+TOOLCHAIN_LINK_ROOTS = ("bin", "sbin", "lib", "include", "share", "etc", "libexec", "opt")
+_KEG_REL = re.compile(r"^Cellar/([^/]+)/([^/]+)$")
+_CACHE_KEY_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]*$")
 
 
 def simruntime_bootable(bundle: Path) -> bool:
@@ -765,17 +787,40 @@ def formula_short_name(name: str) -> str:
 
 
 def formula_source(prefix: Path, name: str) -> Path | None:
+    """Locate a formula file without asking Homebrew to load it.
+
+    Core formulae usually live at ``Formula/<letter>/<name>.rb``. ``libtool``
+    lives at ``Formula/lib/libtool.rb``, so a letter-only lookup misses it and
+    the toolchain pin cannot be recorded.
+    """
     short = formula_short_name(name)
     if name.count("/") == 2:
         user, repo, _formula = name.split("/")
         roots = [prefix / "Library" / "Taps" / user / f"homebrew-{repo}"]
     else:
         roots = [prefix / "Library" / "Taps" / "homebrew" / "homebrew-core"]
+    relative = [
+        Path("Formula") / short[:1].lower() / f"{short}.rb",
+        Path("Formula") / f"{short}.rb",
+    ]
+    if short.startswith("lib"):
+        relative.append(Path("Formula") / "lib" / f"{short}.rb")
     for root in roots:
-        for candidate in (
-            root / "Formula" / short[:1].lower() / f"{short}.rb",
-            root / "Formula" / f"{short}.rb",
-        ):
+        for candidate in relative:
+            path = root / candidate
+            if path.is_file():
+                return path
+        formula_root = root / "Formula"
+        if not formula_root.is_dir():
+            continue
+        try:
+            children = list(formula_root.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_dir():
+                continue
+            candidate = child / f"{short}.rb"
             if candidate.is_file():
                 return candidate
     return None
@@ -1006,6 +1051,532 @@ def bundle_satisfied(brewfile: Path, prefix: Path | None = None) -> bool:
     return ok
 
 
+def brewfile_digest(brewfile: Path) -> str:
+    """SHA-256 of the CI Brewfile bytes. This is the Brewfile half of the cache key."""
+    return hashlib.sha256(brewfile.read_bytes()).hexdigest()
+
+
+def pinned_tool_versions(brewfile: Path, prefix: Path) -> dict[str, str]:
+    """Declared version of every CI Brewfile formula.
+
+    A comment pin wins. Every other formula takes the stable version from the
+    formula file already in the Homebrew tap. Nothing here shells out to
+    ``brew``, and ``llvm@20`` is not a stand-in for ``llvm``.
+    """
+    entries = brewfile_entries(brewfile.read_text(encoding="utf-8"))
+    if not entries:
+        raise ValueError(f"{brewfile} declares no Homebrew formulae")
+    record: dict[str, str] = {}
+    for name, pinned in entries:
+        version = pinned if pinned is not None else formula_version_from_prefix(prefix, name)
+        if version is None or _CACHE_KEY_VERSION.fullmatch(version) is None:
+            raise ValueError(f"{name} has no readable pinned version")
+        record[name] = version
+    if "llvm" not in record:
+        raise ValueError("CI Brewfile does not pin llvm")
+    return record
+
+
+def toolchain_version_token(record: dict[str, str]) -> str:
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def toolchain_pin_suffix(record: dict[str, str]) -> str:
+    """Cache-key suffix: the visible llvm version plus every recorded tool version."""
+    llvm = record["llvm"]
+    if _CACHE_KEY_VERSION.fullmatch(llvm) is None:
+        raise ValueError(f"llvm version cannot be a cache key: {llvm}")
+    return f"llvm-{llvm}-{toolchain_version_token(record)}"
+
+
+def toolchain_cache_key(brewfile_hash: str, pin: str) -> str:
+    return f"{CI_TOOLCHAIN_CACHE_KEY_PREFIX}-{brewfile_hash}-{pin}"
+
+
+def installed_formula_dependencies(names: list[str]) -> list[str]:
+    """Installed runtime dependencies of the CI formulae.
+
+    ``llvm@20`` is dropped by the caller. A failure here does not invent a
+    dependency list; the Brewfile kegs are still packed.
+    """
+    if not names:
+        return []
+    completed = subprocess.run(
+        ["brew", "deps", "--installed", "--formula", "--union", *names],
+        check=False, capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        print(f"could not list Homebrew dependencies: {detail}", file=sys.stderr)
+        return []
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+def _points_into_kegs(path: Path, kegs: set[Path]) -> bool:
+    if not path.is_symlink():
+        return False
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for keg in kegs:
+        if resolved == keg or keg in resolved.parents:
+            return True
+    return False
+
+
+def toolchain_links(prefix: Path, kegs: set[Path]) -> list[str]:
+    """Symlinks outside the kegs that resolve into those kegs.
+
+    ``opt/llvm`` is one of them. ``opt/llvm@20`` points at a different keg and
+    is not collected. The walk does not follow symlinks into the kegs.
+    """
+    found: list[str] = []
+    for folder in TOOLCHAIN_LINK_ROOTS:
+        root = prefix / folder
+        if not root.exists() or root.is_symlink():
+            continue
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            current = Path(dirpath)
+            kept: list[str] = []
+            for name in dirnames:
+                path = current / name
+                if path.is_symlink():
+                    if _points_into_kegs(path, kegs):
+                        found.append(path.relative_to(prefix).as_posix())
+                else:
+                    kept.append(name)
+            dirnames[:] = kept
+            for name in filenames:
+                path = current / name
+                if path.is_symlink() and _points_into_kegs(path, kegs):
+                    found.append(path.relative_to(prefix).as_posix())
+    return sorted(set(found))
+
+
+def _selected_kegs(
+    brewfile: Path, prefix: Path, dependencies: list[str] | None,
+) -> list[tuple[str, Path]] | None:
+    entries = brewfile_entries(brewfile.read_text(encoding="utf-8"))
+    names = [name for name, _version in entries]
+    required = set(names)
+    required.update(formula_short_name(name) for name in names)
+    if dependencies is None:
+        dependencies = installed_formula_dependencies([name for name, _version in entries])
+    selected: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+    for name in [entry for entry, _version in entries] + list(dependencies):
+        short = formula_short_name(name)
+        if short in seen or short in EXCLUDED_TOOLCHAIN_FORMULAE:
+            continue
+        keg = active_keg(prefix, name)
+        if keg is None:
+            if name in required or short in required:
+                print(f"not packing the CI toolchain; {name} has no active keg", file=sys.stderr)
+                return None
+            continue
+        if keg.parent.name in EXCLUDED_TOOLCHAIN_FORMULAE:
+            continue
+        relative = keg.relative_to(prefix).as_posix()
+        if _KEG_REL.fullmatch(relative) is None:
+            print(f"not packing the CI toolchain; {relative} is not one keg", file=sys.stderr)
+            return None
+        selected.append((short, keg))
+        seen.add(short)
+    if "llvm" not in seen:
+        print("not packing the CI toolchain; the pinned llvm keg is missing", file=sys.stderr)
+        return None
+    return selected
+
+
+def toolchain_paths_valid(manifest: dict) -> bool:
+    kegs = manifest.get("kegs")
+    links = manifest.get("links")
+    if not isinstance(kegs, list) or not kegs or not isinstance(links, list):
+        return False
+    for keg in kegs:
+        if not isinstance(keg, str):
+            return False
+        match = _KEG_REL.fullmatch(keg)
+        if match is None or match.group(1) in EXCLUDED_TOOLCHAIN_FORMULAE:
+            return False
+    for link in links:
+        if not isinstance(link, str) or not link or link.startswith("/"):
+            return False
+        parts = Path(link).parts
+        if ".." in parts or "llvm@20" in parts:
+            return False
+        if not parts or parts[0] not in TOOLCHAIN_LINK_ROOTS:
+            return False
+    return True
+
+
+def normalize_tar_name(name: str) -> str:
+    normalized = name[2:] if name.startswith("./") else name
+    if normalized.endswith("/"):
+        normalized = normalized[:-1]
+    return normalized
+
+
+def toolchain_members_allowed(members: list[tarfile.TarInfo], manifest: dict) -> bool:
+    """Reject a whole-prefix archive and any member outside the recorded kegs."""
+    if not toolchain_paths_valid(manifest):
+        return False
+    kegs = [keg for keg in manifest["kegs"] if isinstance(keg, str)]
+    links = {link for link in manifest["links"] if isinstance(link, str)}
+    saw_manifest = False
+    for member in members:
+        name = normalize_tar_name(member.name)
+        if not name or name.startswith("/") or ".." in Path(name).parts or "llvm@20" in name:
+            return False
+        if name in {"", ".", "Cellar", "opt", "bin", "sbin", "lib", "include", "share", "etc", "libexec"}:
+            return False
+        if name == CI_TOOLCHAIN_MANIFEST_NAME:
+            saw_manifest = member.isfile()
+            continue
+        if any(name == keg or name.startswith(keg + "/") for keg in kegs):
+            continue
+        if name in links:
+            continue
+        return False
+    return saw_manifest
+
+
+def opt_llvm_member_is_pinned(members: list[tarfile.TarInfo], keg: str) -> bool:
+    found = False
+    for member in members:
+        if normalize_tar_name(member.name) != "opt/llvm":
+            continue
+        if not member.issym():
+            return False
+        link = member.linkname.replace("\\", "/")
+        if "llvm@20" in link or keg not in link:
+            return False
+        found = True
+    return found
+
+
+def _manifest_matches(manifest: dict, brewfile: Path, prefix: Path, pin: str) -> bool:
+    try:
+        record = pinned_tool_versions(brewfile, prefix)
+        expected = toolchain_pin_suffix(record)
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return False
+    clang = manifest.get("clang")
+    if manifest.get("schema") != 1 or manifest.get("kind") != "orlix-ci-toolchain":
+        return False
+    if manifest.get("brewfile_sha256") != brewfile_digest(brewfile):
+        return False
+    if manifest.get("versions") != record or manifest.get("pin") != pin or pin != expected:
+        return False
+    if not isinstance(clang, dict) or clang.get("path") != PINNED_CI_CLANG:
+        return False
+    keg = clang.get("keg")
+    digest = clang.get("sha256")
+    if not isinstance(keg, str) or not keg.startswith("Cellar/llvm/") or "llvm@20" in keg:
+        return False
+    if not formula_version_matches(keg.rsplit("/", 1)[-1], record["llvm"]):
+        return False
+    if not isinstance(digest, str) or len(digest) != 64:
+        return False
+    if keg not in manifest.get("kegs", []):
+        return False
+    return toolchain_paths_valid(manifest)
+
+
+def read_toolchain_manifest(archive: Path) -> tuple[dict, list[tarfile.TarInfo]]:
+    with tarfile.open(archive, "r") as bundle:
+        members = bundle.getmembers()
+        manifest_member = next(
+            (item for item in members if normalize_tar_name(item.name) == CI_TOOLCHAIN_MANIFEST_NAME),
+            None,
+        )
+        if manifest_member is None or not manifest_member.isfile():
+            raise ValueError("toolchain archive has no manifest")
+        extracted = bundle.extractfile(manifest_member)
+        if extracted is None:
+            raise ValueError("toolchain manifest is not a file")
+        payload = json.loads(extracted.read().decode())
+    if not isinstance(payload, dict):
+        raise ValueError("toolchain manifest is not an object")
+    return payload, members
+
+
+def _reject_tar_name(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    name = normalize_tar_name(info.name)
+    if not name or name.startswith("/") or ".." in Path(name).parts or "llvm@20" in name:
+        raise ValueError(f"refusing to archive {info.name}")
+    return info
+
+
+def write_toolchain_archive(
+    destination: Path, prefix: Path, manifest: dict, kegs: list[str], links: list[str],
+) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_name(destination.name + ".partial")
+    partial.unlink(missing_ok=True)
+    payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    try:
+        with tarfile.open(partial, "w:gz", format=tarfile.PAX_FORMAT, compresslevel=6) as bundle:
+            info = tarfile.TarInfo(CI_TOOLCHAIN_MANIFEST_NAME)
+            info.size = len(payload)
+            info.mtime = 0
+            info.mode = 0o644
+            bundle.addfile(info, io.BytesIO(payload))
+            for relative in kegs:
+                bundle.add(prefix / relative, arcname=relative, recursive=True, filter=_reject_tar_name)
+            for relative in links:
+                bundle.add(prefix / relative, arcname=relative, recursive=False, filter=_reject_tar_name)
+    except (OSError, tarfile.TarError, ValueError):
+        partial.unlink(missing_ok=True)
+        raise
+    partial.replace(destination)
+
+
+def extract_toolchain_archive(archive: Path, prefix: Path) -> None:
+    """Extract pinned kegs into the prefix. This does not replace ``/opt/homebrew``."""
+    prefix.mkdir(parents=True, exist_ok=True)
+    flags = "-xzf" if archive.name.endswith(".gz") else "-xf"
+    completed = subprocess.run(
+        ["tar", "-C", str(prefix), flags, str(archive), f"--exclude={CI_TOOLCHAIN_MANIFEST_NAME}"],
+        check=False,
+    )
+    stray = prefix / CI_TOOLCHAIN_MANIFEST_NAME
+    if stray.is_symlink() or stray.is_file():
+        stray.unlink()
+    if completed.returncode != 0:
+        raise OSError(f"tar extract failed with status {completed.returncode}")
+
+
+def remove_restored_tools(prefix: Path, manifest: dict) -> None:
+    """Remove only the kegs and symlinks this archive recorded.
+
+    ``llvm@20`` is not in that list. A failed identity check must leave the
+    runner's unlinked compiler in place and let ``brew bundle`` install ``llvm``.
+    """
+    if not toolchain_paths_valid(manifest):
+        return
+    for link in manifest["links"]:
+        path = prefix / link
+        if path.is_symlink():
+            path.unlink()
+    for keg in manifest["kegs"]:
+        path = prefix / keg
+        if path.is_symlink():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+
+
+def pinned_clang_bytes_match(prefix: Path, manifest: dict) -> bool:
+    """True when the clang the build runs is the archived file inside the llvm keg."""
+    clang = prefix / "opt" / "llvm" / "bin" / "clang"
+    keg = prefix / manifest["clang"]["keg"]
+    if not pinned_llvm_clang(prefix, keg):
+        return False
+    try:
+        resolved = clang.resolve()
+    except OSError:
+        return False
+    if "llvm@20" in resolved.parts:
+        return False
+    try:
+        digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    except OSError:
+        return False
+    if digest != manifest["clang"]["sha256"]:
+        return False
+    if prefix.resolve() == Path("/opt/homebrew").resolve() and Path(PINNED_CI_CLANG).resolve() != resolved:
+        return False
+    return True
+
+
+def cache_plan(toolchain_bytes: int) -> dict[str, str]:
+    """Decide which optional Actions caches to drop.
+
+    The bootable iOS 15.5 runtime and this toolchain stay. ccache and the
+    Bazel repository cache are dropped, smallest sufficient cut first, only
+    when keeping them would pass the 10GB quota.
+    """
+    kept = BOOTABLE_SIMRUNTIME_CACHE_BYTES + max(toolchain_bytes, 0)
+    ccache = CCACHE_CACHE_BYTES
+    repository = BAZEL_REPOSITORY_CACHE_BYTES
+    quota = ACTIONS_CACHE_QUOTA_BYTES
+    drop_ccache = False
+    drop_repository = False
+    if kept > quota:
+        drop_ccache = True
+        drop_repository = True
+    elif kept + ccache + repository > quota:
+        if kept + repository <= quota:
+            drop_ccache = True
+        elif kept + ccache <= quota:
+            drop_repository = True
+        else:
+            drop_ccache = True
+            drop_repository = True
+    return {
+        "drop_ccache": "true" if drop_ccache else "false",
+        "drop_repository": "true" if drop_repository else "false",
+    }
+
+
+def pack_toolchain(
+    brewfile: Path,
+    archive: Path,
+    prefix: Path,
+    *,
+    pin: str,
+    dependencies: list[str] | None = None,
+) -> bool:
+    """Pack the CI Brewfile kegs and the symlinks that point into them.
+
+    The archive is one gzip file under the Orlix cache directory. It is not a
+    tar of ``/opt/homebrew``. ``llvm@20`` is never a member. The bootable iOS
+    15.5 runtime stays in the Actions cache. ccache or the Bazel repository
+    cache is dropped first if the sum would pass 10GB.
+    """
+    try:
+        record = pinned_tool_versions(brewfile, prefix)
+        expected = toolchain_pin_suffix(record)
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return False
+    if pin != expected:
+        print("not packing the CI toolchain; the recorded pin does not match this prefix", file=sys.stderr)
+        return False
+    if not bundle_satisfied(brewfile, prefix):
+        print("not packing the CI toolchain; brew bundle has not satisfied the pin", file=sys.stderr)
+        return False
+    selected = _selected_kegs(brewfile, prefix, dependencies)
+    if selected is None:
+        return False
+    kegs = [keg for _short, keg in selected]
+    links = toolchain_links(prefix, set(kegs))
+    if "opt/llvm" not in links:
+        print("not packing the CI toolchain; opt/llvm does not point at the pinned keg", file=sys.stderr)
+        return False
+    llvm_keg = next(keg for short, keg in selected if short == "llvm")
+    clang = prefix / "opt" / "llvm" / "bin" / "clang"
+    if not pinned_llvm_clang(prefix, llvm_keg):
+        print(f"not packing the CI toolchain; {PINNED_CI_CLANG} is not inside {llvm_keg}", file=sys.stderr)
+        return False
+    try:
+        clang_bytes = clang.resolve().read_bytes()
+    except OSError as error:
+        print(f"not packing the CI toolchain; {error}", file=sys.stderr)
+        return False
+    keg_names = [keg.relative_to(prefix).as_posix() for keg in kegs]
+    manifest = {
+        "schema": 1,
+        "kind": "orlix-ci-toolchain",
+        "brewfile_sha256": brewfile_digest(brewfile),
+        "versions": record,
+        "pin": expected,
+        "clang": {
+            "path": PINNED_CI_CLANG,
+            "sha256": hashlib.sha256(clang_bytes).hexdigest(),
+            "keg": llvm_keg.relative_to(prefix).as_posix(),
+        },
+        "kegs": keg_names,
+        "links": links,
+    }
+    try:
+        write_toolchain_archive(archive, prefix, manifest, keg_names, links)
+        stored, members = read_toolchain_manifest(archive)
+    except (OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as error:
+        archive.unlink(missing_ok=True)
+        print(f"not packing the CI toolchain; {error}", file=sys.stderr)
+        return False
+    if stored != manifest or not toolchain_members_allowed(members, manifest):
+        archive.unlink(missing_ok=True)
+        print("not packing the CI toolchain; the archive is not limited to the pinned tools", file=sys.stderr)
+        return False
+    if not opt_llvm_member_is_pinned(members, manifest["clang"]["keg"]):
+        archive.unlink(missing_ok=True)
+        print("not packing the CI toolchain; opt/llvm does not point at the pinned keg", file=sys.stderr)
+        return False
+    size = archive.stat().st_size
+    if BOOTABLE_SIMRUNTIME_CACHE_BYTES + size > ACTIONS_CACHE_QUOTA_BYTES:
+        archive.unlink(missing_ok=True)
+        print(
+            "not saving the CI toolchain archive; "
+            f"{size} bytes plus {BOOTABLE_SIMRUNTIME_CACHE_KEY} exceeds "
+            f"{ACTIONS_CACHE_QUOTA_BYTES}"
+        )
+        print("toolchain archive bytes=0")
+        print("toolchain archive omitted=toolchain")
+        return True
+    plan = cache_plan(size)
+    print(f"toolchain archive bytes={size}")
+    print("toolchain archive omitted=none")
+    print(f"drop_ccache={plan['drop_ccache']}")
+    print(f"drop_repository={plan['drop_repository']}")
+    print(f"packed CI toolchain {archive}")
+    return True
+
+
+def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) -> bool:
+    """Extract one pinned archive and require the build's clang path.
+
+    A missing identity check returns false before ``brew bundle`` runs. Members
+    outside the recorded kegs, including a tar of the Homebrew prefix or
+    ``llvm@20``, are rejected without being extracted.
+    """
+    try:
+        manifest, members = read_toolchain_manifest(archive)
+    except (OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as error:
+        print(f"CI toolchain archive is not reusable: {error}", file=sys.stderr)
+        return False
+    if not _manifest_matches(manifest, brewfile, prefix, pin):
+        print("CI toolchain archive does not match the recorded tool pin", file=sys.stderr)
+        return False
+    if not toolchain_members_allowed(members, manifest) or not opt_llvm_member_is_pinned(members, manifest["clang"]["keg"]):
+        print("CI toolchain archive is not limited to the pinned clang", file=sys.stderr)
+        return False
+    # Drop recorded links first so an opt/llvm symlink aimed at llvm@20 cannot
+    # stay in front of the extracted keg. The llvm@20 cellar is not recorded.
+    remove_restored_tools(prefix, manifest)
+    try:
+        extract_toolchain_archive(archive, prefix)
+    except OSError as error:
+        print(str(error), file=sys.stderr)
+        remove_restored_tools(prefix, manifest)
+        return False
+    if pinned_clang_bytes_match(prefix, manifest) and bundle_satisfied(brewfile, prefix):
+        print(f"restored pinned clang {PINNED_CI_CLANG}")
+        return True
+    print(f"restored clang is not {PINNED_CI_CLANG} at the recorded identity", file=sys.stderr)
+    remove_restored_tools(prefix, manifest)
+    return False
+
+
+def emit_cache_plan(toolchain_bytes: int) -> int:
+    plan = cache_plan(toolchain_bytes)
+    print(f"drop_ccache={plan['drop_ccache']}")
+    print(f"drop_repository={plan['drop_repository']}")
+    print(f"ccache_bytes={CCACHE_CACHE_BYTES}")
+    print(f"repository_bytes={BAZEL_REPOSITORY_CACHE_BYTES}")
+    print(f"bootable_bytes={BOOTABLE_SIMRUNTIME_CACHE_BYTES}")
+    print(f"toolchain_bytes={toolchain_bytes}")
+    return 0
+
+
+def emit_toolchain_cache_key(brewfile: Path, prefix: Path) -> int:
+    try:
+        record = pinned_tool_versions(brewfile, prefix)
+        pin = toolchain_pin_suffix(record)
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(f"pin={pin}")
+    print(f"llvm={record['llvm']}")
+    print(f"versions={toolchain_version_token(record)}")
+    return 0
+
+
 def runtime_already_installed(version: str, runtime_dir: Path | None = None) -> bool:
     """True when simctl lists the runtime or the bundle cannot be read.
 
@@ -1174,6 +1745,25 @@ def main(argv: list[str] | None = None) -> int:
     identity = commands.add_parser("compiler-identity")
     identity.add_argument("--developer-dir", required=True, type=Path)
 
+    toolchain_key = commands.add_parser("toolchain-cache-key")
+    toolchain_key.add_argument("--brewfile", required=True, type=Path)
+    toolchain_key.add_argument("--prefix", type=Path)
+
+    restore = commands.add_parser("restore-toolchain")
+    restore.add_argument("--archive", required=True, type=Path)
+    restore.add_argument("--brewfile", required=True, type=Path)
+    restore.add_argument("--pin", required=True)
+    restore.add_argument("--prefix", type=Path)
+
+    pack = commands.add_parser("pack-toolchain")
+    pack.add_argument("--archive", required=True, type=Path)
+    pack.add_argument("--brewfile", required=True, type=Path)
+    pack.add_argument("--pin", required=True)
+    pack.add_argument("--prefix", type=Path)
+
+    retention = commands.add_parser("cache-retention")
+    retention.add_argument("--toolchain-bytes", required=True, type=int)
+
     args = parser.parse_args(argv)
     if args.command == "xcode-present":
         found = xcode_present(args.version)
@@ -1234,6 +1824,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compiler-identity":
         print(observed_compiler_digest(args.developer_dir))
         return 0
+    if args.command == "toolchain-cache-key":
+        root = args.prefix if args.prefix is not None else homebrew_prefix()
+        return emit_toolchain_cache_key(args.brewfile, root)
+    if args.command == "restore-toolchain":
+        root = args.prefix if args.prefix is not None else homebrew_prefix()
+        return 0 if restore_toolchain(args.archive, args.brewfile, root, pin=args.pin) else 1
+    if args.command == "pack-toolchain":
+        root = args.prefix if args.prefix is not None else homebrew_prefix()
+        return 0 if pack_toolchain(args.brewfile, args.archive, root, pin=args.pin) else 1
+    if args.command == "cache-retention":
+        return emit_cache_plan(args.toolchain_bytes)
     raise AssertionError(args.command)
 
 
