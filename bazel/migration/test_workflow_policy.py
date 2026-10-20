@@ -103,6 +103,37 @@ class WorkflowPolicyTests(unittest.TestCase):
             workflow,
         )
 
+    def test_apple_ci_evidence_omits_unpacked_ipa(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        store = workflow.split("name: Store Apple CI evidence", 1)[1].split(
+            "if-no-files-found:", 1
+        )[0]
+        included = [
+            "Build/AgentHarness/bazel-ci",
+            "Build/**/*.xcresult",
+            "Build/**/*.log",
+            "~/Library/Logs/DiagnosticReports",
+        ]
+        for path in included:
+            self.assertIn(f"\n            {path}\n", store)
+        excluded = [
+            line.strip() for line in store.splitlines() if line.strip().startswith("!")
+        ]
+        self.assertEqual(excluded, ["!Build/AgentHarness/bazel-ci/app.*/**"])
+        self.assertLess(
+            store.index("Build/AgentHarness/bazel-ci\n"),
+            store.index("!Build/AgentHarness/bazel-ci/app.*/**"),
+        )
+        apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        self.assertIn('mktemp -d "$$evidence_dir/app.XXXXXX"', apple_ci)
+        self.assertIn("/usr/bin/ditto -x -k", apple_ci)
+        self.assertIn("__bazel-current-simulator-gate", apple_ci)
+        self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
+        self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
+
     def test_xcode_version_comes_from_file_and_selection_is_verified(self) -> None:
         for name in (
             "bazel-ci.yml",
