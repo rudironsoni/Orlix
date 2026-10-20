@@ -271,6 +271,58 @@ class CacheObservationTests(unittest.TestCase):
             self.assertIsNone(observed["remote_downloads"])
             self.assertIsNone(observed["remote_uploads"])
 
+    def test_cas_transfer_bytes_sum_bytestream_payloads_only(self) -> None:
+        def varint(value: int) -> bytes:
+            encoded = bytearray()
+            while True:
+                piece = value & 0x7F
+                value >>= 7
+                if value:
+                    encoded.append(piece | 0x80)
+                else:
+                    encoded.append(piece)
+                    return bytes(encoded)
+
+        def message(field: int, payload: bytes) -> bytes:
+            return varint((field << 3) | 2) + varint(len(payload)) + payload
+
+        def entry(details: bytes) -> bytes:
+            body = message(4, details)
+            return varint(len(body)) + body
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing = cache_observation.cas_transfer_bytes(root / "remote-grpc.log")
+            self.assertIsNone(missing["downloaded_bytes"])
+            self.assertIsNone(missing["uploaded_bytes"])
+            empty = root / "empty.log"
+            empty.write_bytes(b"")
+            zeros = cache_observation.cas_transfer_bytes(empty)
+            self.assertEqual(zeros["downloaded_bytes"], 0)
+            self.assertEqual(zeros["uploaded_bytes"], 0)
+            read_one = varint((3 << 3) | 0) + varint(300)
+            read_two = varint((2 << 3) | 0) + varint(4) + varint((3 << 3) | 0) + varint(200000)
+            write = varint((3 << 3) | 0) + varint(7) + varint((3 << 3) | 0) + varint(20)
+            action_cache = message(8, varint((3 << 3) | 0) + varint(999))
+            find_missing = message(10, varint((1 << 3) | 2) + varint(0))
+            log = root / "remote-grpc.log"
+            log.write_bytes(
+                entry(message(5, read_one))
+                + entry(message(5, read_two))
+                + entry(message(6, write))
+                + entry(action_cache)
+                + entry(find_missing)
+            )
+            counted = cache_observation.cas_transfer_bytes(log)
+            self.assertEqual(counted["downloaded_bytes"], 200300)
+            self.assertEqual(counted["uploaded_bytes"], 20)
+            self.assertIn("read.bytes_read", counted["byte_source"])
+            self.assertIn("write.bytes_sent", counted["byte_source"])
+            truncated = root / "truncated.log"
+            truncated.write_bytes(b"\x80")
+            with self.assertRaises(ValueError):
+                cache_observation.cas_transfer_bytes(truncated)
+
     def test_bep_transfer_bytes_stay_absent_without_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
