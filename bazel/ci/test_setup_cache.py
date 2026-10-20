@@ -825,6 +825,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
             shutil.rmtree(prefix / "Cellar" / "llvm")
             (prefix / "opt" / "llvm").unlink()
             (prefix / "opt" / "llvm").symlink_to(Path("..") / "Cellar" / "llvm@20" / "20.1.8")
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
             self.assertTrue(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
             elapsed = time.perf_counter() - started
             print(f"local toolchain fixture pack+restore took {elapsed:.4f}s")
@@ -833,7 +835,33 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertEqual((prefix / "opt" / "llvm" / "bin" / "clang").read_bytes(), b"pinned-clang" * 1024)
             self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
             self.assertFalse((prefix / CI_TOOLCHAIN_MANIFEST).exists())
+            self.assertTrue((prefix / "etc" / "mke2fs.conf").is_file())
             self.assertLess(elapsed, 5.0, f"fixture pack+restore took {elapsed:.4f}s")
+
+    def test_missing_mke2fs_conf_rejects_the_restored_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            self.assertFalse((prefix / "etc" / "mke2fs.conf").exists())
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                restored = setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin)
+            detail = stderr.getvalue()
+            self.assertFalse(restored)
+            self.assertIn(str(prefix / "etc" / "mke2fs.conf"), detail)
+            self.assertNotIn("restored clang is not", detail)
+            self.assertFalse((prefix / "Cellar" / "llvm" / "23.1.3").exists())
+            self.assertFalse((prefix / "opt" / "llvm").exists())
+            self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
 
     def test_wrong_clang_identity_is_removed_and_llvm20_stays(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -1523,7 +1523,10 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
 
     A missing identity check returns false before ``brew bundle`` runs. Members
     outside the recorded kegs, including a tar of the Homebrew prefix or
-    ``llvm@20``, are rejected without being extracted.
+    ``llvm@20``, are rejected without being extracted. ``etc/mke2fs.conf`` is
+    not a keg member. When that file is absent after extract, this returns
+    false and removes the restored kegs so ``brew bundle`` can install
+    e2fsprogs.
     """
     try:
         manifest, members = read_toolchain_manifest(archive)
@@ -1546,6 +1549,14 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
         remove_restored_tools(prefix, manifest)
         return False
     if pinned_clang_bytes_match(prefix, manifest) and bundle_satisfied(brewfile, prefix):
+        conf = prefix / "etc" / "mke2fs.conf"
+        if not conf.is_file():
+            print(
+                f"restored CI toolchain is missing {conf}; brew bundle must install e2fsprogs",
+                file=sys.stderr,
+            )
+            remove_restored_tools(prefix, manifest)
+            return False
         print(f"restored pinned clang {PINNED_CI_CLANG}")
         return True
     print(f"restored clang is not {PINNED_CI_CLANG} at the recorded identity", file=sys.stderr)
