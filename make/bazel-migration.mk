@@ -1172,9 +1172,9 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 	@lock_buildset="$$(python3 -c 'import json; print(json.load(open("$(CURDIR)/artifacts.lock.json"))["buildset"])')"; if rg -F -q "$$lock_buildset" bazel-bin/bazel/product/kernel_composition/composition.json; then echo "source mode must not claim promoted provenance" >&2; exit 1; fi
 	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
 
-# The cached side is a clean consumer: fresh output base, no disk cache, ccache
-# disabled, and the read-only rc. A disk hit, output-base hit, or ccache hit
-# does not satisfy the jq gate. Only a push of refs/heads/main reaches this
+# The cached side is a clean consumer with a fresh output base, no disk cache,
+# ccache disabled, and the read-only rc. A disk hit, output-base hit, or ccache
+# hit does not satisfy the jq gate. Only a push of refs/heads/main reaches this
 # target. That step installs the read rc and passes the write key only through
 # ORLIX_BUILDBUDDY_SEED_KEY_FILE. The seed side temporarily links a write rc,
 # then restores the read rc before cached and uncached. The seed sets
