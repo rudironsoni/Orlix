@@ -1518,15 +1518,33 @@ def pack_toolchain(
     return True
 
 
+def ensure_mke2fs_conf(prefix: Path) -> bool:
+    """Keep ``etc/mke2fs.conf`` or link it from the restored e2fsprogs keg."""
+    conf = prefix / "etc" / "mke2fs.conf"
+    if conf.is_file():
+        return True
+    sources = [prefix / "opt" / "e2fsprogs" / "etc" / "mke2fs.conf"]
+    sources.extend(sorted(prefix.glob("Cellar/e2fsprogs/*/etc/mke2fs.conf")))
+    source = next((path for path in sources if path.is_file()), None)
+    if source is None:
+        print("restored CI toolchain has no mke2fs.conf", file=sys.stderr)
+        return False
+    if conf.is_symlink():
+        conf.unlink()
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    conf.symlink_to(source)
+    return True
+
+
 def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) -> bool:
     """Extract one pinned archive and require the build's clang path.
 
     A missing identity check returns false before ``brew bundle`` runs. Members
     outside the recorded kegs, including a tar of the Homebrew prefix or
     ``llvm@20``, are rejected without being extracted. ``etc/mke2fs.conf`` is
-    not a keg member. When that file is absent after extract, this returns
-    false and removes the restored kegs so ``brew bundle`` can install
-    e2fsprogs.
+    not a keg member. ``ensure_mke2fs_conf`` keeps a regular file or links one
+    from the e2fsprogs keg. A missing source returns false and removes the
+    restored kegs.
     """
     try:
         manifest, members = read_toolchain_manifest(archive)
@@ -1549,12 +1567,7 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
         remove_restored_tools(prefix, manifest)
         return False
     if pinned_clang_bytes_match(prefix, manifest) and bundle_satisfied(brewfile, prefix):
-        conf = prefix / "etc" / "mke2fs.conf"
-        if not conf.is_file():
-            print(
-                f"restored CI toolchain is missing {conf}; brew bundle must install e2fsprogs",
-                file=sys.stderr,
-            )
+        if not ensure_mke2fs_conf(prefix):
             remove_restored_tools(prefix, manifest)
             return False
         print(f"restored pinned clang {PINNED_CI_CLANG}")
