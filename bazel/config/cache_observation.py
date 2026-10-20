@@ -39,6 +39,19 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _buildbuddy_remote_hits(actions: list[dict[str, Any]]) -> int:
+    """A BuildBuddy remote action-cache hit needs both fields.
+
+    The runner must be exactly "remote cache hit" and cacheHit must be true.
+    A false cacheHit and a disk-cache hit stay out of this count.
+    """
+    return sum(
+        1
+        for action in actions
+        if action.get("cacheHit") is True and action.get("runner") == "remote cache hit"
+    )
+
+
 def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
     actions = _records(execution)
     metrics = next(
@@ -48,10 +61,12 @@ def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
     summary = metrics.get("actionSummary", {})
     timing = metrics.get("timingMetrics", {})
     runners = [action.get("runner", "") for action in actions]
+    remote_hits = _buildbuddy_remote_hits(actions)
     return {
         "schema": 1,
         "buildbuddy_access": access,
-        "remote_hits": runners.count("remote cache hit"),
+        "remote_hits": remote_hits,
+        "buildbuddy_remote_cache_hits": remote_hits,
         "remote_misses": None,
         "remote_uploads": None,
         "remote_downloads": None,
@@ -172,7 +187,7 @@ def _execution_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         "cacheHit": hits,
         "label": sorted(set(labels)),
         "mnemonic": dict(sorted(mnemonics.items())),
-        "remote_cache_hits": runners.get("remote cache hit", 0),
+        "remote_cache_hits": _buildbuddy_remote_hits(actions),
         "runner": dict(sorted(runners.items())),
     }
 
@@ -280,6 +295,7 @@ def reduce_scenario(
     remote_bytes = None
     if access != "off":
         remote_bytes = remote_grpc.stat().st_size if remote_grpc is not None and remote_grpc.is_file() else 0
+    actions = _records(execution)
     return {
         "schema": 1,
         "kind": "scenario-row",
@@ -287,7 +303,8 @@ def reduce_scenario(
         "wallTimeInMs": wall,
         "critical_path_ms": critical_ms,
         "slow_phases": phases if wall > _SLOW_WALL_MS else [],
-        "execution": _execution_fields(_records(execution)),
+        "execution": _execution_fields(actions),
+        "buildbuddy_remote_cache_hits": _buildbuddy_remote_hits(actions),
         "remote_grpc_bytes": remote_bytes,
         "orlixcc_lines": _orlixcc_lines(orlixcc_log),
         "ninja_compiler_edges": _ninja_compiler_edges(ninja_log),
