@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import gzip
 import json
 import os
 import re
@@ -408,7 +407,7 @@ test "$1" = --remote_upload_local_results=true
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_cache_equivalence_prints_profile_transfer_after_observation(self) -> None:
+    def test_cache_equivalence_prints_bep_transfer_after_observation(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         for line in makefile.splitlines():
             if line.lstrip().startswith("#"):
@@ -416,28 +415,30 @@ test "$1" = --remote_upload_local_results=true
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
-        before_print, printer = equivalence.split("profile_transfer_bytes", 1)
+        before_print, printer = equivalence.split("bep_transfer_bytes", 1)
         self.assertIn('if [ "$$side" = seed ]; then continue; fi', before_print)
         self.assertIn("> \"$$proof/$$side/cache-observation.json\"", before_print)
         self.assertLess(printer.index("write_text"), printer.index("print(json.dumps"))
         self.assertIn('"side":sys.argv[3],"transfer":transfer', printer)
-        self.assertIn('"$$proof/$$side/profile.json.gz" "$$side"', printer)
+        self.assertIn('"$$proof/$$side/build-events.json" "$$side"', printer)
+        self.assertNotIn("profile_transfer_bytes", equivalence)
         program = re.search(r"python3 -c '([^']+)'", equivalence).group(1)
         self.assertNotRegex(program, r"downloaded_bytes\"\s*:\s*\d")
         self.assertNotRegex(program, r"uploaded_bytes\"\s*:\s*\d")
+        self.assertNotIn("actionCacheStatistics", program)
+        self.assertNotIn("sizeInBytes", program)
 
-        def printed(profile_payload: dict, side: str) -> dict:
+        def printed(events: list[dict], side: str) -> dict:
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 observation = root / "cache-observation.json"
                 observation.write_text("[]\n", encoding="utf-8")
-                profile = root / "profile.json.gz"
-                with gzip.open(profile, "wt", encoding="utf-8") as handle:
-                    json.dump(profile_payload, handle)
+                bep = root / "build-events.json"
+                bep.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
                 env = os.environ.copy()
                 env["PYTHONPATH"] = str(ROOT / "bazel" / "config")
                 result = subprocess.run(
-                    ["python3", "-c", program, str(observation), str(profile), side],
+                    ["python3", "-c", program, str(observation), str(bep), side],
                     check=False,
                     capture_output=True,
                     text=True,
@@ -452,17 +453,22 @@ test "$1" = --remote_upload_local_results=true
                 return payload
 
         counted = printed(
-            {
-                "traceEvents": [
-                    {"ph": "C", "name": "remote download", "args": {"bytes": 120, "files": 2}},
-                    {"ph": "C", "name": "remote upload", "args": {"bytes": "40"}},
-                ]
-            },
+            [{
+                "buildMetrics": {
+                    "actionSummary": {"actionCacheStatistics": {"sizeInBytes": "999"}},
+                    "networkMetrics": {"systemNetworkStats": {
+                        "bytesRecv": "139074560",
+                        "bytesSent": "5031936",
+                    }},
+                }
+            }],
             "cached",
         )
-        self.assertEqual(counted["transfer"]["downloaded_bytes"], 122)
-        self.assertEqual(counted["transfer"]["uploaded_bytes"], 40)
-        absent = printed({"traceEvents": [{"ph": "X", "name": "build"}]}, "uncached")
+        self.assertEqual(counted["transfer"]["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
+        self.assertEqual(counted["transfer"]["downloaded_bytes"], 139074560)
+        self.assertEqual(counted["transfer"]["uploaded_bytes"], 5031936)
+        absent = printed([], "uncached")
+        self.assertEqual(absent["transfer"]["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
         self.assertIsNone(absent["transfer"]["downloaded_bytes"])
         self.assertIsNone(absent["transfer"]["uploaded_bytes"])
 

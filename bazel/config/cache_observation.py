@@ -227,6 +227,7 @@ def observe(
     remote_hits = _buildbuddy_remote_hits(actions)
     shared = _ccache_record(ccache_statistics)
     ccache = _reported_ccache(shared, action_ccache, build_log_provided=build_log_provided)
+    transfer = system_network_transfer(metrics if isinstance(metrics, dict) else {})
     return {
         "schema": 1,
         "buildbuddy_access": access,
@@ -235,8 +236,9 @@ def observe(
         "remote_misses": None,
         "remote_uploads": None,
         "remote_downloads": None,
-        "uploaded_bytes": None,
-        "downloaded_bytes": None,
+        "uploaded_bytes": transfer["uploaded_bytes"],
+        "downloaded_bytes": transfer["downloaded_bytes"],
+        "byte_source": transfer["byte_source"],
         "local_cache_hits": runners.count("disk cache hit"),
         "counters": _labeled_counters(runners, ccache, remote_hits),
         "ccache": ccache,
@@ -247,53 +249,50 @@ def observe(
     }
 
 
-def profile_transfer_bytes(profile: Path) -> dict[str, Any]:
-    """Sum Bazel profile counter events. Absent counters stay absent."""
-    downloaded = None
-    uploaded = None
-    if profile.is_file():
-        payload = _load_profile(profile)
-        events = payload.get("traceEvents", []) if isinstance(payload, dict) else payload
-        if isinstance(events, list):
-            down = 0
-            up = 0
-            saw_down = False
-            saw_up = False
-            for event in events:
-                if not isinstance(event, dict) or event.get("ph") != "C":
-                    continue
-                name = str(event.get("name") or "").lower()
-                args = event.get("args")
-                if not isinstance(args, dict):
-                    continue
-                total = 0
-                saw_int = False
-                for value in args.values():
-                    if isinstance(value, bool):
-                        continue
-                    if isinstance(value, int):
-                        total += value
-                        saw_int = True
-                    elif isinstance(value, str) and value.isdigit():
-                        total += int(value)
-                        saw_int = True
-                if not saw_int:
-                    continue
-                if "download" in name:
-                    down += total
-                    saw_down = True
-                elif "upload" in name:
-                    up += total
-                    saw_up = True
-            if saw_down:
-                downloaded = down
-            if saw_up:
-                uploaded = up
+_BYTE_SOURCE = "buildMetrics.networkMetrics.systemNetworkStats"
+
+
+def _decimal_byte_count(value: Any) -> int | None:
+    """Bazel JSON encodes these uint64 counters as decimal strings."""
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
+
+
+def system_network_transfer(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Host totals from BuildMetrics.networkMetrics.systemNetworkStats.
+
+    bytesRecv and bytesSent are whole-process byte counters, including BES.
+    They are not CAS-only. A missing field stays null.
+    """
+    network = metrics.get("networkMetrics")
+    stats = network.get("systemNetworkStats") if isinstance(network, dict) else None
+    if not isinstance(stats, dict):
+        stats = {}
+    downloaded = _decimal_byte_count(stats["bytesRecv"]) if "bytesRecv" in stats else None
+    uploaded = _decimal_byte_count(stats["bytesSent"]) if "bytesSent" in stats else None
     return {
-        "byte_source": "bazel-profile",
+        "byte_source": _BYTE_SOURCE,
         "downloaded_bytes": downloaded,
         "uploaded_bytes": uploaded,
     }
+
+
+def bep_transfer_bytes(bep: Path) -> dict[str, Any]:
+    """Read systemNetworkStats from the build event file the recipe already writes."""
+    metrics: dict[str, Any] = {}
+    if bep.is_file():
+        found = next(
+            (
+                record["buildMetrics"]
+                for record in reversed(_records(bep))
+                if isinstance(record, dict) and isinstance(record.get("buildMetrics"), dict)
+            ),
+            None,
+        )
+        if isinstance(found, dict):
+            metrics = found
+    return system_network_transfer(metrics)
 
 
 def _load_profile(path: Path) -> Any:

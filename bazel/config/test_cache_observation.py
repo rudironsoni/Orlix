@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gzip
 import json
 import tempfile
 import unittest
@@ -29,8 +28,11 @@ class CacheObservationTests(unittest.TestCase):
             self.assertEqual(result["buildbuddy_remote_cache_hits"], 1)
             self.assertEqual(result["local_cache_hits"], 1)
             self.assertEqual(result["elapsed_ms"], 42)
+            self.assertEqual(result["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
             self.assertIsNone(result["downloaded_bytes"])
             self.assertIsNone(result["uploaded_bytes"])
+            self.assertIsNone(result["remote_downloads"])
+            self.assertIsNone(result["remote_uploads"])
             self.assertIsNot(result.get("fresh_runner"), True)
             self.assertEqual(result["counters"]["bazel_disk_cache_hits"], 1)
             self.assertEqual(result["counters"]["buildbuddy_remote_cache_hits"], 1)
@@ -235,31 +237,65 @@ class CacheObservationTests(unittest.TestCase):
             self.assertEqual(reported["counters"]["bazel_disk_cache_hits"], 1)
             self.assertEqual(reported["counters"]["buildbuddy_remote_cache_hits"], 1)
 
-    def test_profile_transfer_bytes_sum_download_and_upload_counters(self) -> None:
+    def test_bep_system_network_stats_parse_decimal_strings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            profile = Path(temporary) / "profile.json.gz"
-            payload = {"traceEvents": [
-                {"ph": "C", "name": "remote download", "args": {"bytes": 120, "files": 2}},
-                {"ph": "C", "name": "remote upload", "args": {"bytes": "40"}},
-                {"ph": "X", "name": "remote download", "args": {"bytes": 999}},
-                {"ph": "C", "name": "action cache hits", "args": {"hits": 3}},
-            ]}
-            with gzip.open(profile, "wt", encoding="utf-8") as handle:
-                json.dump(payload, handle)
-            result = cache_observation.profile_transfer_bytes(profile)
-            self.assertEqual(result["byte_source"], "bazel-profile")
-            self.assertEqual(result["downloaded_bytes"], 122)
-            self.assertEqual(result["uploaded_bytes"], 40)
+            root = Path(temporary)
+            bep = root / "build-events.json"
+            bep.write_text(
+                "\n".join([
+                    json.dumps({"id": {"progress": {}}}),
+                    json.dumps({"buildMetrics": {
+                        "actionSummary": {
+                            "actionsExecuted": "428",
+                            "actionCacheStatistics": {"sizeInBytes": "999"},
+                        },
+                        "networkMetrics": {"systemNetworkStats": {
+                            "bytesRecv": "139074560",
+                            "bytesSent": "5031936",
+                        }},
+                    }}),
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            execution = root / "execution.json"
+            execution.write_text(json.dumps({"runner": "remote cache hit", "cacheHit": True}) + "\n")
+            result = cache_observation.bep_transfer_bytes(bep)
+            self.assertEqual(result["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
+            self.assertEqual(result["downloaded_bytes"], 139074560)
+            self.assertEqual(result["uploaded_bytes"], 5031936)
+            observed = cache_observation.observe(execution, bep, "read")
+            self.assertEqual(observed["remote_hits"], 1)
+            self.assertEqual(observed["downloaded_bytes"], 139074560)
+            self.assertEqual(observed["uploaded_bytes"], 5031936)
+            self.assertIsNone(observed["remote_downloads"])
+            self.assertIsNone(observed["remote_uploads"])
 
-    def test_profile_transfer_bytes_stay_absent_without_counters(self) -> None:
+    def test_bep_transfer_bytes_stay_absent_without_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            profile = Path(temporary) / "profile.json.gz"
-            with gzip.open(profile, "wt", encoding="utf-8") as handle:
-                json.dump({"traceEvents": [{"ph": "X", "name": "build"}]}, handle)
-            result = cache_observation.profile_transfer_bytes(profile)
-            self.assertEqual(result["byte_source"], "bazel-profile")
-            self.assertIsNone(result["downloaded_bytes"])
-            self.assertIsNone(result["uploaded_bytes"])
+            root = Path(temporary)
+            empty = root / "empty.json"
+            empty.write_text("", encoding="utf-8")
+            absent = cache_observation.bep_transfer_bytes(empty)
+            self.assertEqual(absent["byte_source"], "buildMetrics.networkMetrics.systemNetworkStats")
+            self.assertIsNone(absent["downloaded_bytes"])
+            self.assertIsNone(absent["uploaded_bytes"])
+            partial = root / "partial.json"
+            partial.write_text(json.dumps({"buildMetrics": {"networkMetrics": {"systemNetworkStats": {
+                "bytesRecv": "12",
+                "bytesSent": 40,
+            }}}}) + "\n")
+            one_sided = cache_observation.bep_transfer_bytes(partial)
+            self.assertEqual(one_sided["downloaded_bytes"], 12)
+            self.assertIsNone(one_sided["uploaded_bytes"])
+            rates = root / "profile.json"
+            rates.write_text(json.dumps({"traceEvents": [
+                {"ph": "C", "name": "Network Down usage (total)", "args": {"system network down (Mbps)": 12.5}},
+                {"ph": "C", "name": "Network Up usage (total)", "args": {"system network up (Mbps)": 1.25}},
+            ]}) + "\n")
+            profile = cache_observation.bep_transfer_bytes(rates)
+            self.assertIsNone(profile["downloaded_bytes"])
+            self.assertIsNone(profile["uploaded_bytes"])
 
 
 if __name__ == "__main__":
