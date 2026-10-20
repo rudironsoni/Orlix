@@ -1173,12 +1173,20 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 	@if rg -q 'Makefile' bazel-bin/bazel/product/kernel_composition/composition.json; then echo "composition must not invoke wrapper Makefiles" >&2; exit 1; fi
 
 # The cached side is a clean consumer with a fresh output base, no disk cache,
-# ccache disabled, and the read-only rc. A disk hit, output-base hit, or ccache
-# hit does not satisfy the jq gate. Only a push of refs/heads/main reaches this
-# target. That step installs the read rc and passes the write key only through
-# ORLIX_BUILDBUDDY_SEED_KEY_FILE. The seed side temporarily links a write rc,
-# then restores the read rc before cached and uncached. The seed sets
-# --remote_upload_local_results=true. Pull requests never run this target.
+# ccache disabled, and the read-only rc. Cached and uncached print the startup
+# flags that run, including the output base, the empty disk cache, action-cache
+# disable on the uncached side, and noremote_accept_cached on the uncached side.
+# Each required label prints cacheHit and runner. The cached runner is remote
+# cache hit. The uncached side prints zero remote cache hits. Both sides print
+# ccache off. The product build keeps its compiler cache. Seed uses the same
+# ccache disable action env so the cached remote hit matches, and it may stay
+# on the write rc. Cached and uncached keep buildbuddy-read with upload false.
+# A disk hit, output-base hit, or ccache hit does not satisfy the jq gate. Only
+# a push of refs/heads/main reaches this target. That step installs the read rc
+# and passes the write key only through ORLIX_BUILDBUDDY_SEED_KEY_FILE. The
+# seed side temporarily links a write rc, then restores the read rc before
+# cached and uncached. The seed sets --remote_upload_local_results=true. Pull
+# requests never run this target.
 # BuildBuddy read mode sets remote_download_outputs=minimal, so this gate
 # downloads every declared output before compare_trees. OrlixLinuxHeadersInstall compares the UAPI
 # directory and kbuild-archive.tar. OrlixMLibCSysroot compares the sysroot
@@ -1205,7 +1213,8 @@ __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 		test -n "$${RUNNER_TEMP:-}" || { echo "RUNNER_TEMP is required to publish the cache-equivalence seed" >&2; exit 1; }; \
 	fi; \
 	proof="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/cache-equivalence.XXXXXX")"; \
-	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1 --remote_executor= --remote_download_outputs=all --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
+	flags=(--config=release --config=source --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --remote_executor= --remote_download_outputs=all --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --symlink_prefix=/); \
+	ccache_off=(--action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1); \
 	seed_rc=""; \
 	seed_rc_restore=""; \
 	restore_seed_rc() { \
@@ -1217,9 +1226,9 @@ __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 		mkdir -p "$$proof/$$side"; \
 		cache_flags=(); \
 		seed_flags=(); \
-		if [ "$$side" = uncached ]; then cache_flags=(--nouse_action_cache --disk_cache= --noremote_accept_cached); fi; \
-		if [ "$$side" = cached ]; then cache_flags=(--disk_cache=); fi; \
-		if [ "$$side" = seed ]; then seed_flags=(--remote_upload_local_results=true); fi; \
+		if [ "$$side" = uncached ]; then cache_flags=(--nouse_action_cache --disk_cache= --noremote_accept_cached "$${ccache_off[@]}"); fi; \
+		if [ "$$side" = cached ]; then cache_flags=(--disk_cache= "$${ccache_off[@]}"); fi; \
+		if [ "$$side" = seed ]; then seed_flags=(--remote_upload_local_results=true "$${ccache_off[@]}"); fi; \
 		if [ "$$side" = seed ] && [ "$(ORLIX_BUILDBUDDY_ACCESS)" = read ]; then \
 			local_link="$(CURDIR)/.bazelrc.local"; \
 			test -L "$$local_link" || { echo "cache-equivalence seed requires the BuildBuddy rc link" >&2; exit 1; }; \
@@ -1238,11 +1247,25 @@ __bazel-cache-equivalence: __bazel-feasibility-bootstrap
 			umask "$$old_umask"; \
 			ln -sfn "$$seed_rc" "$$local_link"; \
 		fi; \
+		if [ "$$side" = cached ] || [ "$$side" = uncached ]; then \
+			consumer_rc="$$(readlink "$(CURDIR)/.bazelrc.local")"; \
+			test -n "$$consumer_rc"; \
+			consumer_config="$$(sed -n 's/^build --config=//p' "$$consumer_rc")"; \
+			test "$$consumer_config" = buildbuddy-read; \
+			grep -F -q 'build:buildbuddy-read --remote_upload_local_results=false' "$(CURDIR)/.bazelrc"; \
+			echo "cache-equivalence: $$side credential build:buildbuddy-read remote_upload_local_results=false"; \
+			echo "cache-equivalence: $$side startup --output_base=$$proof/$$side/output-base $${cache_flags[*]} ccache off"; \
+		fi; \
 		echo "cache-equivalence: $$side build, evidence $$proof/$$side"; \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" build //bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs "$${flags[@]}" $${cache_flags[@]+"$${cache_flags[@]}"} $${seed_flags[@]+"$${seed_flags[@]}"} --execution_log_compact_file= --execution_log_json_file="$$proof/$$side/execution.json" --build_event_json_file="$$proof/$$side/build-events.json" --profile="$$proof/$$side/profile.json.gz" --remote_grpc_log="$$proof/$$side/remote-grpc.log"; \
 		restore_seed_rc; \
 		if [ "$$side" = seed ]; then continue; fi; \
-		jq -e -s --arg side "$$side" 'map(select(.mnemonic == "OrlixLinuxHeadersInstall" or .mnemonic == "OrlixMLibCSysroot" or .mnemonic == "OrlixRootfs")) | if (map(.mnemonic) | sort) == ["OrlixLinuxHeadersInstall", "OrlixMLibCSysroot", "OrlixRootfs"] and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and (if $$side == "cached" then .cacheHit == true and .runner == "remote cache hit" else (.cacheHit // false) == false and .runner != "remote" and (.runner | length) > 0 end)) then map({mnemonic, runner, cacheHit, exitCode}) else error("required component cache behavior was not observed") end' "$$proof/$$side/execution.json" > "$$proof/$$side/cache-observation.json"; \
+		jq -e -s --arg side "$$side" 'map(select(.mnemonic == "OrlixLinuxHeadersInstall" or .mnemonic == "OrlixMLibCSysroot" or .mnemonic == "OrlixRootfs")) | if (map(.mnemonic) | sort) == ["OrlixLinuxHeadersInstall", "OrlixMLibCSysroot", "OrlixRootfs"] and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and (.targetLabel == {"OrlixLinuxHeadersInstall":"//bazel/feasibility/kernel:uapi","OrlixMLibCSysroot":"//bazel/feasibility/mlibc:sysroot","OrlixRootfs":"//bazel/feasibility/rootfs:rootfs"}[.mnemonic]) and (if $$side == "cached" then .cacheHit == true and .runner == "remote cache hit" else (.cacheHit // false) == false and .runner != "remote cache hit" and .runner != "remote" and (.runner | length) > 0 end)) then map({mnemonic, targetLabel, runner, cacheHit, exitCode}) else error("required component cache behavior was not observed") end' "$$proof/$$side/execution.json" > "$$proof/$$side/cache-observation.json"; \
+		jq -r --arg side "$$side" 'sort_by(.mnemonic)[] | "cache-equivalence: \($$side) \(.targetLabel) cacheHit=\(.cacheHit) runner=\(.runner)"' "$$proof/$$side/cache-observation.json"; \
+		remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/$$side/cache-observation.json")"; \
+		if [ "$$side" = cached ]; then test "$$remote_hits" = 3; fi; \
+		if [ "$$side" = uncached ]; then test "$$remote_hits" = 0; fi; \
+		echo "cache-equivalence: $$side remote cache hits $$remote_hits"; \
 		PYTHONPATH="$(CURDIR)/bazel/config" python3 -c 'import json,sys; from pathlib import Path; from cache_observation import cas_transfer_bytes; obs=Path(sys.argv[1]); payload=json.loads(obs.read_text()); transfer=cas_transfer_bytes(Path(sys.argv[2])); obs.write_text(json.dumps({"actions":payload,"transfer":transfer},indent=2)+"\n"); print(json.dumps({"side":sys.argv[3],"transfer":transfer},sort_keys=True))' "$$proof/$$side/cache-observation.json" "$$proof/$$side/remote-grpc.log" "$$side"; \
 		DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/$$side/output-base" cquery 'set(//bazel/feasibility/kernel:uapi //bazel/feasibility/mlibc:sysroot //bazel/feasibility/rootfs:rootfs)' "$${flags[@]}" $${cache_flags[@]+"$${cache_flags[@]}"} --execution_log_compact_file= --output=files > "$$proof/$$side/outputs.txt"; \
 	done; \

@@ -371,7 +371,10 @@ test "$3" = --noremote_accept_cached
         self.assertNotIn("--remote_cache=", equivalence)
         self.assertIn("cache equivalence publishes only for a push of refs/heads/main", equivalence)
         self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", equivalence)
-        self.assertIn('if [ "$$side" = cached ]; then cache_flags=(--disk_cache=); fi', equivalence)
+        self.assertIn(
+            'if [ "$$side" = cached ]; then cache_flags=(--disk_cache= "$${ccache_off[@]}"); fi',
+            equivalence,
+        )
         self.assertEqual(equivalence.count("buildbuddy-write"), 1)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", equivalence)
         shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
@@ -379,7 +382,7 @@ test "$3" = --noremote_accept_cached
         self.assertNotIn("--noremote_accept_cached", shared_flags)
         self.assertNotIn("--disk_cache=", shared_flags)
         seed_upload = next(
-            line for line in equivalence.splitlines() if "seed_flags=(--remote_upload_local_results=true)" in line
+            line for line in equivalence.splitlines() if "seed_flags=(--remote_upload_local_results=true " in line
         )
         self.assertIn('if [ "$$side" = seed ]', seed_upload)
         build = next(line for line in equivalence.splitlines() if " build //bazel/feasibility/kernel:uapi " in line)
@@ -493,6 +496,175 @@ test "$1" = --remote_upload_local_results=true
         absent = printed(None, "uncached")
         self.assertIsNone(absent["transfer"]["downloaded_bytes"])
         self.assertIsNone(absent["transfer"]["uploaded_bytes"])
+
+    def test_cache_equivalence_prints_clean_consumer_flags_and_runners(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        for line in makefile.splitlines():
+            if line.lstrip().startswith("#"):
+                self.assertNotIn(":", line)
+        equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        self.assertIn('--action_env=CCACHE_DIR="$(CCACHE_DIR)"', app)
+        self.assertNotIn("CCACHE_DISABLE", app)
+        self.assertNotIn("ccache_off", app)
+        self.assertIn("ccache_off=(--action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1)", equivalence)
+        shared_flags = next(line for line in equivalence.splitlines() if line.strip().startswith("flags=("))
+        self.assertNotIn("CCACHE_DISABLE", shared_flags)
+        self.assertNotIn("--nouse_action_cache", shared_flags)
+        self.assertIn('seed_flags=(--remote_upload_local_results=true "$${ccache_off[@]}")', equivalence)
+        startup = [
+            line
+            for line in equivalence.splitlines()
+            if "startup --output_base=" in line
+        ]
+        self.assertEqual(len(startup), 1)
+        echoed = startup[0]
+        self.assertIn("--output_base=$$proof/$$side/output-base", echoed)
+        self.assertIn("$${cache_flags[*]}", echoed)
+        self.assertIn("ccache off", echoed)
+        self.assertIn(
+            'echo "cache-equivalence: $$side credential build:buildbuddy-read remote_upload_local_results=false"',
+            equivalence,
+        )
+        self.assertIn("test \"$$consumer_config\" = buildbuddy-read", equivalence)
+        self.assertIn("build:buildbuddy-read --remote_upload_local_results=false", equivalence)
+        self.assertLess(equivalence.index("credential build:buildbuddy-read"), equivalence.index(" build //bazel/feasibility/kernel:uapi "))
+        self.assertLess(
+            equivalence.index("startup --output_base="),
+            equivalence.index(" build //bazel/feasibility/kernel:uapi "),
+        )
+        self.assertIn('.runner == "remote cache hit"', equivalence)
+        self.assertIn('.runner != "remote cache hit"', equivalence)
+        self.assertIn('test "$$remote_hits" = 0', equivalence)
+        self.assertIn('test "$$remote_hits" = 3', equivalence)
+        self.assertIn("cache-equivalence: $$side remote cache hits $$remote_hits", equivalence)
+        self.assertIn("cas_transfer_bytes", equivalence)
+        self.assertLess(
+            equivalence.index("> \"$$proof/$$side/cache-observation.json\""),
+            equivalence.index("cas_transfer_bytes"),
+        )
+        script = r"""
+set -euo pipefail
+ccache_off=(--action_env=ORLIX_COMPILER_LAUNCHER= --action_env=CCACHE_DISABLE=1)
+proof=/proof
+side=cached
+cache_flags=(--disk_cache= "${ccache_off[@]}")
+cached="cache-equivalence: $side startup --output_base=$proof/$side/output-base ${cache_flags[*]} ccache off"
+printf '%s\n' "$cached"
+case "$cached" in
+  *"--output_base=/proof/cached/output-base"*"--disk_cache="*"--action_env=CCACHE_DISABLE=1"*"ccache off"*) ;;
+  *) exit 1 ;;
+esac
+case "$cached" in
+  *"--noremote_accept_cached"*|*"--nouse_action_cache"*) exit 1 ;;
+esac
+side=uncached
+cache_flags=(--nouse_action_cache --disk_cache= --noremote_accept_cached "${ccache_off[@]}")
+uncached="cache-equivalence: $side startup --output_base=$proof/$side/output-base ${cache_flags[*]} ccache off"
+printf '%s\n' "$uncached"
+case "$uncached" in
+  *"--output_base=/proof/uncached/output-base"*"--nouse_action_cache"*"--disk_cache="*"--noremote_accept_cached"*"--action_env=CCACHE_DISABLE=1"*"ccache off"*) ;;
+  *) exit 1 ;;
+esac
+"""
+        result = subprocess.run(
+            ["/bin/bash", "--noprofile", "--norc", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        validator = re.search(
+            r"jq -e -s --arg side \"\$\$side\" '([^']+)'",
+            equivalence,
+        ).group(1).replace("$$", "$")
+        printer = re.search(
+            r"jq -r --arg side \"\$\$side\" '([^']+)'",
+            equivalence,
+        ).group(1).replace("$$", "$")
+        labels = {
+            "OrlixLinuxHeadersInstall": "//bazel/feasibility/kernel:uapi",
+            "OrlixMLibCSysroot": "//bazel/feasibility/mlibc:sysroot",
+            "OrlixRootfs": "//bazel/feasibility/rootfs:rootfs",
+        }
+
+        def records(runner: str, cache_hit: bool) -> str:
+            body = [
+                {
+                    "mnemonic": "SwiftCompile",
+                    "targetLabel": "//Orlix:Orlix",
+                    "runner": "remote cache hit",
+                    "cacheHit": True,
+                    "exitCode": 0,
+                }
+            ]
+            body.extend(
+                {
+                    "mnemonic": mnemonic,
+                    "targetLabel": label,
+                    "runner": runner,
+                    "cacheHit": cache_hit,
+                    "exitCode": 0,
+                }
+                for mnemonic, label in labels.items()
+            )
+            return "".join(json.dumps(item) + "\n" for item in body)
+
+        def observe(side: str, runner: str, cache_hit: bool) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["jq", "-e", "-s", "--arg", "side", side, validator],
+                check=False,
+                capture_output=True,
+                text=True,
+                input=records(runner, cache_hit),
+                timeout=30,
+            )
+
+        cached = observe("cached", "remote cache hit", True)
+        self.assertEqual(cached.returncode, 0, cached.stderr)
+        printed = subprocess.run(
+            ["jq", "-r", "--arg", "side", "cached", printer],
+            check=False,
+            capture_output=True,
+            text=True,
+            input=cached.stdout,
+            timeout=30,
+        )
+        self.assertEqual(printed.returncode, 0, printed.stderr)
+        lines = printed.stdout.splitlines()
+        self.assertEqual(
+            lines,
+            [
+                "cache-equivalence: cached //bazel/feasibility/kernel:uapi cacheHit=true runner=remote cache hit",
+                "cache-equivalence: cached //bazel/feasibility/mlibc:sysroot cacheHit=true runner=remote cache hit",
+                "cache-equivalence: cached //bazel/feasibility/rootfs:rootfs cacheHit=true runner=remote cache hit",
+            ],
+        )
+        uncached = observe("uncached", "linux-sandbox", False)
+        self.assertEqual(uncached.returncode, 0, uncached.stderr)
+        uncached_print = subprocess.run(
+            ["jq", "-r", "--arg", "side", "uncached", printer],
+            check=False,
+            capture_output=True,
+            text=True,
+            input=uncached.stdout,
+            timeout=30,
+        )
+        self.assertEqual(uncached_print.returncode, 0, uncached_print.stderr)
+        self.assertEqual(
+            uncached_print.stdout.splitlines(),
+            [
+                "cache-equivalence: uncached //bazel/feasibility/kernel:uapi cacheHit=false runner=linux-sandbox",
+                "cache-equivalence: uncached //bazel/feasibility/mlibc:sysroot cacheHit=false runner=linux-sandbox",
+                "cache-equivalence: uncached //bazel/feasibility/rootfs:rootfs cacheHit=false runner=linux-sandbox",
+            ],
+        )
+        self.assertEqual(uncached_print.stdout.count("remote cache hit"), 0)
+        rejected = observe("uncached", "remote cache hit", False)
+        self.assertNotEqual(rejected.returncode, 0)
 
     def test_xctest_proof_uses_helper_and_canonical_app(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
