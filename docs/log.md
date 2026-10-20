@@ -7,6 +7,10 @@ updated: 2026-10-20
 ---
 # Orlix Knowledge Log
 
+## [2026-10-20] build | Discard corrupt disk-cache blobs before reuse
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) deletes a Bazel disk-cache blob whose bytes differ from its content-addressed name in `require_identity` before the product build. A matching blob stays. A missing disk cache stays absent. Bazel 9.2 copies a CAS path into the action output without hashing it, so the deleted blob misses and the action runs again. ccache counters stay separate from disk and BuildBuddy hits. `profile_transfer_bytes` is unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-20] build | Keep ccache counters apart from disk and BuildBuddy hits
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) reads `direct_cache_hit`, `direct_cache_miss`, `preprocessed_cache_hit`, and `cache_miss` from the Coreutils action log. Those four counters stay separate from Bazel disk-cache hits and BuildBuddy remote-cache hits. `ccache_misses` adds `direct_cache_miss` to `cache_miss`, so a zero final miss does not hide a direct-mode lookup miss. `buildbuddy_remote_cache_hits` still requires `cacheHit` true and runner exactly `remote cache hit`. `fresh_runner` stays false. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
