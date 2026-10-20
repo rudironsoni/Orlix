@@ -276,105 +276,215 @@ test "${{compile[1]}}" = /staged/clang
         self.assertNotIn("DEVELOPER_DIR", env)
 
     def test_second_compile_is_a_compiler_cache_hit(self) -> None:
-        ccache = shutil.which("ccache")
-        compiler = shutil.which("clang") or shutil.which("gcc") or shutil.which("cc")
-        if not ccache or not compiler:
+        observed = observe_compiler_cache()
+        if observed is None:
             self.skipTest("local ccache and C compiler are not installed")
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cache = root / "ccache"
-            source = root / "leaf.c"
-            header = root / "leaf.h"
-            header.write_text("#define LEAF_VALUE 1\n", encoding="utf-8")
-            source.write_text('#include "leaf.h"\nint leaf(void) { return LEAF_VALUE; }\n', encoding="utf-8")
-            env = {
-                "PATH": os.environ["PATH"],
-                "HOME": str(root),
-                "CCACHE_DIR": str(cache),
-                "CCACHE_COMPILERCHECK": "content",
-                "CCACHE_CONFIGPATH": "/dev/null",
-                "CCACHE_MAXSIZE": "1G",
-                "ORLIX_COMPILER_LAUNCHER": ccache,
-            }
-            apply_action_environment(env)
-            self.assertEqual(env["CCACHE_DIR"], str(cache))
-            self.assertEqual(env["ORLIX_COMPILER_LAUNCHER"], ccache)
-            launcher = env["ORLIX_COMPILER_LAUNCHER"]
+        cases = observed["cases"]
+        unchanged = cases["compiler_cache_unchanged_second_compile"]
+        header = cases["compiler_cache_changed_header"]
+        flagged = cases["compiler_cache_changed_optimization"]
+        corrupt = cases["compiler_cache_corrupt_entry"]
+        missing = cases["compiler_cache_missing_cache"]
+        self.assertEqual(unchanged["cold_hits"], 0, "a cold compiler cache must compile")
+        self.assertGreaterEqual(unchanged["cold_misses"], 1)
+        self.assertTrue(unchanged["objects_equal"])
+        self.assertGreaterEqual(unchanged["hits"], 1, "an unchanged compile must be a compiler-cache hit")
+        self.assertTrue(header["object_differs"])
+        self.assertGreater(
+            header["misses"],
+            unchanged["misses"],
+            "a changed header must miss the compiler cache",
+        )
+        self.assertTrue(flagged["object_differs"])
+        self.assertGreater(
+            flagged["misses"],
+            header["misses"],
+            "a changed flag must miss the compiler cache",
+        )
+        self.assertEqual(header["hits"], unchanged["hits"])
+        self.assertTrue(corrupt["object_matches"])
+        self.assertTrue(missing["object_matches"])
+        self.assertTrue(missing["cache_created"])
+        disabled = observed["disabled_environment"]
+        self.assertNotIn("CCACHE_DIR", disabled)
+        self.assertEqual(disabled["ORLIX_COMPILER_LAUNCHER"], "")
+        self.assertTrue(observed["disabled_object_matches_flagged"])
 
-            def compile_to(name: str, extra: list[str] | None = None) -> bytes:
-                output = root / name
-                command = [launcher, compiler, "-c", str(source), "-I", str(root), "-o", str(output)]
-                if extra:
-                    command.extend(extra)
-                result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                return output.read_bytes()
 
-            def stats() -> tuple[int, int]:
-                result = subprocess.run([ccache, "--show-stats"], env=env, text=True, capture_output=True, check=False)
-                if result.returncode != 0:
-                    result = subprocess.run([ccache, "-s"], env=env, text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                return _cache_counts(result.stdout)
+def _require_arm64_optimization_difference(compiler: str, root: Path, source: Path) -> None:
+    """Fail if -O2 would not change this translation unit on Apple arm64.
 
-            zero = subprocess.run([ccache, "--zero-stats"], env=env, check=False)
-            if zero.returncode != 0:
-                subprocess.run([ccache, "-z"], env=env, check=True)
-            first = compile_to("first.o")
-            hits, misses = stats()
-            self.assertEqual(hits, 0, "a cold compiler cache must compile")
-            self.assertGreaterEqual(misses, 1)
-            second = compile_to("second.o")
-            hits, misses = stats()
-            self.assertEqual(second, first)
-            self.assertGreaterEqual(hits, 1, "an unchanged compile must be a compiler-cache hit")
-            header.write_text("#define LEAF_VALUE 2\n", encoding="utf-8")
-            changed = compile_to("changed.o")
-            hits_after_header, misses_after_header = stats()
-            self.assertNotEqual(changed, first)
-            self.assertGreater(misses_after_header, misses, "a changed header must miss the compiler cache")
-            flagged = compile_to("flag.o", ["-O2"])
-            _hits_after_flag, misses_after_flag = stats()
-            self.assertNotEqual(flagged, changed)
-            self.assertGreater(misses_after_flag, misses_after_header, "a changed flag must miss the compiler cache")
-            self.assertEqual(hits_after_header, hits)
-            other = root / "other.c"
-            other.write_text("int other(void) { return 3; }\n", encoding="utf-8")
-            concurrent = [
-                subprocess.Popen(
-                    [launcher, compiler, "-c", str(src), "-I", str(root), "-o", str(root / name)],
-                    env=env,
-                )
-                for name, src in (("left.o", source), ("right.o", other))
-            ]
-            self.assertTrue(all(proc.wait() == 0 for proc in concurrent))
-            blobs = [
-                path for path in cache.rglob("*")
-                if path.is_file() and path.parent != cache and path.stat().st_size > 8
-            ]
-            self.assertTrue(blobs, "compiler cache stored no object to corrupt")
-            blobs[0].write_bytes(b"corrupt-compiler-cache")
-            rebuilt = compile_to("rebuilt.o")
-            self.assertEqual(rebuilt, changed)
-            missing = root / "missing-cache"
-            env["CCACHE_DIR"] = str(missing)
-            from_missing = compile_to("from-missing.o")
-            self.assertEqual(from_missing, changed)
-            self.assertTrue(missing.is_dir())
-            cold = dict(env)
-            cold["CCACHE_DIR"] = str(cache)
-            cold["CCACHE_DISABLE"] = "1"
-            cold["ORLIX_COMPILER_LAUNCHER"] = ccache
-            apply_action_environment(cold)
-            self.assertNotIn("CCACHE_DIR", cold)
-            self.assertEqual(cold["ORLIX_COMPILER_LAUNCHER"], "")
-            direct = root / "direct.o"
+    The CI host is arm64. A constant return is identical at -O0 and -O2 there,
+    which makes a real miss look like the unoptimized object was reused.
+    """
+    objects = []
+    for extra in ([], ["-O2"]):
+        output = root / ("arm64" + ("-O2" if extra else "") + ".o")
+        result = subprocess.run(
+            [
+                compiler, "--target=arm64-apple-macosx15.0.0", "-c", str(source),
+                "-I", str(root), "-o", str(output), *extra,
+            ],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            return
+        objects.append(output.read_bytes())
+    if len(objects) == 2 and objects[0] == objects[1]:
+        raise AssertionError("changed -O flag did not change arm64 object bytes")
+
+
+def observe_compiler_cache() -> dict[str, object] | None:
+    """Compile through ccache and return the counters this action observed.
+
+    Returns None when ccache or a C compiler is not installed. Callers must
+    not treat that absence as a hit.
+    """
+    ccache = shutil.which("ccache")
+    compiler = shutil.which("clang") or shutil.which("gcc") or shutil.which("cc")
+    if not ccache or not compiler:
+        return None
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        cache = root / "ccache"
+        source = root / "leaf.c"
+        header = root / "leaf.h"
+        header.write_text("#define LEAF_VALUE 1\n", encoding="utf-8")
+        # AArch64 clang, including Apple clang, emits one `mov`/`ret` for
+        # `return LEAF_VALUE` at both -O0 and -O2. Those objects compare equal,
+        # so a changed -O flag would look like it returned the other compile.
+        # The loop is different code at -O0 and -O2 on arm64 and x86-64, and
+        # the header value remains in both objects.
+        source.write_text(
+            '#include "leaf.h"\n'
+            "int leaf(int n) {\n"
+            "  int sum = LEAF_VALUE;\n"
+            "  for (int i = 0; i < n; ++i) sum += i;\n"
+            "  return sum;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        _require_arm64_optimization_difference(compiler, root, source)
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": str(root),
+            "CCACHE_DIR": str(cache),
+            "CCACHE_COMPILERCHECK": "content",
+            "CCACHE_CONFIGPATH": "/dev/null",
+            "CCACHE_MAXSIZE": "1G",
+            "ORLIX_COMPILER_LAUNCHER": ccache,
+        }
+        apply_action_environment(env)
+        if env.get("CCACHE_DIR") != str(cache) or env.get("ORLIX_COMPILER_LAUNCHER") != ccache:
+            raise AssertionError("configured compiler cache was not forwarded")
+        launcher = str(env["ORLIX_COMPILER_LAUNCHER"])
+        invocations = {"unchanged": 0, "header": 0, "flag": 0, "corrupt": 0, "missing": 0}
+
+        def compile_to(name: str, bucket: str, extra: list[str] | None = None) -> bytes:
+            invocations[bucket] += 1
+            output = root / name
+            command = [launcher, compiler, "-c", str(source), "-I", str(root), "-o", str(output)]
+            if extra:
+                command.extend(extra)
+            result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
+            if result.returncode != 0:
+                raise AssertionError(result.stderr)
+            return output.read_bytes()
+
+        def stats() -> tuple[int, int]:
             result = subprocess.run(
-                [compiler, "-c", str(source), "-I", str(root), "-O2", "-o", str(direct)],
-                env=cold, text=True, capture_output=True, check=False,
+                [ccache, "--show-stats"], env=env, text=True, capture_output=True, check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(direct.read_bytes(), flagged)
+            if result.returncode != 0:
+                result = subprocess.run(
+                    [ccache, "-s"], env=env, text=True, capture_output=True, check=False,
+                )
+            if result.returncode != 0:
+                raise AssertionError(result.stderr)
+            return _cache_counts(result.stdout)
+
+        zero = subprocess.run([ccache, "--zero-stats"], env=env, check=False)
+        if zero.returncode != 0:
+            subprocess.run([ccache, "-z"], env=env, check=True)
+        first = compile_to("first.o", "unchanged")
+        cold_hits, cold_misses = stats()
+        second = compile_to("second.o", "unchanged")
+        unchanged_hits, unchanged_misses = stats()
+        header.write_text("#define LEAF_VALUE 2\n", encoding="utf-8")
+        changed = compile_to("changed.o", "header")
+        header_hits, header_misses = stats()
+        flagged = compile_to("flag.o", "flag", ["-O2"])
+        flag_hits, flag_misses = stats()
+        other = root / "other.c"
+        other.write_text("int other(void) { return 3; }\n", encoding="utf-8")
+        concurrent = [
+            subprocess.Popen(
+                [launcher, compiler, "-c", str(src), "-I", str(root), "-o", str(root / name)],
+                env=env,
+            )
+            for name, src in (("left.o", source), ("right.o", other))
+        ]
+        if not all(proc.wait() == 0 for proc in concurrent):
+            raise AssertionError("concurrent compiler-cache compiles failed")
+        blobs = [
+            path for path in cache.rglob("*")
+            if path.is_file() and path.parent != cache and path.stat().st_size > 8
+        ]
+        if not blobs:
+            raise AssertionError("compiler cache stored no object to corrupt")
+        blobs[0].write_bytes(b"corrupt-compiler-cache")
+        rebuilt = compile_to("rebuilt.o", "corrupt")
+        missing = root / "missing-cache"
+        env["CCACHE_DIR"] = str(missing)
+        from_missing = compile_to("from-missing.o", "missing")
+        cold = dict(env)
+        cold["CCACHE_DIR"] = str(cache)
+        cold["CCACHE_DISABLE"] = "1"
+        cold["ORLIX_COMPILER_LAUNCHER"] = ccache
+        apply_action_environment(cold)
+        direct = root / "direct.o"
+        result = subprocess.run(
+            [compiler, "-c", str(source), "-I", str(root), "-O2", "-o", str(direct)],
+            env=cold, text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise AssertionError(result.stderr)
+        return {
+            "cases": {
+                "compiler_cache_unchanged_second_compile": {
+                    "invocations": invocations["unchanged"],
+                    "cold_hits": cold_hits,
+                    "cold_misses": cold_misses,
+                    "hits": unchanged_hits,
+                    "misses": unchanged_misses,
+                    "objects_equal": second == first,
+                },
+                "compiler_cache_changed_header": {
+                    "invocations": invocations["header"],
+                    "hits": header_hits,
+                    "misses": header_misses,
+                    "object_differs": changed != first,
+                },
+                "compiler_cache_changed_optimization": {
+                    "invocations": invocations["flag"],
+                    "hits": flag_hits,
+                    "misses": flag_misses,
+                    "object_differs": flagged != changed,
+                },
+                "compiler_cache_corrupt_entry": {
+                    "invocations": invocations["corrupt"],
+                    "object_matches": rebuilt == changed,
+                    "entry_rewritten": True,
+                },
+                "compiler_cache_missing_cache": {
+                    "invocations": invocations["missing"],
+                    "object_matches": from_missing == changed,
+                    "cache_created": missing.is_dir(),
+                },
+            },
+            "disabled_environment": cold,
+            "disabled_object_matches_flagged": direct.read_bytes() == flagged,
+        }
 
 
 if __name__ == "__main__":
