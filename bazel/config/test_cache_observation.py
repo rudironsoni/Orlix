@@ -297,6 +297,62 @@ class CacheObservationTests(unittest.TestCase):
             self.assertIsNone(profile["downloaded_bytes"])
             self.assertIsNone(profile["uploaded_bytes"])
 
+    def test_local_hits_are_not_counted_as_buildbuddy_remote_hits(self) -> None:
+        runners = (
+            "remote cache hit",
+            "disk cache hit",
+            "local",
+            "output-base action cache",
+            "ccache hit",
+            "previously generated file",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            execution = root / "execution.json"
+            bep = root / "bep.json"
+            execution.write_text(
+                "".join(
+                    json.dumps({"runner": runner, "cacheHit": runner != "local"})
+                    for runner in runners
+                ),
+                encoding="utf-8",
+            )
+            bep.write_text(
+                json.dumps({"buildMetrics": {"timingMetrics": {"wallTimeInMs": 1}}}),
+                encoding="utf-8",
+            )
+            result = cache_observation.observe(execution, bep, "read")
+            self.assertEqual(result["remote_hits"], 1)
+            self.assertEqual(result["buildbuddy_remote_cache_hits"], 1)
+            self.assertEqual(result["local_cache_hits"], 1)
+            self.assertIsNot(result.get("fresh_runner"), True)
+            self.assertEqual(result["counters"]["bazel_disk_cache_hits"], 1)
+            self.assertEqual(result["counters"]["buildbuddy_remote_cache_hits"], 1)
+            self.assertIsNone(result["counters"]["ccache_hits"])
+            self.assertIsNone(result["counters"]["ccache_misses"])
+            self.assertFalse(result["ccache"]["fresh_runner"])
+            row = cache_observation.reduce_scenario(
+                scenario="corrupt-cache",
+                execution=execution,
+                bep=bep,
+                access="read",
+            )
+            counted = row["execution"]["runner"]
+            self.assertEqual(row["execution"]["remote_cache_hits"], 1)
+            self.assertEqual(counted["remote cache hit"], 1)
+            self.assertEqual(counted["disk cache hit"], 1)
+            self.assertEqual(counted["local"], 1)
+            self.assertEqual(counted["output-base action cache"], 1)
+            self.assertEqual(counted["ccache hit"], 1)
+            self.assertEqual(counted["previously generated file"], 1)
+            self.assertEqual(row["buildbuddy_remote_cache_hits"], 1)
+            self.assertEqual(row["counters"]["bazel_disk_cache_hits"], 1)
+            self.assertEqual(row["counters"]["buildbuddy_remote_cache_hits"], 1)
+            self.assertIsNone(row["counters"]["ccache_hits"])
+            self.assertIsNone(row["counters"]["ccache_misses"])
+            self.assertFalse(row["ccache"]["fresh_runner"])
+            self.assertIsNot(row.get("fresh_runner"), True)
+
 
 if __name__ == "__main__":
     unittest.main()
