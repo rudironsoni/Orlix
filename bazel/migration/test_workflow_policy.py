@@ -109,13 +109,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         store = workflow.split("name: Store Apple CI evidence", 1)[1].split(
             "if-no-files-found:", 1
         )[0]
-        included = [
-            "Build/AgentHarness/bazel-ci",
-            "Build/**/*.xcresult",
-            "Build/**/*.log",
-        ]
-        for path in included:
-            self.assertIn(f"\n            {path}\n", store)
+        self.assertIn("\n            Build/AgentHarness/bazel-ci\n", store)
+        self.assertNotIn("Build/**", store)
         self.assertNotIn("Library/Logs/DiagnosticReports", store)
         runtime = makefile.split("__bazel-simulator-runtime-proof:", 1)[1].split(
             "__bazel-current-simulator-gate:", 1
@@ -130,6 +125,11 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertLess(copy.index("reports_dir=~/Library/Logs/DiagnosticReports"), copy.index("/bin/cp -p"))
         self.assertLess(runtime.index("/bin/cp -p"), runtime.index("check DiagnosticReports"))
         self.assertLess(runtime.index("/bin/cp -p"), runtime.index("see DiagnosticReports"))
+        self.assertLess(runtime.index('echo "simctl install start'), runtime.index("xcrun simctl install"))
+        self.assertLess(runtime.index("xcrun simctl install"), runtime.index('echo "simctl install end'))
+        self.assertLess(runtime.index('echo "simctl install end'), runtime.index('echo "simctl launch start'))
+        self.assertLess(runtime.index('echo "simctl launch start'), runtime.index("xcrun simctl launch"))
+        self.assertLess(runtime.index("xcrun simctl launch"), runtime.index('echo "simctl launch end'))
         excluded = [
             line.strip() for line in store.splitlines() if line.strip().startswith("!")
         ]

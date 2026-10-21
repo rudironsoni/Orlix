@@ -664,12 +664,10 @@ jobs:
         with:
           name: bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}
           # app.* is the unpacked IPA the proofs install. current and ios15
-          # keep the launch logs for both simulator runtimes. The proof copies
-          # Orlix-*.ips crash reports into this evidence directory.
+          # keep launch logs, test.xcresult, and copied Orlix-*.ips reports
+          # in this directory. Do not search the rest of Build.
           path: |
             Build/AgentHarness/bazel-ci
-            Build/**/*.xcresult
-            Build/**/*.log
             !Build/AgentHarness/bazel-ci/app.*/**
           if-no-files-found: warn
           retention-days: 14

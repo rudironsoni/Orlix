@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "1029b8b7d02728ed5a3f194c4251b14ae34a2300007bdf3a2a5b370761cdb181",
+      "source_sha256": "30068ddb8c9dc6775bd9b64f87ecfe254f8a0eea4295ea6f3764bef00a373537",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -589,7 +589,7 @@
                 "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
                 "with": {
                   "name": "bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}",
-                  "path": "Build/AgentHarness/bazel-ci\nBuild/**/*.xcresult\nBuild/**/*.log\n!Build/AgentHarness/bazel-ci/app.*/**\n",
+                  "path": "Build/AgentHarness/bazel-ci\n!Build/AgentHarness/bazel-ci/app.*/**\n",
                   "if-no-files-found": "warn",
                   "retention-days": 14
                 }

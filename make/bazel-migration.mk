@@ -1093,10 +1093,14 @@ __bazel-simulator-runtime-proof:
 	fi; \
 	xcrun simctl terminate "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
+	echo "simctl install start label=$(ORLIX_SIMULATOR_LABEL) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
 	xcrun simctl install "$(ORLIX_SIMULATOR_ID)" "$(ORLIX_BAZEL_APP_PATH)"; \
+	echo "simctl install end label=$(ORLIX_SIMULATOR_LABEL) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
 	installed_app="$$(xcrun simctl get_app_container "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix app)"; \
 	test -x "$$installed_app/Orlix" || { echo "installed Orlix app is missing" >&2; exit 1; }; \
+	echo "simctl launch start label=$(ORLIX_SIMULATOR_LABEL) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
 	xcrun simctl launch --terminate-running-process "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix | tee "$$evidence_dir/launch.log"; \
+	echo "simctl launch end label=$(ORLIX_SIMULATOR_LABEL) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
 	launch_pid="$$(/usr/bin/awk 'END {print $$NF}' "$$evidence_dir/launch.log")"; \
 	case "$$launch_pid" in ''|*[!0-9]*) echo "simctl launch did not report a process id" >&2; exit 1 ;; esac; \
 	/bin/sleep 5; \

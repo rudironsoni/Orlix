@@ -7,6 +7,10 @@ updated: 2026-10-21
 ---
 # Orlix Knowledge Log
 
+## [2026-10-21] build | Upload only the Apple CI evidence directory
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) uploads `Build/AgentHarness/bazel-ci` and still omits `app.*`. Launch logs, `test.xcresult`, and copied `Orlix-*.ips` reports already live in that directory. The upload does not search `Build/**`. `__bazel-simulator-runtime-proof` prints a UTC timestamp immediately before and after `simctl install` and `simctl launch`. Both simulator proofs stay. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-21] build | Keep Orlix crash reports inside Apple CI evidence
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies every `Orlix-*.ips` file from `~/Library/Logs/DiagnosticReports` into the simulator proof evidence directory before that proof exits. The Apple CI artifact upload no longer lists that home directory. Launch logs, xcresult bundles, and the copied crash reports stay under `Build`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
