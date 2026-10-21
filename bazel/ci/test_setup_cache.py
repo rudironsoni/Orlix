@@ -843,7 +843,7 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertTrue((prefix / "etc" / "mke2fs.conf").is_file())
             self.assertLess(elapsed, 5.0, f"fixture pack+restore took {elapsed:.4f}s")
 
-    def test_missing_mke2fs_conf_rejects_the_restored_toolchain(self) -> None:
+    def test_missing_mke2fs_conf_does_not_unpack_or_discard_the_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             prefix = root / "prefix"
@@ -858,14 +858,47 @@ class SetupCacheDecisionTests(unittest.TestCase):
             self.assertFalse((prefix / "etc" / "mke2fs.conf").exists())
             stderr = io.StringIO()
             with contextlib.redirect_stderr(stderr):
-                restored = setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin)
+                with mock.patch.object(
+                    setup_cache,
+                    "extract_toolchain_archive",
+                    side_effect=AssertionError("missing mke2fs.conf unpacked the archive"),
+                ):
+                    restored = setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin)
             detail = stderr.getvalue()
-            self.assertFalse(restored)
+            self.assertTrue(restored)
             self.assertIn("restored CI toolchain has no mke2fs.conf", detail)
+            self.assertIn("not unpacking the toolchain archive for a missing mke2fs.conf", detail)
             self.assertNotIn("restored clang is not", detail)
+            self.assertTrue(archive.is_file())
             self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3").is_dir())
             self.assertTrue((prefix / "opt" / "llvm" / "bin" / "clang").is_file())
             self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
+            self.assertFalse((prefix / "etc" / "mke2fs.conf").exists())
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+
+    def test_missing_mke2fs_conf_keeps_kegs_when_the_clang_must_be_extracted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            shutil.rmtree(prefix / "Cellar" / "llvm")
+            (prefix / "opt" / "llvm").unlink()
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                restored = setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin)
+            detail = stderr.getvalue()
+            self.assertTrue(restored)
+            self.assertIn("mke2fs.conf is absent, leaving the archive and kegs in place", detail)
+            self.assertNotIn("restored clang is not", detail)
+            self.assertTrue(archive.is_file())
+            self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3" / "bin" / "clang").is_file())
+            self.assertFalse((prefix / "etc" / "mke2fs.conf").exists())
             self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
 
     def test_mke2fs_conf_is_linked_from_the_e2fsprogs_keg(self) -> None:
@@ -901,6 +934,9 @@ class SetupCacheDecisionTests(unittest.TestCase):
             pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
             self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
             replace_tar_bytes(archive, "Cellar/llvm/23.1.3/bin/clang", b"not-the-pinned-clang")
+            shutil.rmtree(prefix / "Cellar" / "llvm")
+            (prefix / "opt" / "llvm").unlink()
+            (prefix / "opt" / "llvm").symlink_to(Path("..") / "Cellar" / "llvm@20" / "20.1.8")
             self.assertFalse(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
             self.assertFalse((prefix / "Cellar" / "llvm" / "23.1.3").exists())
             self.assertFalse((prefix / "opt" / "llvm").exists())
