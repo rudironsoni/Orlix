@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import platform
 import tempfile
 import unittest
 from unittest import mock
@@ -18,6 +19,7 @@ from bazel.feasibility.kernel.compiler_object_recorder import (
     summarize,
 )
 from bazel.feasibility.kernel.compiler_remote_experiment import (
+    _blocked,
     bazel_flags,
     host_blocker,
     select_storage,
@@ -308,8 +310,26 @@ class RecorderTests(unittest.TestCase):
 
     def test_this_host_does_not_claim_the_kernel_experiment(self) -> None:
         blocker = host_blocker()
-        self.assertIsNotNone(blocker)
-        self.assertIn("not macOS", str(blocker))
+        if platform.system() == "Darwin":
+            developer = os.environ.get("ORLIX_PINNED_DEVELOPER_DIR", "")
+            if developer and Path(developer).is_dir():
+                self.assertIsNone(blocker)
+            else:
+                self.assertIn("ORLIX_PINNED_DEVELOPER_DIR", str(blocker))
+        else:
+            self.assertIsNotNone(blocker)
+            self.assertIn("not macOS", str(blocker))
+            self.assertIn("did not execute", str(blocker))
+        # A prepared macOS host has no host blocker. That is not experiment A or B.
+        record = _blocked(
+            "same-commit",
+            blocker or "host is prepared; the remote compiler-object experiment was not executed",
+        )
+        self.assertEqual(record["status"], "not_executed")
+        self.assertIs(record["executed"], False)
+        self.assertIsNone(record["remote_object_hits"])
+        self.assertIsNone(record["compiler_processes_executed"])
+        self.assertIsNone(record["output_digest"])
 
 
 if __name__ == "__main__":
