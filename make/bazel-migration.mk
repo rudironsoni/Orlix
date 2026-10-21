@@ -1381,8 +1381,8 @@ __bazel-kernel-cache-consumer: __bazel-feasibility-bootstrap
 # A fresh output base and an empty disk cache keep a disk hit or an output-base
 # hit from counting. CCACHE_DISABLE is exported for the shell only. It is not an
 # action env, so the action key stays the one the product build uploaded.
-# A remote cache hit is returned before spawn. darwin-sandbox cannot run a
-# no-sandbox action, so a miss fails before the compile. Pull requests do not run this target.
+# local can run this no-sandbox action and checks the remote cache inside
+# exec, before the compile. Pull requests do not run this target.
 __bazel-compiler-runtime-cache-consumer: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	case "$(ORLIX_BUILDBUDDY_ACCESS)" in \
@@ -1401,7 +1401,7 @@ __bazel-compiler-runtime-cache-consumer: __bazel-feasibility-bootstrap
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel"; \
 	python3 "$(CURDIR)/bazel/selection/origin_resolver.py" $(if $(ORLIX_BAZEL_ORIGINS),--requested-mode auto --origins '$(ORLIX_BAZEL_ORIGINS)' --use-promoted-lock,--requested-mode $(ORLIX_BAZEL_COMPONENT_MODE)) --lock "$(CURDIR)/artifacts.lock.json" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --print-flags > "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-consumer-origin-flags.txt"; \
 	echo "compiler-runtime-cache-consumer: startup --output_base=$$proof/output-base --disk_cache= ccache off"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/output-base" build //bazel/feasibility/mlibc:compiler_runtime --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) $(ORLIX_BAZEL_COMPONENT_CONFIG) $$(cat "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-consumer-origin-flags.txt") --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --remote_executor= --strategy=OrlixCompilerRuntime=darwin-sandbox --execution_log_compact_file= --execution_log_json_file="$$proof/execution.json"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/output-base" build //bazel/feasibility/mlibc:compiler_runtime --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) $(ORLIX_BAZEL_COMPONENT_CONFIG) $$(cat "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-consumer-origin-flags.txt") --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --remote_executor= --strategy=OrlixCompilerRuntime=local --execution_log_compact_file= --execution_log_json_file="$$proof/execution.json"; \
 	jq -e -s 'map(select(.mnemonic == "OrlixCompilerRuntime")) | if length > 0 and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and .targetLabel == "//bazel/feasibility/mlibc:compiler_runtime" and .cacheHit == true and .runner == "remote cache hit") then map({mnemonic, targetLabel, runner, cacheHit, exitCode}) else error("compiler runtime was not a remote cache hit") end' "$$proof/execution.json" > "$$proof/cache-observation.json"; \
 	jq -r '.[] | "compiler-runtime-cache-consumer: \(.targetLabel) cacheHit=\(.cacheHit) runner=\(.runner)"' "$$proof/cache-observation.json"; \
 	remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/cache-observation.json")"; \
