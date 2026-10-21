@@ -115,14 +115,20 @@ class MakeRoutingTests(unittest.TestCase):
 
     def test_analysis_test_uses_its_own_output_base(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        self.assertIn(
-            "ORLIX_BAZEL_ANALYSIS_OUTPUT_BASE ?= $(ORLIX_BUILD_ROOT)/Bazel/analysis-output-base",
-            makefile,
-        )
+        self.assertNotIn("ORLIX_BAZEL_ANALYSIS_OUTPUT_BASE", makefile)
+        self.assertNotIn("analysis-output-base", makefile)
         matrix = makefile.split("__bazel-matrix-check:", 1)[1].split("__bazel-orlixos:", 1)[0]
         command = next(line for line in matrix.splitlines() if " test //bazel/feasibility/analysis:all " in line)
-        self.assertIn('--output_base="$(ORLIX_BAZEL_ANALYSIS_OUTPUT_BASE)"', command)
-        self.assertNotIn("$(ORLIX_BAZEL_OUTPUT_BASE)", command)
+        self.assertIn('--output_base="$(ORLIX_BAZEL_OUTPUT_BASE)"', command)
+        self.assertIn('--disk_cache="$(ORLIX_BAZEL_DISK_CACHE)"', command)
+        bootstrap = makefile.split("__bazel-feasibility-bootstrap:", 1)[1].split(
+            "__bazel-buildbuddy-policy:", 1
+        )[0]
+        mod_deps = next(line for line in bootstrap.splitlines() if " mod deps " in line and "--lockfile_mode=error" in line)
+        self.assertIn('--output_base="$(ORLIX_BAZEL_OUTPUT_BASE)"', mod_deps)
+        self.assertIn('--disk_cache="$(ORLIX_BAZEL_DISK_CACHE)"', mod_deps)
+        self.assertIn("--lockfile_mode=error", mod_deps)
+        self.assertNotIn("shutdown", mod_deps)
         app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
         self.assertNotIn("cquery //Orlix:Orlix", app)
         apple = makefile.split("__bazel-apple-ci:", 1)[1].split("__bazel-simulator-runtime-proof:", 1)[0]
