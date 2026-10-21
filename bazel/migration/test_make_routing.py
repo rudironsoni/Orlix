@@ -1205,7 +1205,9 @@ esac
 
     def test_kernel_cache_consumer_fails_closed_without_compiling(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        consumer = makefile.split("__bazel-kernel-cache-consumer:", 1)[1]
+        consumer = makefile.split("__bazel-kernel-cache-consumer:", 1)[1].split(
+            "__bazel-compiler-runtime-cache-consumer:", 1
+        )[0]
         seed = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
@@ -1228,6 +1230,36 @@ esac
         self.assertIn(".cacheHit == true", consumer)
         self.assertNotIn("//bazel/feasibility/rootfs:rootfs", consumer)
         self.assertNotIn("--noremote_accept_cached", consumer)
+
+    def test_compiler_runtime_cache_consumer_fails_closed_without_compiling(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        consumer = makefile.split("__bazel-compiler-runtime-cache-consumer:", 1)[1]
+        seed = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        apple = makefile.split("__bazel-apple-ci:", 1)[1].split("__bazel-current-simulator-gate:", 1)[0]
+        self.assertNotIn("__bazel-compiler-runtime-cache-consumer", apple)
+        self.assertNotIn("//bazel/feasibility/mlibc:compiler_runtime", seed)
+        self.assertIn("//bazel/feasibility/kernel:uapi", seed)
+        self.assertIn('case "$(ORLIX_BUILDBUDDY_ACCESS)" in', consumer)
+        self.assertIn("read)", consumer)
+        self.assertIn("buildbuddy-read", consumer)
+        self.assertIn("remote_upload_local_results=false", consumer)
+        self.assertIn("--output_base=", consumer)
+        self.assertIn("--disk_cache=", consumer)
+        self.assertIn("export CCACHE_DISABLE=1", consumer)
+        self.assertNotIn("--action_env=CCACHE_DISABLE", consumer)
+        self.assertIn("--action_env=CCACHE_DIR=", consumer)
+        self.assertIn("--modify_execution_info=OrlixCompilerRuntime=+no-local", consumer)
+        self.assertIn("//bazel/feasibility/mlibc:compiler_runtime", consumer)
+        self.assertIn('.runner == "remote cache hit"', consumer)
+        self.assertIn(".cacheHit == true", consumer)
+        self.assertIn('.targetLabel == "//bazel/feasibility/mlibc:compiler_runtime"', consumer)
+        self.assertIn("(.exitCode // 0) == 0", consumer)
+        self.assertNotIn("//bazel/feasibility/rootfs:rootfs", consumer)
+        self.assertNotIn("--noremote_accept_cached", consumer)
+        self.assertNotIn("--platforms", consumer)
+        self.assertNotIn("ORLIX_BAZEL_AUTHORITY", consumer)
 
 
 if __name__ == "__main__":

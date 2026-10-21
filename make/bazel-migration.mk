@@ -73,7 +73,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-xcode-cloud-project-check
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
 .PHONY: __bazel-matrix-check
-.PHONY: __bazel-scenario-harness __bazel-kernel-cache-consumer __bazel-routing-contract
+.PHONY: __bazel-scenario-harness __bazel-kernel-cache-consumer __bazel-compiler-runtime-cache-consumer __bazel-routing-contract
 
 __bazel-bootstrap:
 	@$(ORLIX_RUBY) bazel/bootstrap.rb >/dev/null
@@ -1376,4 +1376,35 @@ __bazel-kernel-cache-consumer: __bazel-feasibility-bootstrap
 	remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/cache-observation.json")"; \
 	test "$$remote_hits" -ge 1; \
 	echo "kernel-cache-consumer: remote cache hits $$remote_hits"
+
+# Read-only lookup for the compiler runtime uploaded by the main product build.
+# A fresh output base and an empty disk cache keep a disk hit or an output-base
+# hit from counting. CCACHE_DISABLE is exported for the shell only. It is not an
+# action env, so the action key stays the one the product build uploaded.
+# +no-local leaves no local strategy when the remote cache misses, so the
+# compiler runtime does not compile. Pull requests do not run this target.
+__bazel-compiler-runtime-cache-consumer: __bazel-feasibility-bootstrap
+	@set -euo pipefail; \
+	case "$(ORLIX_BUILDBUDDY_ACCESS)" in \
+	read) ;; \
+	*) echo "compiler runtime cache consumer runs only on the read rc after a main product build" >&2; exit 1 ;; \
+	esac; \
+	command -v jq >/dev/null || { echo "jq is required to inspect the compiler runtime cache execution log" >&2; exit 1; }; \
+	consumer_rc="$$(readlink "$(CURDIR)/.bazelrc.local")"; \
+	test -n "$$consumer_rc"; \
+	consumer_config="$$(sed -n 's/^build --config=//p' "$$consumer_rc")"; \
+	test "$$consumer_config" = buildbuddy-read; \
+	grep -F -q 'build:buildbuddy-read --remote_upload_local_results=false' "$(CURDIR)/.bazelrc"; \
+	export CCACHE_DISABLE=1; \
+	echo "compiler-runtime-cache-consumer: credential build:buildbuddy-read remote_upload_local_results=false ccache off"; \
+	proof="$$(/usr/bin/mktemp -d "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-cache-consumer.XXXXXX")"; \
+	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel"; \
+	python3 "$(CURDIR)/bazel/selection/origin_resolver.py" $(if $(ORLIX_BAZEL_ORIGINS),--requested-mode auto --origins '$(ORLIX_BAZEL_ORIGINS)' --use-promoted-lock,--requested-mode $(ORLIX_BAZEL_COMPONENT_MODE)) --lock "$(CURDIR)/artifacts.lock.json" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --print-flags > "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-consumer-origin-flags.txt"; \
+	echo "compiler-runtime-cache-consumer: startup --output_base=$$proof/output-base --disk_cache= ccache off"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/output-base" build //bazel/feasibility/mlibc:compiler_runtime --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) $(ORLIX_BAZEL_COMPONENT_CONFIG) $$(cat "$(ORLIX_BUILD_ROOT)/Bazel/compiler-runtime-consumer-origin-flags.txt") --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --remote_executor= --modify_execution_info=OrlixCompilerRuntime=+no-local --execution_log_compact_file= --execution_log_json_file="$$proof/execution.json"; \
+	jq -e -s 'map(select(.mnemonic == "OrlixCompilerRuntime")) | if length > 0 and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and .targetLabel == "//bazel/feasibility/mlibc:compiler_runtime" and .cacheHit == true and .runner == "remote cache hit") then map({mnemonic, targetLabel, runner, cacheHit, exitCode}) else error("compiler runtime was not a remote cache hit") end' "$$proof/execution.json" > "$$proof/cache-observation.json"; \
+	jq -r '.[] | "compiler-runtime-cache-consumer: \(.targetLabel) cacheHit=\(.cacheHit) runner=\(.runner)"' "$$proof/cache-observation.json"; \
+	remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/cache-observation.json")"; \
+	test "$$remote_hits" -ge 1; \
+	echo "compiler-runtime-cache-consumer: remote cache hits $$remote_hits"
 
