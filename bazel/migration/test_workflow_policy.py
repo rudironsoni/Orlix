@@ -103,6 +103,37 @@ class WorkflowPolicyTests(unittest.TestCase):
             workflow,
         )
 
+    def test_apple_ci_evidence_omits_unpacked_ipa(self) -> None:
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
+        store = workflow.split("name: Store Apple CI evidence", 1)[1].split(
+            "if-no-files-found:", 1
+        )[0]
+        included = [
+            "Build/AgentHarness/bazel-ci",
+            "Build/**/*.xcresult",
+            "Build/**/*.log",
+            "~/Library/Logs/DiagnosticReports",
+        ]
+        for path in included:
+            self.assertIn(f"\n            {path}\n", store)
+        excluded = [
+            line.strip() for line in store.splitlines() if line.strip().startswith("!")
+        ]
+        self.assertEqual(excluded, ["!Build/AgentHarness/bazel-ci/app.*/**"])
+        self.assertLess(
+            store.index("Build/AgentHarness/bazel-ci\n"),
+            store.index("!Build/AgentHarness/bazel-ci/app.*/**"),
+        )
+        apple_ci = makefile.split("__bazel-apple-ci:", 1)[1].split(
+            "__bazel-simulator-runtime-proof:", 1
+        )[0]
+        self.assertIn('mktemp -d "$$evidence_dir/app.XXXXXX"', apple_ci)
+        self.assertIn("/usr/bin/ditto -x -k", apple_ci)
+        self.assertIn("__bazel-current-simulator-gate", apple_ci)
+        self.assertIn("__bazel-ios15-simulator-gate", apple_ci)
+        self.assertEqual(apple_ci.count('ORLIX_BAZEL_APP_PATH="$$app"'), 2)
+
     def test_xcode_version_comes_from_file_and_selection_is_verified(self) -> None:
         for name in (
             "bazel-ci.yml",
@@ -427,7 +458,6 @@ class WorkflowPolicyTests(unittest.TestCase):
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
-        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", workflow)
         self.assertNotIn("Stage cache-equivalence seed upload credential", workflow)
         publish = workflow.split("Publish the cache-equivalence seed", 1)[1].split(
             "Promoted-consumer proof", 1
@@ -435,7 +465,15 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("steps.buildbuddy.outputs.access == 'write'", publish)
         self.assertNotIn("access == 'read'", publish)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", publish)
+        self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", publish)
+        self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", publish)
         self.assertIn("make __bazel-cache-equivalence", publish)
+        self.assertNotIn(
+            "ORLIX_BUILDBUDDY_SEED_KEY_FILE",
+            workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+                "Publish the cache-equivalence seed", 1
+            )[0],
+        )
         apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
             "Publish the cache-equivalence seed", 1
         )[0]

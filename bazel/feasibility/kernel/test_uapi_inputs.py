@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+import shutil
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 from bazel.feasibility.kernel.test_linux_source_archive import LinuxSourceArchiveTests
 from bazel.feasibility.kernel.uapi_inputs import EXACT, TREE_PREFIXES, headers_install_source
@@ -120,6 +123,73 @@ printf '%s\n' "$hostcc"
                 text=True,
             )
             self.assertEqual(result.stdout.strip(), candidate)
+
+    def test_cquery_sees_one_uapi_sha256_and_compares_its_parent(self) -> None:
+        text = UAPI.read_text(encoding="utf-8")
+        self.assertEqual(text.count('declare_file(ctx.label.name + "/uapi.sha256")'), 1)
+        self.assertIn('declare_directory(ctx.label.name + "/product")', text)
+        self.assertNotIn('declare_file(ctx.label.name + "/product/uapi.sha256")', text)
+        product = text[text.index('mnemonic = "OrlixPromotedUapiProduct"'):]
+        self.assertIn('/bin/cp -L "$digest" "$out/uapi.sha256"', product)
+        # cquery --output=files lists declared files and directory roots. The
+        # product copy of uapi.sha256 stays inside the product directory, so
+        # the marker /uapi.sha256 matches one path. Its parent contains product/.
+
+    def test_product_action_writes_regular_header_bytes(self) -> None:
+        text = UAPI.read_text(encoding="utf-8")
+        product = text[text.index('mnemonic = "OrlixPromotedUapiProduct"'):]
+        self.assertIn('/bin/cp -R -L "$headers/include/." "$out/include/"', product)
+        self.assertNotIn('/bin/cp -R "$headers/include/." "$out/include/"', product)
+        self.assertIn("UAPI product must be regular files", product)
+
+
+def _rebuild_without_symlinks(source: Path, dest: Path) -> None:
+    """Keep only regular files, the way a tree artifact drops a link-only directory."""
+    dest.mkdir()
+    for path in sorted(source.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        relative = path.relative_to(source)
+        target = dest / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
+
+
+class UapiProductTreeTests(unittest.TestCase):
+    def test_dereferenced_copy_keeps_include_when_symlink_copy_does_not(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload = root / "bytes" / "linux" / "unistd.h"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("unistd\n", encoding="utf-8")
+            headers = root / "headers"
+            link = headers / "include" / "linux" / "unistd.h"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(payload)
+            linked = root / "linked-product"
+            linked.mkdir()
+            (linked / "include").mkdir()
+            subprocess.run(
+                ["/bin/cp", "-R", f"{headers / 'include'}/.", f"{linked / 'include'}/"],
+                check=True,
+            )
+            copied = root / "copied-product"
+            copied.mkdir()
+            (copied / "include").mkdir()
+            subprocess.run(
+                ["/bin/cp", "-R", "-L", f"{headers / 'include'}/.", f"{copied / 'include'}/"],
+                check=True,
+            )
+            linked_tree = root / "linked-tree"
+            copied_tree = root / "copied-tree"
+            _rebuild_without_symlinks(linked, linked_tree)
+            _rebuild_without_symlinks(copied, copied_tree)
+            self.assertFalse((linked_tree / "include").exists())
+            restored = copied_tree / "include" / "linux" / "unistd.h"
+            self.assertTrue(restored.is_file())
+            self.assertFalse(restored.is_symlink())
+            self.assertEqual(restored.read_text(encoding="utf-8"), "unistd\n")
+            self.assertFalse(os.path.islink(copied / "include"))
 
 
 if __name__ == "__main__":

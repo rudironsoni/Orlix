@@ -222,11 +222,22 @@ test -s "$archive"
 test -s "$manifest"
 test -s "$digest"
 /bin/mkdir -p "$out/include"
-/bin/cp -R "$headers/include/." "$out/include/"
-/bin/cp "$archive" "$out/kbuild-archive.tar"
-/bin/cp "$manifest" "$out/manifest.json"
-/bin/cp "$digest" "$out/uapi.sha256"
+# headers is a TreeArtifact, so its files are absolute symlinks. cp -R stores
+# those links. A fresh tree then has no real include directory, while the
+# remote tree restores the header bytes under product/include. Write the bytes.
+/bin/cp -R -L "$headers/include/." "$out/include/"
+/bin/cp -L "$archive" "$out/kbuild-archive.tar"
+/bin/cp -L "$manifest" "$out/manifest.json"
+/bin/cp -L "$digest" "$out/uapi.sha256"
+test -d "$out/include"
+test ! -L "$out/include"
 test -s "$out/include/linux/unistd.h"
+links="$(/usr/bin/find "$out" -type l -print)"
+if [ -n "$links" ]; then
+  printf '%s\n' "UAPI product must be regular files so include survives the tree artifact" >&2
+  printf '%s\n' "$links" >&2
+  exit 1
+fi
 """,
         arguments = [product.path, headers.path, archive.path, manifest.path, digest.path],
         inputs = [headers, archive, manifest, digest],

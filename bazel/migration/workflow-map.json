@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "c1860a087bed4a8794c787057ce48934c9470d56660cffa04ca84bfb6d289cfe",
+      "source_sha256": "0253e99f968aa780881cc99d41a266048d4d03b9ea186397c56c1900dcedc1a2",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -370,8 +370,38 @@
                 }
               },
               {
+                "name": "Record the pinned CI toolchain",
+                "id": "toolchain-pin",
+                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+              },
+              {
+                "name": "Restore CI toolchain bundle",
+                "id": "ci-toolchain",
+                "if": "steps.toolchain-pin.outputs.ready == 'true'",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz",
+                  "key": "orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}"
+                }
+              },
+              {
                 "name": "Install declared build tools",
-                "run": "set -euo pipefail\n# Source bottles only record formulae built from source. They do not\n# skip the bottle install brew bundle runs for the pinned toolchain.\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then\n  echo \"Homebrew packages are already installed at the pinned versions; skipping brew bundle\"\nelse\n  xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\n  brew tap xcodesorg/made\n  git -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\n  git -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\n  brew trust --formula xcodesorg/made/xcodes\n  brew bundle --file bazel/ci/Brewfile\n  test \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\nfi\ntest \"$(xcodes version)\" = \"2.1.0\"\n"
+                "id": "tools",
+                "env": {
+                  "ORLIX_TOOLCHAIN_CACHE_HIT": "${{ steps.ci-toolchain.outputs.cache-hit }}",
+                  "ORLIX_TOOLCHAIN_PIN": "${{ steps.toolchain-pin.outputs.pin }}",
+                  "ORLIX_TOOLCHAIN_READY": "${{ steps.toolchain-pin.outputs.ready }}"
+                },
+                "run": "set -euo pipefail\n# The elapsed time is the measurement for this step. It is not a budget.\ninstall_started=$SECONDS\narchive=\"$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz\"\nrestored=false\nif [ \"$ORLIX_TOOLCHAIN_READY\" = true ] && [ -f \"$archive\" ]; then\n  if python3 bazel/ci/setup_cache.py restore-toolchain --archive \"$archive\" --brewfile bazel/ci/Brewfile --pin \"$ORLIX_TOOLCHAIN_PIN\"; then\n    restored=true\n    echo \"pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle\"\n  else\n    echo \"restored CI toolchain does not match the pinned clang; running brew bundle\"\n    rm -f \"$archive\"\n  fi\nfi\nif [ \"$restored\" != true ]; then\n  if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then\n    echo \"Homebrew packages are already installed at the pinned versions; skipping brew bundle\"\n  else\n    export HOMEBREW_NO_AUTO_UPDATE=1\n    xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2\n    brew tap xcodesorg/made\n    git -C \"$(brew --repo xcodesorg/made)\" fetch origin \"$xcodes_tap_revision\"\n    git -C \"$(brew --repo xcodesorg/made)\" checkout \"$xcodes_tap_revision\"\n    brew trust --formula xcodesorg/made/xcodes\n    brew bundle --file bazel/ci/Brewfile\n    test \"$(git -C \"$(brew --repo xcodesorg/made)\" rev-parse HEAD)\" = \"$xcodes_tap_revision\"\n    if [ \"$GITHUB_EVENT_NAME\" = push ] && [ \"$GITHUB_REF\" = refs/heads/main ] && [ \"$ORLIX_TOOLCHAIN_CACHE_HIT\" != true ] && [ \"$ORLIX_TOOLCHAIN_READY\" = true ]; then\n      python3 bazel/ci/setup_cache.py pack-toolchain --archive \"$archive\" --brewfile bazel/ci/Brewfile --pin \"$ORLIX_TOOLCHAIN_PIN\"\n    fi\n  fi\nfi\nif [ ! -f /opt/homebrew/etc/mke2fs.conf ]; then\n  export HOMEBREW_NO_AUTO_UPDATE=1\n  if brew list --formula e2fsprogs >/dev/null 2>&1; then\n    brew reinstall e2fsprogs\n  else\n    brew install e2fsprogs\n  fi\nfi\ntest \"$(xcodes version)\" = \"2.1.0\"\nif [ -f \"$archive\" ]; then\n  bytes=$(stat -f%z \"$archive\")\n  echo \"toolchain=true\" >> \"$GITHUB_OUTPUT\"\n  echo \"toolchain archive bytes=$bytes\"\nelse\n  bytes=0\n  echo \"toolchain=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"toolchain archive bytes=0\"\nfi\necho \"bytes=$bytes\" >> \"$GITHUB_OUTPUT\"\n# ccache is 97654617 bytes and the Bazel repository cache is\n# 571396067 bytes. Drop one of those, not this archive or the\n# 5126954916-byte iOS 15.5 runtime, if the sum would pass 10GB.\npython3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes \"$bytes\" >> \"$GITHUB_OUTPUT\"\nelapsed=$((SECONDS - install_started))\necho \"seconds=$elapsed\" >> \"$GITHUB_OUTPUT\"\necho \"declared build tools took ${elapsed}s\"\n"
+              },
+              {
+                "name": "Save CI toolchain bundle",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.toolchain-pin.outputs.ready == 'true' && steps.ci-toolchain.outputs.cache-hit != 'true' && steps.tools.outputs.toolchain == 'true'",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz",
+                  "key": "orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}"
+                }
               },
               {
                 "name": "Install the requested Xcode from the cache or Apple",
@@ -489,7 +519,7 @@
               },
               {
                 "name": "Save Bazel repository cache",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true'",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true' && steps.tools.outputs.drop_repository != 'true'",
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/Bazel/repository-cache",
@@ -507,7 +537,7 @@
               },
               {
                 "name": "Save local compiler object cache",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true'",
+                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true'",
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
@@ -518,9 +548,10 @@
                 "name": "Publish the cache-equivalence seed",
                 "if": "steps.buildbuddy.outputs.access == 'write'",
                 "env": {
-                  "ORLIX_BUILDBUDDY_ACCESS": "${{ steps.buildbuddy.outputs.access }}"
+                  "ORLIX_BUILDBUDDY_ACCESS": "read",
+                  "BUILDBUDDY_API_KEY": "${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}"
                 },
-                "run": "make __bazel-cache-equivalence"
+                "run": "set -euo pipefail\nwrite_rc=\"$(readlink .bazelrc.local)\"\numask 077\nseed_key=\"$RUNNER_TEMP/orlix-buildbuddy-seed-key\"\nsed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' \"$write_rc\" > \"$seed_key\"\nchmod 600 \"$seed_key\"\ntest -s \"$seed_key\"\nunlink .bazelrc.local\nunlink \"$write_rc\"\nmake __bazel-buildbuddy-configure\nif [ -n \"${GITHUB_ENV:-}\" ]; then printf '%s\\n' \"ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key\" >> \"$GITHUB_ENV\"; fi\nmake __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE=\"$seed_key\"\n"
               },
               {
                 "name": "Promoted-consumer proof (cold then warm)",
@@ -558,7 +589,7 @@
                 "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
                 "with": {
                   "name": "bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}",
-                  "path": "Build/AgentHarness/bazel-ci\nBuild/**/*.xcresult\nBuild/**/*.log\n~/Library/Logs/DiagnosticReports\n",
+                  "path": "Build/AgentHarness/bazel-ci\nBuild/**/*.xcresult\nBuild/**/*.log\n~/Library/Logs/DiagnosticReports\n!Build/AgentHarness/bazel-ci/app.*/**\n",
                   "if-no-files-found": "warn",
                   "retention-days": 14
                 }

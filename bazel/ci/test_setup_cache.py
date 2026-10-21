@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
 import json
 import plistlib
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 import unittest
@@ -691,6 +695,17 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertTrue(setup_cache.formula_version_matches("23.1.3_1", "23.1.3"))
         self.assertFalse(setup_cache.formula_version_matches("20.1.8", "23.1.3"))
 
+    def test_libtool_formula_is_read_from_the_lib_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            path = (
+                prefix / "Library" / "Taps" / "homebrew" / "homebrew-core"
+                / "Formula" / "lib" / "libtool.rb"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text('class Libtool < Formula\n  version "2.6.2"\nend\n', encoding="utf-8")
+            self.assertEqual(setup_cache.formula_version_from_prefix(prefix, "libtool"), "2.6.2")
+
     def test_pinned_tools_skip_brew_without_spawning_brew(self) -> None:
         brewfile_text = (ROOT / "bazel/ci/Brewfile").read_text(encoding="utf-8")
         entries = setup_cache.brewfile_entries(brewfile_text)
@@ -706,6 +721,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
                 version = pinned or "23.1.3"
                 write_formula(prefix, name, version)
                 write_keg(prefix, name, version, clang=setup_cache.formula_short_name(name) == "llvm")
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
             started = time.perf_counter()
             with mock.patch.object(setup_cache.subprocess, "run", forbid_brew):
                 satisfied = setup_cache.bundle_satisfied(brewfile, prefix)
@@ -745,7 +762,273 @@ class SetupCacheDecisionTests(unittest.TestCase):
             write_keg(prefix, "llvm", "20.1.8", clang=True)
             self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
             write_keg(prefix, "llvm", "23.1.3", clang=True)
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
             self.assertTrue(setup_cache.bundle_satisfied(brewfile, prefix))
+
+    def test_recorded_versions_are_the_toolchain_cache_key_suffix(self) -> None:
+        brewfile = ROOT / "bazel/ci/Brewfile"
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            for name, pinned in setup_cache.brewfile_entries(brewfile.read_text(encoding="utf-8")):
+                write_formula(prefix, name, pinned or "23.1.3")
+            record = setup_cache.pinned_tool_versions(brewfile, prefix)
+            pin = setup_cache.toolchain_pin_suffix(record)
+            digest = setup_cache.brewfile_digest(brewfile)
+            key = setup_cache.toolchain_cache_key(digest, pin)
+        self.assertEqual(record["llvm"], "23.1.3")
+        self.assertEqual(record["xcodesorg/made/xcodes"], "2.1.0")
+        self.assertEqual(digest, hashlib.sha256(brewfile.read_bytes()).hexdigest())
+        self.assertTrue(pin.startswith("llvm-23.1.3-"))
+        self.assertNotIn("20.1.8", pin)
+        self.assertNotIn("llvm@20", key)
+        self.assertEqual(key, f"orlix-ci-toolchain-{digest}-{pin}")
+        changed = dict(record)
+        changed["llvm"] = "23.1.4"
+        self.assertNotEqual(setup_cache.toolchain_pin_suffix(changed), pin)
+
+    def test_toolchain_archive_restores_the_pinned_clang_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text(
+                'brew "llvm"\nbrew "make"\n# xcodes 2.1.0 from tap example\nbrew "xcodesorg/made/xcodes"\n',
+                encoding="utf-8",
+            )
+            write_formula(prefix, "llvm", "23.1.3")
+            write_formula(prefix, "make", "4.4.1")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            clang = prefix / "Cellar" / "llvm" / "23.1.3" / "bin" / "clang"
+            clang.write_bytes(b"pinned-clang" * 1024)
+            write_keg(prefix, "make", "4.4.1")
+            (prefix / "Cellar" / "make" / "4.4.1" / "bin" / "gmake").write_bytes(b"gmake")
+            (prefix / "bin").mkdir()
+            (prefix / "bin" / "gmake").symlink_to(Path("..") / "opt" / "make" / "bin" / "gmake")
+            (prefix / "bin" / "local-tool").write_bytes(b"not-a-brewfile-tool")
+            write_keg(prefix, "xcodes", "2.1.0")
+            write_keg(prefix, "zstd", "1.5.7")
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            write_keg(prefix, "git", "2.50.1")
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            started = time.perf_counter()
+            self.assertTrue(setup_cache.pack_toolchain(
+                brewfile, archive, prefix, pin=pin, dependencies=["zstd", "llvm@20"],
+            ))
+            with tarfile.open(archive, "r") as bundle:
+                names = [setup_cache.normalize_tar_name(member.name) for member in bundle.getmembers()]
+            self.assertIn("Cellar/llvm/23.1.3/bin/clang", names)
+            self.assertIn("opt/llvm", names)
+            self.assertIn("Cellar/zstd/1.5.7", names)
+            self.assertIn("bin/gmake", names)
+            self.assertNotIn("bin/local-tool", names)
+            self.assertFalse(any("llvm@20" in name for name in names))
+            self.assertFalse(any(name == "Cellar" or name.startswith("Cellar/git/") or name == "opt" for name in names))
+            self.assertNotIn("/opt/homebrew", names)
+            shutil.rmtree(prefix / "Cellar" / "llvm")
+            (prefix / "opt" / "llvm").unlink()
+            (prefix / "opt" / "llvm").symlink_to(Path("..") / "Cellar" / "llvm@20" / "20.1.8")
+            (prefix / "etc").mkdir()
+            (prefix / "etc" / "mke2fs.conf").write_text("[defaults]\n", encoding="utf-8")
+            self.assertTrue(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
+            elapsed = time.perf_counter() - started
+            print(f"local toolchain fixture pack+restore took {elapsed:.4f}s")
+            llvm_keg = prefix / "Cellar" / "llvm" / "23.1.3"
+            self.assertTrue(setup_cache.pinned_llvm_clang(prefix, llvm_keg))
+            self.assertEqual((prefix / "opt" / "llvm" / "bin" / "clang").read_bytes(), b"pinned-clang" * 1024)
+            self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
+            self.assertFalse((prefix / CI_TOOLCHAIN_MANIFEST).exists())
+            self.assertTrue((prefix / "etc" / "mke2fs.conf").is_file())
+            self.assertLess(elapsed, 5.0, f"fixture pack+restore took {elapsed:.4f}s")
+
+    def test_missing_mke2fs_conf_rejects_the_restored_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            self.assertFalse((prefix / "etc" / "mke2fs.conf").exists())
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                restored = setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin)
+            detail = stderr.getvalue()
+            self.assertFalse(restored)
+            self.assertIn("restored CI toolchain has no mke2fs.conf", detail)
+            self.assertNotIn("restored clang is not", detail)
+            self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3").is_dir())
+            self.assertTrue((prefix / "opt" / "llvm" / "bin" / "clang").is_file())
+            self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+
+    def test_mke2fs_conf_is_linked_from_the_e2fsprogs_keg(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            source = prefix / "opt" / "e2fsprogs" / "etc" / "mke2fs.conf"
+            source.parent.mkdir(parents=True)
+            source.write_text("[defaults]\n", encoding="utf-8")
+            self.assertTrue(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
+            conf = prefix / "etc" / "mke2fs.conf"
+            self.assertTrue(conf.is_symlink())
+            self.assertEqual(conf.read_text(encoding="utf-8"), "[defaults]\n")
+            self.assertTrue((prefix / "Cellar" / "llvm" / "23.1.3").is_dir())
+
+    def test_wrong_clang_identity_is_removed_and_llvm20_stays(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            replace_tar_bytes(archive, "Cellar/llvm/23.1.3/bin/clang", b"not-the-pinned-clang")
+            self.assertFalse(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
+            self.assertFalse((prefix / "Cellar" / "llvm" / "23.1.3").exists())
+            self.assertFalse((prefix / "opt" / "llvm").exists())
+            self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8" / "bin" / "clang").is_file())
+            self.assertFalse(setup_cache.bundle_satisfied(brewfile, prefix))
+
+    def test_prefix_wide_archive_is_not_restored(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            write_keg(prefix, "llvm@20", "20.1.8", clang=True)
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            append_tar_member(archive, "Cellar/git/2.50.1/README", b"unrelated")
+            self.assertFalse(setup_cache.restore_toolchain(archive, brewfile, prefix, pin=pin))
+            self.assertFalse((prefix / "Cellar" / "git").exists())
+            self.assertTrue((prefix / "Cellar" / "llvm@20" / "20.1.8").is_dir())
+            self.assertTrue(setup_cache.pinned_llvm_clang(prefix, prefix / "Cellar" / "llvm" / "23.1.3"))
+
+    def test_toolchain_budget_keeps_the_bootable_runtime(self) -> None:
+        self.assertEqual(setup_cache.BOOTABLE_SIMRUNTIME_CACHE_BYTES, 5126954916)
+        self.assertEqual(setup_cache.BOOTABLE_SIMRUNTIME_CACHE_KEY, "orlix-ios15-simruntime-bootable-v1")
+        members = setup_cache.CI_TOOLCHAIN_MEMBER_BYTES
+        bottles = setup_cache.CI_TOOLCHAIN_BOTTLE_BYTES
+        runtime = setup_cache.BOOTABLE_SIMRUNTIME_CACHE_BYTES
+        self.assertEqual(members, 2_349_225_560)
+        self.assertEqual(bottles, 582_115_184)
+        self.assertLess(runtime + members, setup_cache.ACTIONS_CACHE_QUOTA_BYTES)
+        plan = setup_cache.cache_plan(members)
+        self.assertEqual(plan["drop_ccache"], "false")
+        self.assertEqual(plan["drop_repository"], "false")
+        self.assertEqual(setup_cache.CCACHE_CACHE_BYTES, 97_654_617)
+        self.assertEqual(setup_cache.BAZEL_REPOSITORY_CACHE_BYTES, 571_396_067)
+        crowded = setup_cache.cache_plan(4_300_000_000)
+        self.assertEqual(crowded["drop_ccache"], "true")
+        self.assertEqual(crowded["drop_repository"], "false")
+        tighter = setup_cache.cache_plan(4_500_000_000)
+        self.assertEqual(tighter["drop_ccache"], "false")
+        self.assertEqual(tighter["drop_repository"], "true")
+
+    def test_archive_over_the_bootable_budget_is_not_saved(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            brewfile = root / "Brewfile"
+            brewfile.write_text('brew "llvm"\nbrew "make"\n', encoding="utf-8")
+            write_formula(prefix, "llvm", "23.1.3")
+            write_formula(prefix, "make", "4.4.1")
+            write_keg(prefix, "llvm", "23.1.3", clang=True)
+            (prefix / "Cellar" / "llvm" / "23.1.3" / "bin" / "clang").write_bytes(b"x" * 64)
+            write_keg(prefix, "make", "4.4.1")
+            (prefix / "Cellar" / "make" / "4.4.1" / "bin" / "gmake").write_bytes(b"m")
+            archive = root / "ci-toolchain.tar.gz"
+            pin = setup_cache.toolchain_pin_suffix(setup_cache.pinned_tool_versions(brewfile, prefix))
+            self.assertTrue(setup_cache.pack_toolchain(brewfile, archive, prefix, pin=pin, dependencies=[]))
+            self.assertTrue(archive.is_file())
+            with tarfile.open(archive, "r:gz") as bundle:
+                names = [setup_cache.normalize_tar_name(member.name) for member in bundle.getmembers()]
+            self.assertIn("Cellar/llvm/23.1.3/bin/clang", names)
+            self.assertIn("Cellar/make/4.4.1", names)
+
+
+CI_TOOLCHAIN_MANIFEST = "orlix-toolchain-manifest.json"
+
+
+def replace_tar_bytes(archive: Path, member_name: str, payload: bytes) -> None:
+    with tarfile.open(archive, "r") as source:
+        members = source.getmembers()
+        payloads = {}
+        for member in members:
+            if member.isfile():
+                extracted = source.extractfile(member)
+                payloads[member.name] = b"" if extracted is None else extracted.read()
+    rewritten = archive.with_name(archive.name + ".rewritten")
+    with tarfile.open(rewritten, "w:gz", format=tarfile.PAX_FORMAT) as bundle:
+        for member in members:
+            info = tarfile.TarInfo(member.name)
+            info.type = member.type
+            info.linkname = member.linkname
+            info.mode = member.mode
+            info.mtime = member.mtime
+            if member.name == member_name:
+                info.type = tarfile.REGTYPE
+                info.linkname = ""
+                info.size = len(payload)
+                bundle.addfile(info, io.BytesIO(payload))
+            elif member.isfile():
+                data = payloads[member.name]
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+            else:
+                bundle.addfile(info)
+    rewritten.replace(archive)
+
+
+def append_tar_member(archive: Path, member_name: str, payload: bytes) -> None:
+    with tarfile.open(archive, "r:*") as source:
+        members = source.getmembers()
+        payloads = {}
+        for member in members:
+            if member.isfile():
+                extracted = source.extractfile(member)
+                payloads[member.name] = b"" if extracted is None else extracted.read()
+    rewritten = archive.with_name(archive.name + ".rewritten")
+    with tarfile.open(rewritten, "w:gz", format=tarfile.PAX_FORMAT) as bundle:
+        for member in members:
+            info = tarfile.TarInfo(member.name)
+            info.type = member.type
+            info.linkname = member.linkname
+            info.mode = member.mode
+            info.mtime = member.mtime
+            if member.isfile():
+                data = payloads[member.name]
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+            else:
+                bundle.addfile(info)
+        extra = tarfile.TarInfo(member_name)
+        extra.size = len(payload)
+        extra.mtime = 0
+        extra.mode = 0o644
+        bundle.addfile(extra, io.BytesIO(payload))
+    rewritten.replace(archive)
 
 
 def write_formula(prefix: Path, name: str, version: str, *, url: str | None = None) -> None:
@@ -955,6 +1238,49 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         self.assertNotIn("homebrew-bottles", text)
         proof = workflow_text("bazel-promoted-consumer-proof.yml")
         self.assertNotIn("actions/cache/save@", proof)
+
+    def test_ordinary_ci_restores_one_toolchain_archive_before_brew_bundle(self) -> None:
+        text = workflow_text("bazel-ci.yml")
+        key = "orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}"
+        self.assertEqual(text.count(f"key: {key}"), 2)
+        self.assertLess(text.index("name: Restore CI toolchain bundle"), text.index("name: Install declared build tools"))
+        self.assertLess(
+            text.index("name: Restore bootable iOS 15.5 simulator runtime"),
+            text.index("name: Restore CI toolchain bundle"),
+        )
+        tools = text.split("name: Install declared build tools", 1)[1].split("\n      - name:", 1)[0]
+        self.assertLess(tools.index("restore-toolchain"), tools.index("brew bundle --file bazel/ci/Brewfile"))
+        self.assertLess(tools.index("bundle-satisfied"), tools.index("brew tap xcodesorg/made"))
+        self.assertLess(tools.index("brew bundle --file bazel/ci/Brewfile"), tools.index("brew reinstall e2fsprogs"))
+        self.assertLess(tools.index("brew reinstall e2fsprogs"), tools.index('test "$(xcodes version)"'))
+        self.assertIn("[ ! -f /opt/homebrew/etc/mke2fs.conf ]", tools)
+        self.assertIn("brew install e2fsprogs", tools)
+        self.assertIn("pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle", tools)
+        self.assertIn("declared build tools took", tools)
+        self.assertIn("toolchain archive bytes=", tools)
+        self.assertNotIn("30 seconds", tools)
+        self.assertNotIn("under 30", tools)
+        main_only = '[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]'
+        self.assertLess(tools.index(main_only), tools.index("pack-toolchain"))
+        save = text.split("name: Save CI toolchain bundle", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", save)
+        self.assertIn("steps.ci-toolchain.outputs.cache-hit != 'true'", save)
+        self.assertIn("path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz", save)
+        self.assertIn("cache-retention --toolchain-bytes", tools)
+        self.assertIn("97654617", tools)
+        self.assertIn("571396067", tools)
+        self.assertIn("steps.tools.outputs.drop_ccache != 'true'", text)
+        self.assertIn("steps.tools.outputs.drop_repository != 'true'", text)
+        self.assertNotIn("2000000000", text)
+        for block in cache_blocks(text):
+            self.assertNotIn("/opt/homebrew", block)
+            self.assertNotIn("path: /opt/homebrew", block)
+        self.assertIn("key: orlix-ios15-simruntime-bootable-v1", text)
+        self.assertNotIn("boot-simulator", text)
+        self.assertNotIn("llvm@20", text)
+        prepare = text.split("name: Prepare both simulator runtimes", 1)[1].split("\n      - name:", 1)[0]
+        self.assertLess(prepare.index("extract-bootable-runtime"), prepare.index("prepare-runtime --version 15.5"))
+        self.assertNotIn("boot-simulator", prepare)
 
 
 if __name__ == "__main__":

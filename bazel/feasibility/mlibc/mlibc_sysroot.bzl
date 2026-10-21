@@ -268,11 +268,23 @@ test -s "$abi"
 test -s "$manifest"
 test -s "$digest"
 /bin/mkdir -p "$out"
-/bin/cp -R "$sysroot/." "$out/"
-/bin/cp "$runtime" "$out/libcompiler_rt.a"
-/bin/cp "$abi" "$out/abi.txt"
-/bin/cp "$manifest" "$out/manifest.json"
-/bin/cp "$digest" "$out/sysroot.sha256"
+# sysroot is a TreeArtifact, so its files are absolute symlinks. cp -R stores
+# those links. A fresh tree then drops the sysroot, while the remote tree
+# restores the bytes. Write the bytes.
+/bin/cp -R -L "$sysroot/." "$out/"
+/bin/cp -L "$runtime" "$out/libcompiler_rt.a"
+/bin/cp -L "$abi" "$out/abi.txt"
+/bin/cp -L "$manifest" "$out/manifest.json"
+/bin/cp -L "$digest" "$out/sysroot.sha256"
+test -d "$out/usr/include"
+test ! -L "$out/usr"
+test -d "$out/usr/lib"
+links="$(/usr/bin/find "$out" -type l -print)"
+if [ -n "$links" ]; then
+  printf '%s\n' "mlibc product must be regular files so the sysroot survives the tree artifact" >&2
+  printf '%s\n' "$links" >&2
+  exit 1
+fi
 """,
         arguments = [product.path, sysroot.path, runtime.path, abi.path, manifest.path, digest.path],
         inputs = [sysroot, runtime, abi, manifest, digest],

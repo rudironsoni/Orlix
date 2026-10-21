@@ -39,7 +39,183 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
+def _buildbuddy_remote_hits(actions: list[dict[str, Any]]) -> int:
+    """A BuildBuddy remote action-cache hit needs both fields.
+
+    The runner must be exactly "remote cache hit" and cacheHit must be true.
+    A false cacheHit and a disk-cache hit stay out of this count.
+    """
+    return sum(
+        1
+        for action in actions
+        if action.get("cacheHit") is True and action.get("runner") == "remote cache hit"
+    )
+
+
+_CCACHE_COUNTERS = (
+    "direct_hits",
+    "preprocessed_hits",
+    "misses",
+    "called_for_link",
+    "cache_size_kibibytes",
+)
+
+
+def _ccache_record(payload: dict[str, Any] | None) -> dict[str, Any]:
+    empty = {
+        "statistics_read": False,
+        "direct_hits": None,
+        "preprocessed_hits": None,
+        "misses": None,
+        "ccache_misses": None,
+        "called_for_link": None,
+        "cache_size_kibibytes": None,
+        "ccache_hits": None,
+        "fresh_runner": False,
+    }
+    if payload is None:
+        return empty
+    if payload.get("statistics_read") is not True:
+        if payload.get("ccache_hits") is not None or payload.get("ccache_misses") is not None:
+            raise ValueError("unread ccache statistics cannot report a hit")
+        return empty
+    for key in _CCACHE_COUNTERS:
+        if not isinstance(payload.get(key), int):
+            raise ValueError(f"ccache statistics missing {key}")
+    hits = payload["direct_hits"] + payload["preprocessed_hits"]
+    if payload.get("ccache_hits") != hits:
+        raise ValueError("ccache hits must be direct hits plus preprocessed hits")
+    misses = payload["misses"]
+    if payload.get("ccache_misses") not in (None, misses):
+        raise ValueError("ccache_misses must match misses")
+    return {
+        "statistics_read": True,
+        "direct_hits": payload["direct_hits"],
+        "preprocessed_hits": payload["preprocessed_hits"],
+        "misses": misses,
+        "ccache_misses": misses,
+        "called_for_link": payload["called_for_link"],
+        "cache_size_kibibytes": payload["cache_size_kibibytes"],
+        "ccache_hits": hits,
+        "fresh_runner": False,
+    }
+
+
+def _labeled_counters(
+    runners: list[str],
+    ccache: dict[str, Any],
+    buildbuddy_remote_cache_hits: int,
+) -> dict[str, Any]:
+    """Three caches. A ccache hit is not a Bazel disk hit or a BuildBuddy hit."""
+    return {
+        "ccache_hits": ccache["ccache_hits"],
+        "ccache_misses": ccache["ccache_misses"],
+        "bazel_disk_cache_hits": runners.count("disk cache hit"),
+        "buildbuddy_remote_cache_hits": buildbuddy_remote_cache_hits,
+    }
+
+
+_COREUTILS_MARKER = "Building GNU Coreutils with incremental Make state"
+
+
+def coreutils_action_counters(text: str) -> dict[str, int | None] | None:
+    """Counters from the coreutils action log, not the shared directory file.
+
+    `direct_cache_hit`, `direct_cache_miss`, `preprocessed_cache_hit`, and
+    `cache_miss` stay ccache counters. They are not Bazel disk hits and they
+    are not BuildBuddy remote hits. `ccache_misses` adds `direct_cache_miss`
+    to `cache_miss`.
+    """
+    start = text.rfind(_COREUTILS_MARKER)
+    if start < 0:
+        return None
+    window = text[start:]
+    required = ("direct_cache_hit", "preprocessed_cache_hit", "cache_miss")
+    decoder = json.JSONDecoder()
+    search_from = 0
+    while True:
+        brace = window.find("{", search_from)
+        if brace < 0:
+            return None
+        try:
+            payload, _ = decoder.raw_decode(window[brace:])
+        except json.JSONDecodeError:
+            search_from = brace + 1
+            continue
+        if isinstance(payload, dict) and all(isinstance(payload.get(name), int) for name in required):
+            direct_misses = payload.get("direct_cache_miss")
+            misses = payload["cache_miss"]
+            if isinstance(direct_misses, int):
+                misses += direct_misses
+            return {
+                "direct_hits": payload["direct_cache_hit"],
+                "direct_cache_hit": payload["direct_cache_hit"],
+                "direct_cache_miss": direct_misses if isinstance(direct_misses, int) else None,
+                "preprocessed_hits": payload["preprocessed_cache_hit"],
+                "preprocessed_cache_hit": payload["preprocessed_cache_hit"],
+                "cache_miss": payload["cache_miss"],
+                "misses": misses,
+                "ccache_misses": misses,
+                "called_for_link": int(payload.get("called_for_link") or 0),
+            }
+        search_from = brace + 1
+
+
+def load_ccache_statistics(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if not path.is_file():
+        raise ValueError(f"ccache statistics are missing: {path}")
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict):
+        raise ValueError("ccache statistics file is not a statistics record")
+    return _ccache_record(payload)
+
+
+def _reported_ccache(
+    shared: dict[str, Any],
+    action: dict[str, int | None] | None,
+    *,
+    build_log_provided: bool,
+) -> dict[str, Any]:
+    """The summary counts the coreutils action. A shared-directory zero is not it."""
+    if action is not None:
+        hits = action["direct_hits"] + action["preprocessed_hits"]
+        return {
+            "statistics_read": True,
+            "direct_hits": action["direct_hits"],
+            "direct_cache_hit": action["direct_cache_hit"],
+            "direct_cache_miss": action["direct_cache_miss"],
+            "preprocessed_hits": action["preprocessed_hits"],
+            "preprocessed_cache_hit": action["preprocessed_cache_hit"],
+            "cache_miss": action["cache_miss"],
+            "misses": action["misses"],
+            "ccache_misses": action["ccache_misses"],
+            "called_for_link": action["called_for_link"],
+            "cache_size_kibibytes": None,
+            "ccache_hits": hits,
+            "source": "coreutils-action-log",
+            "fresh_runner": False,
+        }
+    if build_log_provided:
+        unread = _ccache_record(None)
+        unread["source"] = "coreutils-action-log-missing"
+        unread["fresh_runner"] = False
+        return unread
+    shared = dict(shared)
+    shared["source"] = "shared-directory"
+    shared["fresh_runner"] = False
+    return shared
+
+
+def observe(
+    execution: Path,
+    bep: Path,
+    access: str,
+    ccache_statistics: dict[str, Any] | None = None,
+    action_ccache: dict[str, int | None] | None = None,
+    build_log_provided: bool = False,
+) -> dict[str, Any]:
     actions = _records(execution)
     metrics = next(
         (record["buildMetrics"] for record in reversed(_records(bep)) if "buildMetrics" in record),
@@ -48,19 +224,202 @@ def observe(execution: Path, bep: Path, access: str) -> dict[str, Any]:
     summary = metrics.get("actionSummary", {})
     timing = metrics.get("timingMetrics", {})
     runners = [action.get("runner", "") for action in actions]
+    remote_hits = _buildbuddy_remote_hits(actions)
+    shared = _ccache_record(ccache_statistics)
+    ccache = _reported_ccache(shared, action_ccache, build_log_provided=build_log_provided)
+    transfer = system_network_transfer(metrics if isinstance(metrics, dict) else {})
     return {
         "schema": 1,
         "buildbuddy_access": access,
-        "remote_hits": runners.count("remote cache hit"),
+        "remote_hits": remote_hits,
+        "buildbuddy_remote_cache_hits": remote_hits,
         "remote_misses": None,
         "remote_uploads": None,
         "remote_downloads": None,
-        "uploaded_bytes": None,
-        "downloaded_bytes": None,
+        "uploaded_bytes": transfer["uploaded_bytes"],
+        "downloaded_bytes": transfer["downloaded_bytes"],
+        "byte_source": transfer["byte_source"],
         "local_cache_hits": runners.count("disk cache hit"),
+        "counters": _labeled_counters(runners, ccache, remote_hits),
+        "ccache": ccache,
+        "shared_ccache_directory": shared,
         "elapsed_ms": int(timing.get("wallTimeInMs", 0)),
         "actions_created": int(summary.get("actionsCreated", 0)),
         "actions_executed": int(summary.get("actionsExecuted", 0)),
+    }
+
+
+_BYTE_SOURCE = "buildMetrics.networkMetrics.systemNetworkStats"
+
+
+def _decimal_byte_count(value: Any) -> int | None:
+    """Bazel JSON encodes these uint64 counters as decimal strings."""
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
+
+
+def system_network_transfer(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Host totals from BuildMetrics.networkMetrics.systemNetworkStats.
+
+    bytesRecv and bytesSent are whole-process byte counters, including BES.
+    They are not CAS-only. A missing field stays null.
+    """
+    network = metrics.get("networkMetrics")
+    stats = network.get("systemNetworkStats") if isinstance(network, dict) else None
+    if not isinstance(stats, dict):
+        stats = {}
+    downloaded = _decimal_byte_count(stats["bytesRecv"]) if "bytesRecv" in stats else None
+    uploaded = _decimal_byte_count(stats["bytesSent"]) if "bytesSent" in stats else None
+    return {
+        "byte_source": _BYTE_SOURCE,
+        "downloaded_bytes": downloaded,
+        "uploaded_bytes": uploaded,
+    }
+
+
+def bep_transfer_bytes(bep: Path) -> dict[str, Any]:
+    """Read systemNetworkStats from the build event file the recipe already writes."""
+    metrics: dict[str, Any] = {}
+    if bep.is_file():
+        found = next(
+            (
+                record["buildMetrics"]
+                for record in reversed(_records(bep))
+                if isinstance(record, dict) and isinstance(record.get("buildMetrics"), dict)
+            ),
+            None,
+        )
+        if isinstance(found, dict):
+            metrics = found
+    return system_network_transfer(metrics)
+
+
+_CAS_BYTE_SOURCE = (
+    "remote_execution_log.LogEntry.details.read.bytes_read"
+    "+remote_execution_log.LogEntry.details.write.bytes_sent"
+)
+_READ_DETAILS_FIELD = 5
+_WRITE_DETAILS_FIELD = 6
+_BYTES_FIELD = 3
+
+
+def _varint(data: bytes, index: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    while True:
+        if index >= len(data):
+            raise ValueError("truncated varint in remote grpc log")
+        byte = data[index]
+        index += 1
+        value |= (byte & 0x7F) << shift
+        if byte < 0x80:
+            return value, index
+        shift += 7
+        if shift > 63:
+            raise ValueError("remote grpc log varint is too wide")
+
+
+def _protobuf_fields(data: bytes) -> list[tuple[int, int, bytes | int]]:
+    fields: list[tuple[int, int, bytes | int]] = []
+    index = 0
+    limit = len(data)
+    while index < limit:
+        key, index = _varint(data, index)
+        field = key >> 3
+        wire = key & 7
+        if field == 0:
+            raise ValueError("remote grpc log field number is zero")
+        if wire == 0:
+            value, index = _varint(data, index)
+            fields.append((field, wire, value))
+        elif wire == 1:
+            end = index + 8
+            if end > limit:
+                raise ValueError("truncated fixed64 in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        elif wire == 2:
+            size, index = _varint(data, index)
+            end = index + size
+            if end > limit:
+                raise ValueError("truncated length-delimited field in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        elif wire == 5:
+            end = index + 4
+            if end > limit:
+                raise ValueError("truncated fixed32 in remote grpc log")
+            fields.append((field, wire, data[index:end]))
+            index = end
+        else:
+            raise ValueError(f"unsupported wire type in remote grpc log: {wire}")
+    return fields
+
+
+def _delimited_messages(data: bytes) -> list[bytes]:
+    messages: list[bytes] = []
+    index = 0
+    limit = len(data)
+    while index < limit:
+        size, index = _varint(data, index)
+        end = index + size
+        if end > limit:
+            raise ValueError("truncated LogEntry in remote grpc log")
+        messages.append(data[index:end])
+        index = end
+    return messages
+
+
+def _last_varint(message: bytes, field_number: int) -> int:
+    found = 0
+    seen = False
+    for field, wire, value in _protobuf_fields(message):
+        if field == field_number and wire == 0 and isinstance(value, int):
+            found = value
+            seen = True
+    return found if seen else 0
+
+
+def _bytestream_payload_bytes(details: bytes) -> tuple[int, int]:
+    downloaded = 0
+    uploaded = 0
+    for field, wire, value in _protobuf_fields(details):
+        if wire != 2 or not isinstance(value, bytes):
+            continue
+        if field == _READ_DETAILS_FIELD:
+            downloaded += _last_varint(value, _BYTES_FIELD)
+        elif field == _WRITE_DETAILS_FIELD:
+            uploaded += _last_varint(value, _BYTES_FIELD)
+    return downloaded, uploaded
+
+
+def cas_transfer_bytes(grpc_log: Path) -> dict[str, Any]:
+    """Sum ByteStream payload sizes from Bazel's remote execution log.
+
+    ReadDetails.bytes_read and WriteDetails.bytes_sent count CAS ByteStream
+    data on the remote cache channel. BES uses a different channel and is
+    not in this log. A missing log stays null. An empty log is zero.
+    """
+    if not grpc_log.is_file():
+        return {
+            "byte_source": _CAS_BYTE_SOURCE,
+            "downloaded_bytes": None,
+            "uploaded_bytes": None,
+        }
+    downloaded = 0
+    uploaded = 0
+    for entry in _delimited_messages(grpc_log.read_bytes()):
+        for field, wire, value in _protobuf_fields(entry):
+            if field != 4 or wire != 2 or not isinstance(value, bytes):
+                continue
+            read_bytes, write_bytes = _bytestream_payload_bytes(value)
+            downloaded += read_bytes
+            uploaded += write_bytes
+    return {
+        "byte_source": _CAS_BYTE_SOURCE,
+        "downloaded_bytes": downloaded,
+        "uploaded_bytes": uploaded,
     }
 
 
@@ -123,7 +482,7 @@ def _execution_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         "cacheHit": hits,
         "label": sorted(set(labels)),
         "mnemonic": dict(sorted(mnemonics.items())),
-        "remote_cache_hits": runners.get("remote cache hit", 0),
+        "remote_cache_hits": _buildbuddy_remote_hits(actions),
         "runner": dict(sorted(runners.items())),
     }
 
@@ -207,6 +566,7 @@ def reduce_scenario(
     disk_cache: Path | None = None,
     repository_cache: Path | None = None,
     ccache_dir: Path | None = None,
+    ccache_statistics: dict[str, Any] | None = None,
     product: Path | None = None,
     previous: Path | None = None,
 ) -> dict[str, Any]:
@@ -231,6 +591,11 @@ def reduce_scenario(
     remote_bytes = None
     if access != "off":
         remote_bytes = remote_grpc.stat().st_size if remote_grpc is not None and remote_grpc.is_file() else 0
+    actions = _records(execution)
+    runners = [str(action.get("runner") or "") for action in actions]
+    remote_hits = _buildbuddy_remote_hits(actions)
+    ccache = _ccache_record(ccache_statistics)
+    ccache["fresh_runner"] = False
     return {
         "schema": 1,
         "kind": "scenario-row",
@@ -238,7 +603,10 @@ def reduce_scenario(
         "wallTimeInMs": wall,
         "critical_path_ms": critical_ms,
         "slow_phases": phases if wall > _SLOW_WALL_MS else [],
-        "execution": _execution_fields(_records(execution)),
+        "execution": _execution_fields(actions),
+        "buildbuddy_remote_cache_hits": remote_hits,
+        "counters": _labeled_counters(runners, ccache, remote_hits),
+        "ccache": ccache,
         "remote_grpc_bytes": remote_bytes,
         "orlixcc_lines": _orlixcc_lines(orlixcc_log),
         "ninja_compiler_edges": _ninja_compiler_edges(ninja_log),
@@ -278,9 +646,16 @@ def main() -> int:
     parser.add_argument("--disk-cache", type=Path)
     parser.add_argument("--repository-cache", type=Path)
     parser.add_argument("--ccache-dir", type=Path)
+    parser.add_argument("--ccache-statistics", type=Path)
+    parser.add_argument("--build-log", type=Path)
     parser.add_argument("--product", type=Path)
     parser.add_argument("--previous", type=Path)
     args = parser.parse_args()
+    ccache_statistics = load_ccache_statistics(args.ccache_statistics)
+    action_ccache = None
+    build_log_provided = args.build_log is not None
+    if args.build_log is not None and args.build_log.is_file():
+        action_ccache = coreutils_action_counters(args.build_log.read_text(encoding="utf-8", errors="replace"))
     if args.scenario:
         result = reduce_scenario(
             scenario=args.scenario,
@@ -296,11 +671,19 @@ def main() -> int:
             disk_cache=args.disk_cache,
             repository_cache=args.repository_cache,
             ccache_dir=args.ccache_dir,
+            ccache_statistics=ccache_statistics,
             product=args.product,
             previous=args.previous,
         )
     else:
-        result = observe(args.execution, args.bep, args.access)
+        result = observe(
+            args.execution,
+            args.bep,
+            args.access,
+            ccache_statistics,
+            action_ccache,
+            build_log_provided,
+        )
     args.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, sort_keys=True))
     return 0

@@ -139,23 +139,98 @@ jobs:
           path: ~/Library/Caches/Orlix/ios15-runtime
           key: orlix-ios-runtime-15.5-arm64-71fd7d0159a4439ebef1abb2b1e0b26204b74af903dcc579a7b6e131065a1150
 
-      - name: Install declared build tools
+      - name: Record the pinned CI toolchain
+        id: toolchain-pin
         run: |
           set -euo pipefail
-          # Source bottles only record formulae built from source. They do not
-          # skip the bottle install brew bundle runs for the pinned toolchain.
-          if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then
-            echo "Homebrew packages are already installed at the pinned versions; skipping brew bundle"
+          if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
-            brew tap xcodesorg/made
-            git -C "$(brew --repo xcodesorg/made)" fetch origin "$xcodes_tap_revision"
-            git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
-            brew trust --formula xcodesorg/made/xcodes
-            brew bundle --file bazel/ci/Brewfile
-            test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "pin=unpinned" >> "$GITHUB_OUTPUT"
+            echo "llvm=unpinned" >> "$GITHUB_OUTPUT"
+            echo "versions=unpinned" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore CI toolchain bundle
+        id: ci-toolchain
+        if: steps.toolchain-pin.outputs.ready == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz
+          key: orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}
+
+      - name: Install declared build tools
+        id: tools
+        env:
+          ORLIX_TOOLCHAIN_CACHE_HIT: ${{ steps.ci-toolchain.outputs.cache-hit }}
+          ORLIX_TOOLCHAIN_PIN: ${{ steps.toolchain-pin.outputs.pin }}
+          ORLIX_TOOLCHAIN_READY: ${{ steps.toolchain-pin.outputs.ready }}
+        run: |
+          set -euo pipefail
+          # The elapsed time is the measurement for this step. It is not a budget.
+          install_started=$SECONDS
+          archive="$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz"
+          restored=false
+          if [ "$ORLIX_TOOLCHAIN_READY" = true ] && [ -f "$archive" ]; then
+            if python3 bazel/ci/setup_cache.py restore-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"; then
+              restored=true
+              echo "pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle"
+            else
+              echo "restored CI toolchain does not match the pinned clang; running brew bundle"
+              rm -f "$archive"
+            fi
+          fi
+          if [ "$restored" != true ]; then
+            if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then
+              echo "Homebrew packages are already installed at the pinned versions; skipping brew bundle"
+            else
+              export HOMEBREW_NO_AUTO_UPDATE=1
+              xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+              brew tap xcodesorg/made
+              git -C "$(brew --repo xcodesorg/made)" fetch origin "$xcodes_tap_revision"
+              git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
+              brew trust --formula xcodesorg/made/xcodes
+              brew bundle --file bazel/ci/Brewfile
+              test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
+              if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$ORLIX_TOOLCHAIN_CACHE_HIT" != true ] && [ "$ORLIX_TOOLCHAIN_READY" = true ]; then
+                python3 bazel/ci/setup_cache.py pack-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"
+              fi
+            fi
+          fi
+          if [ ! -f /opt/homebrew/etc/mke2fs.conf ]; then
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            if brew list --formula e2fsprogs >/dev/null 2>&1; then
+              brew reinstall e2fsprogs
+            else
+              brew install e2fsprogs
+            fi
           fi
           test "$(xcodes version)" = "2.1.0"
+          if [ -f "$archive" ]; then
+            bytes=$(stat -f%z "$archive")
+            echo "toolchain=true" >> "$GITHUB_OUTPUT"
+            echo "toolchain archive bytes=$bytes"
+          else
+            bytes=0
+            echo "toolchain=false" >> "$GITHUB_OUTPUT"
+            echo "toolchain archive bytes=0"
+          fi
+          echo "bytes=$bytes" >> "$GITHUB_OUTPUT"
+          # ccache is 97654617 bytes and the Bazel repository cache is
+          # 571396067 bytes. Drop one of those, not this archive or the
+          # 5126954916-byte iOS 15.5 runtime, if the sum would pass 10GB.
+          python3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes "$bytes" >> "$GITHUB_OUTPUT"
+          elapsed=$((SECONDS - install_started))
+          echo "seconds=$elapsed" >> "$GITHUB_OUTPUT"
+          echo "declared build tools took ${elapsed}s"
+
+      - name: Save CI toolchain bundle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.toolchain-pin.outputs.ready == 'true' && steps.ci-toolchain.outputs.cache-hit != 'true' && steps.tools.outputs.toolchain == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz
+          key: orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}
 
       - name: Install the requested Xcode from the cache or Apple
         if: steps.xcode-present.outputs.installed != 'true'
@@ -421,7 +496,7 @@ jobs:
           fi
 
       - name: Save Bazel repository cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.repository == 'true' && steps.tools.outputs.drop_repository != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/Bazel/repository-cache
@@ -435,7 +510,7 @@ jobs:
           key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
 
       - name: Save local compiler object cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache
@@ -447,8 +522,21 @@ jobs:
       - name: Publish the cache-equivalence seed
         if: steps.buildbuddy.outputs.access == 'write'
         env:
-          ORLIX_BUILDBUDDY_ACCESS: ${{ steps.buildbuddy.outputs.access }}
-        run: make __bazel-cache-equivalence
+          ORLIX_BUILDBUDDY_ACCESS: read
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
+        run: |
+          set -euo pipefail
+          write_rc="$(readlink .bazelrc.local)"
+          umask 077
+          seed_key="$RUNNER_TEMP/orlix-buildbuddy-seed-key"
+          sed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' "$write_rc" > "$seed_key"
+          chmod 600 "$seed_key"
+          test -s "$seed_key"
+          unlink .bazelrc.local
+          unlink "$write_rc"
+          make __bazel-buildbuddy-configure
+          if [ -n "${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key" >> "$GITHUB_ENV"; fi
+          make __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE="$seed_key"
 
       # Manual promoted proof: two passes in one job. Each pass starts with a
       # cleared Bazel output base, reconstruction tree, proof output, promotion
@@ -572,10 +660,13 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bazel-apple-ci-${{ github.event.pull_request.head.sha || github.sha }}
+          # app.* is the unpacked IPA the proofs install. current and ios15
+          # keep the launch logs for both simulator runtimes.
           path: |
             Build/AgentHarness/bazel-ci
             Build/**/*.xcresult
             Build/**/*.log
             ~/Library/Logs/DiagnosticReports
+            !Build/AgentHarness/bazel-ci/app.*/**
           if-no-files-found: warn
           retention-days: 14
