@@ -1038,13 +1038,19 @@ __bazel-orlix-archive: __bazel-feasibility-bootstrap __bazel-substitute-promoted
 	if [ -e "$(ORLIX_BETA_ARCHIVE_PATH)" ]; then previous="$$(mktemp -d "$(ORLIX_BETA_ARCHIVE_DIR)/previous-archive.XXXXXX")"; mv "$(ORLIX_BETA_ARCHIVE_PATH)" "$$previous/Orlix.xcarchive"; fi; \
 	/usr/bin/ditto "$$archive" "$(ORLIX_BETA_ARCHIVE_PATH)"
 
-__bazel-apple-ci: __bazel-matrix-check
+__bazel-apple-ci:
 	@set -euo pipefail; \
 	test -n "$(ORLIX_CURRENT_SIMULATOR_ID)" || { echo "ORLIX_CURRENT_SIMULATOR_ID is required" >&2; exit 1; }; \
 	test -n "$(ORLIX_CURRENT_SIMULATOR_VERSION)" || { echo "ORLIX_CURRENT_SIMULATOR_VERSION is required" >&2; exit 1; }; \
 	test -n "$(ORLIX_IOS15_SIMULATOR_ID)" || { echo "ORLIX_IOS15_SIMULATOR_ID is required" >&2; exit 1; }; \
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci"; \
 	mkdir -p "$$evidence_dir"; \
+	current_state="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_CURRENT_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')"; \
+	if [ "$$current_state" != Booted ] && [ "$$current_state" != Booting ]; then \
+		xcrun simctl boot "$(ORLIX_CURRENT_SIMULATOR_ID)" >"$$evidence_dir/current-boot.log" 2>&1 & \
+		xcrun simctl bootstatus "$(ORLIX_CURRENT_SIMULATOR_ID)" -b >"$$evidence_dir/current-bootstatus.log" 2>&1 & \
+	fi; \
+	$(MAKE) __bazel-matrix-check; \
 	echo "apple-ci: profile=$(PROFILE) component_mode=$(ORLIX_BAZEL_COMPONENT_MODE) current_runtime=$(ORLIX_CURRENT_SIMULATOR_VERSION) current_simulator=$(ORLIX_CURRENT_SIMULATOR_ID) ios15_simulator=$(ORLIX_IOS15_SIMULATOR_ID)"; \
 	case "$(ORLIX_BUILDBUDDY_ACCESS)" in \
 	read|write) \
@@ -1088,8 +1094,15 @@ __bazel-simulator-runtime-proof:
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "runtime-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_SIMULATOR_VERSION) simulator=$(ORLIX_SIMULATOR_ID) app=$(ORLIX_BAZEL_APP_PATH)" | tee "$$evidence_dir/input.log"; \
-	if [ "$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')" != Booted ]; then \
-		xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
+	simulator_state="$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')"; \
+	if [ "$$simulator_state" != Booted ]; then \
+		if [ "$$simulator_state" = Booting ]; then \
+			xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)"; \
+		else \
+			xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
+		fi; \
+	else \
+		xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)"; \
 	fi; \
 	xcrun simctl terminate "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
