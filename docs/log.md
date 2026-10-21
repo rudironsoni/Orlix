@@ -7,6 +7,10 @@ updated: 2026-10-21
 ---
 # Orlix Knowledge Log
 
+## [2026-10-21] build | Keep Orlix crash reports inside Apple CI evidence
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) copies every `Orlix-*.ips` file from `~/Library/Logs/DiagnosticReports` into the simulator proof evidence directory before that proof exits. The Apple CI artifact upload no longer lists that home directory. Launch logs, xcresult bundles, and the copied crash reports stay under `Build`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-21] build | Keep a toolchain archive when mke2fs.conf is missing
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) does not unpack `ci-toolchain.tar.gz` when the pinned clang is already installed and `etc/mke2fs.conf` is missing. It links that file from the e2fsprogs keg when the keg has it. Otherwise the Apple CI install step runs `brew install` or `brew reinstall e2fsprogs` only. A clang that still has to be extracted stays on disk with the archive when the conf is absent. A failed clang identity check still removes the recorded kegs and runs `brew bundle`. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

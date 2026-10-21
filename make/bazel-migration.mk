@@ -1100,6 +1100,14 @@ __bazel-simulator-runtime-proof:
 	launch_pid="$$(/usr/bin/awk 'END {print $$NF}' "$$evidence_dir/launch.log")"; \
 	case "$$launch_pid" in ''|*[!0-9]*) echo "simctl launch did not report a process id" >&2; exit 1 ;; esac; \
 	/bin/sleep 5; \
+	reports_dir=~/Library/Logs/DiagnosticReports; \
+	if [ -d "$$reports_dir" ]; then \
+		/usr/bin/find "$$reports_dir" -name 'Orlix-*.ips' -print0 | while IFS= read -r -d '' report; do \
+			rel="$${report#$$reports_dir/}"; \
+			/bin/mkdir -p "$$evidence_dir/$$(/usr/bin/dirname "$$rel")"; \
+			/bin/cp -p "$$report" "$$evidence_dir/$$rel"; \
+		done; \
+	fi; \
 	/bin/kill -0 "$$launch_pid" 2>/dev/null || { echo "Orlix exited within 5 seconds of launch on $(ORLIX_SIMULATOR_LABEL); check DiagnosticReports" >&2; /usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print | /usr/bin/head -n 5 >&2 || true; exit 1; }; \
 	/usr/bin/find ~/Library/Logs/DiagnosticReports -name 'Orlix-*.ips' -newer "$$evidence_dir/launch.log" -print -quit | /usr/bin/grep -q . && { echo "Orlix crash report written during $(ORLIX_SIMULATOR_LABEL) launch; see DiagnosticReports" >&2; exit 1; } || true; \
 	/usr/bin/touch "$$evidence_dir/launch.alive"; \

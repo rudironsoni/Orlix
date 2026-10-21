@@ -113,10 +113,23 @@ class WorkflowPolicyTests(unittest.TestCase):
             "Build/AgentHarness/bazel-ci",
             "Build/**/*.xcresult",
             "Build/**/*.log",
-            "~/Library/Logs/DiagnosticReports",
         ]
         for path in included:
             self.assertIn(f"\n            {path}\n", store)
+        self.assertNotIn("Library/Logs/DiagnosticReports", store)
+        runtime = makefile.split("__bazel-simulator-runtime-proof:", 1)[1].split(
+            "__bazel-current-simulator-gate:", 1
+        )[0]
+        copy = runtime.split("check DiagnosticReports", 1)[0]
+        self.assertIn(
+            '/usr/bin/find "$$reports_dir" -name \'Orlix-*.ips\' -print0',
+            copy,
+        )
+        self.assertNotIn("-newer", copy.split("-name 'Orlix-*.ips'", 1)[1])
+        self.assertIn('/bin/cp -p "$$report" "$$evidence_dir/$$rel"', copy)
+        self.assertLess(copy.index("reports_dir=~/Library/Logs/DiagnosticReports"), copy.index("/bin/cp -p"))
+        self.assertLess(runtime.index("/bin/cp -p"), runtime.index("check DiagnosticReports"))
+        self.assertLess(runtime.index("/bin/cp -p"), runtime.index("see DiagnosticReports"))
         excluded = [
             line.strip() for line in store.splitlines() if line.strip().startswith("!")
         ]
