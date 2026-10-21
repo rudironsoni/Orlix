@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "30068ddb8c9dc6775bd9b64f87ecfe254f8a0eea4295ea6f3764bef00a373537",
+      "source_sha256": "fb05e466f734f16069e1e9bbabb910918237b3f40ad288e4b5accfb79fd5814f",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -552,6 +552,16 @@
                   "BUILDBUDDY_API_KEY": "${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}"
                 },
                 "run": "set -euo pipefail\nwrite_rc=\"$(readlink .bazelrc.local)\"\numask 077\nseed_key=\"$RUNNER_TEMP/orlix-buildbuddy-seed-key\"\nsed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' \"$write_rc\" > \"$seed_key\"\nchmod 600 \"$seed_key\"\ntest -s \"$seed_key\"\nunlink .bazelrc.local\nunlink \"$write_rc\"\nmake __bazel-buildbuddy-configure\nif [ -n \"${GITHUB_ENV:-}\" ]; then printf '%s\\n' \"ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key\" >> \"$GITHUB_ENV\"; fi\nmake __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE=\"$seed_key\"\n"
+              },
+              {
+                "name": "Look up the kernel archive in the remote cache",
+                "if": "steps.buildbuddy.outputs.access == 'write'",
+                "env": {
+                  "ORLIX_BUILDBUDDY_ACCESS": "read",
+                  "ORLIX_BAZEL_COMPONENT_MODE": "${{ steps.component-mode.outputs.mode }}",
+                  "BUILDBUDDY_API_KEY": "${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}"
+                },
+                "run": "make __bazel-kernel-cache-consumer"
               },
               {
                 "name": "Promoted-consumer proof (cold then warm)",

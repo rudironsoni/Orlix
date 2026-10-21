@@ -541,6 +541,14 @@ jobs:
           if [ -n "${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key" >> "$GITHUB_ENV"; fi
           make __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE="$seed_key"
 
+      - name: Look up the kernel archive in the remote cache
+        if: steps.buildbuddy.outputs.access == 'write'
+        env:
+          ORLIX_BUILDBUDDY_ACCESS: read
+          ORLIX_BAZEL_COMPONENT_MODE: ${{ steps.component-mode.outputs.mode }}
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
+        run: make __bazel-kernel-cache-consumer
+
       # Manual promoted proof: two passes in one job. Each pass starts with a
       # cleared Bazel output base, reconstruction tree, proof output, promotion
       # staging, and Apple CI evidence, so nothing is reused from the previous

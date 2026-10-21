@@ -971,5 +971,25 @@ class RoutingContractTests(unittest.TestCase):
             self.assertEqual(row["wallTimeInMs"], 42)
 
 
+    def test_kernel_cache_consumer_is_main_read_after_the_seed(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "bazel-ci.yml").read_text(encoding="utf-8")
+        apple = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Publish the cache-equivalence seed", 1
+        )[0]
+        lookup = workflow.split("Look up the kernel archive in the remote cache", 1)[1].split(
+            "Promoted-consumer proof", 1
+        )[0]
+        self.assertNotIn("__bazel-kernel-cache-consumer", apple)
+        self.assertIn("steps.buildbuddy.outputs.access == 'write'", lookup)
+        self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", lookup)
+        self.assertIn("steps.component-mode.outputs.mode", lookup)
+        self.assertIn("make __bazel-kernel-cache-consumer", lookup)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", lookup)
+        self.assertLess(
+            workflow.index("make __bazel-cache-equivalence"),
+            workflow.index("make __bazel-kernel-cache-consumer"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
