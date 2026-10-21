@@ -1203,7 +1203,7 @@ esac
         self.assertIn('.cacheHit == true and .runner == "remote cache hit"', equivalence)
 
 
-    def test_kernel_cache_consumer_fails_closed_without_compiling(self) -> None:
+    def test_kernel_cache_consumer_uses_local_before_the_runner(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         consumer = makefile.split("__bazel-kernel-cache-consumer:", 1)[1].split(
             "__bazel-compiler-runtime-cache-consumer:", 1
@@ -1224,7 +1224,10 @@ esac
         self.assertIn("export CCACHE_DISABLE=1", consumer)
         self.assertNotIn("--action_env=CCACHE_DISABLE", consumer)
         self.assertIn("--action_env=CCACHE_DIR=", consumer)
-        self.assertIn("--modify_execution_info=OrlixKernelMachOArchive=+no-local", consumer)
+        self.assertIn("--strategy=OrlixKernelMachOArchive=local", consumer)
+        self.assertNotIn("darwin-sandbox", consumer)
+        self.assertNotIn("+no-local", consumer)
+        self.assertNotIn("--modify_execution_info", consumer)
         self.assertIn("//bazel/feasibility/kernel:macho", consumer)
         self.assertIn('.runner == "remote cache hit"', consumer)
         self.assertIn(".cacheHit == true", consumer)
