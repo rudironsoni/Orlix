@@ -292,6 +292,21 @@ class MakeRoutingTests(unittest.TestCase):
         )
         self.assertEqual(apple_ci.count("$(MAKE) __bazel-cache-equivalence"), 0)
         self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", apple_ci)
+        current_boot = next(
+            line for line in apple_ci.splitlines()
+            if 'simctl boot "$(ORLIX_CURRENT_SIMULATOR_ID)"' in line and "bootstatus" not in line
+        )
+        current_bootstatus = next(
+            line for line in apple_ci.splitlines()
+            if 'simctl bootstatus "$(ORLIX_CURRENT_SIMULATOR_ID)" -b' in line
+        )
+        self.assertIn("&", current_boot)
+        self.assertIn("&", current_bootstatus)
+        self.assertLess(apple_ci.index(current_boot), apple_ci.index("$(MAKE) __bazel-matrix-check"))
+        self.assertLess(apple_ci.index(current_bootstatus), apple_ci.index("$(MAKE) __bazel-matrix-check"))
+        self.assertLess(apple_ci.index("$(MAKE) __bazel-matrix-check"), apple_ci.index("__bazel-orlix-app"))
+        self.assertNotIn('simctl boot "$(ORLIX_IOS15_SIMULATOR_ID)"', apple_ci)
+        self.assertNotIn('simctl bootstatus "$(ORLIX_IOS15_SIMULATOR_ID)"', apple_ci)
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
@@ -328,6 +343,15 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("!= Booted", runtime)
         self.assertIn('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b', runtime)
         self.assertLess(runtime.index("!= Booted"), runtime.index('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b'))
+        self.assertLess(runtime.index("= Booting"), runtime.index('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b'))
+        booting_wait = next(
+            line for line in runtime.splitlines()
+            if 'simctl bootstatus "$(ORLIX_SIMULATOR_ID)"' in line and "-b" not in line
+        )
+        self.assertLess(runtime.index("= Booting"), runtime.index(booting_wait))
+        self.assertLess(runtime.index(booting_wait), runtime.index('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b'))
+        self.assertNotIn("simctl create", runtime)
+        self.assertNotIn('simctl boot "$(ORLIX_SIMULATOR_ID)"', runtime)
 
     def test_cache_equivalence_empty_cache_flags_survive_nounset(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
