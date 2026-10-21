@@ -1542,7 +1542,7 @@ def _pinned_formulae_ready(brewfile: Path, prefix: Path) -> bool:
 
 
 def ensure_mke2fs_conf(prefix: Path) -> bool:
-    """Keep ``etc/mke2fs.conf`` or link it from the restored e2fsprogs keg."""
+    """Keep ``etc/mke2fs.conf`` or link it from the e2fsprogs keg."""
     conf = prefix / "etc" / "mke2fs.conf"
     if conf.is_file():
         return True
@@ -1560,14 +1560,16 @@ def ensure_mke2fs_conf(prefix: Path) -> bool:
 
 
 def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) -> bool:
-    """Extract one pinned archive and require the build's clang path.
+    """Require the pinned clang, and do not unpack an archive for ``mke2fs.conf``.
 
     A missing identity check returns false before ``brew bundle`` runs. Members
     outside the recorded kegs, including a tar of the Homebrew prefix or
-    ``llvm@20``, are rejected without being extracted. ``etc/mke2fs.conf`` is
-    not a keg member. ``ensure_mke2fs_conf`` keeps a regular file or links one
-    from the e2fsprogs keg. A missing source returns false and leaves the
-    restored kegs in place.
+    ``llvm@20``, are rejected without being extracted. When the prefix already
+    has that clang, a missing ``etc/mke2fs.conf`` does not unpack the archive
+    and does not delete it. ``ensure_mke2fs_conf`` links the file from the
+    e2fsprogs keg when the keg has it. Otherwise the caller installs or
+    reinstalls e2fsprogs only. An extract that is required for the clang keeps
+    the archive and the restored kegs when the conf is still absent.
     """
     try:
         manifest, members = read_toolchain_manifest(archive)
@@ -1580,6 +1582,15 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
     if not toolchain_members_allowed(members, manifest) or not opt_llvm_member_is_pinned(members, manifest["clang"]["keg"]):
         print("CI toolchain archive is not limited to the pinned clang", file=sys.stderr)
         return False
+    if pinned_clang_bytes_match(prefix, manifest) and _pinned_formulae_ready(brewfile, prefix):
+        if ensure_mke2fs_conf(prefix):
+            print(f"restored pinned clang {PINNED_CI_CLANG}")
+            return True
+        print(
+            "pinned clang is already installed; not unpacking the toolchain archive for a missing mke2fs.conf",
+            file=sys.stderr,
+        )
+        return True
     # Drop recorded links first so an opt/llvm symlink aimed at llvm@20 cannot
     # stay in front of the extracted keg. The llvm@20 cellar is not recorded.
     remove_restored_tools(prefix, manifest)
@@ -1590,9 +1601,13 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
         remove_restored_tools(prefix, manifest)
         return False
     if pinned_clang_bytes_match(prefix, manifest) and _pinned_formulae_ready(brewfile, prefix):
-        if not ensure_mke2fs_conf(prefix):
-            return False
-        print(f"restored pinned clang {PINNED_CI_CLANG}")
+        if ensure_mke2fs_conf(prefix):
+            print(f"restored pinned clang {PINNED_CI_CLANG}")
+            return True
+        print(
+            "restored pinned clang; mke2fs.conf is absent, leaving the archive and kegs in place",
+            file=sys.stderr,
+        )
         return True
     print(f"restored clang is not {PINNED_CI_CLANG} at the recorded identity", file=sys.stderr)
     remove_restored_tools(prefix, manifest)

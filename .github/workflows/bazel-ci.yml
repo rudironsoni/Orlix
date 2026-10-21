@@ -173,6 +173,9 @@ jobs:
           archive="$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz"
           restored=false
           if [ "$ORLIX_TOOLCHAIN_READY" = true ] && [ -f "$archive" ]; then
+            # A missing mke2fs.conf is a successful restore. The archive and
+            # the kegs stay. The e2fsprogs install below is the only brew
+            # command for that file.
             if python3 bazel/ci/setup_cache.py restore-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"; then
               restored=true
               echo "pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle"
