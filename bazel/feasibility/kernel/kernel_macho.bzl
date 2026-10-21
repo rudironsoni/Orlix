@@ -263,6 +263,23 @@ export ORLIX_KERNEL_AR="$llvm_ar_staged"
 export ORLIX_KERNEL_NM="$llvm_nm_staged"
 work="$ORLIX_KERNEL_WORK_ROOT"
 /bin/mkdir -p "$work"
+recorder="$exec_root/bazel/feasibility/kernel/compiler_object_recorder.py"
+test -s "$recorder"
+if [ -n "$ORLIX_COMPILER_LAUNCHER" ]; then
+  export ORLIX_CCACHE_BIN="$ORLIX_COMPILER_LAUNCHER"
+  export ORLIX_COMPILER_CACHE_RECORD="$work/compiler-object-units.jsonl"
+  : > "$ORLIX_COMPILER_CACHE_RECORD"
+  launcher_bin="$work/orlix-compiler-recorder"
+  /usr/bin/printf '%s\n' '#!/bin/bash' "exec /usr/bin/python3 -B \"$recorder\" record \"\$@\"" > "$launcher_bin"
+  /bin/chmod +x "$launcher_bin"
+  export ORLIX_COMPILER_LAUNCHER="$launcher_bin"
+  if [ -n "${ORLIX_COMPILER_REMOTE_STORAGE:-}" ]; then
+    export CCACHE_REMOTE_STORAGE="$ORLIX_COMPILER_REMOTE_STORAGE"
+  fi
+  if [ -n "${ORLIX_COMPILER_REMOTE_ONLY:-}" ]; then
+    export CCACHE_REMOTE_ONLY="$ORLIX_COMPILER_REMOTE_ONLY"
+  fi
+fi
 linux_src="$work/upstream-linux"
 /usr/bin/python3 -B "$exec_root/bazel/feasibility/kernel/linux_source_archive.py" extract "$linux_archive" "$linux_src"
 test -s "$linux_src/Makefile"
@@ -355,6 +372,14 @@ test -x "$nm_cmd"
 /bin/cp "$development_dtb" "$product/arch/orlix/boot/dts/development.dtb"
 digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
 /usr/bin/printf '%s\n' "$digest" > "$digest_out"
+if [ -n "${ORLIX_COMPILER_CACHE_RECORD:-}" ]; then
+  /usr/bin/python3 -B "$recorder" join \
+    --units "$ORLIX_COMPILER_CACHE_RECORD" \
+    --kbuild-log "$kbuild_err" \
+    --work "$work" \
+    --output "$work/compiler-object-record.json" \
+    --output-digest "$digest"
+fi
 /usr/bin/printf '%s\n' '{' \
   '  "component": "OrlixKernel",' \
   '  "format": "mach-o-static-archive",' \
@@ -415,6 +440,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
                 ctx.file.llvm_nm,
                 ctx.file.guest_clang,
                 ctx.file.ccache,
+                ctx.file.compiler_object_recorder,
                 ctx.file.gnu_readlink,
                 ctx.file.gnu_find,
                 ctx.file.host_clang,
@@ -498,6 +524,10 @@ orlix_kernel_macho_archive = rule(
         "llvm_nm": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/llvm-nm")),
         "guest_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/llvm/bin/clang")),
         "ccache": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/ccache")),
+        "compiler_object_recorder": attr.label(
+            allow_single_file = True,
+            default = Label("//bazel/feasibility/kernel:compiler_object_recorder.py"),
+        ),
         "gnu_readlink": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/readlink")),
         "gnu_find": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/find")),
         "host_clang": attr.label(allow_single_file = True, default = Label("@orlix_kernel_toolchain//:tools/bin/clang")),

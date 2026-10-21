@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-20
+updated: 2026-10-21
 ---
 # Orlix Knowledge Log
+
+## [2026-10-21] build | Record remote compiler objects in front of Kbuild
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) puts ccache remote storage in front of the existing kernel Kbuild action. Kbuild still owns its compilation graph. `ORLIX_COMPILER_REMOTE_STORAGE` is that content-addressed store. The GitHub Actions key `orlix-ccache-${compiler digest}` stays a local compiler-identity cache and is not the remote store. A pull request does not receive the publication URL. `__bazel-kernel-compiler-remote-same` and `__bazel-kernel-compiler-remote-edit` are the Apple proof targets. The recorder reads `ccache --print-stats`: a wrapper exit of 0 is not a hit, and compiler execution is a separate counter. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-20] build | Cache the ordinary CI toolchain bundle
 

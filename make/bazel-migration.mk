@@ -73,6 +73,7 @@ export CCACHE_COMPILERCHECK
 .PHONY: __bazel-getconf __bazel-getent __bazel-init __bazel-jq __bazel-curl __bazel-ncurses __bazel-zsh __bazel-rootfs
 .PHONY: __bazel-xcode-cloud-project-check
 .PHONY: __bazel-migration-inventory __bazel-migration-inventory-check
+.PHONY: __bazel-kernel-compiler-remote-same __bazel-kernel-compiler-remote-edit
 .PHONY: __bazel-matrix-check
 .PHONY: __bazel-scenario-harness __bazel-routing-contract
 
@@ -711,6 +712,12 @@ __bazel-kernel-boot: __bazel-feasibility-bootstrap
 	test -n "$$macho" && test -s "$$macho" || { echo "missing Mach-O OrlixKernel.a" >&2; exit 1; }; \
 	/usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' "$${macho%/*}/symbols.txt" >/dev/null || /usr/bin/nm -gU "$$macho" | /usr/bin/grep -E '[[:space:]]T[[:space:]]+_arch_boot_entry' >/dev/null || { echo "OrlixKernel.a missing defined _arch_boot_entry" >&2; exit 1; }
 
+__bazel-kernel-compiler-remote-same:
+	@python3 -m bazel.feasibility.kernel.compiler_remote_experiment --kind same --output Build/AgentHarness/bazel-migration/compiler-remote/same-commit.json --bazel "$(ORLIX_BAZEL)" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" --xcode-version "$(ORLIX_XCODE_VERSION)" --xcode-build "$(ORLIX_XCODE_BUILD)"
+
+__bazel-kernel-compiler-remote-edit:
+	@python3 -m bazel.feasibility.kernel.compiler_remote_experiment --kind edit --output Build/AgentHarness/bazel-migration/compiler-remote/source-edit.json --bazel "$(ORLIX_BAZEL)" --developer-dir "$(ORLIX_PINNED_DEVELOPER_DIR)" --xcode-version "$(ORLIX_XCODE_VERSION)" --xcode-build "$(ORLIX_XCODE_BUILD)"
+
 __bazel-proof-graph: __bazel-kernel-uapi __bazel-kernel-boot
 	@mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel/proof"
 	@set -euo pipefail; \
@@ -841,7 +848,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@python3 -m unittest bazel.feasibility.kernel.test_uapi_inputs bazel.feasibility.mlibc.test_build_state bazel.feasibility.mlibc.test_rule_text bazel.feasibility.packages.test_action_inputs bazel.feasibility.native.test_ssh_archive_pin bazel.feasibility.native.test_ssh_archive_inputs bazel.feasibility.rootfs.test_ext4_bytes bazel.product.test_app_modules
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/packages" python3 -m unittest test_build_state
-	@python3 -m unittest bazel.feasibility.test_compiler_cache_action
+	@python3 -m unittest bazel.feasibility.test_compiler_cache_action bazel.feasibility.kernel.test_compiler_object_recorder
 	@python3 -m unittest bazel.selection.test_source_mutation_matrix
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_stage_v2_product
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare

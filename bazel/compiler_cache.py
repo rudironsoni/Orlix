@@ -22,6 +22,10 @@ def forward_shell_env(shell: Mapping[str, str]) -> dict[str, str]:
     launcher = shell.get("ORLIX_COMPILER_LAUNCHER")
     if launcher:
         env["ORLIX_COMPILER_LAUNCHER"] = launcher
+    for key in ("ORLIX_COMPILER_REMOTE_STORAGE", "ORLIX_COMPILER_REMOTE_ONLY"):
+        value = shell.get(key)
+        if value:
+            env[key] = value
     return env
 
 
