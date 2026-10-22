@@ -21,8 +21,8 @@ from typing import Protocol
 
 
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
-CACHE_VERSION = hashlib.sha256(b"orlix-kernel-compiler-object-v2").hexdigest()
-_KEY_PREFIX = "orlix-kobj-v2-"
+CACHE_VERSION = hashlib.sha256(b"orlix-kernel-compiler-object-v3").hexdigest()
+_KEY_PREFIX = "orlix-kobj-v3-"
 _CHUNK = 16 * 1024 * 1024
 
 
@@ -288,11 +288,13 @@ class _Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._empty(400)
             return
-        if not self.server.allow_write:  # type: ignore[attr-defined]
-            self._empty(403)
-            return
         length = int(self.headers.get("Content-Length", "0"))
         blob = self.rfile.read(length)
+        if not self.server.allow_write:  # type: ignore[attr-defined]
+            # ccache updates a manifest after a direct hit. Accept that write
+            # without storing it so the hit still stands.
+            self._empty(200)
+            return
         try:
             self.server.store.put(digest, blob)  # type: ignore[attr-defined]
         except PermissionError:
@@ -306,7 +308,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:  # noqa: N802
         # Entries are content-addressed. Leaving the blob in place is the
         # same result ccache would read back.
-        self._empty(200 if self.server.allow_write else 403)  # type: ignore[attr-defined]
+        self._empty(200)
 
     def log_message(self, format: str, *args: object) -> None:
         return

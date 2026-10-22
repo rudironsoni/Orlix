@@ -232,9 +232,10 @@ class CompilerObjectRemoteTests(unittest.TestCase):
             httpd.allow_write = False
             store.allow_write = False
             status, _ = self._raw("PUT", f"http://127.0.0.1:{port}/ac/{digest}", b"nope")
-            self.assertEqual(status, 403)
+            self.assertEqual(status, 200)
+            self.assertEqual(self._request("GET", f"http://127.0.0.1:{port}/ac/{digest}"), b"object-bytes")
             status, _ = self._raw("DELETE", f"http://127.0.0.1:{port}/ac/{digest}")
-            self.assertEqual(status, 403)
+            self.assertEqual(status, 200)
         finally:
             httpd.shutdown()
 
@@ -334,7 +335,7 @@ class CompilerObjectRemoteTests(unittest.TestCase):
                 ]
             )
         )
-        self.assertEqual(logged["kernel/locking/mutex.c"]["result"], "Result: cache hit (direct)")
+        self.assertEqual(logged["kernel/locking/mutex.c"]["result"], "cache hit (direct)")
         self.assertNotIn("kernel/bounds.c", logged)
 
     def test_two_directories_reuse_one_gcc_object_through_bazel_http(self) -> None:

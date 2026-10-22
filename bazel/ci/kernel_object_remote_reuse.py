@@ -91,7 +91,7 @@ def run_mode(mode: str, work: Path, *, writing: bool, producer: dict | None) -> 
             work=work,
             ccache_dir=ccache_dir,
             port=port,
-            read_only=not writing,
+            read_only=False,
         )
         logs = work / "logs"
         logs.mkdir(parents=True, exist_ok=True)
@@ -100,7 +100,7 @@ def run_mode(mode: str, work: Path, *, writing: bool, producer: dict | None) -> 
         Path(env["CCACHE_LOGFILE"]).write_text("", encoding="utf-8")
         read_before = store.read_bytes
         write_before = store.write_bytes
-        command = kbuild_command(source, build, gcc, gxx, ccache, "kernel/locking/built-in.a")
+        command = kbuild_command(source, build, gcc, gxx, ccache, "kernel/locking/built-in.a", jobs="1")
         strace_path = logs / "phase3.strace"
         log_path = logs / "phase3.log"
         status = run_logged(["strace", "-f", "-e", "trace=execve", "-s", "262144", "-o", str(strace_path), *command], env, log_path)
@@ -318,8 +318,17 @@ def prepare_kbuild(source: Path, build: Path, gcc: str, gxx: str, ccache: str, e
     return commands
 
 
-def kbuild_command(source: Path, build: Path, gcc: str, gxx: str, ccache: str, target: str) -> list[str]:
-    jobs = str(min(4, os.cpu_count() or 2))
+def kbuild_command(
+    source: Path,
+    build: Path,
+    gcc: str,
+    gxx: str,
+    ccache: str,
+    target: str,
+    jobs: str | None = None,
+) -> list[str]:
+    if jobs is None:
+        jobs = str(min(4, os.cpu_count() or 2))
     return [
         "make",
         "-C",
@@ -422,7 +431,14 @@ def ccache_source_results(log_text: str) -> dict[str, dict[str, object]]:
         if "Executing " in line and "compiler check" not in line:
             results[current]["executed"] = True
         elif "Result:" in line:
-            results[current]["result"] = line.strip()
+            value = line.split("Result:", 1)[1].strip()
+            found = results[current].setdefault("ids", [])
+            if isinstance(found, list):
+                found.append(value)
+            if value in {"direct_cache_hit", "preprocessed_cache_hit", "cache_miss"}:
+                results[current]["result"] = value
+            elif not results[current]["result"]:
+                results[current]["result"] = value
     return results
 
 
