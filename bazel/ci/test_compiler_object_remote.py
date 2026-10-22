@@ -22,6 +22,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from bazel.ci.kernel_object_remote_reuse import (
+    ccache_environment,
     compiler_executions,
     parse_print_stats,
     remote_counters,
@@ -380,6 +381,9 @@ class CompilerObjectRemoteTests(unittest.TestCase):
         self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text(encoding="utf-8"))
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split("__bazel-scenario-harness:", 1)[0]
         self.assertNotIn("__kernel-object-remote-reuse", equivalence)
+        env = ccache_environment(work=ROOT, ccache_dir=ROOT / "ccache", port=9, read_only=False)
+        self.assertEqual(env["CCACHE_NOINODECACHE"], "true")
+        self.assertNotIn("file_stat_matches", env["CCACHE_SLOPPINESS"])
 
     def _compile(self, work: Path, port: int, *, read_only: bool) -> str:
         source = work / "src"
@@ -401,6 +405,7 @@ class CompilerObjectRemoteTests(unittest.TestCase):
                 "CCACHE_DIR": str(ccache_dir),
                 "CCACHE_CONFIGPATH": "/dev/null",
                 "CCACHE_NOHASHDIR": "true",
+                "CCACHE_NOINODECACHE": "true",
                 "CCACHE_LOGFILE": str(log_path),
                 "CCACHE_SLOPPINESS": "include_file_mtime,include_file_ctime,locale",
                 "LC_ALL": "C",

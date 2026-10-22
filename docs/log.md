@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Hash kernel headers from disk for remote ccache reuse
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) turns ccache's inode cache off for the Linux locking proof. Prepare can hash a generated header that Kbuild then rewrites. A warm inode cache keeps that earlier digest, so direct mode misses and the preprocessor still hits. With the inode cache off, direct mode hashes the bytes left on disk. The producer remains the only writer. The two clean-runner proofs are not recorded as passed in this entry.
+
 ## [2026-10-22] build | Reuse unchanged Linux compiler objects through ccache remote storage
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps upstream Kbuild as the dependency graph. `OrlixKernelMachOArchive` stays one action with `no-remote-exec`. `block-network` stays while `CCACHE_REMOTE_STORAGE` is unset. A set URL is forwarded with `CCACHE_REMOTE_ONLY` into the existing ccache launcher. The proof backend is the GitHub Actions cache through ccache's Bazel HTTP layout, keyed by the ccache digest. `bazel/ci/compiler_object_cache_env` copies the cache URL and runtime token from the JavaScript action environment into the job. Cache service v2 stores each digest through its signed blob URL. The producer job is the only writer (`ORLIX_COMPILER_OBJECT_REMOTE_WRITE=1`, `actions: write`). Reuse and source-mutation jobs are read-only and do not receive the BuildBuddy write key. `.github/workflows/bazel-ci.yml` is unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. The two clean-runner proofs are not recorded as passed in this entry.

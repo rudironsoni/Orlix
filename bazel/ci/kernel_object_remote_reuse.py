@@ -360,6 +360,10 @@ def ccache_environment(*, work: Path, ccache_dir: Path, port: int, read_only: bo
             "CCACHE_DIR": str(ccache_dir),
             "CCACHE_CONFIGPATH": "/dev/null",
             "CCACHE_NOHASHDIR": "true",
+            # Prepare hashes generated headers, then Kbuild rewrites them.
+            # A warm inode cache keeps the old digest, so direct mode misses
+            # and the preprocessor still hits. Hash the bytes on disk.
+            "CCACHE_NOINODECACHE": "true",
             "CCACHE_DEBUG": "true",
             "CCACHE_DEBUGDIR": str(work / "ccache-debug"),
             "CCACHE_LOGFILE": str(work / "logs" / "ccache.log"),
