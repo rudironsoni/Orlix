@@ -1348,12 +1348,19 @@ __bazel-routing-contract:
 
 # Read-only lookup for the kernel archive uploaded by the main product build.
 # A fresh output base and an empty disk cache keep a disk hit or an output-base
-# hit from counting. CCACHE_DISABLE is exported for the shell only. It is not an
-# action env, so the action key stays the one the product build uploaded.
-# local can execute this no-sandbox action. handlesCaching is false, so the
-# remote cache lookup runs before the runner and a hit returns before Kbuild.
-# A miss still runs Kbuild. SpawnAction.computeKey fingerprints execution info,
-# so +no-local can never match the product upload. Pull requests do not run this target.
+# hit from counting. CCACHE_DISABLE is exported for the shell only. Bazel 9
+# strict action env does not copy that export into default_shell_env, and the
+# kernel action does not copy it into env. The product graph builds the archive
+# under the Apple rule transition used by Orlix and the public xcframework.
+# That transition writes cpu, apple_split_cpu, platforms, ios_minimum_os, and
+# minimum_os_version. A direct macho target does not receive it. Those options
+# change the bazel-out prefix in OrlixKernelMachOArchive and OrlixTctiIsaRestore
+# argv, so both keys miss together. The flags below are the iOS 15.0 transition
+# outputs for the selected cpu. local can execute this no-sandbox action.
+# handlesCaching is false, so the remote cache lookup runs before the runner
+# and a hit returns before Kbuild. A miss still runs Kbuild.
+# SpawnAction.computeKey fingerprints execution info, so +no-local can never
+# match the product upload. Pull requests do not run this target.
 __bazel-kernel-cache-consumer: __bazel-feasibility-bootstrap
 	@set -euo pipefail; \
 	case "$(ORLIX_BUILDBUDDY_ACCESS)" in \
@@ -1372,7 +1379,7 @@ __bazel-kernel-cache-consumer: __bazel-feasibility-bootstrap
 	mkdir -p "$(ORLIX_BUILD_ROOT)/Bazel"; \
 	python3 "$(CURDIR)/bazel/selection/origin_resolver.py" $(if $(ORLIX_BAZEL_ORIGINS),--requested-mode auto --origins '$(ORLIX_BAZEL_ORIGINS)' --use-promoted-lock,--requested-mode $(ORLIX_BAZEL_COMPONENT_MODE)) --lock "$(CURDIR)/artifacts.lock.json" --profile "$(PROFILE)" --destination "$(ORLIX_BAZEL_DESTINATION)" --print-flags > "$(ORLIX_BUILD_ROOT)/Bazel/kernel-consumer-origin-flags.txt"; \
 	echo "kernel-cache-consumer: startup --output_base=$$proof/output-base --disk_cache= ccache off"; \
-	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/output-base" build //bazel/feasibility/kernel:macho --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) $(ORLIX_BAZEL_COMPONENT_CONFIG) $$(cat "$(ORLIX_BUILD_ROOT)/Bazel/kernel-consumer-origin-flags.txt") --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --remote_executor= --strategy=OrlixKernelMachOArchive=local --execution_log_compact_file= --execution_log_json_file="$$proof/execution.json"; \
+	DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" "$(ORLIX_BAZEL)" --batch --output_base="$$proof/output-base" build //bazel/feasibility/kernel:macho --compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE) --config=$(PROFILE) $(ORLIX_BAZEL_COMPONENT_CONFIG) $$(cat "$(ORLIX_BUILD_ROOT)/Bazel/kernel-consumer-origin-flags.txt") --apple_platform_type=ios --ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU) --cpu=ios_$(ORLIX_BAZEL_IOS_CPU) --apple_split_cpu=$(ORLIX_BAZEL_IOS_CPU) --platforms=@build_bazel_apple_support//platforms:ios_$(ORLIX_BAZEL_IOS_CPU) --ios_minimum_os=15.0 --minimum_os_version=15.0 --xcode_version=$(ORLIX_XCODE_VERSION) --repo_env=DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --host_action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=ORLIX_PINNED_DEVELOPER_DIR="$(ORLIX_PINNED_DEVELOPER_DIR)" --action_env=CCACHE_DIR="$(CCACHE_DIR)" --disk_cache= --repository_cache="$(ORLIX_BAZEL_REPOSITORY_CACHE)" --remote_executor= --strategy=OrlixKernelMachOArchive=local --execution_log_compact_file= --execution_log_json_file="$$proof/execution.json"; \
 	jq -e -s 'map(select(.mnemonic == "OrlixKernelMachOArchive")) | if length > 0 and all(.[]; (.exitCode // 0) == 0 and (.status // "") == "" and .targetLabel == "//bazel/feasibility/kernel:macho" and .cacheHit == true and .runner == "remote cache hit") then map({mnemonic, targetLabel, runner, cacheHit, exitCode}) else error("kernel archive was not a remote cache hit") end' "$$proof/execution.json" > "$$proof/cache-observation.json"; \
 	jq -r '.[] | "kernel-cache-consumer: \(.targetLabel) cacheHit=\(.cacheHit) runner=\(.runner)"' "$$proof/cache-observation.json"; \
 	remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/cache-observation.json")"; \

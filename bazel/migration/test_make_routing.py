@@ -1222,6 +1222,19 @@ esac
         self.assertIn("export CCACHE_DISABLE=1", consumer)
         self.assertNotIn("--action_env=CCACHE_DISABLE", consumer)
         self.assertIn("--action_env=CCACHE_DIR=", consumer)
+        self.assertIn("--cpu=ios_$(ORLIX_BAZEL_IOS_CPU)", consumer)
+        self.assertIn("--apple_split_cpu=$(ORLIX_BAZEL_IOS_CPU)", consumer)
+        self.assertIn(
+            "--platforms=@build_bazel_apple_support//platforms:ios_$(ORLIX_BAZEL_IOS_CPU)",
+            consumer,
+        )
+        self.assertIn("--ios_minimum_os=15.0", consumer)
+        self.assertIn("--minimum_os_version=15.0", consumer)
+        app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
+        self.assertNotIn("--apple_split_cpu=", app)
+        self.assertNotIn("--ios_minimum_os=", app)
+        self.assertNotIn("--minimum_os_version=", app)
+        self.assertNotIn("--cpu=ios_", app)
         self.assertIn("--strategy=OrlixKernelMachOArchive=local", consumer)
         self.assertNotIn("darwin-sandbox", consumer)
         self.assertNotIn("+no-local", consumer)
