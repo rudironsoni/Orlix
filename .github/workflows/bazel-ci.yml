@@ -77,7 +77,7 @@ concurrency:
 
 jobs:
   apple-ci:
-    name: Bazel matrix check
+    name: Apple product proof
     runs-on: macos-26
     timeout-minutes: 180
     steps:
@@ -466,8 +466,9 @@ jobs:
         run: make __bazel-apple-ci
 
       # The product build has already filled these caches. Save that result
-      # before the seed so a failed or cancelled seed does not drop it. Skip a
-      # cache that still has no files. Simulator runtime saves stay with
+      # before the read-only consumer switch. Cache equivalence runs in a
+      # parallel job, so a failed proof does not drop this save. Skip a cache
+      # that still has no files. Simulator runtime saves stay with
       # preparation, before this build.
       - name: Record setup caches filled by the product build
         id: setup-caches
@@ -519,10 +520,11 @@ jobs:
           path: ~/Library/Caches/Orlix/ccache
           key: orlix-ccache-${{ steps.compiler.outputs.digest }}
 
-      # Pull requests stay on the read credential configured above. This step
-      # runs only after a push of refs/heads/main, which is the only context
-      # that selects the write credential.
-      - name: Publish the cache-equivalence seed
+      # The product upload used the write credential. Kernel and compiler-runtime
+      # consumers must look that upload up with the read credential. Doing that
+      # lookup in parallel would miss and run a second full Kbuild. This switch
+      # does not run the cache-equivalence rebuild.
+      - name: Use the read-only BuildBuddy credential
         if: steps.buildbuddy.outputs.access == 'write'
         env:
           ORLIX_BUILDBUDDY_ACCESS: read
@@ -530,16 +532,9 @@ jobs:
         run: |
           set -euo pipefail
           write_rc="$(readlink .bazelrc.local)"
-          umask 077
-          seed_key="$RUNNER_TEMP/orlix-buildbuddy-seed-key"
-          sed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' "$write_rc" > "$seed_key"
-          chmod 600 "$seed_key"
-          test -s "$seed_key"
           unlink .bazelrc.local
           unlink "$write_rc"
           make __bazel-buildbuddy-configure
-          if [ -n "${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key" >> "$GITHUB_ENV"; fi
-          make __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE="$seed_key"
 
       - name: Look up the kernel archive in the remote cache
         if: steps.buildbuddy.outputs.access == 'write'
@@ -687,3 +682,235 @@ jobs:
             !Build/AgentHarness/bazel-ci/app.*/**
           if-no-files-found: warn
           retention-days: 14
+
+  # Parallel with apple-ci. The wall clock is the longer of the two jobs.
+  # Pull requests do not start this job, so they do not gain the cache-disabled
+  # rebuild. The write credential is configured only here, on a main push, and
+  # the cached and uncached sides use the read credential. This job does not
+  # look up the kernel or compiler runtime; those consumers stay behind the
+  # product upload so a miss cannot start a second full Kbuild.
+  cache-equivalence:
+    name: Cache equivalence
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ORLIX_BUILDBUDDY_CACHE_MODE != 'off' }}
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Read requested Xcode version
+        id: xcode-version
+        run: |
+          set -euo pipefail
+          test -s .xcode-version
+          echo "version=$(tr -d '[:space:]' < .xcode-version)" >> "$GITHUB_OUTPUT"
+
+      - name: See whether the requested Xcode is already on the runner
+        id: xcode-present
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py xcode-present --version "${{ steps.xcode-version.outputs.version }}" || python3 bazel/ci/setup_cache.py xcode-selected --version "${{ steps.xcode-version.outputs.version }}"; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode
+        if: steps.xcode-present.outputs.installed == 'true'
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ steps.xcode-version.outputs.version }}
+
+      - name: Restore cached Xcode archive
+        if: steps.xcode-present.outputs.installed != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: "~/Library/Application Support/com.robotsandpencils.xcodes"
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
+
+      - name: Restore Bazel repository cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/Bazel/repository-cache
+          key: orlix-bazel-repos-${{ hashFiles('MODULE.bazel.lock', 'bazel/extensions/ghostty_zig_packages.json') }}
+          restore-keys: |
+            orlix-bazel-repos-
+
+      - name: Record the pinned CI toolchain
+        id: toolchain-pin
+        run: |
+          set -euo pipefail
+          if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "pin=unpinned" >> "$GITHUB_OUTPUT"
+            echo "llvm=unpinned" >> "$GITHUB_OUTPUT"
+            echo "versions=unpinned" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore CI toolchain bundle
+        id: ci-toolchain
+        if: steps.toolchain-pin.outputs.ready == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz
+          key: orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}
+
+      - name: Install declared build tools
+        id: tools
+        env:
+          ORLIX_TOOLCHAIN_CACHE_HIT: ${{ steps.ci-toolchain.outputs.cache-hit }}
+          ORLIX_TOOLCHAIN_PIN: ${{ steps.toolchain-pin.outputs.pin }}
+          ORLIX_TOOLCHAIN_READY: ${{ steps.toolchain-pin.outputs.ready }}
+        run: |
+          set -euo pipefail
+          # The elapsed time is the measurement for this step. It is not a budget.
+          install_started=$SECONDS
+          archive="$HOME/Library/Caches/Orlix/ci-toolchain/ci-toolchain.tar.gz"
+          restored=false
+          if [ "$ORLIX_TOOLCHAIN_READY" = true ] && [ -f "$archive" ]; then
+            # A missing mke2fs.conf is a successful restore. The archive and
+            # the kegs stay. The e2fsprogs install below is the only brew
+            # command for that file.
+            if python3 bazel/ci/setup_cache.py restore-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"; then
+              restored=true
+              echo "pinned clang is /opt/homebrew/opt/llvm/bin/clang; skipping brew bundle"
+            else
+              echo "restored CI toolchain does not match the pinned clang; running brew bundle"
+              rm -f "$archive"
+            fi
+          fi
+          if [ "$restored" != true ]; then
+            if python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile bazel/ci/Brewfile; then
+              echo "Homebrew packages are already installed at the pinned versions; skipping brew bundle"
+            else
+              export HOMEBREW_NO_AUTO_UPDATE=1
+              xcodes_tap_revision=6e47b55144cb1d1f5948e0bb6f443b13a8a8efc2
+              brew tap xcodesorg/made
+              git -C "$(brew --repo xcodesorg/made)" fetch origin "$xcodes_tap_revision"
+              git -C "$(brew --repo xcodesorg/made)" checkout "$xcodes_tap_revision"
+              brew trust --formula xcodesorg/made/xcodes
+              brew bundle --file bazel/ci/Brewfile
+              test "$(git -C "$(brew --repo xcodesorg/made)" rev-parse HEAD)" = "$xcodes_tap_revision"
+              if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$ORLIX_TOOLCHAIN_CACHE_HIT" != true ] && [ "$ORLIX_TOOLCHAIN_READY" = true ]; then
+                python3 bazel/ci/setup_cache.py pack-toolchain --archive "$archive" --brewfile bazel/ci/Brewfile --pin "$ORLIX_TOOLCHAIN_PIN"
+              fi
+            fi
+          fi
+          if [ ! -f /opt/homebrew/etc/mke2fs.conf ]; then
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            if brew list --formula e2fsprogs >/dev/null 2>&1; then
+              brew reinstall e2fsprogs
+            else
+              brew install e2fsprogs
+            fi
+          fi
+          test "$(xcodes version)" = "2.1.0"
+          if [ -f "$archive" ]; then
+            bytes=$(stat -f%z "$archive")
+            echo "toolchain=true" >> "$GITHUB_OUTPUT"
+            echo "toolchain archive bytes=$bytes"
+          else
+            bytes=0
+            echo "toolchain=false" >> "$GITHUB_OUTPUT"
+            echo "toolchain archive bytes=0"
+          fi
+          echo "bytes=$bytes" >> "$GITHUB_OUTPUT"
+          # ccache is 97654617 bytes and the Bazel repository cache is
+          # 571396067 bytes. Drop one of those, not this archive or the
+          # 5126954916-byte iOS 15.5 runtime, if the sum would pass 10GB.
+          python3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes "$bytes" >> "$GITHUB_OUTPUT"
+          elapsed=$((SECONDS - install_started))
+          echo "seconds=$elapsed" >> "$GITHUB_OUTPUT"
+          echo "declared build tools took ${elapsed}s"
+
+      - name: Install the requested Xcode from the cache or Apple
+        if: steps.xcode-present.outputs.installed != 'true'
+        run: |
+          set -euo pipefail
+          xcodes install "${{ steps.xcode-version.outputs.version }}"
+          xcodes select --print-path
+
+      - name: Export the selected Xcode to Make
+        run: |
+          set -euo pipefail
+          echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      - name: Verify selected Xcode
+        run: |
+          set -euo pipefail
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+
+      - name: Resolve BuildBuddy cache policy
+        id: buildbuddy
+        env:
+          ORLIX_BUILDBUDDY_CACHE_MODE: ${{ vars.ORLIX_BUILDBUDDY_CACHE_MODE || 'normal' }}
+          ORLIX_BUILDBUDDY_CONTEXT: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && 'pr' || 'fork') }}
+        run: make __bazel-buildbuddy-policy
+
+      - name: Configure trusted BuildBuddy writes
+        if: steps.buildbuddy.outputs.access == 'write'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY }}
+          ORLIX_BUILDBUDDY_ACCESS: write
+        run: make __bazel-buildbuddy-configure
+
+      # The seed extracts the write key from the rc configured above, deletes
+      # that rc, and installs the read credential before the cached and
+      # uncached sides. The write secret is not passed to the proof.
+      - name: Publish the cache-equivalence seed
+        if: steps.buildbuddy.outputs.access == 'write'
+        env:
+          ORLIX_BUILDBUDDY_ACCESS: read
+          BUILDBUDDY_API_KEY: ${{ secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY }}
+        run: |
+          set -euo pipefail
+          write_rc="$(readlink .bazelrc.local)"
+          umask 077
+          seed_key="$RUNNER_TEMP/orlix-buildbuddy-seed-key"
+          sed -n 's/^build --remote_header=x-buildbuddy-api-key=//p' "$write_rc" > "$seed_key"
+          chmod 600 "$seed_key"
+          test -s "$seed_key"
+          unlink .bazelrc.local
+          unlink "$write_rc"
+          make __bazel-buildbuddy-configure
+          if [ -n "${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_SEED_KEY_FILE=$seed_key" >> "$GITHUB_ENV"; fi
+          make __bazel-cache-equivalence ORLIX_BUILDBUDDY_SEED_KEY_FILE="$seed_key"
+
+      - name: Fail closed when main did not select the write credential
+        if: steps.buildbuddy.outputs.access != 'write'
+        run: |
+          set -euo pipefail
+          echo "cache equivalence publishes only when a push of refs/heads/main selects the write credential" >&2
+          exit 1
+
+      - name: Remove BuildBuddy credentials
+        if: always()
+        run: make __bazel-buildbuddy-cleanup
+
+  # Keeps the required Bazel matrix check name. It does not build. It fails
+  # when the product proof fails or when cache equivalence fails. A skipped
+  # equivalence job is a pull request, a manual dispatch, or cache mode off.
+  bazel-matrix-check:
+    name: Bazel matrix check
+    needs: [apple-ci, cache-equivalence]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless the product proof and cache equivalence passed
+        run: |
+          set -euo pipefail
+          apple="${{ needs.apple-ci.result }}"
+          equivalence="${{ needs.cache-equivalence.result }}"
+          printf 'apple-ci=%s cache-equivalence=%s\n' "$apple" "$equivalence"
+          test "$apple" = success
+          case "$equivalence" in
+            success|skipped) ;;
+            *) echo "cache equivalence must succeed on trusted main publication" >&2; exit 1 ;;
+          esac

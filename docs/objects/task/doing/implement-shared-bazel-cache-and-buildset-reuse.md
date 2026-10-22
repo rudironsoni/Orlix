@@ -5,7 +5,7 @@ tags:
   - bazel
   - cache
   - artifacts
-updated: 2026-10-20
+updated: 2026-10-22
 status: doing
 summary: "Reuse compatible Bazel results and signed guest/native component buildsets across Apple builds without sharing mutable worktree state."
 task_of:
@@ -96,6 +96,8 @@ marker equality alone cannot satisfy this gate. `compare_trees` still decides
 equality.
 The gate produces verification evidence without publishing artifacts or
 changing the signed buildset lock.
+
+On a push of `refs/heads/main`, when the cache mode is not `off`, that gate runs in the `cache-equivalence` job beside the Apple product job. The job checks out the immutable push commit. It configures the write credential only for the seed, then installs the read credential before the cached and uncached sides. A failure is not ignored. Pull requests, manual dispatch, and cache mode `off` do not start the job, so a pull request does not gain the cache-disabled rebuild. The product job still runs both simulator proofs, saves setup caches, switches to the read credential, and then runs the kernel and compiler-runtime consumers. Those consumers stay after that job's upload. The product job does not call the equivalence target. `Bazel matrix check` joins the two jobs and fails when the product job fails or when cache equivalence fails. A skipped equivalence job does not fail the join. Promotion and release proofs are unchanged.
 
 Rootfs output representation must retain empty directories across cache
 restoration. Bazel's [tree-artifact limitation](https://github.com/bazelbuild/bazel/issues/15901)

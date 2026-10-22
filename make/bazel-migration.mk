@@ -1193,7 +1193,8 @@ __bazel-product-composition: __bazel-kernel-uapi __bazel-hostadapter
 # ccache disable action env so the cached remote hit matches, and it may stay
 # on the write rc. Cached and uncached keep buildbuddy-read with upload false.
 # A disk hit, output-base hit, or ccache hit does not satisfy the jq gate. Only
-# a push of refs/heads/main reaches this target. That step installs the read rc
+# a push of refs/heads/main reaches this target, from the cache-equivalence
+# job. The product job does not call it. That step installs the read rc
 # and passes the write key only through ORLIX_BUILDBUDDY_SEED_KEY_FILE. The
 # seed side temporarily links a write rc, then restores the read rc before
 # cached and uncached. The seed sets --remote_upload_local_results=true. Pull

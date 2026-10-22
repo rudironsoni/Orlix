@@ -1278,7 +1278,14 @@ class WorkflowSetupCacheTests(unittest.TestCase):
     def test_ordinary_ci_restores_one_toolchain_archive_before_brew_bundle(self) -> None:
         text = workflow_text("bazel-ci.yml")
         key = "orlix-ci-toolchain-${{ hashFiles('bazel/ci/Brewfile') }}-${{ steps.toolchain-pin.outputs.pin }}"
-        self.assertEqual(text.count(f"key: {key}"), 2)
+        self.assertEqual(text.count(f"key: {key}"), 3)
+        self.assertEqual(text.count("name: Restore CI toolchain bundle"), 2)
+        self.assertEqual(text.count("name: Save CI toolchain bundle"), 1)
+        equivalence = text.split("\n  cache-equivalence:\n", 1)[1].split("\n  bazel-matrix-check:\n", 1)[0]
+        self.assertEqual(equivalence.count(f"key: {key}"), 1)
+        self.assertNotIn("name: Save CI toolchain bundle", equivalence)
+        self.assertNotIn("name: Save Bazel repository cache", equivalence)
+        self.assertNotIn("name: Save local compiler object cache", equivalence)
         self.assertLess(text.index("name: Restore CI toolchain bundle"), text.index("name: Install declared build tools"))
         self.assertLess(
             text.index("name: Restore bootable iOS 15.5 simulator runtime"),
