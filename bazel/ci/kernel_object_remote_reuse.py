@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bazel.compiler_object_remote import ActionsBlobStore, remote_storage_url, serve
+from bazel.compiler_object_remote import ActionsBlobStore, actions_runtime, remote_storage_url, serve
 
 
 LINUX_URL = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.105.tar.xz"
@@ -223,11 +223,8 @@ def compare_objects(actual: dict, expected: dict, *, changed: set[str]) -> None:
 
 
 def actions_store(*, allow_write: bool) -> ActionsBlobStore:
-    return ActionsBlobStore(
-        os.environ.get("ACTIONS_CACHE_URL", ""),
-        os.environ.get("ACTIONS_RUNTIME_TOKEN", ""),
-        allow_write=allow_write,
-    )
+    url, token, service_v2 = actions_runtime(os.environ)
+    return ActionsBlobStore(url, token, allow_write=allow_write, service_v2=service_v2)
 
 
 def wait_for_sentinel(store: ActionsBlobStore, digest: str, identity: str) -> None:

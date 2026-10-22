@@ -24,6 +24,8 @@ jobs:
           fetch-depth: 1
       - name: Install the kernel build tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache xz-utils strace build-essential flex bison bc libelf-dev libssl-dev
+      - name: Expose the Actions cache credentials
+        uses: ./bazel/ci/compiler_object_cache_env
       - name: Produce compiler objects
         env:
           ORLIX_KERNEL_OBJECT_REMOTE_MODE: produce
@@ -54,6 +56,8 @@ jobs:
         with:
           name: kernel-object-identities
           path: Build/kernel-object-remote-reuse/producer
+      - name: Expose the Actions cache credentials
+        uses: ./bazel/ci/compiler_object_cache_env
       - name: Reuse unchanged compiler objects
         env:
           ORLIX_KERNEL_OBJECT_REMOTE_MODE: reuse
@@ -77,6 +81,8 @@ jobs:
         with:
           name: kernel-object-identities
           path: Build/kernel-object-remote-reuse/producer
+      - name: Expose the Actions cache credentials
+        uses: ./bazel/ci/compiler_object_cache_env
       - name: Compile the mutated unit and reuse the rest
         env:
           ORLIX_KERNEL_OBJECT_REMOTE_MODE: mutate

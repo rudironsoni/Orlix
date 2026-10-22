@@ -1,0 +1,5 @@
+name: Compiler object cache credentials
+description: Copy the Actions cache runtime credentials into the job environment.
+runs:
+  using: node20
+  main: index.js

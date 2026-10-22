@@ -29,6 +29,7 @@ from bazel.ci.kernel_object_remote_reuse import (
 from bazel.compiler_object_remote import (
     ActionsBlobStore,
     MemoryBlobStore,
+    actions_runtime,
     remote_storage_url,
     serve,
 )
@@ -106,6 +107,91 @@ class _ActionsHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
 
+class _ActionsV2Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_POST(self) -> None:  # noqa: N802
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length))
+        server = self.server
+        if self.path.endswith("/CreateCacheEntry"):
+            key = payload["key"]
+            if key in server.entries:  # type: ignore[attr-defined]
+                self._json({"ok": False, "message": "already exists"})
+                return
+            self._json(
+                {
+                    "ok": True,
+                    "signed_upload_url": f"http://127.0.0.1:{server.server_address[1]}/upload/{key}",  # type: ignore[attr-defined]
+                }
+            )
+            return
+        if self.path.endswith("/FinalizeCacheEntryUpload"):
+            key = payload["key"]
+            blob = server.pending.get(key)  # type: ignore[attr-defined]
+            if blob is None or str(len(blob)) != payload["size_bytes"]:
+                self._json({"ok": False, "message": "size"})
+                return
+            server.entries[key] = blob  # type: ignore[attr-defined]
+            self._json({"ok": True, "entry_id": "1"})
+            return
+        if self.path.endswith("/GetCacheEntryDownloadURL"):
+            key = payload["key"]
+            blob = server.entries.get(key)  # type: ignore[attr-defined]
+            if blob is None:
+                self._json({"ok": False, "signed_download_url": ""})
+                return
+            self._json(
+                {
+                    "ok": True,
+                    "signed_download_url": f"http://127.0.0.1:{server.server_address[1]}/blob/{key}",  # type: ignore[attr-defined]
+                    "matched_key": key,
+                }
+            )
+            return
+        self._json({"ok": False, "message": "unknown"}, status=404)
+
+    def do_PUT(self) -> None:  # noqa: N802
+        if self.headers.get("x-ms-blob-type") != "BlockBlob":
+            self._json({"message": "blob type"}, status=400)
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        key = self.path.rsplit("/", 1)[-1]
+        self.server.pending[key] = self.rfile.read(length)  # type: ignore[attr-defined]
+        self._send(201, b"")
+
+    def do_GET(self) -> None:  # noqa: N802
+        key = self.path.rsplit("/", 1)[-1]
+        blob = self.server.entries.get(key)  # type: ignore[attr-defined]
+        if blob is None:
+            self._send(404, b"")
+            return
+        self._send(200, blob)
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+    def _json(self, payload: dict[str, object], status: int = 200) -> None:
+        self._send(status, json.dumps(payload).encode())
+
+    def _send(self, status: int, body: bytes) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+
+def _actions_v2_server() -> tuple[ThreadingHTTPServer, int]:
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _ActionsV2Handler)
+    httpd.entries = {}  # type: ignore[attr-defined]
+    httpd.pending = {}  # type: ignore[attr-defined]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd, int(httpd.server_address[1])
+
+
 def urllib_unquote(text: str) -> str:
     from urllib.parse import unquote
 
@@ -151,6 +237,39 @@ class CompilerObjectRemoteTests(unittest.TestCase):
             self.assertEqual(status, 403)
         finally:
             httpd.shutdown()
+
+    def test_runtime_selects_results_url_for_cache_service_v2(self) -> None:
+        with self.assertRaises(RuntimeError):
+            actions_runtime({})
+        url, token, service_v2 = actions_runtime(
+            {
+                "ACTIONS_CACHE_SERVICE_V2": "true",
+                "ACTIONS_CACHE_URL": "https://cache.example/v1/",
+                "ACTIONS_RESULTS_URL": "https://results.example/v2/",
+                "ACTIONS_RUNTIME_TOKEN": "token",
+            }
+        )
+        self.assertEqual(url, "https://results.example/v2/")
+        self.assertEqual(token, "token")
+        self.assertTrue(service_v2)
+
+    def test_actions_store_v2_uploads_through_the_signed_blob_url(self) -> None:
+        httpd, port = _actions_v2_server()
+        try:
+            store = ActionsBlobStore(
+                f"http://127.0.0.1:{port}/ignored/",
+                "runtime-token",
+                allow_write=True,
+                service_v2=True,
+            )
+            store.put(_DIGEST, b"kernel-object")
+            self.assertEqual(store.get(_DIGEST), b"kernel-object")
+            self.assertEqual(store.write_bytes, len(b"kernel-object"))
+            store.put(_DIGEST, b"kernel-object")
+            self.assertEqual(store.write_bytes, len(b"kernel-object"))
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
     def test_actions_store_rejects_missing_runtime_credentials(self) -> None:
         with self.assertRaises(RuntimeError):
@@ -237,6 +356,7 @@ class CompilerObjectRemoteTests(unittest.TestCase):
         self.assertIn("pull_request:", workflow)
         self.assertIn("ORLIX_COMPILER_OBJECT_REMOTE_WRITE: \"1\"", workflow)
         self.assertEqual(workflow.count("ORLIX_COMPILER_OBJECT_REMOTE_WRITE:"), 1)
+        self.assertEqual(workflow.count("uses: ./bazel/ci/compiler_object_cache_env"), 3)
         self.assertIn("actions: write", workflow)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY", workflow)
         self.assertNotIn("kernel_object_remote", bazel)

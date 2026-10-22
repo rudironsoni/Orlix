@@ -73,15 +73,23 @@ class MemoryBlobStore:
 class ActionsBlobStore:
     """GitHub Actions cache entries keyed by the ccache digest."""
 
-    def __init__(self, cache_url: str, token: str, *, allow_write: bool) -> None:
+    def __init__(
+        self,
+        cache_url: str,
+        token: str,
+        *,
+        allow_write: bool,
+        service_v2: bool = False,
+    ) -> None:
         if not cache_url or not token:
             raise RuntimeError(
                 "GitHub Actions cache runtime credentials are required "
-                "(ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN)"
+                "(ACTIONS_CACHE_URL or ACTIONS_RESULTS_URL, and ACTIONS_RUNTIME_TOKEN)"
             )
         self.cache_url = cache_url if cache_url.endswith("/") else cache_url + "/"
         self.token = token
         self.allow_write = allow_write
+        self.service_v2 = service_v2
         self.read_bytes = 0
         self.write_bytes = 0
         self.version = CACHE_VERSION
@@ -107,7 +115,10 @@ class ActionsBlobStore:
         last_error: Exception | None = None
         for attempt in range(5):
             try:
-                self._put_once(key, blob)
+                if self.service_v2:
+                    self._put_v2(key, blob)
+                else:
+                    self._put_once(key, blob)
                 with self._lock:
                     self.write_bytes += len(blob)
                 return
@@ -117,6 +128,30 @@ class ActionsBlobStore:
                 last_error = error
                 time.sleep(0.4 * (attempt + 1))
         raise RuntimeError(f"uploading compiler object {digest} failed") from last_error
+
+    def _put_v2(self, key: str, blob: bytes) -> None:
+        created = self._twirp("CreateCacheEntry", {"key": key, "version": self.version})
+        upload = _field(created, "signed_upload_url", "signedUploadUrl")
+        if not created.get("ok") or not upload:
+            if self._lookup_v2(key):
+                raise _AlreadyStored
+            message = _field(created, "message") or "reservation was not accepted"
+            raise RuntimeError(f"reserve failed: {message}")
+        status, response = _request(
+            "PUT",
+            upload,
+            blob,
+            {"Content-Type": "application/octet-stream", "x-ms-blob-type": "BlockBlob"},
+        )
+        if status not in (200, 201):
+            raise RuntimeError(f"upload failed: {status} {_safe_text(response)}")
+        finalized = self._twirp(
+            "FinalizeCacheEntryUpload",
+            {"key": key, "version": self.version, "size_bytes": str(len(blob))},
+        )
+        if not finalized.get("ok"):
+            message = _field(finalized, "message") or "finalize was not accepted"
+            raise RuntimeError(f"commit failed: {message}")
 
     def _put_once(self, key: str, blob: bytes) -> None:
         reserve = json.dumps(
@@ -165,6 +200,8 @@ class ActionsBlobStore:
         return self._lookup_key(_cache_key(digest))
 
     def _lookup_key(self, key: str) -> str | None:
+        if self.service_v2:
+            return self._lookup_v2(key)
         quoted = urllib.parse.quote(key, safe="")
         status, body = self._api("GET", f"cache?keys={quoted}&version={self.version}")
         if status == 204:
@@ -175,6 +212,45 @@ class ActionsBlobStore:
         if not location:
             raise RuntimeError("cache lookup returned no archive")
         return str(location)
+
+    def _lookup_v2(self, key: str) -> str | None:
+        found = self._twirp(
+            "GetCacheEntryDownloadURL",
+            {"key": key, "version": self.version, "restore_keys": []},
+        )
+        if not found.get("ok"):
+            return None
+        location = _field(found, "signed_download_url", "signedDownloadUrl")
+        return location or None
+
+    def _twirp(self, method: str, payload: dict[str, object]) -> dict[str, object]:
+        parsed = urllib.parse.urlsplit(self.cache_url)
+        url = urllib.parse.urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                f"/twirp/github.actions.results.api.v1.CacheService/{method}",
+                "",
+                "",
+            )
+        )
+        status, body = _request(
+            "POST",
+            url,
+            json.dumps(payload).encode(),
+            {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "User-Agent": "orlix-compiler-object-remote",
+            },
+        )
+        if status != 200:
+            raise RuntimeError(f"{method} failed: {status} {_safe_text(body)}")
+        decoded = json.loads(body)
+        if not isinstance(decoded, dict):
+            raise RuntimeError(f"{method} returned a non-object")
+        return decoded
 
     def _api(
         self,
@@ -279,6 +355,26 @@ def serve(store: BlobStore) -> tuple[ThreadingHTTPServer, int]:
     return httpd, int(httpd.server_address[1])
 
 
+def actions_runtime(environ: dict[str, str]) -> tuple[str, str, bool]:
+    """Return the cache service URL, token, and whether service v2 is active.
+
+    The runner injects these into JavaScript actions. A `run` step only sees
+    them after that action copies them into the job environment.
+    """
+    service_v2 = bool(environ.get("ACTIONS_CACHE_SERVICE_V2"))
+    if service_v2:
+        url = environ.get("ACTIONS_RESULTS_URL", "")
+    else:
+        url = environ.get("ACTIONS_CACHE_URL") or environ.get("ACTIONS_RESULTS_URL") or ""
+    token = environ.get("ACTIONS_RUNTIME_TOKEN", "")
+    if not url or not token:
+        raise RuntimeError(
+            "GitHub Actions cache runtime credentials are required "
+            "(ACTIONS_CACHE_URL or ACTIONS_RESULTS_URL, and ACTIONS_RUNTIME_TOKEN)"
+        )
+    return url, token, service_v2
+
+
 def remote_storage_url(port: int, *, read_only: bool) -> str:
     url = (
         f"http://127.0.0.1:{port}|layout=bazel"
@@ -307,6 +403,14 @@ def _digest_from_path(path: str) -> str:
 def _cache_key(digest: str) -> str:
     _require_digest(digest)
     return _KEY_PREFIX + digest
+
+
+def _field(payload: dict[str, object], *names: str) -> str:
+    for name in names:
+        value = payload.get(name)
+        if value:
+            return str(value)
+    return ""
 
 
 def _safe_text(body: bytes) -> str:
