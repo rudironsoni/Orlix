@@ -977,7 +977,7 @@ class RoutingContractTests(unittest.TestCase):
             "Publish the cache-equivalence seed", 1
         )[0]
         lookup = workflow.split("Look up the kernel archive in the remote cache", 1)[1].split(
-            "Promoted-consumer proof", 1
+            "Look up the compiler runtime in the remote cache", 1
         )[0]
         self.assertNotIn("__bazel-kernel-cache-consumer", apple)
         self.assertIn("steps.buildbuddy.outputs.access == 'write'", lookup)
@@ -988,6 +988,26 @@ class RoutingContractTests(unittest.TestCase):
         self.assertLess(
             workflow.index("make __bazel-cache-equivalence"),
             workflow.index("make __bazel-kernel-cache-consumer"),
+        )
+
+    def test_compiler_runtime_cache_consumer_is_main_read_after_the_kernel_lookup(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "bazel-ci.yml").read_text(encoding="utf-8")
+        apple = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Publish the cache-equivalence seed", 1
+        )[0]
+        lookup = workflow.split("Look up the compiler runtime in the remote cache", 1)[1].split(
+            "Promoted-consumer proof", 1
+        )[0]
+        self.assertNotIn("__bazel-compiler-runtime-cache-consumer", apple)
+        self.assertIn("steps.buildbuddy.outputs.access == 'write'", lookup)
+        self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", lookup)
+        self.assertIn("steps.component-mode.outputs.mode", lookup)
+        self.assertIn("make __bazel-compiler-runtime-cache-consumer", lookup)
+        self.assertIn("ORLIX_CI_BUILDBUDDY_READ_API_KEY", lookup)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", lookup)
+        self.assertLess(
+            workflow.index("make __bazel-kernel-cache-consumer"),
+            workflow.index("make __bazel-compiler-runtime-cache-consumer"),
         )
 
 

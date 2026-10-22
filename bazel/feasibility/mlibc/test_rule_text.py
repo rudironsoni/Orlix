@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 UAPI = ROOT / "bazel/feasibility/kernel/kernel_uapi.bzl"
 SYSROOT = ROOT / "bazel/feasibility/mlibc/mlibc_sysroot.bzl"
 COMPILER = ROOT / "bazel/feasibility/mlibc/compiler_runtime.bzl"
+CONSUMER = ROOT / "bazel/feasibility/mlibc/compiler_runtime_cache_consumer.bzl"
+BUILD = ROOT / "bazel/feasibility/mlibc/BUILD.bazel"
 
 
 def action_text(text: str, mnemonic: str) -> str:
@@ -81,6 +83,19 @@ class UapiMlibcRuleTextTests(unittest.TestCase):
         self.assertIn("OrlixCompilerRuntimeInfo", text)
         self.assertNotIn('mnemonic = "OrlixCompilerRuntime"', text)
         self.assertIn("compiler_runtime[OrlixCompilerRuntimeInfo]", text)
+        consumer = CONSUMER.read_text(encoding="utf-8")
+        build = BUILD.read_text(encoding="utf-8")
+        self.assertIn(
+            'load("@rules_apple//apple/internal:transition_support.bzl", "transition_support")',
+            consumer,
+        )
+        self.assertIn("transition_support.apple_platform_split_transition", consumer)
+        self.assertIn('default = "15.0"', consumer)
+        self.assertIn('default = "ios"', consumer)
+        self.assertIn('name = "compiler_runtime_cache_consumer"', build)
+        self.assertIn('runtime = ":compiler_runtime"', build)
+        self.assertIn('minimum_os_version = "15.0"', build)
+        self.assertIn('platform_type = "ios"', build)
         self.assertNotIn("uapi.sha256", text)
         self.assertNotIn("uapi.sha256", sysroot)
         self.assertNotIn("uapi.uapi_digest", sysroot)
