@@ -174,7 +174,10 @@ def check_mode(evidence: dict, producer: dict | None) -> None:
     executions = evidence["compiler_executions"]
     if evidence["mode"] == "produce":
         if evidence["transfer_bytes"]["write"] <= 0 or remote["misses"] <= 0 or remote["writes"] <= 0:
-            raise SystemExit("producer did not miss and upload compiler objects")
+            raise SystemExit(
+                "producer did not miss and upload compiler objects: "
+                f"{remote} transfer={evidence['transfer_bytes']}"
+            )
         if not executions:
             raise SystemExit("producer did not execute the real compiler")
         if MUTATION_SYMBOL in evidence["archive_symbols"]:
