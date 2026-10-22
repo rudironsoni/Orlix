@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 # Orlix Knowledge Log
+
+## [2026-10-22] build | Match the kernel consumer to the product Apple configuration
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps `export CCACHE_DISABLE=1` on the kernel cache consumer. Bazel 9 strict action env does not put that export in `default_shell_env`, and the archive action does not copy it into `env`. The product upload is the Apple transition configuration from Orlix and the public xcframework, including cpu, apple split cpu, platforms, and the iOS 15.0 minimums. The consumer now sets those options for the selected iOS cpu. `--strategy=OrlixKernelMachOArchive=local` stays. A miss still fails the jq check. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-21] build | Upload only the Apple CI evidence directory
 
