@@ -322,6 +322,20 @@ class CompilerObjectRemoteTests(unittest.TestCase):
             compiler_executions(
                 '123 execve("/usr/bin/gcc", ["/usr/bin/gcc", "-c", "kernel/locking/mutex.c"...'
             )
+        from bazel.ci.kernel_object_remote_reuse import ccache_source_results
+
+        logged = ccache_source_results(
+            "\n".join(
+                [
+                    "Command line: gcc -c kernel/locking/mutex.c",
+                    "Result: cache hit (direct)",
+                    "Command line: gcc -c kernel/bounds.c",
+                    "Result: cache hit (preprocessed)",
+                ]
+            )
+        )
+        self.assertEqual(logged["kernel/locking/mutex.c"]["result"], "Result: cache hit (direct)")
+        self.assertNotIn("kernel/bounds.c", logged)
 
     def test_two_directories_reuse_one_gcc_object_through_bazel_http(self) -> None:
         if any(shutil.which(name) is None for name in ("gcc", "ccache", "strace", "nm")):

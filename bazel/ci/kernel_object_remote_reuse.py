@@ -185,13 +185,24 @@ def check_mode(evidence: dict, producer: dict | None) -> None:
         raise SystemExit("read-only runner uploaded compiler objects")
     if evidence["transfer_bytes"]["read"] <= 0 or remote["hits"] <= 0:
         raise SystemExit("clean runner did not read remote compiler objects")
-    if evidence["ccache_preprocessed_hits"] != 0:
-        raise SystemExit("preprocessed hit ran the compiler front end")
+    results = evidence["ccache_results"]
+    preprocessed = sorted(name for name, meta in results.items() if "preprocessed" in str(meta["result"]))
+    if preprocessed:
+        raise SystemExit(f"preprocessed hit ran the compiler front end: {preprocessed}")
+    if "kernel/locking/semaphore.c" not in results or len(results) < 3:
+        raise SystemExit(f"ccache log did not record the locking units: {sorted(results)}")
     if evidence["mode"] == "reuse":
         if executions:
             raise SystemExit(f"unchanged units executed the compiler: {executions}")
-        if evidence["ccache_direct_hits"] < 1:
-            raise SystemExit("unchanged units were not direct remote hits")
+        missed = sorted(
+            name
+            for name, meta in results.items()
+            if meta["executed"] or "direct" not in str(meta["result"])
+        )
+        if missed:
+            raise SystemExit(f"unchanged units were not direct remote hits: {missed}")
+        if evidence["ccache_direct_hits"] < len(results):
+            raise SystemExit("direct hit count is below the recorded locking units")
         compare_objects(objects, producer["objects"], changed=set())
         if MUTATION_SYMBOL in evidence["archive_symbols"]:
             raise SystemExit("reused archive contains the mutation")
@@ -199,6 +210,12 @@ def check_mode(evidence: dict, producer: dict | None) -> None:
         changed = {MUTATION_SOURCE}
         if set(executions) != changed:
             raise SystemExit(f"mutation compiler executions were {executions}")
+        for name, meta in results.items():
+            if name == MUTATION_SOURCE:
+                if not meta["executed"] or "miss" not in str(meta["result"]):
+                    raise SystemExit(f"mutated unit was not a remote miss: {meta}")
+            elif meta["executed"] or "direct" not in str(meta["result"]):
+                raise SystemExit(f"{name} was not a direct remote hit: {meta}")
         compare_objects(objects, producer["objects"], changed={"kernel/locking/semaphore.o"})
         if MUTATION_SYMBOL not in evidence["archive_symbols"]:
             raise SystemExit("linked archive is missing the mutated symbol")
