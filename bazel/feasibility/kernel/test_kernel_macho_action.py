@@ -97,8 +97,11 @@ class KernelMachOActionTests(unittest.TestCase):
     def test_kernel_archive_executes_staged_tools(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")
         self.assertNotIn("no-remote-cache", archive)
-        self.assertIn('"no-remote-exec": "1"', archive)
-        self.assertIn('"no-sandbox": "1"', archive)
+        self.assertIn("_kernel_execution_requirements", archive)
+        self.assertIn('"no-remote-exec": "1"', self.rule)
+        self.assertIn('"no-sandbox": "1"', self.rule)
+        self.assertIn('if not shell.get("CCACHE_REMOTE_STORAGE")', self.rule)
+        self.assertIn('"block-network": "1"', self.rule)
         self.assertNotIn("/opt/homebrew", self.rule)
         self.assertNotIn("xcrun", self.rule)
         self.assertNotIn("xcodebuild", self.rule)

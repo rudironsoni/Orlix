@@ -22,6 +22,12 @@ def forward_shell_env(shell: Mapping[str, str]) -> dict[str, str]:
     launcher = shell.get("ORLIX_COMPILER_LAUNCHER")
     if launcher:
         env["ORLIX_COMPILER_LAUNCHER"] = launcher
+    remote = shell.get("CCACHE_REMOTE_STORAGE")
+    if remote:
+        env["CCACHE_REMOTE_STORAGE"] = remote
+    remote_only = shell.get("CCACHE_REMOTE_ONLY")
+    if remote_only:
+        env["CCACHE_REMOTE_ONLY"] = remote_only
     return env
 
 
@@ -30,7 +36,10 @@ def apply_action_environment(environment: dict[str, str]) -> None:
 
     A cold build sets CCACHE_DISABLE. An unset CCACHE_DIR is not a configured
     cache, so a host launcher path is cleared with the absolute Xcode paths.
+    Remote storage is part of that cache. It is not forwarded on its own.
     """
     if environment.get("CCACHE_DISABLE") or not environment.get("CCACHE_DIR"):
         environment.pop("CCACHE_DIR", None)
+        environment.pop("CCACHE_REMOTE_STORAGE", None)
+        environment.pop("CCACHE_REMOTE_ONLY", None)
         environment["ORLIX_COMPILER_LAUNCHER"] = ""

@@ -81,6 +81,8 @@ class CompilerCacheActionTests(unittest.TestCase):
         helper = (ROOT / "bazel/compiler_cache.bzl").read_text(encoding="utf-8")
         self.assertIn('env["CCACHE_DIR"] = cache', helper)
         self.assertIn('env["ORLIX_COMPILER_LAUNCHER"] = launcher', helper)
+        self.assertIn('env["CCACHE_REMOTE_STORAGE"] = remote', helper)
+        self.assertIn('env["CCACHE_REMOTE_ONLY"] = remote_only', helper)
         self.assertIn('return {"CCACHE_DISABLE": disabled}', helper)
         self.assertNotIn("inputs", helper)
         configured = forward_shell_env({
@@ -95,8 +97,18 @@ class CompilerCacheActionTests(unittest.TestCase):
             "CCACHE_DIR": "/var/cache/orlix-compiler",
             "CCACHE_DISABLE": "1",
             "ORLIX_COMPILER_LAUNCHER": "/staged/ccache",
+            "CCACHE_REMOTE_STORAGE": "http://127.0.0.1:9|layout=bazel",
+            "CCACHE_REMOTE_ONLY": "true",
         })
         self.assertEqual(disabled, {"CCACHE_DISABLE": "1"})
+        remote = forward_shell_env({
+            "CCACHE_DIR": "/var/cache/orlix-compiler",
+            "ORLIX_COMPILER_LAUNCHER": "/staged/ccache",
+            "CCACHE_REMOTE_STORAGE": "http://127.0.0.1:9|layout=bazel",
+            "CCACHE_REMOTE_ONLY": "true",
+        })
+        self.assertEqual(remote["CCACHE_REMOTE_STORAGE"], "http://127.0.0.1:9|layout=bazel")
+        self.assertEqual(remote["CCACHE_REMOTE_ONLY"], "true")
         for relative in ACTIONS:
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("compiler_cache_env(", text, relative)

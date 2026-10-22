@@ -29,6 +29,18 @@ def _pinned_env(ctx):
         env["ORLIX_KERNEL_INCREMENTAL"] = shell["ORLIX_KERNEL_INCREMENTAL"]
     return env
 
+def _kernel_execution_requirements(shell):
+    """Run Kbuild locally. Remote objects stay inside ccache.
+
+    block-network stays while CCACHE_REMOTE_STORAGE is unset. A configured
+    remote storage URL may reach that store. This does not add per-object
+    Bazel compiles and it does not enable remote execution.
+    """
+    requirements = {"no-remote-exec": "1", "no-sandbox": "1"}
+    if not shell.get("CCACHE_REMOTE_STORAGE"):
+        requirements["block-network"] = "1"
+    return requirements
+
 def _tcti_isa_prepare_impl(ctx):
     archive = ctx.file.archive
     pin = ctx.file.pin
@@ -426,7 +438,7 @@ digest="$(/usr/bin/shasum -a 256 "$archive_out" | /usr/bin/awk '{print $1}')"
         # Staged tools, their dylibs, the macOS SDK slice, and the provenance
         # makefile are action inputs. Output-base Kbuild state is not an output.
         # The action still runs on the Mac, outside remote execution.
-        execution_requirements = {"block-network": "1", "no-remote-exec": "1", "no-sandbox": "1"},
+        execution_requirements = _kernel_execution_requirements(ctx.configuration.default_shell_env),
     )
     artifact_identity = declare_artifact_identity(
         ctx,

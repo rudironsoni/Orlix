@@ -25,4 +25,10 @@ def compiler_cache_env(shell):
     launcher = shell.get("ORLIX_COMPILER_LAUNCHER")
     if launcher:
         env["ORLIX_COMPILER_LAUNCHER"] = launcher
+    remote = shell.get("CCACHE_REMOTE_STORAGE")
+    if remote:
+        env["CCACHE_REMOTE_STORAGE"] = remote
+    remote_only = shell.get("CCACHE_REMOTE_ONLY")
+    if remote_only:
+        env["CCACHE_REMOTE_ONLY"] = remote_only
     return env

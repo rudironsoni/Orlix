@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Reuse unchanged Linux compiler objects through ccache remote storage
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps upstream Kbuild as the dependency graph. `OrlixKernelMachOArchive` stays one action with `no-remote-exec`. `block-network` stays while `CCACHE_REMOTE_STORAGE` is unset. A set URL is forwarded with `CCACHE_REMOTE_ONLY` into the existing ccache launcher. The proof backend is the GitHub Actions cache through ccache's Bazel HTTP layout, keyed by the ccache digest. The producer job is the only writer (`ORLIX_COMPILER_OBJECT_REMOTE_WRITE=1`, `actions: write`). Reuse and source-mutation jobs are read-only and do not receive the BuildBuddy write key. `.github/workflows/bazel-ci.yml` is unchanged. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. The two clean-runner proofs are not recorded as passed in this entry.
+
 ## [2026-10-22] build | Configure the compiler runtime cache consumer with the Apple split
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds `//bazel/feasibility/mlibc:compiler_runtime_cache_consumer`. That target depends on `:compiler_runtime` through `apple_platform_split_transition`, with platform `ios` and minimum OS 15.0. The consumer command keeps `--apple_platform_type=ios` and `--ios_multi_cpus=sim_arm64`, so the device slice is not built. `--strategy=OrlixCompilerRuntime=local` stays. `CCACHE_DISABLE` stays a shell export and is not an action env. Every `OrlixCompilerRuntime` row for `//bazel/feasibility/mlibc:compiler_runtime` must be `cacheHit` true and runner `remote cache hit`. A miss still runs the action. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

@@ -839,6 +839,7 @@ __bazel-matrix-check: __bazel-version-check __bazel-apple-routing-check
 	@PYTHONPATH="$(CURDIR)/bazel/extensions" python3 -m unittest test_native_sources
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/kernel" python3 -m unittest test_kbuild_persist
 	@python3 -m unittest bazel.feasibility.kernel.test_uapi_inputs bazel.feasibility.mlibc.test_build_state bazel.feasibility.mlibc.test_rule_text bazel.feasibility.packages.test_action_inputs bazel.feasibility.native.test_ssh_archive_pin bazel.feasibility.native.test_ssh_archive_inputs bazel.feasibility.rootfs.test_ext4_bytes bazel.product.test_app_modules
+	@PYTHONPATH="$(CURDIR)" python3 -m unittest bazel.ci.test_compiler_object_remote
 	@PYTHONPATH="$(CURDIR)/bazel/feasibility/packages" python3 -m unittest test_build_state
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_stage_v2_product
 	@PYTHONPATH="$(CURDIR)/bazel/promotion" python3 -m unittest test_compare
@@ -1421,4 +1422,22 @@ __bazel-compiler-runtime-cache-consumer: __bazel-feasibility-bootstrap
 	remote_hits="$$(jq '[.[] | select(.runner == "remote cache hit")] | length' "$$proof/cache-observation.json")"; \
 	test "$$remote_hits" -ge 1; \
 	echo "compiler-runtime-cache-consumer: remote cache hits $$remote_hits"
+
+# Reuse unchanged Linux compiler objects through ccache's content-addressed
+# remote store. Kbuild still decides what to compile. produce is the only mode
+# allowed to upload. reuse and mutate are read-only clean runners.
+.PHONY: __kernel-object-remote-reuse
+__kernel-object-remote-reuse:
+	@set -euo pipefail; \
+	mode="$(ORLIX_KERNEL_OBJECT_REMOTE_MODE)"; \
+	case "$$mode" in \
+	produce|reuse|mutate) ;; \
+	*) echo "ORLIX_KERNEL_OBJECT_REMOTE_MODE must be produce, reuse, or mutate" >&2; exit 1 ;; \
+	esac; \
+	if [ "$$mode" = produce ]; then \
+	  test "$(ORLIX_COMPILER_OBJECT_REMOTE_WRITE)" = 1; \
+	else \
+	  test "$(ORLIX_COMPILER_OBJECT_REMOTE_WRITE)" != 1; \
+	fi; \
+	PYTHONPATH="$(CURDIR)" python3 "$(CURDIR)/bazel/ci/kernel_object_remote_reuse.py" "$$mode"
 
