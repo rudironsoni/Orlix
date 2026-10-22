@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 RULE = ROOT / "bazel/feasibility/kernel/kernel_macho.bzl"
 BUILD = ROOT / "bazel/feasibility/kernel/BUILD.bazel"
+CONSUMER = ROOT / "bazel/feasibility/kernel/kernel_cache_consumer.bzl"
 
 
 def _action_tail(text: str, mnemonic: str) -> str:
@@ -22,6 +23,21 @@ class KernelMachOActionTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.rule = RULE.read_text(encoding="utf-8")
         cls.build = BUILD.read_text(encoding="utf-8")
+        cls.consumer = CONSUMER.read_text(encoding="utf-8")
+
+    def test_cache_consumer_uses_the_apple_split_transition(self) -> None:
+        self.assertIn(
+            'load("@rules_apple//apple/internal:transition_support.bzl", "transition_support")',
+            self.consumer,
+        )
+        self.assertIn("transition_support.apple_platform_split_transition", self.consumer)
+        self.assertIn('default = "15.0"', self.consumer)
+        self.assertIn('default = "ios"', self.consumer)
+        self.assertNotIn("apple_static_library", self.consumer)
+        self.assertIn('name = "kernel_cache_consumer"', self.build)
+        self.assertIn('archive = ":macho"', self.build)
+        self.assertIn('minimum_os_version = "15.0"', self.build)
+        self.assertIn('platform_type = "ios"', self.build)
 
     def test_shell_env_is_pinned(self) -> None:
         archive = _action_tail(self.rule, "OrlixKernelMachOArchive")
