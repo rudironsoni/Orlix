@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Keep compiler-object cache writes off pull requests
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) does not let a pull request publish compiler objects. `actions: write` is not granted on `pull_request`, and the BuildBuddy write key stays off that event. The kernel that Orlix builds is `@orlix_linux_source` (`linux-6.12.105-port`) through `OrlixKernelMachOArchive`, with the staged guest clang and ccache. That action runs on `macos-26`. An Ubuntu build of upstream `kernel/locking` with `/usr/bin/gcc` is not the proof. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. The two clean-runner proofs are not recorded as passed.
+
 ## [2026-10-22] build | Hash kernel headers from disk for remote ccache reuse
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) turns ccache's inode cache off for the Linux locking proof. Prepare can hash a generated header that Kbuild then rewrites. A warm inode cache keeps that earlier digest, so direct mode misses and the preprocessor still hits. With the inode cache off, direct mode hashes the bytes left on disk. The proof records the sha256 of every header named by the locking depfiles. The producer remains the only writer. The two clean-runner proofs are not recorded as passed in this entry.

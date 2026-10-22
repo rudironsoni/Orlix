@@ -11,6 +11,17 @@ import unittest
 from pathlib import Path
 
 
+def _kernel_execution_requirements(kernel: str, mnemonic: str) -> str:
+    """Return the requirements text for one kernel action, including its helper."""
+    start = kernel.index(f'mnemonic = "{mnemonic}"')
+    end = kernel.index("\n", kernel.index("execution_requirements = ", start))
+    block = kernel[start:end]
+    if "_kernel_execution_requirements" not in block:
+        return block
+    helper = kernel.index("def _kernel_execution_requirements")
+    return block + kernel[helper:kernel.index("\ndef ", helper + 1)]
+
+
 ROOT = Path(__file__).resolve().parents[3]
 PACKAGES = ROOT / "bazel/feasibility/packages"
 ROOTFS = ROOT / "bazel/feasibility/rootfs"
@@ -291,10 +302,9 @@ class PackageRootfsInputTests(unittest.TestCase):
         self.assertNotIn("xcrun", autotools)
         kernel = (ROOT / "bazel/feasibility/kernel/kernel_macho.bzl").read_text(encoding="utf-8")
         for mnemonic in ("OrlixTctiIsaRestore", "OrlixKernelMachOArchive"):
-            start = kernel.index(f'mnemonic = "{mnemonic}"')
-            block = kernel[start:kernel.index("\n", kernel.index("execution_requirements = ", start))]
-            self.assertNotIn("no-remote-cache", block, mnemonic)
-            self.assertIn('"no-remote-exec": "1"', block, mnemonic)
+            requirements = _kernel_execution_requirements(kernel, mnemonic)
+            self.assertNotIn("no-remote-cache", requirements, mnemonic)
+            self.assertIn('"no-remote-exec": "1"', requirements, mnemonic)
         self.assertIn('"no-sandbox": "1"', kernel)
         for name in ("coreutils.bzl", "bash.bzl"):
             text = (PACKAGES / name).read_text(encoding="utf-8")

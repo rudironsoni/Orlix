@@ -367,17 +367,13 @@ class CompilerObjectRemoteTests(unittest.TestCase):
                 httpd.shutdown()
 
     def test_workflow_keeps_write_authorization_on_the_producer(self) -> None:
-        workflow = (ROOT / ".github/workflows/kernel-object-remote-reuse.yml").read_text(encoding="utf-8")
+        workflow = ROOT / ".github/workflows/kernel-object-remote-reuse.yml"
+        self.assertFalse(workflow.exists(), "a pull request must not publish compiler-object cache writes")
         bazel = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
-        self.assertIn("pull_request:", workflow)
-        self.assertIn("ORLIX_COMPILER_OBJECT_REMOTE_WRITE: \"1\"", workflow)
-        self.assertEqual(workflow.count("ORLIX_COMPILER_OBJECT_REMOTE_WRITE:"), 1)
-        self.assertEqual(workflow.count("uses: ./bazel/ci/compiler_object_cache_env"), 3)
-        self.assertIn("actions: write", workflow)
-        self.assertNotIn("ORLIX_CI_BUILDBUDDY", workflow)
         self.assertNotIn("kernel_object_remote", bazel)
         self.assertNotIn("ORLIX_COMPILER_OBJECT_REMOTE_WRITE", bazel)
+        self.assertNotIn("actions: write", bazel)
         self.assertIn("__kernel-object-remote-reuse:", makefile)
         self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text(encoding="utf-8"))
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split("__bazel-scenario-harness:", 1)[0]

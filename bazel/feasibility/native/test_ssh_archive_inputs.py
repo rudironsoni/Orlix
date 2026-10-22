@@ -7,6 +7,17 @@ import re
 import unittest
 from pathlib import Path
 
+def _kernel_execution_requirements(kernel: str, mnemonic: str) -> str:
+    """Return the requirements text for one kernel action, including its helper."""
+    start = kernel.index(f'mnemonic = "{mnemonic}"')
+    end = kernel.index("\n", kernel.index("execution_requirements = ", start))
+    block = kernel[start:end]
+    if "_kernel_execution_requirements" not in block:
+        return block
+    helper = kernel.index("def _kernel_execution_requirements")
+    return block + kernel[helper:kernel.index("\ndef ", helper + 1)]
+
+
 ROOT = Path(__file__).resolve().parents[3]
 RULE = Path(__file__).with_name("native_bundle.bzl")
 BUILD = Path(__file__).with_name("BUILD.bazel")
@@ -141,10 +152,9 @@ class SshArchiveInputTests(unittest.TestCase):
         coreutils = (ROOT / "bazel/feasibility/packages/coreutils.bzl").read_text(encoding="utf-8")
         bash = (ROOT / "bazel/feasibility/packages/bash.bzl").read_text(encoding="utf-8")
         for mnemonic in ("OrlixTctiIsaRestore", "OrlixKernelMachOArchive"):
-            start = kernel.index(f'mnemonic = "{mnemonic}"')
-            block = kernel[start:kernel.index("\n", kernel.index("execution_requirements = ", start))]
-            self.assertNotIn("no-remote-cache", block, mnemonic)
-            self.assertIn('"no-remote-exec": "1"', block, mnemonic)
+            requirements = _kernel_execution_requirements(kernel, mnemonic)
+            self.assertNotIn("no-remote-cache", requirements, mnemonic)
+            self.assertIn('"no-remote-exec": "1"', requirements, mnemonic)
         self.assertNotIn("no-remote-cache", autotools)
         self.assertNotIn("xcrun", autotools)
         self.assertNotIn("/opt/homebrew", autotools)
