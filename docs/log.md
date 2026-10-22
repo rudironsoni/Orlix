@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Configure the kernel cache consumer with the Apple split
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds `//bazel/feasibility/kernel:kernel_cache_consumer`. That target depends on `:macho` through `apple_platform_split_transition`, with platform `ios` and minimum OS 15.0. The consumer command keeps `--apple_platform_type=ios` and `--ios_multi_cpus=sim_arm64`, so the device slice is not built. The simulator product archive key is `bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min15.0-ST-03e9db8e5a96`. `--strategy=OrlixKernelMachOArchive=local` stays. A miss still fails the jq check. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-22] build | Match the kernel consumer to the product Apple configuration
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps `export CCACHE_DISABLE=1` on the kernel cache consumer. Bazel 9 strict action env does not put that export in `default_shell_env`, and the archive action does not copy it into `env`. The product upload is the Apple transition configuration from Orlix and the public xcframework, including cpu, apple split cpu, platforms, and the iOS 15.0 minimums. The consumer now sets those options for the selected iOS cpu. `--strategy=OrlixKernelMachOArchive=local` stays. A miss still fails the jq check. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

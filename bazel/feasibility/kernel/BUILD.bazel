@@ -1,3 +1,4 @@
+load(":kernel_cache_consumer.bzl", "orlix_kernel_cache_consumer")
 load(":kernel_uapi.bzl", "orlix_kernel_uapi", "orlix_kernel_uapi_variant")
 load(":kernel_macho.bzl", "orlix_kernel_macho_archive", "orlix_kernel_macho_library", "orlix_tcti_isa_prepare")
 load(
@@ -69,6 +70,16 @@ orlix_tcti_isa_prepare(
     serializer = ":kbuild_persist.py",
     tags = ["manual"],
     visibility = ["//bazel/feasibility:__subpackages__"],
+)
+
+# Consumer-only. The product graph reaches :macho through this same split.
+# ios_multi_cpus=sim_arm64 keeps the transition on the simulator slice.
+orlix_kernel_cache_consumer(
+    name = "kernel_cache_consumer",
+    archive = ":macho",
+    minimum_os_version = "15.0",
+    platform_type = "ios",
+    tags = ["manual"],
 )
 
 orlix_kernel_macho_archive(

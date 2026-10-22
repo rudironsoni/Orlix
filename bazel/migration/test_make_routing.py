@@ -1222,14 +1222,15 @@ esac
         self.assertIn("export CCACHE_DISABLE=1", consumer)
         self.assertNotIn("--action_env=CCACHE_DISABLE", consumer)
         self.assertIn("--action_env=CCACHE_DIR=", consumer)
-        self.assertIn("--cpu=ios_$(ORLIX_BAZEL_IOS_CPU)", consumer)
-        self.assertIn("--apple_split_cpu=$(ORLIX_BAZEL_IOS_CPU)", consumer)
-        self.assertIn(
-            "--platforms=@build_bazel_apple_support//platforms:ios_$(ORLIX_BAZEL_IOS_CPU)",
-            consumer,
-        )
-        self.assertIn("--ios_minimum_os=15.0", consumer)
-        self.assertIn("--minimum_os_version=15.0", consumer)
+        self.assertIn("--apple_platform_type=ios", consumer)
+        self.assertIn("--ios_multi_cpus=sim_arm64", consumer)
+        self.assertNotIn("--ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU)", consumer)
+        self.assertNotIn("--cpu=ios_", consumer)
+        self.assertNotIn("--apple_split_cpu=", consumer)
+        self.assertNotIn("--platforms=", consumer)
+        self.assertNotIn("--ios_minimum_os=", consumer)
+        self.assertNotIn("--minimum_os_version=", consumer)
+        self.assertIn("//bazel/feasibility/kernel:kernel_cache_consumer", consumer)
         app = makefile.split("__bazel-orlix-app:", 1)[1].split("__bazel-product-app:", 1)[0]
         self.assertNotIn("--apple_split_cpu=", app)
         self.assertNotIn("--ios_minimum_os=", app)
@@ -1239,7 +1240,7 @@ esac
         self.assertNotIn("darwin-sandbox", consumer)
         self.assertNotIn("+no-local", consumer)
         self.assertNotIn("--modify_execution_info", consumer)
-        self.assertIn("//bazel/feasibility/kernel:macho", consumer)
+        self.assertIn('.targetLabel == "//bazel/feasibility/kernel:macho"', consumer)
         self.assertIn('.runner == "remote cache hit"', consumer)
         self.assertIn(".cacheHit == true", consumer)
         self.assertNotIn("//bazel/feasibility/rootfs:rootfs", consumer)
