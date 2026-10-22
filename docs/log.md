@@ -9,7 +9,7 @@ updated: 2026-10-22
 
 ## [2026-10-22] build | Hash kernel headers from disk for remote ccache reuse
 
-The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) turns ccache's inode cache off for the Linux locking proof. Prepare can hash a generated header that Kbuild then rewrites. A warm inode cache keeps that earlier digest, so direct mode misses and the preprocessor still hits. With the inode cache off, direct mode hashes the bytes left on disk. The producer remains the only writer. The two clean-runner proofs are not recorded as passed in this entry.
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) turns ccache's inode cache off for the Linux locking proof. Prepare can hash a generated header that Kbuild then rewrites. A warm inode cache keeps that earlier digest, so direct mode misses and the preprocessor still hits. With the inode cache off, direct mode hashes the bytes left on disk. The proof records the sha256 of every header named by the locking depfiles. The producer remains the only writer. The two clean-runner proofs are not recorded as passed in this entry.
 
 ## [2026-10-22] build | Reuse unchanged Linux compiler objects through ccache remote storage
 

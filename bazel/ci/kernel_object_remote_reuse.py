@@ -116,6 +116,7 @@ def run_mode(mode: str, work: Path, *, writing: bool, producer: dict | None) -> 
         log_text = Path(env["CCACHE_LOGFILE"]).read_text(encoding="utf-8", errors="replace")
         logged = ccache_source_results(log_text)
         objects = collect_objects(build)
+        headers = depfile_fingerprints(build)
         archive = build / "kernel/locking/built-in.a"
         if not archive.is_file() or archive.stat().st_size == 0:
             raise SystemExit("Kbuild did not link kernel/locking/built-in.a")
@@ -129,6 +130,7 @@ def run_mode(mode: str, work: Path, *, writing: bool, producer: dict | None) -> 
             "kbuild_command": command,
             "prepare_commands": prepare_commands,
             "objects": objects,
+            "depfile_headers": headers,
             "archive": {
                 "path": "kernel/locking/built-in.a",
                 "sha256": sha256_file(archive),
@@ -189,9 +191,11 @@ def check_mode(evidence: dict, producer: dict | None) -> None:
     if evidence["transfer_bytes"]["read"] <= 0 or remote["hits"] <= 0:
         raise SystemExit("clean runner did not read remote compiler objects")
     results = evidence["ccache_results"]
+    header_diff = differing_headers(evidence.get("depfile_headers", {}), producer.get("depfile_headers", {}))
     preprocessed = sorted(name for name, meta in results.items() if "preprocessed" in str(meta["result"]))
     if preprocessed:
-        raise SystemExit(f"preprocessed hit ran the compiler front end: {preprocessed}")
+        detail = f"; depfile headers differ: {header_diff}" if header_diff else "; depfile headers match the producer"
+        raise SystemExit(f"preprocessed hit ran the compiler front end: {preprocessed}{detail}")
     if "kernel/locking/semaphore.c" not in results or len(results) < 3:
         raise SystemExit(f"ccache log did not record the locking units: {sorted(results)}")
     if evidence["mode"] == "reuse":
@@ -229,6 +233,47 @@ def check_mode(evidence: dict, producer: dict | None) -> None:
     for name in ("down", "mutex_lock"):
         if name not in evidence["archive_symbols"]:
             raise SystemExit(f"linked archive is missing {name}")
+
+
+def depfile_fingerprints(build: Path) -> dict[str, dict[str, int | str]]:
+    """Hash headers the locking depfiles name. Direct mode hashes these bytes."""
+    fingerprints: dict[str, dict[str, int | str]] = {}
+    locking = build / "kernel" / "locking"
+    if not locking.is_dir():
+        return fingerprints
+    for dep in sorted(locking.glob(".*.o.d")):
+        text = dep.read_text(encoding="utf-8", errors="replace").replace("\\\n", " ")
+        _, _, rest = text.partition(":")
+        for token in rest.split():
+            if token in fingerprints:
+                continue
+            path = Path(token)
+            if not path.is_absolute():
+                path = build / token
+            if not path.is_file():
+                fingerprints[token] = {"sha256": "", "bytes": -1}
+                continue
+            fingerprints[token] = {"sha256": sha256_file(path), "bytes": path.stat().st_size}
+    return fingerprints
+
+
+def differing_headers(actual: dict, expected: dict) -> list[str]:
+    if not expected or not actual:
+        return []
+    names = sorted(set(actual) | set(expected))
+    diffs: list[str] = []
+    for name in names:
+        left = actual.get(name)
+        right = expected.get(name)
+        if left == right:
+            continue
+        diffs.append(
+            f"{name} consumer={left} producer={right}"
+        )
+        if len(diffs) == 12:
+            diffs.append(f"... {len(names)} headers compared")
+            break
+    return diffs
 
 
 def compare_objects(actual: dict, expected: dict, *, changed: set[str]) -> None:

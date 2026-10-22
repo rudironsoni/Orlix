@@ -21,8 +21,8 @@ from typing import Protocol
 
 
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
-CACHE_VERSION = hashlib.sha256(b"orlix-kernel-compiler-object-v4").hexdigest()
-_KEY_PREFIX = "orlix-kobj-v4-"
+CACHE_VERSION = hashlib.sha256(b"orlix-kernel-compiler-object-v5").hexdigest()
+_KEY_PREFIX = "orlix-kobj-v5-"
 _CHUNK = 16 * 1024 * 1024
 
 

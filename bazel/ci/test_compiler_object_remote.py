@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from bazel.ci.kernel_object_remote_reuse import (
     ccache_environment,
     compiler_executions,
+    differing_headers,
     parse_print_stats,
     remote_counters,
 )
@@ -384,6 +385,11 @@ class CompilerObjectRemoteTests(unittest.TestCase):
         env = ccache_environment(work=ROOT, ccache_dir=ROOT / "ccache", port=9, read_only=False)
         self.assertEqual(env["CCACHE_NOINODECACHE"], "true")
         self.assertNotIn("file_stat_matches", env["CCACHE_SLOPPINESS"])
+        diff = differing_headers(
+            {"keep.h": {"sha256": "aa", "bytes": 1}, "move.h": {"sha256": "bb", "bytes": 2}},
+            {"keep.h": {"sha256": "aa", "bytes": 1}, "move.h": {"sha256": "cc", "bytes": 3}},
+        )
+        self.assertEqual(diff, ["move.h consumer={'sha256': 'bb', 'bytes': 2} producer={'sha256': 'cc', 'bytes': 3}"])
 
     def _compile(self, work: Path, port: int, *, read_only: bool) -> str:
         source = work / "src"
