@@ -28,6 +28,12 @@ def forward_shell_env(shell: Mapping[str, str]) -> dict[str, str]:
     remote_only = shell.get("CCACHE_REMOTE_ONLY")
     if remote_only:
         env["CCACHE_REMOTE_ONLY"] = remote_only
+    no_inode = shell.get("CCACHE_NOINODECACHE")
+    if no_inode:
+        env["CCACHE_NOINODECACHE"] = no_inode
+    logfile = shell.get("CCACHE_LOGFILE")
+    if logfile:
+        env["CCACHE_LOGFILE"] = logfile
     return env
 
 
@@ -42,4 +48,6 @@ def apply_action_environment(environment: dict[str, str]) -> None:
         environment.pop("CCACHE_DIR", None)
         environment.pop("CCACHE_REMOTE_STORAGE", None)
         environment.pop("CCACHE_REMOTE_ONLY", None)
+        environment.pop("CCACHE_NOINODECACHE", None)
+        environment.pop("CCACHE_LOGFILE", None)
         environment["ORLIX_COMPILER_LAUNCHER"] = ""

@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Place kernel object reuse on macos-26
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs the Orlix kernel archive on `macos-26`. `.github/workflows/kernel-object-remote-reuse.yml` writes compiler objects only when `github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'`. The same-commit consumer is another clean job on that push. The commit-B job is a read-only pull request and fails closed until main has published. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. The two clean-runner proofs are not recorded as passed.
+
 ## [2026-10-22] build | Keep compiler-object cache writes off pull requests
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) does not let a pull request publish compiler objects. `actions: write` is not granted on `pull_request`, and the BuildBuddy write key stays off that event. The kernel that Orlix builds is `@orlix_linux_source` (`linux-6.12.105-port`) through `OrlixKernelMachOArchive`, with the staged guest clang and ccache. That action runs on `macos-26`. An Ubuntu build of upstream `kernel/locking` with `/usr/bin/gcc` is not the proof. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`. The two clean-runner proofs are not recorded as passed.

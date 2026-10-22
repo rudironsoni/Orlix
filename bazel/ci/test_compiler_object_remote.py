@@ -367,13 +367,28 @@ class CompilerObjectRemoteTests(unittest.TestCase):
                 httpd.shutdown()
 
     def test_workflow_keeps_write_authorization_on_the_producer(self) -> None:
-        workflow = ROOT / ".github/workflows/kernel-object-remote-reuse.yml"
-        self.assertFalse(workflow.exists(), "a pull request must not publish compiler-object cache writes")
+        workflow = (ROOT / ".github/workflows/kernel-object-remote-reuse.yml").read_text(encoding="utf-8")
+        producer = workflow.split("  producer:", 1)[1].split("  same-commit:", 1)[0]
+        consumers = workflow.split("  same-commit:", 1)[1]
+        guard = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'"
+        self.assertIn(guard, producer)
+        self.assertIn("actions: write", producer)
+        self.assertIn("runs-on: macos-26", workflow)
+        self.assertNotIn("actions: write", consumers)
+        self.assertNotIn("cdn.kernel.org", workflow)
+        self.assertNotIn("ubuntu-24.04", workflow)
+        self.assertIn("fail-on-cache-miss: true", consumers)
+        self.assertIn("github.event_name == 'pull_request'", consumers)
+        archive = (ROOT / "bazel/ci/kernel_archive_remote_reuse.py").read_text(encoding="utf-8")
+        self.assertNotIn("cdn.kernel.org", archive)
+        self.assertIn("//bazel/feasibility/kernel:kernel-release-iphonesimulator", archive)
         bazel = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertNotIn("kernel_object_remote", bazel)
         self.assertNotIn("ORLIX_COMPILER_OBJECT_REMOTE_WRITE", bazel)
         self.assertNotIn("actions: write", bazel)
+        self.assertIn("kernel_archive_remote_reuse.py", makefile)
+        self.assertNotIn("kernel_object_remote_reuse.py", makefile)
         self.assertIn("__kernel-object-remote-reuse:", makefile)
         self.assertIn("ORLIX_BAZEL_AUTHORITY ?= 0", (ROOT / "Makefile").read_text(encoding="utf-8"))
         equivalence = makefile.split("__bazel-cache-equivalence:", 1)[1].split("__bazel-scenario-harness:", 1)[0]

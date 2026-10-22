@@ -1423,11 +1423,11 @@ __bazel-compiler-runtime-cache-consumer: __bazel-feasibility-bootstrap
 	test "$$remote_hits" -ge 1; \
 	echo "compiler-runtime-cache-consumer: remote cache hits $$remote_hits"
 
-# Reuse unchanged Linux compiler objects through ccache's content-addressed
-# remote store. Kbuild still decides what to compile. produce is the only mode
-# allowed to upload. reuse and mutate are read-only clean runners.
+# Reuse unchanged OrlixKernel compiler objects. The macOS kernel archive action
+# runs Kbuild. produce is the only mode allowed to upload. reuse and mutate are
+# read-only clean runners.
 .PHONY: __kernel-object-remote-reuse
-__kernel-object-remote-reuse:
+__kernel-object-remote-reuse: __bazel-toolchain-manifest
 	@set -euo pipefail; \
 	mode="$(ORLIX_KERNEL_OBJECT_REMOTE_MODE)"; \
 	case "$$mode" in \
@@ -1439,5 +1439,6 @@ __kernel-object-remote-reuse:
 	else \
 	  test "$(ORLIX_COMPILER_OBJECT_REMOTE_WRITE)" != 1; \
 	fi; \
-	PYTHONPATH="$(CURDIR)" python3 "$(CURDIR)/bazel/ci/kernel_object_remote_reuse.py" "$$mode"
+	test "$(ORLIX_BAZEL_AUTHORITY)" = 0; \
+	PYTHONPATH="$(CURDIR)" python3 "$(CURDIR)/bazel/ci/kernel_archive_remote_reuse.py" "$$mode"
 

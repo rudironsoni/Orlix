@@ -31,4 +31,10 @@ def compiler_cache_env(shell):
     remote_only = shell.get("CCACHE_REMOTE_ONLY")
     if remote_only:
         env["CCACHE_REMOTE_ONLY"] = remote_only
+    no_inode = shell.get("CCACHE_NOINODECACHE")
+    if no_inode:
+        env["CCACHE_NOINODECACHE"] = no_inode
+    logfile = shell.get("CCACHE_LOGFILE")
+    if logfile:
+        env["CCACHE_LOGFILE"] = logfile
     return env

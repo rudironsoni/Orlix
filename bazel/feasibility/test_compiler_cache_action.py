@@ -83,6 +83,8 @@ class CompilerCacheActionTests(unittest.TestCase):
         self.assertIn('env["ORLIX_COMPILER_LAUNCHER"] = launcher', helper)
         self.assertIn('env["CCACHE_REMOTE_STORAGE"] = remote', helper)
         self.assertIn('env["CCACHE_REMOTE_ONLY"] = remote_only', helper)
+        self.assertIn('env["CCACHE_NOINODECACHE"] = no_inode', helper)
+        self.assertIn('env["CCACHE_LOGFILE"] = logfile', helper)
         self.assertIn('return {"CCACHE_DISABLE": disabled}', helper)
         self.assertNotIn("inputs", helper)
         configured = forward_shell_env({
