@@ -1205,7 +1205,9 @@ esac
 
     def test_kernel_cache_consumer_uses_local_before_the_runner(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        consumer = makefile.split("__bazel-kernel-cache-consumer:", 1)[1]
+        consumer = makefile.split("__bazel-kernel-cache-consumer:", 1)[1].split(
+            "# Read-only lookup for the compiler runtime", 1
+        )[0]
         seed = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
@@ -1245,6 +1247,60 @@ esac
         self.assertIn(".cacheHit == true", consumer)
         self.assertNotIn("//bazel/feasibility/rootfs:rootfs", consumer)
         self.assertNotIn("--noremote_accept_cached", consumer)
+
+    def test_compiler_runtime_cache_consumer_uses_the_apple_split(self) -> None:
+        makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
+        consumer = makefile.split("__bazel-compiler-runtime-cache-consumer:", 1)[1]
+        seed = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
+            "__bazel-scenario-harness:", 1
+        )[0]
+        apple = makefile.split("__bazel-apple-ci:", 1)[1].split("__bazel-current-simulator-gate:", 1)[0]
+        rule = (ROOT / "bazel/feasibility/mlibc/compiler_runtime_cache_consumer.bzl").read_text(
+            encoding="utf-8"
+        )
+        build = (ROOT / "bazel/feasibility/mlibc/BUILD.bazel").read_text(encoding="utf-8")
+        self.assertNotIn("__bazel-compiler-runtime-cache-consumer", apple)
+        self.assertNotIn("//bazel/feasibility/mlibc:compiler_runtime", seed)
+        self.assertIn('case "$(ORLIX_BUILDBUDDY_ACCESS)" in', consumer)
+        self.assertIn("read)", consumer)
+        self.assertIn("buildbuddy-read", consumer)
+        self.assertIn("remote_upload_local_results=false", consumer)
+        self.assertIn("--output_base=", consumer)
+        self.assertIn("--disk_cache=", consumer)
+        self.assertIn("export CCACHE_DISABLE=1", consumer)
+        self.assertNotIn("--action_env=CCACHE_DISABLE", consumer)
+        self.assertIn("--action_env=CCACHE_DIR=", consumer)
+        self.assertIn("--apple_platform_type=ios", consumer)
+        self.assertIn("--ios_multi_cpus=sim_arm64", consumer)
+        self.assertNotIn("--ios_multi_cpus=arm64", consumer)
+        self.assertNotIn("--ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU)", consumer)
+        self.assertNotIn("--cpu=ios_", consumer)
+        self.assertNotIn("--apple_split_cpu=", consumer)
+        self.assertNotIn("--platforms=", consumer)
+        self.assertNotIn("--ios_minimum_os=", consumer)
+        self.assertNotIn("--minimum_os_version=", consumer)
+        self.assertIn("//bazel/feasibility/mlibc:compiler_runtime_cache_consumer", consumer)
+        self.assertIn("--strategy=OrlixCompilerRuntime=local", consumer)
+        self.assertNotIn("darwin-sandbox", consumer)
+        self.assertNotIn("+no-local", consumer)
+        self.assertNotIn("--modify_execution_info", consumer)
+        self.assertIn(
+            '.mnemonic == "OrlixCompilerRuntime" and .targetLabel == "//bazel/feasibility/mlibc:compiler_runtime"',
+            consumer,
+        )
+        self.assertIn('.runner == "remote cache hit"', consumer)
+        self.assertIn(".cacheHit == true", consumer)
+        self.assertIn("all(.[];", consumer)
+        self.assertNotIn("//bazel/feasibility/rootfs:rootfs", consumer)
+        self.assertNotIn("--noremote_accept_cached", consumer)
+        self.assertNotIn("ORLIX_BAZEL_AUTHORITY", consumer)
+        self.assertIn("transition_support.apple_platform_split_transition", rule)
+        self.assertIn('default = "15.0"', rule)
+        self.assertIn('default = "ios"', rule)
+        self.assertIn('name = "compiler_runtime_cache_consumer"', build)
+        self.assertIn('runtime = ":compiler_runtime"', build)
+        self.assertIn('minimum_os_version = "15.0"', build)
+        self.assertIn('platform_type = "ios"', build)
 
 
 if __name__ == "__main__":
