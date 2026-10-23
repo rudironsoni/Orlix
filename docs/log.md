@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Run cache equivalence beside the Apple product job
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `make __bazel-cache-equivalence` in a parallel job on a push of `refs/heads/main` when the cache mode is not `off`. That job checks out the immutable commit, uses the write credential for the seed, then the read credential for the cached and uncached sides. A failure fails `Bazel matrix check`. Pull requests do not start the job. The product job still runs both simulator proofs, then the read-only kernel and compiler-runtime consumers after the product upload. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-22] build | Keep the Apple CI analysis cache for the app build
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `//bazel/feasibility/analysis:all` with the same `--compilation_mode`, `--apple_platform_type=ios`, and `--ios_multi_cpus` as the later app build. The config build no longer changes those options, so the app build keeps the analysis cache. Both simulator proofs stay. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.

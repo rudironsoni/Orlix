@@ -466,14 +466,59 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("--disk_cache=", shared_flags)
         self.assertIn("compare_trees", equivalence)
 
+    def test_matrix_gate_requires_main_equivalence(self) -> None:
+        import os
+        import textwrap
+
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        gate = workflow.split("\n  bazel-matrix-check:\n", 1)[1]
+        script = textwrap.dedent(gate.split("run: |\n", 1)[1])
+        for required, equivalence, expected in (
+            ("false", "skipped", True),
+            ("true", "success", True),
+            ("true", "skipped", False),
+            ("true", "failure", False),
+            ("true", "cancelled", False),
+        ):
+            with self.subTest(required=required, equivalence=equivalence):
+                rendered = script.replace("${{ needs.apple-ci.result }}", "success").replace(
+                    "${{ needs.cache-equivalence.result }}", equivalence
+                )
+                env = dict(os.environ, ORLIX_APPLE_RESULT="success",
+                           ORLIX_EQUIVALENCE_RESULT=equivalence,
+                           ORLIX_EQUIVALENCE_REQUIRED=required)
+                result = subprocess.run(["bash", "-c", rendered], env=env, capture_output=True)
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", workflow)
         self.assertIn("secrets.ORLIX_CI_BUILDBUDDY_READ_API_KEY", workflow)
         self.assertNotIn("Stage cache-equivalence seed upload credential", workflow)
-        publish = workflow.split("Publish the cache-equivalence seed", 1)[1].split(
-            "Promoted-consumer proof", 1
+        self.assertNotIn("continue-on-error", workflow)
+        apple_job = workflow.split("\n  apple-ci:\n", 1)[1].split("\n  cache-equivalence:\n", 1)[0]
+        equivalence = workflow.split("\n  cache-equivalence:\n", 1)[1].split(
+            "\n  bazel-matrix-check:\n", 1
+        )[0]
+        gate = workflow.split("\n  bazel-matrix-check:\n", 1)[1]
+        self.assertNotIn("\n    needs:", apple_job)
+        self.assertNotIn("\n    needs:", equivalence)
+        self.assertIn("needs: [apple-ci, cache-equivalence]", gate)
+        self.assertIn("name: Bazel matrix check", gate)
+        self.assertIn("success|skipped", gate)
+        self.assertIn(
+            "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            equivalence,
+        )
+        self.assertIn("vars.ORLIX_BUILDBUDDY_CACHE_MODE != 'off'", equivalence)
+        self.assertNotIn("__bazel-kernel-cache-consumer", equivalence)
+        self.assertNotIn("__bazel-compiler-runtime-cache-consumer", equivalence)
+        self.assertNotIn("make __bazel-apple-ci", equivalence)
+        self.assertNotIn("make __bazel-cache-equivalence", apple_job)
+        self.assertNotIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", apple_job)
+        publish = equivalence.split("Publish the cache-equivalence seed", 1)[1].split(
+            "\n      - name:", 1
         )[0]
         self.assertIn("steps.buildbuddy.outputs.access == 'write'", publish)
         self.assertNotIn("access == 'read'", publish)
@@ -481,14 +526,9 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", publish)
         self.assertIn("ORLIX_BUILDBUDDY_SEED_KEY_FILE", publish)
         self.assertIn("make __bazel-cache-equivalence", publish)
-        self.assertNotIn(
-            "ORLIX_BUILDBUDDY_SEED_KEY_FILE",
-            workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
-                "Publish the cache-equivalence seed", 1
-            )[0],
-        )
-        apple_step = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
-            "Publish the cache-equivalence seed", 1
+        self.assertEqual(workflow.count("make __bazel-cache-equivalence"), 1)
+        apple_step = apple_job.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "\n      - name:", 1
         )[0]
         self.assertIn("steps.buildbuddy.outputs.access", apple_step)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", apple_step)
@@ -496,6 +536,11 @@ class WorkflowPolicyTests(unittest.TestCase):
             workflow.index("Run the Make-owned Apple CI operation"),
             workflow.index("Publish the cache-equivalence seed"),
         )
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+            equivalence,
+        )
+        self.assertIn("persist-credentials: false", equivalence)
         self.assertIn("github.ref == 'refs/heads/main'", workflow)
         self.assertNotIn("github.event_name == 'push' && 'main'", workflow)
         write_step = workflow.split("Configure trusted BuildBuddy writes", 1)[1].split(
@@ -971,31 +1016,41 @@ class RoutingContractTests(unittest.TestCase):
             self.assertEqual(row["wallTimeInMs"], 42)
 
 
-    def test_kernel_cache_consumer_is_main_read_after_the_seed(self) -> None:
+    def test_kernel_cache_consumer_is_main_read_after_the_product_build(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "bazel-ci.yml").read_text(encoding="utf-8")
-        apple = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
-            "Publish the cache-equivalence seed", 1
+        apple_job = workflow.split("\n  apple-ci:\n", 1)[1].split("\n  cache-equivalence:\n", 1)[0]
+        apple = apple_job.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Use the read-only BuildBuddy credential", 1
         )[0]
-        lookup = workflow.split("Look up the kernel archive in the remote cache", 1)[1].split(
+        lookup = apple_job.split("Look up the kernel archive in the remote cache", 1)[1].split(
             "Look up the compiler runtime in the remote cache", 1
         )[0]
         self.assertNotIn("__bazel-kernel-cache-consumer", apple)
+        self.assertNotIn("make __bazel-cache-equivalence", apple_job)
         self.assertIn("steps.buildbuddy.outputs.access == 'write'", lookup)
         self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", lookup)
         self.assertIn("steps.component-mode.outputs.mode", lookup)
         self.assertIn("make __bazel-kernel-cache-consumer", lookup)
         self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", lookup)
         self.assertLess(
-            workflow.index("make __bazel-cache-equivalence"),
-            workflow.index("make __bazel-kernel-cache-consumer"),
+            apple_job.index("Use the read-only BuildBuddy credential"),
+            apple_job.index("make __bazel-kernel-cache-consumer"),
         )
+        switch = apple_job.split("Use the read-only BuildBuddy credential", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        self.assertIn("ORLIX_BUILDBUDDY_ACCESS: read", switch)
+        self.assertIn("make __bazel-buildbuddy-configure", switch)
+        self.assertNotIn("ORLIX_CI_BUILDBUDDY_WRITE_API_KEY", switch)
+        self.assertNotIn("__bazel-cache-equivalence", switch)
 
     def test_compiler_runtime_cache_consumer_is_main_read_after_the_kernel_lookup(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "bazel-ci.yml").read_text(encoding="utf-8")
-        apple = workflow.split("Run the Make-owned Apple CI operation", 1)[1].split(
-            "Publish the cache-equivalence seed", 1
+        apple_job = workflow.split("\n  apple-ci:\n", 1)[1].split("\n  cache-equivalence:\n", 1)[0]
+        apple = apple_job.split("Run the Make-owned Apple CI operation", 1)[1].split(
+            "Use the read-only BuildBuddy credential", 1
         )[0]
-        lookup = workflow.split("Look up the compiler runtime in the remote cache", 1)[1].split(
+        lookup = apple_job.split("Look up the compiler runtime in the remote cache", 1)[1].split(
             "Promoted-consumer proof", 1
         )[0]
         self.assertNotIn("__bazel-compiler-runtime-cache-consumer", apple)
