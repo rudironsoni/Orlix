@@ -143,6 +143,7 @@ jobs:
         id: toolchain-pin
         run: |
           set -euo pipefail
+          brew update
           if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
@@ -264,10 +265,12 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Restore local compiler object cache
+        id: compiler-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache
-          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
+          key: orlix-ccache-${{ steps.compiler.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: orlix-ccache-${{ steps.compiler.outputs.digest }}
 
       - name: Capture the toolchain manifest before simulator preparation
         run: |
@@ -518,7 +521,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache
-          key: orlix-ccache-${{ steps.compiler.outputs.digest }}
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
       # The product upload used the write credential. Kernel and compiler-runtime
       # consumers must look that upload up with the read credential. Doing that
@@ -743,6 +746,7 @@ jobs:
         id: toolchain-pin
         run: |
           set -euo pipefail
+          brew update
           if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
