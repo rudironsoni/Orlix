@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from functools import cache
+from collections.abc import Callable
 import hashlib
 import os
 import platform
@@ -180,6 +182,12 @@ def ensure_current_manifest(
 
 
 def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
+    @cache
+    def inspect_binary(option: str, binary: str) -> str:
+        return subprocess.check_output(
+            ["/usr/bin/otool", "-arch", platform.machine(), option, binary], text=True,
+        )
+
     developer = Path(developer_dir).resolve(strict=True)
     environment = {**os.environ, "DEVELOPER_DIR": str(developer)}
     sdk = Path(subprocess.check_output(
@@ -242,7 +250,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     pending = list(runtime_paths)
     while pending:
         binary = pending.pop()
-        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
+        libraries = inspect_binary("-L", str(binary))
         for line in libraries.splitlines()[1:]:
             name = line.strip().split(" (", 1)[0]
             if name.startswith(("/usr/lib/", "/System/Library/")):
@@ -263,20 +271,20 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     }
     Path(output).with_name("compiler-runtime-identity.json").write_text(json.dumps(runtime, sort_keys=True) + "\n")
     tools += sorted(runtime_paths)
-    mlibc = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "meson")
+    mlibc = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "meson", inspect_binary)
     tools += [Path(path) for path in mlibc["files"]]
     trees += [Path(path) for path in mlibc["trees"]]
     Path(output).with_name("mlibc-identity.json").write_text(json.dumps(mlibc, sort_keys=True) + "\n")
-    coreutils = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools")
+    coreutils = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools", inspect_binary)
     tools += [Path(path) for path in coreutils["files"]]
     trees += [Path(path) for path in coreutils["trees"]]
     Path(output).with_name("coreutils-identity.json").write_text(json.dumps(coreutils, sort_keys=True) + "\n")
     autotools_tools = tuple(Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "dirname", "mktemp", "sleep", "stat"))
-    autotools = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools", autotools_tools)
+    autotools = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools", inspect_binary, autotools_tools)
     tools += [Path(path) for path in autotools["files"]]
     trees += [Path(path) for path in autotools["trees"]]
     Path(output).with_name("autotools-identity.json").write_text(json.dumps(autotools, sort_keys=True) + "\n")
-    bootstrap = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools-bootstrap", autotools_tools)
+    bootstrap = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autotools-bootstrap", inspect_binary, autotools_tools)
     tools += [Path(path) for path in bootstrap["files"]]
     trees += [Path(path) for path in bootstrap["trees"]]
     Path(output).with_name("autotools-bootstrap-identity.json").write_text(json.dumps(bootstrap, sort_keys=True) + "\n")
@@ -291,7 +299,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     pending = [path for path in rootfs_tools if str(path).startswith("/opt/homebrew/")]
     while pending:
         binary = pending.pop()
-        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
+        libraries = inspect_binary("-L", str(binary))
         for line in libraries.splitlines()[1:]:
             name = line.strip().split(" (", 1)[0]
             if name.startswith(("/usr/lib/", "/System/Library/")):
@@ -312,7 +320,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     bash_tools = (Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),) + tuple(
         Path("/opt/homebrew/opt/coreutils/libexec/gnubin") / name for name in ("ls", "mktemp", "sleep")
     )
-    bash = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autoconf", bash_tools)
+    bash = capture_guest_manifest(developer, sdk, runtime, tree_hashes, "autoconf", inspect_binary, bash_tools)
     tools += [Path(path) for path in bash["files"]]
     trees += [Path(path) for path in bash["trees"]]
     Path(output).with_name("bash-identity.json").write_text(json.dumps(bash, sort_keys=True) + "\n")
@@ -322,7 +330,7 @@ def capture_kernel_manifest(developer_dir: str, output: str) -> dict:
     return {"files": sorted(set([str(path) for path in tools] + candidates)), "trees": [str(path) for path in trees]}
 
 
-def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str, extra_tools: tuple[Path, ...] = ()) -> dict:
+def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashes: dict, engine: str, inspect_binary: Callable[[str, str], str], extra_tools: tuple[Path, ...] = ()) -> dict:
     scripts = set()
     engine_tools = set(extra_tools)
     modules = []
@@ -378,7 +386,7 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
     pending = list(paths)
     while pending:
         binary = pending.pop()
-        load_commands = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-l", str(binary)], text=True).splitlines()
+        load_commands = inspect_binary("-l", str(binary)).splitlines()
         rpaths = []
         library_ids = set()
         for i, line in enumerate(load_commands):
@@ -387,7 +395,7 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
             if line.strip() == "cmd LC_RPATH":
                 name = load_commands[i + 2].strip().removeprefix("path ").split(" (offset", 1)[0]
                 rpaths.append(Path(name.replace("@loader_path", str(binary.resolve().parent)).replace("@executable_path", str(binary.resolve().parent))))
-        libraries = subprocess.check_output(["/usr/bin/otool", "-arch", platform.machine(), "-L", str(binary)], text=True)
+        libraries = inspect_binary("-L", str(binary))
         for line in libraries.splitlines()[1:]:
             name = line.strip().split(" (", 1)[0]
             if name in library_ids or name.startswith(("/usr/lib/", "/System/Library/")):
