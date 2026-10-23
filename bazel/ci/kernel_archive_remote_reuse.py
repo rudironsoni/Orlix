@@ -225,9 +225,9 @@ def kernel_action(path: Path) -> dict:
 
 def ccache_log_stats(text: str) -> dict:
     return {
-        "direct_hits": text.count("Result: cache hit (direct)"),
-        "preprocessed_hits": text.count("Result: cache hit (preprocessed)"),
-        "misses": text.count("Result: cache miss"),
+        "direct_hits": text.count("Result: direct_cache_hit"),
+        "preprocessed_hits": text.count("Result: preprocessed_cache_hit"),
+        "misses": text.count("Result: cache_miss"),
     }
 
 

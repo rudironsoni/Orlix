@@ -402,6 +402,21 @@ class CompilerObjectRemoteTests(unittest.TestCase):
         )
         self.assertEqual(diff, ["move.h consumer={'sha256': 'bb', 'bytes': 2} producer={'sha256': 'cc', 'bytes': 3}"])
 
+    def test_archive_stats_parse_ccache_result_ids(self) -> None:
+        from bazel.ci.kernel_archive_remote_reuse import ccache_log_stats
+
+        text = "\n".join([
+            "[time pid] Result: cache_miss",
+            "[time pid] Result: direct_cache_miss",
+            "[time pid] Result: direct_cache_hit",
+            "[time pid] Result: preprocessed_cache_hit",
+            "[time pid] Result: remote_storage_hit",
+        ])
+        self.assertEqual(
+            ccache_log_stats(text),
+            {"direct_hits": 1, "preprocessed_hits": 1, "misses": 1},
+        )
+
     def _compile(self, work: Path, port: int, *, read_only: bool) -> str:
         source = work / "src"
         source.mkdir(parents=True)
