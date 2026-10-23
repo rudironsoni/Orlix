@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "e4c7974cc827445b8ff807791ed950b1db9e6fdd8f30e744ee571c36d08f55ef",
+      "source_sha256": "e8dbab175887a363b4ed7132bfcde6c8a740f5b4b6f763fc01d14f289885ab5a",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -749,13 +749,18 @@
               "apple-ci",
               "cache-equivalence"
             ],
-            "if": "${{ !cancelled() }}",
+            "if": "${{ always() }}",
             "runs-on": "ubuntu-latest",
             "timeout-minutes": 5,
             "steps": [
               {
                 "name": "Fail unless the product proof and cache equivalence passed",
-                "run": "set -euo pipefail\napple=\"${{ needs.apple-ci.result }}\"\nequivalence=\"${{ needs.cache-equivalence.result }}\"\nprintf 'apple-ci=%s cache-equivalence=%s\\n' \"$apple\" \"$equivalence\"\ntest \"$apple\" = success\ncase \"$equivalence\" in\n  success|skipped) ;;\n  *) echo \"cache equivalence must succeed on trusted main publication\" >&2; exit 1 ;;\nesac\n"
+                "env": {
+                  "ORLIX_APPLE_RESULT": "${{ needs.apple-ci.result }}",
+                  "ORLIX_EQUIVALENCE_RESULT": "${{ needs.cache-equivalence.result }}",
+                  "ORLIX_EQUIVALENCE_REQUIRED": "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ORLIX_BUILDBUDDY_CACHE_MODE != 'off' }}"
+                },
+                "run": "set -euo pipefail\napple=\"$ORLIX_APPLE_RESULT\"\nequivalence=\"$ORLIX_EQUIVALENCE_RESULT\"\nprintf 'apple-ci=%s cache-equivalence=%s\\n' \"$apple\" \"$equivalence\"\ntest \"$apple\" = success\nif [ \"$ORLIX_EQUIVALENCE_REQUIRED\" = true ]; then\n  test \"$equivalence\" = success\nelse\n  case \"$equivalence\" in\n    success|skipped) ;;\n    *) echo \"cache equivalence failed\" >&2; exit 1 ;;\n  esac\nfi\n"
               }
             ]
           }

@@ -899,18 +899,26 @@ jobs:
   bazel-matrix-check:
     name: Bazel matrix check
     needs: [apple-ci, cache-equivalence]
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Fail unless the product proof and cache equivalence passed
+        env:
+          ORLIX_APPLE_RESULT: ${{ needs.apple-ci.result }}
+          ORLIX_EQUIVALENCE_RESULT: ${{ needs.cache-equivalence.result }}
+          ORLIX_EQUIVALENCE_REQUIRED: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ORLIX_BUILDBUDDY_CACHE_MODE != 'off' }}
         run: |
           set -euo pipefail
-          apple="${{ needs.apple-ci.result }}"
-          equivalence="${{ needs.cache-equivalence.result }}"
+          apple="$ORLIX_APPLE_RESULT"
+          equivalence="$ORLIX_EQUIVALENCE_RESULT"
           printf 'apple-ci=%s cache-equivalence=%s\n' "$apple" "$equivalence"
           test "$apple" = success
-          case "$equivalence" in
-            success|skipped) ;;
-            *) echo "cache equivalence must succeed on trusted main publication" >&2; exit 1 ;;
-          esac
+          if [ "$ORLIX_EQUIVALENCE_REQUIRED" = true ]; then
+            test "$equivalence" = success
+          else
+            case "$equivalence" in
+              success|skipped) ;;
+              *) echo "cache equivalence failed" >&2; exit 1 ;;
+            esac
+          fi

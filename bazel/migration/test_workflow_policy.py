@@ -466,6 +466,30 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("--disk_cache=", shared_flags)
         self.assertIn("compare_trees", equivalence)
 
+    def test_matrix_gate_requires_main_equivalence(self) -> None:
+        import os
+        import textwrap
+
+        workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
+        gate = workflow.split("\n  bazel-matrix-check:\n", 1)[1]
+        script = textwrap.dedent(gate.split("run: |\n", 1)[1])
+        for required, equivalence, expected in (
+            ("false", "skipped", True),
+            ("true", "success", True),
+            ("true", "skipped", False),
+            ("true", "failure", False),
+            ("true", "cancelled", False),
+        ):
+            with self.subTest(required=required, equivalence=equivalence):
+                rendered = script.replace("${{ needs.apple-ci.result }}", "success").replace(
+                    "${{ needs.cache-equivalence.result }}", equivalence
+                )
+                env = dict(os.environ, ORLIX_APPLE_RESULT="success",
+                           ORLIX_EQUIVALENCE_RESULT=equivalence,
+                           ORLIX_EQUIVALENCE_REQUIRED=required)
+                result = subprocess.run(["bash", "-c", rendered], env=env, capture_output=True)
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+
     def test_buildbuddy_credentials_are_ephemeral_and_context_bound(self) -> None:
         workflow = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         makefile = (ROOT / "make/bazel-migration.mk").read_text(encoding="utf-8")
