@@ -1250,7 +1250,9 @@ esac
 
     def test_compiler_runtime_cache_consumer_uses_the_apple_split(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
-        consumer = makefile.split("__bazel-compiler-runtime-cache-consumer:", 1)[1]
+        consumer = makefile.split("__bazel-compiler-runtime-cache-consumer:", 1)[1].split(
+            "__kernel-object-remote-reuse:", 1
+        )[0]
         seed = makefile.split("__bazel-cache-equivalence:", 1)[1].split(
             "__bazel-scenario-harness:", 1
         )[0]
