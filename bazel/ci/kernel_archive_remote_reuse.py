@@ -96,7 +96,9 @@ def run_mode(mode: str, work: Path, *, writing: bool, producer: dict | None) -> 
         evidence = {
             "schema": 2,
             "mode": mode,
-            "commit": os.environ.get("GITHUB_SHA", ""),
+            "commit": subprocess.check_output(
+                ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+            ).strip(),
             "kernel_tree": KERNEL_TREE,
             "target": TARGET,
             "compiler": "staged guest clang through ORLIX_COMPILER_LAUNCHER and ccache",
