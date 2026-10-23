@@ -699,7 +699,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "d13bfadd7945ebe4e1d508a65844136777e0db4dccb4aa09febb09335937e7e0",
+      "source_sha256": "e7aab7c5fbd853ef34612ef3b98f0289091b386a63c48615ad8f2d6f4683e46a",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -814,6 +814,22 @@
                   "GITHUB_TOKEN": "${{ github.token }}"
                 },
                 "run": "set -euo pipefail\ntest -n \"$ORLIX_COSIGN_PUB\" || { echo \"ORLIX_COSIGN_PUB is required\" >&2; exit 1; }\nbrew list cosign >/dev/null 2>&1 || brew install cosign\nbrew list oras >/dev/null 2>&1 || brew install oras\nprintf '%s\\n' \"$GITHUB_TOKEN\" | oras login ghcr.io --registry-config \"$ORLIX_ORAS_REGISTRY_CONFIG\" -u \"$GITHUB_ACTOR\" --password-stdin\nmake __bazel-reconstruct-source\n"
+              },
+              {
+                "name": "Preserve failed reconstruction trees",
+                "if": "failure()",
+                "run": "python3 - <<'PYTHON'\nfrom pathlib import Path\nimport tarfile\nroot = Path(\"Build/Bazel\")\ntrees = list(root.glob(\"reconstruct-source.*/staged\"))\nfor component in (\"uapi\", \"mlibc\", \"rootfs\"):\n    trees.extend(root.glob(\"reconstruct/*/\" + component))\nif trees:\n    with tarfile.open(\"${{ runner.temp }}/reconstruction-trees.tar.gz\", \"w:gz\") as archive:\n        for tree in sorted(trees):\n            archive.add(tree, arcname=str(tree))\nPYTHON\n"
+              },
+              {
+                "name": "Upload failed reconstruction trees",
+                "if": "failure()",
+                "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "with": {
+                  "name": "nightly-reconstruction-${{ github.sha }}",
+                  "path": "${{ runner.temp }}/reconstruction-trees.tar.gz",
+                  "if-no-files-found": "warn",
+                  "retention-days": 7
+                }
               },
               {
                 "name": "Run Make-owned cache GC",
