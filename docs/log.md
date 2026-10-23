@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 # Orlix Knowledge Log
+
+## [2026-10-23] build | Record the current native_sources extension in the module lock
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) keeps cache equivalence parallel and required on a push of `refs/heads/main`. That job's first Bazel command is `mod deps --lockfile_mode=error` on a clean checkout. `MODULE.bazel.lock` now records the `native_sources` digest from `single_archive` on `orlix_linux_source`. The publish step still sets `ORLIX_BUILDBUDDY_ACCESS=read` and passes the write key only through `ORLIX_BUILDBUDDY_SEED_KEY_FILE`. Pull requests do not start the job. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
 
 ## [2026-10-22] build | Run cache equivalence beside the Apple product job
 

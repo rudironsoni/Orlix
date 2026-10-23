@@ -296,7 +296,7 @@
   "moduleExtensions": {
     "//bazel/extensions:native_sources.bzl%native_sources": {
       "general": {
-        "bzlTransitiveDigest": "2Gf6jVeDdPLPstytZ/Ipsq7Gyw5b2NMVSrMLpxwsymo=",
+        "bzlTransitiveDigest": "CzRgJkWRnsyCXa+4V3w63zBfSABem67mhTWeSOklQho=",
         "usagesDigest": "x1dTuAEuGxvds9QeOELcYr++4Nw4CyPJYhMfGMQ1HbA=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -337,7 +337,8 @@
               "marker": "Makefile",
               "extra_exports": [
                 "usr/gen_init_cpio.c"
-              ]
+              ],
+              "single_archive": true
             }
           },
           "orlix_mlibc_source": {
