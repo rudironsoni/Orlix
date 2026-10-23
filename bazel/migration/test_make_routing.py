@@ -331,10 +331,9 @@ class MakeRoutingTests(unittest.TestCase):
         self.assertIn("DiagnosticReports", runtime)
         self.assertNotIn('"$(ORLIX_BAZEL)"', runtime)
         self.assertIn("xcrun simctl list devices -j", runtime)
-        self.assertNotIn("!= Booted", runtime)
-        readiness = 'xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \\'
-        self.assertIn("\n\t" + readiness + "\n\txcrun simctl terminate", runtime)
-        self.assertLess(runtime.index(readiness), runtime.index("xcrun simctl install"))
+        self.assertIn("!= Booted", runtime)
+        self.assertIn('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b', runtime)
+        self.assertLess(runtime.index("!= Booted"), runtime.index('simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b'))
 
     def test_cache_equivalence_empty_cache_flags_survive_nounset(self) -> None:
         makefile = (ROOT / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

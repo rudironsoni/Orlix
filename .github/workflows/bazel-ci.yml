@@ -322,12 +322,9 @@ jobs:
           ios15_id="$(xcrun simctl create "Orlix iOS 15.5 CI" "$device_type" "$ios15_runtime_id")"
           test -n "$current_id"
           test -n "$ios15_id"
-          echo "simctl early boot start label=current $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          xcrun simctl boot "$current_id"
           # iOS 26.5 is the runner image runtime. Do not copy it into the
-          # directory simctl scans. Current first boot overlaps the build;
-          # iOS 15.5 boots after current proofs and shutdown. On main,
-          # sudo-tar the installed iOS 15.5 bundle so
+          # directory simctl scans. Proofs boot one simulator at a time after
+          # the app build. On main, sudo-tar the installed iOS 15.5 bundle so
           # private/var/mobile is in the one bootable archive. A partial tree
           # is not archived.
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then

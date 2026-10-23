@@ -208,12 +208,6 @@ class WorkflowPolicyTests(unittest.TestCase):
         apple_ci_at = workflow.index("Run the Make-owned Apple CI operation")
         self.assertLess(manifest_at, runtimes_at)
         self.assertLess(runtimes_at, apple_ci_at)
-        preparation = workflow[runtimes_at:workflow.index("Save bootable iOS 15.5 simulator runtime")]
-        early_boot = 'xcrun simctl boot "$current_id"'
-        self.assertIn(early_boot + "\n", preparation)
-        self.assertLess(preparation.index('test -n "$current_id"'), preparation.index(early_boot))
-        self.assertEqual(preparation.count("xcrun simctl boot"), 1)
-        self.assertNotIn("simctl bootstatus", preparation)
         self.assertIn("make __bazel-toolchain-manifest", workflow)
         self.assertIn(
             'echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"',
