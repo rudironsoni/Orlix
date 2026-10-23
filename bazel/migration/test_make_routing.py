@@ -121,6 +121,12 @@ class MakeRoutingTests(unittest.TestCase):
         command = next(line for line in matrix.splitlines() if " test //bazel/feasibility/analysis:all " in line)
         self.assertIn('--output_base="$(ORLIX_BAZEL_OUTPUT_BASE)"', command)
         self.assertIn('--disk_cache="$(ORLIX_BAZEL_DISK_CACHE)"', command)
+        for flag in (
+            "--compilation_mode=$(ORLIX_BAZEL_COMPILATION_MODE)",
+            "--apple_platform_type=ios",
+            "--ios_multi_cpus=$(ORLIX_BAZEL_IOS_CPU)",
+        ):
+            self.assertIn(flag, command)
         bootstrap = makefile.split("__bazel-feasibility-bootstrap:", 1)[1].split(
             "__bazel-buildbuddy-policy:", 1
         )[0]

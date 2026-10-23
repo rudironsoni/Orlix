@@ -7,6 +7,10 @@ updated: 2026-10-22
 ---
 # Orlix Knowledge Log
 
+## [2026-10-22] build | Keep the Apple CI analysis cache for the app build
+
+The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) runs `//bazel/feasibility/analysis:all` with the same `--compilation_mode`, `--apple_platform_type=ios`, and `--ios_multi_cpus` as the later app build. The config build no longer changes those options, so the app build keeps the analysis cache. Both simulator proofs stay. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
+
 ## [2026-10-22] build | Configure the compiler runtime cache consumer with the Apple split
 
 The [shared-cache task](objects/task/doing/implement-shared-bazel-cache-and-buildset-reuse.md) builds `//bazel/feasibility/mlibc:compiler_runtime_cache_consumer`. That target depends on `:compiler_runtime` through `apple_platform_split_transition`, with platform `ios` and minimum OS 15.0. The consumer command keeps `--apple_platform_type=ios` and `--ios_multi_cpus=sim_arm64`, so the device slice is not built. `--strategy=OrlixCompilerRuntime=local` stays. `CCACHE_DISABLE` stays a shell export and is not an action env. Every `OrlixCompilerRuntime` row for `//bazel/feasibility/mlibc:compiler_runtime` must be `cacheHit` true and runner `remote cache hit`. A miss still runs the action. `ORLIX_BAZEL_AUTHORITY` stays `?= 0`.
