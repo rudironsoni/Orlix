@@ -1087,9 +1087,7 @@ __bazel-simulator-runtime-proof:
 	evidence_dir="$(ORLIX_BUILD_ROOT)/AgentHarness/bazel-ci/$(ORLIX_SIMULATOR_LABEL)"; \
 	mkdir -p "$$evidence_dir"; \
 	echo "runtime-proof: label=$(ORLIX_SIMULATOR_LABEL) version=$(ORLIX_SIMULATOR_VERSION) simulator=$(ORLIX_SIMULATOR_ID) app=$(ORLIX_BAZEL_APP_PATH)" | tee "$$evidence_dir/input.log"; \
-	if [ "$$(xcrun simctl list devices -j | jq -r --arg id "$(ORLIX_SIMULATOR_ID)" '.devices | to_entries[] | .value[] | select(.udid == $$id) | .state')" != Booted ]; then \
-		xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
-	fi; \
+	xcrun simctl bootstatus "$(ORLIX_SIMULATOR_ID)" -b; \
 	xcrun simctl terminate "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	xcrun simctl uninstall "$(ORLIX_SIMULATOR_ID)" com.rudironsoni.Orlix >/dev/null 2>&1 || true; \
 	echo "simctl install start label=$(ORLIX_SIMULATOR_LABEL) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
