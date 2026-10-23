@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "e8dbab175887a363b4ed7132bfcde6c8a740f5b4b6f763fc01d14f289885ab5a",
+      "source_sha256": "a83d7c71997eb271819f6f7c77eaffb39b717586d5de042bf6d478d4797b85f0",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -372,7 +372,7 @@
               {
                 "name": "Record the pinned CI toolchain",
                 "id": "toolchain-pin",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nbrew update\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Restore CI toolchain bundle",
@@ -669,7 +669,7 @@
               {
                 "name": "Record the pinned CI toolchain",
                 "id": "toolchain-pin",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nbrew update\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Restore CI toolchain bundle",

@@ -143,6 +143,7 @@ jobs:
         id: toolchain-pin
         run: |
           set -euo pipefail
+          brew update
           if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
@@ -743,6 +744,7 @@ jobs:
         id: toolchain-pin
         run: |
           set -euo pipefail
+          brew update
           if python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> "$GITHUB_OUTPUT"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
