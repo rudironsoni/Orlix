@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "e8dbab175887a363b4ed7132bfcde6c8a740f5b4b6f763fc01d14f289885ab5a",
+      "source_sha256": "d356313f02dbfb3ddc37773ab9262de58d44489ab31d0460455f5e5c00db8fbd",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -423,10 +423,12 @@
               },
               {
                 "name": "Restore local compiler object cache",
+                "id": "compiler-cache",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
+                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+                  "restore-keys": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
                 }
               },
               {
@@ -541,7 +543,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
+                  "key": "${{ steps.compiler-cache.outputs.cache-primary-key }}"
                 }
               },
               {

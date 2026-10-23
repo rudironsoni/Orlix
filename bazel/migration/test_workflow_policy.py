@@ -379,6 +379,12 @@ class WorkflowPolicyTests(unittest.TestCase):
         ccache = text.split("Restore local compiler object cache", 1)[1].split(
             "\n      - name:", 1
         )[0]
+        self.assertIn("id: compiler-cache", ccache)
+        self.assertIn("key: orlix-ccache-${{ steps.compiler.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}", ccache)
+        self.assertIn("restore-keys: orlix-ccache-${{ steps.compiler.outputs.digest }}", ccache)
+        publish = text.split("Save local compiler object cache", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("key: ${{ steps.compiler-cache.outputs.cache-primary-key }}", publish)
+        self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", publish)
         self.assertNotIn("remote cache hit", ccache)
         self.assertNotIn("BuildBuddy", ccache)
         self.assertIn(
