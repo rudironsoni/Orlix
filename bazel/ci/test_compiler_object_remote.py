@@ -419,6 +419,22 @@ class CompilerObjectRemoteTests(unittest.TestCase):
             {"direct_hits": 1, "preprocessed_hits": 1, "misses": 1},
         )
 
+    def test_archive_action_reads_multiline_execution_records(self) -> None:
+        from bazel.ci.kernel_archive_remote_reuse import kernel_action
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "execution.json"
+            records = [
+                {"mnemonic": "Genrule"},
+                {"mnemonic": "OrlixKernelMachOArchive", "runner": "local",
+                 "cacheHit": False, "commandArgs": ["gmake", "__kernel-archive"]},
+            ]
+            path.write_text("\n".join(json.dumps(item, indent=2) for item in records))
+            self.assertEqual(kernel_action(path)["command"], "gmake __kernel-archive")
+            path.write_text(path.read_text() + "\n" + json.dumps(records[1]))
+            with self.assertRaisesRegex(SystemExit, "expected one.*found 2"):
+                kernel_action(path)
+
     def _compile(self, work: Path, port: int, *, read_only: bool) -> str:
         source = work / "src"
         source.mkdir(parents=True)

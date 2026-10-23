@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bazel.compiler_object_remote import ActionsBlobStore, actions_runtime, remote_storage_url, serve
+from bazel.config.cache_observation import _records
 
 
 TARGET = "//bazel/feasibility/kernel:kernel-release-iphonesimulator"
@@ -189,25 +190,7 @@ def bazel_command(
 def kernel_action(path: Path) -> dict:
     if not path.is_file():
         raise SystemExit("kernel execution log is missing")
-    text = path.read_text(encoding="utf-8", errors="replace")
-    records = []
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        parsed = None
-    if isinstance(parsed, list):
-        records = parsed
-    elif isinstance(parsed, dict):
-        records = [parsed]
-    else:
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    records = _records(path)
     matches = [item for item in records if isinstance(item, dict) and item.get("mnemonic") == MNEMONIC]
     if len(matches) != 1:
         raise SystemExit(f"expected one {MNEMONIC} action, found {len(matches)}")
