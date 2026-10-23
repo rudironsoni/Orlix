@@ -1968,6 +1968,166 @@
         }
       }
     },
+    ".github/workflows/kernel-object-remote-reuse.yml": {
+      "source_sha256": "b77b13a22946840a5ac16f45afc8d0cf21c44c76cdcb8eb975e33904f2733449",
+      "workflow": {
+        "name": "Kernel object remote reuse",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
+          "pull_request": null
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "kernel-object-remote-reuse-${{ github.ref }}",
+          "cancel-in-progress": false
+        },
+        "jobs": {
+          "producer": {
+            "name": "Publish kernel compiler objects",
+            "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
+            "runs-on": "macos-26",
+            "timeout-minutes": 360,
+            "permissions": {
+              "contents": "read",
+              "actions": "write"
+            },
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Prepare the macOS kernel runner",
+                "uses": "./.github/actions/macos-kernel-setup"
+              },
+              {
+                "name": "Copy compiler-object cache credentials",
+                "uses": "./bazel/ci/compiler_object_cache_env"
+              },
+              {
+                "name": "Build the Orlix kernel archive and publish compiler objects",
+                "env": {
+                  "ORLIX_KERNEL_OBJECT_REMOTE_MODE": "produce",
+                  "ORLIX_COMPILER_OBJECT_REMOTE_WRITE": "1"
+                },
+                "run": "make __kernel-object-remote-reuse"
+              },
+              {
+                "name": "Stage the publication marker",
+                "run": "set -euo pipefail\nmkdir -p Build/kernel-object-remote-publication\ncp Build/kernel-object-remote-reuse/evidence.json Build/kernel-object-remote-publication/evidence.json\n"
+              },
+              {
+                "name": "Publish the kernel compiler-object marker",
+                "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "Build/kernel-object-remote-publication",
+                  "key": "orlix-kernel-compiler-object-publication-v1-${{ github.sha }}"
+                }
+              }
+            ]
+          },
+          "same-commit": {
+            "name": "Reuse unchanged kernel compiler objects",
+            "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
+            "needs": "producer",
+            "runs-on": "macos-26",
+            "timeout-minutes": 360,
+            "permissions": {
+              "contents": "read",
+              "actions": "read"
+            },
+            "steps": [
+              {
+                "name": "Check out the exact commit",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false
+                }
+              },
+              {
+                "name": "Require the main publication",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "Build/kernel-object-remote-publication",
+                  "key": "orlix-kernel-compiler-object-publication-v1-${{ github.sha }}",
+                  "fail-on-cache-miss": true
+                }
+              },
+              {
+                "name": "Prepare the macOS kernel runner",
+                "uses": "./.github/actions/macos-kernel-setup"
+              },
+              {
+                "name": "Copy compiler-object cache credentials",
+                "uses": "./bazel/ci/compiler_object_cache_env"
+              },
+              {
+                "name": "Rebuild the same commit without compiler-object write",
+                "env": {
+                  "ORLIX_KERNEL_OBJECT_REMOTE_MODE": "reuse",
+                  "ORLIX_KERNEL_OBJECT_REMOTE_PRODUCER": "Build/kernel-object-remote-publication/evidence.json"
+                },
+                "run": "make __kernel-object-remote-reuse"
+              }
+            ]
+          },
+          "mutation": {
+            "name": "Reuse kernel objects after commit B",
+            "if": "github.event_name == 'pull_request'",
+            "runs-on": "macos-26",
+            "timeout-minutes": 360,
+            "permissions": {
+              "contents": "read",
+              "actions": "read"
+            },
+            "steps": [
+              {
+                "name": "Check out commit B",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": false,
+                  "ref": "${{ github.event.pull_request.head.sha }}"
+                }
+              },
+              {
+                "name": "Require the main publication",
+                "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "with": {
+                  "path": "Build/kernel-object-remote-publication",
+                  "key": "orlix-kernel-compiler-object-publication-v1-${{ github.event.pull_request.base.sha }}",
+                  "fail-on-cache-miss": true
+                }
+              },
+              {
+                "name": "Prepare the macOS kernel runner",
+                "uses": "./.github/actions/macos-kernel-setup"
+              },
+              {
+                "name": "Copy compiler-object cache credentials",
+                "uses": "./bazel/ci/compiler_object_cache_env"
+              },
+              {
+                "name": "Build commit B without compiler-object write",
+                "env": {
+                  "ORLIX_KERNEL_OBJECT_REMOTE_MODE": "mutate",
+                  "ORLIX_KERNEL_OBJECT_REMOTE_PRODUCER": "Build/kernel-object-remote-publication/evidence.json"
+                },
+                "run": "make __kernel-object-remote-reuse"
+              }
+            ]
+          }
+        }
+      }
+    },
     ".github/workflows/rulesync-generate.yml": {
       "source_sha256": "f6b5407207180c2ea1df7a9f1ff2404f5811e0890e61a2c6c8ab6f313ecc2249",
       "workflow": {
