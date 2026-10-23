@@ -92,7 +92,7 @@
       }
     },
     ".github/workflows/bazel-benchmark.yml": {
-      "source_sha256": "043b3ca89af1abc5cec1445e8a2bfb489234fe6bba990d020741e91581d18ea9",
+      "source_sha256": "e7d984935734a9be40dba7f514896390bc84107debaec63988dc9829ff2ff313",
       "workflow": {
         "name": "Bazel component benchmark",
         "on": {
@@ -148,7 +148,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -175,7 +175,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -193,7 +193,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Measure and compare component builds through Make",
@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "a9736333ea1a927a88a98e6d361d0881bebb61a621ab2721d0f621c137b0f86a",
+      "source_sha256": "a8446c8c843af99eb4b6b70a4e425acde85048fa2f2a0185470af7859a62b248",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -339,7 +339,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -414,7 +414,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Resolve the pinned compiler identity",
@@ -532,7 +532,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -620,7 +620,7 @@
       }
     },
     ".github/workflows/bazel-gc.yml": {
-      "source_sha256": "b01c572abe28ffbb091eb4b5e2be295a33564db0826705b4c5b63af96ef6c7e7",
+      "source_sha256": "054fffa25fbc18ccd04d7354c9bcb9af83b88b968743bffd15eb8a66e644883c",
       "workflow": {
         "name": "Bazel cache garbage collection",
         "on": {
@@ -687,7 +687,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Run Make-owned cache GC",
@@ -699,7 +699,7 @@
       }
     },
     ".github/workflows/bazel-nightly.yml": {
-      "source_sha256": "d13bfadd7945ebe4e1d508a65844136777e0db4dccb4aa09febb09335937e7e0",
+      "source_sha256": "ad7ad866f757a6a6399f366be1d5b96c4aa8406169f90d00a7b9fde436120e2a",
       "workflow": {
         "name": "Bazel nightly",
         "on": {
@@ -755,7 +755,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -782,7 +782,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -800,7 +800,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Run Make-owned matrix check",
@@ -825,7 +825,7 @@
       }
     },
     ".github/workflows/bazel-promote.yml": {
-      "source_sha256": "ac0a50402c84216a79e06acadce4901186f320d8a04f1561f4fe9f5587ae65da",
+      "source_sha256": "ff94b88fd8ed155ef8efe8a1323a80198cd25fa93b59bd14ba196f63d3366974",
       "workflow": {
         "name": "Bazel promote",
         "on": {
@@ -902,7 +902,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -947,7 +947,7 @@
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -966,7 +966,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Dual-build without action cache",
@@ -1024,7 +1024,7 @@
       }
     },
     ".github/workflows/bazel-promoted-consumer-proof.yml": {
-      "source_sha256": "974b9f29abab0e87e6a87878eec7e8ce9b7bcc2031a9a85f407c4a3b41a3e5fd",
+      "source_sha256": "6aae6047794e8ecd60f73ec4c01e80c6b0b6c0a6e5a8a3678369d100c75bb64c",
       "workflow": {
         "name": "Promoted consumer proof",
         "on": {
@@ -1085,7 +1085,7 @@
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Application Support/com.robotsandpencils.xcodes",
-                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113"
+                  "key": "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a"
                 }
               },
               {
@@ -1148,7 +1148,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Capture the toolchain manifest before simulator preparation",
@@ -1279,7 +1279,7 @@
       }
     },
     ".github/workflows/ios-build.yml": {
-      "source_sha256": "e2fe25c37cd3b953c56235ac1ac7f4336df2e91ea6b8d02fa5a80144aac04eb6",
+      "source_sha256": "488567ad8fac5c205eb2277b0cb04761fac1916269eb0a8784d0c4e80d3f6848",
       "workflow": {
         "name": "iOS Build",
         "run-name": "iOS Build ${{ inputs.build_id || github.ref_name }}",
@@ -1437,7 +1437,7 @@
               {
                 "name": "Setup Orlix Xcode and build tools",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Restore DerivedData cache",
@@ -1669,7 +1669,7 @@
       }
     },
     ".github/workflows/ios-share.yml": {
-      "source_sha256": "8633f2689247909c6f661bae6c7d42adca98602d0554a9efac286474cfd1d5d1",
+      "source_sha256": "db9fdcc4741e70ca105f9ae4b3bb372cca244eacbfab909fbdce28cae43d5bf8",
       "workflow": {
         "name": "iOS Simulator",
         "run-name": "iOS Simulator ${{ inputs.build_id || github.ref_name }}",
@@ -1813,7 +1813,7 @@
               {
                 "name": "Setup Orlix Xcode and build tools",
                 "if": "steps.detect.outputs.type == 'orlix'",
-                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
+                "run": "set -euo pipefail\nbrew trust --formula xcodesorg/made/xcodes\nif python3 bazel/ci/setup_cache.py bundle-satisfied --brewfile Brewfile; then\n  echo \"Homebrew packages are already installed; skipping brew bundle\"\nelse\n  brew bundle --file Brewfile\nfi\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$(xcode-select -p)\"\necho \"ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)\" >> \"$GITHUB_ENV\"\necho \"ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}\" >> \"$GITHUB_ENV\"\n"
               },
               {
                 "name": "Restore DerivedData cache",
@@ -2209,7 +2209,7 @@
       }
     },
     ".github/workflows/testflight-beta.yml": {
-      "source_sha256": "469d3f6061f2030c82d35c30d08f804453d7b9057c1eb257189ebfd65a3133c9",
+      "source_sha256": "223fd5928f9eee406ca5704980e0c3c0009436fb9cc942e93ea849f2a655542c",
       "workflow": {
         "name": "TestFlight beta",
         "on": {
@@ -2314,7 +2314,7 @@
               },
               {
                 "name": "Verify selected Xcode",
-                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 17F113 --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
+                "run": "set -euo pipefail\npython3 bazel/config/xcode_select.py --repo \"$GITHUB_WORKSPACE\" --build 27A266a --developer-dir \"$ORLIX_PINNED_DEVELOPER_DIR\"\n"
               },
               {
                 "name": "Check runner capacity",

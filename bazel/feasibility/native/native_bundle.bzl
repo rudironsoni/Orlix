@@ -47,7 +47,7 @@ _MANIFEST = "\n".join([
     '  "libssh2": "1.11.1",',
     '  "macos_minimum": "13.3",',
     '  "openssl": "3.2.0",',
-    '  "xcode": "26.6"',
+    '  "xcode": "27.0"',
     "}",
     "",
 ])

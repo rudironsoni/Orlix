@@ -11,22 +11,22 @@ import xcode_select
 
 
 REPO = Path(__file__).resolve().parents[2]
+DIR_27 = "/Applications/Xcode-27.0.0.app/Contents/Developer"
+APP_27 = "/Applications/Xcode-27.0.0.app"
 DIR_26 = "/Applications/Xcode-26.6.0.app/Contents/Developer"
 APP_26 = "/Applications/Xcode-26.6.0.app"
-DIR_27 = "/Applications/Xcode-27.0.0-Release.Candidate.app/Contents/Developer"
-APP_27 = "/Applications/Xcode-27.0.0-Release.Candidate.app"
 
 
 def _runner(
-    resolved_version="26.6",
-    resolved_path=APP_26,
-    lookup_versions=("26.6",),
-    select_path=APP_26,
+    resolved_version="27.0",
+    resolved_path=APP_27,
+    lookup_versions=("27.0",),
+    select_path=APP_27,
     select_error=None,
-    developer_dir=DIR_26,
+    developer_dir=DIR_27,
     developer_dir_after_select=None,
-    version="26.6",
-    build="17F113",
+    version="27.0",
+    build="27A266a",
     calls=None,
 ):
     selected = {"done": False}
@@ -82,9 +82,9 @@ class XcodeSelectTests(unittest.TestCase):
 
     def test_xcode_version_file_is_the_canonical_release_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / ".xcode-version").write_text("26.6\n", encoding="utf-8")
-            self.assertEqual(xcode_select.read_requested_version(tmp), "26.6")
-        self.assertEqual(xcode_select.read_requested_version(REPO), "26.6")
+            (Path(tmp) / ".xcode-version").write_text("27.0\n", encoding="utf-8")
+            self.assertEqual(xcode_select.read_requested_version(tmp), "27.0")
+        self.assertEqual(xcode_select.read_requested_version(REPO), "27.0")
         makefile = (REPO / "make" / "bazel-migration.mk").read_text(encoding="utf-8")
         self.assertIn(".xcode-version", makefile)
 
@@ -93,51 +93,51 @@ class XcodeSelectTests(unittest.TestCase):
             with self.assertRaisesRegex(xcode_select.XcodeSelectError, "brew install xcodesorg/made/xcodes"):
                 xcode_select.require_xcodes()
             with self.assertRaises(xcode_select.XcodeSelectError):
-                xcode_select.verify(str(REPO), "17F113")
+                xcode_select.verify(str(REPO), "27A266a")
 
     def test_missing_requested_xcode_fails_clearly(self) -> None:
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner(lookup_versions=())):
             with self.assertRaisesRegex(
                 xcode_select.XcodeSelectError,
-                r"xcodes could not resolve Xcode 26\.6 in its configured Xcode directory",
+                r"xcodes could not resolve Xcode 27\.0 in its configured Xcode directory",
             ):
-                xcode_select.verify(str(REPO), "17F113")
+                xcode_select.verify(str(REPO), "27A266a")
 
     def test_resolution_failure_does_not_claim_global_absence(self) -> None:
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner(lookup_versions=())):
-            with self.assertRaisesRegex(xcode_select.XcodeSelectError, r"xcodes install 26\.6") as raised:
-                xcode_select.verify(str(REPO), "17F113")
-        self.assertNotIn("Xcode 26.6 is not installed;", str(raised.exception))
+            with self.assertRaisesRegex(xcode_select.XcodeSelectError, r"xcodes install 27\.0") as raised:
+                xcode_select.verify(str(REPO), "27A266a")
+        self.assertNotIn("Xcode 27.0 is not installed;", str(raised.exception))
         self.assertIn("configured Xcode directory", str(raised.exception))
 
     def test_selection_uses_xcodes(self) -> None:
         calls = []
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner(calls=calls)):
-            payload = xcode_select.select(str(REPO), "17F113")
+            payload = xcode_select.select(str(REPO), "27A266a")
         selects = [command for command, _ in calls if command[:2] == ["xcodes", "select"]]
         self.assertEqual(selects, [["xcodes", "select", "--print-path"]])
-        self.assertEqual(payload["version"], "26.6")
-        self.assertEqual(payload["developer_dir"], DIR_26)
+        self.assertEqual(payload["version"], "27.0")
+        self.assertEqual(payload["developer_dir"], DIR_27)
 
     def test_xcode_version_file_drives_xcodes_select(self) -> None:
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / ".xcode-version").write_text("26.6\n", encoding="utf-8")
+            (Path(tmp) / ".xcode-version").write_text("27.0\n", encoding="utf-8")
             with _which(), mock.patch(
                 "xcode_select.subprocess.run", side_effect=_runner(calls=calls)
             ):
-                xcode_select.select(tmp, "17F113")
+                xcode_select.select(tmp, "27A266a")
         selects = [(command, kwargs) for command, kwargs in calls if command[:2] == ["xcodes", "select"]]
         self.assertEqual(len(selects), 1)
         command, kwargs = selects[0]
-        self.assertNotIn("26.6", command)
+        self.assertNotIn("27.0", command)
         self.assertEqual(kwargs.get("cwd"), str(tmp))
 
     def test_no_listing_parsing_and_no_version_normalization(self) -> None:
         calls = []
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner(calls=calls)):
-            xcode_select.select(str(REPO), "17F113")
-            xcode_select.verify(str(REPO), "17F113")
+            xcode_select.select(str(REPO), "27A266a")
+            xcode_select.verify(str(REPO), "27A266a")
         for command, _ in calls:
             self.assertNotEqual(command, ["xcodes", "installed"])
         source = Path(xcode_select.__file__).read_text(encoding="utf-8")
@@ -146,8 +146,8 @@ class XcodeSelectTests(unittest.TestCase):
     def test_xcodes_directory_is_honored(self) -> None:
         calls = []
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner(calls=calls)):
-            xcode_select.select(str(REPO), "17F113")
-            xcode_select.verify(str(REPO), "17F113")
+            xcode_select.select(str(REPO), "27A266a")
+            xcode_select.verify(str(REPO), "27A266a")
         for command, kwargs in calls:
             if command[0] == "xcodes":
                 self.assertNotIn("--directory", command)
@@ -155,63 +155,63 @@ class XcodeSelectTests(unittest.TestCase):
 
     def test_xcodes_resolves_the_version(self) -> None:
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner()):
-            self.assertEqual(xcode_select.resolve_requested("26.6"), APP_26)
+            self.assertEqual(xcode_select.resolve_requested("27.0"), APP_27)
 
     def test_selected_developer_directory_comes_from_xcode_select(self) -> None:
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner()):
-            payload = xcode_select.verify(str(REPO), "17F113")
-        self.assertEqual(payload["developer_dir"], DIR_26)
-        self.assertEqual(payload["xcodes_resolved_path"], APP_26)
-        other = "/Library/Developer/Xcode-26.6.0.app/Contents/Developer"
+            payload = xcode_select.verify(str(REPO), "27A266a")
+        self.assertEqual(payload["developer_dir"], DIR_27)
+        self.assertEqual(payload["xcodes_resolved_path"], APP_27)
+        other = "/Library/Developer/Xcode-27.0.0.app/Contents/Developer"
         with _which(), mock.patch(
             "xcode_select.subprocess.run", side_effect=_runner(developer_dir=other)
         ):
-            payload = xcode_select.verify(str(REPO), "17F113")
+            payload = xcode_select.verify(str(REPO), "27A266a")
         self.assertEqual(payload["developer_dir"], other)
 
     def test_wrong_xcode_version_fails(self) -> None:
         with _which(), mock.patch(
-            "xcode_select.subprocess.run", side_effect=_runner(version="27.0", build="27A266a")
+            "xcode_select.subprocess.run", side_effect=_runner(version="26.6", build="17F113")
         ):
-            with self.assertRaisesRegex(xcode_select.XcodeSelectError, r"expected Xcode 26\.6"):
-                xcode_select.verify(str(REPO), "17F113")
+            with self.assertRaisesRegex(xcode_select.XcodeSelectError, r"expected Xcode 27\.0"):
+                xcode_select.verify(str(REPO), "27A266a")
 
     def test_correct_version_with_wrong_build_fails(self) -> None:
         with _which(), mock.patch(
-            "xcode_select.subprocess.run", side_effect=_runner(version="26.6", build="27A000a")
+            "xcode_select.subprocess.run", side_effect=_runner(version="27.0", build="27A000a")
         ):
-            with self.assertRaisesRegex(xcode_select.XcodeSelectError, "17F113"):
-                xcode_select.verify(str(REPO), "17F113")
+            with self.assertRaisesRegex(xcode_select.XcodeSelectError, "27A266a"):
+                xcode_select.verify(str(REPO), "27A266a")
 
-    def test_xcode_27_selection_does_not_leak_into_acceptance(self) -> None:
+    def test_xcode_26_selection_does_not_leak_into_acceptance(self) -> None:
         with _which(), mock.patch(
             "xcode_select.subprocess.run",
-            side_effect=_runner(developer_dir=DIR_27, version="27.0", build="27A266a"),
+            side_effect=_runner(developer_dir=DIR_26, version="26.6", build="17F113"),
         ):
             with self.assertRaises(xcode_select.XcodeSelectError):
-                xcode_select.verify(str(REPO), "17F113")
+                xcode_select.verify(str(REPO), "27A266a")
         with _which(), mock.patch("xcode_select.subprocess.run", side_effect=_runner()):
             with self.assertRaisesRegex(xcode_select.XcodeSelectError, "does not match"):
-                xcode_select.verify(str(REPO), "17F113", developer_dir=DIR_27)
+                xcode_select.verify(str(REPO), "27A266a", developer_dir=DIR_26)
 
-    def test_initial_27_selection_moves_to_26_for_orlix(self) -> None:
+    def test_initial_26_selection_moves_to_27_for_orlix(self) -> None:
         calls = []
         with _which(), mock.patch(
             "xcode_select.subprocess.run",
             side_effect=_runner(
-                developer_dir=DIR_27,
-                developer_dir_after_select=DIR_26,
-                select_path=APP_26,
+                developer_dir=DIR_26,
+                developer_dir_after_select=DIR_27,
+                select_path=APP_27,
                 calls=calls,
             ),
         ):
-            payload = xcode_select.select(str(REPO), "17F113")
+            payload = xcode_select.select(str(REPO), "27A266a")
         selects = [(c, k.get("cwd")) for c, k in calls if c[:2] == ["xcodes", "select"]]
         self.assertEqual(selects, [(["xcodes", "select", "--print-path"], str(REPO))])
-        self.assertEqual(payload["version"], "26.6")
-        self.assertEqual(payload["build"], "17F113")
-        self.assertEqual(payload["developer_dir"], DIR_26)
-        self.assertEqual(payload["xcodes_selected_path"], APP_26)
+        self.assertEqual(payload["version"], "27.0")
+        self.assertEqual(payload["build"], "27A266a")
+        self.assertEqual(payload["developer_dir"], DIR_27)
+        self.assertEqual(payload["xcodes_selected_path"], APP_27)
 
     def test_accepted_selection_reaches_toolchain_verification(self) -> None:
         makefile = (REPO / "make" / "bazel-migration.mk").read_text(encoding="utf-8")

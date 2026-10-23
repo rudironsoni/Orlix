@@ -4,9 +4,9 @@
   "authority": "Bazel is product-compile authority after the ADR 0037 cutover. Make remains the public interface.",
   "toolchain_pin": {
     "bazel": "9.3.1",
-    "xcode": "26.6",
-    "xcode_build": "17F113",
-    "apple_sdk": "26.5",
+    "xcode": "27.0",
+    "xcode_build": "27A266a",
+    "apple_sdk": "27.0",
     "rules_apple": "4.5.3",
     "rules_swift": "3.6.1",
     "rules_xcodeproj": "4.1.0"

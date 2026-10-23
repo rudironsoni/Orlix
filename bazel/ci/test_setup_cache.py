@@ -1107,7 +1107,7 @@ class WorkflowSetupCacheTests(unittest.TestCase):
             self.assertIn("steps.xcode-present.outputs.installed == 'true'", text, name)
             self.assertIn("steps.xcode-present.outputs.installed != 'true'", text, name)
             self.assertIn(
-                "orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113",
+                "orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a",
                 text,
                 name,
             )

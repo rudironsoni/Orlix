@@ -161,7 +161,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertIn("xcode-version: ${{ steps.xcode-version.outputs.version }}", text, name)
             self.assertIn(
                 'python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" '
-                '--build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"',
+                '--build 27A266a --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"',
                 text,
                 name,
             )

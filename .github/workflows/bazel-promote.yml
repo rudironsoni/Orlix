@@ -87,7 +87,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: "~/Library/Application Support/com.robotsandpencils.xcodes"
-          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a
 
       - name: Restore verified source downloads
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -156,7 +156,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: "~/Library/Application Support/com.robotsandpencils.xcodes"
-          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
+          key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-27A266a
 
       - name: Save Homebrew source bottles
         if: github.ref == 'refs/heads/main' && steps.tools.outputs.bottles == 'true'
@@ -175,7 +175,7 @@ jobs:
       - name: Verify selected Xcode
         run: |
           set -euo pipefail
-          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 27A266a --developer-dir "$ORLIX_PINNED_DEVELOPER_DIR"
 
       - name: Dual-build without action cache
         timeout-minutes: 350

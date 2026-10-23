@@ -290,7 +290,7 @@ jobs:
           else
             brew bundle --file Brewfile
           fi
-          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 17F113 --developer-dir "$(xcode-select -p)"
+          python3 bazel/config/xcode_select.py --repo "$GITHUB_WORKSPACE" --build 27A266a --developer-dir "$(xcode-select -p)"
           echo "ORLIX_PINNED_DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           echo "ORLIX_BAZEL_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
 
