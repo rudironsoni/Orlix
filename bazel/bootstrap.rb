@@ -5,12 +5,12 @@ require "pathname"
 require "rbconfig"
 require "uri"
 
-VERSION = "9.2.0"
+VERSION = "9.3.1"
 CHECKSUMS = {
-  "darwin-arm64" => "dd466352a3e4d3581b8898740ee1ff208866ccbe25f8d367c5dcb950219587e6",
-  "darwin-x86_64" => "14c9bcb01303b38192e0e2895051c1bcf19bf89d7e416f5aeeeb48b6b624cfbf",
-  "linux-arm64" => "049dd21f40ad979db11c3ee68c96a42ce75f1185e69ac61ab20de1501427a410",
-  "linux-x86_64" => "7668a95db1250f12c40407251e4e203b4ec8bf39bc495d2f485b2d8c99048694"
+  "darwin-arm64" => "19c4958626e0e3a564a61c2e85eeaab97b550a30632b82341191aa61ed0ccc1b",
+  "darwin-x86_64" => "01eb4368a9c331391448bc1f11b1bec4e57793a0cee0581579ee786cd26baf37",
+  "linux-arm64" => "10ba9cb76d4ee748d274dcc2981992bb12b74a203dc41a9c2eceeb8f29359366",
+  "linux-x86_64" => "7f775b54bbec487efaf0f49ccda1d2ed02cd34f582edfdd6aeeec76e39ef585c"
 }.freeze
 
 class OrlixBazelBootstrap

@@ -28,7 +28,7 @@ def _bazel() -> str | None:
     if candidate and Path(candidate).is_file():
         return candidate
     for path in (
-        Path.home() / "Library/Caches/Orlix/Tools/bazel/9.2.0/bazel",
+        Path.home() / "Library/Caches/Orlix/Tools/bazel/9.3.1/bazel",
         Path("/opt/homebrew/bin/bazel"),
         Path("/usr/local/bin/bazel"),
     ):

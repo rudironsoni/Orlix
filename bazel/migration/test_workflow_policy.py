@@ -418,7 +418,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             "__bazel-buildbuddy-cleanup:", 1
         )[0]
         self.assertIn(
-            "--remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)",
+            "--remote_instance_name=orlix/apple/bazel-9.3.1/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)",
             configure,
         )
         apple = makefile.split("__bazel-apple-ci:", 1)[1].split(

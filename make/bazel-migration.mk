@@ -1,5 +1,5 @@
 ORLIX_BAZEL_CACHE_ROOT ?= $(HOME)/Library/Caches/Orlix/Bazel
-ORLIX_BAZEL_VERSION ?= 9.2.0
+ORLIX_BAZEL_VERSION ?= 9.3.1
 ORLIX_XCODE_VERSION_FILE := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../.xcode-version)
 ORLIX_XCODE_VERSION ?= $(shell tr -d '[:space:]' < $(ORLIX_XCODE_VERSION_FILE))
 ORLIX_XCODE_BUILD ?= 17F113
@@ -79,7 +79,7 @@ __bazel-bootstrap:
 	@$(ORLIX_RUBY) bazel/bootstrap.rb >/dev/null
 
 __bazel-version-check: __bazel-bootstrap
-	@test "$$($(ORLIX_BAZEL) --version)" = "bazel 9.2.0" || { echo "Bazel 9.2.0 is required" >&2; exit 1; }
+	@test "$$($(ORLIX_BAZEL) --version)" = "bazel 9.3.1" || { echo "Bazel 9.3.1 is required" >&2; exit 1; }
 
 __xcode-select:
 	@PYTHONPATH="$(CURDIR)/bazel/config" python3 "$(CURDIR)/bazel/config/xcode_select.py" --repo "$(CURDIR)" --build "$(ORLIX_XCODE_BUILD)" --select
@@ -132,7 +132,7 @@ __bazel-buildbuddy-configure:
 	rc="$$RUNNER_TEMP/orlix-buildbuddy.bazelrc"; \
 	test ! -e "$(CURDIR)/.bazelrc.local" && test ! -L "$(CURDIR)/.bazelrc.local" || { echo ".bazelrc.local already exists" >&2; exit 1; }; \
 	umask 077; \
-	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.2.0/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
+	printf '%s\n' "build --config=buildbuddy-$(ORLIX_BUILDBUDDY_ACCESS)" "build --remote_header=x-buildbuddy-api-key=$$BUILDBUDDY_API_KEY" "build --remote_instance_name=orlix/apple/bazel-9.3.1/xcode-$(ORLIX_XCODE_BUILD)/$(ORLIX_BAZEL_CACHE_EPOCH)" > "$$rc"; \
 	chmod 600 "$$rc"; \
 	ln -s "$$rc" "$(CURDIR)/.bazelrc.local"; \
 	if [ -n "$${GITHUB_ENV:-}" ]; then printf '%s\n' "ORLIX_BUILDBUDDY_RC=$$rc" >> "$$GITHUB_ENV"; fi

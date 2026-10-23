@@ -580,7 +580,7 @@ jobs:
           rm -rf "$results"; mkdir -p "$results"
           for pass in cold warm; do
             echo "=== promoted $pass pass ==="
-            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.3.1/bazel"
             if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
             chmod -R u+w Build/Bazel 2>/dev/null || true
             rm -rf Build/Bazel/output-base Build/Bazel/reconstruct Build/Bazel/proof bazel/promotion/imported Build/AgentHarness/bazel-ci Build/AgentHarness/bazel-promotion
@@ -593,7 +593,7 @@ jobs:
             cp Build/AgentHarness/bazel-promotion/acquisition.json "$results/$pass-acquisition.json"
             # Fresh output base so the package glob is re-evaluated against the
             # freshly staged tree and no first-pass Bazel result is reused.
-            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.2.0/bazel"
+            bazel_bin="$HOME/Library/Caches/Orlix/Tools/bazel/9.3.1/bazel"
             if [ -x "$bazel_bin" ]; then DEVELOPER_DIR="$(xcode-select -p)" "$bazel_bin" --output_base="$PWD/Build/Bazel/output-base" shutdown >/dev/null 2>&1 || true; fi
             chmod -R u+w Build/Bazel 2>/dev/null || true
             rm -rf Build/Bazel/output-base Build/AgentHarness/bazel-ci

@@ -26,7 +26,7 @@ class ToolchainPinTests(unittest.TestCase):
                 if command[-1] == "-version":
                     text = "Xcode 26.6\nBuild version 17F113"
                 elif command[-1] == "--version":
-                    text = "bazel 9.2.0"
+                    text = "bazel 9.3.1"
                 elif "--find" in command or command[-1] == "--show-sdk-path":
                     text = str(binary)
                 else:
@@ -67,7 +67,7 @@ class ToolchainPinTests(unittest.TestCase):
                 .replace("$(ORLIX_BUILD_ROOT)", str(build_root))
                 .replace("$(ORLIX_PINNED_DEVELOPER_DIR)", str(developer))
                 .replace("$(ORLIX_BAZEL_RUN_ID)", "run-9")
-                .replace("$(ORLIX_BAZEL_DISK_CACHE)", str(root / "bazel-9.2.0-xcode-17F113"))
+                .replace("$(ORLIX_BAZEL_DISK_CACHE)", str(root / "bazel-9.3.1-xcode-17F113"))
             )
             completed = subprocess.run(
                 ["bash", "-c", recipe], capture_output=True, text=True, timeout=60
@@ -78,26 +78,26 @@ class ToolchainPinTests(unittest.TestCase):
         product = pin.product_pin()
         self.assertEqual(product["xcode_version"], "26.6")
         self.assertEqual(product["xcode_build"], "17F113")
-        self.assertEqual(product["disk_cache_namespace"], "bazel-9.2.0-xcode-17F113")
+        self.assertEqual(product["disk_cache_namespace"], "bazel-9.3.1-xcode-17F113")
 
     def test_xcode_27_0_is_allowed_and_not_the_pin(self) -> None:
         self.assertIn(("27.0", "27A266a"), pin.allowed_identities())
         self.assertEqual(
             pin.namespace_for("27.0", "27A266a"),
-            "bazel-9.2.0-xcode-27A266a",
+            "bazel-9.3.1-xcode-27A266a",
         )
         self.assertNotEqual(pin.product_pin()["xcode_build"], "27A266a")
 
     def test_unknown_xcode_is_rejected(self) -> None:
         with self.assertRaises(pin.PinError):
-            pin.require_identity("99.0", "99A0000", "bazel-9.2.0-xcode-99A0000")
+            pin.require_identity("99.0", "99A0000", "bazel-9.3.1-xcode-99A0000")
 
     def test_wrong_disk_cache_namespace_fails(self) -> None:
         with self.assertRaises(pin.PinError):
             pin.require_identity(
                 "26.6",
                 "17F113",
-                "/cache/bazel-9.2.0-xcode-27A5252f",
+                "/cache/bazel-9.3.1-xcode-27A5252f",
             )
 
     def _manifest_fixture(self, root: Path):
@@ -110,7 +110,7 @@ class ToolchainPinTests(unittest.TestCase):
             if command[-1] == "-version":
                 text = "Xcode 26.6\nBuild version 17F113"
             elif command[-1] == "--version":
-                text = "bazel 9.2.0"
+                text = "bazel 9.3.1"
             elif "--find" in command or command[-1] == "--show-sdk-path":
                 text = str(binary)
             else:
@@ -194,7 +194,7 @@ class ToolchainPinTests(unittest.TestCase):
             root = Path(tmp)
             payload, _, output = self._capture_payload(root)
             checked = pin.validate_manifest(
-                str(output), str(root), "run-1", "cache/bazel-9.2.0-xcode-17F113"
+                str(output), str(root), "run-1", "cache/bazel-9.3.1-xcode-17F113"
             )
             self.assertEqual(checked["run_id"], "run-1")
             self.assertEqual(checked["developer_dir"], payload["developer_dir"])
@@ -204,13 +204,13 @@ class ToolchainPinTests(unittest.TestCase):
             root = Path(tmp)
             _, _, output = self._capture_payload(root)
             with self.assertRaisesRegex(pin.PinError, "stale toolchain manifest"):
-                pin.validate_manifest(str(output), str(root), "run-2", "cache/bazel-9.2.0-xcode-17F113")
+                pin.validate_manifest(str(output), str(root), "run-2", "cache/bazel-9.3.1-xcode-17F113")
             elsewhere = root / "elsewhere"
             elsewhere.mkdir()
             with self.assertRaisesRegex(pin.PinError, "stale toolchain manifest"):
-                pin.validate_manifest(str(output), str(elsewhere), "run-1", "cache/bazel-9.2.0-xcode-17F113")
+                pin.validate_manifest(str(output), str(elsewhere), "run-1", "cache/bazel-9.3.1-xcode-17F113")
             with self.assertRaisesRegex(pin.PinError, "missing"):
-                pin.validate_manifest(str(root / "absent.json"), str(root), "run-1", "cache/bazel-9.2.0-xcode-17F113")
+                pin.validate_manifest(str(root / "absent.json"), str(root), "run-1", "cache/bazel-9.3.1-xcode-17F113")
 
     def test_ensure_reuses_current_manifest_without_observing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -222,7 +222,7 @@ class ToolchainPinTests(unittest.TestCase):
             ):
                 payload = pin.ensure_current_manifest(
                     str(root), "/nonexistent/bazel", str(output), "run-1",
-                    "cache/bazel-9.2.0-xcode-17F113",
+                    "cache/bazel-9.3.1-xcode-17F113",
                 )
             self.assertEqual(payload["run_id"], "run-1")
 
@@ -239,7 +239,7 @@ class ToolchainPinTests(unittest.TestCase):
             with mock.patch("toolchain_pin.subprocess.run", side_effect=observe):
                 payload = pin.ensure_current_manifest(
                     str(root), str(binary), str(output), "run-2",
-                    "cache/bazel-9.2.0-xcode-17F113",
+                    "cache/bazel-9.3.1-xcode-17F113",
                 )
             self.assertEqual(payload["run_id"], "run-2")
             self.assertTrue(calls)
