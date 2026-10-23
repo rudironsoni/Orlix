@@ -15,6 +15,7 @@ concurrency:
 jobs:
   producer:
     name: Publish kernel compiler objects
+    cache-mode: write
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
     runs-on: macos-26
     timeout-minutes: 360
@@ -53,6 +54,7 @@ jobs:
 
   same-commit:
     name: Reuse unchanged kernel compiler objects
+    cache-mode: read
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'
     needs: producer
     runs-on: macos-26
@@ -87,6 +89,7 @@ jobs:
 
   mutation:
     name: Reuse kernel objects after commit B
+    cache-mode: read
     if: github.event_name == 'pull_request'
     runs-on: macos-26
     timeout-minutes: 360

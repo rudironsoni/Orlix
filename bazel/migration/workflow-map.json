@@ -1969,7 +1969,7 @@
       }
     },
     ".github/workflows/kernel-object-remote-reuse.yml": {
-      "source_sha256": "b77b13a22946840a5ac16f45afc8d0cf21c44c76cdcb8eb975e33904f2733449",
+      "source_sha256": "02878034b18d00cba353f0cb82fe624e490923c17b662131e0e1c276e44d5194",
       "workflow": {
         "name": "Kernel object remote reuse",
         "on": {
@@ -1990,6 +1990,7 @@
         "jobs": {
           "producer": {
             "name": "Publish kernel compiler objects",
+            "cache-mode": "write",
             "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
             "runs-on": "macos-26",
             "timeout-minutes": 360,
@@ -2037,6 +2038,7 @@
           },
           "same-commit": {
             "name": "Reuse unchanged kernel compiler objects",
+            "cache-mode": "read",
             "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'",
             "needs": "producer",
             "runs-on": "macos-26",
@@ -2082,6 +2084,7 @@
           },
           "mutation": {
             "name": "Reuse kernel objects after commit B",
+            "cache-mode": "read",
             "if": "github.event_name == 'pull_request'",
             "runs-on": "macos-26",
             "timeout-minutes": 360,

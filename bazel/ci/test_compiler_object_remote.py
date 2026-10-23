@@ -373,6 +373,8 @@ class CompilerObjectRemoteTests(unittest.TestCase):
         guard = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rudironsoni/Orlix'"
         self.assertIn(guard, producer)
         self.assertIn("actions: write", producer)
+        self.assertIn("cache-mode: write", producer)
+        self.assertEqual(consumers.count("cache-mode: read"), 2)
         self.assertIn("runs-on: macos-26", workflow)
         self.assertNotIn("actions: write", consumers)
         self.assertNotIn("cdn.kernel.org", workflow)
