@@ -364,7 +364,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("__ios15-simulator-build", workflow)
         self.assertIn("if: always()", workflow)
 
-    def test_canonical_workflow_has_stable_concurrency_and_download_only_pr_caches(self) -> None:
+    def test_canonical_workflow_scopes_compiler_publication_to_main_and_pr451(self) -> None:
         text = (ROOT / ".github/workflows/bazel-ci.yml").read_text(encoding="utf-8")
         self.assertIn("bazel-ci-main", text)
         self.assertIn("bazel-ci-pr-{0}", text)
@@ -385,6 +385,12 @@ class WorkflowPolicyTests(unittest.TestCase):
         publish = text.split("Save local compiler object cache", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn("key: ${{ steps.compiler-cache.outputs.cache-primary-key }}", publish)
         self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", publish)
+        self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.number == 451 && github.run_attempt == 1 && github.event.pull_request.head.repo.full_name == github.repository", publish)
+        self.assertIn("steps.tools.outputs.drop_ccache != 'true'", publish)
+        self.assertIn("steps.setup-caches.outputs.drop_ccache != 'true'", publish)
+        record = text.split("name: Record setup caches filled by the product build", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("CCACHE_MAXSIZE=4Gi ccache --cleanup", record)
+        self.assertIn('test "$ccache_kib" -le 4194304', record)
         self.assertNotIn("remote cache hit", ccache)
         self.assertNotIn("BuildBuddy", ccache)
         self.assertIn(

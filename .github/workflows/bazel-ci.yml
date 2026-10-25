@@ -475,7 +475,7 @@ jobs:
       # preparation, before this build.
       - name: Record setup caches filled by the product build
         id: setup-caches
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 451 && github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           set -euo pipefail
           cache_has_files() {
@@ -486,6 +486,13 @@ jobs:
             found="$(find "$dir" -type f -size +0c -print -quit)"
             [ -n "$found" ]
           }
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && cache_has_files "$HOME/Library/Caches/Orlix/ccache"; then
+            CCACHE_DIR="$HOME/Library/Caches/Orlix/ccache" CCACHE_MAXSIZE=4Gi ccache --cleanup
+            ccache_kib=$(du -sk "$HOME/Library/Caches/Orlix/ccache" | awk '{print $1}')
+            test "$ccache_kib" -le 4194304
+            echo "PR451 compiler snapshot size=${ccache_kib}KiB limit=4194304KiB"
+            python3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes "${{ steps.tools.outputs.bytes }}" --ccache-bytes "$((ccache_kib * 1024))" >> "$GITHUB_OUTPUT"
+          fi
           if cache_has_files "$HOME/Library/Caches/Orlix/Bazel/repository-cache"; then
             echo "repository=true" >> "$GITHUB_OUTPUT"
           else
@@ -517,7 +524,7 @@ jobs:
           key: orlix-xcode-${{ steps.xcode-version.outputs.version }}-17F113
 
       - name: Save local compiler object cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true'
+        if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 451 && github.run_attempt == 1 && github.event.pull_request.head.repo.full_name == github.repository)) && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true' && steps.setup-caches.outputs.drop_ccache != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Orlix/ccache

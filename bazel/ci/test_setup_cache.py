@@ -975,6 +975,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertEqual(plan["drop_repository"], "false")
         self.assertEqual(setup_cache.CCACHE_CACHE_BYTES, 97_654_617)
         self.assertEqual(setup_cache.BAZEL_REPOSITORY_CACHE_BYTES, 571_396_067)
+        self.assertEqual(setup_cache.cache_plan(0, 4 * 1024**3)["drop_ccache"], "false")
+        self.assertEqual(setup_cache.cache_plan(members, 4 * 1024**3)["drop_ccache"], "true")
         crowded = setup_cache.cache_plan(4_300_000_000)
         self.assertEqual(crowded["drop_ccache"], "true")
         self.assertEqual(crowded["drop_repository"], "false")

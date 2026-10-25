@@ -288,6 +288,10 @@ hostcc="$work/hostcc"
 export ORLIX_KERNEL_PREPARED_SOURCE_SHA256="$(/bin/cat "$work/prepared-source.sha256")"
 export CCACHE_BASEDIR="$work"
 export CCACHE_EXTRAFILES="$compiler_identity"
+if [ -n "${ORLIX_COMPILER_LAUNCHER:-}" ]; then
+  export CCACHE_STATSLOG="$work/ccache-stats.log"
+  : > "$CCACHE_STATSLOG"
+fi
 export ORLIX_BUILD_ROOT="$work"
 export ORLIX_KERNEL_PORT_PREPARED=1
 export ORLIX_KERNEL_KUNIT=0
@@ -328,6 +332,11 @@ if [ "$kbuild_status" -ne 0 ]; then
 fi
 /usr/bin/grep -v -E '^[[:space:]]*ORLIXCC[[:space:]]' "$kbuild_err" >&2 || true
 /bin/cat "$kbuild_log"
+if [ -n "${ORLIX_COMPILER_LAUNCHER:-}" ]; then
+  /usr/bin/printf 'Kernel compiler cache profile=%s destination=%s\n' "$PROFILE" "$ORLIX_KERNEL_ARCHIVE_PLATFORMS"
+  /usr/bin/python3 -c 'from pathlib import Path; import sys; print("Kbuild C compiler-cache invocations:", sum(line.lstrip().startswith("ORLIXCC ") for line in Path(sys.argv[1]).read_text().splitlines()))' "$kbuild_err"
+  "$ccache_staged" --print-log-stats --format=json
+fi
 /usr/bin/python3 -c 'from pathlib import Path; import source_state,sys; source_state.record(Path(sys.argv[1]))' "$work"
 built="$work/OrlixKernel/$PROFILE/$ORLIX_KERNEL_ARCHIVE_PLATFORMS/OrlixKernel.a"
 test -s "$built"

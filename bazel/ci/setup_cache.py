@@ -1401,7 +1401,7 @@ def pinned_clang_bytes_match(prefix: Path, manifest: dict) -> bool:
     return True
 
 
-def cache_plan(toolchain_bytes: int) -> dict[str, str]:
+def cache_plan(toolchain_bytes: int, ccache_bytes: int = CCACHE_CACHE_BYTES) -> dict[str, str]:
     """Decide which optional Actions caches to drop.
 
     The bootable iOS 15.5 runtime and this toolchain stay. ccache and the
@@ -1409,7 +1409,7 @@ def cache_plan(toolchain_bytes: int) -> dict[str, str]:
     when keeping them would pass the 10GB quota.
     """
     kept = BOOTABLE_SIMRUNTIME_CACHE_BYTES + max(toolchain_bytes, 0)
-    ccache = CCACHE_CACHE_BYTES
+    ccache = max(ccache_bytes, 0)
     repository = BAZEL_REPOSITORY_CACHE_BYTES
     quota = ACTIONS_CACHE_QUOTA_BYTES
     drop_ccache = False
@@ -1614,11 +1614,11 @@ def restore_toolchain(archive: Path, brewfile: Path, prefix: Path, *, pin: str) 
     return False
 
 
-def emit_cache_plan(toolchain_bytes: int) -> int:
-    plan = cache_plan(toolchain_bytes)
+def emit_cache_plan(toolchain_bytes: int, ccache_bytes: int = CCACHE_CACHE_BYTES) -> int:
+    plan = cache_plan(toolchain_bytes, ccache_bytes)
     print(f"drop_ccache={plan['drop_ccache']}")
     print(f"drop_repository={plan['drop_repository']}")
-    print(f"ccache_bytes={CCACHE_CACHE_BYTES}")
+    print(f"ccache_bytes={ccache_bytes}")
     print(f"repository_bytes={BAZEL_REPOSITORY_CACHE_BYTES}")
     print(f"bootable_bytes={BOOTABLE_SIMRUNTIME_CACHE_BYTES}")
     print(f"toolchain_bytes={toolchain_bytes}")
@@ -1824,6 +1824,7 @@ def main(argv: list[str] | None = None) -> int:
 
     retention = commands.add_parser("cache-retention")
     retention.add_argument("--toolchain-bytes", required=True, type=int)
+    retention.add_argument("--ccache-bytes", type=int, default=CCACHE_CACHE_BYTES)
 
     args = parser.parse_args(argv)
     if args.command == "xcode-present":
@@ -1895,7 +1896,7 @@ def main(argv: list[str] | None = None) -> int:
         root = args.prefix if args.prefix is not None else homebrew_prefix()
         return 0 if pack_toolchain(args.brewfile, args.archive, root, pin=args.pin) else 1
     if args.command == "cache-retention":
-        return emit_cache_plan(args.toolchain_bytes)
+        return emit_cache_plan(args.toolchain_bytes, args.ccache_bytes)
     raise AssertionError(args.command)
 
 
