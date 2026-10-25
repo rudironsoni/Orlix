@@ -360,7 +360,7 @@ def capture_guest_manifest(developer: Path, sdk: Path, runtime: dict, tree_hashe
         if engine == "autotools-bootstrap":
             scripts.update((Path("/opt/homebrew/bin/glibtoolize"), Path("/bin/sh")))
             modules.extend(("/opt/homebrew/opt/libtool/share/libtool", "/opt/homebrew/opt/libtool/share/aclocal", "/opt/homebrew/opt/pkgconf/share/aclocal"))
-        engine_tools.update(Path(path) for path in ("/opt/homebrew/bin/gmake", "/opt/homebrew/opt/m4/bin/m4", "/opt/homebrew/bin/pkgconf", "/opt/homebrew/opt/bison/bin/bison", "/opt/homebrew/opt/llvm/bin/llvm-ranlib"))
+        engine_tools.update(Path(path) for path in ("/opt/homebrew/bin/gmake", "/opt/homebrew/opt/m4/bin/m4", "/opt/homebrew/opt/bison/bin/bison", "/opt/homebrew/opt/llvm/bin/llvm-ranlib"))
         engine_tools.update(Path("/opt/homebrew/bin") / name for name in ("ggrep", "gsed", "gawk", "gtar"))
         scripts.update(Path("/usr/bin") / name for name in ("install", "file", "grep", "head", "uname", "basename", "wc", "touch"))
         scripts.update({Path("/bin/chmod"), Path("/bin/expr")})
@@ -564,7 +564,6 @@ def stage_executed_tools(developer_dir: str, destination: str) -> None:
         Path("/opt/homebrew/opt/llvm/bin/llvm-objdump"),
         Path("/opt/homebrew/opt/bison/bin/bison"),
         Path("/opt/homebrew/opt/m4/bin/m4"),
-        Path("/opt/homebrew/bin/pkgconf"),
         Path("/opt/homebrew/bin/glibtoolize"),
         Path("/opt/homebrew/bin/autoreconf"),
         Path("/opt/homebrew/bin/automake"),
