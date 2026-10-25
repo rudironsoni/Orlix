@@ -975,6 +975,8 @@ class SetupCacheDecisionTests(unittest.TestCase):
         self.assertEqual(plan["drop_repository"], "false")
         self.assertEqual(setup_cache.CCACHE_CACHE_BYTES, 97_654_617)
         self.assertEqual(setup_cache.BAZEL_REPOSITORY_CACHE_BYTES, 571_396_067)
+        self.assertEqual(setup_cache.cache_plan(0, 4 * 1024**3)["drop_ccache"], "false")
+        self.assertEqual(setup_cache.cache_plan(members, 4 * 1024**3)["drop_ccache"], "true")
         crowded = setup_cache.cache_plan(4_300_000_000)
         self.assertEqual(crowded["drop_ccache"], "true")
         self.assertEqual(crowded["drop_repository"], "false")
@@ -1281,6 +1283,9 @@ class WorkflowSetupCacheTests(unittest.TestCase):
         self.assertEqual(text.count(f"key: {key}"), 3)
         self.assertEqual(text.count("name: Restore CI toolchain bundle"), 2)
         self.assertEqual(text.count("name: Save CI toolchain bundle"), 1)
+        for step in text.split("name: Record the pinned CI toolchain")[1:]:
+            selection = step.split("\n      - name:", 1)[0]
+            self.assertLess(selection.index("brew update"), selection.index("toolchain-cache-key"))
         equivalence = text.split("\n  cache-equivalence:\n", 1)[1].split("\n  bazel-matrix-check:\n", 1)[0]
         self.assertEqual(equivalence.count(f"key: {key}"), 1)
         self.assertNotIn("name: Save CI toolchain bundle", equivalence)

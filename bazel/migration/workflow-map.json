@@ -216,7 +216,7 @@
       }
     },
     ".github/workflows/bazel-ci.yml": {
-      "source_sha256": "e8dbab175887a363b4ed7132bfcde6c8a740f5b4b6f763fc01d14f289885ab5a",
+      "source_sha256": "901bbd771bccb1a371e5840c2222556ab1ff19c371df3551cdcaa0bfa04dde81",
       "workflow": {
         "name": "Bazel CI",
         "on": {
@@ -372,7 +372,7 @@
               {
                 "name": "Record the pinned CI toolchain",
                 "id": "toolchain-pin",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nbrew update\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Restore CI toolchain bundle",
@@ -423,10 +423,12 @@
               },
               {
                 "name": "Restore local compiler object cache",
+                "id": "compiler-cache",
                 "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
+                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+                  "restore-keys": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
                 }
               },
               {
@@ -514,8 +516,8 @@
               {
                 "name": "Record setup caches filled by the product build",
                 "id": "setup-caches",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-                "run": "set -euo pipefail\ncache_has_files() {\n  dir=\"$1\"\n  if [ ! -d \"$dir\" ]; then\n    return 1\n  fi\n  found=\"$(find \"$dir\" -type f -size +0c -print -quit)\"\n  [ -n \"$found\" ]\n}\nif cache_has_files \"$HOME/Library/Caches/Orlix/Bazel/repository-cache\"; then\n  echo \"repository=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"repository=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Application Support/com.robotsandpencils.xcodes\"; then\n  echo \"xcode=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"xcode=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  echo \"ccache=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ccache=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "if": "(github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 451 && github.event.pull_request.head.repo.full_name == github.repository)",
+                "run": "set -euo pipefail\ncache_has_files() {\n  dir=\"$1\"\n  if [ ! -d \"$dir\" ]; then\n    return 1\n  fi\n  found=\"$(find \"$dir\" -type f -size +0c -print -quit)\"\n  [ -n \"$found\" ]\n}\nif [ \"$GITHUB_EVENT_NAME\" = pull_request ] && cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  CCACHE_DIR=\"$HOME/Library/Caches/Orlix/ccache\" CCACHE_MAXSIZE=4Gi ccache --cleanup\n  ccache_kib=$(du -sk \"$HOME/Library/Caches/Orlix/ccache\" | awk '{print $1}')\n  test \"$ccache_kib\" -le 4194304\n  echo \"PR451 compiler snapshot size=${ccache_kib}KiB limit=4194304KiB\"\n  python3 bazel/ci/setup_cache.py cache-retention --toolchain-bytes \"${{ steps.tools.outputs.bytes }}\" --ccache-bytes \"$((ccache_kib * 1024))\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/Bazel/repository-cache\"; then\n  echo \"repository=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"repository=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Application Support/com.robotsandpencils.xcodes\"; then\n  echo \"xcode=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"xcode=false\" >> \"$GITHUB_OUTPUT\"\nfi\nif cache_has_files \"$HOME/Library/Caches/Orlix/ccache\"; then\n  echo \"ccache=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ccache=false\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Save Bazel repository cache",
@@ -537,11 +539,11 @@
               },
               {
                 "name": "Save local compiler object cache",
-                "if": "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true'",
+                "if": "((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 451 && github.run_attempt == 1 && github.event.pull_request.head.repo.full_name == github.repository)) && steps.setup-caches.outputs.ccache == 'true' && steps.tools.outputs.drop_ccache != 'true' && steps.setup-caches.outputs.drop_ccache != 'true'",
                 "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
                 "with": {
                   "path": "~/Library/Caches/Orlix/ccache",
-                  "key": "orlix-ccache-${{ steps.compiler.outputs.digest }}"
+                  "key": "${{ steps.compiler-cache.outputs.cache-primary-key }}"
                 }
               },
               {
@@ -669,7 +671,7 @@
               {
                 "name": "Record the pinned CI toolchain",
                 "id": "toolchain-pin",
-                "run": "set -euo pipefail\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+                "run": "set -euo pipefail\nbrew update\nif python3 bazel/ci/setup_cache.py toolchain-cache-key --brewfile bazel/ci/Brewfile >> \"$GITHUB_OUTPUT\"; then\n  echo \"ready=true\" >> \"$GITHUB_OUTPUT\"\nelse\n  echo \"ready=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"pin=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"llvm=unpinned\" >> \"$GITHUB_OUTPUT\"\n  echo \"versions=unpinned\" >> \"$GITHUB_OUTPUT\"\nfi\n"
               },
               {
                 "name": "Restore CI toolchain bundle",
